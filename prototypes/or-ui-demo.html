@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Opencut Reinforced — UI Prototype</title>
+  <style>
+    :root {
+      --or-bg: #090909;
+      --or-bg-raised: #0f0f10;
+      --or-surface: #151516;
+      --or-surface-hover: #1c1c1e;
+      --or-border: #2a2a2d;
+      --or-border-strong: #3a3a3e;
+      --or-text: #f5f5f5;
+      --or-text-secondary: #a6a6ab;
+      --or-text-muted: #85858b;
+      --or-primary: #f5f5f5;
+      --or-primary-text: #090909;
+      --or-selection: #3fc7ff;
+      --or-ai: #9b7cff;
+      --or-success: #47b881;
+      --or-warning: #d8a542;
+      --or-danger: #e05a5a;
+      --radius-sm: 6px;
+      --radius-control: 8px;
+      --radius-card: 10px;
+      --radius-panel: 12px;
+      --radius-modal: 14px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --topbar-height: 58px;
+      --sidebar-width: 224px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      color: var(--or-text);
+      background: var(--or-bg);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--or-bg); }
+    body { color: var(--or-text); }
+    button, input, select, textarea { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--or-selection);
+      outline-offset: 2px;
+    }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    a { color: inherit; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .muted { color: var(--or-text-muted); }
+    .secondary { color: var(--or-text-secondary); }
+    .eyebrow { color: var(--or-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .small { font-size: 12px; }
+    .hidden { display: none !important; }
+    .prototype-badge { padding: 4px 7px; border: 1px solid var(--or-border); border-radius: 5px; color: var(--or-text-secondary); font-size: 10px; line-height: 1; white-space: nowrap; }
+
+    .icon { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-sm { width: 14px; height: 14px; }
+    .icon-lg { width: 20px; height: 20px; }
+    .app-shell { min-height: 100vh; }
+    .appbar {
+      position: fixed; inset: 0 0 auto; z-index: 30; height: var(--topbar-height);
+      display: flex; align-items: center; gap: 14px; padding: 0 18px;
+      background: rgba(15, 15, 16, .97); border-bottom: 1px solid var(--or-border);
+    }
+    .brand { display: inline-flex; align-items: center; gap: 10px; min-width: 205px; text-decoration: none; }
+    .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--or-border-strong); border-radius: 7px; font-size: 13px; font-weight: 750; letter-spacing: -.08em; }
+    .brand-name { font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+    .appbar-divider { width: 1px; height: 24px; background: var(--or-border); }
+    .appbar-project { display: flex; align-items: center; gap: 8px; color: var(--or-text-secondary); font-size: 13px; }
+    .appbar-spacer { flex: 1; }
+    .save-state { display: inline-flex; align-items: center; gap: 6px; color: var(--or-text-muted); font-size: 11px; white-space: nowrap; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--or-success); }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .top-actions .mobile-top-action { display: none; }
+    .view-switch { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--or-border); border-radius: 8px; background: var(--or-bg); }
+    .view-switch button { border: 0; border-radius: 5px; background: transparent; padding: 5px 8px; color: var(--or-text-muted); font-size: 11px; cursor: pointer; }
+    .view-switch button[aria-pressed="true"] { background: var(--or-surface-hover); color: var(--or-text); }
+    .sidebar {
+      position: fixed; top: var(--topbar-height); bottom: 0; left: 0; z-index: 20; width: var(--sidebar-width);
+      display: flex; flex-direction: column; padding: 13px 10px 14px; overflow-y: auto;
+      background: var(--or-bg-raised); border-right: 1px solid var(--or-border);
+    }
+    .nav-group { margin: 3px 0 10px; }
+    .nav-heading { padding: 9px 10px 6px; color: var(--or-text-muted); font-size: 10px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+    .nav-link { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--or-text-secondary); text-align: left; cursor: pointer; }
+    .nav-link:hover { background: var(--or-surface); color: var(--or-text); }
+    .nav-link[aria-current="page"] { background: #202022; color: var(--or-text); }
+    .nav-link[aria-current="page"] .icon { color: var(--or-text); }
+    .nav-link .nav-label { flex: 1; }
+    .nav-pill { color: var(--or-text-muted); font-size: 10px; }
+    .sidebar-bottom { margin-top: auto; padding: 12px 9px 2px; border-top: 1px solid var(--or-border); }
+    .sidebar-bottom .prototype-badge { display: inline-block; margin-bottom: 8px; }
+
+    .main { min-height: 100vh; margin-left: var(--sidebar-width); padding: calc(var(--topbar-height) + 22px) 24px 36px; }
+    .page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+    .page-head-copy { min-width: 0; flex: 1; }
+    .page-title { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; }
+    .page-subtitle { margin: 6px 0 0; color: var(--or-text-secondary); font-size: 12px; }
+    .page-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .workspace { min-width: 0; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px;
+      padding: 7px 11px; border: 1px solid var(--or-border-strong); border-radius: var(--radius-control);
+      background: var(--or-surface); color: var(--or-text); font-size: 12px; font-weight: 550; cursor: pointer;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .btn:hover { background: var(--or-surface-hover); border-color: #55555b; }
+    .btn-primary { background: var(--or-primary); color: var(--or-primary-text); border-color: var(--or-primary); font-weight: 650; }
+    .btn-primary:hover { background: #dedee1; border-color: #dedee1; }
+    .btn-ghost { border-color: transparent; background: transparent; color: var(--or-text-secondary); }
+    .btn-ghost:hover { border-color: var(--or-border); background: var(--or-surface); color: var(--or-text); }
+    .btn-danger { color: var(--or-danger); }
+    .btn-compact { min-height: 28px; padding: 5px 8px; font-size: 11px; }
+    .icon-button { width: 32px; height: 32px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--or-text-secondary); cursor: pointer; }
+    .icon-button:hover { background: var(--or-surface-hover); color: var(--or-text); }
+    .text-link { border: 0; background: transparent; padding: 0; color: var(--or-text-secondary); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .panel { min-width: 0; border: 1px solid var(--or-border); border-radius: var(--radius-panel); background: var(--or-bg-raised); }
+    .panel-head { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--or-border); }
+    .panel-head h2, .panel-head h3 { flex: 1; margin: 0; font-size: 13px; font-weight: 620; }
+    .panel-body { padding: 15px; }
+    .section-block { margin-top: 20px; }
+    .section-title-row { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
+    .section-title-row h2, .section-title-row h3 { margin: 0; font-size: 14px; font-weight: 620; }
+    .section-title-row .push { margin-left: auto; }
+    .divider { height: 1px; background: var(--or-border); margin: 15px 0; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    .row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .row-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .push { margin-left: auto; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .field label, .field-label { color: var(--or-text-secondary); font-size: 11px; font-weight: 550; }
+    .input, .select, .textarea {
+      width: 100%; min-height: 35px; padding: 8px 10px; border: 1px solid var(--or-border-strong); border-radius: 7px;
+      background: #0c0c0d; color: var(--or-text); font-size: 12px;
+    }
+    .textarea { min-height: 76px; resize: vertical; line-height: 1.5; }
+    .input::placeholder, .textarea::placeholder { color: #6e6e74; }
+    .range-row { display: grid; grid-template-columns: minmax(80px, 1fr) 130px 42px; align-items: center; gap: 10px; min-height: 35px; }
+    input[type="range"] { width: 100%; accent-color: var(--or-text); }
+    input[type="checkbox"], input[type="radio"] { accent-color: var(--or-text); }
+    .switch { appearance: none; position: relative; width: 34px; height: 19px; border: 1px solid var(--or-border-strong); border-radius: 20px; background: #242426; cursor: pointer; }
+    .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #a6a6ab; transition: transform .14s ease; }
+    .switch:checked { background: #e5e5e8; border-color: #e5e5e8; }
+    .switch:checked::after { background: #101011; transform: translateX(15px); }
+    .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 36px; }
+    .toggle-row .toggle-copy { flex: 1; min-width: 0; }
+    .toggle-row strong { display: block; font-size: 12px; font-weight: 550; }
+    .toggle-row small { display: block; margin-top: 3px; color: var(--or-text-muted); font-size: 10px; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid var(--or-border); border-radius: 5px; color: var(--or-text-secondary); font-size: 10px; white-space: nowrap; }
+    .chip.semantic-selection { border-color: rgba(63,199,255,.55); color: var(--or-selection); }
+    .chip.semantic-ai { border-color: rgba(155,124,255,.48); color: #b8a5ff; }
+    .chip.semantic-warning { border-color: rgba(216,165,66,.5); color: var(--or-warning); }
+    .chip.semantic-success { border-color: rgba(71,184,129,.45); color: var(--or-success); }
+    .badge { display: inline-flex; align-items: center; padding: 3px 6px; border-radius: 5px; background: #222224; color: var(--or-text-secondary); font-size: 10px; }
+    .empty-state { display: grid; justify-items: center; gap: 8px; padding: 28px 15px; text-align: center; color: var(--or-text-secondary); }
+    .empty-state strong { color: var(--or-text); font-size: 13px; }
+    .empty-state p { margin: 0; max-width: 340px; font-size: 11px; line-height: 1.5; }
+
+    .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .project-card { overflow: hidden; border: 1px solid var(--or-border); border-radius: var(--radius-card); background: var(--or-bg-raised); }
+    .project-cover { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 7; background: #141415; border-bottom: 1px solid var(--or-border); color: #73737a; }
+    .project-cover::before { content: ""; position: absolute; inset: 0; }
+    .project-cover .icon { position: relative; width: 28px; height: 28px; }
+    .project-cover-meta { position: absolute; inset: auto 9px 8px; display: flex; justify-content: space-between; color: #a6a6ab; font-size: 10px; }
+    .project-card-body { padding: 11px; }
+    .project-title-row { display: flex; align-items: center; gap: 7px; }
+    .project-title-row strong { flex: 1; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .project-meta { display: flex; flex-wrap: wrap; gap: 7px 11px; margin-top: 7px; color: var(--or-text-muted); font-size: 10px; }
+    .project-card-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .project-list { width: 100%; border-collapse: collapse; }
+    .project-list th { padding: 9px 8px; border-bottom: 1px solid var(--or-border); color: var(--or-text-muted); text-align: left; font-size: 10px; font-weight: 550; }
+    .project-list td { padding: 10px 8px; border-bottom: 1px solid var(--or-border); color: var(--or-text-secondary); font-size: 11px; }
+    .project-list tr:last-child td { border-bottom: 0; }
+    .project-list .project-name { color: var(--or-text); font-weight: 550; }
+    .project-list-wrap { overflow-x: auto; }
+    .filter-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter-chip { padding: 6px 9px; border: 1px solid var(--or-border); border-radius: 6px; background: transparent; color: var(--or-text-secondary); font-size: 11px; cursor: pointer; }
+    .filter-chip[aria-pressed="true"] { background: #252527; color: var(--or-text); border-color: var(--or-border-strong); }
+    .search-wrap { position: relative; min-width: 180px; flex: 1; max-width: 280px; }
+    .search-wrap .icon { position: absolute; top: 10px; left: 10px; color: var(--or-text-muted); }
+    .search-wrap .input { padding-left: 32px; }
+
+    .editor-top { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--or-border); border-radius: 10px 10px 0 0; background: var(--or-bg-raised); }
+    .editor-grid { display: grid; grid-template-columns: minmax(155px, 190px) minmax(260px, 1fr) minmax(205px, 255px); min-height: 350px; border: 1px solid var(--or-border); border-top: 0; background: var(--or-bg-raised); }
+    .editor-panel { min-width: 0; overflow: hidden; border-right: 1px solid var(--or-border); }
+    .editor-panel:last-child { border-right: 0; }
+    .editor-panel-header { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 10px; border-bottom: 1px solid var(--or-border); }
+    .editor-panel-header strong { flex: 1; font-size: 11px; font-weight: 600; }
+    .editor-panel-content { padding: 9px; }
+    .media-mini { display: flex; align-items: center; gap: 8px; padding: 7px 5px; border-bottom: 1px solid #202022; cursor: pointer; }
+    .media-mini:hover { background: var(--or-surface); }
+    .file-tile { display: grid; place-items: center; width: 35px; height: 29px; flex: 0 0 auto; border: 1px solid var(--or-border); border-radius: 5px; background: #1b1b1d; color: var(--or-text-muted); }
+    .media-mini-copy { min-width: 0; flex: 1; }
+    .media-mini-copy strong { display: block; overflow: hidden; color: var(--or-text); font-size: 10px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+    .media-mini-copy small { display: block; margin-top: 3px; color: var(--or-text-muted); font-size: 9px; }
+    .preview-area { display: flex; min-width: 0; flex-direction: column; }
+    .preview-canvas-wrap { display: grid; place-items: center; min-height: 245px; padding: 12px; background: #101011; }
+    .preview-canvas { position: relative; display: grid; place-items: center; width: min(100%, 500px); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #3a3a3e; background: #29292b; }
+    .preview-canvas.vertical { width: auto; height: min(270px, 70vw); aspect-ratio: 9 / 16; }
+    .preview-mock { position: absolute; inset: 15%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.14); background: #2d2d30; }
+    .preview-mock::before, .preview-mock::after { content: ""; position: absolute; border: 1px solid rgba(255,255,255,.13); }
+    .preview-mock::before { inset: 14%; }
+    .preview-mock::after { width: 22%; aspect-ratio: 1; border-radius: 50%; }
+    .preview-label { position: absolute; bottom: 8px; left: 9px; color: rgba(255,255,255,.65); font: 10px ui-monospace, monospace; }
+    .safe-guides .preview-mock { outline: 1px dashed rgba(255,255,255,.4); outline-offset: -22px; }
+    .transport { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 6px; border-top: 1px solid var(--or-border); }
+    .transport .time-display { margin: 0 10px; color: var(--or-text-secondary); font: 10px ui-monospace, monospace; }
+    .inspector-section { padding: 10px 0; border-bottom: 1px solid var(--or-border); }
+    .inspector-section:last-child { border-bottom: 0; }
+    .inspector-section h4 { margin: 0 0 7px; color: var(--or-text-secondary); font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
+    .inspector-control { display: grid; grid-template-columns: 52px 1fr 32px; align-items: center; gap: 5px; margin: 5px 0; color: var(--or-text-muted); font-size: 9px; }
+    .inspector-control input { width: 100%; min-width: 0; height: 26px; padding: 4px 5px; border: 1px solid var(--or-border); border-radius: 5px; background: #0c0c0d; color: var(--or-text); font-size: 10px; }
+    .editor-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; border: 1px solid var(--or-border); border-top: 0; background: var(--or-bg-raised); }
+    .tool-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 29px; padding: 5px 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--or-text-secondary); font-size: 10px; cursor: pointer; }
+    .tool-btn:hover, .tool-btn[aria-pressed="true"] { border-color: var(--or-border); background: var(--or-surface); color: var(--or-text); }
+    .timeline { overflow: hidden; border: 1px solid var(--or-border); border-top: 0; border-radius: 0 0 10px 10px; background: #101011; }
+    .timeline-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--or-border); }
+    .timeline-head strong { font-size: 11px; }
+    .timeline-scroller { position: relative; max-height: 300px; overflow: auto; }
+    .timeline-ruler { position: sticky; top: 0; z-index: 4; display: flex; height: 23px; margin-left: 68px; border-bottom: 1px solid var(--or-border); background: #141415; color: var(--or-text-muted); font: 9px ui-monospace, monospace; }
+    .ruler-mark { flex: 0 0 90px; padding: 5px 5px; border-left: 1px solid var(--or-border); }
+    .track-row { position: relative; display: flex; min-height: 40px; border-bottom: 1px solid #262628; }
+    .track-row:last-child { border-bottom: 0; }
+    .track-label { position: sticky; left: 0; z-index: 3; display: flex; align-items: center; gap: 4px; width: 68px; flex: 0 0 68px; padding: 4px; border-right: 1px solid var(--or-border); background: #151516; }
+    .track-label strong { flex: 1; color: var(--or-text-secondary); font-size: 9px; }
+    .track-label button { width: 18px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--or-text-muted); cursor: pointer; font-size: 9px; }
+    .track-lane { position: relative; min-width: 470px; flex: 1; min-height: 40px; background-image: linear-gradient(to right, transparent 89px, #232325 90px); background-size: 90px 100%; }
+    .clip { position: absolute; top: 5px; display: flex; align-items: center; min-width: 42px; height: 29px; overflow: hidden; padding: 4px 7px; border: 1px solid #55555a; border-radius: 5px; background: #333336; color: #efeff1; font-size: 9px; white-space: nowrap; cursor: pointer; user-select: none; }
+    .clip:hover { background: #3b3b3f; }
+    .clip.selected { outline: 1px solid var(--or-selection); border-color: var(--or-selection); }
+    .clip.ai-clip::after { content: "AI"; margin-left: auto; padding-left: 5px; color: #b8a5ff; font-size: 8px; }
+    .clip.audio-clip { background: #29292b; border-color: #66666b; }
+    .clip.text-clip { background: #353536; }
+    .playhead { position: absolute; top: 22px; bottom: 0; left: 68px; z-index: 5; width: 1px; background: var(--or-selection); pointer-events: none; }
+    .playhead::before { content: ""; position: absolute; top: -1px; left: -4px; width: 9px; height: 7px; background: var(--or-selection); clip-path: polygon(0 0,100% 0,50% 100%); }
+    .timeline-zoom { display: flex; align-items: center; gap: 7px; width: 155px; }
+    .mobile-editor { display: none; }
+
+    .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .asset-card { min-width: 0; padding: 9px; border: 1px solid var(--or-border); border-radius: 8px; background: var(--or-bg-raised); }
+    .asset-thumb { display: grid; place-items: center; height: 84px; margin-bottom: 8px; border: 1px solid var(--or-border); border-radius: 6px; background: #1a1a1c; color: #77777d; }
+    .asset-card strong { display: block; overflow: hidden; font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+    .asset-card small { display: block; margin-top: 4px; color: var(--or-text-muted); font-size: 9px; }
+    .asset-card .row { margin-top: 7px; }
+    .caption-row { display: grid; grid-template-columns: 112px 1fr auto; align-items: center; gap: 9px; padding: 9px; border-bottom: 1px solid var(--or-border); }
+    .caption-row:last-child { border-bottom: 0; }
+    .caption-time { color: var(--or-text-muted); font: 9px ui-monospace, monospace; }
+    .caption-row input { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid var(--or-border); border-radius: 5px; background: #0c0c0d; color: var(--or-text); font-size: 11px; }
+    .meter { height: 5px; overflow: hidden; border-radius: 5px; background: #29292b; }
+    .meter > span { display: block; height: 100%; background: #bfc0c3; transition: width .25s ease; }
+    .terminal { overflow: hidden; border: 1px solid var(--or-border); border-radius: 9px; background: #090909; }
+    .terminal-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--or-border); color: var(--or-text-muted); font-size: 10px; }
+    .terminal-body { min-height: 190px; max-height: 310px; overflow: auto; padding: 11px; color: #d6d6d8; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .terminal-line { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .terminal-prompt { color: var(--or-text); }
+    .terminal-input-row { display: flex; gap: 7px; padding: 8px 10px; border-top: 1px solid var(--or-border); }
+    .terminal-input-row input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--or-text); font: 11px ui-monospace, monospace; }
+    .terminal-input-row input:focus-visible { outline: 2px solid var(--or-selection); outline-offset: 2px; border-radius: 3px; }
+    .status-list { display: flex; flex-direction: column; gap: 9px; }
+    .status-item { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px; border: 1px solid var(--or-border); border-radius: 7px; background: #111112; }
+    .status-item .status-copy { min-width: 0; flex: 1; }
+    .status-item strong { display: block; font-size: 11px; font-weight: 550; }
+    .status-item small { display: block; margin-top: 3px; color: var(--or-text-muted); font-size: 9px; }
+    .agent-avatar { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--or-border-strong); border-radius: 7px; color: var(--or-text-secondary); font-size: 10px; font-weight: 650; }
+    .feature-card { padding: 11px; border: 1px solid var(--or-border); border-radius: 8px; background: var(--or-bg-raised); }
+    .feature-card strong { display: block; font-size: 11px; font-weight: 560; }
+    .feature-card small { display: block; margin-top: 6px; color: var(--or-text-muted); font-size: 9px; }
+    .feature-card .badge { margin-top: 8px; }
+    .scopes { display: flex; flex-wrap: wrap; gap: 3px; }
+    .settings-layout { display: grid; grid-template-columns: 178px minmax(0, 1fr); gap: 12px; align-items: start; }
+    .settings-nav { display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--or-border); border-radius: 10px; background: var(--or-bg-raised); }
+    .settings-nav .filter-chip { text-align: left; }
+    .model-list { display: flex; flex-direction: column; gap: 7px; }
+    .model-row { display: grid; grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 1fr) minmax(170px, auto); align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--or-border); border-radius: 8px; background: #111112; }
+    .model-main { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .model-metadata { display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--or-text-muted); font-size: 9px; }
+    .model-action { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+    .transition-diagram { display: flex; flex-direction: column; justify-content: center; height: 58px; padding: 8px; border: 1px solid var(--or-border); border-radius: 6px; background: #101011; }
+    .plan-list { display: flex; flex-direction: column; gap: 9px; margin: 0; padding-left: 23px; color: var(--or-text-secondary); font-size: 11px; }
+    .plan-list li { display: list-item; padding-left: 3px; }
+    .plan-list .badge { margin-right: 7px; }
+    .palette-results { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto; margin-top: 10px; }
+    .palette-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--or-text-secondary); text-align: left; cursor: pointer; }
+    .palette-item:hover, .palette-item:focus-visible { border-color: var(--or-border); background: var(--or-surface); color: var(--or-text); }
+    .palette-item kbd { margin-left: auto; }
+    .image-mock { display: grid; place-items: center; gap: 8px; min-height: 240px; padding: 15px; border: 1px solid var(--or-border); border-radius: 8px; background: #101011; }
+    .image-frame { position: relative; display: grid; place-items: center; width: min(100%, 390px); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #4b4b50; background: #252527; }
+    .image-frame::before { content: ""; position: absolute; inset: 12%; border: 1px solid rgba(255,255,255,.18); }
+    .image-frame::after { content: ""; position: absolute; inset: 0; }
+    .image-center-mark { position: relative; z-index: 1; width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; }
+    .image-center-mark::after { content: ""; position: absolute; left: 50%; top: -9px; width: 1px; height: 48px; background: rgba(255,255,255,.42); transform: translateX(-50%); }
+    .scope-svg { width: 100%; height: 110px; border: 1px solid var(--or-border); border-radius: 6px; background: #101011; }
+    .scope-svg path, .scope-svg polyline { fill: none; stroke: #a6a6ab; stroke-width: 1.5; }
+    .scope-svg .grid-line { stroke: #343437; stroke-width: 1; }
+    .tabs { display: flex; gap: 3px; overflow-x: auto; border-bottom: 1px solid var(--or-border); }
+    .tab { flex: 0 0 auto; padding: 9px 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--or-text-muted); font-size: 11px; cursor: pointer; }
+    .tab[aria-selected="true"] { border-bottom-color: var(--or-text); color: var(--or-text); }
+    .progress-row { display: flex; align-items: center; gap: 8px; }
+    .progress-row .meter { flex: 1; }
+    .progress-row small { color: var(--or-text-muted); font-size: 9px; white-space: nowrap; }
+
+    .mobile-header { display: none; }
+    .mobile-bottom-nav { display: none; }
+    .modal-root { position: fixed; inset: 0; z-index: 100; display: none; place-items: center; padding: 18px; background: rgba(0,0,0,.7); }
+    .modal-root.is-open { display: grid; }
+    .modal { width: min(520px, 100%); max-height: min(85vh, 720px); overflow: auto; border: 1px solid var(--or-border-strong); border-radius: var(--radius-modal); background: #111112; box-shadow: 0 18px 60px rgba(0,0,0,.45); }
+    .modal-head { display: flex; align-items: center; gap: 10px; padding: 15px 17px; border-bottom: 1px solid var(--or-border); }
+    .modal-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 620; }
+    .modal-body { padding: 16px 17px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 17px 16px; }
+    .toast-region { position: fixed; right: 17px; bottom: 17px; z-index: 120; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
+    .toast { max-width: min(360px, calc(100vw - 34px)); padding: 10px 13px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: #1c1c1e; color: var(--or-text); font-size: 11px; box-shadow: 0 10px 30px rgba(0,0,0,.35); animation: toast-in .16s ease-out; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .safe-area { position: relative; }
+
+    @media (max-width: 1180px) {
+      :root { --sidebar-width: 205px; }
+      .main { padding-left: 18px; padding-right: 18px; }
+      .editor-grid { grid-template-columns: minmax(142px, 170px) minmax(240px, 1fr) minmax(190px, 220px); }
+      .grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 900px) {
+      .editor-grid { grid-template-columns: minmax(135px, 160px) minmax(0, 1fr); }
+      .inspector-panel { display: none; }
+      .grid-4, .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .appbar { padding: 0 10px; gap: 8px; }
+      .brand { min-width: auto; }
+      .brand-name, .appbar-divider, .appbar-project, .save-state { display: none; }
+      .top-actions { gap: 4px; }
+      .top-actions .mobile-top-action { display: inline-grid; }
+      .appbar .top-actions > [data-action="undo"], .appbar .top-actions > [data-action="redo"], .appbar .top-actions > [data-action="export-dialog"] { display: none; }
+      .view-switch { margin-left: auto; }
+      .view-switch button { padding: 5px 6px; }
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: calc(var(--topbar-height) + 14px) 12px 88px; }
+      .page-head { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+      body[data-view="editor"] .page-head { display: none; }
+      body[data-view="editor"] .appbar .mobile-top-action { display: none; }
+      .page-actions { width: 100%; justify-content: flex-start; }
+      .page-title { font-size: 20px; }
+      .mobile-bottom-nav { position: fixed; inset: auto 0 0; z-index: 40; display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 6px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--or-border); background: rgba(15,15,16,.98); }
+      .mobile-bottom-nav button { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; padding: 5px 2px; border: 0; background: transparent; color: var(--or-text-muted); font-size: 9px; cursor: pointer; }
+      .mobile-bottom-nav button[aria-current="page"] { color: var(--or-text); }
+      .mobile-bottom-nav button .icon { width: 17px; height: 17px; }
+      .grid-4, .grid-3, .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .search-wrap { max-width: none; }
+      .editor-grid, .editor-tools, .timeline { display: none; }
+      .editor-top { border-radius: 10px 10px 0 0; }
+      .editor-top strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .editor-top label.field { display: none; }
+      .mobile-editor { display: block; border: 1px solid var(--or-border); border-top: 0; border-radius: 0 0 10px 10px; overflow: hidden; }
+      .mobile-preview { display: grid; place-items: center; padding: 15px; background: #101011; }
+      .mobile-preview .preview-canvas { width: min(100%, 400px); }
+      .mobile-editor-transport { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 9px; border-top: 1px solid var(--or-border); border-bottom: 1px solid var(--or-border); }
+      .mobile-timeline { padding: 10px; }
+      .mobile-timeline-track { position: relative; height: 34px; margin: 7px 0; border: 1px solid var(--or-border); border-radius: 5px; background: #131314; }
+      .mobile-timeline-track .clip { top: 2px; height: 28px; }
+      .mobile-tool-dock { position: sticky; bottom: 70px; display: grid; grid-template-columns: repeat(6, 1fr); padding: 7px; border-top: 1px solid var(--or-border); background: #111112; }
+      .mobile-tool-dock button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; min-height: 42px; padding: 5px 1px; border: 0; background: transparent; color: var(--or-text-secondary); font-size: 9px; }
+      .mobile-tool-dock button:hover { color: var(--or-text); }
+      .mobile-inspector { position: fixed; inset: auto 0 0; z-index: 70; max-height: 72vh; overflow: auto; padding-bottom: max(12px, env(safe-area-inset-bottom)); border: 1px solid var(--or-border-strong); border-radius: 14px 14px 0 0; background: #111112; box-shadow: 0 -18px 60px rgba(0,0,0,.45); }
+      .mobile-inspector .panel-body { max-height: 56vh; overflow: auto; }
+      .mobile-inspector-backdrop { position: fixed; inset: 0; z-index: 69; background: rgba(0,0,0,.55); }
+      .caption-row { grid-template-columns: 1fr auto; }
+      .caption-time { grid-column: 1 / -1; }
+      .settings-layout { grid-template-columns: 1fr; }
+      .settings-nav { flex-direction: row; overflow-x: auto; }
+      .model-row { grid-template-columns: 1fr; gap: 8px; }
+      .model-action { justify-content: flex-start; }
+      .project-cover { aspect-ratio: 16 / 8; }
+      .modal-root { align-items: end; padding: 0; }
+      .modal { width: 100%; max-height: 88vh; border-radius: 14px 14px 0 0; }
+      .terminal-body { min-height: 145px; }
+    }
+    @media (max-width: 390px) {
+      .main { padding-left: 9px; padding-right: 9px; }
+      .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .quick-actions .btn { flex: 1 1 42%; }
+      .page-actions .btn { flex: 1 1 auto; }
+      .mobile-tool-dock { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .editor-top { gap: 4px; padding-left: 6px; padding-right: 6px; }
+      .editor-top .btn { padding: 5px 6px; }
+    }
+    .app-shell[data-mode="mobile"] .sidebar { display: none; }
+    .app-shell[data-mode="mobile"] .main { margin-left: 0; padding-bottom: 88px; }
+    .app-shell[data-mode="mobile"] .mobile-bottom-nav { display: grid; }
+    .app-shell[data-mode="mobile"] .editor-grid, .app-shell[data-mode="mobile"] .editor-tools, .app-shell[data-mode="mobile"] .timeline { display: none; }
+    .app-shell[data-mode="mobile"] .mobile-editor { display: block; }
+    .app-shell[data-mode="mobile"] .mobile-top-action { display: inline-grid; }
+    .app-shell[data-mode="mobile"] .page-head { display: none; }
+    .app-shell[data-mode="mobile"] .appbar .mobile-top-action { display: none; }
+    .app-shell[data-mode="mobile"] .appbar .top-actions > [data-action="undo"],
+    .app-shell[data-mode="mobile"] .appbar .top-actions > [data-action="redo"],
+    .app-shell[data-mode="mobile"] .appbar .top-actions > [data-action="export-dialog"] { display: none; }
+    @media (min-width: 761px) {
+      .app-shell[data-mode="mobile"] .main { padding-left: max(18px, calc((100vw - 760px) / 2)); padding-right: max(18px, calc((100vw - 760px) / 2)); }
+      .app-shell[data-mode="mobile"] .mobile-bottom-nav { left: 50%; right: auto; width: min(100%, 760px); transform: translateX(-50%); }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 8V5h7l2 2"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4m-4 6h4m10-6h4m-4 6h4"/></symbol>
+    <symbol id="i-media" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 5h16M12 5v14M8 19h8"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M4 10v4m4-8v12m4-16v20m4-14v8m4-11v14"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.5 6.5L20 12l-6.5 1.5L12 20l-1.5-6.5L4 12l6.5-2.5zM19 3v4m2-2h-4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m21 15-5-5-7 8"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5m-9 5v8"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.9-1 1.8-1.4-.5a8 8 0 0 1-1.6.9l-.3 1.5h-2.1l-.3-1.5a8 8 0 0 1-1.7-.9l-1.4.5-1-1.8 1.1-.9a7 7 0 0 1 0-1.9l-1.1-.9 1-1.8 1.4.5a8 8 0 0 1 1.7-.9l.3-1.5h2.1l.3 1.5a8 8 0 0 1 1.6.9l1.4-.5 1 1.8-1.1.9a7 7 0 0 1 0 1.8z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="4" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2l2-6 4 12 3-9 3 6 2-3h2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24"><path d="M5 5v4a3 3 0 0 0 3 3h8a3 3 0 0 1 3 3v4M5 19v-4a3 3 0 0 1 3-3m8-7 3-3 3 3m-3-3v7"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9a7 7 0 0 1 12-2L20 9M4 15l2.5 2a7 7 0 0 0 12-2"/></symbol>
+  </svg>
+  <div class="app-shell" id="app-shell" data-mode="desktop">
+    <header class="appbar">
+      <a class="brand" href="#" data-action="navigate" data-view="home" aria-label="Opencut Reinforced home">
+        <span class="brand-mark">OR</span><span class="brand-name">Opencut Reinforced</span>
+      </a>
+      <span class="appbar-divider" aria-hidden="true"></span>
+      <div class="appbar-project"><svg class="icon icon-sm"><use href="#i-folder"></use></svg><span id="appbar-project-name">Tutorial Draft</span></div>
+      <div class="appbar-spacer"></div>
+      <span class="save-state"><span class="status-dot"></span><span id="save-state-text">Saved</span></span>
+      <div class="top-actions">
+        <button class="icon-button mobile-top-action" data-action="navigate" data-view="projects" aria-label="Search projects" title="Search projects"><svg class="icon"><use href="#i-search"></use></svg></button>
+        <button class="icon-button mobile-top-action" data-action="navigate" data-view="settings" aria-label="Settings" title="Settings"><svg class="icon"><use href="#i-settings"></use></svg></button>
+        <button class="icon-button" data-action="undo" aria-label="Undo" title="Undo"><svg class="icon"><use href="#i-undo"></use></svg></button>
+        <button class="icon-button" data-action="redo" aria-label="Redo" title="Redo"><svg class="icon"><use href="#i-redo"></use></svg></button>
+        <button class="btn btn-primary btn-compact" data-action="export-dialog"><svg class="icon icon-sm"><use href="#i-export"></use></svg>Export</button>
+        <div class="view-switch" aria-label="Prototype viewport">
+          <button data-action="set-mode" data-mode="desktop" aria-pressed="true">Desktop</button>
+          <button data-action="set-mode" data-mode="mobile" aria-pressed="false">Mobile</button>
+        </div>
+      </div>
+    </header>
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation"></aside>
+    <main class="main">
+      <div id="page-head"></div>
+      <div class="workspace" id="workspace" tabindex="-1"></div>
+    </main>
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile navigation"></nav>
+  </div>
+  <div class="modal-root" id="modal-root" aria-live="polite"></div>
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script>
+    "use strict";
+    const $ = (selector, root) => (root || document).querySelector(selector);
+    const $$ = (selector, root) => Array.from((root || document).querySelectorAll(selector));
+    const esc = value => String(value == null ? "" : value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const icon = (name, extra) => '<svg class="icon ' + (extra || "") + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
+    const btn = (label, action, cls, attrs) => '<button type="button" class="btn ' + (cls || "") + '" data-action="' + action + '" ' + (attrs || "") + '>' + label + '</button>';
+    const tracksSeed = [
+      { id: "v2", name: "V2", type: "video", muted: false, locked: false, visible: true, clips: [{ id: "clip-title", name: "Opening title", start: 0.2, duration: 4.6, kind: "text" }] },
+      { id: "v1", name: "V1", type: "video", muted: false, locked: false, visible: true, clips: [{ id: "clip-intro", name: "intro.mp4", start: 0, duration: 8.2, kind: "video" }, { id: "clip-interview", name: "interview.mp4", start: 8.5, duration: 12.4, kind: "video" }, { id: "clip-broll", name: "broll_01.mp4", start: 21.2, duration: 7.8, kind: "video" }] },
+      { id: "t1", name: "T1", type: "text", muted: false, locked: false, visible: true, clips: [{ id: "clip-subtitles", name: "Captions", start: 3.2, duration: 6.8, kind: "text", ai: true }] },
+      { id: "a1", name: "A1", type: "audio", muted: false, locked: false, visible: true, clips: [{ id: "clip-voice", name: "voice.wav", start: 0, duration: 24.1, kind: "audio" }] },
+      { id: "a2", name: "A2", type: "audio", muted: true, locked: false, visible: true, clips: [{ id: "clip-music", name: "music.wav", start: 0, duration: 28.7, kind: "audio" }] },
+      { id: "sub", name: "SUB", type: "text", muted: false, locked: false, visible: true, clips: [] }
+    ];
+    const state = {
+      view: "home",
+      mode: "desktop",
+      activeProjectId: "p-tutorial",
+      projectsFilter: "All",
+      projectSearch: "",
+      projectSort: "Edited",
+      projectLayout: "grid",
+      mediaSearch: "",
+      mediaFilter: "All",
+      selectedMediaTab: "Media",
+      selectedClipId: "clip-interview",
+      selectedTool: "Select",
+      selectedSettings: "General",
+      selectedAgentTab: "Agents",
+      selectedModelTab: "Installed",
+      selectedAiMode: "Video",
+      selectedFeature: "CORE EDITOR",
+      selectedTransitionCategory: "Basic",
+      selectedEffectCategory: "All",
+      currentTime: 8.5,
+      duration: 62.4,
+      playing: false,
+      zoom: 1,
+      safeGuides: false,
+      loop: false,
+      volume: 75,
+      saved: true,
+      history: [],
+      redoHistory: [],
+      captionsProgress: 0,
+      translationApplied: false,
+      aiProgress: 0,
+      exportProgress: 0,
+      exportName: "",
+      promptPlan: false,
+      promptDryRun: false,
+      agentApplied: false,
+      mobileInspector: false,
+      terminalLog: [{ input: "or help", output: "OR prototype CLI — simulated commands: version, health, capabilities, project inspect, timeline list, selection get, help" }],
+      projects: [
+        { id: "p-short", name: "Short Film Edit", ratio: "16:9", duration: "03:42", edited: "Today", pinned: true, archived: false, resolution: "1080p" },
+        { id: "p-travel", name: "Travel Cut", ratio: "9:16", duration: "00:48", edited: "Yesterday", pinned: false, archived: false, resolution: "1080p" },
+        { id: "p-tutorial", name: "Tutorial Draft", ratio: "16:9", duration: "01:02", edited: "Sep 18", pinned: false, archived: false, resolution: "1440p" },
+        { id: "p-product", name: "Product Demo", ratio: "1:1", duration: "00:30", edited: "Sep 12", pinned: false, archived: false, resolution: "1080p" }
+      ],
+      media: [
+        { id: "m-intro", name: "intro.mp4", type: "Video", duration: "00:08", spec: "1920×1080 · 30 fps", source: "Media" },
+        { id: "m-interview", name: "interview.mp4", type: "Video", duration: "00:24", spec: "3840×2160 · 25 fps", source: "Media" },
+        { id: "m-broll", name: "broll_01.mp4", type: "Video", duration: "00:12", spec: "1920×1080 · 30 fps", source: "Media" },
+        { id: "m-voice", name: "voice.wav", type: "Audio", duration: "00:36", spec: "48 kHz · stereo", source: "Media" },
+        { id: "m-music", name: "music.wav", type: "Audio", duration: "01:18", spec: "44.1 kHz · stereo", source: "Media" },
+        { id: "m-logo", name: "logo.png", type: "Image", duration: "—", spec: "2400×1200 · PNG", source: "Library" }
+      ],
+      tracks: JSON.parse(JSON.stringify(tracksSeed)),
+      captions: [
+        { id: "cap-1", time: "00:00:02.000 → 00:00:04.500", text: "Welcome to the project.", translated: "Chào mừng đến với dự án." },
+        { id: "cap-2", time: "00:00:04.500 → 00:00:07.200", text: "This subtitle was generated locally.", translated: "Phụ đề này được tạo cục bộ." },
+        { id: "cap-3", time: "00:00:07.200 → 00:00:09.100", text: "You can edit every line.", translated: "Bạn có thể chỉnh sửa từng dòng." }
+      ],
+      agents: [
+        { name: "Codex", tag: "CX", status: "Connected" },
+        { name: "OpenCode", tag: "OC", status: "Disconnected" },
+        { name: "Claude Code", tag: "CC", status: "Disconnected" },
+        { name: "DeepSeek Harness", tag: "DH", status: "Busy" }
+      ],
+      models: [
+        { name: "Whisper Tiny", version: "1.2", task: "Transcription", size: "75 MB", license: "MIT", runtime: "ONNX", hardware: "CPU", status: "Installed", progress: 100 },
+        { name: "Whisper Base", version: "1.2", task: "Transcription", size: "142 MB", license: "MIT", runtime: "ONNX", hardware: "CPU / GPU", status: "Available", progress: 0 },
+        { name: "Whisper Small", version: "1.2", task: "Transcription", size: "466 MB", license: "MIT", runtime: "ONNX", hardware: "GPU", status: "Available", progress: 0 },
+        { name: "Whisper Medium", version: "1.2", task: "Transcription", size: "1.5 GB", license: "MIT", runtime: "ONNX", hardware: "GPU", status: "Available", progress: 0 },
+        { name: "Translation Model", version: "0.8", task: "Translation", size: "620 MB", license: "Apache-2.0", runtime: "ONNX", hardware: "CPU", status: "Available", progress: 0 },
+        { name: "Background Removal Model", version: "0.4", task: "Segmentation", size: "210 MB", license: "MIT", runtime: "ONNX", hardware: "GPU", status: "Available", progress: 0 },
+        { name: "Local LLM", version: "—", task: "Agent planning", size: "2.1 GB", license: "Review required", runtime: "Future", hardware: "GPU", status: "Future", progress: 0 },
+        { name: "Image Generator", version: "—", task: "Image generation", size: "—", license: "Review required", runtime: "Future", hardware: "GPU", status: "Future", progress: 0 },
+        { name: "Video Generator", version: "—", task: "Video generation", size: "—", license: "Review required", runtime: "Future", hardware: "GPU", status: "Future", progress: 0 }
+      ],
+      exportQueue: [
+        { id: "e-1", name: "Short Film Edit — Draft.mp4", status: "Complete", progress: 100 },
+        { id: "e-2", name: "Travel Cut — Social.mp4", status: "Queued", progress: 0 }
+      ],
+      generated: [],
+      settings: { autosave: true, offline: false, networkAI: false, telemetry: false, snap: true, cloud: false, confirmAgent: true, uiDensity: "Comfortable" },
+      modal: null
+    };
+    const navGroups = [
+      { title: "Workspace", items: [["home","Home","home"],["projects","Projects","folder"],["editor","Editor","film"]] },
+      { title: "Tools", items: [["media","Media","media"],["captions","Text & Captions","text"],["audio","Audio","audio"],["effects","Effects","spark"],["transitions","Transitions","refresh"],["color","Color","image"],["image-tools","Image Tools","image"]] },
+      { title: "Intelligence", items: [["ai-studio","AI Studio","spark"],["models","Models","box"],["agents","CLI & Agents","terminal"]] },
+      { title: "Output", items: [["export","Export","export"],["feature-map","Feature Map","grid"],["plugins","Plugins","box"],["settings","Settings","settings"]] }
+    ];
+    const featureGroups = {
+      "CORE EDITOR": ["Projects","Media","Timeline","Text","Audio","Effects","Transitions","Color","Export"],
+      "AI": ["Auto Captions","Translation","Prompt Editing","Image Generation","Video Generation","Audio Generation","Voice","Background Removal"],
+      "AGENT-NATIVE": ["CLI","Command Discovery","Agent Hub","Permissions","Dry Run","Edit Plans","Task Queue"],
+      "INFRASTRUCTURE": ["Models","Plugins","Local AI","Cloud Providers","Proxy / Cache","Crash Recovery","Autosave"],
+      "PLATFORMS": ["macOS","Windows","Linux","Android"]
+    };
+    const agentPlan = ["Detect silence", "Ripple-delete 4 regions", "Transcribe dialogue", "Translate captions to Vietnamese", "Normalize dialogue", "Apply -10 dB music ducking", "Change canvas to 9:16", "Reframe main subject", "Export draft"];
+
+    function activeProject() { return state.projects.find(project => project.id === state.activeProjectId) || state.projects[0]; }
+    function getClip(id) {
+      for (const track of state.tracks) {
+        const clip = track.clips.find(item => item.id === id);
+        if (clip) return { clip: clip, track: track };
+      }
+      return null;
+    }
+    function fmtTime(seconds) {
+      const value = Math.max(0, Number(seconds) || 0);
+      const minutes = Math.floor(value / 60);
+      const whole = Math.floor(value % 60);
+      const frames = Math.floor((value - Math.floor(value)) * 30);
+      return String(minutes).padStart(2, "0") + ":" + String(whole).padStart(2, "0") + ":" + String(frames).padStart(2, "0");
+    }
+    function setSaved(value) {
+      state.saved = value;
+      const label = $("#save-state-text");
+      if (label) label.textContent = value ? "Saved" : "Unsaved changes";
+    }
+    function markChanged() { setSaved(false); }
+    function toast(message) {
+      const host = $("#toast-region");
+      const node = document.createElement("div");
+      node.className = "toast";
+      node.textContent = message;
+      host.appendChild(node);
+      window.setTimeout(() => node.remove(), 2800);
+    }
+    function pageInfo(view) {
+      const data = {
+        home: ["Home", "Projects and recent work"],
+        projects: ["Projects", "Browse and organize project files"],
+        editor: ["Editor", activeProject().name + " · " + activeProject().ratio],
+        media: ["Media", "Project assets and media library"],
+        captions: ["Text & Captions", "Titles, subtitles, and translation tools"],
+        audio: ["Audio", "Track controls and audio utilities"],
+        effects: ["Effects", "Effect browser · prototype only"],
+        transitions: ["Transitions", "Transition browser · prototype only"],
+        color: ["Color", "Color controls and scopes · prototype only"],
+        "image-tools": ["Image Tools", "Basic image editing · prototype only"],
+        "ai-studio": ["AI Studio", "Local and provider-based generation · simulated"],
+        agents: ["CLI & Agents", "Structured capabilities and agent workflows · simulated"],
+        models: ["Models", "Model inventory · no real downloads"],
+        export: ["Export", "Queue and export settings · simulated"],
+        settings: ["Settings", "Application preferences · prototype only"],
+        plugins: ["Plugins", "Experimental / Planned"],
+        "feature-map": ["Feature Map", "Future product scope for review"]
+      };
+      return data[view] || ["Workspace", "Prototype"];
+    }
+    function pageActions(view) {
+      if (view === "home") return "";
+      if (view === "projects") return btn(icon("plus") + "New Project", "new-project", "btn-primary");
+      if (view === "editor") return "";
+      if (view === "media") return "";
+      if (view === "captions") return "";
+      if (view === "agents") return btn("Edit with Agent", "navigate", "", 'data-view="agents" data-tab="Prompt Editing"');
+      if (view === "export") return btn(icon("export") + "New Export", "export-dialog", "btn-primary");
+      return "";
+    }
+    function renderNav() {
+      $("#sidebar").innerHTML = navGroups.map(group => '<div class="nav-group"><div class="nav-heading">' + esc(group.title) + '</div>' + group.items.map(item => '<button class="nav-link" data-action="navigate" data-view="' + item[0] + '" ' + (state.view === item[0] ? 'aria-current="page"' : "") + '>' + icon(item[2]) + '<span class="nav-label">' + esc(item[1]) + '</span></button>').join("") + '</div>').join("") +
+        '<div class="sidebar-bottom"><span class="prototype-badge">UI Prototype</span><div class="row"><span class="status-dot"></span><span class="small secondary">Offline demo state</span></div></div>';
+      const mobile = [["home","Home","home"],["projects","Projects","folder"],["create","Create","plus"],["ai-studio","AI","spark"],["settings","Settings","settings"]];
+      $("#mobile-bottom-nav").innerHTML = mobile.map(item => '<button data-action="' + (item[0] === "create" ? "new-project" : "navigate") + '" ' + (item[0] !== "create" ? 'data-view="' + item[0] + '"' : "") + ' ' + (state.view === item[0] ? 'aria-current="page"' : "") + '>' + icon(item[2]) + '<span>' + esc(item[1]) + '</span></button>').join("");
+    }
+    function renderHead() {
+      const info = pageInfo(state.view);
+      $("#page-head").innerHTML = '<div class="page-head"><div class="page-head-copy"><h1 class="page-title">' + esc(info[0]) + '</h1><p class="page-subtitle">' + esc(info[1]) + '</p></div><div class="page-actions">' + pageActions(state.view) + '</div></div>';
+    }
+    function panel(title, body, extra) {
+      return '<section class="panel ' + (extra || "") + '"><div class="panel-head"><h2>' + title + '</h2></div><div class="panel-body">' + body + '</div></section>';
+    }
+    function subheading(title, trailing) {
+      return '<div class="section-title-row"><h2>' + title + '</h2><span class="push">' + (trailing || "") + '</span></div>';
+    }
+    function projectCard(project) {
+      return '<article class="project-card"><div class="project-cover" aria-hidden="true">' + icon("film","icon-lg") + '<div class="project-cover-meta"><span>' + esc(project.ratio) + ' · ' + esc(project.resolution) + '</span><span>' + esc(project.duration) + '</span></div></div><div class="project-card-body"><div class="project-title-row"><strong>' + esc(project.name) + '</strong><button class="icon-button" data-action="toggle-pin" data-id="' + project.id + '" aria-label="' + (project.pinned ? "Unpin project" : "Pin project") + '">' + (project.pinned ? "◆" : "◇") + '</button></div><div class="project-meta"><span>' + esc(project.edited) + '</span><span>' + (project.pinned ? "Pinned" : "Project") + '</span></div><div class="project-card-actions">' + btn("Open","open-project","btn-compact btn-primary",'data-id="' + project.id + '"') + btn("More","project-menu","btn-compact",'data-id="' + project.id + '"') + '</div></div></article>';
+    }
+    function renderHome() {
+      const recent = state.projects.filter(project => !project.archived).slice(0, 4);
+      return '<div class="quick-actions">' + btn(icon("plus") + "New Project","new-project","btn-primary") + btn(icon("folder") + "Open Project","open-project","") + btn(icon("media") + "Import Media","import-media","") + '</div>' +
+        '<div class="section-block">' + subheading("Recent Projects",btn("View all","navigate","btn-ghost btn-compact",'data-view="projects"')) + '<div class="grid grid-4">' + recent.map(projectCard).join("") + '</div></div>' +
+        '<div class="grid grid-2 section-block">' +
+        panel("Recent Exports", state.exportQueue.slice(0,3).map(item => '<div class="status-item">' + icon("export") + '<div class="status-copy"><strong>' + esc(item.name) + '</strong><small>' + esc(item.status) + '</small></div><span class="badge">' + esc(item.progress) + '%</span></div>').join("") || '<div class="empty-state">No exports</div>') +
+        panel("Recent AI Tasks", '<div class="status-list"><div class="status-item">' + icon("mic") + '<div class="status-copy"><strong>Caption pass · Tutorial Draft</strong><small>Demo task · Sep 18</small></div><span class="badge">Complete</span></div><div class="status-item">' + icon("spark") + '<div class="status-copy"><strong>Prompt edit plan</strong><small>Not applied</small></div><span class="badge">Draft</span></div></div>') +
+        '</div><div class="grid grid-2 section-block">' +
+        panel("Core", '<div class="row-wrap"><span class="chip">Demo values</span><span class="chip semantic-success">Ready · simulated</span></div><div class="divider"></div><div class="row"><span class="secondary">Version</span><strong class="push mono small">0.1.0-prototype</strong></div><div class="row" style="margin-top:9px"><span class="secondary">Architecture API</span><strong class="push mono small">1</strong></div><p class="small muted" style="line-height:1.5;margin:12px 0 0">These sample values are not connected to a production Rust core.</p>') +
+        panel("Quick Tools", '<div class="row-wrap">' + btn(icon("mic") + "Auto Captions","navigate","btn-compact",'data-view="captions"') + btn(icon("spark") + "AI Studio","navigate","btn-compact",'data-view="ai-studio"') + btn(icon("media") + "Import","import-media","btn-compact") + btn(icon("box") + "Models","navigate","btn-compact",'data-view="models"') + '</div>') +
+        '</div>';
+    }
+    function filteredProjects() {
+      let items = state.projects.filter(project => {
+        const filterOk = state.projectsFilter === "All" || (state.projectsFilter === "Pinned" ? project.pinned : state.projectsFilter === "Archived" ? project.archived : !project.archived);
+        return filterOk && project.name.toLowerCase().includes(state.projectSearch.toLowerCase());
+      });
+      if (state.projectSort === "Name") items = items.slice().sort((a,b) => a.name.localeCompare(b.name));
+      return items;
+    }
+    function renderProjects() {
+      const projects = filteredProjects();
+      const filters = ["All","Recent","Pinned","Archived"];
+      const head = '<div class="row-wrap"><label class="search-wrap">' + icon("search") + '<input class="input" id="project-search" type="search" aria-label="Search projects" placeholder="Search projects" value="' + esc(state.projectSearch) + '"></label><label class="field" style="min-width:125px"><span class="field-label">Sort</span><select class="select" id="project-sort"><option' + (state.projectSort==="Edited"?' selected':'') + '>Edited</option><option' + (state.projectSort==="Name"?' selected':'') + '>Name</option></select></label><button class="icon-button" data-action="projects-layout" data-layout="grid" aria-pressed="' + (state.projectLayout==="grid") + '" aria-label="Grid view">' + icon("grid") + '</button><button class="icon-button" data-action="projects-layout" data-layout="list" aria-pressed="' + (state.projectLayout==="list") + '" aria-label="List view">' + icon("list") + '</button></div><div class="filter-row" style="margin-top:11px">' + filters.map(filter => '<button class="filter-chip" data-action="project-filter" data-filter="' + filter + '" aria-pressed="' + (filter===state.projectsFilter) + '">' + filter + '</button>').join("") + '</div>';
+      let content = "";
+      if (!projects.length) content = '<div class="empty-state"><strong>No projects found</strong><p>Try a different search or filter.</p></div>';
+      else if (state.projectLayout === "grid") content = '<div class="grid grid-4 section-block">' + projects.map(projectCard).join("") + '</div>';
+      else content = '<div class="project-list-wrap section-block"><table class="project-list"><thead><tr><th>Project</th><th>Format</th><th>Duration</th><th>Edited</th><th>State</th><th></th></tr></thead><tbody>' + projects.map(project => '<tr><td class="project-name">' + esc(project.name) + '</td><td>' + esc(project.ratio) + ' · ' + esc(project.resolution) + '</td><td>' + esc(project.duration) + '</td><td>' + esc(project.edited) + '</td><td>' + (project.archived ? "Archived" : project.pinned ? "Pinned" : "Active") + '</td><td>' + btn("Open","open-project","btn-compact btn-primary",'data-id="' + project.id + '"') + btn("Rename","rename-project","btn-compact",'data-id="' + project.id + '"') + btn("Archive","archive-project","btn-compact",'data-id="' + project.id + '"') + btn("Delete","delete-project","btn-compact btn-danger",'data-id="' + project.id + '"') + '</td></tr>').join("") + '</tbody></table></div>';
+      return '<div class="panel"><div class="panel-body">' + head + '</div></div>' + content;
+    }
+    function clipButton(clip, track, scale) {
+      const selected = clip.id === state.selectedClipId;
+      const kind = clip.kind === "audio" ? "audio-clip" : clip.kind === "text" ? "text-clip" : "";
+      const left = Math.max(0, clip.start * 18 * scale);
+      const width = Math.max(48, clip.duration * 18 * scale);
+      return '<button draggable="true" class="clip ' + kind + (clip.ai ? " ai-clip" : "") + (selected ? " selected" : "") + '" data-action="select-clip" data-id="' + clip.id + '" data-track="' + track.id + '" style="left:' + left + 'px;width:' + width + 'px" aria-pressed="' + selected + '">' + esc(clip.name) + '</button>';
+    }
+    function renderTracks() {
+      const scale = state.zoom;
+      return state.tracks.map(track => '<div class="track-row" data-track-row="' + track.id + '"><div class="track-label"><strong>' + esc(track.name) + '</strong><button data-action="track-visible" data-id="' + track.id + '" aria-label="Toggle track visibility">' + (track.visible ? "◉" : "○") + '</button><button data-action="track-mute" data-id="' + track.id + '" aria-label="Mute track">' + (track.muted ? "M" : "m") + '</button><button data-action="track-lock" data-id="' + track.id + '" aria-label="Lock track">' + (track.locked ? "L" : "l") + '</button></div><div class="track-lane" data-drop-track="' + track.id + '">' + track.clips.map(clip => clipButton(clip,track,scale)).join("") + '</div></div>').join("");
+    }
+    function renderInspector() {
+      const selected = getClip(state.selectedClipId);
+      if (!selected) return '<div class="empty-state"><strong>No clip selected</strong><p>Select a timeline clip to inspect its properties.</p></div>';
+      const clip = selected.clip;
+      const prop = (name, value) => '<label class="inspector-control"><span>' + name + '</span><input data-action="clip-property" data-property="' + name.toLowerCase() + '" value="' + esc(value) + '" aria-label="' + name + '"><span class="muted">•</span></label>';
+      const keyframes = clip.keyframes || 2;
+      return '<div class="inspector-section"><h4>Transform</h4>' + prop("Position X","0") + prop("Position Y","0") + prop("Scale","100%") + prop("Rotation","0°") + prop("Anchor","Center") + prop("Opacity","100%") + '</div><div class="inspector-section"><h4>Crop</h4>' + prop("Left","0") + prop("Right","0") + prop("Top","0") + prop("Bottom","0") + '</div><div class="inspector-section"><h4>Blend & Speed</h4><div class="field"><label for="blend-mode">Blend</label><select id="blend-mode" class="select"><option>Normal</option><option>Multiply</option><option>Screen</option><option>Overlay</option></select></div><div class="field" style="margin-top:8px"><label for="speed">Speed</label><select id="speed" class="select"><option>0.25x</option><option>0.5x</option><option selected>1x</option><option>2x</option><option>Custom</option></select></div></div><div class="inspector-section"><div class="row"><h4 style="margin:0">Keyframes</h4><span class="push chip">' + keyframes + ' dots</span></div><div class="row-wrap" style="margin-top:8px">' + btn("Add Keyframe","add-keyframe","btn-compact") + btn("Previous","previous-keyframe","btn-compact") + btn("Next","next-keyframe","btn-compact") + btn("Delete","delete-keyframe","btn-compact btn-danger") + '</div><div class="scopes" style="margin-top:9px"><span class="chip">Position • 2</span><span class="chip">Scale • 1</span><span class="chip">Rotation • 0</span><span class="chip">Opacity • 1</span></div><p class="small muted">Stabilization: planned</p></div><div class="row-wrap" style="padding-top:9px">' + btn("Reset","reset-inspector","btn-compact") + btn("Properties","planned","btn-compact") + '</div>';
+    }
+    function renderMobileEditor() {
+      const selected = getClip(state.selectedClipId);
+      return '<div class="mobile-editor"><div class="mobile-preview"><div class="preview-canvas"><div class="preview-mock"></div><span class="preview-label">' + fmtTime(state.currentTime) + '</span></div></div><div class="mobile-editor-transport"><button class="icon-button" data-action="go-start" aria-label="Go to start">' + icon("back") + '</button><button class="icon-button" data-action="toggle-play" aria-label="Play or pause">' + icon(state.playing ? "pause" : "play") + '</button><button class="icon-button" data-action="go-end" aria-label="Go to end">' + icon("next") + '</button><span class="time-display mono">' + fmtTime(state.currentTime) + '</span></div><div class="mobile-timeline"><div class="row"><strong class="small">Timeline</strong><span class="push muted small">' + (selected ? esc(selected.clip.name) : "No selection") + '</span></div>' + state.tracks.filter(track => track.clips.length).slice(0,4).map(track => '<div class="mobile-timeline-track" data-drop-track="' + track.id + '">' + track.clips.map(clip => clipButton(clip,track,0.65)).join("") + '</div>').join("") + '</div><div class="mobile-tool-dock"><button data-action="split-clip">' + icon("split") + '<span>Split</span></button><button data-action="mobile-inspector">' + icon("settings") + '<span>Tools</span></button><button data-action="navigate" data-view="captions">' + icon("text") + '<span>Text</span></button><button data-action="navigate" data-view="audio">' + icon("audio") + '<span>Audio</span></button><button data-action="navigate" data-view="effects">' + icon("spark") + '<span>FX</span></button><button data-action="navigate" data-view="ai-studio">' + icon("spark") + '<span>AI</span></button></div></div>';
+    }
+    function renderEditor() {
+      const mediaList = state.media.slice(0,5).map(item => '<div class="media-mini" data-action="add-media-timeline" data-id="' + item.id + '">' + '<span class="file-tile">' + icon(item.type==="Audio"?"audio":item.type==="Image"?"image":"film") + '</span><span class="media-mini-copy"><strong>' + esc(item.name) + '</strong><small>' + esc(item.duration) + ' · ' + esc(item.type) + '</small></span></div>').join("");
+      const ruler = Array.from({length: 13}, (_,i) => '<span class="ruler-mark">' + String(i*5).padStart(2,"0") + ':00</span>').join("");
+      const editorHead = '<div class="editor-top"><button class="icon-button" data-action="navigate" data-view="projects" aria-label="Back to projects">' + icon("back") + '</button><strong class="small">' + esc(activeProject().name) + '</strong><span class="chip semantic-success">Saved</span><span class="push"></span><button class="btn btn-compact" data-action="project-settings">Settings</button><label class="field small"><span class="hidden">Preview quality</span><select class="select" aria-label="Preview quality"><option>Auto</option><option>Full</option><option>1/2</option><option>1/4</option></select></label>' + btn(icon("export")+"Export","export-dialog","btn-primary btn-compact") + '</div>';
+      const desktop = '<div class="editor-grid"><section class="editor-panel"><div class="editor-panel-header"><strong>Media</strong><button class="icon-button" data-action="import-media" aria-label="Import media">' + icon("plus") + '</button></div><div class="editor-panel-content"><div class="filter-row"><button class="filter-chip" aria-pressed="true" data-action="editor-media-tab" data-tab="Media">Media</button><button class="filter-chip" data-action="editor-media-tab" data-tab="Library">Library</button><button class="filter-chip" data-action="editor-media-tab" data-tab="Generated">Generated</button></div>' + mediaList + '<button class="text-link" style="margin-top:9px" data-action="navigate" data-view="media">Open media browser</button></div></section><section class="editor-panel preview-area"><div class="editor-panel-header"><strong>Preview</strong><button class="icon-button push" data-action="toggle-guides" aria-label="Toggle safe area guides">' + icon("eye") + '</button><span class="chip">16:9</span></div><div class="preview-canvas-wrap"><div class="preview-canvas ' + (activeProject().ratio==="9:16"?"vertical":"") + (state.safeGuides?" safe-guides":"") + '"><div class="preview-mock"></div><span class="preview-label">' + fmtTime(state.currentTime) + '</span></div></div><div class="transport"><button class="icon-button" data-action="go-start" aria-label="Go to start">' + icon("back") + '</button><button class="icon-button" data-action="toggle-play" aria-label="Play or pause">' + icon(state.playing?"pause":"play") + '</button><button class="icon-button" data-action="next-frame" aria-label="Next frame">' + icon("next") + '</button><span class="time-display mono">' + fmtTime(state.currentTime) + ' / ' + fmtTime(state.duration) + '</span><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="' + state.loop + '">↻</button><button class="icon-button" data-action="volume" aria-label="Volume">' + icon("wave") + '</button></div></section><section class="editor-panel inspector-panel"><div class="editor-panel-header"><strong>Inspector</strong><span class="push chip">' + (getClip(state.selectedClipId)?esc(getClip(state.selectedClipId).clip.kind):"—") + '</span></div><div class="editor-panel-content">' + renderInspector() + '</div></section></div><div class="editor-tools">' + ["Select","Split","Trim","Ripple Delete","Delete","Duplicate","Crop","Transform","Speed","Freeze Frame","Reverse","Link","Group","Snap","Magnet","Marker","Undo","Redo"].map(tool => '<button class="tool-btn" data-action="editor-tool" data-tool="' + tool + '" aria-pressed="' + (state.selectedTool===tool) + '">' + (tool==="Split"?icon("split"):tool==="Duplicate"?icon("copy"):tool==="Undo"?icon("undo"):tool==="Redo"?icon("redo"):"") + esc(tool) + '</button>').join("") + '</div><section class="timeline"><div class="timeline-head"><strong>Timeline</strong><button class="btn btn-compact" data-action="add-marker">+ Marker</button><span class="push"></span><label class="timeline-zoom small"><span class="muted">−</span><input id="timeline-zoom" aria-label="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="' + state.zoom + '"><span class="muted">+</span></label></div><div class="timeline-scroller"><div class="timeline-ruler">' + ruler + '</div><div class="playhead" id="playhead" aria-hidden="true"></div>' + renderTracks() + '</div></section>';
+      return editorHead + desktop + renderMobileEditor();
+    }
+    function renderMedia() {
+      const tabs = ["Media","Library","Generated","Proxy"];
+      const list = state.media.filter(item => {
+        const tabOk = state.selectedMediaTab === "Media" ? item.source === "Media" : state.selectedMediaTab === "Library" ? item.source === "Library" : state.selectedMediaTab === "Generated" ? item.source === "Generated" : item.source === "Proxy";
+        return tabOk && (state.mediaFilter==="All" || item.type===state.mediaFilter) && item.name.toLowerCase().includes(state.mediaSearch.toLowerCase());
+      });
+      const generated = state.generated.map(item => ({id:item.id,name:item.name,type:item.type,duration:item.duration,spec:item.spec,source:"Generated"}));
+      const viewList = state.selectedMediaTab === "Generated" ? generated : list;
+      return '<div class="panel"><div class="panel-body"><div class="tabs">' + tabs.map(tab => '<button class="tab" data-action="media-tab" data-tab="' + tab + '" aria-selected="' + (tab===state.selectedMediaTab) + '">' + tab + '</button>').join("") + '</div><div class="row-wrap" style="margin-top:12px"><label class="search-wrap">' + icon("search") + '<input id="media-search" class="input" type="search" aria-label="Search media" placeholder="Search media" value="' + esc(state.mediaSearch) + '"></label><div class="filter-row">' + ["All","Video","Audio","Image"].map(filter => '<button class="filter-chip" data-action="media-filter" data-filter="' + filter + '" aria-pressed="' + (state.mediaFilter===filter) + '">' + filter + '</button>').join("") + '</div></div></div></div><div class="section-block media-grid">' + (viewList.length ? viewList.map(item => '<article class="asset-card"><div class="asset-thumb">' + icon(item.type==="Audio"?"audio":item.type==="Image"?"image":"film","icon-lg") + '</div><strong title="' + esc(item.name) + '">' + esc(item.name) + '</strong><small>' + esc(item.duration) + ' · ' + esc(item.spec) + '</small><div class="row-wrap"><button class="btn btn-compact btn-primary" data-action="add-media-timeline" data-id="' + item.id + '">Add to Timeline</button><button class="icon-button" data-action="media-menu" data-id="' + item.id + '" aria-label="Media actions">' + icon("more") + '</button></div></article>').join("") : '<div class="empty-state"><strong>No media in this view</strong><p>Import a demo file or choose another tab.</p>' + btn("Import Files","import-media","btn-compact") + '</div>') + '</div><div class="section-block row-wrap">' + btn("Import Files","import-media","") + btn("Import Folder","import-folder","") + btn("Record","planned","") + btn("Paste Media","planned","") + '</div>';
+    }
+    function captionRows() {
+      return state.captions.map(item => '<div class="caption-row"><span class="caption-time">' + esc(item.time) + '</span><input data-action="caption-edit" data-id="' + item.id + '" value="' + esc(state.translationApplied ? item.translated : item.text) + '" aria-label="Edit subtitle"><button class="icon-button" data-action="caption-more" data-id="' + item.id + '" aria-label="Caption actions">' + icon("more") + '</button></div>').join("");
+    }
+    function renderCaptions() {
+      return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Auto Captions</h2><span class="chip">Simulated</span></div><div class="panel-body stack"><div class="field"><label for="caption-source">Source</label><select class="select" id="caption-source"><option>Timeline</option><option>Selected Clip</option><option>Audio Track</option></select></div><div class="field"><label for="caption-language">Language</label><select class="select" id="caption-language"><option>Auto detect</option><option>English</option><option>Vietnamese</option><option>Japanese</option><option>Korean</option><option>Chinese</option><option>Spanish</option></select></div><div class="grid grid-2"><div class="field"><label for="caption-model">Model</label><select id="caption-model" class="select"><option>Whisper Tiny</option><option>Whisper Base</option><option>Whisper Small</option><option>Whisper Medium</option><option>Whisper Large (planned)</option></select></div><div class="field"><label for="caption-device">Device</label><select id="caption-device" class="select"><option>Auto</option><option>CPU</option><option>GPU</option></select></div></div><label class="toggle-row"><input type="checkbox" checked><span class="toggle-copy"><strong>Word timestamps</strong></span></label><label class="toggle-row"><input type="checkbox"><span class="toggle-copy"><strong>Speaker detection</strong><small>Placeholder</small></span></label><label class="toggle-row"><input type="checkbox" checked><span class="toggle-copy"><strong>Remove filler words</strong></span></label><label class="toggle-row"><input type="checkbox" checked><span class="toggle-copy"><strong>Punctuation</strong></span></label><div class="field"><label for="line-length">Maximum line length</label><input id="line-length" class="input" type="number" value="42" min="12" max="90"></div>' + (state.captionsProgress>0 && state.captionsProgress<100 ? '<div class="progress-row"><div class="meter"><span style="width:' + state.captionsProgress + '%"></span></div><small>' + state.captionsProgress + '% · Transcribing demo task</small></div>' : "") + btn(icon("mic")+"Transcribe","start-captions","btn-primary") + '</div></section><section class="panel"><div class="panel-head"><h2>Subtitle Translation</h2><span class="chip">Mock text</span></div><div class="panel-body stack"><div class="grid grid-2"><div class="field"><label>Source language</label><select class="select"><option>English</option><option>Vietnamese</option></select></div><div class="field"><label>Target language</label><select class="select"><option>Vietnamese</option><option>English</option><option>Japanese</option><option>Korean</option></select></div></div><div class="field"><label>Translator provider</label><select class="select"><option>Local Translation Model</option><option>Local LLM</option><option>Cloud Provider</option><option>Custom Provider</option></select></div><div class="row-wrap">' + btn("Translate","translate-captions","btn-primary") + btn("Apply","apply-translation","") + btn("Create bilingual captions","bilingual-captions","") + '</div><div class="row-wrap">' + btn("Export SRT","subtitle-export","btn-compact") + btn("Export VTT","subtitle-export","btn-compact") + btn("Export ASS","subtitle-export","btn-compact") + '</div></div></section></div><section class="panel section-block"><div class="panel-head"><h2>Subtitle segments</h2><span class="push chip">' + state.captions.length + ' demo rows</span></div><div>' + captionRows() + '</div></section>';
+    }
+    function renderAudio() {
+      const rows = state.tracks.filter(track => track.type === "audio").map(track => '<div class="status-item"><span class="file-tile">' + icon("audio") + '</span><div class="status-copy"><strong>' + esc(track.name) + ' · ' + esc(track.clips[0] ? track.clips[0].name : "Empty track") + '</strong><small>' + (track.muted?"Muted":"Ready") + ' · demo mixer control</small></div><label class="field small"><span>Volume</span><input type="range" min="0" max="100" value="' + (track.muted?0:75) + '" aria-label="' + track.name + ' volume"></label><label class="field small"><span>Pan</span><input type="range" min="-100" max="100" value="0" aria-label="' + track.name + ' pan"></label><button class="btn btn-compact" data-action="track-mute" data-id="' + track.id + '">' + (track.muted?"Unmute":"Mute") + '</button><button class="btn btn-compact" data-action="audio-solo" data-id="' + track.id + '">Solo</button></div>').join("");
+      return '<div class="grid grid-2">' + panel("Mixer", '<div class="status-list">' + rows + '</div><div class="row-wrap section-block">' + btn("Normalize","audio-tool","") + btn("Auto Ducking","audio-tool","") + btn("Beat Detection","audio-tool","") + '</div>') + panel("Audio tools", '<div class="grid grid-2">' + ["Noise Reduction","Voice Enhancement","EQ","Compressor","Limiter","Fade In","Fade Out","Voice Isolation"].map(name => '<button class="feature-card" data-action="audio-tool"><strong>' + name + '</strong><small>' + (name==="Voice Isolation"?"Planned":"Prototype control") + '</small></button>').join("") + '</div>') + '</div>';
+    }
+    const effects = ["Brightness / Contrast","Exposure","Temperature","Saturation","Curves","LUT","Gaussian Blur","Sharpen","Vignette","Chromatic Aberration","Grain","Noise Reduction"];
+    const effectGroups = { "All": effects, "Color": effects.slice(0,6), "Blur": ["Gaussian Blur"], "Sharpen": ["Sharpen"], "Distortion": ["Chromatic Aberration"], "Light": ["Exposure","Vignette"], "Stylize": ["Grain"], "Utility": ["Noise Reduction"], "Audio": ["Noise Reduction"] };
+    function renderEffects() {
+      const categories = ["All","Color","Blur","Sharpen","Distortion","Light","Stylize","Utility","Audio"];
+      const list = effectGroups[state.selectedEffectCategory] || effects;
+      return '<div class="row-wrap">' + categories.map(name => '<button class="filter-chip" data-action="effect-category" data-category="' + name + '" aria-pressed="' + (state.selectedEffectCategory===name) + '">' + name + '</button>').join("") + '</div><div class="grid grid-4 section-block">' + list.map(name => '<button class="feature-card" data-action="add-effect" data-effect="' + esc(name) + '"><span class="eyebrow">Effect</span><strong style="margin-top:6px">' + esc(name) + '</strong><small>Neutral preview · add to selected clip</small></button>').join("") + '</div>';
+    }
+    function renderTransitions() {
+      const items = ["Cut","Cross Dissolve","Fade","Dip to Black","Slide","Push","Zoom","Wipe"];
+      return '<div class="row-wrap">' + ["Basic","Movement","Mask","Light","Stylized"].map(name => '<button class="filter-chip" data-action="transition-category" data-category="' + name + '" aria-pressed="' + (state.selectedTransitionCategory===name) + '">' + name + '</button>').join("") + '</div><div class="grid grid-4 section-block">' + items.map((name,i) => '<article class="feature-card"><div class="transition-diagram" aria-hidden="true"><span style="display:block;height:22px;width:' + (30+i*5) + '%;border:1px solid #777;border-radius:3px;background:#232325"></span><span style="display:block;height:22px;width:' + (40+i*4) + '%;margin:5px 0 0 auto;border:1px solid #777;border-radius:3px;background:#171718"></span></div><strong style="margin-top:8px">' + name + '</strong><small>Duration</small><select class="select" aria-label="' + name + ' duration"><option>0.25 s</option><option selected>0.5 s</option><option>1.0 s</option><option>2.0 s</option></select><button class="btn btn-compact btn-primary" style="margin-top:8px;width:100%" data-action="add-transition" data-name="' + name + '">Add to edit point</button></article>').join("") + '</div>';
+    }
+    function renderColor() {
+      const controls = ["Exposure","Contrast","Highlights","Shadows","Whites","Blacks","Temperature","Tint","Saturation","Vibrance"];
+      return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Primary controls</h2></div><div class="panel-body">' + controls.map((name,i) => '<label class="range-row"><span class="secondary small">' + name + '</span><input type="range" min="-100" max="100" value="0" aria-label="' + name + '"><span class="mono muted small">0</span></label>').join("") + '<div class="divider"></div><div class="row-wrap">' + btn("Curves","planned","") + btn("HSL","planned","") + btn("LUT","planned","") + '</div></div></section><section class="panel"><div class="panel-head"><h2>Scopes</h2><span class="push chip">Placeholder</span></div><div class="panel-body stack">' + ["Waveform","Vectorscope","Histogram"].map((name,i) => '<div><div class="row"><strong class="small">' + name + '</strong><span class="push muted small">Demo trace</span></div><svg class="scope-svg" viewBox="0 0 240 90" role="img" aria-label="' + name + ' placeholder"><path class="grid-line" d="M20 15H230M20 45H230M20 75H230M20 15V75M90 15V75M160 15V75M230 15V75"/><polyline points="' + (i===0?"20,70 50,64 82,50 106,54 136,32 162,39 187,22 230,29":i===1?"22,46 46,30 72,38 95,21 126,50 152,64 176,48 202,36 230,46":"20,74 38,64 56,41 72,23 88,42 109,66 129,72 150,51 172,24 193,37 211,63 230,71") + '"/></svg></div>').join("") + '</div></section></div>';
+    }
+    function renderImageTools() {
+      return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Image canvas</h2><span class="chip">Neutral mock</span></div><div class="panel-body"><div class="image-mock"><span class="image-frame"><span class="image-center-mark"></span></span><span class="mono muted small">2400 × 1200</span></div><div class="row-wrap section-block">' + ["Crop","Resize","Rotate","Flip","Mask","Remove Background","AI Select Subject"].map(name => btn(name,"image-tool",name==="Remove Background"?"":"btn-compact",'data-tool="' + name + '"')).join("") + '</div><button class="btn btn-primary section-block" data-action="send-image-timeline">Send to Timeline</button></div></section><section class="panel"><div class="panel-head"><h2>Adjustments</h2></div><div class="panel-body">' + ["Exposure","Brightness","Contrast","Temperature","Saturation","Blur","Sharpen"].map(name => '<label class="range-row"><span class="secondary small">' + name + '</span><input type="range" min="-100" max="100" value="0" aria-label="' + name + '"><span class="mono muted small">0</span></label>').join("") + '</div></section></div>';
+    }
+    function renderAiStudio() {
+      const mode = state.selectedAiMode;
+      const fields = mode==="Video" ? '<div class="grid grid-3"><div class="field"><label>Aspect ratio</label><select class="select"><option>16:9</option><option>9:16</option><option>1:1</option></select></div><div class="field"><label>Duration</label><select class="select"><option>5 s</option><option>10 s</option><option>15 s</option></select></div><div class="field"><label>Frame rate</label><select class="select"><option>24 fps</option><option>30 fps</option><option>60 fps</option></select></div></div>' : mode==="Image" ? '<div class="grid grid-3"><div class="field"><label>Width</label><input class="input" type="number" value="1024"></div><div class="field"><label>Height</label><input class="input" type="number" value="1024"></div><div class="field"><label>Aspect ratio</label><select class="select"><option>1:1</option><option>16:9</option><option>9:16</option></select></div></div>' : mode==="Audio" ? '<div class="grid grid-2"><div class="field"><label>Duration</label><select class="select"><option>15 seconds</option><option>30 seconds</option><option>60 seconds</option></select></div><div class="field"><label>Type</label><select class="select"><option>Music</option><option>Sound effect</option><option>Ambience</option></select></div></div>' : '<div class="grid grid-3"><div class="field"><label>Voice</label><select class="select"><option>Neutral 01</option><option>Neutral 02</option></select></div><div class="field"><label>Language</label><select class="select"><option>English</option><option>Vietnamese</option></select></div><div class="field"><label>Speed</label><input type="range" min="50" max="150" value="100" aria-label="Voice speed"></div></div>';
+      return '<section class="panel"><div class="tabs">' + ["Video","Image","Audio","Voice"].map(name => '<button class="tab" data-action="ai-mode" data-mode="' + name + '" aria-selected="' + (mode===name) + '">' + name + '</button>').join("") + '</div><div class="panel-body grid grid-2"><div class="stack"><div class="field"><label for="ai-prompt">Prompt</label><textarea id="ai-prompt" class="textarea" placeholder="Describe the result you want.">A restrained monochrome title card with subtle film grain.</textarea></div><div class="field"><label>Reference Media</label><div class="row-wrap"><button class="btn btn-compact" data-action="reference-media">Choose media</button><span class="chip">No reference selected</span></div></div><div class="grid grid-3"><div class="field"><label>Model</label><select class="select"><option>Demo model</option><option>Local model (planned)</option><option>Custom model</option></select></div><div class="field"><label>Provider</label><select class="select"><option>Local</option><option>Cloud API</option><option>Custom</option></select></div><div class="field"><label>Seed</label><input class="input" type="number" value="42"></div></div>' + fields + '<div class="grid grid-2"><div class="field"><label>Quality</label><select class="select"><option>Standard</option><option>High</option><option>Draft</option></select></div><div class="field"><label>Output</label><select class="select"><option>Generated media library</option><option>Temporary result</option></select></div></div><div class="row-wrap">' + btn(icon("spark")+"Generate","generate-ai","btn-primary") + '<span class="small muted">Simulated · no model or network call</span></div>' + (state.aiProgress>0&&state.aiProgress<100?'<div class="progress-row"><div class="meter"><span style="width:'+state.aiProgress+'%"></span></div><small>'+state.aiProgress+'% · Generating</small></div>':"") + '</div><div class="stack"><div class="panel"><div class="panel-head"><h2>Task queue</h2><span class="push chip">Demo</span></div><div class="panel-body">' + (state.aiProgress>=100?'<div class="status-item">'+icon("check")+'<div class="status-copy"><strong>'+mode+' result · Demo</strong><small>Complete · added to Generated media</small></div></div>':'<div class="empty-state"><strong>No active generation</strong><p>Generate to start a simulated task.</p></div>') + '</div></div><div class="panel"><div class="panel-head"><h2>Generated media</h2></div><div class="panel-body">' + (state.generated.length?state.generated.map(item=>'<div class="status-item">'+icon("image")+'<div class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.type)+' · '+esc(item.spec)+'</small></div>'+btn("Add to Timeline","add-generated","btn-compact",'data-id="'+item.id+'"')+btn("Delete","delete-generated","btn-compact btn-danger",'data-id="'+item.id+'"')+'</div>').join(""):'<div class="small muted">No generated media yet.</div>') + '</div></div></div></div></section>';
+    }
+    function renderPromptEditing() {
+      const plan = state.promptPlan ? '<div class="panel section-block"><div class="tabs"><button class="tab" aria-selected="true">Plan</button><button class="tab" aria-selected="false">Changes</button><button class="tab" aria-selected="false">Warnings</button></div><div class="panel-body"><ol class="plan-list">' + agentPlan.map((step,i)=>'<li><span class="badge">'+(i+1)+'</span>'+esc(step)+'</li>').join("") + '</ol><div class="divider"></div><div class="row-wrap"><span class="chip">Changes: 9 planned</span><span class="chip semantic-warning">Warnings: mock media and model availability</span></div></div></div>' : '<div class="empty-state"><strong>No edit plan yet</strong><p>Plan creates a structured demo plan. Dry Run previews mock changes without applying them.</p></div>';
+      return '<section class="panel"><div class="panel-head"><h2>Edit with Agent</h2><span class="chip">Simulated plan</span></div><div class="panel-body"><div class="field"><label for="agent-prompt">Describe the edit</label><textarea id="agent-prompt" class="textarea" style="min-height:100px">Remove the long pauses, add Vietnamese captions, lower the music during speech and create a 30-second vertical version.</textarea></div><div class="row-wrap section-block">' + btn("Plan","agent-plan","btn-primary") + btn("Dry Run","agent-dry-run","") + btn("Apply","agent-apply","",' ' + (state.promptPlan?"":"disabled")) + btn("Undo Agent Edit","undo-agent","") + '<span class="small muted">No real editing occurs.</span></div>' + plan + (state.promptDryRun?'<div class="panel section-block"><div class="panel-head"><h2>Dry Run</h2></div><div class="panel-body"><div class="row-wrap"><span class="chip">9 operations</span><span class="chip">Estimated duration: demo only</span><span class="chip semantic-warning">No files will be changed</span></div></div></div>':"") + (state.agentApplied?'<div class="row section-block"><span class="chip semantic-success">Demo plan applied to mock timeline</span></div>':"") + '</div></section>';
+    }
+    function renderAgents() {
+      const tabs = ["Agents","CLI","Tasks","Capabilities","Permissions","Prompt Editing","AGENTS.md"];
+      let content = "";
+      if (state.selectedAgentTab === "CLI") {
+        content = '<div class="terminal"><div class="terminal-head"><span class="status-dot"></span><strong>OR CLI</strong><span class="push">local simulation · no shell</span></div><div class="terminal-body" id="terminal-body">' + state.terminalLog.map(line=>'<p class="terminal-line"><span class="terminal-prompt">or&gt; </span>'+esc(line.input)+'\n'+esc(line.output)+'</p>').join("") + '</div><form class="terminal-input-row" id="terminal-form"><span class="mono secondary">or&gt;</span><input id="terminal-input" aria-label="Prototype CLI command" autocomplete="off" spellcheck="false" placeholder="version, health, capabilities, help"><button class="btn btn-compact" type="submit">Run</button></form></div><div class="row-wrap section-block"><span class="chip">version</span><span class="chip">health</span><span class="chip">capabilities</span><span class="chip">project inspect</span><span class="chip">timeline list</span><span class="chip">selection get</span></div>';
+      } else if (state.selectedAgentTab === "Agents") {
+        content = '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Agents</h2><span class="push chip">Prototype</span></div><div class="panel-body status-list">' + state.agents.map(agent=>'<div class="status-item"><span class="agent-avatar">'+esc(agent.tag)+'</span><div class="status-copy"><strong>'+esc(agent.name)+'</strong><small>'+esc(agent.status)+' · demo connection</small></div><span class="badge">'+esc(agent.status)+'</span><button class="btn btn-compact" data-action="agent-toggle" data-name="'+esc(agent.name)+'">'+(agent.status==="Connected"?"Disconnect":"Connect")+'</button><button class="icon-button" data-action="agent-session" data-name="'+esc(agent.name)+'" aria-label="Open session">'+icon("terminal")+'</button></div>').join("") + '</div></section><section class="panel"><div class="panel-head"><h2>Send a task</h2></div><div class="panel-body stack"><textarea class="textarea" id="agent-task" placeholder="Describe a task for a connected agent"></textarea><div class="row-wrap">'+btn("Send Task","send-agent-task","btn-primary") + btn("Open Session","agent-session","") + '</div><p class="small muted">Task submission is simulated and does not contact an agent.</p></div></section></div>';
+      } else if (state.selectedAgentTab === "Capabilities") {
+        const caps = ["project.read","project.edit","media.inspect","media.import","timeline.read","timeline.edit","captions.transcribe","captions.translate","audio.edit","image.edit","ai.generate","render.export"];
+        content = '<div class="grid grid-3">' + caps.map((name,i)=>'<article class="feature-card"><strong class="mono">'+name+'</strong><small>Future discoverable command</small><span class="badge">'+(i<3?"Planned":"Planned")+'</span></article>').join("") + '</div><p class="small muted section-block">These are product direction only. The production core currently exposes no application capabilities in this prototype.</p>';
+      } else if (state.selectedAgentTab === "Permissions") {
+        const perms = ["Project Read","Project Edit","Media Read","Media Write","Render","Model Download","Network AI"];
+        content = '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Agent permissions</h2><span class="chip">Mock controls</span></div><div class="panel-body">' + perms.map((name,i)=>'<label class="toggle-row"><span class="toggle-copy"><strong>'+name+'</strong><small>Prototype permission only</small></span><input class="switch" type="checkbox" '+(i===0?'checked':'')+' aria-label="'+name+' permission"></label>').join("") + '</div></section><section class="panel"><div class="panel-head"><h2>Always denied</h2></div><div class="panel-body stack">' + ["Secrets Read","Filesystem Anywhere","Shell Anywhere"].map(name=>'<div class="status-item"><span class="chip semantic-warning">Denied</span><div class="status-copy"><strong>'+name+'</strong><small>Future permission boundary</small></div></div>').join("") + '</div></section></div>';
+      } else if (state.selectedAgentTab === "Prompt Editing") content = renderPromptEditing();
+      else if (state.selectedAgentTab === "Tasks") content = '<section class="panel"><div class="panel-head"><h2>Task queue</h2><span class="push chip">Demo</span></div><div class="panel-body status-list"><div class="status-item">'+icon("check")+'<div class="status-copy"><strong>Caption pass · Tutorial Draft</strong><small>Complete · simulated</small></div><span class="badge">Complete</span></div><div class="status-item">'+icon("clock")+'<div class="status-copy"><strong>Prompt edit plan</strong><small>Waiting for review</small></div><span class="badge">Draft</span></div></div></section>';
+      else content = '<section class="panel"><div class="panel-head"><h2>Repository agent instructions</h2><span class="chip">Preview</span></div><div class="panel-body"><p class="small secondary">Project rules live in AGENTS.md. Future agent integrations should use structured OR capabilities with explicit permissions.</p><div class="row-wrap">'+btn("Open Feature Map","navigate","btn-compact",'data-view="feature-map"')+btn("Review permissions","agent-tab","btn-compact",'data-tab="Permissions"')+'</div><pre class="mono small" style="white-space:pre-wrap;color:var(--or-text-secondary);line-height:1.6">OR agent contract (planned)\n- discover stable commands\n- inspect before changing\n- dry-run complex edits\n- require confirmation for writes\n- never expose stored secrets</pre></div></section>';
+      return '<section class="panel"><div class="tabs">' + tabs.map(tab=>'<button class="tab" data-action="agent-tab" data-tab="'+esc(tab)+'" aria-selected="'+(tab===state.selectedAgentTab)+'">'+esc(tab)+'</button>').join("") + '</div><div class="panel-body">'+content+'</div></section>';
+    }
+    function filteredModels() {
+      if (state.selectedModelTab==="Installed") return state.models.filter(model=>model.status==="Installed");
+      if (state.selectedModelTab==="Updates") return state.models.filter(model=>model.status==="Update");
+      if (state.selectedModelTab==="Storage") return [];
+      return state.models.filter(model=>model.status!=="Installed");
+    }
+    function modelButtons(model) {
+      const name = 'data-name="' + esc(model.name) + '"';
+      if (model.status === "Downloading") return '<div class="progress-row"><div class="meter"><span style="width:' + model.progress + '%"></span></div><small>' + model.progress + '%</small></div>' + btn("Pause","model-pause","btn-compact",name) + btn("Cancel","model-cancel","btn-compact btn-danger",name);
+      if (model.status === "Paused") return '<span class="chip semantic-warning">Paused</span>' + btn("Resume","model-resume","btn-compact",name) + btn("Cancel","model-cancel","btn-compact btn-danger",name);
+      if (model.status === "Installed") return '<span class="chip semantic-success">Installed</span>' + btn("Remove","model-remove","btn-compact btn-danger",name);
+      if (model.status === "Future") return '<span class="chip">Future</span>';
+      if (model.status === "Update") return btn("Update","model-update","btn-compact",name);
+      return btn("Download","model-download","btn-compact",name);
+    }
+    function renderModels() {
+      const tabs = ["Installed","Available","Updates","Storage"];
+      let body = "";
+      if (state.selectedModelTab === "Storage") {
+        body = '<div class="grid grid-2"><div class="feature-card"><strong>Model storage</strong><small>Demo allocation · no files on disk</small><div class="progress-row" style="margin-top:10px"><div class="meter"><span style="width:23%"></span></div><small>0.8 / 3.5 GB</small></div></div><div class="feature-card"><strong>Cache</strong><small>Prototype location: local demo state</small><button class="btn btn-compact section-block" data-action="clear-cache">Clear cache</button></div></div>';
+      } else {
+        const models = filteredModels();
+        body = '<div class="model-list">' + models.map(model => {
+          return '<article class="model-row"><div class="model-main"><span class="file-tile">' + icon("box") + '</span><div class="status-copy"><strong>' + esc(model.name) + '</strong><small>' + esc(model.task) + ' · ' + esc(model.version) + ' · ' + esc(model.size) + '</small></div></div><div class="model-metadata"><span>' + esc(model.license) + '</span><span>' + esc(model.runtime) + '</span><span>' + esc(model.hardware) + '</span></div><div class="model-action">' + modelButtons(model) + '</div></article>';
+        }).join("") + (models.length ? "" : '<div class="empty-state"><strong>No updates available</strong><p>Model update checks are not connected.</p></div>');
+      }
+      return '<section class="panel"><div class="tabs">' + tabs.map(tab => '<button class="tab" data-action="model-tab" data-tab="' + tab + '" aria-selected="' + (state.selectedModelTab === tab) + '">' + tab + '</button>').join("") + '</div><div class="panel-body"><div class="row-wrap"><span class="chip">No real downloads</span><span class="chip">License review required before distribution</span><span class="push secondary small">Installed demo data: 0.8 GB</span></div><div class="section-block">' + body + '</div></div></section>';
+    }
+    function exportForm() {
+      return '<div class="grid grid-2"><div class="field"><label for="export-filename">Filename</label><input id="export-filename" class="input" value="'+esc(activeProject().name.replace(/ /g,"-"))+'-draft"></div><div class="field"><label for="export-destination">Destination</label><input id="export-destination" class="input" value="~/Movies/Exports"></div><div class="field"><label>Preset</label><select class="select"><option>Draft</option><option>YouTube 1080p</option><option>YouTube 4K</option><option>TikTok / Reels</option><option>Instagram</option><option>Archive</option><option>Custom</option></select></div><div class="field"><label>Format</label><select class="select"><option>MP4</option><option>MOV</option><option>WebM</option></select></div><div class="field"><label>Codec</label><select class="select"><option>H.264</option><option>H.265</option><option>AV1</option><option>VP9</option></select></div><div class="field"><label>Resolution</label><select class="select"><option>1920 × 1080</option><option>3840 × 2160</option><option>1080 × 1920</option><option>Custom</option></select></div><div class="field"><label>Frame rate</label><select class="select"><option>30 fps</option><option>24 fps</option><option>25 fps</option><option>60 fps</option></select></div><div class="field"><label>Bitrate</label><select class="select"><option>12 Mbps</option><option>20 Mbps</option><option>Custom</option></select></div><div class="field"><label>Audio codec</label><select class="select"><option>AAC</option><option>PCM</option><option>Opus</option></select></div><div class="field"><label>Hardware acceleration</label><select class="select"><option>Auto</option><option>CPU</option><option>VideoToolbox · platform-dependent</option><option>NVENC · future</option><option>QSV · future</option><option>VAAPI · future</option></select></div></div><p class="small muted">All settings are mock values. Export does not read or write media.</p>';
+    }
+    function renderExport() {
+      return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Export settings</h2><span class="chip">Simulation only</span></div><div class="panel-body">'+exportForm()+'<div class="row-wrap section-block">'+btn("Add to Queue","queue-export","") + btn("Export","start-export","btn-primary")+'</div>'+(state.exportProgress>0&&state.exportProgress<100?'<div class="progress-row"><div class="meter"><span style="width:'+state.exportProgress+'%"></span></div><small>'+state.exportProgress+'% · Rendering demo</small></div>':"")+'</div></section><section class="panel"><div class="panel-head"><h2>Queue</h2><span class="push chip">'+state.exportQueue.length+' jobs</span></div><div class="panel-body status-list">'+state.exportQueue.map(item=>'<div class="status-item">'+icon("export")+'<div class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.status)+' · '+item.progress+'%</small></div><div class="meter" style="width:72px"><span style="width:'+item.progress+'%"></span></div><button class="icon-button" data-action="remove-export" data-id="'+item.id+'" aria-label="Remove export">'+icon("close")+'</button></div>').join("")+'</div></section></div>';
+    }
+    function renderSettings() {
+      const sections = ["General","Appearance","Editing","Playback","Performance","Storage","AI","Models","Agents","Privacy","Shortcuts","Updates","About"];
+      let content = "";
+      if (state.selectedSettings==="General") content = '<div class="grid grid-2"><div class="field"><label>Language</label><select class="select"><option>English</option><option>Tiếng Việt</option></select></div><label class="toggle-row"><span class="toggle-copy"><strong>Autosave</strong><small>Prototype preference</small></span><input class="switch setting-toggle" data-setting="autosave" type="checkbox" '+(state.settings.autosave?"checked":"")+'></label><div class="field"><label>Autosave interval</label><select class="select"><option>1 minute</option><option>5 minutes</option><option>10 minutes</option></select></div></div>';
+      else if (state.selectedSettings==="Appearance") content = '<div class="row-wrap"><span class="chip">Focused Monochrome</span><span class="small muted">No colorful light theme</span></div><div class="field section-block"><label>UI density</label><select class="select" id="density"><option>Comfortable</option><option>Compact</option></select></div><div class="field section-block"><label>Text scaling</label><input type="range" min="90" max="130" value="100" aria-label="Text scaling"></div>';
+      else if (state.selectedSettings==="Editing") content = '<label class="toggle-row"><span class="toggle-copy"><strong>Snap</strong><small>Default timeline snapping</small></span><input class="switch setting-toggle" data-setting="snap" type="checkbox" '+(state.settings.snap?"checked":"")+'></label><div class="field section-block"><label>Default transition</label><select class="select"><option>Cut</option><option>Cross Dissolve</option></select></div><div class="field section-block"><label>Timeline behavior</label><select class="select"><option>Selection follows playhead</option><option>Playhead follows selection</option></select></div>';
+      else if (state.selectedSettings==="Playback") content = '<div class="field"><label>Preview resolution</label><select class="select"><option>Auto</option><option>Full</option><option>1/2</option><option>1/4</option></select></div><div class="field section-block"><label>Audio buffer</label><select class="select"><option>Default</option><option>Low latency</option></select></div>';
+      else if (state.selectedSettings==="Performance") content = '<div class="grid grid-2"><label class="toggle-row"><span class="toggle-copy"><strong>GPU acceleration</strong><small>Planned platform setting</small></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware decode</strong></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware encode</strong></span><input class="switch" type="checkbox"></label><div class="field"><label>Memory/cache limit</label><select class="select"><option>Auto</option><option>4 GB</option><option>8 GB</option></select></div></div>';
+      else if (state.selectedSettings==="Storage") content = '<div class="stack"><div class="field"><label>Cache path</label><input class="input" value="Default · prototype"></div><div class="field"><label>Proxy path</label><input class="input" value="Not configured"></div><div class="field"><label>Model storage</label><input class="input" value="Not configured"></div>'+btn("Clear Cache","clear-cache","")+'</div>';
+      else if (state.selectedSettings==="AI") content = '<label class="toggle-row"><span class="toggle-copy"><strong>Local-first</strong><small>Preferred provider behavior</small></span><input class="switch" type="checkbox" checked></label><label class="toggle-row"><span class="toggle-copy"><strong>Allow cloud providers</strong></span><input class="switch setting-toggle" data-setting="cloud" type="checkbox" '+(state.settings.cloud?"checked":"")+'></label><div class="field section-block"><label>Default provider</label><select class="select"><option>Local</option><option>OpenAI-compatible</option><option>Gemini-compatible</option><option>Custom</option></select></div>';
+      else if (state.selectedSettings==="Models") content = '<p class="small secondary">Manage local models, license details, runtime needs, and install state.</p>'+btn("Open Model Manager","navigate","btn-compact",'data-view="models"');
+      else if (state.selectedSettings==="Agents") content = '<label class="toggle-row"><span class="toggle-copy"><strong>Agent control</strong></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Confirm before changes</strong><small>Recommended default</small></span><input class="switch setting-toggle" data-setting="confirmAgent" type="checkbox" '+(state.settings.confirmAgent?"checked":"")+'></label>';
+      else if (state.selectedSettings==="Privacy") content = '<label class="toggle-row"><span class="toggle-copy"><strong>Offline mode</strong><small>Blocks provider network calls in the future product</small></span><input class="switch setting-toggle" data-setting="offline" type="checkbox" '+(state.settings.offline?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Network AI permission</strong></span><input class="switch setting-toggle" data-setting="networkAI" type="checkbox" '+(state.settings.networkAI?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Telemetry</strong><small>Off by default · placeholder</small></span><input class="switch setting-toggle" data-setting="telemetry" type="checkbox" '+(state.settings.telemetry?"checked":"")+'></label>';
+      else if (state.selectedSettings==="Shortcuts") content = '<div class="row"><label class="search-wrap">'+icon("search")+'<input class="input" id="shortcut-search" placeholder="Search shortcuts"></label></div><div class="divider"></div>'+[["Play / Pause","Space"],["Undo","⌘ / Ctrl + Z"],["Redo","⌘ / Ctrl + Shift + Z"],["Command Palette","⌘ / Ctrl + K"],["Save","⌘ / Ctrl + S"],["Delete Selection","Delete"]].map(pair=>'<div class="row" style="padding:8px 0;border-bottom:1px solid var(--or-border)"><span>'+pair[0]+'</span><kbd class="chip push">'+pair[1]+'</kbd></div>').join("");
+      else if (state.selectedSettings==="Updates") content = '<div class="status-item">'+icon("refresh")+'<div class="status-copy"><strong>Application updates</strong><small>Prototype — update check is not connected</small></div><span class="badge">Future</span></div><div class="status-item">'+icon("box")+'<div class="status-copy"><strong>Model updates</strong><small>Use Model Manager</small></div>'+btn("Open","navigate","btn-compact",'data-view="models"')+'</div>';
+      else content = '<div class="status-item"><span class="brand-mark">OR</span><div class="status-copy"><strong>Opencut Reinforced</strong><small>UI Prototype · MIT</small></div></div><p class="small secondary">Repository</p><a href="https://github.com/huou07/Opencut-Reinforced" target="_blank" rel="noreferrer">github.com/huou07/Opencut-Reinforced</a>';
+      return '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">'+sections.map(name=>'<button class="filter-chip" data-action="settings-section" data-section="'+name+'" aria-pressed="'+(state.selectedSettings===name)+'">'+name+'</button>').join("")+'</nav><section class="panel"><div class="panel-head"><h2>'+esc(state.selectedSettings)+'</h2><span class="chip">Prototype preference</span></div><div class="panel-body">'+content+'</div></section></div>';
+    }
+    function renderPlugins() {
+      const items = [["Effects","Effect modules"],["Importers","Media import adapters"],["Exporters","Output formats"],["AI Providers","Local or cloud providers"],["Automation","Workflow helpers"]];
+      return '<div class="row-wrap"><span class="chip semantic-warning">Experimental / Planned</span><span class="small muted">No executable plugin installation is simulated.</span></div><div class="grid grid-3 section-block">'+items.map(item=>'<article class="feature-card"><span class="eyebrow">Planned category</span><strong style="margin-top:6px">'+item[0]+'</strong><small>'+item[1]+'</small><div class="divider"></div><span class="small secondary">Permissions and sandbox model are undecided.</span><span class="badge">Future</span></article>').join("")+'</div>';
+    }
+    function renderFeatureMap() {
+      const groups = Object.keys(featureGroups);
+      if (!groups.includes(state.selectedFeature)) state.selectedFeature = groups[0];
+      return '<div class="row-wrap">'+groups.map(name=>'<button class="filter-chip" data-action="feature-group" data-group="'+name+'" aria-pressed="'+(state.selectedFeature===name)+'">'+name+'</button>').join("")+'</div><div class="grid grid-3 section-block">'+featureGroups[state.selectedFeature].map((name,i)=>'<article class="feature-card"><strong>'+esc(name)+'</strong><small>'+esc(state.selectedFeature)+'</small><span class="badge">'+(name==="Plugins"||name==="Cloud Providers"||name==="Video Generation"?"Future":"Planned")+'</span></article>').join("")+'</div><div class="panel section-block"><div class="panel-head"><h2>Scope note</h2></div><div class="panel-body small secondary">This prototype represents a proposed product map only. No listed editing, AI, agent, platform, or infrastructure capability is implemented by this HTML file.</div></div>';
+    }
+    function renderView() {
+      const views = {
+        home: renderHome,
+        projects: renderProjects,
+        editor: renderEditor,
+        media: renderMedia,
+        captions: renderCaptions,
+        audio: renderAudio,
+        effects: renderEffects,
+        transitions: renderTransitions,
+        color: renderColor,
+        "image-tools": renderImageTools,
+        "ai-studio": renderAiStudio,
+        agents: renderAgents,
+        models: renderModels,
+        export: renderExport,
+        settings: renderSettings,
+        plugins: renderPlugins,
+        "feature-map": renderFeatureMap
+      };
+      return (views[state.view] || renderHome)();
+    }
+    function render() {
+      $("#app-shell").dataset.mode = state.mode;
+      renderNav();
+      renderHead();
+      $("#workspace").innerHTML = renderView();
+      $("#appbar-project-name").textContent = activeProject().name;
+      $("#save-state-text").textContent = state.saved ? "Saved" : "Unsaved changes";
+      document.body.dataset.view = state.view;
+    }
+    function pushHistory() {
+      state.history.push(JSON.stringify({ tracks: state.tracks, selectedClipId: state.selectedClipId, currentTime: state.currentTime }));
+      if (state.history.length > 40) state.history.shift();
+      state.redoHistory = [];
+    }
+    function restoreHistory(source, destination) {
+      if (!source.length) { toast("Nothing to change"); return; }
+      destination.push(JSON.stringify({ tracks: state.tracks, selectedClipId: state.selectedClipId, currentTime: state.currentTime }));
+      const previous = JSON.parse(source.pop());
+      state.tracks = previous.tracks;
+      state.selectedClipId = previous.selectedClipId;
+      state.currentTime = previous.currentTime;
+      markChanged();
+      render();
+      toast("Timeline state restored");
+    }
+    function findTrackForType(type) {
+      return state.tracks.find(track => type==="audio" ? track.type==="audio" : type==="text" ? track.type==="text" : track.type==="video") || state.tracks[0];
+    }
+    function addClip(name, kind, length, ai) {
+      pushHistory();
+      const track = findTrackForType(kind);
+      const end = track.clips.reduce((value,item)=>Math.max(value,item.start+item.duration),0);
+      const clip = { id: "clip-" + Date.now() + "-" + Math.floor(Math.random()*10000), name: name, start: end, duration: length || 6, kind: kind, ai: !!ai };
+      track.clips.push(clip);
+      state.selectedClipId = clip.id;
+      state.view = "editor";
+      markChanged();
+      render();
+      toast("Added to the mock timeline");
+    }
+    function startPlayback() {
+      state.playing = !state.playing;
+      render();
+      if (!state.playing) {
+        if (state.playTimer) window.clearInterval(state.playTimer);
+        return;
+      }
+      if (state.playTimer) window.clearInterval(state.playTimer);
+      state.playTimer = window.setInterval(() => {
+        state.currentTime += .25;
+        if (state.currentTime >= state.duration) { state.currentTime = 0; state.playing = false; window.clearInterval(state.playTimer); }
+        $$(".time-display").forEach(node => { node.textContent = fmtTime(state.currentTime) + (node.closest(".transport") ? " / " + fmtTime(state.duration) : ""); });
+        const head = $("#playhead");
+        if (head) head.style.left = (68 + state.currentTime * 18 * state.zoom) + "px";
+        if (!state.playing) render();
+      }, 250);
+    }
+    function openModal(title, content, footer, id) {
+      const root = $("#modal-root");
+      root.innerHTML = '<section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal-' + (id || "dialog") + '"><div class="modal-head"><h2 id="modal-title">' + title + '</h2><button class="icon-button" data-action="close-modal" aria-label="Close">' + icon("close") + '</button></div><div class="modal-body">' + content + '</div>' + (footer ? '<div class="modal-foot">' + footer + '</div>' : '') + '</section>';
+      root.classList.add("is-open");
+      state.modal = id || "dialog";
+      window.setTimeout(() => { const first = $("input,select,textarea,button", root); if (first) first.focus(); }, 20);
+    }
+    function closeModal() { $("#modal-root").classList.remove("is-open"); $("#modal-root").innerHTML = ""; state.modal = null; }
+    function newProjectModal() {
+      const content = '<div class="stack"><div class="field"><label for="new-project-name">Project Name</label><input id="new-project-name" class="input" value="Untitled Project"></div><div class="grid grid-2"><div class="field"><label>Aspect Ratio</label><select id="new-project-ratio" class="select"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>Custom</option></select></div><div class="field"><label>Resolution</label><select id="new-project-resolution" class="select"><option>720p</option><option selected>1080p</option><option>1440p</option><option>4K</option><option>Custom</option></select></div><div class="field"><label>Frame rate</label><select class="select"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></div><div class="field"><label>Audio</label><select class="select"><option>44.1 kHz</option><option selected>48 kHz</option></select></div><div class="field"><label>Color</label><select class="select"><option>SDR</option><option>HDR · future</option></select></div></div><p class="small muted">Creates an empty demo project in local page state only.</p></div>';
+      openModal("New Project",content,btn("Cancel","close-modal","")+btn("Create","create-project","btn-primary"),"new-project");
+    }
+    function deleteProjectModal(id) {
+      const project = state.projects.find(item=>item.id===id);
+      if (!project) return;
+      openModal("Delete Project",'<p class="secondary">Delete <strong>'+esc(project.name)+'</strong> from the prototype demo state?</p><p class="small muted">This cannot affect files on your computer.</p>',btn("Cancel","close-modal","")+btn("Delete","confirm-delete-project","btn-danger btn-primary",'data-id="'+id+'"'),"delete-project");
+    }
+    function projectMenu(id) {
+      openModal("Project Actions",'<div class="row-wrap">'+btn("Open","open-project","btn-compact btn-primary",'data-id="'+id+'"')+btn("Rename","rename-project","btn-compact",'data-id="'+id+'"')+btn("Duplicate","duplicate-project","btn-compact",'data-id="'+id+'"')+btn("Archive","archive-project","btn-compact",'data-id="'+id+'"')+btn("Delete","delete-project","btn-compact btn-danger",'data-id="'+id+'"')+'</div>',btn("Close","close-modal",""),"project-actions");
+    }
+    function renameProjectModal(id) {
+      const project = state.projects.find(item=>item.id===id);
+      if (!project) return;
+      openModal("Rename Project",'<div class="field"><label for="rename-project-name">Project Name</label><input id="rename-project-name" class="input" value="'+esc(project.name)+'"></div>',btn("Cancel","close-modal","")+btn("Save","confirm-rename-project","btn-primary",'data-id="'+id+'"'),"rename-project");
+    }
+    function exportDialog() {
+      openModal("Export",exportForm(),btn("Cancel","close-modal","")+btn("Add to Queue","queue-export","")+btn("Export","start-export","btn-primary"),"export-dialog");
+    }
+    function runCli(raw) {
+      const command = raw.trim();
+      if (!command) return;
+      let output = "";
+      const parts = command.split(/\s+/);
+      if (parts[0] !== "or") output = "error: enter a command beginning with 'or'";
+      else if (parts[1] === "help" || !parts[1]) output = "version [--json]\nhealth [--json]\ncapabilities [--json]\nproject inspect [--json]\ntimeline list\nselection get";
+      else if (parts[1] === "version") output = parts.includes("--json") ? JSON.stringify({name:"Opencut Reinforced",version:"0.1.0-prototype",architecture_api_version:1},null,2) : "Opencut Reinforced 0.1.0-prototype · API 1";
+      else if (parts[1] === "health") output = parts.includes("--json") ? JSON.stringify({status:"ready",source:"simulated"},null,2) : "Ready · simulated";
+      else if (parts[1] === "capabilities") output = parts.includes("--json") ? JSON.stringify([{id:"core.info",availability:"Demo"},{id:"core.health",availability:"Demo"},{id:"project.read",availability:"Planned"},{id:"timeline.edit",availability:"Planned"}],null,2) : "core.info · Demo\ncore.health · Demo\nproject.read · Planned\ntimeline.edit · Planned";
+      else if (parts[1] === "project" && parts[2] === "inspect") output = parts.includes("--json") ? JSON.stringify({project:activeProject().name,duration:62.4,tracks:state.tracks.length,source:"mock"},null,2) : activeProject().name + " · 01:02 · " + state.tracks.length + " tracks · mock";
+      else if (parts[1] === "timeline" && parts[2] === "list") output = JSON.stringify(state.tracks.map(track=>({track:track.name,clips:track.clips.map(clip=>clip.name)})),null,2);
+      else if (parts[1] === "selection" && parts[2] === "get") output = JSON.stringify(getClip(state.selectedClipId) ? getClip(state.selectedClipId).clip : null,null,2);
+      else output = "error: unknown command; try 'or help'";
+      state.terminalLog.push({input:command,output:output});
+      if (state.terminalLog.length>30) state.terminalLog.shift();
+      render();
+      const terminal = $("#terminal-body");
+      if (terminal) terminal.scrollTop = terminal.scrollHeight;
+      const input = $("#terminal-input");
+      if (input) input.focus();
+    }
+    function startProgress(kind) {
+      const key = kind==="captions"?"captionsProgress":kind==="ai"?"aiProgress":"exportProgress";
+      state[key] = 8;
+      render();
+      const timer = window.setInterval(() => {
+        state[key] = Math.min(100,state[key]+23);
+        if (state[key] >= 100) {
+          window.clearInterval(timer);
+          if (kind==="captions") toast("Demo captions are ready to edit");
+          if (kind==="ai") {
+            const item = { id:"g-"+Date.now(),name:state.selectedAiMode.toLowerCase()+"-result-demo",type:state.selectedAiMode,spec:"Demo output · no file created",duration:"00:05" };
+            state.generated.unshift(item);
+            state.media.push({id:item.id,name:item.name,type:item.type==="Audio"?"Audio":item.type==="Image"?"Image":"Video",duration:item.duration,spec:item.spec,source:"Generated"});
+            toast("Demo result added to Generated media");
+          }
+          if (kind==="export") {
+            state.exportQueue.unshift({id:"e-"+Date.now(),name:(state.exportName||activeProject().name+"-draft")+".mp4",status:"Complete",progress:100});
+            toast("Prototype export complete — no file written");
+          }
+        }
+        if (state.view==="captions"&&kind==="captions" || state.view==="ai-studio"&&kind==="ai" || state.view==="export"&&kind==="export") render();
+      },500);
+    }
+    function startModelProgress(model, paused) {
+      if (paused) {
+        model.status = model.status==="Paused"?"Downloading":"Paused";
+        render();
+        return;
+      }
+      model.status = "Downloading";
+      model.progress = Math.max(1,model.progress);
+      render();
+      const timer = window.setInterval(() => {
+        if (model.status==="Paused" || model.status==="Available") { window.clearInterval(timer); return; }
+        model.progress = Math.min(100,model.progress+26);
+        if (model.progress>=100) { model.status="Installed"; window.clearInterval(timer); toast(model.name+" installed in demo state"); }
+        if (state.view==="models") render();
+      },500);
+    }
+    function changeProject(id) {
+      const project = state.projects.find(item=>item.id===id);
+      if (!project) { toast("No project selected"); return; }
+      state.activeProjectId = project.id;
+      state.view = "editor";
+      render();
+      toast("Opened "+project.name+" in the demo editor");
+    }
+    function handleAction(action, target) {
+      const id = target && target.dataset ? target.dataset.id : undefined;
+      switch (action) {
+        case "navigate":
+          if (target.dataset.tab && target.dataset.tab==="Prompt Editing") state.selectedAgentTab="Prompt Editing";
+          state.mobileInspector=false;
+          state.view = target.dataset.view || "home";
+          render();
+          return;
+        case "set-mode":
+          state.mode = target.dataset.mode;
+          render();
+          toast(state.mode==="mobile"?"Mobile layout preview":"Desktop layout preview");
+          return;
+        case "new-project": newProjectModal(); return;
+        case "export-dialog": exportDialog(); return;
+        case "open-project": changeProject(id || state.projects[0].id); closeModal(); return;
+        case "import-media":
+          state.media.unshift({id:"m-demo-"+Date.now(),name:"imported_media_demo.mp4",type:"Video",duration:"00:14",spec:"1920×1080 · 30 fps",source:"Media"});
+          state.selectedMediaTab="Media"; state.view="media"; render(); toast("Added a demo media item; no file was read"); return;
+        case "import-folder": toast("Folder import is a prototype placeholder"); return;
+        case "project-settings": openModal("Project Settings",'<div class="grid grid-2"><div class="field"><label>Aspect ratio</label><select class="select"><option>'+esc(activeProject().ratio)+'</option><option>9:16</option><option>1:1</option></select></div><div class="field"><label>Resolution</label><select class="select"><option>'+esc(activeProject().resolution)+'</option><option>1080p</option><option>4K</option></select></div></div>',btn("Close","close-modal","")+btn("Save","close-modal","btn-primary"),"project-settings"); return;
+        case "projects-layout": state.projectLayout=target.dataset.layout; render(); return;
+        case "project-filter": state.projectsFilter=target.dataset.filter; render(); return;
+        case "toggle-pin": {
+          const project=state.projects.find(item=>item.id===id); if(project){project.pinned=!project.pinned;render();toast(project.pinned?"Pinned project":"Unpinned project");} return;
+        }
+        case "project-menu": projectMenu(id); return;
+        case "rename-project": renameProjectModal(id); return;
+        case "confirm-rename-project": {
+          const project=state.projects.find(item=>item.id===id); const input=$("#rename-project-name"); if(project&&input){project.name=input.value.trim()||project.name;markChanged();closeModal();render();toast("Project renamed in demo state");} return;
+        }
+        case "duplicate-project": {
+          const project=state.projects.find(item=>item.id===id); if(project){const copy=Object.assign({},project,{id:"p-"+Date.now(),name:project.name+" Copy",pinned:false,edited:"Just now"});state.projects.unshift(copy);closeModal();render();toast("Project duplicated in demo state");} return;
+        }
+        case "archive-project": {
+          const project=state.projects.find(item=>item.id===id); if(project){project.archived=!project.archived;closeModal();render();toast(project.archived?"Project archived":"Project restored");} return;
+        }
+        case "delete-project": deleteProjectModal(id); return;
+        case "confirm-delete-project": state.projects=state.projects.filter(item=>item.id!==id);if(state.activeProjectId===id)state.activeProjectId=state.projects[0]?state.projects[0].id:null;closeModal();render();toast("Project removed from demo state");return;
+        case "close-modal": closeModal(); return;
+        case "select-clip": state.selectedClipId=id;state.currentTime=(getClip(id)||{clip:{start:0}}).clip.start;render();return;
+        case "split-clip": {
+          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}
+          if(found.clip.duration<1){toast("Clip is too short to split in this demo");return;}
+          pushHistory();const second=Object.assign({},found.clip,{id:"clip-"+Date.now(),name:found.clip.name+" · B",start:found.clip.start+found.clip.duration/2,duration:found.clip.duration/2});found.clip.duration=found.clip.duration/2;found.track.clips.push(second);state.selectedClipId=second.id;markChanged();render();toast("Split selected clip");return;
+        }
+        case "duplicate-clip": {
+          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}pushHistory();const copy=Object.assign({},found.clip,{id:"clip-"+Date.now(),name:found.clip.name+" Copy",start:found.clip.start+found.clip.duration});found.track.clips.push(copy);state.selectedClipId=copy.id;markChanged();render();toast("Duplicated clip");return;
+        }
+        case "delete-clip": {
+          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}pushHistory();found.track.clips=found.track.clips.filter(clip=>clip.id!==found.clip.id);state.selectedClipId=null;markChanged();render();toast("Removed clip from demo timeline");return;
+        }
+        case "undo": restoreHistory(state.history,state.redoHistory);return;
+        case "redo": restoreHistory(state.redoHistory,state.history);return;
+        case "toggle-play": startPlayback();return;
+        case "go-start": state.currentTime=0;render();return;
+        case "go-end": state.currentTime=state.duration;render();return;
+        case "next-frame": state.currentTime+=1/30;render();return;
+        case "toggle-guides": state.safeGuides=!state.safeGuides;render();return;
+        case "toggle-loop": state.loop=!state.loop;target.setAttribute("aria-pressed",String(state.loop));toast(state.loop?"Loop enabled":"Loop disabled");return;
+        case "volume": toast("Preview volume: "+state.volume+"%");return;
+        case "add-marker": toast("Marker added at "+fmtTime(state.currentTime));return;
+        case "add-keyframe": {
+          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}
+          pushHistory();found.clip.keyframes=(found.clip.keyframes||2)+1;markChanged();render();toast("Keyframe added to the selected clip");return;
+        }
+        case "previous-keyframe": state.currentTime=Math.max(0,state.currentTime-1);render();toast("Moved to previous demo keyframe");return;
+        case "next-keyframe": state.currentTime=Math.min(state.duration,state.currentTime+1);render();toast("Moved to next demo keyframe");return;
+        case "delete-keyframe": {
+          const found=getClip(state.selectedClipId);if(!found||!found.clip.keyframes){toast("No demo keyframe to remove");return;}
+          pushHistory();found.clip.keyframes=Math.max(0,found.clip.keyframes-1);markChanged();render();toast("Demo keyframe removed");return;
+        }
+        case "editor-tool": {
+          state.selectedTool=target.dataset.tool;
+          const tool=state.selectedTool;
+          if(tool==="Split") {render();handleAction("split-clip",target);return;}
+          if(tool==="Duplicate") {render();handleAction("duplicate-clip",target);return;}
+          if(tool==="Delete"||tool==="Ripple Delete") {render();handleAction("delete-clip",target);return;}
+          if(tool==="Undo") {handleAction("undo",target);return;}
+          if(tool==="Redo") {handleAction("redo",target);return;}
+          if(tool==="Snap") {state.settings.snap=!state.settings.snap;render();toast("Snap "+(state.settings.snap?"on":"off"));return;}
+          if(tool==="Magnet") {target.setAttribute("aria-pressed",String(target.getAttribute("aria-pressed")!=="true"));toast("Magnet toggle changed");return;}
+          if(tool==="Select") {render();return;}
+          render();toast(tool+" selected · prototype only");return;
+        }
+        case "track-mute": {const track=state.tracks.find(item=>item.id===id);if(track){track.muted=!track.muted;render();toast(track.name+(track.muted?" muted":" unmuted"));}return;}
+        case "track-lock": {const track=state.tracks.find(item=>item.id===id);if(track){track.locked=!track.locked;render();toast(track.name+(track.locked?" locked":" unlocked"));}return;}
+        case "track-visible": {const track=state.tracks.find(item=>item.id===id);if(track){track.visible=!track.visible;render();toast(track.name+(track.visible?" visible":" hidden"));}return;}
+        case "add-media-timeline": {const item=state.media.find(media=>media.id===id)||state.generated.find(media=>media.id===id);if(item){addClip(item.name,item.type==="Audio"||item.type==="Audio"?"audio":item.type==="Image"?"video":"video",parseFloat(item.duration)||6,false);}return;}
+        case "editor-media-tab": state.selectedMediaTab=target.dataset.tab;toast(target.dataset.tab+" panel selected");return;
+        case "media-tab": state.selectedMediaTab=target.dataset.tab;render();return;
+        case "media-filter": state.mediaFilter=target.dataset.filter;render();return;
+        case "media-menu": openModal("Media Actions",'<div class="row-wrap">'+["Rename","Relink","Create Proxy","Reveal in Folder","Properties","Remove"].map(name=>btn(name,"media-action","btn-compact",'data-name="'+name+'" data-id="'+id+'"')).join("")+'</div><p class="small muted">No filesystem access in this prototype.</p>',btn("Close","close-modal",""),"media-actions");return;
+        case "media-action": closeModal();toast(target.dataset.name+" · prototype only");return;
+        case "start-captions": startProgress("captions");return;
+        case "translate-captions": state.translationApplied=false;startProgress("captions");window.setTimeout(()=>toast("Translation prepared in demo state"),1300);return;
+        case "apply-translation": state.translationApplied=true;render();toast("Translated captions applied in demo view");return;
+        case "bilingual-captions": state.translationApplied=true;render();toast("Bilingual caption view prepared");return;
+        case "subtitle-export": toast("Mock "+target.textContent+" export — no file created");return;
+        case "caption-more": toast("Caption actions: duplicate, split, or delete · prototype");return;
+        case "audio-tool": toast((target.dataset.tool||target.textContent.trim())+" is a prototype control");return;
+        case "audio-solo": toast("Solo is simulated for "+id);return;
+        case "effect-category": state.selectedEffectCategory=target.dataset.category;render();return;
+        case "add-effect": {
+          const found=getClip(state.selectedClipId);if(!found){toast("Select a timeline clip first");return;}
+          pushHistory();found.clip.effects=found.clip.effects||[];found.clip.effects.push(target.dataset.effect);markChanged();render();toast(target.dataset.effect+" added to Inspector");return;
+        }
+        case "transition-category": state.selectedTransitionCategory=target.dataset.category;render();toast(target.dataset.category+" transitions");return;
+        case "add-transition": toast(target.dataset.name+" transition added to the mock edit point");return;
+        case "planned": toast("Planned capability — prototype only");return;
+        case "image-tool": toast(target.dataset.tool+" adjustment is simulated");return;
+        case "send-image-timeline": addClip("image-edit-demo.png","video",5,false);return;
+        case "ai-mode": state.selectedAiMode=target.dataset.mode;render();return;
+        case "reference-media": openModal("Reference Media",'<div class="status-list">'+state.media.filter(item=>item.type!=="Audio").map(item=>'<label class="status-item"><input type="checkbox"><span class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.spec)+'</small></span></label>').join("")+'</div>',btn("Cancel","close-modal","")+btn("Use selection","close-modal","btn-primary"),"reference-media");return;
+        case "generate-ai": state.aiProgress=0;startProgress("ai");return;
+        case "add-generated": {const item=state.generated.find(x=>x.id===id);if(item)addClip(item.name,item.type==="Audio"?"audio":"video",5,true);return;}
+        case "delete-generated": state.generated=state.generated.filter(item=>item.id!==id);state.media=state.media.filter(item=>item.id!==id);render();toast("Demo result removed");return;
+        case "agent-tab": state.selectedAgentTab=target.dataset.tab;render();return;
+        case "agent-toggle": {const agent=state.agents.find(item=>item.name===target.dataset.name);if(agent){agent.status=agent.status==="Connected"?"Disconnected":"Connected";render();toast(agent.name+" "+agent.status.toLowerCase()+" in demo state");}return;}
+        case "agent-session": toast("Session panel is simulated for "+(target.dataset.name||"agent"));return;
+        case "send-agent-task": toast("Task queued in demo state; no agent was contacted");return;
+        case "agent-plan": state.promptPlan=true;state.promptDryRun=false;render();toast("Structured demo plan created");return;
+        case "agent-dry-run": state.promptPlan=true;state.promptDryRun=true;render();toast("Dry run complete · no timeline changes made");return;
+        case "agent-apply": if(!state.promptPlan){toast("Create a plan first");return;}pushHistory();state.agentApplied=true;state.tracks.find(track=>track.name==="SUB").clips.push({id:"clip-agent-"+Date.now(),name:"Vietnamese captions",start:0,duration:30,kind:"text",ai:true});state.tracks.find(track=>track.name==="A2").muted=false;markChanged();render();toast("Demo edit applied to mock timeline");return;
+        case "undo-agent": if(state.agentApplied){handleAction("undo",target);state.agentApplied=false;render();toast("Agent edit undone");}else toast("No agent edit to undo");return;
+        case "model-tab": state.selectedModelTab=target.dataset.tab;render();return;
+        case "model-download": {const model=state.models.find(item=>item.name===target.dataset.name);if(model){if(model.status==="Future"){toast("Model download is a future capability");return;}startModelProgress(model,false);}return;}
+        case "model-pause": {const model=state.models.find(item=>item.name===target.dataset.name);if(model)startModelProgress(model,true);return;}
+        case "model-resume": {const model=state.models.find(item=>item.name===target.dataset.name);if(model)startModelProgress(model,false);return;}
+        case "model-update": {const model=state.models.find(item=>item.name===target.dataset.name);if(model){model.status="Available";model.progress=0;startModelProgress(model,false);}return;}
+        case "model-cancel": {const model=state.models.find(item=>item.name===target.dataset.name);if(model){model.status="Available";model.progress=0;render();toast("Demo download canceled");}return;}
+        case "model-remove": {const model=state.models.find(item=>item.name===target.dataset.name);if(model){model.status="Available";model.progress=0;render();toast("Removed from demo installed list");}return;}
+        case "clear-cache": toast("Prototype cache is empty");return;
+        case "queue-export": {const input=$("#export-filename");const name=input&&input.value.trim()?input.value.trim():activeProject().name+"-draft";state.exportQueue.unshift({id:"e-"+Date.now(),name:name,status:"Queued",progress:0});closeModal();render();toast("Export added to demo queue");return;}
+        case "start-export": {const input=$("#export-filename");state.exportName=input&&input.value.trim()?input.value.trim():activeProject().name+"-draft";state.exportProgress=0;closeModal();state.view="export";startProgress("export");return;}
+        case "remove-export": state.exportQueue=state.exportQueue.filter(item=>item.id!==id);render();toast("Queue item removed");return;
+        case "settings-section": state.selectedSettings=target.dataset.section;render();return;
+        case "feature-group": state.selectedFeature=target.dataset.group;render();return;
+        case "mobile-inspector": state.mobileInspector=!state.mobileInspector;render();return;
+        case "palette-run": return;
+        case "create-project": {
+          const name=($("#new-project-name")||{}).value||"Untitled Project";
+          const ratio=($("#new-project-ratio")||{}).value||"16:9";
+          const resolution=($("#new-project-resolution")||{}).value||"1080p";
+          const project={id:"p-"+Date.now(),name:name.trim()||"Untitled Project",ratio:ratio,resolution:resolution,duration:"00:00",edited:"Just now",pinned:false,archived:false};
+          state.projects.unshift(project);state.activeProjectId=project.id;state.tracks=JSON.parse(JSON.stringify(tracksSeed)).map(track=>Object.assign({},track,{clips:[]}));state.selectedClipId=null;state.duration=0;state.view="editor";markChanged();closeModal();render();toast("Empty demo project created");return;
+        }
+        case "projects-open-menu": projectMenu(id);return;
+        default: toast("Planned capability — prototype only");
+      }
+    }
+    document.addEventListener("click", event => {
+      const target = event.target.closest("[data-action]");
+      if (target) {
+        event.preventDefault();
+        handleAction(target.dataset.action,target);
+      }
+      if (event.target === $("#modal-root")) closeModal();
+    });
+    document.addEventListener("input", event => {
+      const target=event.target;
+      if(target.id==="project-search"){state.projectSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#project-search");if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
+      if(target.id==="media-search"){state.mediaSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#media-search");if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
+      if(target.matches('[data-action="caption-edit"]')){const caption=state.captions.find(item=>item.id===target.dataset.id);if(caption){if(state.translationApplied)caption.translated=target.value;else caption.text=target.value;}return;}
+      if(target.id==="timeline-zoom"){
+        state.zoom=Number(target.value);
+        $$(".clip").forEach(node=>{
+          const found=getClip(node.dataset.id);
+          if(found){node.style.left=Math.max(0,found.clip.start*18*state.zoom)+"px";node.style.width=Math.max(48,found.clip.duration*18*state.zoom)+"px";}
+        });
+        const head=$("#playhead");if(head)head.style.left=(68+state.currentTime*18*state.zoom)+"px";
+        return;
+      }
+      if(target.matches(".setting-toggle")){state.settings[target.dataset.setting]=target.checked;toast("Preference updated in demo state");return;}
+      if(target.matches('[data-action="clip-property"]')){markChanged();return;}
+      if(target.matches(".range-row input[type=range]")){const value=target.parentElement.querySelector("span:last-child");if(value)value.textContent=String(target.value);return;}
+    });
+    document.addEventListener("change", event => {
+      const target=event.target;
+      if(target.id==="project-sort"){state.projectSort=target.value;render();}
+      if(target.matches(".setting-toggle")){state.settings[target.dataset.setting]=target.checked;toast("Preference updated in demo state");}
+      if(target.id==="density"){state.settings.uiDensity=target.value;toast("Density changed in demo state");}
+    });
+    document.addEventListener("submit", event => {
+      if(event.target.id==="terminal-form"){event.preventDefault();runCli(($("#terminal-input")||{}).value||"");return;}
+    });
+    document.addEventListener("keydown", event => {
+      const typing=event.target.matches("input,textarea,select,[contenteditable=true]");
+      const command=event.metaKey||event.ctrlKey;
+      if(event.key==="Escape"&&state.modal){closeModal();return;}
+      if(command&&event.key.toLowerCase()==="k"){event.preventDefault();openPalette();return;}
+      if(typing)return;
+      if(event.code==="Space"){event.preventDefault();startPlayback();return;}
+      if(command&&event.key.toLowerCase()==="s"){event.preventDefault();setSaved(true);toast("Demo project saved");return;}
+      if(command&&event.key.toLowerCase()==="z"){event.preventDefault();handleAction(event.shiftKey?"redo":"undo",{});return;}
+      if((event.key==="Delete"||event.key==="Backspace")&&state.view==="editor"){event.preventDefault();handleAction("delete-clip",{});}
+    });
+    function openPalette() {
+      const commands=[["New Project","new-project",null],["Open Project","navigate","projects"],["Import Media","import-media",null],["Split Clip","split-clip",null],["Auto Captions","navigate","captions"],["Translate Captions","navigate","captions"],["AI Studio","navigate","ai-studio"],["Agent Edit","navigate","agents"],["Export","export-dialog",null],["Settings","navigate","settings"]];
+      const content='<div class="field"><label for="palette-search">Search commands</label><input id="palette-search" class="input" placeholder="Type a command…" autocomplete="off"></div><div id="palette-results" class="palette-results">'+commands.map((item,i)=>'<button class="palette-item" data-action="palette-run" data-index="'+i+'"><span>'+esc(item[0])+'</span><kbd class="chip">'+(i<4?"⌘":"")+'</kbd></button>').join("")+'</div>';
+      openModal("Command Palette",content,"","palette");
+      state.paletteCommands=commands;
+      const input=$("#palette-search");if(input)input.addEventListener("input",filterPalette);
+    }
+    function filterPalette() {
+      const query=($("#palette-search")||{}).value||"";
+      const results=$("#palette-results");
+      if(!results)return;
+      results.innerHTML=state.paletteCommands.filter(item=>item[0].toLowerCase().includes(query.toLowerCase())).map(item=>'<button class="palette-item" data-action="palette-run" data-command="'+item[1]+'" data-view="'+(item[2]||"")+'"><span>'+esc(item[0])+'</span><kbd class="chip">Enter</kbd></button>').join("")||'<div class="empty-state">No matching commands</div>';
+    }
+    document.addEventListener("click",event=>{
+      const target=event.target.closest('[data-action="palette-run"]');
+      if(!target)return;
+      const index=target.dataset.index;
+      const item=index?state.paletteCommands[Number(index)]:{0:target.textContent.trim(),1:target.dataset.command,2:target.dataset.view};
+      closeModal();
+      if(item[1]==="navigate"){state.view=item[2]||"home";render();}
+      else handleAction(item[1],target);
+    });
+    document.addEventListener("keydown",event=>{
+      if(state.modal==="palette"&&event.key==="Enter"){
+        const first=$(".palette-item");if(first){event.preventDefault();first.click();}
+      }
+    });
+    document.addEventListener("dragstart",event=>{
+      const clip=event.target.closest(".clip");if(clip&&event.dataTransfer){event.dataTransfer.setData("text/plain",clip.dataset.id);event.dataTransfer.effectAllowed="move";}
+    });
+    document.addEventListener("dragover",event=>{if(event.target.closest("[data-drop-track]"))event.preventDefault();});
+    document.addEventListener("drop",event=>{
+      const lane=event.target.closest("[data-drop-track]");if(!lane)return;event.preventDefault();
+      const found=getClip(event.dataTransfer.getData("text/plain"));if(!found)return;
+      const targetTrack=state.tracks.find(item=>item.id===lane.dataset.dropTrack);if(!targetTrack||targetTrack.locked){toast("Track is locked");return;}
+      pushHistory();const clip=found.clip;found.track.clips=found.track.clips.filter(item=>item.id!==clip.id);clip.start=Math.max(0,(event.offsetX||0)/(18*state.zoom));targetTrack.clips.push(clip);state.selectedClipId=clip.id;markChanged();render();toast("Moved clip in the mock timeline");
+    });
+    document.addEventListener("click",event=>{
+      if(state.mobileInspector&&event.target.matches(".mobile-inspector-backdrop")){state.mobileInspector=false;render();}
+    });
+    function updateModalInspector() {
+      if(!state.mobileInspector) {
+        $$(".mobile-inspector, .mobile-inspector-backdrop").forEach(node=>node.remove());
+        return;
+      }
+      $$(".mobile-inspector, .mobile-inspector-backdrop").forEach(node=>node.remove());
+      const host=document.createElement("div");
+      host.innerHTML='<div class="mobile-inspector-backdrop" aria-hidden="true"></div><section class="mobile-inspector"><div class="panel-head"><h2>Clip tools</h2><button class="icon-button" data-action="mobile-inspector" aria-label="Close clip tools">'+icon("close")+'</button></div><div class="panel-body">'+renderInspector()+'<div class="row-wrap section-block">'+btn("Duplicate","duplicate-clip","btn-compact")+btn("Delete","delete-clip","btn-compact btn-danger")+'</div></div></section>';
+      document.body.appendChild(host.firstElementChild);
+      document.body.appendChild(host.lastElementChild);
+    }
+    const originalRender=render;
+    render=function(){originalRender();updateModalInspector();};
+    render();
+  </script>
+</body>
+</html>
