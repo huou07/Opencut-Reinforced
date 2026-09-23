@@ -312,4 +312,3 @@ Use docs/architecture/ or docs/decisions/ only when enough decisions exist to
 justify those directories.
 
 Avoid documentation fragmentation.
-

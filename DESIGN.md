@@ -466,4 +466,3 @@ Desktop and mobile must look like members of one product family.
 Do not invent a new visual language per screen.
 
 When a new component is needed, first check whether an existing OR component can solve the problem.
-
