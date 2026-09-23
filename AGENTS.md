@@ -256,6 +256,7 @@ Current source of truth:
 
 - AGENTS.md — agent workflow and repository rules
 - DESIGN.md — UI/UX design language
+- docs/ARCHITECTURE.md — pre-implementation product architecture direction
 - README.md — concise project overview
 
 As the project grows, create structured docs/ only when needed, for example:
@@ -295,4 +296,3 @@ At the end of implementation work, report concisely:
 - remaining blockers or unverified items
 
 Never report a test as passing unless it actually ran and passed.
-
