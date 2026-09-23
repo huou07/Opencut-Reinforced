@@ -27,6 +27,25 @@ Ponytail helps coding agents prefer small, necessary implementations while retai
 
 Review third-party agent tooling before installing it. Do not install additional agent frameworks or overlapping instruction suites by default. Add tooling only when a concrete project need justifies it.
 
+## Repository / GitHub safeguards
+
+- `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access.
+- `.github/workflows/repo-hygiene.yml` runs on pull requests, pushes to `main`, and manual dispatch. The repository requires Actions references to use full commit SHAs; the workflow pins `actions/checkout` accordingly.
+- GitHub Actions is enabled. The default `GITHUB_TOKEN` permission is read-only, and workflows cannot approve pull request reviews by default.
+- Dependabot alerts and security updates are enabled. `.github/dependabot.yml` configures weekly updates for GitHub Actions only.
+- The dependency graph is enabled for this public repository.
+- Secret scanning and push protection are enabled.
+- GitHub Private Vulnerability Reporting is enabled; see [SECURITY.md](../SECURITY.md).
+- The active `main-safety` ruleset applies only to `main` and blocks branch deletion and non-fast-forward updates. It does not require pull requests, approvals, status checks, or signed commits.
+
+## Future, not yet enabled
+
+- Add Rust build/test CI when a Cargo workspace exists.
+- Add Flutter analyze/test CI when a Flutter app exists.
+- Enable CodeQL after source code is introduced. Scan Rust and GitHub Actions workflows where useful. Verify CodeQL coverage for each supported language; Flutter/Dart should also use its own static-analysis and test tooling.
+- Add release workflows when real build artifacts exist.
+- Add artifact signing and attestations when releases exist.
+
 ## Approved agent tooling
 
 - CodeGraph
