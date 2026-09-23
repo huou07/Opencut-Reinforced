@@ -1,0 +1,50 @@
+name: Feature request
+description: Describe a problem or use case and a possible improvement.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the behavior that would address the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches have you considered?
+    validations:
+      required: false
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform relevance
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Android
+        - Cross-platform
+        - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Willingness to contribute
+      options:
+        - I may be able to help implement this
+        - I can help test or provide feedback
+        - I am not able to contribute code
+        - Not sure
+    validations:
+      required: true
