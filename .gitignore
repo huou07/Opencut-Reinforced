@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.env.*
+*.log
+.codegraph/
+target/
+build/
+dist/
+node_modules/
+.dart_tool/
+.gradle/
+coverage/
+*.swp
+*.swo
