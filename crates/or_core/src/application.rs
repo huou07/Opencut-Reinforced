@@ -566,9 +566,9 @@ mod tests {
     #[test]
     fn revision_overflow_rejects_rename_without_partial_mutation() {
         let mut session = ProjectSession {
-            project: decode_project(&format!(
-                r#"{{"format":"opencut-reinforced-project","schema_version":1,"project":{{"id":"{PROJECT_ID}","revision":{u64::MAX},"name":"A"}}}}"#
-            ))
+            project: decode_project(
+                r#"{"format":"opencut-reinforced-project","schema_version":1,"project":{"id":"01234567-89ab-4def-8123-456789abcdef","revision":18446744073709551615,"name":"A"}}"#,
+            )
             .unwrap(),
             project_instance_id: ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
         };
