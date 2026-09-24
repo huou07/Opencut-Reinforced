@@ -2,25 +2,21 @@
 
 ## Current status
 
-The repository does not yet release Opencut Reinforced application binaries. Phase 3 provides an executable architecture skeleton, but production editor behavior has not started.
+Stable releases: **none**.
 
-## Future GitHub-first workflow
+The Developer Preview workflow is being introduced. No Developer Preview has been published yet. When available, it will be a prerelease for contributors and testers to inspect the native shell and architecture progress. OR remains a pre-MVP project, not a usable video editor.
 
-A future application release should follow this sequence:
+## Developer Preview
 
-    reviewed commit
-    -> CI
-    -> version tag
-    -> full test matrix
-    -> platform builds
-    -> packaging
-    -> checksums
-    -> dependency and license inventory
-    -> SBOM where practical
-    -> signing and attestation where available
-    -> GitHub Release
+Developer Previews are automated nightly or manually dispatched from `main` only. A preview is published only after the exact source commit has a successful Platform verification run. Its `dev-<12-character-commit-sha>` tag traces it to that source commit, and duplicate releases for the same commit are skipped.
 
-Use a release only after all required checks pass and artifacts can be traced to the tagged source and build configuration.
+These artifacts are debug developer builds for testing only. Desktop builds are unsigned and not notarized. They are not production releases or performance benchmarks. Each release includes the four raw Flutter outputs for macOS, Windows x64, Linux x64, and Android, plus `SHA256SUMS.txt` and `BUILD-INFO.txt`. Build outputs are not committed to Git.
+
+The preview exists to launch and inspect the current native shell and architecture foundation. It does not provide timeline editing, media ingest, playback, rendering, or export. Project formats and features may evolve before a stable release.
+
+## Future Stable Release
+
+A stable release is a later product milestone, not a Developer Preview. Stable releases will use deliberate semantic versions and require product readiness plus a reviewed platform matrix, packaging, checksums, dependency and license inventory, human-readable notes, and applicable signing, notarization, or attestation. Installer formats and platform-specific distribution remain undecided until that work is scoped.
 
 ## Intended platforms
 
@@ -29,16 +25,4 @@ Use a release only after all required checks pass and artifacts can be traced to
 - Linux
 - Android
 
-The product does not currently target iOS or web.
-
-## Release artifacts and metadata
-
-- Do not commit application build artifacts into Git source.
-- Publish checksums and human-readable release notes with each future artifact.
-- Include dependency and license inventory for shipped components.
-- Produce an SBOM where practical.
-- Sign artifacts and provide attestations where the platform and release infrastructure support them.
-- Record the exact FFmpeg configuration and review its redistribution implications.
-- Do not bundle model weights by default. Any exception needs a clear size, license, and distribution strategy.
-
-Exact installers, archive types, mobile delivery channels, signing providers, and package formats are not selected. Decide them when the packaging phase begins.
+The product does not currently target iOS or web. Do not bundle model weights by default. Any future inclusion needs a clear size, license, and distribution strategy. FFmpeg configuration and redistribution implications must be reviewed when packaging begins.
