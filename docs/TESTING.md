@@ -30,7 +30,18 @@ For example, a blocked local macOS native check plus a passing GitHub macOS nati
 - `RationalTime` and `RationalRate`: normalization, invalid denominator/rate rejection, serde validation and normalization, and exact 24, 24000/1001, 30000/1001, and 48000/1 unit conversions.
 - Checked exact addition/subtraction and overflow, rational ordering, and `TimeRange` duration validation including serde rejection of negative duration.
 
-There are no ProjectDocument, project save/reopen, command, transaction, or history tests in Phase 4A.
+Phase 4A has no project-document, project save/reopen, command, transaction, or history tests.
+
+## Current Phase 4B coverage
+
+- New `ProjectDocument` ID, initial revision, exact name, and domain round trip.
+- V1 format marker, schema version, envelope fields, deterministic pretty output, and trailing newline.
+- Exact Unicode name preservation and unchanged nonzero/maximum revision round trips.
+- Malformed JSON, missing fields, wrong marker, invalid/missing/noninteger or unsupported schema version, and unknown-field rejection at the envelope and project levels.
+- Malformed, nil, and non-v4 project ID rejection through the existing `ProjectId` invariant.
+- Runtime-instance ID and field leakage guard; decoding returns only canonical project state.
+
+There are no filesystem save/load, migration, command, transaction, or history tests.
 
 ## Test pyramid
 

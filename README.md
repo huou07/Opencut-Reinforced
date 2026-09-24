@@ -4,7 +4,7 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP: Phase 3 bootstrap and Phase 4A domain primitives implemented; project/editor implementation has not started.** The repository contains a bootstrap Rust core and CLI, foundational project identity, revision, and exact-time value types, a minimal Flutter shell, and a typed Flutter-to-Rust bridge. It is not yet usable as a video editor and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
+**Pre-MVP: Phase 3 bootstrap and Phase 4A/4B project foundations implemented; editing behavior has not started.** The repository contains a bootstrap Rust core and CLI, foundational identity, revision, exact-time, and versioned project-document values, a minimal Flutter shell, and a typed Flutter-to-Rust bridge. It is not yet usable as a video editor and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 

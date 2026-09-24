@@ -19,7 +19,7 @@ These are the current direct dependencies for the executable architecture and fo
 | Dependency | Version | Purpose | License |
 | --- | --- | --- | --- |
 | [serde](https://github.com/serde-rs/serde/blob/master/serde/Cargo.toml) | 1.0.229 | Core DTO serialization | MIT OR Apache-2.0 |
-| [serde_json](https://docs.rs/crate/serde_json/1.0.151/source/Cargo.toml.orig) | 1.0.151 | CLI JSON output | MIT OR Apache-2.0 |
+| [serde_json](https://docs.rs/crate/serde_json/1.0.151/source/Cargo.toml.orig) | 1.0.151 | CLI JSON output and `.orproj` v1 codec | MIT OR Apache-2.0 |
 | [uuid](https://github.com/uuid-rs/uuid) | 1.26.1 | Typed UUIDv4 project and runtime-instance IDs with serde | Apache-2.0 OR MIT |
 | [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge/versions/2.13.0) | 2.13.0 | Generated typed Dart/Rust bridge bindings | MIT |
 | [flutter_rust_bridge_hooks](https://pub.dev/packages/flutter_rust_bridge_hooks/versions/2.13.0) | 2.13.0 | Native-assets hook and Rust library packaging | MIT |

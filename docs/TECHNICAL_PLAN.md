@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds only foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. A project document, command/query system, editing, media, rendering, and automation remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict in-memory `.orproj` v1 JSON codec. Commands, queries, filesystem save/load, migrations, editing, media, rendering, and automation remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -78,7 +78,21 @@ Canonical time is never stored as `f32` or `f64`. Rational values remain exact: 
 
 ## 3. Native project format
 
-The native project is planned as a versioned structured .orproj document. It is agent-readable and will use stable opaque persistent IDs for projects and other persistent objects. Phase 4A selects typed UUID version 4 for `ProjectId`; it is independent of names, paths, and collection indexes. Future persistent object IDs should follow the same typed opaque-ID pattern unless evidence justifies another representation. No `TrackId`, `ClipId`, or other object IDs exist yet. Exact .orproj serialization syntax and schema remain undecided; serde support does not select JSON or another file format.
+The initial `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
+
+```json
+{
+  "format": "opencut-reinforced-project",
+  "schema_version": 1,
+  "project": {
+    "id": "01234567-89ab-4def-8123-456789abcdef",
+    "revision": 0,
+    "name": "Example Project"
+  }
+}
+```
+
+The `ProjectDocument` domain type stores a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, and UTF-8 name. Its fields are not the wire schema: private v1 DTOs and explicit conversion keep internal domain changes from silently changing the file contract. V1 decoding validates IDs and required fields and rejects unknown fields; the version probe rejects unsupported versions before v1 decoding. The current Rust encoder emits deterministic pretty JSON with a trailing newline for the same document; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The codec has no filesystem save/load or migration behavior yet. Future persistent object IDs should follow the same typed opaque-ID pattern unless evidence justifies another representation. No `TrackId`, `ClipId`, or other object IDs exist yet.
 
 Projects reference external media. Media paths and fingerprints support relink, replace, offline state, and project collection without embedding source media by default. Cache entries never become canonical project state.
 
@@ -94,7 +108,7 @@ A crash journal records recoverable changes between durable checkpoints. Startup
 
 ### Project revisions
 
-`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; command mutation is not implemented yet. Once canonical mutation exists, each successful mutation will increment the revision exactly once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is not part of the future project document.
+`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; Phase 4B's v1 codec preserves the stored revision during encode/decode. Command mutation is not implemented yet. Once canonical mutation exists, each successful mutation will increment the revision exactly once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
 
 Future live mutation preconditions conceptually identify state by `ProjectId` + `ProjectInstanceId` + `ProjectRevision`. This distinguishes a stale client attached to a previous runtime session even when the same project reopens at the same revision. The command wire schema remains deferred. Revision overflow is checked and must never wrap. Restoring older snapshot content through OR is a new mutation: at current revision 100, restoring content captured at revision 20 results in revision 101, not 20.
 
@@ -309,7 +323,6 @@ Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is 
 The following are deliberately not permanently selected:
 
 - exact FFmpeg Rust binding
-- exact .orproj serialization syntax
 - exact Flutter/native texture implementation
 - exact Flutter state management framework and state-change event schema, event bus/library, and transport
 - exact text shaping library

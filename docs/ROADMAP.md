@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1 and Phase 3's executable architecture skeleton is complete. Phase 4 is next; it starts project and command foundations, not a finished editor. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is in progress. Phase 4 establishes project and command foundations, not a finished editor. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -35,20 +35,26 @@ Complete product scope, architecture, implementation workflow, roadmap, testing,
 ### Phase 4 — Project and command foundation
 **Status: IN PROGRESS**
 
-Phase 4A foundational values are implemented in `or_core`:
+Phase 4A — DONE:
 
 - exact rational time, rate, and range primitives
 - typed UUIDv4 persistent project identity
 - ephemeral runtime project-instance identity
 - checked persistent project revision
 
+Phase 4B — DONE:
+
+- minimal `ProjectDocument`
+- `.orproj` UTF-8 JSON schema v1 and strict in-memory codec
+- explicit domain/wire conversion and schema-version dispatch
+
 Remaining Phase 4 work:
 
-- ProjectDocument and .orproj schema
 - commands and queries
-- undo and redo
-- serialization and migrations
-- atomic save and crash journal
+- transactions, history, undo, and redo
+- real migrations when a later schema exists
+- filesystem save/load and atomic replace
+- crash journal and recovery
 - local IPC
 - CLI parity
 
