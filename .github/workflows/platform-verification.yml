@@ -1,4 +1,4 @@
-name: Phase 3 platform verification
+name: Platform verification
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: phase3-${{ github.workflow }}-${{ github.ref }}
+  group: platform-verification-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
