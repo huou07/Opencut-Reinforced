@@ -3,6 +3,7 @@ use serde::Serialize;
 mod application;
 mod project;
 mod project_document;
+mod project_storage;
 mod time;
 
 pub use application::{
@@ -17,6 +18,10 @@ pub use project::{
 pub use project_document::{
     CURRENT_PROJECT_SCHEMA_VERSION, ProjectCodecError, ProjectDocument, decode_project,
     encode_project,
+};
+pub use project_storage::{
+    MAX_PROJECT_FILE_BYTES, ProjectStorageError, TempFileOperation, load_project_file,
+    save_project_file_atomic,
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 

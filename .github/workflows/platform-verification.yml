@@ -88,6 +88,9 @@ jobs:
         with:
           toolchain: 1.98.0
 
+      - name: Run project storage tests
+        run: cargo test -p or_core --test project_storage
+
       - name: Install Flutter 3.47.5
         run: |
           git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -156,6 +159,9 @@ jobs:
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: 1.98.0
+
+      - name: Run project storage tests
+        run: cargo test -p or_core --test project_storage
 
       - name: Install Flutter 3.47.5
         run: |
