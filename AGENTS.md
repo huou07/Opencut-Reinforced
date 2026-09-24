@@ -159,6 +159,19 @@ If a test cannot run because of a real environment limitation:
 
 For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
 
+## Regression preservation rule
+
+Do not regress behavior that has already been fixed or verified. Before changing
+an existing subsystem, inspect its current behavior and relevant tests or
+acceptance checks, and preserve unrelated working behavior. A regression fix is
+incomplete until it adds an automated test where practical, or a reproducible
+acceptance check for UI behavior that cannot reasonably be unit-tested yet.
+Keep recorded guards passing unless the user explicitly changes the requirement;
+never remove or weaken a guard just to make a change pass. When refactoring
+conflicts with known-good behavior, preserve behavior first and refactor
+incrementally. Prefer **preserve → change one subsystem → verify → commit** over
+broad rewrites, and rerun checks for every touched subsystem before handoff.
+
 ## Definition of done
 
 A task is complete only when:
