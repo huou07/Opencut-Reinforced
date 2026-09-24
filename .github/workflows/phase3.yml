@@ -50,11 +50,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: 3.47.5
-          channel: stable
+      - name: Install Flutter 3.47.5
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
@@ -87,11 +88,12 @@ jobs:
         with:
           toolchain: 1.98.0
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: 3.47.5
-          channel: stable
+      - name: Install Flutter 3.47.5
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
@@ -152,11 +154,12 @@ jobs:
         with:
           toolchain: 1.98.0
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: 3.47.5
-          channel: stable
+      - name: Install Flutter 3.47.5
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
@@ -181,11 +184,13 @@ jobs:
         with:
           toolchain: 1.98.0
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: 3.47.5
-          channel: stable
+      - name: Install Flutter 3.47.5
+        shell: pwsh
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP/flutter"
+          if ((git -C "$env:RUNNER_TEMP/flutter" rev-parse HEAD).Trim() -ne "6a19cca56475dbfba1478ee68d7bd0c2ef891da1") { throw "Flutter revision mismatch" }
+          "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
@@ -225,11 +230,12 @@ jobs:
           toolchain: 1.98.0
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: 3.47.5
-          channel: stable
+      - name: Install Flutter 3.47.5
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
