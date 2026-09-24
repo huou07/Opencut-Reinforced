@@ -404,7 +404,7 @@ jobs:
 
           **PRERELEASE — DEBUG / DEVELOPER BUILD**
 
-          Source commit: `$GITHUB_SHA`
+          Source commit: ${GITHUB_SHA}
 
           This build is for developer testing of the current native shell and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
@@ -412,8 +412,8 @@ jobs:
           - Cross-platform Flutter shell
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
-          - `ProjectDocument` and `.orproj` v1 codec
-          - Bounded `.orproj` file loading and atomic save
+          - ProjectDocument and .orproj v1 codec
+          - Bounded .orproj file loading and atomic save
           - Command and query contracts
           - Transactions
           - Undo and redo
