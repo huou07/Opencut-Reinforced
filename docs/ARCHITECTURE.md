@@ -29,9 +29,39 @@ GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, a
 
 The diagram describes a target. Exact bridge, bindings, and rendering integration remain subject to implementation-time evaluation. Flutter is the presentation layer; Rust owns project and editing truth. GUI, CLI, and agents submit the same validated domain operations and query the same structured state. They must not become independent editing engines.
 
+### Control/project plane and real-time media plane
+
+The planned architecture separates project decisions from time-sensitive playback and rendering work:
+
+    Flutter / CLI / Agent
+             |
+             v
+      Commands / Queries
+             |
+             v
+     Canonical Project State
+             |
+      evaluated snapshot
+             |
+             v
+    -------------------------
+      REAL-TIME MEDIA PLANE
+    -------------------------
+             |
+      Decode / Audio / Render
+             |
+             v
+           Output
+
+The control/project plane owns project mutations, commands, queries, undo and redo, `ProjectRevision`, persistence, and timeline editing decisions. The real-time media plane owns transient decoded frames, audio buffers, playback clock, frame queues, render resources and GPU textures, frames in flight, render scheduling, dropped-frame decisions, and transient playback position.
+
+Per-frame playback and rendering must not create Project transactions or increment `ProjectRevision`. The revision changes only when canonical project state changes. Playback ticks, decoding, audio buffering, render evaluation, presentation, and dropping an obsolete preview frame are runtime activity, not project edits.
+
+Render workers consume a stable, versioned evaluated view of project/timeline state. The renderer must not mutate canonical Project state or require a heavyweight lock on mutable Project state for its lifetime. Snapshot representation and granularity remain open; a full immutable evaluated structure, incremental graph, structural sharing, versioned read model, or another measured design may satisfy this boundary.
+
 ### Canonical mutation and concurrency
 
-Only the command/application execution path may mutate canonical Project state. GUI, CLI, agents, renderers, decoders, jobs, and AI workers submit validated commands or structured results and proposals; none writes the canonical project directly. Each active project exposes a monotonically increasing revision. A successful transaction increments it once; reads and failed or rolled-back work do not. A client acting on inspected state supplies its expected revision, and stale work is rejected for re-query and revalidation rather than silently applied.
+Only the command/application execution path may mutate canonical Project state. GUI, CLI, agents, renderers, decoders, jobs, and AI workers submit validated commands or structured results and proposals; none writes the canonical project directly. Each active project exposes a monotonically increasing revision. A successful transaction increments it once; reads and failed or rolled-back work do not. A client acting on inspected state supplies its expected revision, and stale work is rejected for re-query and revalidation rather than silently applied. This command path is for project edits, never a per-frame playback or render execution path.
 
 ## Planned boundaries
 
@@ -57,19 +87,25 @@ Rust is intended to own project, timeline, media identity and metadata, command 
 
 FFmpeg is the intended media layer for probing, demuxing, decoding, encoding, muxing, and conversion or resampling. Its exact Rust binding and packaged configuration are undecided and require a licensing review.
 
-The render core evaluates timeline state into sources, transforms, effects, compositing, color, and output. Preview and export use the same edit semantics, while scheduling and quality may differ; cross-GPU pixels are not required to be bit-identical. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
+The render core evaluates a versioned timeline view into sources, transforms, effects, compositing, color, and output. Preview and export use the same edit semantics, while scheduling and quality may differ; cross-GPU pixels are not required to be bit-identical. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
+
+OR's intended media policy is zero-copy where platform/backend interoperability safely permits it, and otherwise to minimize copies across hot media paths. This is not a universal zero-copy promise: software and CPU-frame fallbacks remain first-class. Future frame boundaries must be able to represent CPU frames, GPU textures, hardware-decoder surfaces, and external/shared platform surfaces without forcing hardware-decoded frames through CPU memory. Avoid a design that copies every decoded frame through Rust byte buffers, Dart objects, and a Flutter GPU upload.
+
+The decoder boundary must support software decode and hardware-surface decode, with automatic capability-based selection and a correctness fallback. Export should prefer a GPU/native-compatible surface into a hardware encoder where supported, and otherwise use a CPU frame with a supported software or platform encoder. Hardware paths are not assumed to be faster or available for every device, codec, or format. Platform-specific interop belongs behind narrow media/render boundaries; project and timeline semantics stay platform-independent.
+
+GPU work is a candidate for scaling, rotation, crop, color conversion where appropriate, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and unsuitable operations remain CPU/domain responsibilities. Profile the workload; not every operation belongs on the GPU. Preview can prioritize latency with lower resolution, proxies, reduced-quality effects, and bounded work, while export can prioritize quality and throughput. Both preserve the same timing, transform, effect, compositing, text, keyframe, and color intent.
 
 Audio decoding belongs in the media layer. A low-latency output abstraction and an audio playback clock are planned. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
 
 ### Preview bridge
 
-Rust and wgpu are intended to own rendered preview frames. Flutter should eventually consume a native or external texture handle, with platform-specific fast paths and a correctness fallback. Decoded real-time video frames must not travel through the ordinary Dart/Rust message bridge as copied objects.
+Rust and wgpu are intended to own rendered preview frames. Flutter should eventually consume a native or external texture handle, with platform-specific fast paths and a correctness fallback. The Flutter/Dart bridge remains a control and structured-data path; full-rate decoded video frames must not travel through ordinary Dart/Rust messages as copied objects. Frame/resource transport must support a correct fallback when external texture interoperability is unavailable.
 
 ### Project, cache, and jobs
 
-The native project is a versioned, structured .orproj document with stable IDs, external media references, and migrations. Project data is canonical; thumbnails, waveforms, proxies, render intermediates, and indexes are disposable cache data.
+The native project is a versioned, structured .orproj document with stable IDs, external media references, and migrations. Project data is canonical; thumbnails, waveforms, proxies, render intermediates, and indexes are disposable cache data. Future caches use deterministic keys, bounded storage and eviction, and a clear-cache operation; cache data can be regenerated and is never required for project correctness.
 
-A shared background Job Manager is planned for thumbnails, waveforms, proxies, transcription, translation, AI work, model and asset downloads, and export. Jobs report progress and structured results or errors, support cancellation, and support pause and priority where appropriate. Workers do not mutate canonical project state; results that affect a project return through validated application commands.
+A shared Job Manager is planned for thumbnails, waveforms, proxies, transcription, translation, AI work, model and asset downloads, and export. Jobs report progress and structured results or errors, support cancellation, and support pause and priority where appropriate. Scheduling must use bounded concurrency, backpressure, and deliberate CPU and memory budgets; it must not create unbounded workers or queues. Playback-critical decode, audio, and render work must be able to take priority over opportunistic work such as thumbnail and waveform generation, proxy creation, and AI analysis. Stale preview work may be dropped where safe. Workers do not mutate canonical project state; results that affect a project return through validated application commands.
 
 ### Local IPC and platform boundary
 

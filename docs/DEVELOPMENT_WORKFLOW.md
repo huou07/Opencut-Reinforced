@@ -17,13 +17,25 @@ This workflow applies to the Phase 3 architecture skeleton and all later impleme
 9. **Integrate with the UI.** Use a stable shell slot and check feature descriptors and the command registry first. Do not add a permanent navigation region without clear justification. Read [DESIGN.md](../DESIGN.md).
 10. **Adapt mobile presentation.** Use the same command and state model. Adapt layout with touch-native panels, sheets, or full-screen utility surfaces; do not duplicate domain logic.
 11. **Expose safe agent capabilities.** Add discovery, queries, permissions, dry-run, and diff preview where appropriate. Never expose secret access.
-12. **Review performance, security, and licensing.** Consider memory, supported platforms, permissions, dependency licenses, asset rights, and model rights.
+12. **Review performance where it applies, plus security and licensing.** Apply the hot-path review below primarily to media, render, audio, timeline evaluation, export, AI processing, and large background jobs. Ordinary UI-only work does not need an unnecessary media-performance review. Consider supported platforms, permissions, dependency licenses, asset rights, and model rights for all relevant work.
 13. **Localize at the presentation boundary.** Do not scatter user-facing English strings through domain/business logic. Use localization-capable Flutter resources when production UI starts; keep command IDs, JSON field names, and machine-readable error codes stable.
 14. **Update documentation.** Update the existing source of truth. Create a new document only when the information needs a durable home.
 15. **Preserve regression guards.** Read [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md). Add a permanent guard when a UI regression is fixed. Never remove or weaken a working guard to make a change pass.
 16. **Verify the affected system.** Run relevant Rust, CLI, Flutter, platform, integration, acceptance, and performance checks. Report checks that did not run as unrun.
 17. **Commit one logical change.** Commit only a coherent change with no known-broken state. Use a clear Conventional Commit-style subject.
 18. **Open a focused pull request and pass CI.** External contributors use feature branches and pull requests. Explain what changed, why, architecture impact, tests, docs, and risks. CI must pass before merge. Early maintainer work may continue to fast-forward main pushes under repository policy.
+
+### Real-time and hot-path review
+
+For applicable work, ask:
+
+- Does this run per project edit, per frame, or per audio callback?
+- Does it allocate on the hot path or copy large frames/buffers?
+- Does it require CPU↔GPU transfer or block the UI/application mutation path?
+- Is background concurrency bounded, and can stale preview work be cancelled or dropped safely?
+- Does it preserve a correctness fallback?
+
+If a proposed implementation routes per-frame playback/render work through the project mutation path, stop and redesign it. Playback ticks, frame decode, and presentation are runtime work; they must not create Project transactions or increment `ProjectRevision`.
 
 ## State ownership, concurrency, and background results
 

@@ -75,6 +75,23 @@ Property and invariant tests should cover:
 - permission and secret-boundary tests
 - crash recovery, memory, leak, and performance tests
 
+## Performance instrumentation and benchmarks
+
+Performance work is planned. Local diagnostic instrumentation should eventually measure decode latency, render CPU time, render GPU time where available, present latency, dropped frames, audio underruns, queue depth, memory use, GPU/resource memory where measurable, cache hit/miss, and export throughput. This is local performance diagnosis, not telemetry or network reporting.
+
+Before claiming a hardware optimization, use controlled, repeatable media fixtures and benchmark scenarios. Representative workload classes may include:
+
+- 1080p H.264 playback and 1080p high-frame-rate playback
+- 4K H.264/H.265 playback and 4K high-frame-rate playback where hardware permits
+- multiple composited layers
+- transform, color, and effect workloads
+- seek and scrub workloads
+- export throughput
+
+These are benchmark examples, not permanent product resolution or codec requirements. Use tiny self-created or legally safe fixtures with recorded provenance; do not download copyrighted benchmark media. Compare software and hardware paths on known hardware where possible, and record enough device/backend and workload context to make results interpretable. Measure latency, throughput, copies/transfers, memory, and fallback correctness rather than assuming a hardware path is faster.
+
+GitHub-hosted CI is authoritative for build correctness, automated tests, platform compatibility, and native bridge verification. Shared hosted runners are not stable authoritative hardware-performance machines: do not set hard FPS or performance-regression thresholds from ordinary hosted-runner timings. If performance regression checks become necessary, use known dedicated hardware, a self-hosted runner, or a repeatable local benchmark machine.
+
 ## Fixtures and results
 
 Use tiny, self-created or legally safe media fixtures. Keep fixture provenance and rights clear. Avoid shipping downloaded models or copyrighted media as test data.

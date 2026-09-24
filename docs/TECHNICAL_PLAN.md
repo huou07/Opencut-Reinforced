@@ -37,6 +37,39 @@ Flutter is the presentation layer. Rust owns canonical project and editing state
 
 No client keeps an independent editing engine. The browser prototype is not the model for production internals.
 
+### Control/project plane and real-time media plane
+
+The architecture has two related but distinct planes:
+
+- **Control/project plane:** commands and queries, project mutations, undo/redo, canonical `ProjectRevision`, persistence, and timeline editing decisions. Only validated application transactions change canonical project state.
+- **Real-time media plane:** transient decoded frames, audio buffers, playback clock, frame queues, render resources and GPU textures, frames in flight, render scheduling, dropped-frame decisions, and transient playback position.
+
+    Flutter / CLI / Agent
+             |
+             v
+      Commands / Queries
+             |
+             v
+     Canonical Project State
+             |
+      evaluated snapshot
+             |
+             v
+    -------------------------
+      REAL-TIME MEDIA PLANE
+    -------------------------
+             |
+      Decode / Audio / Render
+             |
+             v
+           Output
+
+The command registry and project transaction path must not become a per-frame playback/render path. Playback ticks, decoding, audio buffering, render evaluation, presentation, and dropped-frame decisions are runtime execution and must not create Project transactions or increment `ProjectRevision`. Only canonical project mutation changes that revision.
+
+Timeline/render evaluation should produce a stable, versioned render-facing read view. Conceptually, canonical Project revision N is evaluated into `RenderSnapshot N` for media/render workers; after a project change, a snapshot for revision N+1 is prepared and the renderer switches safely. The renderer must not mutate canonical Project state or continuously hold a heavyweight lock on mutable Project state. Snapshot representation and granularity remain open: a full immutable evaluated structure, incremental graph, structural sharing, versioned read model, or another measured solution may be appropriate. Do not assume every edit requires cloning the entire project.
+
+The Phase 3 application-info capability query is a bootstrap capability concept only. Future runtime capability discovery may centrally describe useful CPU architecture/features, GPU adapter/backend/limits, hardware decode and encode paths, pixel formats, and external/shared texture interoperability. Expose only details needed for pipeline selection; avoid unnecessary device fingerprinting and scattered platform checks in domain code.
+
 ## 2. Time model
 
 Do not use floating-point seconds as canonical timeline time. Use rational or integer time suitable for video frame rates, audio sample rates, source rates, and timeline rates. A time value must carry or resolve through an explicit rate/timebase.
@@ -124,19 +157,29 @@ Hot UI paths should use scoped queries such as timeline viewport, track list, se
 
 The Phase 3 bootstrap uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in the `packages/or_app_bridge` Dart package and a thin `crates/or_app_bridge` adapter that calls `or_core`. Its native-assets hook builds the Rust library for the consuming Flutter target. The demonstrated API is limited to app info, health, and capabilities; the future command/query/event model and media transport remain planned. CI verifies target builds and exercises the real macOS bridge.
 
-Keep high-volume media transport separate from ordinary bridge messages. Do not send decoded real-time video frames as copied Dart objects.
+Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
 ## 10. Preview rendering and frame model
 
 Rust and wgpu are intended to own the render graph and preview rendering. Flutter should consume a native or external texture handle when supported. Evaluate platform-specific fast paths and retain a correctness fallback. Do not copy full-resolution frames through Dart at playback frame rate.
 
-Define CPU and GPU frame abstractions at the media/render boundary. Allow later hardware decoding and zero- or minimal-copy paths without changing timeline or project APIs. Resource ownership, synchronization, color format, and lifecycle need platform-specific prototypes before choosing the exact Flutter texture integration.
+Prefer zero-copy where platform/backend interoperability safely permits it; otherwise minimize copies across hot media paths. This is not a universal zero-copy promise. Avoid a forced route of decoder to CPU RGBA copy to Rust bytes to Dart bytes to Flutter GPU upload. The intended fast direction is compressed media to decoder to a CPU or hardware frame to a GPU-compatible/shared surface where available, then through the render graph to a native/external display texture.
+
+The frame boundary must eventually represent distinct memory domains such as a CPU frame, GPU texture, hardware decoder surface, or external/shared platform surface. Do not force every hardware-decoded frame to round-trip through CPU memory. Exact frame structures are not selected here. Resource ownership, synchronization, color format, and lifecycle need platform prototypes before choosing the Flutter texture integration.
+
+Timeline/render evaluation should publish a stable read view such as `RenderSnapshot N` for canonical `ProjectRevision N`. A project mutation produces a view associated with the next revision, which workers can adopt safely. Render workers never mutate Project, and the architecture must not require them to lock mutable Project state continuously. The snapshot may be a full immutable evaluated structure, incremental graph, structurally shared data, versioned read model, or another measured strategy; snapshot granularity must be benchmarked rather than assumed to mean cloning the whole project for every edit.
+
+Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The exact synchronization primitive, frame queue, buffering mode, and number of frames in flight are implementation choices. Double buffering, triple buffering, or other bounded depths may suit different playback, scrubbing, paused/frame-step, export, or low-latency preview modes; measure the tradeoff among latency, throughput, memory, and GPU occupancy.
 
 A frame should carry explicit dimensions, pixel or texture format, color information, and timing metadata. The exact representation remains implementation work.
 
 ## 11. Media and render graph
 
 FFmpeg is the intended baseline for media probing, demux, decode, encode, mux, conversion, and resampling. The exact Rust binding is undecided. Packaged FFmpeg configuration, linked libraries, and codecs require an explicit distribution license audit.
+
+The media boundary must support both software decode and hardware-surface decode. A centralized capability/provider layer should report usable paths for automatic selection and safe fallback; generic timeline/domain code must not accumulate platform-specific conditionals. Possible platform directions are examples only, not selections: VideoToolbox/platform video surfaces on macOS; platform hardware decode and D3D-compatible surfaces on Windows; VAAPI, Vulkan, or DMABUF-style interop on Linux; and MediaCodec with hardware-buffer or native-surface paths on Android. Support varies by codec, device, pixel format, driver, and backend.
+
+Pipeline selection should choose the best supported and stable path for the actual codec, pixel format, resolution, backend, device, driver, platform, and operation. A hardware path is not presumed faster. Prefer hardware decode and minimal-copy GPU processing where they benefit the workload, and preserve software/CPU paths as correctness fallbacks when decode, GPU interop, or drivers are unavailable or unstable.
 
 The render evaluation order is:
 
@@ -150,9 +193,15 @@ The render evaluation order is:
 
 Preview and export share the same edit semantics: clip timing, transforms, effects, compositing, text, keyframe evaluation, and color intent. This does not require identical implementation scheduling or bit-identical pixels. Preview may use lower resolution, proxies, reduced quality, or different scheduling; export may use full-quality sources, offline evaluation, and a different encoder. Equivalent source and quality conditions must still represent the same edit.
 
+GPU candidates include scaling, rotation, crop, appropriate color-space conversion, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and work unsuited to a GPU remain CPU/domain responsibilities. Profile by operation; there is no requirement that every operation run on the GPU. Export should prefer render output in a GPU/native-compatible surface to a hardware encoder when supported, avoiding GPU readback followed by upload when interop allows. Otherwise use a CPU frame and a supported software or platform encoder. Exact hardware encoder APIs and FFmpeg hardware-frame integration remain undecided.
+
+Use optimized upstream implementations and compiler auto-vectorization before considering architecture-specific intrinsics or custom SIMD. ARM NEON or x86 SIMD paths may be evaluated behind tested abstractions only after profiling identifies a meaningful bottleneck.
+
 ## 12. Audio and text
 
 Decode audio through the media layer. Define a low-latency audio output abstraction and use an audio clock as a playback synchronization master where appropriate. Core gain, pan, fades, and future DSP live in the audio engine, not in Flutter presentation code.
+
+The future audio output callback/realtime path should avoid network calls, Flutter calls, JSON parsing, heavy locks, unnecessary allocation, Project mutation, and blocking background jobs. A conceptual direction is decode/resample to a bounded audio buffer or ring, then low-latency audio output and a playback clock. Video presentation synchronizes to that clock where appropriate. Exact audio library and buffer design are not selected.
 
 Final video text is rendered by the render core. Exported text must not depend on Flutter widget rendering. Select a font shaping and rendering dependency only after cross-platform behavior and licensing are evaluated.
 
@@ -160,7 +209,13 @@ Final video text is rendered by the render core. Exported text must not depend o
 
 Use a shared Job Manager for thumbnail and waveform generation, proxy creation, transcription, translation, AI work, model and asset downloads, and export. Each job exposes stable identity, status, progress, cancellation, result or structured error, and pause or priority only where the operation supports it.
 
-Cache keys are deterministic over source fingerprint, operation, parameters, and cache schema version. Cache storage may use a local database or index, but the exact database crate is not selected. Cache contents are disposable and never authoritative project state. Provide bounded storage and a clear-cache operation.
+Scheduling must support bounded concurrency, cancellation, backpressure, and deliberate CPU and memory budgets without unbounded worker creation. Keep conceptual classes for latency-sensitive realtime work (audio output, immediately needed playback decode, render/present), interactive work (commands, timeline queries, scrubbing, inspector updates), and background work (thumbnails, waveforms, proxies, indexing, AI analysis, downloads). Playback-critical work must be able to take priority over opportunistic background work, and AI/background work must not starve playback; exact priority names and implementation are not fixed.
+
+Producers must not outrun consumers indefinitely. Frame/decode and export queues, thumbnail work, and AI/background work must stay bounded. When a consumer is slower, the system may pause production, reduce queue depth, drop obsolete preview work where safe, or block a background producer appropriately. The exact queue type and policy are workload decisions.
+
+Hot media paths should avoid repeated large allocations where practical. Bounded frame, texture, audio-buffer, decode-surface, and render-target reuse are candidates, not selected implementations; pools must remain bounded and must not turn into an unbounded cache. Establish system-level budgets for RAM, GPU memory or equivalent render resources, decoded-frame cache, thumbnail cache, waveform cache, and proxy/cache storage. Budgets may vary by device class, available memory, platform, and workload, with more conservative policy on Android; fixed percentages and values are deferred.
+
+Cache keys are deterministic over source fingerprint, operation, parameters, and cache schema version. Cache storage may use a local database or index, but the exact database crate is not selected. Cache contents are disposable and never authoritative project state. Provide bounded storage, eviction and regeneration paths, and a clear-cache operation; cache presence must never be required for project correctness.
 
 Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, `CaptionProposal`, or `EditProposal` outputs. They may update disposable cache/job state but must not directly mutate the canonical ProjectDocument. If an output should change a project, the application layer checks its permissions and expected revision/preconditions, then applies it through a validated command/transaction. This preserves undo/redo and rejects stale analysis instead of applying it silently.
 
@@ -219,7 +274,7 @@ Native and OpenFX compatibility is later and has a higher trust cost. Do not tre
 
 ## 19. Export and interchange
 
-Export uses the same timeline and render evaluation as preview. The intended flow is offscreen render frames to a media encoder and muxer, managed as a background job with progress and cancellation. Codec and hardware options depend on platform support and licensing review.
+Export uses the same timeline and render evaluation as preview. The intended flow is offscreen render frames to a media encoder and muxer, managed as a background job with progress and cancellation. Where supported, prefer a GPU/native-compatible render surface into a hardware encoder; otherwise use CPU frames with a supported software or platform encoder. Do not require a GPU readback/upload cycle when a stable shared-surface path is available. Codec and hardware options depend on platform support and licensing review, and correctness fallback remains first-class.
 
 The native OR format is not OpenTimelineIO. OTIO is an import/export interchange format and API for editorial cut information, not the native project database and not a media container. Select adapters and supported OTIO fields when an interchange implementation is scoped.
 
@@ -260,6 +315,25 @@ The following are deliberately not permanently selected:
 - exact SQLite or storage crate
 - exact Flutter localization package and generated resource format
 - exact GPU image-comparison tolerance metric
+- exact immutable render snapshot representation, granularity, and update strategy
+- exact hardware decode API on each platform
+- exact hardware encode API on each platform
+- exact FFmpeg hardware-frame integration
+- exact CPU, GPU, decoder-surface, and external/shared frame representation
+- exact external texture/interoperability path on each platform
+- exact synchronization primitive between project evaluation, media workers, GPU, and presentation
+- exact frame queue depth, frames in flight, and buffering strategy for each mode
+- exact worker scheduler/runtime, thread-pool implementation, and priority API
+- exact frame, texture, audio-buffer, decode-surface, and render-target pool implementation
+- exact RAM, GPU/resource, and cache budget values and adaptation policy
+- exact performance thresholds and benchmark hardware
+- exact centralized runtime hardware capability schema/provider
+- exact hardware/software path selection thresholds by codec, format, device, driver, and operation
+- exact CPU/GPU operation partition, based on profiling and task characteristics
+- exact CPU SIMD/intrinsic implementations and feature dispatch
+- exact performance instrumentation implementation
+- exact audio callback buffer/ring design and buffering policy
+- exact cache eviction policy
 - exact translation model
 - exact segmentation model
 - exact text-to-speech model or runtime

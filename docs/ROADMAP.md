@@ -44,6 +44,8 @@ Complete product scope, architecture, implementation workflow, roadmap, testing,
 - local IPC
 - CLI parity
 
+Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, commands and queries, transactions and history, serialization, and IPC while preserving control-plane/media-plane separation, a snapshot-ready project/timeline evaluation boundary, and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
+
 ### Phase 5 — Media foundation
 **Status: PLANNED**
 
@@ -73,6 +75,10 @@ Complete product scope, architecture, implementation workflow, roadmap, testing,
 - video decode
 - audio playback and A/V synchronization
 - transform, crop, and opacity
+
+#### Performance Architecture Gate
+
+Before the hardware/media pipeline architecture is considered settled, complete this gate once enough Phase 5/7 prototypes and implementation exist to measure real behavior. It must evaluate software versus hardware decode, frame memory domains, CPU/GPU transfer count, native/external texture interoperability, render synchronization, buffering, hardware encode, correctness fallbacks, memory budgets, and scheduler/backpressure behavior. Use representative prototypes and benchmarks, not assumptions about platform capabilities. This gate does not delay Phase 4; it belongs when Phase 5/7 evidence can inform the choices.
 
 ### Phase 8 — Desktop MVP
 **Status: PLANNED**
