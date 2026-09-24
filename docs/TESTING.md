@@ -30,7 +30,7 @@ For example, a blocked local macOS native check plus a passing GitHub macOS nati
 - `RationalTime` and `RationalRate`: normalization, invalid denominator/rate rejection, serde validation and normalization, and exact 24, 24000/1001, 30000/1001, and 48000/1 unit conversions.
 - Checked exact addition/subtraction and overflow, rational ordering, and `TimeRange` duration validation including serde rejection of negative duration.
 
-Phase 4A has no project-document, project save/reopen, command, transaction, or history tests.
+Phase 4A tests foundational values only; later sections record project and application coverage.
 
 ## Current Phase 4B coverage
 
@@ -41,17 +41,25 @@ Phase 4A has no project-document, project save/reopen, command, transaction, or 
 - Malformed, nil, and non-v4 project ID rejection through the existing `ProjectId` invariant.
 - Runtime-instance ID and field leakage guard; decoding returns only canonical project state.
 
-There are no filesystem save/load, migration, command, transaction, or history tests.
+There are no filesystem save/load or migration tests.
 
 ## Current Phase 4C coverage
 
-- Exact one-entry command and query catalogs, and `ProjectSession::open` preserving the document while owning a valid runtime instance ID.
+- `ProjectSession::open` preserving the document while owning a valid runtime instance ID, plus discovery of the then-implemented command and query contracts.
 - Strict command/query envelope serde round trips, unknown-field rejection, and validation order for operation ID, schema, project, instance, revision, and arguments.
 - `project.rename`: exact Unicode preservation, one revision increment per real rename, same-name no-op, stale revision/current-revision reporting, project/session mismatch, unknown/unsupported command rejection, malformed/extra arguments, and overflow without partial mutation.
 - `project.summary`: current IDs, revision, and name; read-only behavior; visibility of renamed state; project/session mismatch; unknown/unsupported query rejection; and empty-object-only arguments.
 - Rename → `.orproj` encode/decode preserves the changed name and revision without persisting the runtime instance ID.
 
-Phase 4C does not test transaction groups, ChangeSet/history, undo/redo, filesystem persistence, IPC, or client integrations.
+## Current Phase 4D coverage
+
+- Exact command/query catalogs including undo/redo discovery; strict command-call and transaction-envelope serde round trips, unknown-field rejection, and typed-ID validation.
+- Atomic rename groups, net `ChangeSet` normalization, one revision increment/history entry for changed groups, and no revision/history/redo clearing for net no-ops.
+- Rollback and history preservation for invalid, unknown, unsupported, disallowed, empty, stale, or wrong-project/session transactions.
+- `history.undo` and `history.redo`: inverse/forward changes, one new revision each, grouped undo, redo invalidation after a real edit, no-op/failed-edit redo preservation, empty-stack errors, history conflicts, and overflow without partial mutation.
+- Transaction and history effects round-trip through the `.orproj` v1 codec as canonical name/revision only; runtime instance ID and history remain absent, and a reopened session starts with empty history.
+
+There are no filesystem save/load, migration, IPC, or client-integration tests.
 
 ## Test pyramid
 

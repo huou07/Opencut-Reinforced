@@ -55,9 +55,14 @@ Phase 4C — DONE:
 - `project.rename` v1 and `project.summary` v1
 - structured errors, checked revision mutation, and read-only query proof
 
+Phase 4D — DONE:
+
+- rename-only atomic transaction groups with one net `ChangeSet`
+- one persistent revision increment per changed transaction; no increment for net no-ops or failed groups
+- in-memory, per-session undo/redo history that is not part of `.orproj`
+
 Remaining Phase 4 work:
 
-- Phase 4D: transaction groups, ChangeSet, history, undo/redo, and atomic grouped commands
 - real migrations when a later schema exists
 - filesystem save/load and atomic replace
 - crash journal and recovery

@@ -2,7 +2,7 @@
 
 ## Status
 
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4C provide project/application foundations and the first command/query contracts; timeline, media, and editor behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4D provide project/application foundations, the first command/query contracts, rename-only atomic transaction groups, and session-local undo/redo; filesystem persistence, IPC, timeline, media, and editor behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
 
 ## Feature path
 
