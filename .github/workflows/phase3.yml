@@ -1,0 +1,240 @@
+name: Phase 3 platform verification
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+  flutter-static:
+    name: Flutter static and widget checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Check Dart formatting
+        working-directory: apps/or_app
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze Flutter code
+        working-directory: apps/or_app
+        run: flutter analyze
+
+      - name: Run Flutter widget tests
+        working-directory: apps/or_app
+        run: flutter test
+
+  macos:
+    name: macOS native build and bridge smoke
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build macOS app with Rust bridge
+        working-directory: apps/or_app
+        run: flutter build macos --debug
+
+      - name: Capture CLI bootstrap data
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          commands = {
+              "app_info": ["version", "--json"],
+              "health": ["health", "--json"],
+              "capabilities": ["capabilities", "--json"],
+          }
+          snapshot = {}
+          for key, arguments in commands.items():
+              output = subprocess.check_output(
+                  ["cargo", "run", "--quiet", "-p", "or_cli", "--", *arguments],
+                  text=True,
+              )
+              snapshot[key] = json.loads(output)
+
+          path = os.path.join(os.environ["RUNNER_TEMP"], "or-cli-bootstrap.json")
+          with open(path, "w", encoding="utf-8") as file:
+              json.dump(snapshot, file, separators=(",", ":"))
+          PY
+
+      - name: Run real native bridge smoke test
+        working-directory: apps/or_app
+        run: >-
+          flutter test integration_test/core_bridge_test.dart -d macos
+          --dart-define=OR_CLI_BOOTSTRAP_FILE=$RUNNER_TEMP/or-cli-bootstrap.json
+
+  linux:
+    name: Linux native build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Flutter Linux build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build Linux app with Rust bridge
+        working-directory: apps/or_app
+        run: flutter build linux --debug
+
+  windows:
+    name: Windows native build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build Windows app with Rust bridge
+        working-directory: apps/or_app
+        run: flutter build windows --debug
+
+  android:
+    name: Android APK build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - name: Install Android platform and Rust NDK
+        run: >-
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          "ndk;28.2.13676358"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build debug APK with Rust bridge
+        working-directory: apps/or_app
+        run: flutter build apk --debug
