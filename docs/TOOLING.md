@@ -2,6 +2,18 @@
 
 This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
 
+## Verification model
+
+Local machines are for editing and lightweight source verification. GitHub Actions is the canonical verification environment for platform, linker, and native builds. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
+
+Report each check as one of:
+
+- `PASS` — it ran and succeeded.
+- `FAIL` — it ran and exposed a source, test, or configuration defect.
+- `LOCAL ENVIRONMENT BLOCKED` — it could not run because a missing or intentionally unconfigured local platform tool prevented it. This status is neither pass nor fail.
+
+When a required local check is environment-blocked and an equivalent Actions job exists, continue and inspect that remote job. The task may complete for that check only after the remote job passes. A blocked local check with no remote result is still unverified.
+
 ## Local development baseline
 
 Install only the tools needed for the part you are changing. The repository pins Rust 1.98.0; Flutter CI uses Flutter 3.47.5 stable.
@@ -14,6 +26,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+Run lightweight checks first. For core-only work, prefer affected-package checks such as `cargo check -p or_core --all-targets`, and use package-scoped Clippy/tests where they work in the current environment. Attempt stronger workspace checks when useful. A native linker failure caused only by unavailable local platform tooling is `LOCAL ENVIRONMENT BLOCKED`; a Rust source or test failure is `FAIL` and must be fixed.
+
 Flutter checks run from `apps/or_app`:
 
 ```sh
@@ -23,18 +37,21 @@ flutter analyze
 flutter test
 ```
 
-Flutter's Rust native-assets hook builds the bridge for the host target during Flutter builds and tests. On macOS, the Command Line Tools are sufficient for general Rust work and widget tests. If an unaccepted full Xcode selection blocks Flutter's native-asset packaging, run the Flutter command with `DEVELOPER_DIR=/Library/Developer/CommandLineTools` when those tools are installed.
+Flutter's Rust native-assets hook builds the bridge for the host target during Flutter builds and tests. Flutter checks that need unavailable host tooling may be environment-blocked locally; use the matching Actions job. Do not change Xcode selection, set `DEVELOPER_DIR`, accept licenses, install/repair platform components, or use `sudo` for platform setup as a normal agent workaround. Those are optional manual choices only for a developer who explicitly wants local platform builds and chooses to configure that machine.
 
 ## Hosted platform verification
 
 GitHub Actions is the canonical place for native platform builds. Contributors do not need to own a Mac, Windows PC, or Linux machine, and do not need to install every platform SDK.
 
-- macOS: native app build and real Rust bridge smoke test
-- Linux: native app build
-- Windows: native app build
-- Android: debug APK build; no emulator runtime test is currently configured
+- `Repository hygiene`: repository checks from `scripts/check-repo.sh`.
+- `Rust checks`: formatting, workspace Clippy, and workspace tests on Ubuntu.
+- `Flutter static and widget checks`: dependency resolution, Dart formatting, analysis, and Flutter widget tests on Ubuntu.
+- `macOS native build and bridge smoke`: macOS app build, CLI bootstrap capture, and a real native Rust bridge smoke test.
+- `Linux native build`: Linux app build.
+- `Windows native build`: Windows app build.
+- `Android APK build`: debug APK build; no emulator runtime test is currently configured.
 
-Full Xcode is optional for general OR development. It is required only for contributors who want to build or debug the macOS app locally; GitHub-hosted macOS runners provide canonical verification. Android SDK, JDK, and emulator setup are optional unless actively developing or debugging Android-specific behavior.
+Full Xcode, CocoaPods, Android SDK/JDK, Windows SDK, and Linux platform packages are optional for general OR development. Install or configure them only when explicitly choosing local platform development; GitHub-hosted jobs provide canonical coverage for the configured targets.
 
 ## CodeGraph
 

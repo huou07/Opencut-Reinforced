@@ -16,4 +16,4 @@ Opencut Reinforced is in a pre-MVP product and architecture phase. Keep contribu
 
 External contributors do not need CodeGraph, Ponytail, proprietary software, or private tooling. Keep secrets, model weights, build outputs, and generated media out of Git. Review dependency, model, and asset licenses before distribution.
 
-Contributors are not expected to install every target platform SDK or own a Mac, Windows PC, or Linux machine. See [docs/TOOLING.md](docs/TOOLING.md) for the local development baseline and GitHub-hosted platform checks.
+Contributors are not expected to install every target platform SDK or own a Mac, Windows PC, or Linux machine. For ordinary development, classify checks prevented by missing platform tooling as `LOCAL ENVIRONMENT BLOCKED` and rely on the equivalent GitHub Actions job for evidence; see [docs/TOOLING.md](docs/TOOLING.md).

@@ -21,9 +21,19 @@ This workflow applies to the Phase 3 architecture skeleton and all later impleme
 13. **Localize at the presentation boundary.** Do not scatter user-facing English strings through domain/business logic. Use localization-capable Flutter resources when production UI starts; keep command IDs, JSON field names, and machine-readable error codes stable.
 14. **Update documentation.** Update the existing source of truth. Create a new document only when the information needs a durable home.
 15. **Preserve regression guards.** Read [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md). Add a permanent guard when a UI regression is fixed. Never remove or weaken a working guard to make a change pass.
-16. **Verify the affected system.** Run relevant Rust, CLI, Flutter, platform, integration, acceptance, and performance checks. Report checks that did not run as unrun.
+16. **Verify the affected system.** Follow the CI-first verification ladder below. Report checks that did not run with their actual status.
 17. **Commit one logical change.** Commit only a coherent change with no known-broken state. Use a clear Conventional Commit-style subject.
 18. **Open a focused pull request and pass CI.** External contributors use feature branches and pull requests. Explain what changed, why, architecture impact, tests, docs, and risks. CI must pass before merge. Early maintainer work may continue to fast-forward main pushes under repository policy.
+
+### CI-first verification ladder
+
+1. Run repository hygiene, diff checks, formatting, and static/source checks locally.
+2. Run checks scoped to the affected package or subsystem, such as `cargo check -p or_core --all-targets`, plus relevant tests and linting where available.
+3. Attempt stronger workspace checks when useful; do not let an unrelated missing platform tool prevent source work.
+4. Classify each check as `PASS`, `FAIL`, or `LOCAL ENVIRONMENT BLOCKED`. Fix source/test failures. Use the blocked status only when local platform tooling prevented execution; never report it as passing.
+5. Push through normal Git and inspect the actual required GitHub Actions jobs for the commit. Hosted CI is canonical for platform/linker/native verification.
+6. Fix implementation failures and rerun relevant local checks before pushing a focused fix. Do not disable or weaken required workflows to get a green result.
+7. Complete only after required remote jobs pass. A local block with no equivalent remote result remains unverified and must be reported. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly asks for local platform development.
 
 ### Real-time and hot-path review
 

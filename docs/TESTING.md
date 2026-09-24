@@ -13,6 +13,16 @@ Phase 3 has executable tests for the bootstrap core, CLI, Flutter shell, and nat
 
 These checks prove the bootstrap architecture only. They do not demonstrate editing, media, or release behavior.
 
+## CI-first verification status
+
+GitHub-hosted Actions is canonical for platform correctness, linker-dependent builds, and the native bridge runtime smoke test. Local inability to run a platform test does not remove its verification requirement; it moves the evidence source to the equivalent required Actions job.
+
+- `PASS`: the check ran and succeeded.
+- `FAIL`: the check ran and found a defect that must be addressed.
+- `LOCAL ENVIRONMENT BLOCKED`: local execution was prevented by unavailable or intentionally unconfigured platform tooling. This is neither pass nor fail.
+
+For example, a blocked local macOS native check plus a passing GitHub macOS native job is verified. A blocked local check with its remote job not run is not verified. Never weaken or omit a test because a local platform tool is unavailable.
+
 ## Current Phase 4A coverage
 
 - `ProjectId` and `ProjectInstanceId`: UUIDv4 generation, canonical display and parse round trips, serde round trips, and invalid/non-v4 project ID rejection.

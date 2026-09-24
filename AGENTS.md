@@ -161,6 +161,10 @@ If a test cannot run because of a real environment limitation:
 
 For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
 
+## CI-first platform verification
+
+Use local machines for editing and available source checks; GitHub Actions is canonical for platform/native verification. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS` and `FAIL`, and require the corresponding remote check to pass. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [docs/TOOLING.md](docs/TOOLING.md).
+
 ## Regression preservation rule
 
 Do not regress behavior that has already been fixed or verified. Before changing
