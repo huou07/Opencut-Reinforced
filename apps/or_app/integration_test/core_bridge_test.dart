@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -15,11 +14,9 @@ void main() {
   testWidgets('native bridge diagnostics match the CLI snapshot', (
     tester,
   ) async {
-    const expectedFile = String.fromEnvironment('OR_CLI_BOOTSTRAP_FILE');
-    expect(expectedFile, isNotEmpty);
-    final expected = jsonDecode(
-      await File(expectedFile).readAsString(),
-    ) as Map<String, dynamic>;
+    const expectedJson = String.fromEnvironment('OR_CLI_BOOTSTRAP_JSON');
+    expect(expectedJson, isNotEmpty);
+    final expected = jsonDecode(expectedJson) as Map<String, dynamic>;
     final gateway = RustCoreGateway();
 
     final appInfo = await gateway.appInfo();

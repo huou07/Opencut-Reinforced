@@ -123,16 +123,19 @@ jobs:
               )
               snapshot[key] = json.loads(output)
 
-          path = os.path.join(os.environ["RUNNER_TEMP"], "or-cli-bootstrap.json")
-          with open(path, "w", encoding="utf-8") as file:
-              json.dump(snapshot, file, separators=(",", ":"))
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as file:
+              file.write(
+                  "OR_CLI_BOOTSTRAP_JSON="
+                  + json.dumps(snapshot, separators=(",", ":"))
+                  + "\n"
+              )
           PY
 
       - name: Run real native bridge smoke test
         working-directory: apps/or_app
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
-          --dart-define=OR_CLI_BOOTSTRAP_FILE=$RUNNER_TEMP/or-cli-bootstrap.json
+          "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
 
   linux:
     name: Linux native build
