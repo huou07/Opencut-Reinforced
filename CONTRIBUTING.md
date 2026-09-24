@@ -1,19 +1,17 @@
 # Contributing
 
-Opencut Reinforced is in an early, pre-implementation phase. Keep contributions focused on the requested scope.
+Opencut Reinforced is in a pre-MVP product and architecture phase. Keep contributions focused on an agreed scope and preserve existing behavior.
 
-Before contributing:
+## Contributor path
 
-- Read [AGENTS.md](AGENTS.md) for repository workflow and safety rules.
-- Read [DESIGN.md](DESIGN.md) before UI or visual changes.
-- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before architecture changes.
-- Discuss large or difficult-to-reverse architecture changes before implementing them.
+1. Read [README.md](README.md).
+2. Read this guide and [docs/INDEX.md](docs/INDEX.md).
+3. Choose a focused issue or feature and identify its product and architecture references. Discuss difficult-to-reverse architecture changes before implementation.
+4. Follow [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md).
+5. Put editing behavior in the domain and command layer before adding UI.
+6. Reuse existing UI shell slots and follow [DESIGN.md](DESIGN.md) for visual work.
+7. Add relevant tests and update the existing source-of-truth documentation.
+8. Run the applicable verification and report anything that did not run.
+9. Open a focused pull request describing what changed, why, architecture impact, checks, docs, and risks.
 
-For changes:
-
-- Make one logical change per commit; use a Conventional Commit-style subject where practical.
-- Update relevant documentation with implementation changes and relevant tests when behavior changes.
-- Ensure all relevant checks pass. Explain any checks that do not apply.
-- Do not commit secrets, model weights, generated builds, or other local artifacts.
-- Review dependency licenses for compatibility before adding dependencies.
-- CodeGraph and Ponytail are optional maintainer/agent tools. They are not required for external contributors.
+External contributors do not need CodeGraph, Ponytail, proprietary software, or private tooling. Keep secrets, model weights, build outputs, and generated media out of Git. Review dependency, model, and asset licenses before distribution.

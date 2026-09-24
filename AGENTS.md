@@ -263,24 +263,22 @@ Do not implement this infrastructure until requested, but preserve the architect
 
 ## Documentation structure
 
-Keep AGENTS.md primarily as operational instructions and a map.
+Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. Use [docs/INDEX.md](docs/INDEX.md) for the authoritative documentation map. Prefer updating the existing source-of-truth document over creating unnecessary documents.
 
-Current source of truth:
+## Document routing
 
-- AGENTS.md — agent workflow and repository rules
-- DESIGN.md — UI/UX design language
-- docs/ARCHITECTURE.md — pre-implementation product architecture direction
-- README.md — concise project overview
+Read the relevant source of truth for the task:
 
-As the project grows, create structured docs/ only when needed, for example:
+- UI: DESIGN.md, docs/UX_ACCEPTANCE.md, and the relevant section of docs/PRODUCT.md.
+- Product scope: docs/PRODUCT.md and docs/ROADMAP.md.
+- Architecture: docs/ARCHITECTURE.md and docs/TECHNICAL_PLAN.md.
+- Feature implementation: docs/DEVELOPMENT_WORKFLOW.md.
+- Testing: docs/TESTING.md.
+- Security and licensing: docs/SECURITY_LICENSING.md.
+- Release: docs/RELEASE.md.
+- Contributors: README.md, CONTRIBUTING.md, and docs/DEVELOPMENT_WORKFLOW.md.
 
-- docs/architecture/
-- docs/product/
-- docs/testing/
-- docs/tooling/
-- docs/decisions/
-
-Do not let AGENTS.md grow into a full project encyclopedia.
+Do not guess project architecture when the repository documents the answer. The HTML prototype is a product and UX reference only, not production architecture.
 
 ## Tooling
 

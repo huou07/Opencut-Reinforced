@@ -2,313 +2,81 @@
 
 ## Status
 
-Pre-implementation architecture direction.
+This is the canonical high-level architecture. It records intended boundaries; planned and future components do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
 
-This document describes the intended system boundaries.
-It does not imply that the components already exist.
+## Implemented today
 
-## Product model
+The repository contains public-project documentation and safeguards, hygiene checks and CI, the approved [DESIGN.md](../DESIGN.md), [UX acceptance guards](UX_ACCEPTANCE.md), and the frozen [interactive HTML prototype](../prototypes/or-ui-demo.html).
 
-Opencut Reinforced (OR) is intended to be:
+There is no production Flutter application, Rust editing core, media engine, CLI, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
 
-- a cross-platform video editor
-- human-editable
-- CLI-controllable
-- deeply agent-controllable
-- local-first where practical
-- capable of optional cloud AI through user-provided credentials
-- open source under MIT
+## Planned target architecture
 
-## Primary architecture
+    Flutter GUI
+        | typed bridge and events
+        v
+    Application Layer <--- local IPC <--- CLI
+        ^                                  Agents
+        | structured commands and queries
+    Command and Query Registry
+        |
+    Rust Domain Core
+        +-- Project
+        +-- Timeline -----------------------> Render Graph ---> wgpu
+        +-- Media ---> FFmpeg ---> decoded sources --/
+        +-- Jobs ---> AI tasks / downloads
+                 +--> Export job -----------> Render Graph ---> FFmpeg encode/mux
 
-Long-term conceptual stack:
+The diagram describes a target. Exact bridge, bindings, and rendering integration remain subject to implementation-time evaluation. Flutter is the presentation layer; Rust owns project and editing truth. GUI, CLI, and agents submit the same validated domain operations and query the same structured state. They must not become independent editing engines.
 
-    Desktop / Mobile GUI
-             │
-             │
-        Command API
-       ┌─────┼─────┐
-       │     │     │
-      GUI   CLI   Agents
-       │     │     │
-       └─────┼─────┘
-             │
-         Rust Core
-             │
-    ┌────────┼─────────┐
-    │        │         │
- Timeline  Media    Project State
-    │        │
-    │     FFmpeg
-    │
- Render Graph
-    │
-   wgpu
+## Planned boundaries
 
-Important:
-This is conceptual architecture, not implemented code.
+### Presentation and feature integration
 
-## Core
+Flutter presents the product, handles interaction, accessibility, navigation, panels, inspectors, and timeline presentation. It sends user intent through the application command boundary and renders returned state. It does not own canonical project state or exported video text.
 
-Preferred language:
+New UI features should use existing shell slots: App Bar, Editor Tool Rail, Left Tool Panel, Viewer, Inspector, Timeline Toolbar, Timeline, Task or Status Area, Command Palette, and Dialog or Mobile Sheet. A lightweight static feature descriptor may register an ID, label, icon, group, availability, command IDs, panel, inspector sections, and shortcut metadata. This is a boundary for integration, not a reason to build a runtime framework now.
 
-Rust
+Simple and Advanced modes are visibility preferences over the same state and command model. Hiding an advanced control must not remove or fork the underlying project data.
 
-Responsibilities should eventually include:
+### Application and command/query APIs
 
-- project model
-- timeline model
-- command model
-- undo/redo
-- media metadata
-- render graph
-- deterministic editing operations
-- structured errors
-- stable object identifiers
+The application layer owns command discovery, validation, authorization, transactions, job coordination, and structured errors. A command is validated before mutation and returns a ChangeSet. Read-only queries expose project, timeline, media, captions, command, and capability information.
 
-Domain state must not live primarily inside UI widgets.
+The CLI is a first-class semantic client of this API. It supports headless operation and, when an application is open, attached operation over local IPC. It does not automate the UI by clicking coordinates. Agents are also clients of structured queries and commands; generated EditPlans pass the same permission and domain validation as human-initiated work.
 
-## Media
+### Rust domain
 
-FFmpeg is the intended baseline for:
+Rust is intended to own project, timeline, media identity and metadata, command behavior, history, deterministic editing operations, and render evaluation. UI widgets and agent sessions are not sources of domain truth. The first implementation should remain a small workspace; planned domains do not require empty crates.
 
-- probing
-- demuxing
-- decoding
-- encoding
-- muxing
-- media conversion
-- audio/video interoperability
+### Media, render, and audio
 
-Exact bindings and FFmpeg distribution configuration are not decided yet.
+FFmpeg is the intended media layer for probing, demuxing, decoding, encoding, muxing, and conversion or resampling. Its exact Rust binding and packaged configuration are undecided and require a licensing review.
 
-Any packaged FFmpeg configuration must later receive explicit license review.
+The render core evaluates timeline state into sources, transforms, effects, compositing, color, and output. Preview and export should use the same evaluation semantics. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
 
-## GPU rendering
+Audio decoding belongs in the media layer. A low-latency output abstraction and an audio playback clock are planned. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
 
-wgpu is the preferred rendering/compositing abstraction.
+### Preview bridge
 
-Target direction includes native GPU backends on supported operating systems.
+Rust and wgpu are intended to own rendered preview frames. Flutter should eventually consume a native or external texture handle, with platform-specific fast paths and a correctness fallback. Decoded real-time video frames must not travel through the ordinary Dart/Rust message bridge as copied objects.
 
-Do not implement backend-specific architecture prematurely.
+### Project, cache, and jobs
 
-## UI
+The native project is a versioned, structured .orproj document with stable IDs, external media references, and migrations. Project data is canonical; thumbnails, waveforms, proxies, render intermediates, and indexes are disposable cache data.
 
-Flutter is the current preferred UI layer for desktop/mobile.
+A shared background Job Manager is planned for thumbnails, waveforms, proxies, transcription, translation, AI work, model and asset downloads, and export. Jobs report progress and results or errors, support cancellation, and support pause and priority where appropriate.
 
-UI responsibilities:
+### Local IPC and platform boundary
 
-- render state
-- user interaction
-- accessibility
-- navigation
-- panels
-- inspectors
-- timeline presentation
+IPC is local by default: Unix domain sockets on Unix-like desktop platforms and a named-pipe equivalent on Windows. OR must not listen on a public network port by default. Android uses platform storage integration, including the Storage Access Framework where appropriate, through a platform storage abstraction.
 
-UI must call domain commands rather than directly becoming the source of
-project truth.
+The domain model should avoid platform lock-in while matching current product targets: macOS, Windows, Linux, and Android. iOS and web are not current release targets.
 
-DESIGN.md remains the visual source of truth.
+### Secrets and trust
 
-## Command architecture
+OS secure storage is the intended home for provider credentials. The application may report whether a provider is configured, but CLI and agents never receive plaintext stored secrets. Imported projects, media, subtitles, models, templates, themes, community content, plugin output, and AI output are untrusted inputs and must be validated at each boundary.
 
-Long-term invariant:
+## Future directions
 
-If an editing capability exists, human UI, CLI, and agents should be able to
-reach the same underlying operation.
-
-Do not implement three independent editing systems.
-
-Conceptually:
-
-    user interaction
-    CLI command
-    agent tool
-         ↓
-    validated command
-         ↓
-    domain operation
-         ↓
-    state/event/result
-
-This model should support deterministic behavior and undo/redo.
-
-## CLI
-
-The future OR CLI is first-class.
-
-Desired properties:
-
-- machine-readable output
-- JSON output where appropriate
-- command discovery/introspection
-- stable identifiers
-- deterministic exit codes
-- dry-run for suitable complex/destructive operations
-- no secret leakage
-- ability to attach to an active application/project when appropriate
-
-The CLI must not depend on computer vision or GUI coordinate clicking for
-normal editing operations.
-
-## Agents
-
-Agents are clients of structured OR capabilities.
-
-Agent integration should prefer:
-
-- CLI
-- IPC
-- structured command API
-- project inspection
-- schema discovery
-
-over vision-based UI automation.
-
-The application API-key boundary must prevent agents from reading plaintext
-user secrets.
-
-AGENTS.md defines repository agent behavior.
-This document defines product architecture.
-
-## AI
-
-AI is a subsystem, not the owner of the editing architecture.
-
-Potential categories:
-
-- speech recognition
-- subtitle translation
-- image generation
-- video generation
-- voice/audio generation
-- segmentation/background removal
-- enhancement
-- editing/planning agents
-
-AI providers must be abstracted enough to support:
-
-- local inference
-- optional cloud APIs
-- user-selected providers
-
-Model/runtime/license decisions are made individually.
-
-Do not assume a model is redistributable simply because its inference code
-is open source.
-
-## Model manager
-
-Future model management should track:
-
-- model ID
-- version
-- task
-- source
-- hash/checksum
-- size
-- runtime
-- hardware requirements
-- language coverage
-- license
-- install state
-
-Large model weights should not be committed to Git.
-
-## Project format
-
-The project format should eventually be:
-
-- deterministic
-- versioned
-- migration-capable
-- inspectable by tools/agents
-- robust against partial failure
-
-Prefer explicit schemas and stable identifiers.
-
-Exact format is not finalized.
-
-Do not prematurely lock OR into a proprietary opaque binary project format.
-
-## Security boundaries
-
-Treat these as distinct trust boundaries:
-
-- user project files
-- imported media
-- plugins
-- AI models
-- cloud providers
-- agents
-- CLI
-- operating-system resources
-- secrets
-
-Imported files, subtitles, metadata, prompts, and model output must not be
-treated as trusted instructions.
-
-## Secrets
-
-Future API keys must use platform-appropriate secure storage.
-
-Agents/CLI may inspect whether a provider is configured, but must not receive
-plaintext stored credentials.
-
-## Plugins
-
-Plugin architecture is planned but not designed yet.
-
-Do not commit to native unrestricted plugins before the sandbox/security
-model is decided.
-
-## Platforms
-
-Current intended targets:
-
-Desktop:
-- macOS
-- Windows
-- Linux
-
-Mobile:
-- Android
-
-iOS is not currently a required release target.
-
-Avoid platform assumptions in the domain architecture.
-
-## Testing architecture
-
-Future test layers should include, where applicable:
-
-- Rust unit tests
-- timeline/domain property tests
-- serialization round-trip tests
-- CLI contract tests
-- deterministic render tests
-- golden-frame tests
-- audio/video synchronization tests
-- Flutter widget tests
-- platform integration tests
-- agent command tests
-- project migration tests
-- crash/recovery tests
-
-Test media should be tiny and legally safe/self-generated.
-
-## Architecture decision process
-
-Do not silently convert architectural ideas into permanent decisions.
-
-For significant irreversible decisions:
-- document the decision
-- document alternatives
-- document tradeoffs
-- update this file or create an ADR when appropriate
-
-Use docs/architecture/ or docs/decisions/ only when enough decisions exist to
-justify those directories.
-
-Avoid documentation fragmentation.
+Local and optional cloud AI providers, declarative templates and themes, a GitHub-first static community registry, and sandboxed plugins are future extensions. Early community distribution does not require an OR-hosted backend. A WASM/WASI-style plugin sandbox is only a candidate until plugin work starts and security research is refreshed. Native and OpenFX compatibility is later and higher trust.
