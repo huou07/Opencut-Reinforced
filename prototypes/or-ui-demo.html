@@ -361,7 +361,7 @@
       .mobile-bottom-nav button .icon { width: 17px; height: 17px; }
       .grid-4, .grid-3, .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
       .search-wrap { max-width: none; }
-      .editor-grid, .editor-tools, .timeline { display: none; }
+      .editor-grid, .editor-tools { display: none; }
       .editor-top { border-radius: 10px 10px 0 0; }
       .editor-top strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .editor-top label.field { display: none; }
@@ -399,7 +399,7 @@
     .app-shell[data-mode="mobile"] .sidebar { display: none; }
     .app-shell[data-mode="mobile"] .main { margin-left: 0; padding-bottom: 88px; }
     .app-shell[data-mode="mobile"] .mobile-bottom-nav { display: grid; }
-    .app-shell[data-mode="mobile"] .editor-grid, .app-shell[data-mode="mobile"] .editor-tools, .app-shell[data-mode="mobile"] .timeline { display: none; }
+    .app-shell[data-mode="mobile"] .editor-grid, .app-shell[data-mode="mobile"] .editor-tools { display: none; }
     .app-shell[data-mode="mobile"] .mobile-editor { display: block; }
     .app-shell[data-mode="mobile"] .mobile-top-action { display: inline-grid; }
     .app-shell[data-mode="mobile"] .page-head { display: none; }
@@ -431,6 +431,9 @@
     body[data-view="editor"] .main { height: 100vh; margin-left: 0; padding: var(--topbar-height) 0 0; overflow: hidden; }
     body[data-view="editor"] #page-head { display: none; }
     body[data-view="editor"] .workspace { height: calc(100vh - var(--topbar-height)); overflow: hidden; }
+    /* Editor shell selectors must stay scoped to the current editor implementation.
+       Do not use broad `.timeline { display:none }` responsive rules: shared semantic
+       classes may be used by both desktop and mobile layouts. */
     .editor-shell {
       --left-panel-width: 252px;
       --inspector-width: 260px;
@@ -487,14 +490,14 @@
     .timeline-resize-handle { position: relative; cursor: row-resize; touch-action: none; background: #0d0d0e; }
     .timeline-resize-handle::after { content: ""; position: absolute; top: 3px; left: calc(50% - 18px); width: 36px; height: 2px; border-radius: 2px; background: var(--or-border-strong); }
     .timeline-resize-handle:hover::after { background: var(--or-selection); }
-    .editor-timeline-tools { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: auto; padding: 4px 9px; border-top: 1px solid var(--or-border); border-bottom: 1px solid var(--or-border); background: var(--or-bg-raised); }
-    .editor-timeline-tools .tool-btn { flex: 0 0 auto; }
+    .editor-timeline-tools { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: visible; padding: 4px 9px; border-top: 1px solid var(--or-border); border-bottom: 1px solid var(--or-border); background: var(--or-bg-raised); }
+    .timeline-primary-tools { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; }
+    .timeline-primary-tools .tool-btn { flex: 0 0 auto; }
     .editor-timeline-tools .tool-btn { min-height: 32px; }
-    .timeline-more { position: relative; flex: 0 0 auto; }
-    .timeline-more > summary { list-style: none; cursor: pointer; }
-    .timeline-more > summary::-webkit-details-marker { display: none; }
-    .timeline-overflow { position: absolute; top: calc(100% + 5px); right: 0; z-index: 15; display: grid; min-width: 190px; padding: 5px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: var(--or-bg-raised); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
-    .timeline-overflow .tool-btn { width: 100%; justify-content: flex-start; }
+    .timeline-more-trigger { flex: 0 0 auto; }
+    .timeline-overflow { position: fixed; z-index: 1200; display: grid; width: max-content; min-width: 220px; max-width: calc(100vw - 16px); max-height: min(70vh, 480px); overflow-x: hidden; overflow-y: auto; padding: 5px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: var(--or-bg-raised); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+    .timeline-overflow[hidden] { display: none; }
+    .timeline-overflow .tool-btn { width: 100%; justify-content: flex-start; white-space: nowrap; }
     .tool-label { white-space: nowrap; }
     .editor-shell .editor-timeline { display: block; min-height: 0; overflow: hidden; border: 0; border-radius: 0; }
     .editor-timeline .timeline-scroller { height: 100%; max-height: none; }
@@ -1452,10 +1455,10 @@
     const commonTimelineCommands=["Select","Split","Trim","Ripple Delete","Duplicate","Delete"];
     const secondaryTimelineCommands=["Link / Unlink","Group","Snap","Marker"];
     const advancedTimelineCommands=["Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap","Freeze Frame","Reverse"];
-    function renderTimelineCommand(name){
+    let timelineMoreOpen=false;
+    function renderTimelineCommand(name,menuItem){
       const icons={"Select":"select","Split":"split","Trim":"trim","Ripple Delete":"ripple","Duplicate":"copy","Delete":"trash","Link / Unlink":"link","Group":"group","Snap":"snap","Marker":"marker","Compound Clip":"group","Nested Timeline":"film","Adjustment Layer":"image","Speed Ramp":"wave","Time Remap":"clock","Freeze Frame":"clock","Reverse":"refresh"};
-      const labels={"Ripple Delete":"Ripple","Link / Unlink":"Link","Compound Clip":"Compound","Nested Timeline":"Nested","Adjustment Layer":"Adjustment","Freeze Frame":"Freeze"};
-      return '<button class="tool-btn" data-action="timeline-command" data-name="'+esc(name)+'" aria-label="'+esc(name)+'" title="'+esc(name)+'">'+icon(icons[name]||"box")+'<span class="tool-label">'+esc(labels[name]||name)+'</span></button>';
+      return '<button class="tool-btn" data-action="timeline-command" data-name="'+esc(name)+'"'+(menuItem?' role="menuitem"':'')+' aria-label="'+esc(name)+'" title="'+esc(name)+'">'+icon(icons[name]||"box")+'<span class="tool-label">'+esc(name)+'</span></button>';
     }
     function renderEditor() {
       const rail=renderEditorPanel();
@@ -1463,14 +1466,38 @@
       const overlays=[["showViewerGrid","Grid"],["showSafeArea","Safe Area"],["showGuides","Guides"],["showRulers","Rulers"],["showTransform","Transform"],["showBoundingBox","Bounds"]];
       const viewer='<section class="editor-viewer" aria-label="Project preview"><div class="viewer-toolbar"><strong>Viewer</strong><span class="push"></span><div class="viewer-overlays">'+overlays.map(item=>'<button class="icon-button" data-action="viewer-overlay" data-state="'+item[0]+'" aria-pressed="'+state[item[0]]+'" aria-label="'+item[1]+'" title="'+item[1]+'">'+(item[1]==="Safe Area"?"SA":item[1]==="Bounds"?"□":item[1]==="Guides"?"⌖":item[1]==="Rulers"?"R":item[1]==="Transform"?"↔":icon("grid"))+'</button>').join("")+'</div><select id="viewer-zoom" class="select" aria-label="Viewer zoom">'+["Fit","25%","50%","100%","200%"].map(value=>'<option'+(state.viewerZoom===value?' selected':'')+'>'+value+'</option>').join("")+'</select><button class="btn btn-compact" data-action="viewer-only" aria-pressed="'+state.viewOnly+'">'+(state.viewOnly?"Exit Cinema":"Cinema")+'</button><button class="icon-button" data-action="fullscreen-preview" aria-label="'+(state.fullscreenPreview?"Exit fullscreen preview":"Fullscreen Preview")+'" title="Fullscreen Preview">'+icon("image")+'</button></div><div class="viewer-stage"><div class="viewer-canvas '+(state.showViewerGrid?"show-grid ":"")+(state.showSafeArea?"show-safe ":"")+(state.showGuides?"show-guides ":"")+(state.showRulers?"show-rulers ":"")+(state.showTransform?"show-transform ":"")+(state.showBoundingBox?"show-bounds":"")+'" style="aspect-ratio:'+aspect+'"><div class="preview-mock"></div><span class="preview-label">'+fmtTime(state.currentTime)+' · '+esc(activeProject().name)+'</span><button class="viewer-focus-button" data-action="viewer-focus" aria-label="Toggle viewer focus" title="Viewer focus">'+icon("image")+'</button></div></div><div class="viewer-transport"><div class="transport-group transport-left"><button class="icon-button" data-action="go-start" aria-label="Go to start" title="Go to start">'+icon("back")+'</button><button class="icon-button" data-action="previous-frame" aria-label="Previous frame" title="Previous frame · Left Arrow">'+icon("back")+'</button></div><button class="icon-button transport-play" data-action="toggle-play" aria-label="'+(state.playing?"Pause":"Play")+'" aria-pressed="'+state.playing+'" title="Play / Pause · Space">'+icon(state.playing?"pause":"play")+'</button><div class="transport-group transport-right"><button class="icon-button" data-action="next-frame" aria-label="Next frame" title="Next frame · Right Arrow">'+icon("next")+'</button><button class="icon-button" data-action="go-end" aria-label="Go to end" title="Go to end">'+icon("next")+'</button><span class="time-display mono" aria-live="off">'+fmtTime(state.currentTime)+' / '+fmtTime(state.duration)+'</span><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="'+state.loop+'" title="Loop">'+icon("refresh")+'</button><button class="icon-button" data-action="volume" aria-label="Preview volume" title="Preview volume">'+icon("wave")+'</button></div></div></section>';
       const ruler=Array.from({length:Math.max(2,Math.min(500,Math.ceil(state.duration/5)+1))},(_,index)=>'<span class="ruler-mark">'+fmtTime(index*5)+'</span>').join("");
-      const commands=commonTimelineCommands.map(renderTimelineCommand).join("");
-      const overflow='<details class="timeline-more"><summary class="tool-btn" aria-label="More timeline commands" title="More timeline commands">'+icon("more")+'<span class="tool-label">More</span></summary><div class="timeline-overflow" role="menu">'+secondaryTimelineCommands.concat(advancedTimelineCommands).map(renderTimelineCommand).join("")+'</div></details>';
+      const commands='<div class="timeline-primary-tools" aria-label="Common timeline commands">'+commonTimelineCommands.map(name=>renderTimelineCommand(name,false)).join("")+'</div>';
+      const more='<button type="button" class="tool-btn timeline-more-trigger" data-action="timeline-more-toggle" aria-haspopup="menu" aria-expanded="'+timelineMoreOpen+'" aria-label="More timeline commands" title="More timeline commands">'+icon("more")+'<span class="tool-label">More</span></button>';
+      const overflow='<div id="timeline-more-menu" class="timeline-overflow" role="menu"'+(timelineMoreOpen?'':' hidden')+' style="visibility:hidden">'+secondaryTimelineCommands.concat(advancedTimelineCommands).map(name=>renderTimelineCommand(name,true)).join("")+'</div>';
       const zoom='<label class="timeline-zoom small"><span class="muted">−</span><input id="timeline-zoom" aria-label="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="'+state.zoom+'"><span class="muted">+</span></label>';
-      const timeline='<div class="editor-timeline-tools">'+commands+overflow+zoom+'</div><section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks</span><span class="push"></span><button class="filter-chip" data-action="toggle-follow-playhead" aria-pressed="'+state.followPlayhead+'" title="Scroll the timeline as playback advances">Follow</button><div class="timeline-track-controls">'+["Video","Audio","Text","Caption"].map(name=>'<button class="btn btn-compact" data-action="add-track" data-type="'+name.toLowerCase()+'">+ '+name+'</button>').join("")+btn("ADJ","add-adjustment-layer","btn-compact")+btn("Graph","toggle-graph","btn-compact")+'</div></div><div class="timeline-scroller" style="--timeline-zoom:'+state.zoom+'"><div class="timeline-ruler" aria-label="Timeline ruler">'+ruler+'</div><div class="playhead-hit" id="playhead-hit" role="slider" tabindex="0" aria-label="Timeline playhead" aria-valuemin="0" aria-valuemax="'+state.duration+'" aria-valuenow="'+state.currentTime+'" style="left:'+timelineTimeToPixel(state.currentTime)+'px"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn("Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
+      const timeline='<div class="editor-timeline-tools">'+commands+more+zoom+overflow+'</div><section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks</span><span class="push"></span><button class="filter-chip" data-action="toggle-follow-playhead" aria-pressed="'+state.followPlayhead+'" title="Scroll the timeline as playback advances">Follow</button><div class="timeline-track-controls">'+["Video","Audio","Text","Caption"].map(name=>'<button class="btn btn-compact" data-action="add-track" data-type="'+name.toLowerCase()+'">+ '+name+'</button>').join("")+btn("ADJ","add-adjustment-layer","btn-compact")+btn("Graph","toggle-graph","btn-compact")+'</div></div><div class="timeline-scroller" style="--timeline-zoom:'+state.zoom+'"><div class="timeline-ruler" aria-label="Timeline ruler">'+ruler+'</div><div class="playhead-hit" id="playhead-hit" role="slider" tabindex="0" aria-label="Timeline playhead" aria-valuemin="0" aria-valuemax="'+state.duration+'" aria-valuenow="'+state.currentTime+'" style="left:'+timelineTimeToPixel(state.currentTime)+'px"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn("Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
       const mobileDock='<nav class="editor-mobile-dock" aria-label="Editor tools">'+featureRegistry.filter(item=>item.editorTool).map(item=>'<button data-action="editor-tool-panel" data-tool="'+item.tool+'" aria-pressed="'+(state.selectedEditorTool===item.tool)+'" aria-label="'+esc(item.label)+'" title="'+esc(item.label)+'">'+icon(item.icon)+'<span>'+esc(item.shortLabel)+'</span></button>').join("")+'</nav>';
       const projectMenu='<div class="editor-project-bar"><button class="btn btn-compact project-menu-button" data-action="project-menu" aria-haspopup="dialog">Project</button>'+btn("Create Template","create-template","btn-compact")+btn("Snapshots","project-snapshots","btn-compact")+'<span class="push"></span><span class="small muted">'+esc(activeProject().ratio)+' · '+esc(activeProject().resolution)+'</span><button class="icon-button" data-action="project-settings" aria-label="Project settings">'+icon("settings")+'</button></div>';
-      return '<div class="editor-shell '+(state.leftPanelCollapsed?"left-panel-collapsed ":"")+(state.inspectorCollapsed?"inspector-collapsed ":"")+(state.viewOnly?"editor-cinema ":"")+(state.fullscreenPreview?"preview-fullscreen ":"")+(state.viewerFocus?"viewer-focused":"")+'" style="--left-panel-width:'+state.leftPanelWidth+'px;--inspector-width:'+state.inspectorWidth+'px;--timeline-height:'+state.timelineHeight+'px">'+projectMenu+'<div class="editor-stage">'+rail+'<div class="editor-resize-handle" data-resize="left" role="separator" tabindex="0" aria-label="Resize left panel" aria-orientation="vertical"></div>'+viewer+'<div class="editor-resize-handle" data-resize="inspector" role="separator" tabindex="0" aria-label="Resize inspector" aria-orientation="vertical"></div>'+renderEditorInspector()+'</div><div class="timeline-resize-handle" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize timeline" aria-orientation="horizontal"></div>'+mobileDock+timeline+'</div>';
+      return '<div class="editor-shell '+(state.leftPanelCollapsed?"left-panel-collapsed ":"")+(state.inspectorCollapsed?"inspector-collapsed ":"")+(state.viewOnly?"editor-cinema ":"")+(state.fullscreenPreview?"preview-fullscreen ":"")+(state.viewerFocus?"viewer-focused":"")+'" data-project-id="'+esc(activeProject().id)+'" style="--left-panel-width:'+state.leftPanelWidth+'px;--inspector-width:'+state.inspectorWidth+'px;--timeline-height:'+state.timelineHeight+'px">'+projectMenu+'<div class="editor-stage">'+rail+'<div class="editor-resize-handle" data-resize="left" role="separator" tabindex="0" aria-label="Resize left panel" aria-orientation="vertical"></div>'+viewer+'<div class="editor-resize-handle" data-resize="inspector" role="separator" tabindex="0" aria-label="Resize inspector" aria-orientation="vertical"></div>'+renderEditorInspector()+'</div><div class="timeline-resize-handle" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize timeline" aria-orientation="horizontal"></div>'+mobileDock+timeline+'</div>';
     }
+    function closeTimelineMore(){
+      timelineMoreOpen=false;
+      $$("#timeline-more-menu").forEach(menu=>menu.remove());
+      $("[data-action=timeline-more-toggle]")?.setAttribute("aria-expanded","false");
+    }
+    function syncTimelineMorePopover(){
+      const trigger=$("[data-action=timeline-more-toggle]"),menus=$$("#timeline-more-menu"),workspace=$("#workspace");
+      const menu=menus.find(item=>workspace&&workspace.contains(item))||menus.find(item=>item.parentElement===document.body);
+      if(!timelineMoreOpen||!trigger||!menu){closeTimelineMore();return;}
+      $$("#timeline-more-menu").filter(item=>item!==menu).forEach(item=>item.remove());
+      menu.hidden=false;
+      menu.style.visibility="hidden";
+      document.body.appendChild(menu);
+      const button=trigger.getBoundingClientRect(),rect=menu.getBoundingClientRect(),margin=8,gap=6;
+      const opensAbove=button.bottom+gap+rect.height>window.innerHeight-margin;
+      const top=Math.max(margin,Math.min(opensAbove?button.top-gap-rect.height:button.bottom+gap,window.innerHeight-rect.height-margin));
+      const left=Math.max(margin,Math.min(button.right-rect.width,window.innerWidth-rect.width-margin));
+      menu.dataset.placement=opensAbove?"top":"bottom";
+      menu.style.left=left+"px";
+      menu.style.top=top+"px";
+      menu.style.visibility="visible";
+    }
+    window.addEventListener("resize",syncTimelineMorePopover);
     function renderMediaManagement(id) {
       const actions=["Rename","Relink Media","Replace Media","Create Proxy","Delete Proxy","Optimized Media","Offline Media State","Reveal in Folder","Properties","Collect Project","Consolidate Media","Scene Detection","Duplicate Detection","Remove"];
       return '<div class="row-wrap">'+actions.map(name=>btn(name,"media-action","btn-compact",'data-name="'+name+'"'+(id?' data-id="'+id+'"':''))).join("")+'</div><p class="small muted section-block">Media management is simulated. No local files are read, moved, linked, or processed.</p>';
@@ -2362,9 +2389,10 @@
           if(["Captions","Translate","Dubbing"].includes(state.aiAssistSelection)){openEditorTool(state.aiAssistSelection,target);return true;}
           render();toast(state.aiAssistSelection+" plan simulated for the current project");return true;
         }
+        case "timeline-more-toggle": timelineMoreOpen=!timelineMoreOpen;render();return true;
         case "timeline-command": {
           const name=target.dataset.name||"";
-          const overflow=target.closest("details.timeline-more");if(overflow)overflow.open=false;
+          closeTimelineMore();
           if(name==="Select"){state.selectedTool="Select";return true;}
           if(name==="Split"){handleAction("split-clip",target);return true;}
           if(name==="Duplicate"){handleAction("duplicate-clip",target);return true;}
@@ -2507,6 +2535,12 @@
       if(target.matches(".speaker-map")){const speaker="Speaker "+target.dataset.speaker;state.speakerVoices[speaker]=target.value;state.dubbingSegments.forEach(item=>{if(item.speaker===speaker)item.voice=target.value;});}
     });
     document.addEventListener("pointerdown",event=>{
+      if(!timelineMoreOpen)return;
+      const target=event.target;
+      if(target instanceof Element&&(target.closest("#timeline-more-menu")||target.closest('[data-action="timeline-more-toggle"]')))return;
+      closeTimelineMore();
+    });
+    document.addEventListener("pointerdown",event=>{
       const handle=event.target.closest("#playhead-hit");
       const ruler=event.target.closest(".timeline-ruler");
       if(!handle&&!ruler)return;
@@ -2553,6 +2587,7 @@
     document.addEventListener("keydown", event => {
       const typing=event.target.matches("input,textarea,select,[contenteditable=true]");
       const command=event.metaKey||event.ctrlKey;
+      if(event.key==="Escape"&&timelineMoreOpen){event.preventDefault();closeTimelineMore();$("[data-action=timeline-more-toggle]")?.focus();return;}
       if(event.key==="Escape"&&state.modal){closeModal();return;}
       if(event.key==="Escape"&&(state.viewerFocus||state.fullscreenPreview||state.viewOnly||state.mobileToolSheet||state.mobileInspector)){state.viewerFocus=false;state.fullscreenPreview=false;state.viewOnly=false;state.mobileToolSheet=false;state.mobileInspector=false;render();return;}
       if(state.modal==="palette"&&event.key==="Enter"){const first=$(".palette-item");if(first){event.preventDefault();first.click();return;}}
@@ -2656,14 +2691,26 @@
       document.body.appendChild(host.lastElementChild);
     }
     function runPrototypeSelfTest(){
-      const checks=[validateNavigationTargets(),validateFeatureRegistry(),typeof renderEditor==="function",!!state.projects.find(project=>project.id===state.activeProjectId),!!validateThemeData(focusedTheme),!validateThemeData({schema:"or.theme.v1",name:"Unsafe",tokens:{bg:"url(javascript:alert(1))"}})];
+      const editorMarkup=renderEditor();
+      const featureIds=featureRegistry.map(feature=>feature.id);
+      const iconReferences=[...editorMarkup.matchAll(/href="#(i-[^"]+)"/g)].map(match=>match[1]);
+      const hasAllEditorIcons=iconReferences.every(id=>document.getElementById(id));
+      const checks=[validateNavigationTargets(),validateFeatureRegistry(),typeof renderEditor==="function",editorMarkup.includes('class="editor-shell '),editorMarkup.includes('class="timeline editor-timeline"'),editorMarkup.includes('class="editor-mobile-dock"'),editorMarkup.includes('data-action="timeline-more-toggle"'),editorMarkup.includes('id="timeline-more-menu"'),secondaryTimelineCommands.length+advancedTimelineCommands.length>0,new Set(featureIds).size===featureIds.length,hasAllEditorIcons,!!state.projects.find(project=>project.id===state.activeProjectId),!!validateThemeData(focusedTheme),!validateThemeData({schema:"or.theme.v1",name:"Unsafe",tokens:{bg:"url(javascript:alert(1))"}})];
       const ok=checks.every(Boolean);
       if(ok)console.info("OR prototype self-test: PASS");
-      else console.error("OR prototype self-test: FAIL · navigation, features, editor renderer, or active project check failed");
+      else console.error("OR prototype self-test: FAIL · navigation, features, editor timeline/menu, icons, or active project check failed");
       return ok;
     }
     const originalRender=render;
-    render=function(){originalRender();updateModalInspector();};
+    render=function(){
+      const oldShell=$(".editor-shell"),oldScroller=$(".editor-timeline .timeline-scroller");
+      const oldProjectId=oldShell?.dataset.projectId,scrollLeft=oldScroller?.scrollLeft||0,scrollTop=oldScroller?.scrollTop||0;
+      originalRender();
+      updateModalInspector();
+      const newScroller=$(".editor-timeline .timeline-scroller");
+      if(oldProjectId===state.activeProjectId&&newScroller){newScroller.scrollLeft=scrollLeft;newScroller.scrollTop=scrollTop;}
+      syncTimelineMorePopover();
+    };
     render();
     applyTheme(builtInThemes[state.themeName],false);
     runPrototypeSelfTest();
