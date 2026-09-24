@@ -1,5 +1,13 @@
 use serde::Serialize;
 
+mod project;
+mod time;
+
+pub use project::{
+    ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
+};
+pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
+
 const APP_NAME: &str = "Opencut Reinforced";
 const CORE_API_VERSION: u32 = 1;
 
