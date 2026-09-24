@@ -229,23 +229,26 @@
     .timeline-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--or-border); }
     .timeline-head strong { font-size: 11px; }
     .timeline-scroller { position: relative; max-height: 300px; overflow: auto; }
-    .timeline-ruler { position: sticky; top: 0; z-index: 4; display: flex; height: 23px; margin-left: 68px; border-bottom: 1px solid var(--or-border); background: #141415; color: var(--or-text-muted); font: 9px ui-monospace, monospace; }
-    .ruler-mark { flex: 0 0 90px; padding: 5px 5px; border-left: 1px solid var(--or-border); }
+    .timeline-ruler { position: sticky; top: 0; z-index: 4; display: flex; height: 23px; margin-left: 68px; border-bottom: 1px solid var(--or-border); background: #141415; color: var(--or-text-muted); font: 9px ui-monospace, monospace; cursor: ew-resize; touch-action: none; }
+    .ruler-mark { flex: 0 0 calc(90px * var(--timeline-zoom, 1)); padding: 5px 5px; border-left: 1px solid var(--or-border); pointer-events: none; }
     .track-row { position: relative; display: flex; min-height: 40px; border-bottom: 1px solid #262628; }
     .track-row:last-child { border-bottom: 0; }
     .track-label { position: sticky; left: 0; z-index: 3; display: flex; align-items: center; gap: 4px; width: 68px; flex: 0 0 68px; padding: 4px; border-right: 1px solid var(--or-border); background: #151516; }
     .track-label strong { flex: 1; color: var(--or-text-secondary); font-size: 9px; }
     .track-label button { width: 18px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--or-text-muted); cursor: pointer; font-size: 9px; }
-    .track-lane { position: relative; min-width: 470px; flex: 1; min-height: 40px; background-image: linear-gradient(to right, transparent 89px, #232325 90px); background-size: 90px 100%; }
+    .track-lane { position: relative; min-width: 470px; flex: 1; min-height: 40px; background-image: linear-gradient(to right, transparent calc(100% - 1px), #232325 100%); background-size: calc(90px * var(--timeline-zoom, 1)) 100%; }
     .clip { position: absolute; top: 5px; display: flex; align-items: center; min-width: 42px; height: 29px; overflow: hidden; padding: 4px 7px; border: 1px solid #55555a; border-radius: 5px; background: #333336; color: #efeff1; font-size: 9px; white-space: nowrap; cursor: pointer; user-select: none; }
     .clip:hover { background: #3b3b3f; }
     .clip.selected { outline: 1px solid var(--or-selection); border-color: var(--or-selection); }
     .clip.ai-clip::after { content: "AI"; margin-left: auto; padding-left: 5px; color: #b8a5ff; font-size: 8px; }
     .clip.audio-clip { background: #29292b; border-color: #66666b; }
     .clip.text-clip { background: #353536; }
-    .playhead { position: absolute; top: 22px; bottom: 0; left: 68px; z-index: 5; width: 1px; background: var(--or-selection); pointer-events: none; }
-    .playhead::before { content: ""; position: absolute; top: -1px; left: -4px; width: 9px; height: 7px; background: var(--or-selection); clip-path: polygon(0 0,100% 0,50% 100%); }
-    .timeline-zoom { display: flex; align-items: center; gap: 7px; width: 155px; }
+    .playhead-hit { position: absolute; top: 0; bottom: 0; z-index: 6; width: 16px; transform: translateX(-50%); cursor: ew-resize; touch-action: none; }
+    .playhead-hit::before { content: ""; position: absolute; top: 22px; bottom: 0; left: 50%; width: 1px; background: var(--or-selection); }
+    .playhead-hit::after { content: ""; position: absolute; top: 16px; left: 50%; width: 11px; height: 7px; transform: translateX(-50%); background: var(--or-selection); clip-path: polygon(0 0,100% 0,50% 100%); }
+    .transport-play { width: 36px; height: 36px; flex: 0 0 36px; border-color: var(--or-border-strong); background: var(--or-surface); }
+    .icon-button[aria-pressed="true"] { border-color: var(--or-border-strong); background: var(--or-surface-hover); color: var(--or-text); }
+    .timeline-zoom { display: flex; flex: 0 0 112px; align-items: center; gap: 5px; width: 112px; }
     .mobile-editor { display: none; }
 
     .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -476,11 +479,23 @@
     .viewer-canvas .preview-label { z-index: 4; }
     .viewer-transport { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; border-top: 1px solid var(--or-border); }
     .viewer-transport .time-display { margin: 0 8px; color: var(--or-text-secondary); font: 10px ui-monospace,monospace; }
+    .viewer-transport { display: grid; grid-template-columns: minmax(0,1fr) 38px minmax(0,1fr); gap: 5px; padding: 3px 8px; }
+    .transport-group { display: flex; align-items: center; gap: 3px; min-width: 0; }
+    .transport-left { justify-content: flex-end; }
+    .transport-right { justify-content: flex-start; }
+    .transport-right .time-display { margin: 0 4px; white-space: nowrap; }
     .timeline-resize-handle { position: relative; cursor: row-resize; touch-action: none; background: #0d0d0e; }
     .timeline-resize-handle::after { content: ""; position: absolute; top: 3px; left: calc(50% - 18px); width: 36px; height: 2px; border-radius: 2px; background: var(--or-border-strong); }
     .timeline-resize-handle:hover::after { background: var(--or-selection); }
     .editor-timeline-tools { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: auto; padding: 4px 9px; border-top: 1px solid var(--or-border); border-bottom: 1px solid var(--or-border); background: var(--or-bg-raised); }
     .editor-timeline-tools .tool-btn { flex: 0 0 auto; }
+    .editor-timeline-tools .tool-btn { min-height: 32px; }
+    .timeline-more { position: relative; flex: 0 0 auto; }
+    .timeline-more > summary { list-style: none; cursor: pointer; }
+    .timeline-more > summary::-webkit-details-marker { display: none; }
+    .timeline-overflow { position: absolute; top: calc(100% + 5px); right: 0; z-index: 15; display: grid; min-width: 190px; padding: 5px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: var(--or-bg-raised); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+    .timeline-overflow .tool-btn { width: 100%; justify-content: flex-start; }
+    .tool-label { white-space: nowrap; }
     .editor-shell .editor-timeline { display: block; min-height: 0; overflow: hidden; border: 0; border-radius: 0; }
     .editor-timeline .timeline-scroller { height: 100%; max-height: none; }
     .timeline .clip.adjustment-clip { border-style: dashed; background: #29292b; }
@@ -531,6 +546,11 @@
     .feature-map-item { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: start; padding: 9px; border: 1px solid var(--or-border); border-radius: 7px; background: #111112; }
     .feature-map-item strong { font-size: 10px; font-weight: 550; }
     .feature-map-item small { display: block; margin-top: 3px; color: var(--or-text-muted); font-size: 9px; }
+    .theme-card { min-width: 0; border: 1px solid var(--or-border); border-radius: var(--radius-card); background: var(--or-bg-raised); }
+    .theme-swatches { display: flex; gap: 6px; margin-top: 12px; }
+    .theme-swatch { width: 25px; height: 25px; border: 1px solid var(--or-border-strong); border-radius: 6px; }
+    .theme-editor-grid { margin-top: 10px; }
+    .theme-editor-grid input[type="color"] { height: 34px; padding: 3px; }
     .editor-mobile-dock { display: none; }
     .mobile-create-sheet { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
     .mobile-create-sheet .btn { min-height: 52px; justify-content: flex-start; }
@@ -550,7 +570,8 @@
     .mobile-tool-sheet-backdrop { position: fixed; inset: 0 0 54px; z-index: 65; background: rgba(0,0,0,.55); }
     .mobile-tool-sheet { position: fixed; inset: auto 0 54px; z-index: 70; max-height: min(76vh,690px); overflow: auto; border: 1px solid var(--or-border-strong); border-radius: 14px 14px 0 0; background: #101011; box-shadow: 0 -14px 42px rgba(0,0,0,.45); }
     .mobile-tool-sheet .editor-panel-body { overflow: visible; }
-    .simple-mode .advanced-tool, .simple-mode .developer-only { display: none !important; }
+    .simple-mode .developer-only { display: none !important; }
+    @media (max-width: 1024px) { .editor-timeline-tools .tool-label { display: none; } }
     .complexity-select { width: 170px; }
     @media (min-width: 761px) {
       body[data-view="editor"] .main { padding-right: 0; }
@@ -584,6 +605,8 @@
       .viewer-overlays { display: none; }
       .viewer-stage { padding: 7px; }
       .viewer-transport { min-height: 38px; }
+      .viewer-transport .icon-button { width: 34px; height: 34px; }
+      .viewer-transport .transport-play { width: 38px; height: 38px; }
       .timeline-resize-handle { height: 5px; }
       .editor-timeline-tools { padding: 3px 5px; }
       .editor-timeline .timeline-scroller { overflow: auto; }
@@ -603,6 +626,7 @@
       .appbar-context .context-title { max-width: 22vw; }
       .editor-project-bar .project-name { max-width: 32vw; }
       .editor-project-bar .context-divider, .editor-project-bar .desktop-only { display: none; }
+      .transport-left [data-action="go-start"], .transport-right [data-action="go-end"], .transport-right [data-action="volume"] { display: none; }
       .editor-timeline-tools .tool-btn { padding: 4px 5px; }
       .template-grid, .library-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
       .template-card-actions .btn, .library-card-actions .btn { flex: 1 1 auto; }
@@ -678,6 +702,13 @@
     <symbol id="i-split" viewBox="0 0 24 24"><path d="M5 5v4a3 3 0 0 0 3 3h8a3 3 0 0 1 3 3v4M5 19v-4a3 3 0 0 1 3-3m8-7 3-3 3 3m-3-3v7"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9a7 7 0 0 1 12-2L20 9M4 15l2.5 2a7 7 0 0 0 12-2"/></symbol>
+    <symbol id="i-select" viewBox="0 0 24 24"><path d="m5 3 13 10-6 1.2L9 20z"/><path d="m12 14 4 7"/></symbol>
+    <symbol id="i-trim" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.2 8.2 12 12M8.2 15.8 20 4M13 12l7-7"/></symbol>
+    <symbol id="i-ripple" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/><path d="m17 9 3 3-3 3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m9 15-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M15 9l2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0M8 12h8"/></symbol>
+    <symbol id="i-group" viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="12" rx="2"/><path d="M9 20h10a2 2 0 0 0 2-2V9"/></symbol>
+    <symbol id="i-snap" viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 12 0V3M6 7h12M12 16v5M9 21h6"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 24 24"><path d="M12 21s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12z"/><circle cx="12" cy="9" r="2"/></symbol>
   </svg>
   <div class="app-shell" id="app-shell" data-mode="desktop">
     <header class="appbar" id="appbar" aria-label="Application toolbar"></header>
@@ -705,6 +736,7 @@
       { id: "a2", name: "A2", type: "audio", muted: true, locked: false, visible: true, clips: [{ id: "clip-music", name: "music.wav", start: 0, duration: 28.7, kind: "audio" }] },
       { id: "sub", name: "SUB", type: "text", muted: false, locked: false, visible: true, clips: [] }
     ];
+    const timelineSeedDuration = 62.4;
     const templateSeed = [
       {id:"tpl-clean-interview",name:"Clean Interview",category:"Video",creator:"OR Demo Team",version:"1.0",ratio:"16:9",duration:"02:00",mediaSlots:4,textSlots:3,audioSlots:2,source:"Built-in",downloaded:true,license:"Demo asset · metadata example",minVersion:"0.1",description:"A restrained interview edit with replaceable footage, title cards, and dialogue/music tracks.",slots:["Hero Video","B-roll","Logo","Background Music"],text:["Title","Speaker","Closing Card"],dependencies:{fonts:["System Sans"],effects:["Basic Color"],transitions:["Cut"],luts:[],models:[],plugins:[]}},
       {id:"tpl-social-vertical",name:"Vertical Social Cut",category:"Short Form",creator:"OR Demo Team",version:"1.2",ratio:"9:16",duration:"00:30",mediaSlots:5,textSlots:4,audioSlots:1,source:"Built-in",downloaded:true,license:"Demo asset · metadata example",minVersion:"0.1",description:"A short vertical layout with editable media and concise caption slots.",slots:["Opening Shot","Main Clip","B-roll","End Card","Music"],text:["Hook","Subtitle","CTA","Credit"],dependencies:{fonts:["System Sans"],effects:["Auto Reframe · planned"],transitions:["Cut"],luts:[],models:[],plugins:[]}},
@@ -742,6 +774,19 @@
       {id:"as-lut-neutral",category:"LUTs",name:"Neutral LUT · Demo",source:"Built-in",creator:"OR Demo Team",version:"1.0",license:"Demo asset · metadata example",compatibility:"Color",dependencies:[],downloaded:true,favorite:false},
       {id:"as-lut-community",category:"LUTs",name:"Community LUT · Demo",source:"Community",creator:"Community author (demo)",version:"0.4",license:"Review required",compatibility:"Color",dependencies:[],downloaded:false,favorite:false}
     ];
+    const themeCssProperties={bg:"--or-bg",raised:"--or-bg-raised",surface:"--or-surface",hover:"--or-surface-hover",border:"--or-border",borderStrong:"--or-border-strong",text:"--or-text",textSecondary:"--or-text-secondary",textMuted:"--or-text-muted",primary:"--or-primary",primaryText:"--or-primary-text",selection:"--or-selection",ai:"--or-ai",success:"--or-success",warning:"--or-warning",danger:"--or-danger",radiusControl:"--radius-control",radiusCard:"--radius-card",radiusPanel:"--radius-panel"};
+    const themeRadiusTokens=new Set(["radiusControl","radiusCard","radiusPanel"]);
+    const focusedTheme={schema:"or.theme.v1",name:"Focused Monochrome",tokens:{bg:"#090909",raised:"#0f0f10",surface:"#151516",hover:"#1c1c1e",border:"#2a2a2d",borderStrong:"#3a3a3e",text:"#f5f5f5",textSecondary:"#a6a6ab",textMuted:"#85858b",primary:"#f5f5f5",primaryText:"#090909",selection:"#3fc7ff",ai:"#9b7cff",success:"#47b881",warning:"#d8a542",danger:"#e05a5a",radiusControl:"8px",radiusCard:"10px",radiusPanel:"12px"}};
+    const builtInThemes={
+      "Focused Monochrome":focusedTheme,
+      "Soft Graphite":{schema:"or.theme.v1",name:"Soft Graphite",tokens:Object.assign({},focusedTheme.tokens,{bg:"#111214",raised:"#17191c",surface:"#202226",hover:"#292c31",border:"#363a40",borderStrong:"#4a5058",text:"#f2f3f5",textSecondary:"#b1b5bc",textMuted:"#8a9099",selection:"#77c8ed",radiusControl:"9px",radiusCard:"12px",radiusPanel:"14px"})},
+      "High Contrast":{schema:"or.theme.v1",name:"High Contrast",tokens:Object.assign({},focusedTheme.tokens,{bg:"#000000",raised:"#050505",surface:"#111111",hover:"#202020",border:"#686868",borderStrong:"#a0a0a0",text:"#ffffff",textSecondary:"#e0e0e0",textMuted:"#bcbcbc",selection:"#62d7ff",warning:"#ffd65a",danger:"#ff7070"})},
+      "OLED Black":{schema:"or.theme.v1",name:"OLED Black",tokens:Object.assign({},focusedTheme.tokens,{bg:"#000000",raised:"#050505",surface:"#090909",hover:"#141414",border:"#242424",borderStrong:"#393939",text:"#f5f5f5",textSecondary:"#a6a6ab",textMuted:"#77777d"})}
+    };
+    const communityThemes=[
+      {schema:"or.theme.v1",name:"Studio Slate · Community demo",tokens:Object.assign({},builtInThemes["Soft Graphite"].tokens,{selection:"#8ab6ff",ai:"#b18cff"}),source:"Community demo"},
+      {schema:"or.theme.v1",name:"Warm Neutral · Community demo",tokens:Object.assign({},focusedTheme.tokens,{bg:"#100f0d",raised:"#191714",surface:"#24211c",hover:"#302b24",border:"#403a31",borderStrong:"#5a5043",text:"#f5f0e6",textSecondary:"#c5bcad",textMuted:"#9a9182",selection:"#dfb978"}),source:"Community demo"}
+    ];
     const state = {
       view: "home",
       mode: "desktop",
@@ -775,6 +820,14 @@
       graphEditor: false,
       resizeState: null,
       selectedSettings: "General",
+      themeName: "Focused Monochrome",
+      themePreviewName: null,
+      themeBrowseTab: "Built-in",
+      customThemes: [],
+      downloadedThemes: [],
+      themeDraftTokens: null,
+      themeDraftOriginalName: null,
+      themeDraftOriginalPreview: false,
       settingsPage: "Preferences",
       developerMode: false,
       workspaceComplexity: "Simple",
@@ -846,10 +899,15 @@
       projectReturnView: "projects",
       templateCreateSource: "Templates",
       currentTime: 8.5,
+      projectFps: 30,
       markers: [],
-      duration: 62.4,
+      duration: timelineSeedDuration,
       playing: false,
+      playTimer: null,
       zoom: 1,
+      followPlayhead: false,
+      timelineDrag: null,
+      contextMenu: null,
       safeGuides: false,
       loop: false,
       volume: 75,
@@ -881,6 +939,7 @@
         { id: "m-logo", name: "logo.png", type: "Image", duration: "—", spec: "2400×1200 · PNG", source: "Library" }
       ],
       tracks: JSON.parse(JSON.stringify(tracksSeed)),
+      projectTimelines: {},
       captions: [
         { id: "cap-1", time: "00:00:02.000 → 00:00:04.500", text: "Welcome to the project.", translated: "Chào mừng đến với dự án." },
         { id: "cap-2", time: "00:00:04.500 → 00:00:07.200", text: "This subtitle was generated locally.", translated: "Phụ đề này được tạo cục bộ." },
@@ -1287,7 +1346,7 @@
       const track=ensureAudioTrack("VO");
       const end=track.clips.reduce((value,item)=>Math.max(value,item.start+item.duration),0);
       const clip={id:"clip-voice-"+Date.now(),name:name,start:end,duration:Math.max(3,name.length/12),kind:"audio",ai:true};
-      track.clips.push(clip);state.selectedClipId=clip.id;state.view="editor";state.selectedEditorTool="Audio";markChanged();render();
+      track.clips.push(clip);state.selectedClipId=clip.id;openProjectInEditor(state.activeProjectId,{tool:"Audio",render:false});markChanged();render();
       toast("Voice clip added to the mock VO track");
     }
     function renderPronunciationDictionary() {
@@ -1349,12 +1408,40 @@
       if(tool==="AI") return renderAiWorkspace();
       return renderMoreTools();
     }
+    const featureRegistry=[
+      {id:"media",tool:"Media",label:"Media",shortLabel:"Media",icon:"media",group:"editor",editorTool:true,command:"editor.open.media",panelRenderer:renderEditorToolContent},
+      {id:"templates",tool:"Templates",label:"Templates",shortLabel:"Templates",icon:"film",group:"editor",editorTool:true,command:"editor.open.templates",panelRenderer:renderEditorToolContent},
+      {id:"text",tool:"Text",label:"Text",shortLabel:"Text",icon:"text",group:"editor",editorTool:true,command:"editor.open.text",panelRenderer:renderEditorToolContent},
+      {id:"captions",tool:"Captions",label:"Captions",shortLabel:"Captions",icon:"text",group:"editor",editorTool:true,command:"editor.open.captions",panelRenderer:renderEditorToolContent},
+      {id:"shapes",tool:"Stickers / Shapes",label:"Stickers / Shapes",shortLabel:"Shapes",icon:"box",group:"editor",editorTool:true,command:"editor.open.shapes",panelRenderer:renderEditorToolContent},
+      {id:"audio",tool:"Audio",label:"Audio",shortLabel:"Audio",icon:"audio",group:"editor",editorTool:true,command:"editor.open.audio",panelRenderer:renderEditorToolContent},
+      {id:"effects",tool:"Effects",label:"Effects",shortLabel:"Effects",icon:"spark",group:"editor",editorTool:true,command:"editor.open.effects",panelRenderer:renderEditorToolContent},
+      {id:"transitions",tool:"Transitions",label:"Transitions",shortLabel:"Transitions",icon:"refresh",group:"editor",editorTool:true,command:"editor.open.transitions",panelRenderer:renderEditorToolContent},
+      {id:"color",tool:"Filters / Color",label:"Filters / Color",shortLabel:"Color",icon:"image",group:"editor",editorTool:true,command:"editor.open.color",panelRenderer:renderEditorToolContent},
+      {id:"ai",tool:"AI",label:"AI",shortLabel:"AI",icon:"spark",group:"editor",editorTool:true,command:"editor.open.ai",panelRenderer:renderEditorToolContent},
+      {id:"more",tool:"More",label:"More",shortLabel:"More",icon:"more",group:"editor",editorTool:true,command:"editor.open.more",panelRenderer:renderEditorToolContent}
+    ];
+    const expectedEditorFeatureIds=["media","templates","text","captions","shapes","audio","effects","transitions","color","ai","more"];
+    function validateFeatureRegistry() {
+      const ids=new Set(),commands=new Set();let valid=true;
+      featureRegistry.forEach(feature=>{
+        const errors=[];
+        if(ids.has(feature.id))errors.push("duplicate id");
+        if(commands.has(feature.command))errors.push("duplicate command");
+        if(!feature.label)errors.push("missing label");
+        if(!document.getElementById("i-"+feature.icon))errors.push("unknown icon "+feature.icon);
+        if(typeof feature.panelRenderer!=="function")errors.push("missing panel renderer");
+        ids.add(feature.id);commands.add(feature.command);
+        if(errors.length){valid=false;console.error("OR feature registry · "+feature.id+": "+errors.join(", "));}
+      });
+      expectedEditorFeatureIds.filter(id=>!ids.has(id)).forEach(id=>{valid=false;console.error("OR feature registry · missing baseline feature: "+id);});
+      return valid;
+    }
     function renderEditorPanel() {
       const tool=state.selectedEditorTool;
-      const icons={"Media":"media","Templates":"film","Text":"text","Captions":"text","Stickers / Shapes":"box","Audio":"audio","Effects":"spark","Transitions":"refresh","Filters / Color":"image","AI":"spark","More":"more"};
-      const rail=["Media","Templates","Text","Captions","Stickers / Shapes","Audio","Effects","Transitions","Filters / Color","AI","More"];
-      const content='<div class="editor-panel-top"><strong>'+esc(tool)+'</strong><button class="icon-button" data-action="collapse-left-panel" aria-label="'+(state.leftPanelCollapsed?"Expand":"Collapse")+' left panel">'+icon(state.leftPanelCollapsed?"next":"back")+'</button><button class="icon-button mobile-close-panel" data-action="close-mobile-tool-sheet" aria-label="Close tool panel">'+icon("close")+'</button></div><div class="editor-panel-body">'+renderEditorToolContent()+'</div>';
-      const railHTML='<nav class="editor-tool-rail" aria-label="Editor tools">'+rail.map(name=>'<button data-action="editor-tool-panel" data-tool="'+name+'" aria-pressed="'+(name===tool)+'" aria-label="'+name+'" title="'+name+'">'+icon(icons[name]||"box")+'<span>'+esc(name==="Stickers / Shapes"?"Shapes":name==="Filters / Color"?"Color":name)+'</span></button>').join("")+'</nav>';
+      const feature=featureRegistry.find(item=>item.tool===tool)||featureRegistry[0];
+      const content='<div class="editor-panel-top"><strong>'+esc(feature.label)+'</strong><button class="icon-button" data-action="collapse-left-panel" aria-label="'+(state.leftPanelCollapsed?"Expand":"Collapse")+' left panel">'+icon(state.leftPanelCollapsed?"next":"back")+'</button><button class="icon-button mobile-close-panel" data-action="close-mobile-tool-sheet" aria-label="Close tool panel">'+icon("close")+'</button></div><div class="editor-panel-body">'+feature.panelRenderer()+'</div>';
+      const railHTML='<nav class="editor-tool-rail" aria-label="Editor tools">'+featureRegistry.filter(item=>item.editorTool).map(item=>'<button data-action="editor-tool-panel" data-tool="'+item.tool+'" aria-pressed="'+(item.tool===tool)+'" aria-label="'+esc(item.label)+'" title="'+esc(item.label)+'">'+icon(item.icon)+'<span>'+esc(item.shortLabel)+'</span></button>').join("")+'</nav>';
       if(state.mobileToolSheet) return '<div class="mobile-tool-sheet-backdrop" data-action="close-mobile-tool-sheet"></div><section class="mobile-tool-sheet" aria-label="'+esc(tool)+' tool panel">'+content+'</section>';
       return railHTML+'<aside class="editor-left-panel" aria-label="'+esc(tool)+' tool panel">'+content+'</aside>';
     }
@@ -1362,15 +1449,26 @@
       if(state.inspectorCollapsed) return '<button class="icon-button inspector-expand" data-action="collapse-inspector" aria-label="Expand inspector">'+icon("back")+'</button>';
       return '<aside class="editor-inspector"><div class="editor-panel-top"><strong>Inspector</strong><span class="push chip">'+(getClip(state.selectedClipId)?esc(getClip(state.selectedClipId).clip.kind):"—")+'</span><button class="icon-button" data-action="collapse-inspector" aria-label="Collapse inspector">'+icon("next")+'</button></div><div class="editor-panel-body">'+renderInspector()+'<div class="inspector-section"><h4>Video Tools</h4><div class="row-wrap">'+["Mask","Chroma Key","Motion Tracking","Subject Tracking","Stabilization","Auto Reframe"].map(name=>btn(name,"advanced-tool","btn-compact advanced-tool",'data-name="'+name+'"')).join("")+'</div></div><div class="inspector-section"><h4>Project Actions</h4><div class="row-wrap">'+btn("Create Template","create-template","btn-compact")+btn("Snapshots","project-snapshots","btn-compact")+'</div></div></div></aside>';
     }
+    const commonTimelineCommands=["Select","Split","Trim","Ripple Delete","Duplicate","Delete"];
+    const secondaryTimelineCommands=["Link / Unlink","Group","Snap","Marker"];
+    const advancedTimelineCommands=["Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap","Freeze Frame","Reverse"];
+    function renderTimelineCommand(name){
+      const icons={"Select":"select","Split":"split","Trim":"trim","Ripple Delete":"ripple","Duplicate":"copy","Delete":"trash","Link / Unlink":"link","Group":"group","Snap":"snap","Marker":"marker","Compound Clip":"group","Nested Timeline":"film","Adjustment Layer":"image","Speed Ramp":"wave","Time Remap":"clock","Freeze Frame":"clock","Reverse":"refresh"};
+      const labels={"Ripple Delete":"Ripple","Link / Unlink":"Link","Compound Clip":"Compound","Nested Timeline":"Nested","Adjustment Layer":"Adjustment","Freeze Frame":"Freeze"};
+      return '<button class="tool-btn" data-action="timeline-command" data-name="'+esc(name)+'" aria-label="'+esc(name)+'" title="'+esc(name)+'">'+icon(icons[name]||"box")+'<span class="tool-label">'+esc(labels[name]||name)+'</span></button>';
+    }
     function renderEditor() {
       const rail=renderEditorPanel();
       const aspect=activeProject().ratio==="9:16"?"9 / 16":activeProject().ratio==="1:1"?"1 / 1":activeProject().ratio==="4:3"?"4 / 3":"16 / 9";
       const overlays=[["showViewerGrid","Grid"],["showSafeArea","Safe Area"],["showGuides","Guides"],["showRulers","Rulers"],["showTransform","Transform"],["showBoundingBox","Bounds"]];
-      const viewer='<section class="editor-viewer" aria-label="Project preview"><div class="viewer-toolbar"><strong>Viewer</strong><span class="push"></span><div class="viewer-overlays">'+overlays.map(item=>'<button class="icon-button" data-action="viewer-overlay" data-state="'+item[0]+'" aria-pressed="'+state[item[0]]+'" aria-label="'+item[1]+'" title="'+item[1]+'">'+(item[1]==="Safe Area"?"SA":item[1]==="Bounds"?"□":item[1]==="Guides"?"⌖":item[1]==="Rulers"?"R":item[1]==="Transform"?"↔":icon("grid"))+'</button>').join("")+'</div><select id="viewer-zoom" class="select" aria-label="Viewer zoom">'+["Fit","25%","50%","100%","200%"].map(value=>'<option'+(state.viewerZoom===value?' selected':'')+'>'+value+'</option>').join("")+'</select><button class="btn btn-compact" data-action="viewer-only" aria-pressed="'+state.viewOnly+'">'+(state.viewOnly?"Exit Cinema":"Cinema")+'</button><button class="icon-button" data-action="fullscreen-preview" aria-label="'+(state.fullscreenPreview?"Exit fullscreen preview":"Fullscreen Preview")+'" title="Fullscreen Preview">'+icon("image")+'</button></div><div class="viewer-stage"><div class="viewer-canvas '+(state.showViewerGrid?"show-grid ":"")+(state.showSafeArea?"show-safe ":"")+(state.showGuides?"show-guides ":"")+(state.showRulers?"show-rulers ":"")+(state.showTransform?"show-transform ":"")+(state.showBoundingBox?"show-bounds":"")+'" style="aspect-ratio:'+aspect+'"><div class="preview-mock"></div><span class="preview-label">'+fmtTime(state.currentTime)+' · '+esc(activeProject().name)+'</span><button class="viewer-focus-button" data-action="viewer-focus" aria-label="Toggle viewer focus" title="Viewer focus">'+icon("image")+'</button></div></div><div class="viewer-transport"><button class="icon-button" data-action="go-start" aria-label="Go to start">'+icon("back")+'</button><button class="icon-button" data-action="toggle-play" aria-label="Play or pause">'+icon(state.playing?"pause":"play")+'</button><button class="icon-button" data-action="next-frame" aria-label="Next frame">'+icon("next")+'</button><span class="time-display mono">'+fmtTime(state.currentTime)+' / '+fmtTime(state.duration)+'</span><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="'+state.loop+'">↻</button><button class="icon-button" data-action="volume" aria-label="Preview volume">'+icon("wave")+'</button></div></section>';
-      const ruler=Array.from({length:17},(_,index)=>'<span class="ruler-mark">'+String(index*5).padStart(2,"0")+':00</span>').join("");
-      const timeline='<div class="editor-timeline-tools"><button class="tool-btn" data-action="editor-tool" data-tool="Select" aria-pressed="true">Select</button>'+["Split","Trim","Ripple Delete","Duplicate","Delete","Link / Unlink","Group","Snap","Marker","Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap","Freeze Frame","Reverse"].map(name=>'<button class="tool-btn '+(["Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap"].includes(name)?"advanced-tool":"")+'" data-action="timeline-command" data-name="'+name+'">'+(name==="Split"?icon("split"):name==="Duplicate"?icon("copy"):"")+name+'</button>').join("")+'<label class="timeline-zoom small"><span class="muted">−</span><input id="timeline-zoom" aria-label="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="'+state.zoom+'"><span class="muted">+</span></label></div><section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks</span><span class="push"></span><div class="timeline-track-controls">'+["Video","Audio","Text","Caption"].map(name=>'<button class="btn btn-compact" data-action="add-track" data-type="'+name.toLowerCase()+'">+ '+name+'</button>').join("")+btn("ADJ","add-adjustment-layer","btn-compact advanced-tool")+btn("Graph","toggle-graph","btn-compact advanced-tool")+'</div></div><div class="timeline-scroller"><div class="timeline-ruler">'+ruler+'</div><div class="playhead" id="playhead" aria-hidden="true"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn("Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
-      const mobileDock='<nav class="editor-mobile-dock" aria-label="Editor tools">'+["Edit","Media","Templates","Text","Captions","Audio","FX","AI","More"].map(name=>'<button data-action="'+(name==="Edit"?"editor-tool-panel":"editor-tool-panel")+'" data-tool="'+(name==="Edit"?"Media":name==="FX"?"Effects":name)+'" aria-pressed="'+(state.selectedEditorTool===(name==="FX"?"Effects":name==="Edit"?"Media":name))+'">'+icon(name==="Audio"?"audio":name==="Text"||name==="Captions"?"text":name==="Media"?"media":name==="Templates"?"film":name==="AI"?"spark":"box")+'<span>'+name+'</span></button>').join("")+'</nav>';
-      const projectMenu='<div class="editor-project-bar"><button class="btn btn-compact project-menu-button" data-action="project-menu" aria-haspopup="dialog">Project</button>'+btn("Create Template","create-template","btn-compact") + btn("Snapshots","project-snapshots","btn-compact") + '<span class="push"></span><span class="small muted">'+esc(activeProject().ratio)+' · '+esc(activeProject().resolution)+'</span><button class="icon-button" data-action="project-settings" aria-label="Project settings">'+icon("settings")+'</button></div>';
+      const viewer='<section class="editor-viewer" aria-label="Project preview"><div class="viewer-toolbar"><strong>Viewer</strong><span class="push"></span><div class="viewer-overlays">'+overlays.map(item=>'<button class="icon-button" data-action="viewer-overlay" data-state="'+item[0]+'" aria-pressed="'+state[item[0]]+'" aria-label="'+item[1]+'" title="'+item[1]+'">'+(item[1]==="Safe Area"?"SA":item[1]==="Bounds"?"□":item[1]==="Guides"?"⌖":item[1]==="Rulers"?"R":item[1]==="Transform"?"↔":icon("grid"))+'</button>').join("")+'</div><select id="viewer-zoom" class="select" aria-label="Viewer zoom">'+["Fit","25%","50%","100%","200%"].map(value=>'<option'+(state.viewerZoom===value?' selected':'')+'>'+value+'</option>').join("")+'</select><button class="btn btn-compact" data-action="viewer-only" aria-pressed="'+state.viewOnly+'">'+(state.viewOnly?"Exit Cinema":"Cinema")+'</button><button class="icon-button" data-action="fullscreen-preview" aria-label="'+(state.fullscreenPreview?"Exit fullscreen preview":"Fullscreen Preview")+'" title="Fullscreen Preview">'+icon("image")+'</button></div><div class="viewer-stage"><div class="viewer-canvas '+(state.showViewerGrid?"show-grid ":"")+(state.showSafeArea?"show-safe ":"")+(state.showGuides?"show-guides ":"")+(state.showRulers?"show-rulers ":"")+(state.showTransform?"show-transform ":"")+(state.showBoundingBox?"show-bounds":"")+'" style="aspect-ratio:'+aspect+'"><div class="preview-mock"></div><span class="preview-label">'+fmtTime(state.currentTime)+' · '+esc(activeProject().name)+'</span><button class="viewer-focus-button" data-action="viewer-focus" aria-label="Toggle viewer focus" title="Viewer focus">'+icon("image")+'</button></div></div><div class="viewer-transport"><div class="transport-group transport-left"><button class="icon-button" data-action="go-start" aria-label="Go to start" title="Go to start">'+icon("back")+'</button><button class="icon-button" data-action="previous-frame" aria-label="Previous frame" title="Previous frame · Left Arrow">'+icon("back")+'</button></div><button class="icon-button transport-play" data-action="toggle-play" aria-label="'+(state.playing?"Pause":"Play")+'" aria-pressed="'+state.playing+'" title="Play / Pause · Space">'+icon(state.playing?"pause":"play")+'</button><div class="transport-group transport-right"><button class="icon-button" data-action="next-frame" aria-label="Next frame" title="Next frame · Right Arrow">'+icon("next")+'</button><button class="icon-button" data-action="go-end" aria-label="Go to end" title="Go to end">'+icon("next")+'</button><span class="time-display mono" aria-live="off">'+fmtTime(state.currentTime)+' / '+fmtTime(state.duration)+'</span><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="'+state.loop+'" title="Loop">'+icon("refresh")+'</button><button class="icon-button" data-action="volume" aria-label="Preview volume" title="Preview volume">'+icon("wave")+'</button></div></div></section>';
+      const ruler=Array.from({length:Math.max(2,Math.min(500,Math.ceil(state.duration/5)+1))},(_,index)=>'<span class="ruler-mark">'+fmtTime(index*5)+'</span>').join("");
+      const commands=commonTimelineCommands.map(renderTimelineCommand).join("");
+      const overflow='<details class="timeline-more"><summary class="tool-btn" aria-label="More timeline commands" title="More timeline commands">'+icon("more")+'<span class="tool-label">More</span></summary><div class="timeline-overflow" role="menu">'+secondaryTimelineCommands.concat(advancedTimelineCommands).map(renderTimelineCommand).join("")+'</div></details>';
+      const zoom='<label class="timeline-zoom small"><span class="muted">−</span><input id="timeline-zoom" aria-label="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="'+state.zoom+'"><span class="muted">+</span></label>';
+      const timeline='<div class="editor-timeline-tools">'+commands+overflow+zoom+'</div><section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks</span><span class="push"></span><button class="filter-chip" data-action="toggle-follow-playhead" aria-pressed="'+state.followPlayhead+'" title="Scroll the timeline as playback advances">Follow</button><div class="timeline-track-controls">'+["Video","Audio","Text","Caption"].map(name=>'<button class="btn btn-compact" data-action="add-track" data-type="'+name.toLowerCase()+'">+ '+name+'</button>').join("")+btn("ADJ","add-adjustment-layer","btn-compact")+btn("Graph","toggle-graph","btn-compact")+'</div></div><div class="timeline-scroller" style="--timeline-zoom:'+state.zoom+'"><div class="timeline-ruler" aria-label="Timeline ruler">'+ruler+'</div><div class="playhead-hit" id="playhead-hit" role="slider" tabindex="0" aria-label="Timeline playhead" aria-valuemin="0" aria-valuemax="'+state.duration+'" aria-valuenow="'+state.currentTime+'" style="left:'+timelineTimeToPixel(state.currentTime)+'px"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn("Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
+      const mobileDock='<nav class="editor-mobile-dock" aria-label="Editor tools">'+featureRegistry.filter(item=>item.editorTool).map(item=>'<button data-action="editor-tool-panel" data-tool="'+item.tool+'" aria-pressed="'+(state.selectedEditorTool===item.tool)+'" aria-label="'+esc(item.label)+'" title="'+esc(item.label)+'">'+icon(item.icon)+'<span>'+esc(item.shortLabel)+'</span></button>').join("")+'</nav>';
+      const projectMenu='<div class="editor-project-bar"><button class="btn btn-compact project-menu-button" data-action="project-menu" aria-haspopup="dialog">Project</button>'+btn("Create Template","create-template","btn-compact")+btn("Snapshots","project-snapshots","btn-compact")+'<span class="push"></span><span class="small muted">'+esc(activeProject().ratio)+' · '+esc(activeProject().resolution)+'</span><button class="icon-button" data-action="project-settings" aria-label="Project settings">'+icon("settings")+'</button></div>';
       return '<div class="editor-shell '+(state.leftPanelCollapsed?"left-panel-collapsed ":"")+(state.inspectorCollapsed?"inspector-collapsed ":"")+(state.viewOnly?"editor-cinema ":"")+(state.fullscreenPreview?"preview-fullscreen ":"")+(state.viewerFocus?"viewer-focused":"")+'" style="--left-panel-width:'+state.leftPanelWidth+'px;--inspector-width:'+state.inspectorWidth+'px;--timeline-height:'+state.timelineHeight+'px">'+projectMenu+'<div class="editor-stage">'+rail+'<div class="editor-resize-handle" data-resize="left" role="separator" tabindex="0" aria-label="Resize left panel" aria-orientation="vertical"></div>'+viewer+'<div class="editor-resize-handle" data-resize="inspector" role="separator" tabindex="0" aria-label="Resize inspector" aria-orientation="vertical"></div>'+renderEditorInspector()+'</div><div class="timeline-resize-handle" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize timeline" aria-orientation="horizontal"></div>'+mobileDock+timeline+'</div>';
     }
     function renderMediaManagement(id) {
@@ -1485,13 +1583,62 @@
     function renderExport() {
       return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Export settings</h2><span class="chip">Simulation only</span></div><div class="panel-body">'+exportForm()+'<div class="row-wrap section-block">'+btn("Add to Queue","queue-export","") + btn("Export","start-export","btn-primary")+'</div>'+(state.exportProgress>0&&state.exportProgress<100?'<div class="progress-row"><div class="meter"><span style="width:'+state.exportProgress+'%"></span></div><small>'+state.exportProgress+'% · Rendering demo</small></div>':"")+'</div></section><section class="panel"><div class="panel-head"><h2>Queue</h2><span class="push chip">'+state.exportQueue.length+' jobs</span></div><div class="panel-body status-list">'+state.exportQueue.map(item=>'<div class="status-item">'+icon("export")+'<div class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.status)+' · '+item.progress+'%</small></div><div class="meter" style="width:72px"><span style="width:'+item.progress+'%"></span></div><button class="icon-button" data-action="remove-export" data-id="'+item.id+'" aria-label="Remove export">'+icon("close")+'</button></div>').join("")+'</div></section></div>';
     }
+    function validateThemeData(input){
+      if(!input||input.schema!=="or.theme.v1"||typeof input.name!=="string"||!input.name.trim()||input.name.length>48||!input.tokens||typeof input.tokens!=="object"||Array.isArray(input.tokens))return null;
+      const tokens={};
+      for(const [key,value] of Object.entries(input.tokens)){
+        if(!Object.prototype.hasOwnProperty.call(themeCssProperties,key)||typeof value!=="string")return null;
+        if(themeRadiusTokens.has(key)){
+          const radius=/^(0|[1-9][0-9]?)px$/.exec(value);
+          if(!radius||Number.parseInt(value,10)>20)return null;
+        }else if(!/^#[0-9a-f]{6}$/i.test(value))return null;
+        tokens[key]=value;
+      }
+      if(!Object.keys(tokens).length)return null;
+      return {schema:"or.theme.v1",name:input.name.trim(),tokens};
+    }
+    function getThemeByName(name){
+      return builtInThemes[name]||state.customThemes.find(theme=>theme.name===name)||state.downloadedThemes.find(theme=>theme.name===name)||communityThemes.find(theme=>theme.name===name)||null;
+    }
+    function applyTheme(theme,preview){
+      const safe=validateThemeData({schema:theme&&theme.schema,name:theme&&theme.name,tokens:theme&&theme.tokens});
+      if(!safe){console.error("OR theme rejected: invalid theme tokens");toast("Theme could not be applied");return false;}
+      const tokens=Object.assign({},focusedTheme.tokens,safe.tokens);
+      Object.entries(themeCssProperties).forEach(([key,property])=>document.documentElement.style.setProperty(property,tokens[key]));
+      if(preview)state.themePreviewName=safe.name;
+      else{state.themeName=safe.name;state.themePreviewName=null;}
+      return true;
+    }
+    function createThemeModal(name,tokens){
+      state.themeDraftTokens=Object.assign({},tokens||focusedTheme.tokens);
+      state.themeDraftOriginalName=state.themePreviewName||state.themeName;
+      state.themeDraftOriginalPreview=!!state.themePreviewName;
+      const editors=Object.keys(themeCssProperties).map(key=>{
+        const label=key.replace(/([A-Z])/g," $1").replace(/^./,letter=>letter.toUpperCase());
+        const value=state.themeDraftTokens[key]||focusedTheme.tokens[key];
+        const input=themeRadiusTokens.has(key)?'<select class="select" data-theme-token="'+key+'">'+[0,4,6,8,10,12,14,16,18,20].map(size=>'<option value="'+size+'px"'+(value===size+"px"?" selected":"")+'>'+size+'px</option>').join("")+'</select>':'<input class="input" type="color" data-theme-token="'+key+'" value="'+esc(value)+'">';
+        return '<label class="field"><span>'+esc(label)+'</span>'+input+'</label>';
+      }).join("");
+      openModal("Create Theme",'<div class="field"><label for="theme-name">Theme name</label><input id="theme-name" class="input" maxlength="48" value="'+esc(name||"My Custom Theme")+'"></div><details class="section-block"><summary class="small">Edit semantic tokens</summary><div class="grid grid-3 theme-editor-grid">'+editors+'</div></details><p class="small muted section-block">Only named color and corner-radius tokens are saved. Draft changes preview live.</p>',btn("Cancel","close-modal","")+btn("Create Theme","theme-create-save","btn-primary"),"theme-create");
+    }
+    function renderAppearanceSettings(){
+      const tabs=["Built-in","Community","Downloaded","Mine"];
+      const themes=state.themeBrowseTab==="Built-in"?Object.values(builtInThemes):state.themeBrowseTab==="Community"?communityThemes:state.themeBrowseTab==="Downloaded"?state.downloadedThemes:state.customThemes;
+      const cards=themes.map(theme=>{
+        const active=(state.themePreviewName||state.themeName)===theme.name;
+        const custom=state.customThemes.some(item=>item.name===theme.name);
+        const swatches=["bg","surface","text","selection"].map(key=>'<span class="theme-swatch" style="background:'+esc(theme.tokens[key]||focusedTheme.tokens[key])+'" aria-hidden="true"></span>').join("");
+        return '<article class="feature-card theme-card"><div class="row"><strong>'+esc(theme.name)+'</strong><span class="push badge">'+(active?"Selected":custom?"Mine":theme.source||state.themeBrowseTab)+'</span></div><div class="theme-swatches">'+swatches+'</div><div class="row-wrap section-block"><button class="btn btn-compact" data-action="theme-preview" data-name="'+esc(theme.name)+'">Preview</button><button class="btn btn-compact btn-primary" data-action="theme-apply" data-name="'+esc(theme.name)+'">Apply</button>'+(state.themeBrowseTab==="Community"?'<button class="btn btn-compact" data-action="theme-download" data-name="'+esc(theme.name)+'">Download</button>':"")+(custom?'<button class="btn btn-compact" data-action="theme-duplicate" data-name="'+esc(theme.name)+'">Duplicate</button><button class="btn btn-compact" data-action="theme-reset" data-name="'+esc(theme.name)+'">Reset</button><button class="btn btn-compact" data-action="theme-export" data-name="'+esc(theme.name)+'">Export JSON</button>':"")+'</div></article>';
+      }).join("");
+      return '<section class="theme-settings"><div class="row-wrap"><span class="chip">Current theme · '+esc(state.themePreviewName||state.themeName)+'</span><span class="small muted">Semantic colors and radii only.</span><span class="push"></span><button class="btn btn-compact" data-action="theme-create-open">Create Theme</button><button class="btn btn-compact" data-action="theme-import-open">Import JSON</button></div><div class="tabs section-block">'+tabs.map(tab=>'<button class="tab" data-action="theme-tab" data-tab="'+tab+'" aria-selected="'+(state.themeBrowseTab===tab)+'">'+tab+'</button>').join("")+'</div><div class="grid grid-2 section-block">'+(cards||'<div class="empty-state"><strong>No themes in this tab</strong><p>Community entries are local examples. Downloaded and Mine list your page-state themes.</p></div>')+'</div><p class="small muted section-block">Theme JSON accepts schema or.theme.v1 and known color/radius tokens only. CSS, selectors, scripts, and URLs are rejected. Community examples do not connect to a service.</p><div class="field section-block"><label for="density">UI density</label><select class="select" id="density"><option'+(state.settings.uiDensity==="Comfortable"?" selected":"")+'>Comfortable</option><option'+(state.settings.uiDensity==="Compact"?" selected":"")+'>Compact</option><option'+(state.settings.uiDensity==="Spacious"?" selected":"")+'>Spacious</option></select></div><div class="field section-block"><label>Text scaling</label><input type="range" min="90" max="130" value="100" aria-label="Text scaling"></div><label class="toggle-row section-block"><span class="toggle-copy"><strong>Reduced motion</strong><small>Use system preference and avoid extra transitions.</small></span><input class="switch setting-toggle" data-setting="reducedMotion" type="checkbox" '+(state.settings.reducedMotion?"checked":"")+'></label></section>';
+    }
     function renderSettings() {
       const sections=["General","Workspace","Appearance","Editing","Performance","Storage","AI & Models","Downloads","Privacy","Keyboard","Advanced / Developer","About"];
       const devViews=[["Agents & CLI","agents"],["Command Inspector","command-inspector"],["Capability Explorer","capability-explorer"],["Diagnostics","diagnostics"],["Plugins","plugins"],["Feature Map","feature-map"],["Automation Recipes","recipes"]];
       let content="";
       if(state.selectedSettings==="General") content='<div class="grid grid-2"><div class="field"><label for="language">Language</label><select id="language" class="select"><option>English</option><option>Tiếng Việt</option></select></div><label class="toggle-row"><span class="toggle-copy"><strong>Autosave</strong><small>Prototype preference</small></span><input class="switch setting-toggle" data-setting="autosave" type="checkbox" '+(state.settings.autosave?"checked":"")+'></label><div class="field"><label>Autosave interval</label><select class="select"><option>1 minute</option><option>5 minutes</option><option>10 minutes</option></select></div></div>';
       else if(state.selectedSettings==="Workspace") content='<div class="grid grid-2"><label class="field"><span>Workspace Complexity</span><select id="workspace-complexity" class="select complexity-select"><option'+(state.workspaceComplexity==="Simple"?" selected":"")+'>Simple</option><option'+(state.workspaceComplexity==="Advanced"?" selected":"")+'>Advanced</option></select></label><div class="field"><span class="field-label">Preview layout</span><div class="view-switch"><button data-action="set-mode" data-mode="desktop" aria-pressed="'+(state.mode==="desktop")+'">Desktop</button><button data-action="set-mode" data-mode="mobile" aria-pressed="'+(state.mode==="mobile")+'">Mobile</button></div></div></div><p class="small secondary section-block">Simple and Advanced share one project and command model. Advanced reveals additional timeline, audio, color, and developer controls.</p>';
-      else if(state.selectedSettings==="Appearance") content='<div class="row-wrap"><span class="chip">Focused Monochrome</span><span class="small muted">Black, charcoal, gray, and white application chrome.</span></div><div class="field section-block"><label for="density">UI density</label><select class="select" id="density"><option'+(state.settings.uiDensity==="Comfortable"?" selected":"")+'>Comfortable</option><option'+(state.settings.uiDensity==="Compact"?" selected":"")+'>Compact</option></select></div><div class="field section-block"><label>Text scaling</label><input type="range" min="90" max="130" value="100" aria-label="Text scaling"></div>';
+      else if(state.selectedSettings==="Appearance") content=renderAppearanceSettings();
       else if(state.selectedSettings==="Editing") content='<label class="toggle-row"><span class="toggle-copy"><strong>Snap</strong><small>Default timeline snapping</small></span><input class="switch setting-toggle" data-setting="snap" type="checkbox" '+(state.settings.snap?"checked":"")+'></label><div class="field section-block"><label>Default transition</label><select class="select"><option>Cut</option><option>Cross Dissolve</option></select></div><div class="field section-block"><label>Timeline behavior</label><select class="select"><option>Selection follows playhead</option><option>Playhead follows selection</option></select></div>';
       else if(state.selectedSettings==="Performance") content='<div class="grid grid-2"><label class="toggle-row"><span class="toggle-copy"><strong>GPU acceleration</strong><small>Planned platform setting</small></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware decode</strong></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware encode</strong></span><input class="switch" type="checkbox"></label><div class="field"><label>Memory/cache limit</label><select class="select"><option>Auto</option><option>4 GB</option><option>8 GB</option></select></div></div>';
       else if(state.selectedSettings==="Storage") content='<div class="stack"><div class="field"><label>Cache path</label><input class="input" value="Default · prototype" readonly></div><div class="field"><label>Proxy path</label><input class="input" value="Not configured" readonly></div><div class="field"><label>Model storage</label><input class="input" value="Not configured" readonly></div>'+btn("Clear Cache","clear-cache","")+'</div>';
@@ -1499,7 +1646,7 @@
       else if(state.selectedSettings==="Downloads") content=renderDownloads();
       else if(state.selectedSettings==="Privacy") content='<label class="toggle-row"><span class="toggle-copy"><strong>Offline mode</strong><small>Blocks provider calls in the future product.</small></span><input class="switch setting-toggle" data-setting="offline" type="checkbox" '+(state.settings.offline?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Network AI permission</strong></span><input class="switch setting-toggle" data-setting="networkAI" type="checkbox" '+(state.settings.networkAI?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Telemetry</strong><small>Off by default · placeholder</small></span><input class="switch setting-toggle" data-setting="telemetry" type="checkbox" '+(state.settings.telemetry?"checked":"")+'></label>';
       else if(state.selectedSettings==="Keyboard") content='<div class="row"><label class="search-wrap">'+icon("search")+'<input class="input" id="shortcut-search" placeholder="Search shortcuts" aria-label="Search shortcuts"></label></div><div class="divider"></div>'+[["Play / Pause","Space"],["Undo","⌘ / Ctrl + Z"],["Redo","⌘ / Ctrl + Shift + Z"],["Command Palette","⌘ / Ctrl + K"],["Save","⌘ / Ctrl + S"],["Delete Selection","Delete"]].map(pair=>'<div class="row shortcut-row"><span>'+pair[0]+'</span><kbd class="chip push">'+pair[1]+'</kbd></div>').join("");
-      else if(state.selectedSettings==="Advanced / Developer") content='<label class="toggle-row"><span class="toggle-copy"><strong>Developer Mode</strong><small>Shows CLI, agent, diagnostics, command, plugin, and feature map surfaces.</small></span><input id="developer-mode-toggle" class="switch" type="checkbox" '+(state.developerMode?"checked":"")+'></label>'+(state.developerMode?'<nav class="dev-subnav section-block" aria-label="Developer tools">'+devViews.map(item=>'<button class="filter-chip" data-action="navigate" data-view="'+item[1]+'">'+esc(item[0])+'</button>').join("")+'</nav>':'<p class="small muted section-block">Developer surfaces are hidden from regular navigation until enabled.</p>');
+      else if(state.selectedSettings==="Advanced / Developer") content='<label class="toggle-row"><span class="toggle-copy"><strong>Developer Mode</strong><small>Shows CLI, agent, diagnostics, command, plugin, and feature map surfaces.</small></span><input id="developer-mode-toggle" class="switch" type="checkbox" '+(state.developerMode?"checked":"")+'></label>'+'<nav class="dev-subnav section-block" aria-label="Developer tools">'+devViews.map(item=>'<button class="filter-chip" data-action="navigate" data-view="'+item[1]+'">'+esc(item[0])+'</button>').join("")+'</nav><p class="small muted">Developer pages remain reachable here in either workspace mode.</p>';
       else content='<div class="status-item"><span class="brand-mark">OR</span><div class="status-copy"><strong>Opencut Reinforced</strong><small>UI Prototype · repository metadata</small></div></div><p class="small secondary">Product direction and interactions in this page are simulated.</p><span class="mono small secondary">Repository: huou07/Opencut-Reinforced</span>';
       return '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">'+sections.map(name=>'<button class="filter-chip" data-action="settings-section" data-section="'+name+'" aria-pressed="'+(state.selectedSettings===name)+'">'+esc(name)+'</button>').join("")+'</nav><section class="panel"><div class="panel-head"><h2>'+esc(state.selectedSettings)+'</h2><span class="chip">Prototype preference</span></div><div class="panel-body">'+content+'</div></section></div>';
     }
@@ -1541,8 +1688,7 @@
       const recipes=[["Podcast Short",["Inspect selected sequence","Remove pauses","Create transcript","Apply caption style","Queue vertical draft"]],["Translate + Dub",["Select subtitle track","Translate captions","Map speakers","Generate voice segments","Review and apply"]],["Auto Caption + Style",["Transcribe selected media","Review transcript","Choose caption template","Add captions to timeline"]],["Vertical Social Cut",["Duplicate sequence","Set 9:16 canvas","Reframe clips","Review title-safe area"]],["Remove Silence",["Analyze dialogue track","Preview proposed ranges","Confirm ripple plan"]],["Batch Export",["Select projects","Choose export preset","Review output queue"]]];
       return '<div class="row-wrap"><span class="chip">Automation recipes</span><span class="small muted">Structured OR command sequences · no shell code.</span></div><div class="grid grid-2 section-block">'+recipes.map(item=>'<button class="feature-card" data-action="recipe-preview" data-name="'+esc(item[0])+'"><strong>'+esc(item[0])+'</strong><small>'+item[1].length+' structured steps · click to inspect</small></button>').join("")+'</div>';
     }
-    function renderView() {
-      const views={
+    const viewRegistry={
         home:renderHome,projects:renderProjects,templates:()=>renderTemplates(false),assets:()=>renderAssetLibrary(false),
         editor:renderEditor,media:renderMedia,captions:renderCaptions,audio:renderAudio,effects:renderEffects,
         transitions:renderTransitions,color:renderColor,"image-tools":renderImageTools,"ai-studio":renderAiStudio,
@@ -1552,8 +1698,18 @@
         downloads:renderDownloads,diagnostics:()=>renderDeveloperView(renderDiagnostics()),
         "command-inspector":()=>renderDeveloperView(renderCommandInspector()),
         "capability-explorer":()=>renderDeveloperView(renderCapabilityExplorer()),recipes:()=>renderDeveloperView(renderRecipes())
-      };
-      return (views[state.view]||renderHome)();
+    };
+    const navigationRouteIds=["home","projects","templates","assets","editor","media","captions","audio","effects","transitions","color","image-tools","ai-studio","agents","models","export","settings","plugins","feature-map","snapshots","downloads","diagnostics","command-inspector","capability-explorer","recipes"];
+    function validateNavigationTargets() {
+      let valid=true;
+      navigationRouteIds.forEach(id=>{if(typeof viewRegistry[id]!=="function"){valid=false;console.error("OR navigation target has no renderer: "+id);}});
+      $$('[data-action="navigate"][data-view]').forEach(node=>{const id=node.dataset.view;if(typeof viewRegistry[id]!=="function"){valid=false;console.error("OR navigation target has no renderer: "+id);}});
+      return valid;
+    }
+    function renderView() {
+      const renderer=viewRegistry[state.view];
+      if(typeof renderer!=="function"){console.error("OR view has no renderer: "+state.view);return renderHome();}
+      return renderer();
     }
     function render() {
       $("#app-shell").dataset.mode=state.mode;
@@ -1607,28 +1763,48 @@
       const clip = { id: "clip-" + Date.now() + "-" + Math.floor(Math.random()*10000), name: name, start: end, duration: length || 6, kind: kind, ai: !!ai };
       track.clips.push(clip);
       state.selectedClipId = clip.id;
-      state.view = "editor";
+      openProjectInEditor(state.activeProjectId,{tool:state.selectedEditorTool,mobileToolSheet:state.mobileToolSheet,render:false});
       markChanged();
       render();
       toast("Added to the mock timeline");
     }
-    function startPlayback() {
-      state.playing = !state.playing;
-      render();
-      if (!state.playing) {
-        if (state.playTimer) window.clearInterval(state.playTimer);
-        return;
-      }
-      if (state.playTimer) window.clearInterval(state.playTimer);
-      state.playTimer = window.setInterval(() => {
-        state.currentTime += .25;
-        if (state.currentTime >= state.duration) { state.currentTime = 0; state.playing = false; window.clearInterval(state.playTimer); }
-        $$(".time-display").forEach(node => { node.textContent = fmtTime(state.currentTime) + (node.closest(".transport") ? " / " + fmtTime(state.duration) : ""); });
-        const head = $("#playhead");
-        if (head) head.style.left = (68 + state.currentTime * 18 * state.zoom) + "px";
-        if (!state.playing) render();
-      }, 250);
+    function timelineScale(){return 18*state.zoom;}
+    function timelineHeaderWidth(){return 68;}
+    function timelineTimeToPixel(time){return timelineHeaderWidth()+Math.max(0,time)*timelineScale();}
+    function pixelToTimelineTime(clientX,scroller){
+      const rect=scroller.getBoundingClientRect();
+      return Math.max(0,Math.min(state.duration,(clientX-rect.left+scroller.scrollLeft-timelineHeaderWidth())/timelineScale()));
     }
+    function setCurrentTime(time,options){
+      const limit=Math.max(0,Number(state.duration)||0);
+      state.currentTime=Math.max(0,Math.min(limit,Number(time)||0));
+      const x=timelineTimeToPixel(state.currentTime);
+      const head=$("#playhead-hit");if(head){head.style.left=x+"px";head.setAttribute("aria-valuenow",String(state.currentTime));}
+      $$(".time-display").forEach(node=>{node.textContent=fmtTime(state.currentTime)+" / "+fmtTime(state.duration);});
+      $$(".preview-label").forEach(node=>{node.textContent=fmtTime(state.currentTime)+" · "+activeProject().name;});
+      if(state.followPlayhead&&options&&options.playback){const scroller=$(".timeline-scroller");if(scroller&&x-scroller.scrollLeft>scroller.clientWidth-36)scroller.scrollLeft=Math.max(0,x-scroller.clientWidth+80);}
+      return state.currentTime;
+    }
+    function setPlayback(playing){
+      state.playing=!!playing;
+      const button=$('[data-action="toggle-play"]');
+      if(button){button.setAttribute("aria-label",state.playing?"Pause":"Play");button.setAttribute("aria-pressed",String(state.playing));const use=$("use",button);if(use)use.setAttribute("href",state.playing?"#i-pause":"#i-play");}
+      if(state.playTimer)cancelAnimationFrame(state.playTimer);
+      state.playTimer=null;
+      if(state.playing){
+        let last=performance.now();
+        const tick=now=>{
+          if(!state.playing)return;
+          const elapsed=Math.min(.1,(now-last)/1000);last=now;
+          let next=state.currentTime+elapsed;
+          if(next>=state.duration){if(state.loop)next=0;else{next=state.duration;setPlayback(false);}}
+          setCurrentTime(next,{playback:true});
+          if(state.playing)state.playTimer=requestAnimationFrame(tick);
+        };
+        state.playTimer=requestAnimationFrame(tick);
+      }
+    }
+    function startPlayback(){setPlayback(!state.playing);}
     function openModal(title, content, footer, id) {
       const root = $("#modal-root");
       if(!root.classList.contains("is-open")) state.modalReturnFocus=document.activeElement;
@@ -1637,7 +1813,7 @@
       state.modal = id || "dialog";
       window.setTimeout(() => { const first = $("input,select,textarea,button", root); if (first) first.focus(); }, 20);
     }
-    function closeModal() { const root=$("#modal-root");root.classList.remove("is-open");root.innerHTML="";if(state.modal==="asset-preview")state.previewingAssetId=null;state.modal=null;const focus=state.modalReturnFocus;state.modalReturnFocus=null;if(focus&&focus.isConnected)window.setTimeout(()=>focus.focus(),0); }
+    function closeModal() { const root=$("#modal-root");root.classList.remove("is-open");root.innerHTML="";if(state.modal==="asset-preview")state.previewingAssetId=null;if(state.modal==="theme-create"&&state.themeDraftTokens){const previous=getThemeByName(state.themeDraftOriginalName)||focusedTheme;applyTheme(previous,state.themeDraftOriginalPreview);state.themeDraftTokens=null;state.themeDraftOriginalName=null;state.themeDraftOriginalPreview=false;}state.modal=null;const focus=state.modalReturnFocus;state.modalReturnFocus=null;if(focus&&focus.isConnected)window.setTimeout(()=>focus.focus(),0); }
     function newProjectModal() {
       const content = '<div class="stack"><div class="field"><label for="new-project-name">Project Name</label><input id="new-project-name" class="input" value="Untitled Project"></div><div class="grid grid-2"><div class="field"><label>Aspect Ratio</label><select id="new-project-ratio" class="select"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>Custom</option></select></div><div class="field"><label>Resolution</label><select id="new-project-resolution" class="select"><option>720p</option><option selected>1080p</option><option>1440p</option><option>4K</option><option>Custom</option></select></div><div class="field"><label>Frame rate</label><select class="select"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></div><div class="field"><label>Audio</label><select class="select"><option>44.1 kHz</option><option selected>48 kHz</option></select></div><div class="field"><label>Color</label><select class="select"><option>SDR</option><option>HDR · future</option></select></div></div><p class="small muted">Creates an empty demo project in local page state only.</p></div>';
       openModal("New Project",content,btn("Cancel","close-modal","")+btn("Create","create-project","btn-primary"),"new-project");
@@ -1647,17 +1823,73 @@
       const content='<div class="mobile-create-sheet">'+choices.map(item=>'<button class="feature-card" data-action="'+item[1]+'" '+(item[3]?item[1]==="navigate"?'data-view="'+item[3]+'"':'data-tool="'+item[3]+'" data-ai-tab="'+item[4]+'"':'')+'><strong>'+esc(item[0])+'</strong><small>'+esc(item[2])+'</small></button>').join("")+'</div><p class="small muted section-block">Create actions use mock project state. Import does not read local files.</p>';
       openModal("Create",content,'<button class="btn" data-action="close-modal">Close</button>',"create-menu");
     }
-    function openEditorTool(tool, target) {
-      const name=tool||"Media";
-      state.view="editor";
+    function projectDurationSeconds(project){
+      const parts=String(project.duration||"").split(":").map(Number);
+      if(parts.length===2&&parts.every(Number.isFinite))return Math.max(0,parts[0]*60+parts[1]);
+      if(parts.length===3&&parts.every(Number.isFinite))return Math.max(0,parts[0]*3600+parts[1]*60+parts[2]);
+      return timelineSeedDuration;
+    }
+    function saveProjectTimeline(projectId){
+      if(!projectId)return;
+      state.projectTimelines[projectId]={tracks:JSON.parse(JSON.stringify(state.tracks)),selectedClipId:state.selectedClipId,currentTime:state.currentTime,duration:state.duration};
+    }
+    function openProjectInEditor(projectId,options){
+      const project=state.projects.find(item=>item.id===projectId);
+      if(!project){console.error("OR editor entry failed: project not found: "+projectId);toast("Project is no longer available");return false;}
+      const opts=options||{};
+      const previousProjectId=state.activeProjectId;
+      const switchingProjects=previousProjectId!==project.id;
+      if(state.playing)setPlayback(false);
+      if(switchingProjects){
+        saveProjectTimeline(previousProjectId);
+        const saved=state.projectTimelines[project.id];
+        if(saved){
+          state.tracks=JSON.parse(JSON.stringify(saved.tracks));
+          state.selectedClipId=saved.selectedClipId;
+          state.currentTime=saved.currentTime;
+          state.duration=saved.duration;
+        }else{
+          state.tracks=JSON.parse(JSON.stringify(tracksSeed));
+          state.selectedClipId="clip-interview";
+          state.currentTime=0;
+          state.duration=projectDurationSeconds(project);
+        }
+      }
+      state.activeProjectId=project.id;
+      state.projectFps=Number(project.fps)||30;
+      if(opts.tracks)state.tracks=opts.tracks;
+      if(opts.duration!==undefined)state.duration=Math.max(0,Number(opts.duration)||0);
+      if(opts.selectedClipId!==undefined)state.selectedClipId=opts.selectedClipId;
+      if(opts.currentTime!==undefined)state.currentTime=Math.max(0,Math.min(state.duration,Number(opts.currentTime)||0));
+      else if(switchingProjects)state.currentTime=Math.max(0,Math.min(state.duration,state.currentTime));
+      saveProjectTimeline(project.id);
+      state.selectedEditorTool=opts.tool||"Media";
       state.mobileInspector=false;
-      state.selectedEditorTool=(name==="Voiceover"||name==="Dubbing"||name==="Translate")?"Audio" : name;
-      if(name==="Voiceover") state.audioTab="Voiceover";
-      else if(name==="Dubbing"||name==="Translate"){state.selectedEditorTool="Captions";state.captionTab=name==="Translate"?"Translate":"Dubbing";}
-      else if(name==="Captions") state.captionTab="Transcript";
-      if(name==="AI") state.aiTab=(target&&target.dataset&&target.dataset.aiTab)||"Generate";
-      if(isMobileLayout()) state.mobileToolSheet=true;
-      closeModal();render();
+      state.mobileToolSheet=!!opts.mobileToolSheet;
+      state.viewOnly=false;state.viewerFocus=false;state.fullscreenPreview=false;
+      state.timelineDrag=null;state.contextMenu=null;
+      if(state.modal)closeModal();
+      state.view="editor";
+      if(opts.render!==false)render();
+      return true;
+    }
+    function exitEditor(destination){
+      const next=viewRegistry[destination]?destination:"projects";
+      setPlayback(false);
+      state.mobileToolSheet=false;state.mobileInspector=false;state.viewOnly=false;state.viewerFocus=false;state.fullscreenPreview=false;
+      state.timelineDrag=null;state.resizeState=null;state.contextMenu=null;state.selectedClipId=null;
+      if(state.modal)closeModal();
+      state.view=next;render();
+    }
+    function openEditorTool(tool,target){
+      const name=tool||"Media";
+      let selected=name;
+      if(name==="Voiceover"){selected="Audio";state.audioTab="Voiceover";}
+      else if(name==="Dubbing"||name==="Translate"){selected="Captions";state.captionTab=name==="Translate"?"Translate":"Dubbing";}
+      else if(name==="Captions")state.captionTab="Transcript";
+      if(name==="AI")state.aiTab=(target&&target.dataset&&target.dataset.aiTab)||"Generate";
+      if(!featureRegistry.some(item=>item.tool===selected))selected="Media";
+      openProjectInEditor(state.activeProjectId,{tool:selected,mobileToolSheet:isMobileLayout()});
     }
     function createProjectFromTemplate(id) {
       const template=state.templates.find(item=>item.id===id);
@@ -1673,7 +1905,10 @@
         const track=isText?text:isAudio?audio:video;
         track.clips.push({id:"clip-tpl-"+Date.now()+"-"+index,name:slot,start:index*3,duration:3,kind:isText?"text":isAudio?"audio":"video"});
       });
-      state.projects.unshift(project);state.activeProjectId=project.id;state.tracks=[video,audio,text];state.selectedClipId=video.clips[0]?.id||text.clips[0]?.id||audio.clips[0]?.id||null;state.currentTime=0;state.duration=Math.max(30,template.duration.split(":").reduce((total,part)=>total*60+Number(part||0),0));state.view="editor";state.selectedEditorTool="Media";state.mobileToolSheet=isMobileLayout();state.saved=true;closeModal();render();toast("Project created from declarative template data");
+      const duration=Math.max(30,template.duration.split(":").reduce((total,part)=>total*60+Number(part||0),0));
+      state.projects.unshift(project);state.saved=true;
+      openProjectInEditor(project.id,{tracks:[video,audio,text],selectedClipId:video.clips[0]?.id||text.clips[0]?.id||audio.clips[0]?.id||null,currentTime:0,duration:duration,tool:"Media",mobileToolSheet:false});
+      toast("Project created from declarative template data");
     }
     function createSnapshot(name) {
       const snapshot={id:"snap-"+Date.now(),name:name||"Snapshot · "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),kind:"Manual Snapshot",date:"Just now",tracks:JSON.parse(JSON.stringify(state.tracks)),selectedClipId:state.selectedClipId,currentTime:state.currentTime};
@@ -1788,21 +2023,21 @@
     function changeProject(id) {
       const project = state.projects.find(item=>item.id===id);
       if (!project) { toast("No project selected"); return; }
-      state.activeProjectId = project.id;
-      state.view = "editor";
-      render();
+      if(!openProjectInEditor(project.id))return;
       toast("Opened "+project.name+" in the demo editor");
     }
     function handleAction(action, target) {
       const id = target && target.dataset ? target.dataset.id : undefined;
       switch (action) {
         case "navigate":
+          if(typeof viewRegistry[target.dataset.view||"home"]!=="function"){console.error("OR navigation target has no renderer: "+(target.dataset.view||"home"));toast("This screen is unavailable");return;}
           if(state.modal)closeModal();
           if (target.dataset.tab && target.dataset.tab==="Prompt Editing") state.selectedAgentTab="Prompt Editing";
           if (target.dataset.agentTab) state.selectedAgentTab=target.dataset.agentTab;
           if (target.dataset.section) state.selectedSettings=target.dataset.section;
           if (["agents","models","plugins","feature-map","diagnostics","command-inspector","capability-explorer","recipes"].includes(target.dataset.view)) state.developerMode=true;
           state.mobileInspector=false;
+          if((target.dataset.view||"home")==="editor"){openProjectInEditor(state.activeProjectId);return;}
           state.view = target.dataset.view || "home";
           render();
           return;
@@ -1813,13 +2048,13 @@
           toast(state.mode==="mobile"?"Mobile layout preview":"Desktop layout preview");
           return;
         case "create-menu": createMenu();return;
-        case "exit-editor": state.view="projects";state.mobileToolSheet=false;state.mobileInspector=false;state.viewOnly=false;state.viewerFocus=false;state.fullscreenPreview=false;render();return;
+        case "exit-editor": exitEditor("projects");return;
         case "open-editor-tool": openEditorTool(target.dataset.tool,target);return;
         case "editor-tool-panel": state.selectedEditorTool=target.dataset.tool||"Media";state.mobileToolSheet=isMobileLayout();render();return;
         case "close-mobile-tool-sheet": state.mobileToolSheet=false;render();return;
         case "collapse-left-panel": state.leftPanelCollapsed=!state.leftPanelCollapsed;render();return;
         case "collapse-inspector": state.inspectorCollapsed=!state.inspectorCollapsed;render();return;
-        case "viewer-only": if(state.view!=="editor")state.view="editor";state.viewOnly=!state.viewOnly;state.viewerFocus=false;render();toast(state.viewOnly?"Cinema view · timeline and panels hidden":"Editor workspace restored");return;
+        case "viewer-only": if(state.view!=="editor")openProjectInEditor(state.activeProjectId,{render:false});state.viewOnly=!state.viewOnly;state.viewerFocus=false;render();toast(state.viewOnly?"Cinema view · timeline and panels hidden":"Editor workspace restored");return;
         case "fullscreen-preview": state.fullscreenPreview=!state.fullscreenPreview;state.viewerFocus=false;render();toast(state.fullscreenPreview?"Fullscreen preview simulation":"Preview returned to the editor");return;
         case "viewer-focus": state.viewerFocus=!state.viewerFocus;state.viewOnly=false;state.fullscreenPreview=false;render();return;
         case "viewer-overlay": {const key=target.dataset.state;if(key in state){state[key]=!state[key];render();}return;}
@@ -1830,7 +2065,7 @@
         case "open-project": changeProject(id || state.projects[0].id); closeModal(); return;
         case "import-media":
           state.media.unshift({id:"m-demo-"+Date.now(),name:"imported_media_demo.mp4",type:"Video",duration:"00:14",spec:"1920×1080 · 30 fps",source:"Media"});
-          state.selectedMediaTab="Media";state.selectedEditorTool="Media";state.view="editor";state.mobileToolSheet=isMobileLayout();render();toast("Added a demo media item; no file was read"); return;
+          state.selectedMediaTab="Media";openProjectInEditor(state.activeProjectId,{tool:"Media",mobileToolSheet:isMobileLayout()});toast("Added a demo media item; no file was read"); return;
         case "import-folder": toast("Folder import is a prototype placeholder"); return;
         case "project-settings": openModal("Project Settings",'<div class="grid grid-2"><div class="field"><label>Aspect ratio</label><select class="select"><option>'+esc(activeProject().ratio)+'</option><option>9:16</option><option>1:1</option></select></div><div class="field"><label>Resolution</label><select class="select"><option>'+esc(activeProject().resolution)+'</option><option>1080p</option><option>4K</option></select></div></div>',btn("Close","close-modal","")+btn("Save","close-modal","btn-primary"),"project-settings"); return;
         case "projects-layout": state.projectLayout=target.dataset.layout; render(); return;
@@ -1867,11 +2102,13 @@
         case "undo": restoreHistory(state.history,state.redoHistory);return;
         case "redo": restoreHistory(state.redoHistory,state.history);return;
         case "toggle-play": startPlayback();return;
-        case "go-start": state.currentTime=0;render();return;
-        case "go-end": state.currentTime=state.duration;render();return;
-        case "next-frame": state.currentTime+=1/30;render();return;
+        case "go-start": setCurrentTime(0);return;
+        case "go-end": setCurrentTime(state.duration);return;
+        case "previous-frame": setCurrentTime(state.currentTime-1/(state.projectFps||30));return;
+        case "next-frame": setCurrentTime(state.currentTime+1/(state.projectFps||30));return;
         case "toggle-guides": state.safeGuides=!state.safeGuides;render();return;
         case "toggle-loop": state.loop=!state.loop;target.setAttribute("aria-pressed",String(state.loop));toast(state.loop?"Loop enabled":"Loop disabled");return;
+        case "toggle-follow-playhead": state.followPlayhead=!state.followPlayhead;target.setAttribute("aria-pressed",String(state.followPlayhead));toast(state.followPlayhead?"Follow playhead enabled":"Follow playhead disabled");return;
         case "volume": toast("Preview volume: "+state.volume+"%");return;
         case "add-marker": state.markers.push({id:"marker-"+Date.now(),time:state.currentTime,label:"Marker "+(state.markers.length+1)});render();toast("Marker added at "+fmtTime(state.currentTime));return;
         case "add-keyframe": {
@@ -1954,6 +2191,44 @@
         case "queue-export": {const input=$("#export-filename");const name=input&&input.value.trim()?input.value.trim():activeProject().name+"-draft";state.exportQueue.unshift({id:"e-"+Date.now(),name:name,status:"Queued",progress:0});closeModal();render();toast("Export added to demo queue");return;}
         case "start-export": {const input=$("#export-filename");state.exportName=input&&input.value.trim()?input.value.trim():activeProject().name+"-draft";state.exportProgress=0;closeModal();state.view="export";startProgress("export");return;}
         case "remove-export": state.exportQueue=state.exportQueue.filter(item=>item.id!==id);render();toast("Queue item removed");return;
+        case "theme-tab": state.themeBrowseTab=target.dataset.tab||"Built-in";render();return;
+        case "theme-preview": {const theme=getThemeByName(target.dataset.name);if(theme&&applyTheme(theme,true)){render();toast(theme.name+" previewed");}return;}
+        case "theme-apply": {const theme=getThemeByName(target.dataset.name);if(theme&&applyTheme(theme,false)){render();toast("Theme applied");}return;}
+        case "theme-create-open": {const theme=getThemeByName(state.themePreviewName||state.themeName)||focusedTheme;createThemeModal("My Custom Theme",theme.tokens);return;}
+        case "theme-duplicate": {const theme=getThemeByName(target.dataset.name);if(theme)createThemeModal(theme.name+" Copy",theme.tokens);return;}
+        case "theme-create-save": {
+          const name=(($("#theme-name")||{}).value||"").trim();
+          if(builtInThemes[name]){toast("Choose a name that does not match a built-in theme");return;}
+          const theme=validateThemeData({schema:"or.theme.v1",name:name,tokens:state.themeDraftTokens||focusedTheme.tokens});
+          if(!theme){toast("Enter a valid theme name");return;}
+          const existing=state.customThemes.findIndex(item=>item.name===theme.name);if(existing>=0)state.customThemes.splice(existing,1);
+          state.customThemes.unshift(theme);state.themeBrowseTab="Mine";state.themeDraftTokens=null;state.themeDraftOriginalName=null;closeModal();applyTheme(theme,false);render();toast("Custom theme created in demo state");return;
+        }
+        case "theme-reset": {
+          const theme=state.customThemes.find(item=>item.name===target.dataset.name);if(!theme)return;
+          theme.tokens=Object.assign({},focusedTheme.tokens);
+          if(state.themeName===theme.name)applyTheme(theme,false);
+          render();toast("Theme reset to Focused Monochrome tokens");return;
+        }
+        case "theme-import-open": openModal("Import Theme JSON",'<p class="small secondary">Paste an or.theme.v1 theme. Only known color and radius tokens are accepted.</p><textarea id="theme-import-json" class="textarea" aria-label="Theme JSON" placeholder="Paste JSON here"></textarea>',btn("Cancel","close-modal","")+btn("Import Theme","theme-import","btn-primary"),"theme-import");return;
+        case "theme-import": {
+          let input;try{input=JSON.parse((($("#theme-import-json")||{}).value||""));}catch(error){toast("Theme JSON is invalid");return;}
+          if(!input||Object.keys(input).some(key=>!["schema","name","tokens"].includes(key))){toast("Theme JSON contains unsupported fields");return;}
+          const theme=validateThemeData(input);if(!theme||builtInThemes[theme.name]){toast("Theme JSON has an unsupported schema or token");return;}
+          const existing=state.customThemes.findIndex(item=>item.name===theme.name);if(existing>=0)state.customThemes.splice(existing,1);
+          state.customThemes.unshift(theme);state.themeBrowseTab="Mine";closeModal();applyTheme(theme,false);render();toast("Theme imported in page state");return;
+        }
+        case "theme-export": {
+          const theme=getThemeByName(target.dataset.name);if(!theme)return;
+          const payload={schema:theme.schema,name:theme.name,tokens:theme.tokens};
+          const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
+          const link=document.createElement("a");link.href=url;link.download=(theme.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"or-theme")+".json";document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Theme JSON exported");return;
+        }
+        case "theme-download": {
+          const theme=communityThemes.find(item=>item.name===target.dataset.name);if(!theme)return;
+          if(!state.downloadedThemes.some(item=>item.name===theme.name))state.downloadedThemes.unshift({schema:theme.schema,name:theme.name,tokens:Object.assign({},theme.tokens),source:"Downloaded demo"});
+          render();toast("Community theme added to the local demo list");return;
+        }
         case "settings-section": state.selectedSettings=target.dataset.section;render();return;
         case "feature-group": state.selectedFeature=target.dataset.group;render();return;
         case "mobile-inspector": state.mobileInspector=!state.mobileInspector;render();return;
@@ -1963,7 +2238,9 @@
           const ratio=($("#new-project-ratio")||{}).value||"16:9";
           const resolution=($("#new-project-resolution")||{}).value||"1080p";
           const project={id:"p-"+Date.now(),name:name.trim()||"Untitled Project",ratio:ratio,resolution:resolution,duration:"00:00",edited:"Just now",pinned:false,archived:false};
-          state.projects.unshift(project);state.activeProjectId=project.id;state.tracks=JSON.parse(JSON.stringify(tracksSeed)).map(track=>Object.assign({},track,{clips:[]}));state.selectedClipId=null;state.duration=0;state.view="editor";markChanged();closeModal();render();toast("Empty demo project created");return;
+          const tracks=JSON.parse(JSON.stringify(tracksSeed)).map(track=>Object.assign({},track,{clips:[]}));
+          state.projects.unshift(project);state.saved=false;
+          openProjectInEditor(project.id,{tracks:tracks,selectedClipId:null,currentTime:0,duration:0,tool:"Media"});markChanged();toast("Empty demo project created");return;
         }
         case "projects-open-menu": projectMenu(id);return;
         default: if(!handleExtendedAction(action,target,id))toast("Planned capability — prototype only");
@@ -2012,8 +2289,8 @@
         case "asset-add": {
           const asset=state.assets.find(item=>item.id===id);if(!asset)return true;closeModal();
           if(["Music","Sound Effects","Ambience"].includes(asset.category)){addClip(asset.name,"audio",20,false);return true;}
-          if(["Effects","Transitions","Filters","LUTs"].includes(asset.category)){const found=getClip(state.selectedClipId);if(found){pushHistory();found.clip.effects=found.clip.effects||[];found.clip.effects.push(asset.name);markChanged();}state.view="editor";state.selectedEditorTool=asset.category==="Transitions"?"Transitions":asset.category==="Filters"||asset.category==="LUTs"?"Filters / Color":"Effects";render();toast(asset.name+" applied to the selected mock clip");return true;}
-          if(asset.category==="Text Styles"){state.captionStyle=asset.name;state.view="editor";state.selectedEditorTool="Text";render();toast(asset.name+" style selected for the project");return true;}
+          if(["Effects","Transitions","Filters","LUTs"].includes(asset.category)){const found=getClip(state.selectedClipId);if(found){pushHistory();found.clip.effects=found.clip.effects||[];found.clip.effects.push(asset.name);markChanged();}openProjectInEditor(state.activeProjectId,{tool:asset.category==="Transitions"?"Transitions":asset.category==="Filters"||asset.category==="LUTs"?"Filters / Color":"Effects"});toast(asset.name+" applied to the selected mock clip");return true;}
+          if(asset.category==="Text Styles"){state.captionStyle=asset.name;openProjectInEditor(state.activeProjectId,{tool:"Text"});toast(asset.name+" style selected for the project");return true;}
           addClip(asset.name,"text",5,false);return true;
         }
         case "asset-remove": {const asset=state.assets.find(item=>item.id===id);if(asset){asset.downloaded=false;state.downloads=state.downloads.filter(item=>item.assetId!==id);render();toast("Removed from downloaded demo assets");}return true;}
@@ -2057,7 +2334,7 @@
           let count=0;state.captions.forEach(item=>{if(item.text.includes(find)){item.text=item.text.split(find).join(replace);count++;}});
           render();toast(count?"Updated "+count+" transcript line(s)":"No matching transcript text");return true;
         }
-        case "transcript-jump": {const index=state.captions.findIndex(item=>item.id===id);if(index>=0){state.currentTime=[2,4.5,7.2][index]||0;state.view="editor";state.selectedEditorTool="Captions";render();toast("Playhead moved to transcript segment");}return true;}
+        case "transcript-jump": {const index=state.captions.findIndex(item=>item.id===id);if(index>=0){openProjectInEditor(state.activeProjectId,{tool:"Captions",currentTime:[2,4.5,7.2][index]||0});setCurrentTime(state.currentTime);toast("Playhead moved to transcript segment");}return true;}
         case "audio-tab": state.audioTab=target.dataset.tab;state.audioCategory="All";state.audioSearch="";render();return true;
         case "audio-category": state.audioCategory=target.dataset.category;render();return true;
         case "voiceover-generate": state.voiceoverText=value("#voiceover-text")||state.voiceoverText;addVoiceClip(state.voiceoverText.slice(0,36)||"Voiceover demo");return true;
@@ -2069,7 +2346,7 @@
           if(!state.dubbingGenerated){toast("Generate or review dubbing segments first");return true;}
           pushHistory();const track=state.tracks.find(item=>item.name==="DUB")||ensureAudioTrack("DUB");
           state.dubbingSegments.forEach((segment,index)=>track.clips.push({id:"clip-dub-"+Date.now()+"-"+index,name:"Dub · "+segment.speaker,start:index*2.5,duration:2.5,kind:"audio",ai:true}));
-          state.view="editor";state.selectedEditorTool="Audio";state.audioTab="Dubbing";markChanged();render();toast("Dubbing audio added to a mock DUB track");return true;
+          state.audioTab="Dubbing";openProjectInEditor(state.activeProjectId,{tool:"Audio",render:false});markChanged();render();toast("Dubbing audio added to a mock DUB track");return true;
         }
         case "dubbing-segment": dubbingSegmentModal(id,target.dataset.segmentAction);return true;
         case "dubbing-segment-save": saveDubbingSegment(id,target.dataset.segmentAction);return true;
@@ -2087,6 +2364,8 @@
         }
         case "timeline-command": {
           const name=target.dataset.name||"";
+          const overflow=target.closest("details.timeline-more");if(overflow)overflow.open=false;
+          if(name==="Select"){state.selectedTool="Select";return true;}
           if(name==="Split"){handleAction("split-clip",target);return true;}
           if(name==="Duplicate"){handleAction("duplicate-clip",target);return true;}
           if(name==="Delete"||name==="Ripple Delete"){handleAction("delete-clip",target);return true;}
@@ -2106,7 +2385,7 @@
           let track=state.tracks.find(item=>item.type==="adjustment");
           if(!track){track={id:"adj-"+Date.now(),name:"ADJ",type:"adjustment",muted:false,locked:false,visible:true,clips:[]};state.tracks.unshift(track);}
           track.clips.push({id:"clip-adj-"+Date.now(),name:"Adjustment Layer",start:state.currentTime,duration:8,kind:"adjustment"});
-          state.selectedClipId=track.clips[track.clips.length-1].id;state.view="editor";state.selectedEditorTool="More";state.mobileToolSheet=false;markChanged();render();toast("Adjustment layer added to the mock timeline");return true;
+          state.selectedClipId=track.clips[track.clips.length-1].id;openProjectInEditor(state.activeProjectId,{tool:"More",mobileToolSheet:false,render:false});markChanged();render();toast("Adjustment layer added to the mock timeline");return true;
         }
         case "toggle-graph": state.graphEditor=!state.graphEditor;render();return true;
         case "advanced-tool": advancedTool(target.dataset.name||target.textContent.trim());return true;
@@ -2118,7 +2397,7 @@
           if(action==="snapshot-preview"){
             openModal("Snapshot · "+snapshot.name,'<p class="small secondary">'+esc(snapshot.kind)+' · '+esc(snapshot.date)+'</p><p>'+snapshot.tracks.length+' mock tracks · '+snapshot.tracks.reduce((sum,item)=>sum+item.clips.length,0)+' timeline elements</p><div class="community-note">Preview reads only in-memory demo state.</div>',btn("Close","close-modal","")+btn("Restore Snapshot","snapshot-restore","btn-primary",'data-id="'+id+'"'),"snapshot-preview");return true;
           }
-          if(action==="snapshot-restore"){state.tracks=JSON.parse(JSON.stringify(snapshot.tracks));state.selectedClipId=snapshot.selectedClipId||null;state.currentTime=snapshot.currentTime||0;state.view="editor";closeModal();markChanged();render();toast("Mock snapshot restored");return true;}
+          if(action==="snapshot-restore"){openProjectInEditor(state.activeProjectId,{tracks:JSON.parse(JSON.stringify(snapshot.tracks)),selectedClipId:snapshot.selectedClipId||null,currentTime:snapshot.currentTime||0,tool:"Media",render:false});closeModal();markChanged();render();toast("Mock snapshot restored");return true;}
           const copy=JSON.parse(JSON.stringify(snapshot));copy.id="snap-"+Date.now();copy.name=snapshot.name+" Copy";copy.kind="Manual Snapshot";copy.date="Just now";state.snapshots.unshift(copy);render();toast("Snapshot duplicated in demo state");return true;
         }
         case "recipe-preview": {
@@ -2181,6 +2460,12 @@
     });
     document.addEventListener("input", event => {
       const target=event.target;
+      if(target.matches("[data-theme-token]")){
+        state.themeDraftTokens[target.dataset.themeToken]=target.value;
+        const draftName=(( $("#theme-name")||{}).value||"").trim()||"Theme draft";
+        applyTheme({schema:"or.theme.v1",name:draftName,tokens:state.themeDraftTokens},true);
+        return;
+      }
       const searchable={"template-search":"templateSearch","asset-search":"assetSearch","feature-search":"featureSearch","audio-search":"audioSearch","transcript-search":"transcriptSearch"};
       if(searchable[target.id]){state[searchable[target.id]]=target.value;const caret=target.selectionStart;render();const replacement=$("#"+target.id);if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
       if(target.id==="project-search"){state.projectSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#project-search");if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
@@ -2193,7 +2478,8 @@
           const found=getClip(node.dataset.id);
           if(found){node.style.left=Math.max(0,found.clip.start*18*state.zoom)+"px";node.style.width=Math.max(48,found.clip.duration*18*state.zoom)+"px";}
         });
-        const head=$("#playhead");if(head)head.style.left=(68+state.currentTime*18*state.zoom)+"px";
+        const scroller=$(".timeline-scroller");if(scroller)scroller.style.setProperty("--timeline-zoom",String(state.zoom));
+        setCurrentTime(state.currentTime);
         return;
       }
       if(target.matches(".setting-toggle")){state.settings[target.dataset.setting]=target.checked;toast("Preference updated in demo state");return;}
@@ -2220,6 +2506,29 @@
       if(target.id==="voiceover-voice")state.voiceoverVoice=target.value;
       if(target.matches(".speaker-map")){const speaker="Speaker "+target.dataset.speaker;state.speakerVoices[speaker]=target.value;state.dubbingSegments.forEach(item=>{if(item.speaker===speaker)item.voice=target.value;});}
     });
+    document.addEventListener("pointerdown",event=>{
+      const handle=event.target.closest("#playhead-hit");
+      const ruler=event.target.closest(".timeline-ruler");
+      if(!handle&&!ruler)return;
+      const scroller=event.target.closest(".timeline-scroller");if(!scroller)return;
+      const captureTarget=handle||ruler;
+      state.timelineDrag={pointerId:event.pointerId,scroller:scroller,target:captureTarget};
+      if(state.playing)setPlayback(false);
+      if(captureTarget.setPointerCapture)captureTarget.setPointerCapture(event.pointerId);
+      setCurrentTime(pixelToTimelineTime(event.clientX,scroller));
+      event.preventDefault();
+    });
+    document.addEventListener("pointermove",event=>{
+      const drag=state.timelineDrag;if(!drag||drag.pointerId!==event.pointerId)return;
+      setCurrentTime(pixelToTimelineTime(event.clientX,drag.scroller));
+      event.preventDefault();
+    });
+    document.addEventListener("pointerup",event=>{
+      const drag=state.timelineDrag;if(!drag||drag.pointerId!==event.pointerId)return;
+      if(drag.target.hasPointerCapture&&drag.target.hasPointerCapture(event.pointerId))drag.target.releasePointerCapture(event.pointerId);
+      state.timelineDrag=null;
+    });
+    document.addEventListener("pointercancel",event=>{if(state.timelineDrag&&state.timelineDrag.pointerId===event.pointerId)state.timelineDrag=null;});
     document.addEventListener("pointerdown",event=>{
       const handle=event.target.closest("[data-resize]");if(!handle)return;
       const shell=$(".editor-shell");if(!shell)return;
@@ -2249,10 +2558,23 @@
       if(state.modal==="palette"&&event.key==="Enter"){const first=$(".palette-item");if(first){event.preventDefault();first.click();return;}}
       if(state.modal==="palette"&&event.key==="ArrowDown"&&typing){const first=$(".palette-item");if(first){event.preventDefault();first.focus();return;}}
       if(command&&event.key.toLowerCase()==="k"){event.preventDefault();openPalette();return;}
+      if(event.target.id==="playhead-hit"&&["ArrowLeft","ArrowRight"].includes(event.key)){event.preventDefault();setCurrentTime(state.currentTime+(event.key==="ArrowRight"?1:-1)*(event.shiftKey?1:1/(state.projectFps||30)));return;}
       if(typing)return;
-      if(event.code==="Space"){event.preventDefault();startPlayback();return;}
+      if(state.modal)return;
+      if(event.code==="Space"&&state.view==="editor"){event.preventDefault();startPlayback();return;}
       if(command&&event.key.toLowerCase()==="s"){event.preventDefault();setSaved(true);toast("Demo project saved");return;}
       if(command&&event.key.toLowerCase()==="z"){event.preventDefault();handleAction(event.shiftKey?"redo":"undo",{});return;}
+      if(state.view==="editor"&&["ArrowLeft","ArrowRight"].includes(event.key)){
+        event.preventDefault();
+        if(event.shiftKey){
+          const points=state.tracks.flatMap(track=>track.clips.map(clip=>clip.start)).sort((a,b)=>a-b);
+          const point=event.key==="ArrowLeft"?points.filter(time=>time<state.currentTime-.001).pop():points.find(time=>time>state.currentTime+.001);
+          setCurrentTime(point===undefined?state.currentTime+(event.key==="ArrowLeft"?-1:1):point);
+        }else setCurrentTime(state.currentTime+(event.key==="ArrowLeft"?-1:1)/(state.projectFps||30));
+        return;
+      }
+      if(state.view==="editor"&&event.key==="Home"){event.preventDefault();setCurrentTime(0);return;}
+      if(state.view==="editor"&&event.key==="End"){event.preventDefault();setCurrentTime(state.duration);return;}
       if((event.key==="Delete"||event.key==="Backspace")&&state.view==="editor"){event.preventDefault();handleAction("delete-clip",{});}
       if(event.target.matches('[data-resize]')&&["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)){
         event.preventDefault();const type=event.target.dataset.resize;
@@ -2284,8 +2606,11 @@
         {label:"Manage Models",action:"navigate",view:"settings",section:"AI & Models"},
         {label:"Manage Downloads",action:"download-manager"},
         {label:"Open Settings",action:"navigate",view:"settings"},
+        {label:"Appearance & Themes",action:"navigate",view:"settings",section:"Appearance"},
         {label:"Advanced / Developer",action:"navigate",view:"settings",section:"Advanced / Developer"}
       ];
+      featureRegistry.forEach(feature=>{if(!state.paletteCommands.some(item=>item.tool===feature.tool))state.paletteCommands.push({label:"Open "+feature.label,action:"open-editor-tool",tool:feature.tool});});
+      navigationRouteIds.forEach(view=>{if(!state.paletteCommands.some(item=>item.view===view))state.paletteCommands.push({label:"Open "+pageInfo(view)[0],action:"navigate",view:view});});
       const content='<div class="field"><label for="palette-search">Search navigation, tools, templates, assets, commands, and settings</label><input id="palette-search" class="input" placeholder="Type a workflow…" autocomplete="off"></div><div id="palette-results" class="palette-results"></div>';
       openModal("Command Palette",content,"","palette");
       filterPalette();
@@ -2330,9 +2655,18 @@
       document.body.appendChild(host.firstElementChild);
       document.body.appendChild(host.lastElementChild);
     }
+    function runPrototypeSelfTest(){
+      const checks=[validateNavigationTargets(),validateFeatureRegistry(),typeof renderEditor==="function",!!state.projects.find(project=>project.id===state.activeProjectId),!!validateThemeData(focusedTheme),!validateThemeData({schema:"or.theme.v1",name:"Unsafe",tokens:{bg:"url(javascript:alert(1))"}})];
+      const ok=checks.every(Boolean);
+      if(ok)console.info("OR prototype self-test: PASS");
+      else console.error("OR prototype self-test: FAIL · navigation, features, editor renderer, or active project check failed");
+      return ok;
+    }
     const originalRender=render;
     render=function(){originalRender();updateModalInspector();};
     render();
+    applyTheme(builtInThemes[state.themeName],false);
+    runPrototypeSelfTest();
   </script>
 </body>
 </html>
