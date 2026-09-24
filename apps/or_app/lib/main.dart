@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:or_app/core_gateway.dart';
+import 'package:or_app/rust_core_gateway.dart';
+import 'package:or_app/src/rust/frb_generated.dart';
 
-void main() {
-  runApp(const OrApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RustLib.init();
+  runApp(const OrApp(gateway: RustCoreGateway()));
 }
 
 class OrApp extends StatelessWidget {
-  const OrApp({super.key});
+  const OrApp({super.key, required this.gateway});
+
+  final CoreGateway gateway;
 
   @override
   Widget build(BuildContext context) {
+    const background = Color(0xFF101010);
     const surface = Color(0xFF181818);
     const border = Color(0xFF303030);
 
@@ -18,7 +26,7 @@ class OrApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF101010),
+        scaffoldBackgroundColor: background,
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFE5E5E5),
           onPrimary: Color(0xFF101010),
@@ -36,7 +44,7 @@ class OrApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const _Workspace(),
+      home: _Workspace(gateway: gateway),
     );
   }
 }
@@ -62,7 +70,9 @@ extension on _Area {
 }
 
 class _Workspace extends StatefulWidget {
-  const _Workspace();
+  const _Workspace({required this.gateway});
+
+  final CoreGateway gateway;
 
   @override
   State<_Workspace> createState() => _WorkspaceState();
@@ -91,7 +101,9 @@ class _WorkspaceState extends State<_Workspace> {
                 ),
                 const VerticalDivider(width: 1, thickness: 1),
               ],
-              Expanded(child: _AreaPage(area: _selected)),
+              Expanded(
+                child: _AreaPage(area: _selected, gateway: widget.gateway),
+              ),
             ],
           ),
           bottomNavigationBar: compact
@@ -161,9 +173,10 @@ class _SideNavigation extends StatelessWidget {
 }
 
 class _AreaPage extends StatelessWidget {
-  const _AreaPage({required this.area});
+  const _AreaPage({required this.area, required this.gateway});
 
   final _Area area;
+  final CoreGateway gateway;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +190,7 @@ class _AreaPage extends StatelessWidget {
             _Area.projects ||
             _Area.templates ||
             _Area.assets => _PlaceholderPage(title: area.label),
-            _Area.settings => const _SettingsPage(),
+            _Area.settings => _SettingsPage(gateway: gateway),
           },
         ),
       ),
@@ -230,26 +243,126 @@ class _PlaceholderPage extends StatelessWidget {
   }
 }
 
-class _SettingsPage extends StatelessWidget {
-  const _SettingsPage();
+typedef _Diagnostics = ({
+  AppInfo appInfo,
+  HealthStatus health,
+  List<Capability> capabilities,
+});
+
+class _SettingsPage extends StatefulWidget {
+  const _SettingsPage({required this.gateway});
+
+  final CoreGateway gateway;
+
+  @override
+  State<_SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<_SettingsPage> {
+  late final Future<_Diagnostics> _diagnostics = _loadDiagnostics();
+
+  Future<_Diagnostics> _loadDiagnostics() async => (
+    appInfo: await widget.gateway.appInfo(),
+    health: await widget.gateway.health(),
+    capabilities: await widget.gateway.capabilities(),
+  );
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PageTitle('Settings'),
-        SizedBox(height: 28),
-        Text(
+        const _PageTitle('Settings'),
+        const SizedBox(height: 28),
+        const Text(
           'About / Developer Diagnostics',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        SizedBox(height: 8),
-        Text(
-          'Core diagnostics will be connected in Phase 3.',
-          style: TextStyle(color: Color(0xFFAAAAAA)),
+        const SizedBox(height: 16),
+        FutureBuilder<_Diagnostics>(
+          future: _diagnostics,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Text('Loading Rust core diagnostics...');
+            }
+            if (snapshot.hasError) {
+              return const Text('Could not load Rust core diagnostics.');
+            }
+
+            final diagnostics = snapshot.requireData;
+            return _DiagnosticsView(diagnostics: diagnostics);
+          },
         ),
       ],
+    );
+  }
+}
+
+class _DiagnosticsView extends StatelessWidget {
+  const _DiagnosticsView({required this.diagnostics});
+
+  final _Diagnostics diagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DiagnosticRow('Application name', diagnostics.appInfo.name),
+          _DiagnosticRow('Version', diagnostics.appInfo.version),
+          _DiagnosticRow(
+            'Core API version',
+            '${diagnostics.appInfo.coreApiVersion}',
+          ),
+          _DiagnosticRow('Health', diagnostics.health.status),
+          const SizedBox(height: 16),
+          const Text(
+            'Capabilities',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          for (final capability in diagnostics.capabilities)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('${capability.id} · v${capability.version}'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosticRow extends StatelessWidget {
+  const _DiagnosticRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 144,
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFFAAAAAA)),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
     );
   }
 }
