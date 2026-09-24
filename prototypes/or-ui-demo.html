@@ -24,6 +24,12 @@
       --or-success: #47b881;
       --or-warning: #d8a542;
       --or-danger: #e05a5a;
+      --or-input: #0c0c0d;
+      --or-clip: #333336;
+      --or-clip-hover: #3b3b3f;
+      --track-header-width: 68px;
+      --timeline-base-scale: 18px;
+      --or-text-scale: 1;
       --radius-sm: 6px;
       --radius-control: 8px;
       --radius-card: 10px;
@@ -638,6 +644,96 @@
       .editor-cinema .editor-project-bar { display: none; }
       .viewer-focus-button { display: grid; }
     }
+    html { font-size: calc(14px * var(--or-text-scale)); }
+    .input, .select, .textarea, .inspector-control input, .caption-row input { background: var(--or-input); }
+    .editor-project-bar { position: relative; }
+    .editor-menu-bar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+    .editor-menu-bar > button { min-height: 28px; padding: 4px 7px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--or-text-secondary); font-size: 11px; cursor: pointer; }
+    .editor-menu-bar > button:hover, .editor-menu-bar > button[aria-expanded="true"] { border-color: var(--or-border); background: var(--or-surface); color: var(--or-text); }
+    .menu-popover, .timeline-more-popover { position: absolute; z-index: 80; min-width: 210px; padding: 5px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: var(--or-bg-raised); box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+    .menu-popover { top: calc(100% - 2px); left: 8px; }
+    .menu-popover button, .timeline-more-popover button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--or-text-secondary); text-align: left; font-size: 11px; cursor: pointer; }
+    .menu-popover button:hover, .timeline-more-popover button:hover { background: var(--or-surface-hover); color: var(--or-text); }
+    .menu-popover button kbd { margin-left: auto; color: var(--or-text-muted); }
+    .editor-timeline-tools { overflow: visible; flex-wrap: nowrap; }
+    .editor-timeline-tools .tool-btn { justify-content: flex-start; min-width: 32px; height: 30px; flex: 0 0 auto; white-space: nowrap; }
+    .editor-timeline-tools .tool-btn.primary-tool { min-width: 72px; }
+    .editor-timeline-tools .tool-btn[aria-pressed="true"] { border-color: var(--or-border-strong); background: var(--or-surface); color: var(--or-text); }
+    .tool-separator { width: 1px; height: 20px; flex: 0 0 1px; margin: 0 3px; background: var(--or-border); }
+    .timeline-more-wrap { position: relative; flex: 0 0 auto; }
+    .timeline-more-popover { top: 34px; right: 0; max-height: min(65vh, 480px); overflow: auto; }
+    .timeline-more-popover button .icon { color: var(--or-text-muted); }
+    .timeline { --timeline-content-width: 1200px; --timeline-step: 90px; }
+    .timeline-scroller { touch-action: pan-x pan-y; }
+    .timeline-ruler { position: sticky; left: 0; display: block; width: var(--timeline-content-width); height: 24px; margin-left: var(--track-header-width); cursor: crosshair; touch-action: none; user-select: none; }
+    .ruler-mark { position: absolute; top: 0; width: 1px; height: 100%; padding: 5px 4px; border-left: 1px solid var(--or-border); white-space: nowrap; }
+    .track-row { width: calc(var(--track-header-width) + var(--timeline-content-width)); min-width: calc(var(--track-header-width) + var(--timeline-content-width)); }
+    .track-label { width: var(--track-header-width); flex-basis: var(--track-header-width); }
+    .track-label button { display: grid; place-items: center; width: 20px; height: 26px; border-radius: 4px; }
+    .track-label button[aria-pressed="true"] { color: var(--or-selection); background: color-mix(in srgb, var(--or-selection) 12%, transparent); }
+    .track-lane { width: var(--timeline-content-width); min-width: var(--timeline-content-width); flex: 0 0 var(--timeline-content-width); background-image: linear-gradient(to right, transparent calc(var(--timeline-step) - 1px), var(--or-border) var(--timeline-step)); background-size: var(--timeline-step) 100%; }
+    .clip { background: var(--or-clip); }
+    .clip:hover { background: var(--or-clip-hover); }
+    .clip[aria-pressed="true"] { outline: 1px solid var(--or-selection); border-color: var(--or-selection); }
+    .clip.clip-disabled { opacity: .45; text-decoration: line-through; }
+    .clip.is-dragging, .clip:active { cursor: grabbing; }
+    .clip.is-dragging { opacity: .62; }
+    .playhead { position: absolute; top: 0; bottom: 0; left: var(--playhead-x, var(--track-header-width)); z-index: 6; display: block; width: 18px; height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; transform: translateX(-50%); cursor: ew-resize; touch-action: none; }
+    .playhead:hover { background: transparent; }
+    .playhead::before { content: ""; position: absolute; top: 0; left: 4px; width: 10px; height: 8px; background: var(--or-selection); clip-path: polygon(0 0,100% 0,50% 100%); }
+    .playhead-line { position: absolute; top: 8px; bottom: 0; left: 8px; width: 1px; background: var(--or-selection); pointer-events: none; }
+    .playhead[aria-valuenow]:focus-visible { outline: 2px solid var(--or-selection); outline-offset: -1px; }
+    .snap-guide { position: absolute; top: 24px; bottom: 0; left: -1px; z-index: 5; display: none; width: 1px; background: var(--or-selection); opacity: .65; pointer-events: none; }
+    .snap-guide.is-visible { display: block; }
+    .viewer-transport { display: grid; grid-template-columns: minmax(0,1fr) 40px minmax(0,1fr); gap: 4px; justify-content: stretch; position: relative; }
+    .transport-group { display: flex; align-items: center; gap: 3px; min-width: 0; }
+    .transport-left { justify-content: flex-end; }
+    .transport-right { justify-content: flex-start; }
+    .viewer-transport .icon-button { width: 32px; height: 32px; flex: 0 0 32px; }
+    .viewer-transport .play-toggle { width: 40px; height: 32px; flex: 0 0 40px; border-color: var(--or-border-strong); background: var(--or-surface); color: var(--or-text); }
+    .viewer-transport .play-toggle:hover { background: var(--or-surface-hover); }
+    .viewer-transport .time-display { margin: 0 4px; white-space: nowrap; }
+    .viewer-transport [data-action="toggle-loop"][aria-pressed="true"] { border-color: var(--or-border-strong); background: var(--or-surface); color: var(--or-text); }
+    .or-tooltip { position: fixed; z-index: 150; max-width: 240px; padding: 5px 8px; border: 1px solid var(--or-border-strong); border-radius: 5px; background: var(--or-bg-raised); color: var(--or-text); font-size: 10px; line-height: 1.35; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.32); }
+    .or-context-menu { position: fixed; z-index: 140; width: 220px; max-height: min(70vh, 520px); overflow: auto; padding: 5px; border: 1px solid var(--or-border-strong); border-radius: 8px; background: var(--or-bg-raised); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+    .or-context-menu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--or-text-secondary); text-align: left; font-size: 11px; cursor: pointer; }
+    .or-context-menu button:hover { background: var(--or-surface-hover); color: var(--or-text); }
+    .or-context-menu .menu-divider { height: 1px; margin: 4px 2px; background: var(--or-border); }
+    .theme-swatches { display: flex; gap: 3px; }
+    .theme-swatches span { width: 22px; height: 22px; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; }
+    .theme-token-row { display: grid; grid-template-columns: minmax(120px,1fr) 36px 104px; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--or-border); }
+    .theme-token-row input[type="color"] { width: 36px; height: 30px; padding: 2px; border: 1px solid var(--or-border); border-radius: 5px; background: var(--or-input); }
+    .theme-library-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--or-border); border-radius: 7px; background: var(--or-bg-raised); }
+    .theme-library-card .theme-card-copy { min-width: 0; }
+    .theme-library-card strong { display: block; font-size: 11px; }
+    .theme-library-card small { display: block; margin-top: 4px; color: var(--or-text-muted); font-size: 10px; }
+    .theme-editor-preview { padding: 12px; border: 1px solid var(--or-border); border-radius: var(--radius-card); background: var(--or-bg); }
+    .theme-editor-preview .preview-surface { padding: 10px; border: 1px solid var(--or-border); border-radius: var(--radius-control); background: var(--or-surface); }
+    .view-only-timeline .editor-timeline, .view-only-timeline .timeline-resize-handle { display: none !important; }
+    .timeline-collapsed { grid-template-rows: 48px minmax(0,1fr) 0 36px 0 !important; }
+    .timeline-collapsed .editor-timeline, .timeline-collapsed .timeline-resize-handle { display: none !important; }
+    .workspace-preset-select { width: 118px; min-height: 28px !important; padding: 4px 6px !important; font-size: 10px; }
+    [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    @media (max-width: 1180px) { .editor-timeline-tools .tool-btn.primary-tool span { display: none; } .editor-timeline-tools .tool-btn.primary-tool { width: 34px; min-width: 34px; justify-content: center; padding-inline: 0; } }
+    @media (max-width: 760px) {
+      .editor-project-bar .editor-menu-bar { display: none; }
+      .viewer-transport { grid-template-columns: minmax(0,1fr) 44px minmax(0,1fr); min-height: 44px; }
+      .viewer-transport .play-toggle { width: 44px; height: 38px; flex-basis: 44px; }
+      .viewer-transport .icon-button { width: 40px; height: 40px; flex-basis: 40px; }
+      .transport-right [data-action="toggle-loop"], .transport-right [data-action="volume"] { display: none; }
+      .viewer-transport .time-display { font-size: 9px; margin-left: 3px; }
+      .editor-timeline-tools { overflow-x: auto; }
+      .editor-timeline-tools .tool-btn.primary-tool span { display: inline; }
+      .editor-timeline-tools .tool-btn.primary-tool { width: auto; min-width: 68px; padding-inline: 7px; }
+      .timeline-ruler { touch-action: none; }
+      .playhead { width: 24px; }
+      .playhead-line { left: 11px; }
+      .playhead::before { left: 7px; }
+      .theme-token-row { grid-template-columns: minmax(95px,1fr) 36px 94px; }
+      #modal-theme-editor { position: fixed; inset: 0; width: 100%; max-height: 100dvh; border-radius: 0; }
+      .workspace-preset-select { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
   </style>
 </head>
 <body>
@@ -678,6 +774,44 @@
     <symbol id="i-split" viewBox="0 0 24 24"><path d="M5 5v4a3 3 0 0 0 3 3h8a3 3 0 0 1 3 3v4M5 19v-4a3 3 0 0 1 3-3m8-7 3-3 3 3m-3-3v7"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9a7 7 0 0 1 12-2L20 9M4 15l2.5 2a7 7 0 0 0 12-2"/></symbol>
+    <symbol id="i-select" viewBox="0 0 24 24"><path d="m5 3 14 10-6 1-3 6L5 3z"/></symbol>
+    <symbol id="i-trim" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.2 8.2 11.6 11.6M14 5l-3.5 3.5M8.2 15.8 5 19m9-7 5.5-5.5"/></symbol>
+    <symbol id="i-ripple" viewBox="0 0 24 24"><path d="M4 6h7M4 12h4m-4 6h7M14 5l6 7-6 7"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2A5 5 0 0 0 12 3.9l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></symbol>
+    <symbol id="i-unlink" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2A5 5 0 0 0 12 3.9l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1M4 4l16 16"/></symbol>
+    <symbol id="i-group" viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="12" rx="2"/><rect x="9" y="8" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-ungroup" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7zM11 7h2M7 11v2m10-2v2m-4 3h-2"/></symbol>
+    <symbol id="i-snap" viewBox="0 0 24 24"><path d="M8 4v5a4 4 0 0 0 8 0V4M8 7H5a2 2 0 0 0-2 2v2a9 9 0 0 0 18 0V9a2 2 0 0 0-2-2h-3M12 20v2"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 24 24"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-nested" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 13h7v7h-7zM11 7h4a2 2 0 0 1 2 2v4"/></symbol>
+    <symbol id="i-adjustment" viewBox="0 0 24 24"><path d="M4 6h6m4 0h6M4 12h2m4 0h10M4 18h8m4 0h4"/><circle cx="12" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="14" cy="18" r="2"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4 18a9 9 0 1 1 16 0M12 13l4-5M7 18h10"/><circle cx="12" cy="13" r="1"/></symbol>
+    <symbol id="i-speed-ramp" viewBox="0 0 24 24"><path d="M4 19h16M5 16l5-5 3 2 6-8M5 5v14"/><path d="M15 5h4v4"/></symbol>
+    <symbol id="i-time-remap" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2M3 4v5h5"/></symbol>
+    <symbol id="i-freeze" viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9 4l3 3 3-3M9 20l3-3 3 3M4 10l4-1-1-4m13 9-4 1 1 4M4 14l4 1-1 4m13-9-4-1 1-4"/></symbol>
+    <symbol id="i-reverse" viewBox="0 0 24 24"><path d="m11 5-8 7 8 7V5zm10 0-8 7 8 7V5z"/></symbol>
+    <symbol id="i-previous-frame" viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></symbol>
+    <symbol id="i-next-frame" viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></symbol>
+    <symbol id="i-start" viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/><path d="M3 5v14"/></symbol>
+    <symbol id="i-end" viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/><path d="M21 5v14"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4zM17 9a5 5 0 0 1 0 6m2-9a9 9 0 0 1 0 12"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4zM17 9l5 6m0-6-5 6"/></symbol>
+    <symbol id="i-zoom-in" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5m-10.5-13v5m-2.5-2.5h5"/></symbol>
+    <symbol id="i-zoom-out" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5m-13.5-10h5"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5M8 8h8v8H8z"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
+    <symbol id="i-cinema" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14m10-14v14"/></symbol>
+    <symbol id="i-transitions" viewBox="0 0 24 24"><path d="M4 6h7v12H4zM13 6h7v12h-7zM11 12h2M9 10l2 2-2 2m6-4-2 2 2 2"/></symbol>
+    <symbol id="i-effects" viewBox="0 0 24 24"><path d="m12 3 1.5 6.5L20 12l-6.5 1.5L12 20l-1.5-6.5L4 12l6.5-2.5z"/></symbol>
+    <symbol id="i-ai" viewBox="0 0 24 24"><path d="M4 18 10 6l6 12M6 14h8M16 5h4m-2-2v4M16 19h4m-2-2v4"/></symbol>
+    <symbol id="i-auto-beat" viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/><path d="M4 3v2m16 14v2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="m16 3 5 5-4 1-4 4 2 4-2 2-4-5-5 7 4-9-5-4 2-2 4 2 4-4z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A11 11 0 0 1 12 5c6.5 0 10 7 10 7a15 15 0 0 1-4 4.5M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7a10 10 0 0 0 3-.5"/></symbol>
+    <symbol id="i-cut" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.2 8.2 12.3 12.3m-9-12 8.5-8.5M8.2 15.8 5 19"/></symbol>
+    <symbol id="i-paste" viewBox="0 0 24 24"><path d="M8 4H5v17h14V4h-3M9 3h6l1 3H8zM8 12h8m-8 4h8"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/></symbol>
   </svg>
   <div class="app-shell" id="app-shell" data-mode="desktop">
     <header class="appbar" id="appbar" aria-label="Application toolbar"></header>
@@ -695,8 +829,28 @@
     const $ = (selector, root) => (root || document).querySelector(selector);
     const $$ = (selector, root) => Array.from((root || document).querySelectorAll(selector));
     const esc = value => String(value == null ? "" : value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    const icon = (name, extra) => '<svg class="icon ' + (extra || "") + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
+    const iconRegistry = { home:"home",folder:"folder",film:"film",media:"media",text:"text",audio:"audio",spark:"spark",image:"image",box:"box",terminal:"terminal",export:"export",settings:"settings",search:"search",plus:"plus",play:"play",pause:"pause",back:"previous-frame",next:"next-frame",more:"more",close:"close",download:"download",check:"check",grid:"grid",list:"list",clock:"clock",save:"save",mic:"mic",wave:"wave",lock:"lock",eye:"eye",trash:"trash",delete:"trash",undo:"undo",redo:"redo",split:"split",copy:"copy",duplicate:"copy",refresh:"refresh",select:"select",trim:"trim",ripple:"ripple",link:"link",unlink:"unlink",group:"group",ungroup:"ungroup",snap:"snap",marker:"marker",compound:"layers",layers:"layers",nested:"nested",adjustment:"adjustment",speed:"speed",speedRamp:"speed-ramp",timeRemap:"time-remap",freeze:"freeze",reverse:"reverse",previousFrame:"previous-frame",nextFrame:"next-frame",start:"start",end:"end",loop:"loop",volume:"volume",mute:"mute",zoomIn:"zoom-in",zoomOut:"zoom-out",fit:"fit",fullscreen:"fullscreen",cinema:"cinema",templates:"film",captions:"text",stickers:"box",effects:"effects",transitions:"transitions",color:"image",ai:"ai",pin:"pin",eyeOff:"eye-off",cut:"cut",paste:"paste",star:"star",autoBeat:"auto-beat" };
+    const icon = (name, extra) => '<svg class="icon ' + (extra || "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-' + (iconRegistry[name] || "more") + '"></use></svg>';
     const btn = (label, action, cls, attrs) => '<button type="button" class="btn ' + (cls || "") + '" data-action="' + action + '" ' + (attrs || "") + '>' + label + '</button>';
+    const themeTokenDefs = [
+      ["bg","Background","--or-bg"],["bgRaised","Raised background","--or-bg-raised"],["surface","Surface","--or-surface"],["surfaceHover","Surface hover","--or-surface-hover"],["border","Border","--or-border"],["borderStrong","Strong border","--or-border-strong"],
+      ["text","Primary text","--or-text"],["textSecondary","Secondary text","--or-text-secondary"],["textMuted","Muted text","--or-text-muted"],["primary","Primary action","--or-primary"],["primaryText","Primary action text","--or-primary-text"],
+      ["selection","Selection","--or-selection"],["ai","AI","--or-ai"],["success","Success","--or-success"],["warning","Warning","--or-warning"],["danger","Danger","--or-danger"]
+    ];
+    const focusedTokens = { bg:"#090909",bgRaised:"#0f0f10",surface:"#151516",surfaceHover:"#1c1c1e",border:"#2a2a2d",borderStrong:"#3a3a3e",text:"#f5f5f5",textSecondary:"#a6a6ab",textMuted:"#85858b",primary:"#f5f5f5",primaryText:"#090909",selection:"#3fc7ff",ai:"#9b7cff",success:"#47b881",warning:"#d8a542",danger:"#e05a5a" };
+    const builtInThemes = [
+      {id:"focused",name:"Focused Monochrome",tokens:focusedTokens},
+      {id:"graphite",name:"Soft Graphite",tokens:Object.assign({},focusedTokens,{bg:"#111214",bgRaised:"#17181b",surface:"#202124",surfaceHover:"#2b2d31",border:"#37393d",borderStrong:"#4b4e54",text:"#f3f4f5",textSecondary:"#b4b7bd",textMuted:"#858991",primary:"#e9ebee",primaryText:"#121315",selection:"#69b7d2"})},
+      {id:"contrast",name:"High Contrast",tokens:Object.assign({},focusedTokens,{bg:"#000000",bgRaised:"#0b0b0b",surface:"#171717",surfaceHover:"#252525",border:"#555555",borderStrong:"#858585",text:"#ffffff",textSecondary:"#dddddd",textMuted:"#b6b6b6",primary:"#ffffff",primaryText:"#000000",selection:"#64d6ff"})},
+      {id:"oled",name:"OLED Black",tokens:Object.assign({},focusedTokens,{bg:"#000000",bgRaised:"#050505",surface:"#101010",surfaceHover:"#1b1b1b",border:"#242424",borderStrong:"#393939",text:"#f5f5f5",textSecondary:"#aaaaaa",textMuted:"#777777",primary:"#f5f5f5",primaryText:"#000000"})}
+    ];
+    const communityThemes = [
+      {id:"community-slate",name:"Quiet Slate",creator:"OR Theme Lab",version:"1.0",compatibility:"OR 0.1+",license:"MIT",tokens:Object.assign({},focusedTokens,{bg:"#101316",bgRaised:"#171c20",surface:"#20282d",surfaceHover:"#2b353b",border:"#39464d",borderStrong:"#51636c",selection:"#8ab8c7"})},
+      {id:"community-paper",name:"Warm Neutral",creator:"OR Theme Lab",version:"1.0",compatibility:"OR 0.1+",license:"CC0",tokens:Object.assign({},focusedTokens,{bg:"#141311",bgRaised:"#1b1916",surface:"#26231f",surfaceHover:"#33302b",border:"#45413b",borderStrong:"#5d574e",text:"#f3eee5",textSecondary:"#c0b9ae",textMuted:"#91897d",primary:"#eee7db",primaryText:"#171511",selection:"#c1ae87"})},
+      {id:"community-cool",name:"Cool Gray",creator:"OR Theme Lab",version:"0.9",compatibility:"OR 0.1+",license:"Review required",tokens:Object.assign({},focusedTokens,{bg:"#101214",bgRaised:"#171a1d",surface:"#202428",surfaceHover:"#2b3035",border:"#3a4147",borderStrong:"#535c64",selection:"#8ab8d4"})}
+    ];
+    function readLocalJSON(key, fallback) { try { const value=localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch (_) { return fallback; } }
+    function saveLocalJSON(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; } }
     const tracksSeed = [
       { id: "v2", name: "V2", type: "video", muted: false, locked: false, visible: true, clips: [{ id: "clip-title", name: "Opening title", start: 0.2, duration: 4.6, kind: "text" }] },
       { id: "v1", name: "V1", type: "video", muted: false, locked: false, visible: true, clips: [{ id: "clip-intro", name: "intro.mp4", start: 0, duration: 8.2, kind: "video" }, { id: "clip-interview", name: "interview.mp4", start: 8.5, duration: 12.4, kind: "video" }, { id: "clip-broll", name: "broll_01.mp4", start: 21.2, duration: 7.8, kind: "video" }] },
@@ -754,6 +908,7 @@
       mediaFilter: "All",
       selectedMediaTab: "Media",
       selectedClipId: "clip-interview",
+      selectedClipIds: ["clip-interview"],
       selectedTool: "Select",
       selectedEditorTool: "Media",
       leftPanelCollapsed: false,
@@ -772,8 +927,32 @@
       leftPanelWidth: 252,
       inspectorWidth: 260,
       timelineHeight: 258,
-      graphEditor: false,
+      timelineCollapsed: false,
+      followPlayhead: false,
+      projectFps: 30,
+      playingDirection: 1,
+      scrubPointerId: null,
       resizeState: null,
+      openMenu: null,
+      openTimelineMore: false,
+      contextClipId: null,
+      pendingClipStart: null,
+      pinnedToolbarTools: [],
+      hiddenToolbarTools: [],
+      currentThemeId: readLocalJSON("or.theme", "focused"),
+      customThemes: readLocalJSON("or.custom-themes", []),
+      downloadedThemes: readLocalJSON("or.downloaded-themes", []),
+      themeLibraryTab: "Built-in",
+      themeDraft: null,
+      themeEditorReturn: null,
+      themePreviewing: false,
+      themeImportError: "",
+      appearanceDensity: readLocalJSON("or.density", "Comfortable"),
+      textScale: readLocalJSON("or.text-scale", 100),
+      reducedMotion: readLocalJSON("or.reduced-motion", false),
+      cornerRadius: readLocalJSON("or.corner-radius", "Theme Default"),
+      workspacePreset: "Editing",
+      graphEditor: false,
       selectedSettings: "General",
       settingsPage: "Preferences",
       developerMode: false,
@@ -914,6 +1093,10 @@
       modal: null,
       modalReturnFocus: null
     };
+    const savedLayout = readLocalJSON("or.layout", {}) || {};
+    state.leftPanelWidth = Math.max(190, Math.min(390, Number(savedLayout.leftPanelWidth) || state.leftPanelWidth));
+    state.inspectorWidth = Math.max(220, Math.min(390, Number(savedLayout.inspectorWidth) || state.inspectorWidth));
+    state.timelineHeight = Math.max(145, Math.min(430, Number(savedLayout.timelineHeight) || state.timelineHeight));
     const navGroups = [
       { title: "Workspace", items: [["home","Home","home"],["projects","Projects","folder"],["templates","Templates","film"],["assets","Asset Library","box"],["settings","Settings","settings"]] }
     ];
@@ -937,7 +1120,150 @@
       "PLATFORMS": ["macOS","Windows","Linux","Android"],
       "DEVELOPER": ["CLI","Agent Hub","Command Inspector","Capability Explorer","Diagnostics","Plugins"]
     };
+    /* Prototype feature contract: id, label, icon, group, availability, panelRenderer,
+       contextActions, command, and optional shortcut. Register a feature here first;
+       the existing rail, mobile dock, More sheet, command palette, and Feature Map
+       discover it from this data without changing the editor shell. This is UI-only,
+       not a production plugin API. */
+    const featureRegistry = {
+      media:{id:"media",label:"Media",icon:"media",group:"Assets",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Media"),contextActions:["Import Files"],command:"editor.open.media"},
+      templates:{id:"templates",label:"Templates",icon:"templates",group:"Assets",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Templates"),contextActions:["Create Template"],command:"editor.open.templates"},
+      text:{id:"text",label:"Text",icon:"text",group:"Text",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Text"),contextActions:["Add Text"],command:"editor.open.text"},
+      captions:{id:"captions",label:"Captions",icon:"captions",group:"Text",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Captions"),contextActions:["Transcribe"],command:"editor.open.captions"},
+      shapes:{id:"shapes",label:"Stickers / Shapes",shortLabel:"Shapes",icon:"stickers",group:"Assets",availability:"core",editorTool:true,mobileDock:false,panelRenderer:()=>renderEditorToolContentLegacy("Stickers / Shapes"),command:"editor.open.shapes"},
+      audio:{id:"audio",label:"Audio",icon:"audio",group:"Audio",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Audio"),command:"editor.open.audio"},
+      effects:{id:"effects",label:"Effects",icon:"effects",group:"Video",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("Effects"),command:"editor.open.effects"},
+      transitions:{id:"transitions",label:"Transitions",icon:"transitions",group:"Video",availability:"advanced",editorTool:true,mobileDock:false,panelRenderer:()=>renderEditorToolContentLegacy("Transitions"),command:"editor.open.transitions"},
+      color:{id:"color",label:"Filters / Color",shortLabel:"Color",icon:"color",group:"Color",availability:"advanced",editorTool:true,mobileDock:false,panelRenderer:()=>renderEditorToolContentLegacy("Filters / Color"),command:"editor.open.color"},
+      ai:{id:"ai",label:"AI",icon:"ai",group:"AI",availability:"core",editorTool:true,mobileDock:true,panelRenderer:()=>renderEditorToolContentLegacy("AI"),command:"editor.open.ai"},
+      more:{id:"more",label:"More",icon:"more",group:"Editor",availability:"core",editorTool:true,mobileDock:true,panelRenderer:renderMoreTools,command:"editor.open.more"},
+      autoBeatSync:{id:"auto-beat-sync",label:"Auto Beat Sync",shortLabel:"Beat Sync",icon:"autoBeat",group:"Audio",availability:"prototype-planned",editorTool:false,mobileDock:false,showInMore:true,panelRenderer:renderAutoBeatSyncPanel,contextActions:["Analyze Beat Grid"],command:"audio.auto_beat_sync",featureMapGroup:"AUDIO"}
+    };
     const agentPlan = ["Detect silence", "Ripple-delete 4 regions", "Transcribe dialogue", "Translate captions to Vietnamese", "Normalize dialogue", "Apply -10 dB music ducking", "Change canvas to 9:16", "Reframe main subject", "Export draft"];
+
+    const timelineMetrics = { trackHeaderWidth: 68, pixelsPerSecond: 18, rulerInterval: 5 };
+    function clampTime(value) { return Math.max(0, Math.min(Math.max(0, Number(state.duration) || 0), Number(value) || 0)); }
+    function timelineScale() { return timelineMetrics.pixelsPerSecond * Math.max(.2, Number(state.zoom) || 1); }
+    function timelineTimeToPixel(time) { return timelineMetrics.trackHeaderWidth + clampTime(time) * timelineScale(); }
+    function pixelToTimelineTime(clientX, scroller) {
+      if (!scroller) return 0;
+      const rect = scroller.getBoundingClientRect();
+      return clampTime((clientX - rect.left + scroller.scrollLeft - timelineMetrics.trackHeaderWidth) / timelineScale());
+    }
+    function syncTimelineGeometry() {
+      const scroller=$(".timeline-scroller");
+      if(!scroller)return;
+      const width=Math.max(420,scroller.clientWidth-timelineMetrics.trackHeaderWidth,state.duration*timelineScale()+timelineScale()*timelineMetrics.rulerInterval);
+      const root=scroller.closest(".timeline");
+      if(root){root.style.setProperty("--timeline-content-width",width+"px");root.style.setProperty("--timeline-step",(timelineScale()*timelineMetrics.rulerInterval)+"px");}
+      const ruler=$(".timeline-ruler",scroller);
+      if(ruler){
+        ruler.innerHTML=Array.from({length:Math.ceil((state.duration||60)/timelineMetrics.rulerInterval)+1},(_,index)=>{
+          const time=index*timelineMetrics.rulerInterval;
+          return '<span class="ruler-mark" style="left:'+(time*timelineScale())+'px">'+esc(fmtTime(time).slice(0,5))+'</span>';
+        }).join("");
+      }
+      const head=$("#playhead",scroller);
+      if(head)head.style.left=timelineTimeToPixel(state.currentTime)+"px";
+    }
+    function updateTimelineScale() {
+      state.zoom=Math.max(.55,Math.min(1.8,Number(state.zoom)||1));
+      $$("#timeline-zoom").forEach(input=>input.value=String(state.zoom));
+      $$(".clip").forEach(node=>{const found=getClip(node.dataset.id);if(found){node.style.left=Math.max(0,found.clip.start*timelineScale())+"px";node.style.width=Math.max(48,found.clip.duration*timelineScale())+"px";}});
+      syncTimelineGeometry();
+    }
+    function setCurrentTime(time, options) {
+      const opts=options||{};
+      state.currentTime=clampTime(time);
+      const label=fmtTime(state.currentTime);
+      $$(".time-display").forEach(node=>{node.textContent=label+" / "+fmtTime(state.duration);});
+      $$(".preview-label").forEach(node=>{node.textContent=label+" · "+activeProject().name;});
+      const head=$("#playhead");
+      if(head){head.style.left=timelineTimeToPixel(state.currentTime)+"px";head.setAttribute("aria-valuemax",String(Math.round(state.duration*state.projectFps)));head.setAttribute("aria-valuenow",String(Math.round(state.currentTime*state.projectFps)));head.setAttribute("aria-valuetext",label);}
+      if(opts.follow&&state.followPlayhead){
+        const scroller=$(".timeline-scroller");
+        if(scroller){const x=timelineTimeToPixel(state.currentTime);if(x>scroller.scrollLeft+scroller.clientWidth*.78)scroller.scrollLeft=Math.min(scroller.scrollWidth-scroller.clientWidth,x-scroller.clientWidth*.72);}
+      }
+      return state.currentTime;
+    }
+    function syncPlaybackButton() {
+      const button=$(".play-toggle");
+      if(!button)return;
+      const playing=state.playing;
+      button.setAttribute("aria-label",playing?"Pause playback":"Play playback");
+      button.setAttribute("title",playing?"Pause · Space":"Play · Space");
+      button.setAttribute("data-tooltip",playing?"Pause · Space":"Play · Space");
+      button.setAttribute("aria-pressed",String(playing));
+      const use=$("use",button);
+      if(use)use.setAttribute("href",playing?"#i-pause":"#i-play");
+    }
+    function stopPlayback() {
+      state.playing=false;
+      if(state.playbackFrame)window.cancelAnimationFrame(state.playbackFrame);
+      state.playbackFrame=0;
+      syncPlaybackButton();
+    }
+    function startPlayback(direction) {
+      const requestedDirection=direction===-1?-1:1;
+      if(state.playing){
+        if(direction&&state.playingDirection!==requestedDirection){state.playingDirection=requestedDirection;state.playbackLast=performance.now();syncPlaybackButton();return;}
+        stopPlayback();return;
+      }
+      if((Number(state.duration)||0)<=0){toast("Add timeline content before playback");return;}
+      if(requestedDirection<0&&state.currentTime<=0)setCurrentTime(state.duration);
+      if(requestedDirection>0&&state.currentTime>=state.duration&&!state.loop)setCurrentTime(0);
+      state.playing=true;
+      state.playingDirection=requestedDirection;
+      state.playbackLast=performance.now();
+      syncPlaybackButton();
+      const tick=now=>{
+        if(!state.playing)return;
+        const elapsed=Math.min(.12,Math.max(0,(now-state.playbackLast)/1000));
+        state.playbackLast=now;
+        let next=state.currentTime+elapsed*state.playingDirection;
+        const ended=state.playingDirection>0?next>=state.duration:next<=0;
+        if(ended&&state.loop)next=state.playingDirection>0?0:state.duration;
+        else if(ended)next=state.playingDirection>0?state.duration:0;
+        setCurrentTime(next,{follow:true});
+        if(ended&&!state.loop){stopPlayback();return;}
+        state.playbackFrame=window.requestAnimationFrame(tick);
+      };
+      state.playbackFrame=window.requestAnimationFrame(tick);
+    }
+    function currentTheme() {
+      return builtInThemes.concat(state.customThemes||[],state.downloadedThemes||[]).find(theme=>theme.id===state.currentThemeId)||builtInThemes[0];
+    }
+    function applyAppearanceSettings() {
+      const root=document.documentElement;
+      root.style.setProperty("--or-text-scale",String(Math.max(90,Math.min(130,Number(state.textScale)||100))/100));
+      root.dataset.density=state.appearanceDensity||"Comfortable";
+      root.dataset.reducedMotion=String(!!state.reducedMotion);
+      const radius=state.cornerRadius==="Theme Default"?8:Number(state.cornerRadius)||8;
+      root.style.setProperty("--radius-control",radius+"px");
+      root.style.setProperty("--radius-card",Math.min(12,radius+2)+"px");
+    }
+    function applyThemeById(id, persist) {
+      const theme=builtInThemes.concat(state.customThemes||[],state.downloadedThemes||[]).find(item=>item.id===id)||builtInThemes[0];
+      state.currentThemeId=theme.id;
+      themeTokenDefs.forEach(([key,,cssVar])=>document.documentElement.style.setProperty(cssVar,theme.tokens[key]||focusedTokens[key]));
+      document.documentElement.dataset.theme=theme.id;
+      if(theme.radius)state.cornerRadius=String(theme.radius);
+      if(theme.density)state.appearanceDensity=theme.density;
+      if(persist!==false)saveLocalJSON("or.theme",theme.id);
+      applyAppearanceSettings();
+      return theme;
+    }
+    function persistThemes() { saveLocalJSON("or.custom-themes",state.customThemes||[]);saveLocalJSON("or.downloaded-themes",state.downloadedThemes||[]); }
+    function safeThemeTokens(value) {
+      return value&&typeof value==="object"&&!Array.isArray(value)&&themeTokenDefs.every(([key])=>typeof value[key]==="string"&&/^#[0-9a-f]{6}$/i.test(value[key]));
+    }
+    function applyThemePreview(tokens) {
+      if(!safeThemeTokens(tokens))return false;
+      themeTokenDefs.forEach(([key,,cssVar])=>document.documentElement.style.setProperty(cssVar,tokens[key]));
+      state.themePreviewing=true;
+      return true;
+    }
+    function restoreSelectedTheme() { state.themePreviewing=false;applyThemeById(state.currentThemeId,false); }
 
     function activeProject() { return state.projects.find(project => project.id === state.activeProjectId) || state.projects[0] || {id:"p-empty",name:"Untitled Project",ratio:"16:9",resolution:"1080p",duration:"00:00",edited:"Just now",pinned:false,archived:false}; }
     function isMobileLayout() { return state.mode==="mobile"||window.innerWidth<=760; }
@@ -952,7 +1278,7 @@
       const value = Math.max(0, Number(seconds) || 0);
       const minutes = Math.floor(value / 60);
       const whole = Math.floor(value % 60);
-      const frames = Math.floor((value - Math.floor(value)) * 30);
+      const frames = Math.floor((value - Math.floor(value)) * Math.max(1,Number(state.projectFps)||30));
       return String(minutes).padStart(2, "0") + ":" + String(whole).padStart(2, "0") + ":" + String(frames).padStart(2, "0");
     }
     function setSaved(value) {
@@ -1212,25 +1538,28 @@
       openModal("Downloads & Tasks",renderDownloads(),btn("Open Manager","navigate","",'data-view="downloads"')+btn("Close","close-modal",""),"download-manager");
       $("#modal-download-manager").classList.add("wide-modal");
     }
-    function clipButton(clip, track, scale) {
-      const selected = clip.id === state.selectedClipId;
-      const kind = clip.kind === "audio" ? "audio-clip" : clip.kind === "text" ? "text-clip" : clip.kind === "adjustment" ? "adjustment-clip" : "";
-      const left = Math.max(0, clip.start * 18 * scale);
-      const width = Math.max(48, clip.duration * 18 * scale);
-      return '<button draggable="true" class="clip ' + kind + (clip.ai ? " ai-clip" : "") + (selected ? " selected" : "") + '" data-action="select-clip" data-id="' + clip.id + '" data-track="' + track.id + '" style="left:' + left + 'px;width:' + width + 'px" aria-pressed="' + selected + '">' + esc(clip.name) + '</button>';
+    function clipButton(clip, track) {
+      const selected=(state.selectedClipIds||[state.selectedClipId]).includes(clip.id)||clip.id===state.selectedClipId;
+      const kind=clip.kind==="audio"?"audio-clip":clip.kind==="text"?"text-clip":clip.kind==="adjustment"?"adjustment-clip":"";
+      const width=Math.max(48,clip.duration*timelineScale());
+      return '<button draggable="true" class="clip '+kind+(clip.ai?" ai-clip":"")+(clip.enabled===false?" clip-disabled":"")+(selected?" selected":"")+'" data-action="select-clip" data-id="'+esc(clip.id)+'" data-track="'+esc(track.id)+'" style="left:'+Math.max(0,clip.start*timelineScale())+'px;width:'+width+'px" aria-pressed="'+selected+'" aria-label="'+esc(clip.name+", "+fmtTime(clip.start)+", "+fmtTime(clip.duration)+" duration")+'" title="Double-click to seek to clip start" data-tooltip="'+esc(clip.name+" · double-click to seek")+'">'+esc(clip.name)+'</button>';
     }
     function renderTracks() {
-      const scale = state.zoom;
-      return state.tracks.map(track => '<div class="track-row '+(track.type==="adjustment"?"adjustment-track ":"")+(track.visible?"":"track-hidden")+'" data-track-row="' + track.id + '"><div class="track-label"><strong>' + esc(track.name) + '</strong><button data-action="track-visible" data-id="' + track.id + '" aria-pressed="' + track.visible + '" aria-label="Toggle track visibility">' + (track.visible ? "◉" : "○") + '</button><button data-action="track-mute" data-id="' + track.id + '" aria-pressed="' + track.muted + '" aria-label="Mute track">' + (track.muted ? "M" : "m") + '</button><button data-action="track-lock" data-id="' + track.id + '" aria-pressed="' + track.locked + '" aria-label="Lock track">' + (track.locked ? "L" : "l") + '</button></div><div class="track-lane" data-drop-track="' + track.id + '">' + track.clips.map(clip => clipButton(clip,track,scale)).join("") + '</div></div>').join("");
+      return state.tracks.map(track=>'<div class="track-row '+(track.type==="adjustment"?"adjustment-track ":"")+(track.visible?"":"track-hidden")+'" data-track-row="'+esc(track.id)+'"><div class="track-label"><strong>'+esc(track.name)+'</strong><button data-action="track-visible" data-id="'+esc(track.id)+'" aria-pressed="'+track.visible+'" aria-label="'+(track.visible?"Hide":"Show")+' '+esc(track.name)+' track" title="'+(track.visible?"Hide":"Show")+' track" data-tooltip="'+(track.visible?"Hide":"Show")+' track">'+icon(track.visible?"eye":"eyeOff")+'</button><button data-action="track-mute" data-id="'+esc(track.id)+'" aria-pressed="'+track.muted+'" aria-label="'+(track.muted?"Unmute":"Mute")+' '+esc(track.name)+'" title="'+(track.muted?"Unmute":"Mute")+' track" data-tooltip="'+(track.muted?"Unmute":"Mute")+' track">'+icon(track.muted?"mute":"volume")+'</button><button data-action="track-lock" data-id="'+esc(track.id)+'" aria-pressed="'+track.locked+'" aria-label="'+(track.locked?"Unlock":"Lock")+' '+esc(track.name)+'" title="'+(track.locked?"Unlock":"Lock")+' track" data-tooltip="'+(track.locked?"Unlock":"Lock")+' track">'+icon("lock")+'</button></div><div class="track-lane" data-drop-track="'+esc(track.id)+'">'+track.clips.map(clip=>clipButton(clip,track)).join("")+'</div></div>').join("");
     }
     function renderInspector() {
-      const selected = getClip(state.selectedClipId);
-      if (!selected) return '<div class="empty-state"><strong>No clip selected</strong><p>Select a timeline clip to inspect its properties.</p></div>';
-      const clip = selected.clip;
-      const prop = (name, value) => '<label class="inspector-control"><span>' + name + '</span><input data-action="clip-property" data-property="' + name.toLowerCase() + '" value="' + esc(value) + '" aria-label="' + name + '"><span class="muted">•</span></label>';
-      const keyframes = clip.keyframes || 2;
+      const selectedIds=(state.selectedClipIds||[]).filter(id=>getClip(id));
+      if(selectedIds.length>1){
+        const selected=selectedIds.map(getClip),types=[...new Set(selected.map(item=>item.clip.kind))];
+        return '<div class="inspector-section"><h4>Selection</h4><div class="status-item"><div class="status-copy"><strong>'+selectedIds.length+' clips selected</strong><small>'+esc(types.length===1?types[0]+" clips":"Mixed clip types")+' · shared values only</small></div></div><div class="row-wrap section-block">'+btn(icon("duplicate")+"Duplicate","duplicate-clip","btn-compact",'aria-label="Duplicate selected clips" title="Duplicate selected clips"')+btn(icon("delete")+"Delete","delete-clip","btn-compact btn-danger",'aria-label="Delete selected clips" title="Delete selected clips"')+'</div><p class="small muted">Individual properties are available when one clip is selected.</p></div>';
+      }
+      const selected=getClip(selectedIds[0]||state.selectedClipId);
+      if(!selected)return '<div class="empty-state"><strong>No clip selected</strong><p>Select a timeline clip to inspect its properties.</p></div>';
+      const clip=selected.clip;
+      const prop=(name,value)=>'<label class="inspector-control"><span>'+name+'</span><input data-action="clip-property" data-property="'+name.toLowerCase()+'" value="'+esc(value)+'" aria-label="'+name+'"><span class="muted">•</span></label>';
+      const keyframes=clip.keyframes||2;
       const effectList=(clip.effects||[]).concat(clip.transition?["Transition: "+clip.transition]:[]).map(effect=>'<span class="chip">'+esc(effect)+'</span>').join("");
-      return '<div class="inspector-section"><h4>Transform</h4>' + prop("Position X","0") + prop("Position Y","0") + prop("Scale","100%") + prop("Rotation","0°") + prop("Anchor","Center") + prop("Opacity","100%") + '</div><div class="inspector-section"><h4>Crop</h4>' + prop("Left","0") + prop("Right","0") + prop("Top","0") + prop("Bottom","0") + '</div><div class="inspector-section"><h4>Blend & Speed</h4><div class="field"><label for="blend-mode">Blend</label><select id="blend-mode" class="select"><option>Normal</option><option>Multiply</option><option>Screen</option><option>Overlay</option></select></div><div class="field" style="margin-top:8px"><label for="speed">Speed</label><select id="speed" class="select"><option>0.25x</option><option>0.5x</option><option selected>1x</option><option>2x</option><option>4x</option><option>Custom</option></select></div></div><div class="inspector-section"><div class="row"><h4 style="margin:0">Keyframes</h4><span class="push chip">' + keyframes + ' dots</span></div><div class="row-wrap" style="margin-top:8px">' + btn("Add Keyframe","add-keyframe","btn-compact") + btn("Previous","previous-keyframe","btn-compact") + btn("Next","next-keyframe","btn-compact") + btn("Delete","delete-keyframe","btn-compact btn-danger") + '</div><div class="scopes" style="margin-top:9px"><span class="chip">Position • 2</span><span class="chip">Scale • 1</span><span class="chip">Rotation • 0</span><span class="chip">Opacity • 1</span></div><p class="small muted">Stabilization: planned</p></div>'+(effectList?'<div class="inspector-section"><h4>Applied Effects / Transitions</h4><div class="row-wrap">'+effectList+'</div></div>':'')+'<div class="row-wrap" style="padding-top:9px">' + btn("Reset","reset-inspector","btn-compact") + btn("Properties","planned","btn-compact") + '</div>';
+      return '<div class="inspector-section"><h4>Transform</h4>'+prop("Position X",clip.properties&&clip.properties["position x"]||"0")+prop("Position Y",clip.properties&&clip.properties["position y"]||"0")+prop("Scale",clip.properties&&clip.properties.scale||"100%")+prop("Rotation",clip.properties&&clip.properties.rotation||"0°")+prop("Anchor","Center")+prop("Opacity",clip.properties&&clip.properties.opacity||"100%")+'</div><div class="inspector-section"><h4>Crop</h4>'+prop("Left","0")+prop("Right","0")+prop("Top","0")+prop("Bottom","0")+'</div><div class="inspector-section"><h4>Blend & Speed</h4><div class="field"><label for="blend-mode">Blend</label><select id="blend-mode" class="select"><option>Normal</option><option>Multiply</option><option>Screen</option><option>Overlay</option></select></div><div class="field" style="margin-top:8px"><label for="speed">Speed</label><select class="select" data-action="clip-speed" id="speed"><option>0.25x</option><option>0.5x</option><option selected>1x</option><option>2x</option><option>4x</option><option>Custom</option></select></div></div><div class="inspector-section"><div class="row"><h4 style="margin:0">Keyframes</h4><span class="push chip">'+keyframes+' dots</span></div><div class="row-wrap" style="margin-top:8px">'+btn(icon("plus")+"Keyframe","add-keyframe","btn-compact",'title="Add keyframe" data-tooltip="Add keyframe"')+btn(icon("previous-frame")+"Previous","previous-keyframe","btn-compact",'title="Previous keyframe"')+btn(icon("next-frame")+"Next","next-keyframe","btn-compact",'title="Next keyframe"')+btn(icon("delete")+"Delete","delete-keyframe","btn-compact btn-danger",'title="Delete keyframe"')+'</div><div class="scopes" style="margin-top:9px"><span class="chip">Position • 2</span><span class="chip">Scale • 1</span><span class="chip">Rotation • 0</span><span class="chip">Opacity • 1</span></div><p class="small muted">Stabilization: planned</p></div>'+(effectList?'<div class="inspector-section"><h4>Applied Effects / Transitions</h4><div class="row-wrap">'+effectList+'</div></div>':'')+'<div class="row-wrap" style="padding-top:9px">'+btn(icon("refresh")+"Reset","reset-inspector","btn-compact")+btn("Properties","planned","btn-compact")+'</div>';
     }
     function filteredFonts() {
       return state.assets.filter(asset=>asset.category==="Fonts").filter(asset=>{
@@ -1331,12 +1660,19 @@
       } else content='<div class="row-wrap">'+modes.map(mode=>'<button class="filter-chip" data-action="ai-mode" data-mode="'+mode+'" aria-pressed="'+(state.selectedAiMode===mode)+'">'+mode+'</button>').join("")+'</div><div class="field section-block"><label for="ai-prompt">Prompt</label><textarea id="ai-prompt" class="textarea" placeholder="Describe the result you want.">A restrained monochrome title card with subtle film grain.</textarea></div><div class="grid grid-2 section-block"><label class="field"><span>Model</span><select class="select"><option>Demo model</option><option>Local model · planned</option></select></label><label class="field"><span>Provider</span><select class="select"><option>Local · simulated</option><option>Cloud · not connected</option><option>Custom</option></select></label><label class="field"><span>Output</span><select class="select"><option>Generated media library</option><option>Temporary result</option></select></label><label class="field"><span>Quality</span><select class="select"><option>Standard</option><option>Draft</option><option>High</option></select></label></div><div class="row-wrap section-block">'+btn("Generate","generate-ai","btn-primary")+btn("Manage Models…","navigate-settings-ai","")+'<span class="small muted">No inference or network calls.</span></div>'+(state.aiProgress>0&&state.aiProgress<100?'<div class="progress-row"><div class="meter"><span style="width:'+state.aiProgress+'%"></span></div><small>'+state.aiProgress+'% · Simulated</small></div>':state.aiProgress>=100?'<div class="status-item"><span class="chip semantic-success">Complete</span><div class="status-copy"><strong>Generation simulation finished</strong><small>No media file was created.</small></div></div>':'')+(state.generated.length?'<div class="status-list section-block">'+state.generated.map(item=>'<div class="status-item"><span class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.type)+' · '+esc(item.spec)+'</small></span>'+btn("Add to Timeline","add-generated","btn-compact btn-primary",'data-id="'+item.id+'"')+'</div>').join("")+'</div>':"");
       return '<div class="tabs">'+tabs.map(tab=>'<button class="tab" data-action="ai-tab" data-tab="'+tab+'" aria-selected="'+(state.aiTab===tab)+'">'+tab+'</button>').join("")+'</div><div class="editor-panel-body">'+content+'</div>';
     }
-    function renderMoreTools() {
-      const items=["Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap","Freeze Frame","Reverse","Link / Unlink","Group","Create Multicam Clip","Create Snapshot","Diagnostics","Developer Mode"];
-      return '<p class="small secondary">Advanced workflows share the same project and timeline in this product vision.</p><div class="stack">'+items.map(name=>'<button class="feature-card '+(["Diagnostics","Developer Mode"].includes(name)?"developer-only":(["Nested Timeline","Create Multicam Clip"].includes(name)?"advanced-tool":""))+'" data-action="advanced-tool" data-name="'+name+'"><strong>'+name+'</strong><small>'+(name==="Create Multicam Clip"?"Advanced / Future · sync by audio, timecode, or manual":name==="Developer Mode"?"Settings · developer utilities":name==="Diagnostics"?"Settings · local status view":"Prototype simulation")+'</small></button>').join("")+'</div><div class="row-wrap section-block">'+btn("Graph Editor","toggle-graph","advanced-tool")+'</div>';
+    function renderAutoBeatSyncPanel() {
+      return '<div class="row-wrap"><span class="chip">Prototype / Planned</span><span class="small muted">Uses mock track timing only. No audio analysis runs.</span></div><div class="field section-block"><label for="beat-source">Source track</label><select class="select" id="beat-source"><option>Music.wav · A2</option><option>Voice.wav · A1</option></select></div><div class="grid grid-2 section-block"><label class="field"><span>Target</span><select class="select"><option>Selected video clips</option><option>Selected markers</option></select></label><label class="field"><span>Strength</span><select class="select"><option>Subtle</option><option>Balanced</option><option>Strong</option></select></label></div><div class="row-wrap section-block">'+btn(icon("autoBeat")+"Analyze Beat Grid","timeline-command","btn-primary",'data-name="Analyze Beat Grid"')+btn("Apply to Selection","timeline-command","",'data-name="Auto Beat Sync"')+'</div><div class="community-note section-block">Registered feature example · planned command: audio.auto_beat_sync</div>';
     }
-    function renderEditorToolContent() {
-      const tool=state.selectedEditorTool;
+    function renderMoreTools() {
+      const advanced=["Compound Clip","Nested Timeline","Adjustment Layer","Speed","Speed Ramp","Time Remap","Freeze Frame","Reverse","Link","Group","Ungroup","Create Multicam Clip","Create Snapshot","Diagnostics","Developer Mode"];
+      const registered=Object.values(featureRegistry).filter(item=>item.showInMore||item.editorTool&&item.availability==="advanced");
+      const registeredHTML=registered.map(item=>'<button class="feature-card" data-action="editor-tool-panel" data-tool="'+esc(item.label)+'"><strong>'+icon(item.icon)+' '+esc(item.label)+'</strong><small>'+esc(item.group)+' · '+esc(item.availability==="prototype-planned"?"Prototype / Planned":"Advanced tool")+'</small></button>').join("");
+      return '<p class="small secondary">Advanced workflows use the same editor regions and project state.</p><div class="grid grid-2">'+registeredHTML+'</div><h3 class="section-block small">Timeline actions</h3><div class="grid grid-2">'+advanced.map(name=>'<button class="feature-card advanced-tool" data-action="advanced-tool" data-name="'+esc(name)+'"><strong>'+icon(timelineIconFor(name))+' '+esc(name)+'</strong><small>Prototype command · no media processing</small></button>').join("")+'</div><div class="row-wrap section-block">'+btn(icon("adjustment")+"Graph Editor","toggle-graph","btn-compact advanced-tool")+btn(icon("save")+"Create Snapshot","snapshot-create","btn-compact")+'</div><div class="community-note section-block">Customize the timeline toolbar to pin or remove frequently used commands.</div>'+btn("Customize Toolbar","toolbar-customize","btn-compact");
+    }
+    function timelineIconFor(name) {
+      return ({Select:"select",Split:"split",Trim:"trim",Ripple:"ripple","Ripple Delete":"ripple",Delete:"delete",Duplicate:"duplicate",Link:"link","Link / Unlink":"link",Group:"group",Ungroup:"ungroup",Snap:"snap",Marker:"marker","Compound Clip":"compound","Nested Timeline":"nested","Adjustment Layer":"adjustment",Speed:"speed","Speed Ramp":"speedRamp","Time Remap":"timeRemap",Freeze:"freeze","Freeze Frame":"freeze",Reverse:"reverse",More:"more","Add Track":"plus"})[name]||"more";
+    }
+    function renderEditorToolContentLegacy(tool) {
       if(tool==="Media") return '<div class="row-wrap">'+["Media","Generated","Asset Library"].map(tab=>'<button class="filter-chip" data-action="editor-media-tab" data-tab="'+tab+'" aria-pressed="'+(state.selectedMediaTab===tab)+'">'+tab+'</button>').join("")+'</div>'+(state.selectedMediaTab==="Asset Library"?renderAssetLibrary(true):'<div class="row-wrap section-block">'+btn("Import Files","import-media","btn-compact")+btn("Import Folder","import-folder","btn-compact")+btn("Media Management…","media-management","btn-compact")+'</div><div class="stack section-block">'+state.media.filter(item=>state.selectedMediaTab==="Generated"?item.source==="Generated":item.source!=="Generated").map(item=>'<button class="media-mini" data-action="add-media-timeline" data-id="'+item.id+'"><span class="file-tile">'+icon(item.type==="Audio"?"audio":item.type==="Image"?"image":"film")+'</span><span class="media-mini-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.duration)+' · '+esc(item.type)+'</small></span></button>').join("")+'</div><p class="small muted section-block">Import, relink, proxy, and offline states are project-local simulations.</p>');
       if(tool==="Templates") return renderTemplates(true);
       if(tool==="Text") return renderTextPanel();
@@ -1349,29 +1685,74 @@
       if(tool==="AI") return renderAiWorkspace();
       return renderMoreTools();
     }
+    function renderEditorToolContent() {
+      const feature=Object.values(featureRegistry).find(item=>item.label===state.selectedEditorTool||item.id===state.selectedEditorTool);
+      return feature&&feature.panelRenderer?feature.panelRenderer():renderMoreTools();
+    }
     function renderEditorPanel() {
       const tool=state.selectedEditorTool;
-      const icons={"Media":"media","Templates":"film","Text":"text","Captions":"text","Stickers / Shapes":"box","Audio":"audio","Effects":"spark","Transitions":"refresh","Filters / Color":"image","AI":"spark","More":"more"};
-      const rail=["Media","Templates","Text","Captions","Stickers / Shapes","Audio","Effects","Transitions","Filters / Color","AI","More"];
-      const content='<div class="editor-panel-top"><strong>'+esc(tool)+'</strong><button class="icon-button" data-action="collapse-left-panel" aria-label="'+(state.leftPanelCollapsed?"Expand":"Collapse")+' left panel">'+icon(state.leftPanelCollapsed?"next":"back")+'</button><button class="icon-button mobile-close-panel" data-action="close-mobile-tool-sheet" aria-label="Close tool panel">'+icon("close")+'</button></div><div class="editor-panel-body">'+renderEditorToolContent()+'</div>';
-      const railHTML='<nav class="editor-tool-rail" aria-label="Editor tools">'+rail.map(name=>'<button data-action="editor-tool-panel" data-tool="'+name+'" aria-pressed="'+(name===tool)+'" aria-label="'+name+'" title="'+name+'">'+icon(icons[name]||"box")+'<span>'+esc(name==="Stickers / Shapes"?"Shapes":name==="Filters / Color"?"Color":name)+'</span></button>').join("")+'</nav>';
-      if(state.mobileToolSheet) return '<div class="mobile-tool-sheet-backdrop" data-action="close-mobile-tool-sheet"></div><section class="mobile-tool-sheet" aria-label="'+esc(tool)+' tool panel">'+content+'</section>';
+      const rail=Object.values(featureRegistry).filter(item=>item.editorTool&&item.availability==="core");
+      const content='<div class="editor-panel-top"><strong>'+esc(tool)+'</strong><button class="icon-button" data-action="collapse-left-panel" aria-label="'+(state.leftPanelCollapsed?"Expand":"Collapse")+' left panel" title="'+(state.leftPanelCollapsed?"Expand":"Collapse")+' left panel">'+icon(state.leftPanelCollapsed?"next":"back")+'</button><button class="icon-button mobile-close-panel" data-action="close-mobile-tool-sheet" aria-label="Close tool panel">'+icon("close")+'</button></div><div class="editor-panel-body">'+renderEditorToolContent()+'</div>';
+      const railHTML='<nav class="editor-tool-rail" aria-label="Editor tools">'+rail.map(item=>'<button data-action="editor-tool-panel" data-tool="'+esc(item.label)+'" aria-pressed="'+(item.label===tool)+'" aria-label="'+esc(item.label)+'" title="'+esc(item.label)+'" data-tooltip="'+esc(item.label)+'">'+icon(item.icon)+'<span>'+esc(item.shortLabel||item.label)+'</span></button>').join("")+'</nav>';
+      if(state.mobileToolSheet)return '<div class="mobile-tool-sheet-backdrop" data-action="close-mobile-tool-sheet"></div><section class="mobile-tool-sheet" aria-label="'+esc(tool)+' tool panel">'+content+'</section>';
       return railHTML+'<aside class="editor-left-panel" aria-label="'+esc(tool)+' tool panel">'+content+'</aside>';
     }
     function renderEditorInspector() {
-      if(state.inspectorCollapsed) return '<button class="icon-button inspector-expand" data-action="collapse-inspector" aria-label="Expand inspector">'+icon("back")+'</button>';
-      return '<aside class="editor-inspector"><div class="editor-panel-top"><strong>Inspector</strong><span class="push chip">'+(getClip(state.selectedClipId)?esc(getClip(state.selectedClipId).clip.kind):"—")+'</span><button class="icon-button" data-action="collapse-inspector" aria-label="Collapse inspector">'+icon("next")+'</button></div><div class="editor-panel-body">'+renderInspector()+'<div class="inspector-section"><h4>Video Tools</h4><div class="row-wrap">'+["Mask","Chroma Key","Motion Tracking","Subject Tracking","Stabilization","Auto Reframe"].map(name=>btn(name,"advanced-tool","btn-compact advanced-tool",'data-name="'+name+'"')).join("")+'</div></div><div class="inspector-section"><h4>Project Actions</h4><div class="row-wrap">'+btn("Create Template","create-template","btn-compact")+btn("Snapshots","project-snapshots","btn-compact")+'</div></div></div></aside>';
+      if(state.inspectorCollapsed)return '<button class="icon-button inspector-expand" data-action="collapse-inspector" aria-label="Expand inspector" title="Expand inspector">'+icon("back")+'</button>';
+      return '<aside class="editor-inspector"><div class="editor-panel-top"><strong>Inspector</strong><span class="push chip">'+(getClip(state.selectedClipId)?esc(getClip(state.selectedClipId).clip.kind):"—")+'</span><button class="icon-button" data-action="collapse-inspector" aria-label="Collapse inspector" title="Collapse inspector">'+icon("next")+'</button></div><div class="editor-panel-body">'+renderInspector()+'<div class="inspector-section"><h4>Video Tools</h4><div class="row-wrap">'+["Mask","Chroma Key","Motion Tracking","Subject Tracking","Stabilization","Auto Reframe"].map(name=>btn(name,"advanced-tool","btn-compact advanced-tool",'data-name="'+name+'"')).join("")+'</div></div><div class="inspector-section"><h4>Project Actions</h4><div class="row-wrap">'+btn(icon("templates")+"Create Template","create-template","btn-compact")+btn(icon("clock")+"Snapshots","project-snapshots","btn-compact")+'</div></div></div></aside>';
+    }
+    function timelineMenuItem(name) {
+      const iconName=timelineIconFor(name), label=({Ripple:"Ripple",Delete:"Delete",Compound:"Compound",Adjustment:"Adjustment",Freeze:"Freeze"})[name]||name;
+      const pressed=name==="Snap"?state.settings.snap:name==="Follow Playhead"?state.followPlayhead:false;
+      return '<button class="'+(name==="Compound Clip"||name==="Nested Timeline"||name==="Adjustment Layer"||name==="Speed Ramp"||name==="Time Remap"||name==="Freeze Frame"||name==="Reverse"?"advanced-tool":"")+'" data-action="timeline-command" data-name="'+esc(name)+'" '+(name==="Snap"||name==="Follow Playhead"?'aria-pressed="'+pressed+'"':'')+' aria-label="'+esc(name)+'" title="'+esc(name)+'" data-tooltip="'+esc(name)+'">'+icon(iconName)+'<span>'+esc(label)+'</span></button>';
+    }
+    function renderTimelineToolbar() {
+      const selected=getClip(state.selectedClipId), kind=selected?selected.clip.kind:"none";
+      let names=kind==="none"?["Select","Marker","Snap","Add Track"]:kind==="audio"?["Split","Trim","Ripple","Duplicate","Delete"]:kind==="text"?["Split","Duplicate","Delete","Edit Text","Style"]:["Split","Trim","Ripple","Duplicate","Delete"];
+      names=names.filter(name=>!state.hiddenToolbarTools.includes(name));
+      for(const name of state.pinnedToolbarTools)if(!names.includes(name))names.push(name);
+      const buttons=names.map(name=>{
+        const key=name==="Ripple Delete"?"Ripple":name;
+        const action=name==="Select"?"editor-tool":"timeline-command";
+        const pressed=key==="Select"?state.selectedTool==="Select":key==="Snap"?state.settings.snap:false;
+        const label=key==="Ripple Delete"?"Ripple":key==="Link / Unlink"?"Link":key==="Compound Clip"?"Compound":key==="Adjustment Layer"?"Adjustment":key==="Freeze Frame"?"Freeze":key;
+        return '<button class="tool-btn primary-tool" data-action="'+action+'" data-tool="'+esc(key)+'" data-name="'+esc(key)+'" aria-pressed="'+pressed+'" aria-label="'+esc(label)+'" title="'+esc(label+(key==="Split"?" · ⌘/Ctrl+B":""))+'" data-tooltip="'+esc(label+(key==="Split"?" · ⌘/Ctrl+B":""))+'">'+icon(timelineIconFor(key))+'<span>'+esc(label)+'</span></button>';
+      }).join("");
+      const extra=['Link','Unlink','Group','Ungroup','Compound Clip','Nested Timeline','Adjustment Layer','Speed','Speed Ramp','Time Remap','Freeze Frame','Reverse','Marker','Add Track','Follow Playhead'];
+      const menu='<div class="timeline-more-wrap"><button class="tool-btn" data-action="timeline-more-toggle" aria-haspopup="menu" aria-expanded="'+state.openTimelineMore+'" aria-label="More timeline tools" title="More timeline tools" data-tooltip="More timeline tools">'+icon("more")+'<span>More</span></button>'+(state.openTimelineMore?'<div class="timeline-more-popover" role="menu">'+extra.map(timelineMenuItem).join("")+btn(icon("adjustment")+"Customize Toolbar","toolbar-customize","btn-compact")+'</div>':"")+'</div>';
+      const zoom='<span class="tool-separator"></span><button class="icon-button" data-action="timeline-zoom-step" data-step="-1" aria-label="Zoom out" title="Zoom out" data-tooltip="Zoom out">'+icon("zoomOut")+'</button><input id="timeline-zoom" aria-label="Timeline zoom" title="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="'+state.zoom+'"><button class="icon-button" data-action="timeline-zoom-step" data-step="1" aria-label="Zoom in" title="Zoom in" data-tooltip="Zoom in">'+icon("zoomIn")+'</button>';
+      const follow='<button class="tool-btn" data-action="toggle-follow-playhead" aria-pressed="'+state.followPlayhead+'" aria-label="Follow playhead" title="Follow Playhead" data-tooltip="Follow Playhead">'+icon("fit")+'<span>Follow</span></button>';
+      return '<div class="editor-timeline-tools" aria-label="Timeline editing tools">'+buttons.join("")+'<span class="tool-separator"></span>'+timelineMenuItem("Snap")+timelineMenuItem("Marker")+menu+follow+zoom+'</div>';
+    }
+    function renderEditorMenus() {
+      const menus={
+        Project:[["New Project","new-project","plus"],["Open Projects","navigate","folder","projects"],["Save","save-project","save"],["Create Template","create-template","templates"],["Snapshots","project-snapshots","clock"],["Export","export-dialog","export"]],
+        Edit:[["Undo","undo","undo","","⌘/Ctrl+Z"],["Redo","redo","redo","","⌘/Ctrl+Shift+Z"],["Cut","clip-action","cut"],["Copy","clip-action","duplicate"],["Paste","clip-action","paste"],["Delete","delete-clip","delete"]],
+        Clip:[["Split","timeline-command","split","Split"],["Trim","timeline-command","trim","Trim"],["Speed","timeline-command","speed","Speed"],["Transform","advanced-tool","adjustment","Transform"],["Compound Clip","advanced-tool","compound","Compound Clip"]],
+        View:[[state.leftPanelCollapsed?"Show Left Panel":"Hide Left Panel","toggle-left-panel","fit"],[state.inspectorCollapsed?"Show Inspector":"Hide Inspector","toggle-inspector","fit"],[state.timelineCollapsed?"Show Timeline":"Hide Timeline","toggle-timeline","fit"],["Viewer Only","viewer-only","cinema"],["Theme","theme-browser","settings"],["Command Palette","open-palette","search"]]
+      };
+      const buttons=Object.entries(menus).map(([name,items])=>'<button data-action="menu-toggle" data-menu="'+name+'" aria-expanded="'+(state.openMenu===name)+'">'+name+'</button>').join("");
+      const open=state.openMenu;
+      let popup="";
+      if(open&&menus[open])popup='<div class="menu-popover" role="menu" aria-label="'+open+' menu">'+menus[open].map(([label,action,iconName,arg,shortcut])=>{
+        const attr=action==="navigate"?' data-view="'+arg+'"':action==="timeline-command"?' data-name="'+arg+'"':action==="clip-action"?' data-name="'+label+'"':'';
+        return '<button role="menuitem" data-action="'+action+'"'+attr+' aria-label="'+esc(label)+'" title="'+esc(label)+'">'+icon(iconName)+'<span>'+esc(label)+'</span>'+(shortcut?'<kbd>'+esc(shortcut)+'</kbd>':'')+'</button>';
+      }).join("")+'</div>';
+      return '<nav class="editor-menu-bar" aria-label="Editor menus">'+buttons+'</nav>'+popup;
+    }
+    function renderMobileEditorDock() {
+      const dock=Object.values(featureRegistry).filter(item=>item.editorTool&&item.mobileDock);
+      return '<nav class="editor-mobile-dock" aria-label="Editor tools">'+dock.map(item=>'<button data-action="editor-tool-panel" data-tool="'+esc(item.label)+'" aria-pressed="'+(state.selectedEditorTool===item.label)+'" aria-label="'+esc(item.label)+'" title="'+esc(item.label)+'" data-tooltip="'+esc(item.label)+'">'+icon(item.icon)+'<span>'+esc(item.shortLabel||item.label)+'</span></button>').join("")+'</nav>';
     }
     function renderEditor() {
       const rail=renderEditorPanel();
       const aspect=activeProject().ratio==="9:16"?"9 / 16":activeProject().ratio==="1:1"?"1 / 1":activeProject().ratio==="4:3"?"4 / 3":"16 / 9";
+      const overlayIcons={showViewerGrid:"grid",showSafeArea:"fit",showGuides:"snap",showRulers:"marker",showTransform:"adjustment",showBoundingBox:"group"};
       const overlays=[["showViewerGrid","Grid"],["showSafeArea","Safe Area"],["showGuides","Guides"],["showRulers","Rulers"],["showTransform","Transform"],["showBoundingBox","Bounds"]];
-      const viewer='<section class="editor-viewer" aria-label="Project preview"><div class="viewer-toolbar"><strong>Viewer</strong><span class="push"></span><div class="viewer-overlays">'+overlays.map(item=>'<button class="icon-button" data-action="viewer-overlay" data-state="'+item[0]+'" aria-pressed="'+state[item[0]]+'" aria-label="'+item[1]+'" title="'+item[1]+'">'+(item[1]==="Safe Area"?"SA":item[1]==="Bounds"?"□":item[1]==="Guides"?"⌖":item[1]==="Rulers"?"R":item[1]==="Transform"?"↔":icon("grid"))+'</button>').join("")+'</div><select id="viewer-zoom" class="select" aria-label="Viewer zoom">'+["Fit","25%","50%","100%","200%"].map(value=>'<option'+(state.viewerZoom===value?' selected':'')+'>'+value+'</option>').join("")+'</select><button class="btn btn-compact" data-action="viewer-only" aria-pressed="'+state.viewOnly+'">'+(state.viewOnly?"Exit Cinema":"Cinema")+'</button><button class="icon-button" data-action="fullscreen-preview" aria-label="'+(state.fullscreenPreview?"Exit fullscreen preview":"Fullscreen Preview")+'" title="Fullscreen Preview">'+icon("image")+'</button></div><div class="viewer-stage"><div class="viewer-canvas '+(state.showViewerGrid?"show-grid ":"")+(state.showSafeArea?"show-safe ":"")+(state.showGuides?"show-guides ":"")+(state.showRulers?"show-rulers ":"")+(state.showTransform?"show-transform ":"")+(state.showBoundingBox?"show-bounds":"")+'" style="aspect-ratio:'+aspect+'"><div class="preview-mock"></div><span class="preview-label">'+fmtTime(state.currentTime)+' · '+esc(activeProject().name)+'</span><button class="viewer-focus-button" data-action="viewer-focus" aria-label="Toggle viewer focus" title="Viewer focus">'+icon("image")+'</button></div></div><div class="viewer-transport"><button class="icon-button" data-action="go-start" aria-label="Go to start">'+icon("back")+'</button><button class="icon-button" data-action="toggle-play" aria-label="Play or pause">'+icon(state.playing?"pause":"play")+'</button><button class="icon-button" data-action="next-frame" aria-label="Next frame">'+icon("next")+'</button><span class="time-display mono">'+fmtTime(state.currentTime)+' / '+fmtTime(state.duration)+'</span><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="'+state.loop+'">↻</button><button class="icon-button" data-action="volume" aria-label="Preview volume">'+icon("wave")+'</button></div></section>';
-      const ruler=Array.from({length:17},(_,index)=>'<span class="ruler-mark">'+String(index*5).padStart(2,"0")+':00</span>').join("");
-      const timeline='<div class="editor-timeline-tools"><button class="tool-btn" data-action="editor-tool" data-tool="Select" aria-pressed="true">Select</button>'+["Split","Trim","Ripple Delete","Duplicate","Delete","Link / Unlink","Group","Snap","Marker","Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap","Freeze Frame","Reverse"].map(name=>'<button class="tool-btn '+(["Compound Clip","Nested Timeline","Adjustment Layer","Speed Ramp","Time Remap"].includes(name)?"advanced-tool":"")+'" data-action="timeline-command" data-name="'+name+'">'+(name==="Split"?icon("split"):name==="Duplicate"?icon("copy"):"")+name+'</button>').join("")+'<label class="timeline-zoom small"><span class="muted">−</span><input id="timeline-zoom" aria-label="Timeline zoom" type="range" min="0.55" max="1.8" step="0.05" value="'+state.zoom+'"><span class="muted">+</span></label></div><section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks</span><span class="push"></span><div class="timeline-track-controls">'+["Video","Audio","Text","Caption"].map(name=>'<button class="btn btn-compact" data-action="add-track" data-type="'+name.toLowerCase()+'">+ '+name+'</button>').join("")+btn("ADJ","add-adjustment-layer","btn-compact advanced-tool")+btn("Graph","toggle-graph","btn-compact advanced-tool")+'</div></div><div class="timeline-scroller"><div class="timeline-ruler">'+ruler+'</div><div class="playhead" id="playhead" aria-hidden="true"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn("Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
-      const mobileDock='<nav class="editor-mobile-dock" aria-label="Editor tools">'+["Edit","Media","Templates","Text","Captions","Audio","FX","AI","More"].map(name=>'<button data-action="'+(name==="Edit"?"editor-tool-panel":"editor-tool-panel")+'" data-tool="'+(name==="Edit"?"Media":name==="FX"?"Effects":name)+'" aria-pressed="'+(state.selectedEditorTool===(name==="FX"?"Effects":name==="Edit"?"Media":name))+'">'+icon(name==="Audio"?"audio":name==="Text"||name==="Captions"?"text":name==="Media"?"media":name==="Templates"?"film":name==="AI"?"spark":"box")+'<span>'+name+'</span></button>').join("")+'</nav>';
-      const projectMenu='<div class="editor-project-bar"><button class="btn btn-compact project-menu-button" data-action="project-menu" aria-haspopup="dialog">Project</button>'+btn("Create Template","create-template","btn-compact") + btn("Snapshots","project-snapshots","btn-compact") + '<span class="push"></span><span class="small muted">'+esc(activeProject().ratio)+' · '+esc(activeProject().resolution)+'</span><button class="icon-button" data-action="project-settings" aria-label="Project settings">'+icon("settings")+'</button></div>';
-      return '<div class="editor-shell '+(state.leftPanelCollapsed?"left-panel-collapsed ":"")+(state.inspectorCollapsed?"inspector-collapsed ":"")+(state.viewOnly?"editor-cinema ":"")+(state.fullscreenPreview?"preview-fullscreen ":"")+(state.viewerFocus?"viewer-focused":"")+'" style="--left-panel-width:'+state.leftPanelWidth+'px;--inspector-width:'+state.inspectorWidth+'px;--timeline-height:'+state.timelineHeight+'px">'+projectMenu+'<div class="editor-stage">'+rail+'<div class="editor-resize-handle" data-resize="left" role="separator" tabindex="0" aria-label="Resize left panel" aria-orientation="vertical"></div>'+viewer+'<div class="editor-resize-handle" data-resize="inspector" role="separator" tabindex="0" aria-label="Resize inspector" aria-orientation="vertical"></div>'+renderEditorInspector()+'</div><div class="timeline-resize-handle" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize timeline" aria-orientation="horizontal"></div>'+mobileDock+timeline+'</div>';
+      const viewer='<section class="editor-viewer" aria-label="Project preview"><div class="viewer-toolbar"><strong>Viewer</strong><span class="push"></span><div class="viewer-overlays">'+overlays.map(item=>'<button class="icon-button" data-action="viewer-overlay" data-state="'+item[0]+'" aria-pressed="'+state[item[0]]+'" aria-label="'+item[1]+'" title="'+item[1]+'" data-tooltip="'+item[1]+'">'+icon(overlayIcons[item[0]])+'</button>').join("")+'</div><select id="viewer-zoom" class="select" aria-label="Viewer zoom" title="Viewer zoom">'+["Fit","25%","50%","100%","200%"].map(value=>'<option'+(state.viewerZoom===value?' selected':'')+'>'+value+'</option>').join("")+'</select><button class="btn btn-compact" data-action="viewer-only" aria-pressed="'+state.viewOnly+'" title="Cinema mode" data-tooltip="Cinema mode">'+icon("cinema")+'<span class="desktop-only">'+(state.viewOnly?"Exit Cinema":"Cinema")+'</span></button><button class="icon-button" data-action="fullscreen-preview" aria-label="'+(state.fullscreenPreview?"Exit fullscreen preview":"Fullscreen Preview")+'" title="Fullscreen Preview" data-tooltip="Fullscreen Preview">'+icon("fullscreen")+'</button></div><div class="viewer-stage"><div class="viewer-canvas '+(state.showViewerGrid?"show-grid ":"")+(state.showSafeArea?"show-safe ":"")+(state.showGuides?"show-guides ":"")+(state.showRulers?"show-rulers ":"")+(state.showTransform?"show-transform ":"")+(state.showBoundingBox?"show-bounds":"")+'" style="aspect-ratio:'+aspect+'"><div class="preview-mock"></div><span class="preview-label">'+fmtTime(state.currentTime)+' · '+esc(activeProject().name)+'</span><button class="viewer-focus-button" data-action="viewer-focus" aria-label="Toggle viewer focus" title="Viewer focus" data-tooltip="Viewer focus">'+icon("fullscreen")+'</button></div></div><div class="viewer-transport" aria-label="Preview transport"><div class="transport-group transport-left"><button class="icon-button" data-action="go-start" aria-label="Go to start" title="Go to start" data-tooltip="Go to start · Home">'+icon("start")+'</button><button class="icon-button" data-action="previous-frame" aria-label="Previous frame" title="Previous frame" data-tooltip="Previous frame · ←">'+icon("previousFrame")+'</button></div><button class="icon-button play-toggle" data-action="toggle-play" aria-label="Play playback" aria-pressed="false" title="Play · Space" data-tooltip="Play · Space">'+icon("play")+'</button><div class="transport-group transport-right"><button class="icon-button" data-action="next-frame" aria-label="Next frame" title="Next frame" data-tooltip="Next frame · →">'+icon("nextFrame")+'</button><button class="icon-button" data-action="go-end" aria-label="Go to end" title="Go to end" data-tooltip="Go to end · End">'+icon("end")+'</button><button class="icon-button" data-action="toggle-loop" aria-label="Toggle loop" aria-pressed="'+state.loop+'" title="Loop" data-tooltip="Loop">'+icon("loop")+'</button><button class="icon-button" data-action="volume" aria-label="Preview volume" title="Preview volume" data-tooltip="Preview volume">'+icon("volume")+'</button><span class="time-display mono">'+fmtTime(state.currentTime)+' / '+fmtTime(state.duration)+'</span></div></div></section>';
+      const timeline='<section class="timeline editor-timeline"><div class="timeline-head"><strong>Timeline</strong><span class="chip">'+state.tracks.length+' tracks · '+state.projectFps+' fps</span><span class="push"></span><div class="timeline-track-controls">'+[["video","Video"],["audio","Audio"],["text","Text"],["caption","Caption"]].map(item=>'<button class="btn btn-compact" data-action="add-track" data-type="'+item[0]+'" aria-label="Add '+item[1]+' track" title="Add '+item[1]+' track">'+icon(item[0]==="audio"?"audio":item[0]==="text"||item[0]==="caption"?"text":"film")+'<span>'+item[1]+'</span></button>').join("")+btn(icon("adjustment")+"ADJ","add-adjustment-layer","btn-compact advanced-tool",'aria-label="Add adjustment layer" title="Add adjustment layer"')+btn(icon("layers")+"Graph","toggle-graph","btn-compact advanced-tool",'aria-label="Toggle graph editor" title="Toggle graph editor"')+'</div></div><div class="timeline-scroller"><div class="timeline-ruler" aria-label="Timeline ruler" title="Click or drag to seek"></div><button class="playhead" id="playhead" role="slider" tabindex="0" aria-label="Timeline playhead" aria-valuemin="0" aria-valuemax="'+Math.round(state.duration*state.projectFps)+'" aria-valuenow="'+Math.round(state.currentTime*state.projectFps)+'" aria-valuetext="'+fmtTime(state.currentTime)+'" title="Drag to scrub" data-tooltip="Timeline playhead · ← / → to seek"><span class="playhead-line"></span></button><div class="snap-guide" aria-hidden="true"></div>'+renderTracks()+'</div>'+(state.graphEditor?'<div class="graph-panel advanced-tool"><div class="row"><strong class="small">Keyframe / Graph Editor</strong><span class="push small muted">Position · Scale · Rotation · Opacity · Speed</span>'+btn(icon("close")+"Close","toggle-graph","btn-compact")+'</div><svg viewBox="0 0 600 74" role="img" aria-label="Sample keyframe curve"><path d="M12 60 C120 58 150 18 250 34 S430 63 588 12"></path></svg></div>':"")+'</section>';
+      const projectMenu='<div class="editor-project-bar"><div class="editor-menu-bar-wrap">'+renderEditorMenus()+'</div><select class="select workspace-preset-select" id="workspace-preset" aria-label="Workspace preset" title="Workspace preset">'+["Editing","Captions","Audio","Color","AI"].map(name=>'<option'+(state.workspacePreset===name?' selected':'')+'>'+name+'</option>').join("")+'</select><span class="push"></span><span class="project-name">'+esc(activeProject().name)+'</span><span class="context-divider"></span><span class="small muted">'+esc(activeProject().ratio)+' · '+esc(activeProject().resolution)+'</span><button class="icon-button" data-action="toggle-left-panel" aria-label="'+(state.leftPanelCollapsed?"Show":"Hide")+' left panel" title="'+(state.leftPanelCollapsed?"Show":"Hide")+' left panel">'+icon("media")+'</button><button class="icon-button" data-action="toggle-inspector" aria-label="'+(state.inspectorCollapsed?"Show":"Hide")+' inspector" title="'+(state.inspectorCollapsed?"Show":"Hide")+' inspector">'+icon("adjustment")+'</button></div>';
+      return '<div class="editor-shell '+(state.leftPanelCollapsed?"left-panel-collapsed ":"")+(state.inspectorCollapsed?"inspector-collapsed ":"")+(state.timelineCollapsed?"timeline-collapsed ":"")+(state.viewOnly?"editor-cinema ":"")+(state.fullscreenPreview?"preview-fullscreen ":"")+(state.viewerFocus?"viewer-focused":"")+'" style="--left-panel-width:'+state.leftPanelWidth+'px;--inspector-width:'+state.inspectorWidth+'px;--timeline-height:'+state.timelineHeight+'px;--track-header-width:'+timelineMetrics.trackHeaderWidth+'px">'+projectMenu+'<div class="editor-stage">'+rail+'<div class="editor-resize-handle" data-resize="left" role="separator" tabindex="0" aria-label="Resize left panel" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>'+viewer+'<div class="editor-resize-handle" data-resize="inspector" role="separator" tabindex="0" aria-label="Resize inspector" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>'+renderEditorInspector()+'</div><div class="timeline-resize-handle" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize timeline" aria-orientation="horizontal" title="Drag to resize · double-click to reset"></div>'+renderMobileEditorDock()+renderTimelineToolbar()+timeline+'</div>';
     }
     function renderMediaManagement(id) {
       const actions=["Rename","Relink Media","Replace Media","Create Proxy","Delete Proxy","Optimized Media","Offline Media State","Reveal in Folder","Properties","Collect Project","Consolidate Media","Scene Detection","Duplicate Detection","Remove"];
@@ -1485,20 +1866,117 @@
     function renderExport() {
       return '<div class="grid grid-2"><section class="panel"><div class="panel-head"><h2>Export settings</h2><span class="chip">Simulation only</span></div><div class="panel-body">'+exportForm()+'<div class="row-wrap section-block">'+btn("Add to Queue","queue-export","") + btn("Export","start-export","btn-primary")+'</div>'+(state.exportProgress>0&&state.exportProgress<100?'<div class="progress-row"><div class="meter"><span style="width:'+state.exportProgress+'%"></span></div><small>'+state.exportProgress+'% · Rendering demo</small></div>':"")+'</div></section><section class="panel"><div class="panel-head"><h2>Queue</h2><span class="push chip">'+state.exportQueue.length+' jobs</span></div><div class="panel-body status-list">'+state.exportQueue.map(item=>'<div class="status-item">'+icon("export")+'<div class="status-copy"><strong>'+esc(item.name)+'</strong><small>'+esc(item.status)+' · '+item.progress+'%</small></div><div class="meter" style="width:72px"><span style="width:'+item.progress+'%"></span></div><button class="icon-button" data-action="remove-export" data-id="'+item.id+'" aria-label="Remove export">'+icon("close")+'</button></div>').join("")+'</div></section></div>';
     }
+    function themeSwatches(tokens) {
+      return '<div class="theme-swatches" aria-label="Theme color preview">'+[tokens.bg,tokens.surface,tokens.text,tokens.primary,tokens.selection].map(color=>'<span style="background:'+color+'"></span>').join("")+'</div>';
+    }
+    function themeSummary(theme) {
+      return '<article class="theme-library-card"><div class="theme-card-copy"><strong>'+esc(theme.name)+'</strong><small>'+esc(theme.creator|| (theme.source||"Built-in"))+' · '+esc(theme.version||"1.0")+' · '+esc(theme.compatibility||"OR 0.1+")+' · '+esc(theme.license||"Built-in")+'</small>'+themeSwatches(theme.tokens)+'</div><div class="row-wrap"><button class="btn btn-compact" data-action="theme-preview" data-id="'+esc(theme.id)+'">Preview</button>'+(theme.source==="Community"&&!state.downloadedThemes.some(item=>item.id===theme.id)?'<button class="btn btn-compact" data-action="theme-download" data-id="'+esc(theme.id)+'">Download</button>':"")+'<button class="btn btn-compact btn-primary" data-action="theme-apply" data-id="'+esc(theme.id)+'">Apply</button><button class="icon-button" data-action="theme-details" data-id="'+esc(theme.id)+'" aria-label="Theme details" title="Theme details">'+icon("more")+'</button></div></article>';
+    }
+    function renderThemeBrowser() {
+      const tabs=["Built-in","Downloaded","Community","My Themes"];
+      let themes=[];
+      if(state.themeLibraryTab==="Built-in")themes=builtInThemes.map(theme=>Object.assign({source:"Built-in"},theme));
+      if(state.themeLibraryTab==="Downloaded")themes=(state.downloadedThemes||[]).map(theme=>Object.assign({source:"Downloaded"},theme));
+      if(state.themeLibraryTab==="Community")themes=communityThemes.map(theme=>Object.assign({source:"Community"},theme));
+      if(state.themeLibraryTab==="My Themes")themes=(state.customThemes||[]).map(theme=>Object.assign({source:"My Themes"},theme));
+      const tabBar='<div class="tabs">'+tabs.map(tab=>'<button class="tab" data-action="theme-tab" data-tab="'+tab+'" aria-selected="'+(state.themeLibraryTab===tab)+'">'+tab+'</button>').join("")+'</div>';
+      const actions='<div class="row-wrap section-block">'+btn(icon("plus")+"Create Theme","theme-editor-open","btn-compact btn-primary")+btn("Import Theme","theme-import","btn-compact")+'</div>';
+      return tabBar+actions+'<div class="stack section-block">'+(themes.length?themes.map(themeSummary).join(""):'<div class="empty-state"><strong>No themes here yet</strong><p>Imported or saved themes appear in this tab.</p></div>')+'</div><div class="community-note section-block">Themes contain visual tokens only. They cannot run code, add commands, read files, or change project and agent permissions.</div><input id="theme-import-file" type="file" accept="application/json,.json" class="hidden" aria-label="Choose theme JSON file">';
+    }
+    function themeBrowserModal() {
+      state.themeLibraryTab=state.themeLibraryTab||"Built-in";
+      openModal("Themes",renderThemeBrowser(),btn("Close","close-modal",""),"theme-browser");
+      $("#modal-theme-browser").classList.add("wide-modal");
+    }
+    function themeDetail(id) {
+      const theme=builtInThemes.concat(communityThemes,state.downloadedThemes||[],state.customThemes||[]).find(item=>item.id===id);
+      if(!theme)return;
+      openModal(theme.name,'<div class="theme-editor-preview" style="background:'+theme.tokens.bg+';color:'+theme.tokens.text+'">'+themeSwatches(theme.tokens)+'<div class="preview-surface" style="background:'+theme.tokens.surface+';border-color:'+theme.tokens.border+'"><strong>'+esc(theme.name)+'</strong><p class="small">Preview of semantic workspace surfaces.</p></div></div><dl class="metadata-list section-block"><dt>Creator</dt><dd>'+esc(theme.creator||"Opencut Reinforced")+'</dd><dt>Version</dt><dd>'+esc(theme.version||"1.0")+'</dd><dt>Compatibility</dt><dd>'+esc(theme.compatibility||"OR 0.1+")+'</dd><dt>License</dt><dd>'+esc(theme.license||"Built-in")+'</dd><dt>Safety</dt><dd>Visual tokens only; no code or selectors</dd></dl><div class="community-note">A theme cannot execute JavaScript, modify project data, add commands, access the filesystem, read secrets, or change agent permissions.</div>',btn("Close","close-modal","")+btn("Duplicate","theme-duplicate","btn-compact")+btn("Apply","theme-apply","btn-primary",'data-id="'+esc(id)+'"'),"theme-details");
+    }
+    function openThemeEditor(theme) {
+      const existing=theme||null;
+      state.themeDraft={id:existing&&existing.id||"",schema:"or.theme.v1",name:existing?existing.name:"My OR Theme",tokens:Object.assign({},existing?existing.tokens:focusedTokens),radius:existing&&existing.radius||8,density:existing&&existing.density||"Comfortable",license:existing&&existing.license||"Personal"};
+      state.themeEditorReturn=state.currentThemeId;
+      state.themePreviewing=true;
+      applyThemePreview(state.themeDraft.tokens);
+      themeEditorModal();
+    }
+    function themeEditorMarkup() {
+      const draft=state.themeDraft;
+      const tokenRows=themeTokenDefs.map(([key,label])=>'<label class="theme-token-row"><span>'+esc(label)+'</span><input type="color" data-theme-color="'+key+'" value="'+esc(draft.tokens[key])+'" aria-label="'+esc(label)+' color"><input class="input mono" type="text" data-theme-hex="'+key+'" value="'+esc(draft.tokens[key])+'" aria-label="'+esc(label)+' hex value"></label>').join("");
+      return '<div class="grid grid-2"><div class="stack"><div class="field"><label for="theme-name">Theme name</label><input id="theme-name" class="input" maxlength="48" value="'+esc(draft.name)+'"></div><div class="row-wrap">'+btn("Duplicate","theme-duplicate","btn-compact")+btn(icon("refresh")+"Reset","theme-reset","btn-compact")+btn(icon("export")+"Export Theme","theme-export","btn-compact")+'</div><div class="field"><label for="theme-radius">Corner Radius</label><select id="theme-radius" class="select">'+[[6,"Compact"],[8,"Theme Default"],[10,"Rounded"],[12,"Spacious"]].map(pair=>'<option value="'+pair[0]+'"'+(Number(draft.radius)===pair[0]?' selected':'')+'>'+pair[1]+'</option>').join("")+'</select></div><div class="field"><label for="theme-density">UI Density</label><select id="theme-density" class="select">'+["Compact","Comfortable","Spacious"].map(name=>'<option'+(draft.density===name?' selected':'')+'>'+name+'</option>').join("")+'</select></div><div class="theme-editor-preview" id="theme-editor-preview"><strong>Live preview</strong><div class="preview-surface section-block"><span class="chip">Selection</span><div class="row-wrap section-block">'+btn("Primary Action","planned","btn-primary btn-compact")+btn("Secondary","planned","btn-compact")+'</div><small>Viewer · Timeline · Inspector</small></div></div></div><div><h3 class="small">Visual tokens</h3><div class="theme-token-list">'+tokenRows+'</div><div class="community-note section-block">Only validated color tokens, radius, and density are accepted. Arbitrary CSS, selectors, URLs, and scripts are rejected.</div></div></div>';
+    }
+    function themeEditorModal() {
+      openModal(state.themeDraft&&state.themeDraft.id?"Edit Theme":"Create Theme",themeEditorMarkup(),btn("Cancel","close-modal","")+btn("Save Theme","theme-save","btn-primary"),"theme-editor");
+      $("#modal-theme-editor").classList.add("xwide-modal");
+      $("#modal-theme-editor").classList.toggle("theme-editor-fullscreen",isMobileLayout());
+    }
+    function updateThemeEditorPreview() {
+      const preview=$("#theme-editor-preview"),draft=state.themeDraft;
+      if(!preview||!draft)return;
+      preview.style.background=draft.tokens.bg;preview.style.color=draft.tokens.text;
+      const surface=$(".preview-surface",preview);if(surface){surface.style.background=draft.tokens.surface;surface.style.borderColor=draft.tokens.border;}
+    }
+    function duplicateThemeDraft() {
+      const draft=state.themeDraft;
+      if(!draft)return;
+      state.themeDraft=Object.assign({},draft,{id:"",name:(draft.name||"My OR Theme")+" Copy",tokens:Object.assign({},draft.tokens)});
+      themeEditorModal();applyThemePreview(state.themeDraft.tokens);
+    }
+    function saveCustomTheme() {
+      const draft=state.themeDraft;
+      if(!draft||!safeThemeTokens(draft.tokens)){toast("Theme colors must use valid #RRGGBB values");return;}
+      const name=(($("#theme-name")||{}).value||draft.name).trim();
+      if(!name){toast("Enter a theme name");return;}
+      draft.name=name;draft.radius=Number(( $("#theme-radius")||{}).value)||8;draft.density=( $("#theme-density")||{}).value||"Comfortable";
+      const theme=Object.assign({},draft,{id:draft.id||"custom-"+Date.now(),schema:"or.theme.v1",creator:"You",version:"1.0",compatibility:"OR 0.1+",license:draft.license||"Personal"});
+      const existing=state.customThemes.findIndex(item=>item.id===theme.id);
+      if(existing>=0)state.customThemes[existing]=theme;else state.customThemes.unshift(theme);
+      persistThemes();state.themePreviewing=false;state.themeDraft=null;state.currentThemeId=theme.id;state.cornerRadius=String(theme.radius);state.appearanceDensity=theme.density;
+      saveLocalJSON("or.theme",theme.id);saveLocalJSON("or.corner-radius",state.cornerRadius);saveLocalJSON("or.density",state.appearanceDensity);applyThemeById(theme.id,false);closeModal();toast("Theme saved and applied");
+    }
+    function exportTheme(theme) {
+      const data={schema:"or.theme.v1",name:theme.name,tokens:theme.tokens,radius:Number(theme.radius)||8,density:theme.density||"Comfortable"};
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob),link=document.createElement("a");
+      link.href=url;link.download=(theme.name||"or-theme").toLowerCase().replace(/[^a-z0-9]+/g,"-")+".or-theme.json";link.click();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Theme JSON exported");
+    }
+    function validateImportedTheme(theme) {
+      const rootKeys=["schema","name","tokens","radius","density"];
+      if(!theme||typeof theme!=="object"||Array.isArray(theme)||Object.keys(theme).some(key=>!rootKeys.includes(key)))throw new Error("Only the OR theme token format is accepted.");
+      if(theme.schema!=="or.theme.v1"||typeof theme.name!=="string"||!theme.name.trim())throw new Error("Theme schema or name is invalid.");
+      if(!theme.tokens||typeof theme.tokens!=="object"||Array.isArray(theme.tokens)||Object.keys(theme.tokens).some(key=>!themeTokenDefs.some(([name])=>name===key))||!safeThemeTokens(theme.tokens))throw new Error("Theme tokens must contain only valid #RRGGBB colors.");
+      if(theme.radius!=null&&(!Number.isFinite(Number(theme.radius))||Number(theme.radius)<4||Number(theme.radius)>16))throw new Error("Theme radius must be between 4 and 16.");
+      if(theme.density!=null&&!["Compact","Comfortable","Spacious"].includes(theme.density))throw new Error("Theme density is invalid.");
+      return {id:"imported-"+Date.now(),schema:"or.theme.v1",name:theme.name.trim(),tokens:theme.tokens,radius:Number(theme.radius)||8,density:theme.density||"Comfortable",creator:"Imported locally",version:"1.0",compatibility:"OR 0.1+",license:"User supplied"};
+    }
+    function renderToolbarCustomizeModal() {
+      const available=["Split","Trim","Ripple","Duplicate","Delete","Snap","Marker","Link","Group","Speed","Adjustment Layer","Freeze Frame","Reverse"];
+      const rows=available.map(name=>'<div class="status-item"><span class="file-tile">'+icon(timelineIconFor(name))+'</span><div class="status-copy"><strong>'+esc(name)+'</strong><small>'+((state.pinnedToolbarTools||[]).includes(name)?"Pinned to common toolbar":(state.hiddenToolbarTools||[]).includes(name)?"Removed from common toolbar":"Available in context or More")+'</small></div>'+btn("Pin to Toolbar","toolbar-pin","btn-compact",'data-name="'+esc(name)+'"')+btn("Remove from Toolbar","toolbar-remove","btn-compact",'data-name="'+esc(name)+'"')+'</div>').join("");
+      openModal("Customize Editor Toolbar",'<p class="small secondary">Pin common actions or remove them from the default row. Advanced actions remain available in More.</p><div class="status-list">'+rows+'</div>',btn("Reset Defaults","toolbar-reset","btn-compact")+btn("Close","close-modal",""),"toolbar-customize");
+      $("#modal-toolbar-customize").classList.add("wide-modal");
+    }
+
+    function renderAppearanceSettings() {
+      const theme=currentTheme();
+      return '<section class="stack"><div class="row"><div class="status-copy"><strong>Theme</strong><small>Visual tokens change the palette while the default remains OR Focused Monochrome.</small></div><span class="push"></span><span class="chip">'+esc(theme.name)+'</span></div><div class="theme-editor-preview" style="background:'+theme.tokens.bg+';color:'+theme.tokens.text+'">'+themeSwatches(theme.tokens)+'<div class="preview-surface section-block" style="background:'+theme.tokens.surface+';border-color:'+theme.tokens.border+'">Viewer · Timeline · Inspector</div></div><div class="row-wrap">'+btn("Browse Themes","theme-browser","btn-compact")+btn("Create Theme","theme-editor-open","btn-compact btn-primary")+btn("Import Theme","theme-import","btn-compact")+'</div></section><div class="divider"></div><div class="grid grid-2"><label class="field"><span>UI Density</span><select class="select" id="appearance-density">'+["Compact","Comfortable","Spacious"].map(name=>'<option'+(state.appearanceDensity===name?' selected':'')+'>'+name+'</option>').join("")+'</select></label><label class="field"><span>Text Scale</span><input id="text-scale" type="range" min="90" max="130" step="5" value="'+state.textScale+'" aria-label="Text Scale"></label><label class="field"><span>Corner Style</span><select class="select" id="corner-style">'+[["Theme Default","Theme Default"],[6,"Compact"],[8,"Balanced"],[12,"Rounded"]].map(pair=>'<option value="'+pair[0]+'"'+(String(state.cornerRadius)===String(pair[0])?' selected':'')+'>'+pair[1]+'</option>').join("")+'</select></label><label class="toggle-row"><span class="toggle-copy"><strong>Reduced Motion</strong><small>Reduce UI transitions and animation.</small></span><input id="reduced-motion" class="switch" type="checkbox" '+(state.reducedMotion?"checked":"")+'></label><label class="field"><span>Workspace Complexity</span><select id="workspace-complexity" class="select"><option'+(state.workspaceComplexity==="Simple"?" selected":"")+'>Simple</option><option'+(state.workspaceComplexity==="Advanced"?" selected":"")+'>Advanced</option></select></label></div><div class="row-wrap section-block">'+btn("Customize Toolbar","toolbar-customize","btn-compact")+'</div>';
+    }
     function renderSettings() {
-      const sections=["General","Workspace","Appearance","Editing","Performance","Storage","AI & Models","Downloads","Privacy","Keyboard","Advanced / Developer","About"];
+      const sections=["General","Workspace","Appearance","Editing","Playback","Performance","Storage","AI & Models","Downloads","Privacy","Shortcuts","Advanced / Developer","About"];
       const devViews=[["Agents & CLI","agents"],["Command Inspector","command-inspector"],["Capability Explorer","capability-explorer"],["Diagnostics","diagnostics"],["Plugins","plugins"],["Feature Map","feature-map"],["Automation Recipes","recipes"]];
       let content="";
       if(state.selectedSettings==="General") content='<div class="grid grid-2"><div class="field"><label for="language">Language</label><select id="language" class="select"><option>English</option><option>Tiếng Việt</option></select></div><label class="toggle-row"><span class="toggle-copy"><strong>Autosave</strong><small>Prototype preference</small></span><input class="switch setting-toggle" data-setting="autosave" type="checkbox" '+(state.settings.autosave?"checked":"")+'></label><div class="field"><label>Autosave interval</label><select class="select"><option>1 minute</option><option>5 minutes</option><option>10 minutes</option></select></div></div>';
       else if(state.selectedSettings==="Workspace") content='<div class="grid grid-2"><label class="field"><span>Workspace Complexity</span><select id="workspace-complexity" class="select complexity-select"><option'+(state.workspaceComplexity==="Simple"?" selected":"")+'>Simple</option><option'+(state.workspaceComplexity==="Advanced"?" selected":"")+'>Advanced</option></select></label><div class="field"><span class="field-label">Preview layout</span><div class="view-switch"><button data-action="set-mode" data-mode="desktop" aria-pressed="'+(state.mode==="desktop")+'">Desktop</button><button data-action="set-mode" data-mode="mobile" aria-pressed="'+(state.mode==="mobile")+'">Mobile</button></div></div></div><p class="small secondary section-block">Simple and Advanced share one project and command model. Advanced reveals additional timeline, audio, color, and developer controls.</p>';
-      else if(state.selectedSettings==="Appearance") content='<div class="row-wrap"><span class="chip">Focused Monochrome</span><span class="small muted">Black, charcoal, gray, and white application chrome.</span></div><div class="field section-block"><label for="density">UI density</label><select class="select" id="density"><option'+(state.settings.uiDensity==="Comfortable"?" selected":"")+'>Comfortable</option><option'+(state.settings.uiDensity==="Compact"?" selected":"")+'>Compact</option></select></div><div class="field section-block"><label>Text scaling</label><input type="range" min="90" max="130" value="100" aria-label="Text scaling"></div>';
+      else if(state.selectedSettings==="Appearance") content=renderAppearanceSettings();
       else if(state.selectedSettings==="Editing") content='<label class="toggle-row"><span class="toggle-copy"><strong>Snap</strong><small>Default timeline snapping</small></span><input class="switch setting-toggle" data-setting="snap" type="checkbox" '+(state.settings.snap?"checked":"")+'></label><div class="field section-block"><label>Default transition</label><select class="select"><option>Cut</option><option>Cross Dissolve</option></select></div><div class="field section-block"><label>Timeline behavior</label><select class="select"><option>Selection follows playhead</option><option>Playhead follows selection</option></select></div>';
       else if(state.selectedSettings==="Performance") content='<div class="grid grid-2"><label class="toggle-row"><span class="toggle-copy"><strong>GPU acceleration</strong><small>Planned platform setting</small></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware decode</strong></span><input class="switch" type="checkbox"></label><label class="toggle-row"><span class="toggle-copy"><strong>Hardware encode</strong></span><input class="switch" type="checkbox"></label><div class="field"><label>Memory/cache limit</label><select class="select"><option>Auto</option><option>4 GB</option><option>8 GB</option></select></div></div>';
       else if(state.selectedSettings==="Storage") content='<div class="stack"><div class="field"><label>Cache path</label><input class="input" value="Default · prototype" readonly></div><div class="field"><label>Proxy path</label><input class="input" value="Not configured" readonly></div><div class="field"><label>Model storage</label><input class="input" value="Not configured" readonly></div>'+btn("Clear Cache","clear-cache","")+'</div>';
       else if(state.selectedSettings==="AI & Models") content='<div class="grid grid-2"><label class="toggle-row"><span class="toggle-copy"><strong>Prefer local models</strong><small>Provider selection is a mock preference.</small></span><input class="switch" type="checkbox" checked></label><label class="toggle-row"><span class="toggle-copy"><strong>Allow cloud providers</strong></span><input class="switch setting-toggle" data-setting="cloud" type="checkbox" '+(state.settings.cloud?"checked":"")+'></label><div class="field"><label>Default provider</label><select class="select"><option>Local</option><option>OpenAI-compatible</option><option>Gemini-compatible</option><option>Custom</option></select></div></div><div class="row-wrap section-block">'+btn("Manage Models…","navigate","btn-compact btn-primary",'data-view="models"')+'<span class="small muted">Demo metadata · review required. No model downloads are real.</span></div>';
       else if(state.selectedSettings==="Downloads") content=renderDownloads();
       else if(state.selectedSettings==="Privacy") content='<label class="toggle-row"><span class="toggle-copy"><strong>Offline mode</strong><small>Blocks provider calls in the future product.</small></span><input class="switch setting-toggle" data-setting="offline" type="checkbox" '+(state.settings.offline?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Network AI permission</strong></span><input class="switch setting-toggle" data-setting="networkAI" type="checkbox" '+(state.settings.networkAI?"checked":"")+'></label><label class="toggle-row"><span class="toggle-copy"><strong>Telemetry</strong><small>Off by default · placeholder</small></span><input class="switch setting-toggle" data-setting="telemetry" type="checkbox" '+(state.settings.telemetry?"checked":"")+'></label>';
-      else if(state.selectedSettings==="Keyboard") content='<div class="row"><label class="search-wrap">'+icon("search")+'<input class="input" id="shortcut-search" placeholder="Search shortcuts" aria-label="Search shortcuts"></label></div><div class="divider"></div>'+[["Play / Pause","Space"],["Undo","⌘ / Ctrl + Z"],["Redo","⌘ / Ctrl + Shift + Z"],["Command Palette","⌘ / Ctrl + K"],["Save","⌘ / Ctrl + S"],["Delete Selection","Delete"]].map(pair=>'<div class="row shortcut-row"><span>'+pair[0]+'</span><kbd class="chip push">'+pair[1]+'</kbd></div>').join("");
+      else if(state.selectedSettings==="Playback") content='<div class="stack"><label class="toggle-row"><span class="toggle-copy"><strong>Loop playback</strong><small>Use the preview transport toggle.</small></span><input id="playback-loop-setting" class="switch" type="checkbox" '+(state.loop?"checked":"")+'></label><label class="field"><span>Frame Rate</span><select id="playback-fps" class="select">'+[24,25,30,50,60].map(fps=>'<option'+(state.projectFps===fps?" selected":"")+'>'+fps+'</option>').join("")+'</select></label><label class="toggle-row"><span class="toggle-copy"><strong>Follow Playhead</strong><small>Scroll the timeline during playback.</small></span><input id="follow-playhead-setting" class="switch" type="checkbox" '+(state.followPlayhead?"checked":"")+'></label></div>';
+      else if(state.selectedSettings==="Shortcuts") content='<div class="row"><label class="search-wrap">'+icon("search")+'<input class="input" id="shortcut-search" placeholder="Search shortcuts" aria-label="Search shortcuts"></label></div><div class="divider"></div>'+[["Play / Pause","Space"],["Undo","⌘ / Ctrl + Z"],["Redo","⌘ / Ctrl + Shift + Z"],["Command Palette","⌘ / Ctrl + K"],["Save","⌘ / Ctrl + S"],["Delete Selection","Delete"]].map(pair=>'<div class="row shortcut-row"><span>'+pair[0]+'</span><kbd class="chip push">'+pair[1]+'</kbd></div>').join("");
       else if(state.selectedSettings==="Advanced / Developer") content='<label class="toggle-row"><span class="toggle-copy"><strong>Developer Mode</strong><small>Shows CLI, agent, diagnostics, command, plugin, and feature map surfaces.</small></span><input id="developer-mode-toggle" class="switch" type="checkbox" '+(state.developerMode?"checked":"")+'></label>'+(state.developerMode?'<nav class="dev-subnav section-block" aria-label="Developer tools">'+devViews.map(item=>'<button class="filter-chip" data-action="navigate" data-view="'+item[1]+'">'+esc(item[0])+'</button>').join("")+'</nav>':'<p class="small muted section-block">Developer surfaces are hidden from regular navigation until enabled.</p>');
       else content='<div class="status-item"><span class="brand-mark">OR</span><div class="status-copy"><strong>Opencut Reinforced</strong><small>UI Prototype · repository metadata</small></div></div><p class="small secondary">Product direction and interactions in this page are simulated.</p><span class="mono small secondary">Repository: huou07/Opencut-Reinforced</span>';
       return '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">'+sections.map(name=>'<button class="filter-chip" data-action="settings-section" data-section="'+name+'" aria-pressed="'+(state.selectedSettings===name)+'">'+esc(name)+'</button>').join("")+'</nav><section class="panel"><div class="panel-head"><h2>'+esc(state.selectedSettings)+'</h2><span class="chip">Prototype preference</span></div><div class="panel-body">'+content+'</div></section></div>';
@@ -1512,6 +1990,7 @@
       return '<div class="row-wrap"><span class="chip semantic-warning">Prototype catalog</span><span class="small muted">No executable plugin runs or installs here.</span></div><div class="grid grid-3 section-block">'+items.map(item=>'<article class="feature-card"><span class="eyebrow">'+esc(item[0])+'</span><strong>'+esc(item[1])+'</strong><small>Version metadata example · compatibility review required</small><div class="divider"></div><span class="small secondary">Source: demo catalog</span><span class="small secondary">License: '+esc(item[3])+'</span><span class="small secondary">Permissions: declared before installation</span><span class="badge">Planned</span></article>').join("")+'</div>';
     }
     function featureStatusFor(name,group) {
+      if(Object.values(featureRegistry).some(feature=>feature.label===name&&feature.featureMapGroup===group))return "Planned";
       if(/Future/i.test(name)||["HDR — Future","EDL/XML — Future","Voice Clone — Future / consent required","Lip Sync — Future","Semantic Media Search — Future","Multicam"].includes(name)) return "Future";
       if(["AI ASSIST","AI GENERATION","AGENT-NATIVE"].includes(group)||(["INFRASTRUCTURE","DEVELOPER"].includes(group)&&/model|provider|plugin|agent|cli|automation/i.test(name))) return "Experimental";
       if(["PROJECT & WORKFLOW","EDITOR CORE","VIDEO","TEXT","CAPTIONS","DUBBING","AUDIO","CREATIVE ASSETS","COMMUNITY","ACCESSIBILITY","PLATFORMS"].includes(group)) return "Core Vision";
@@ -1520,9 +1999,10 @@
     function renderFeatureMap() {
       const statuses=["All","Core Vision","Planned","Future","Experimental"];
       const query=(state.featureSearch||"").trim().toLowerCase();
-      const groups=Object.entries(featureGroups).map(([group,items])=>[group,items.filter(name=>(!query||(group+" "+name).toLowerCase().includes(query))&&(state.featureStatus==="All"||featureStatusFor(name,group)===state.featureStatus))]).filter(([,items])=>items.length);
+      const registryGroups=Object.values(featureRegistry).filter(feature=>feature.featureMapGroup).reduce((groups,feature)=>{groups[feature.featureMapGroup]=groups[feature.featureMapGroup]||[];groups[feature.featureMapGroup].push(feature.label);return groups;},{});
+      const groups=Object.entries(featureGroups).map(([group,items])=>[group,items.concat(registryGroups[group]||[]).filter(name=>(!query||(group+" "+name).toLowerCase().includes(query))&&(state.featureStatus==="All"||featureStatusFor(name,group)===state.featureStatus))]).filter(([,items])=>items.length);
       const toolbar='<div class="feature-map-toolbar"><label class="search-wrap">'+icon("search")+'<input id="feature-search" class="input" type="search" placeholder="Search product capabilities" aria-label="Search product capabilities" value="'+esc(state.featureSearch)+'"></label><label class="field"><span class="field-label">Status</span><select id="feature-status" class="select">'+statuses.map(status=>'<option'+(state.featureStatus===status?' selected':'')+'>'+status+'</option>').join("")+'</select></label></div>';
-      const groupsHTML=groups.map(([group,items])=>'<details class="feature-group" open><summary><strong>'+esc(group)+'</strong><span class="chip">'+items.length+' items</span></summary><div class="feature-map-list">'+items.map(name=>'<article class="feature-map-item"><div><strong>'+esc(name)+'</strong><small>'+esc(group)+' · product direction only</small></div><span class="badge">'+featureStatusFor(name,group)+'</span></article>').join("")+'</div></details>').join("");
+      const groupsHTML=groups.map(([group,items])=>'<details class="feature-group" open><summary><strong>'+esc(group)+'</strong><span class="chip">'+items.length+' items</span></summary><div class="feature-map-list">'+items.map(name=>{const registered=Object.values(featureRegistry).some(feature=>feature.label===name&&feature.featureMapGroup===group);return '<article class="feature-map-item"><div><strong>'+esc(name)+'</strong><small>'+esc(group)+' · '+(registered?'registered prototype feature':'product direction only')+'</small></div><span class="badge">'+(registered?'Prototype / Planned':featureStatusFor(name,group))+'</span></article>';}).join("")+'</div></details>').join("");
       return '<div class="row-wrap"><span class="small secondary">Full OR product vision · statuses describe direction, not shipped functionality.</span><span class="push prototype-badge">Prototype map</span></div><section class="panel section-block"><div class="panel-body">'+toolbar+(groupsHTML||'<div class="empty-state"><strong>No matching capabilities</strong><p>Try another search or status.</p></div>')+'</div></section>';
     }
     function renderDiagnostics() {
@@ -1556,6 +2036,8 @@
       return (views[state.view]||renderHome)();
     }
     function render() {
+      if(!state.themePreviewing)applyThemeById(state.currentThemeId,false);
+      else applyAppearanceSettings();
       $("#app-shell").dataset.mode=state.mode;
       $("#app-shell").classList.toggle("simple-mode",state.workspaceComplexity==="Simple");
       document.body.dataset.view=state.view;
@@ -1566,6 +2048,9 @@
       const saveText=$("#save-state-text");
       if(saveText) saveText.textContent=state.saved?"Saved":"Unsaved changes";
       sizeViewerCanvas();
+      syncTimelineGeometry();
+      syncPlaybackButton();
+      updateUndoRedoButtons();
     }
     function sizeViewerCanvas() {
       const stage=$(".viewer-stage");
@@ -1580,21 +2065,34 @@
       canvas.style.width=Math.max(60,Math.round(fitWidth*factor))+"px";
       canvas.style.height=Math.max(60,Math.round(fitWidth/ratio*factor))+"px";
     }
-    window.addEventListener("resize",()=>window.requestAnimationFrame(sizeViewerCanvas));
-    function pushHistory() {
-      state.history.push(JSON.stringify({ tracks: state.tracks, selectedClipId: state.selectedClipId, currentTime: state.currentTime }));
+    window.addEventListener("resize",()=>window.requestAnimationFrame(()=>{sizeViewerCanvas();syncTimelineGeometry();}));
+    function updateUndoRedoButtons() {
+      const undo=$("[data-action=undo]"),redo=$("[data-action=redo]");
+      if(undo){undo.disabled=!state.history.length;undo.title=state.history.length?"Undo · "+(state.lastAction||"last edit"):"Undo unavailable";undo.setAttribute("aria-label",undo.title);}
+      if(redo){redo.disabled=!state.redoHistory.length;redo.title=state.redoHistory.length?"Redo · "+(state.lastRedoAction||"last edit"):"Redo unavailable";redo.setAttribute("aria-label",redo.title);}
+    }
+    function pushHistory(action) {
+      state.history.push(JSON.stringify({ tracks: state.tracks, markers:state.markers, captions:state.captions, selectedClipId: state.selectedClipId, selectedClipIds:state.selectedClipIds, currentTime: state.currentTime }));
       if (state.history.length > 40) state.history.shift();
       state.redoHistory = [];
+      state.lastAction=action||"Edit";
+      updateUndoRedoButtons();
     }
     function restoreHistory(source, destination) {
       if (!source.length) { toast("Nothing to change"); return; }
-      destination.push(JSON.stringify({ tracks: state.tracks, selectedClipId: state.selectedClipId, currentTime: state.currentTime }));
+      destination.push(JSON.stringify({ tracks: state.tracks, markers:state.markers, captions:state.captions, selectedClipId: state.selectedClipId, selectedClipIds:state.selectedClipIds, currentTime: state.currentTime }));
       const previous = JSON.parse(source.pop());
+      if(source===state.redoHistory)state.lastAction=state.lastRedoAction||"Edit";else state.lastRedoAction=state.lastAction||"Edit";
       state.tracks = previous.tracks;
+      state.markers = previous.markers||state.markers;
+      state.captions = previous.captions||state.captions;
       state.selectedClipId = previous.selectedClipId;
+      state.selectedClipIds=previous.selectedClipIds||[previous.selectedClipId].filter(Boolean);
       state.currentTime = previous.currentTime;
       markChanged();
       render();
+      setCurrentTime(previous.currentTime);
+      updateUndoRedoButtons();
       toast("Timeline state restored");
     }
     function findTrackForType(type) {
@@ -1607,27 +2105,11 @@
       const clip = { id: "clip-" + Date.now() + "-" + Math.floor(Math.random()*10000), name: name, start: end, duration: length || 6, kind: kind, ai: !!ai };
       track.clips.push(clip);
       state.selectedClipId = clip.id;
+      state.selectedClipIds=[clip.id];
       state.view = "editor";
       markChanged();
       render();
       toast("Added to the mock timeline");
-    }
-    function startPlayback() {
-      state.playing = !state.playing;
-      render();
-      if (!state.playing) {
-        if (state.playTimer) window.clearInterval(state.playTimer);
-        return;
-      }
-      if (state.playTimer) window.clearInterval(state.playTimer);
-      state.playTimer = window.setInterval(() => {
-        state.currentTime += .25;
-        if (state.currentTime >= state.duration) { state.currentTime = 0; state.playing = false; window.clearInterval(state.playTimer); }
-        $$(".time-display").forEach(node => { node.textContent = fmtTime(state.currentTime) + (node.closest(".transport") ? " / " + fmtTime(state.duration) : ""); });
-        const head = $("#playhead");
-        if (head) head.style.left = (68 + state.currentTime * 18 * state.zoom) + "px";
-        if (!state.playing) render();
-      }, 250);
     }
     function openModal(title, content, footer, id) {
       const root = $("#modal-root");
@@ -1637,9 +2119,9 @@
       state.modal = id || "dialog";
       window.setTimeout(() => { const first = $("input,select,textarea,button", root); if (first) first.focus(); }, 20);
     }
-    function closeModal() { const root=$("#modal-root");root.classList.remove("is-open");root.innerHTML="";if(state.modal==="asset-preview")state.previewingAssetId=null;state.modal=null;const focus=state.modalReturnFocus;state.modalReturnFocus=null;if(focus&&focus.isConnected)window.setTimeout(()=>focus.focus(),0); }
+    function closeModal() { const root=$("#modal-root");const closing=state.modal;root.classList.remove("is-open");root.innerHTML="";if(closing==="asset-preview")state.previewingAssetId=null;if((closing==="theme-editor"||closing==="theme-browser"||closing==="theme-details")&&state.themePreviewing){state.themePreviewing=false;state.themePreviewTokens=null;restoreSelectedTheme();}if(closing==="theme-editor")state.themeDraft=null;state.modal=null;const focus=state.modalReturnFocus;state.modalReturnFocus=null;if(focus&&focus.isConnected)window.setTimeout(()=>focus.focus(),0); }
     function newProjectModal() {
-      const content = '<div class="stack"><div class="field"><label for="new-project-name">Project Name</label><input id="new-project-name" class="input" value="Untitled Project"></div><div class="grid grid-2"><div class="field"><label>Aspect Ratio</label><select id="new-project-ratio" class="select"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>Custom</option></select></div><div class="field"><label>Resolution</label><select id="new-project-resolution" class="select"><option>720p</option><option selected>1080p</option><option>1440p</option><option>4K</option><option>Custom</option></select></div><div class="field"><label>Frame rate</label><select class="select"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></div><div class="field"><label>Audio</label><select class="select"><option>44.1 kHz</option><option selected>48 kHz</option></select></div><div class="field"><label>Color</label><select class="select"><option>SDR</option><option>HDR · future</option></select></div></div><p class="small muted">Creates an empty demo project in local page state only.</p></div>';
+      const content = '<div class="stack"><div class="field"><label for="new-project-name">Project Name</label><input id="new-project-name" class="input" value="Untitled Project"></div><div class="grid grid-2"><div class="field"><label>Aspect Ratio</label><select id="new-project-ratio" class="select"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>Custom</option></select></div><div class="field"><label>Resolution</label><select id="new-project-resolution" class="select"><option>720p</option><option selected>1080p</option><option>1440p</option><option>4K</option><option>Custom</option></select></div><div class="field"><label for="new-project-fps">Frame rate</label><select id="new-project-fps" class="select"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></div><div class="field"><label>Audio</label><select class="select"><option>44.1 kHz</option><option selected>48 kHz</option></select></div><div class="field"><label>Color</label><select class="select"><option>SDR</option><option>HDR · future</option></select></div></div><p class="small muted">Creates an empty demo project in local page state only.</p></div>';
       openModal("New Project",content,btn("Cancel","close-modal","")+btn("Create","create-project","btn-primary"),"new-project");
     }
     function createMenu() {
@@ -1789,13 +2271,65 @@
       const project = state.projects.find(item=>item.id===id);
       if (!project) { toast("No project selected"); return; }
       state.activeProjectId = project.id;
+      state.projectFps = Number(project.fps) || 30;
       state.view = "editor";
       render();
       toast("Opened "+project.name+" in the demo editor");
     }
     function handleAction(action, target) {
       const id = target && target.dataset ? target.dataset.id : undefined;
+      if(action!=="context-menu-toggle")closeContextMenu();
+      if(action!=="menu-toggle"){state.openMenu=null;$(".menu-popover")?.remove();$$('[data-action="menu-toggle"]').forEach(button=>button.setAttribute("aria-expanded","false"));}
+      if(action!=="timeline-more-toggle"){state.openTimelineMore=false;$(".timeline-more-popover")?.remove();$("[data-action=timeline-more-toggle]")?.setAttribute("aria-expanded","false");}
       switch (action) {
+        case "menu-toggle": state.openMenu=state.openMenu===target.dataset.menu?null:target.dataset.menu;render();return;
+        case "timeline-more-toggle": state.openTimelineMore=!state.openTimelineMore;render();return;
+        case "toggle-left-panel": case "collapse-left-panel": state.leftPanelCollapsed=!state.leftPanelCollapsed;render();return;
+        case "toggle-inspector": case "collapse-inspector": state.inspectorCollapsed=!state.inspectorCollapsed;render();return;
+        case "toggle-timeline": state.timelineCollapsed=!state.timelineCollapsed;render();return;
+        case "save-project": setSaved(true);toast("Saved");return;
+        case "theme-browser": themeBrowserModal();return;
+        case "theme-tab": state.themeLibraryTab=target.dataset.tab||"Built-in";const themeBody=$("#modal-theme-browser .modal-body");if(themeBody)themeBody.innerHTML=renderThemeBrowser();return;
+        case "theme-preview": {
+          const theme=builtInThemes.concat(communityThemes,state.downloadedThemes||[],state.customThemes||[]).find(item=>item.id===id);
+          if(theme){state.themePreviewing=true;state.themePreviewTokens=theme.tokens;applyThemePreview(theme.tokens);toast("Previewing "+theme.name);}
+          return;
+        }
+        case "theme-apply": {
+          const theme=applyThemeById(id,true);state.themePreviewing=false;state.themePreviewTokens=null;
+          closeModal();toast("Theme applied · "+theme.name);return;
+        }
+        case "theme-download": {
+          const theme=communityThemes.find(item=>item.id===id);
+          if(theme&&!state.downloadedThemes.some(item=>item.id===id)){state.downloadedThemes.unshift(Object.assign({},theme,{source:"Downloaded",tokens:Object.assign({},theme.tokens)}));persistThemes();}
+          const body=$("#modal-theme-browser .modal-body");if(body)body.innerHTML=renderThemeBrowser();toast("Theme added to Downloaded · local demo only");return;
+        }
+        case "theme-details": themeDetail(id);return;
+        case "theme-editor-open": closeModal();openThemeEditor();return;
+        case "theme-duplicate": {
+          const theme=builtInThemes.concat(communityThemes,state.downloadedThemes||[],state.customThemes||[]).find(item=>item.id===id);
+          const source=theme||state.themeDraft;
+          closeModal();openThemeEditor(source);return;
+        }
+        case "theme-reset": {
+          if(state.themeDraft){state.themeDraft=Object.assign({},state.themeDraft,{tokens:Object.assign({},focusedTokens),radius:8,density:"Comfortable"});themeEditorModal();applyThemePreview(state.themeDraft.tokens);}
+          return;
+        }
+        case "theme-save": saveCustomTheme();return;
+        case "theme-export": {const theme=state.themeDraft||currentTheme();exportTheme(theme);return;}
+        case "theme-import": {let input=$("#theme-import-file");if(!input){themeBrowserModal();input=$("#theme-import-file");}if(input)input.click();return;}
+        case "toolbar-customize": renderToolbarCustomizeModal();return;
+        case "toolbar-pin": {
+          const name=target.dataset.name;if(name&&!state.pinnedToolbarTools.includes(name)){state.pinnedToolbarTools.push(name);state.hiddenToolbarTools=state.hiddenToolbarTools.filter(item=>item!==name);}
+          renderToolbarCustomizeModal();render();return;
+        }
+        case "toolbar-remove": {
+          const name=target.dataset.name;if(name){state.pinnedToolbarTools=state.pinnedToolbarTools.filter(item=>item!==name);if(!state.hiddenToolbarTools.includes(name))state.hiddenToolbarTools.push(name);}
+          renderToolbarCustomizeModal();render();return;
+        }
+        case "toolbar-reset": state.pinnedToolbarTools=[];state.hiddenToolbarTools=[];state.selectedTool="Select";renderToolbarCustomizeModal();render();return;
+        case "toggle-follow-playhead": state.followPlayhead=!state.followPlayhead;target.setAttribute("aria-pressed",String(state.followPlayhead));toast("Follow Playhead "+(state.followPlayhead?"on":"off"));return;
+        case "timeline-zoom-step": state.zoom=Math.max(.55,Math.min(1.8,state.zoom+Number(target.dataset.step)*.1));updateTimelineScale();return;
         case "navigate":
           if(state.modal)closeModal();
           if (target.dataset.tab && target.dataset.tab==="Prompt Editing") state.selectedAgentTab="Prompt Editing";
@@ -1817,8 +2351,6 @@
         case "open-editor-tool": openEditorTool(target.dataset.tool,target);return;
         case "editor-tool-panel": state.selectedEditorTool=target.dataset.tool||"Media";state.mobileToolSheet=isMobileLayout();render();return;
         case "close-mobile-tool-sheet": state.mobileToolSheet=false;render();return;
-        case "collapse-left-panel": state.leftPanelCollapsed=!state.leftPanelCollapsed;render();return;
-        case "collapse-inspector": state.inspectorCollapsed=!state.inspectorCollapsed;render();return;
         case "viewer-only": if(state.view!=="editor")state.view="editor";state.viewOnly=!state.viewOnly;state.viewerFocus=false;render();toast(state.viewOnly?"Cinema view · timeline and panels hidden":"Editor workspace restored");return;
         case "fullscreen-preview": state.fullscreenPreview=!state.fullscreenPreview;state.viewerFocus=false;render();toast(state.fullscreenPreview?"Fullscreen preview simulation":"Preview returned to the editor");return;
         case "viewer-focus": state.viewerFocus=!state.viewerFocus;state.viewOnly=false;state.fullscreenPreview=false;render();return;
@@ -1833,6 +2365,7 @@
           state.selectedMediaTab="Media";state.selectedEditorTool="Media";state.view="editor";state.mobileToolSheet=isMobileLayout();render();toast("Added a demo media item; no file was read"); return;
         case "import-folder": toast("Folder import is a prototype placeholder"); return;
         case "project-settings": openModal("Project Settings",'<div class="grid grid-2"><div class="field"><label>Aspect ratio</label><select class="select"><option>'+esc(activeProject().ratio)+'</option><option>9:16</option><option>1:1</option></select></div><div class="field"><label>Resolution</label><select class="select"><option>'+esc(activeProject().resolution)+'</option><option>1080p</option><option>4K</option></select></div></div>',btn("Close","close-modal","")+btn("Save","close-modal","btn-primary"),"project-settings"); return;
+        case "clip-action": handleAction("timeline-context-command",target);return;
         case "projects-layout": state.projectLayout=target.dataset.layout; render(); return;
         case "project-filter": state.projectsFilter=target.dataset.filter; render(); return;
         case "toggle-pin": {
@@ -1852,28 +2385,39 @@
         case "delete-project": deleteProjectModal(id); return;
         case "confirm-delete-project": {if(state.projects.length<=1){closeModal();toast("Keep one demo project available");return;}state.projects=state.projects.filter(item=>item.id!==id);if(state.activeProjectId===id){state.activeProjectId=state.projects[0].id;state.view="projects";}closeModal();render();toast("Project removed from demo state");return;}
         case "close-modal": closeModal(); return;
-        case "select-clip": state.selectedClipId=id;state.currentTime=(getClip(id)||{clip:{start:0}}).clip.start;render();return;
+        case "select-clip": state.selectedClipId=id;state.selectedClipIds=[id];render();return;
+        case "select-clip-add": {
+          const ids=state.selectedClipIds||[];state.selectedClipIds=ids.includes(id)?ids.filter(item=>item!==id):ids.concat(id);
+          if(state.selectedClipIds.length)state.selectedClipId=state.selectedClipIds[state.selectedClipIds.length-1];render();return;
+        }
         case "split-clip": {
           const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}
           if(found.clip.duration<1){toast("Clip is too short to split in this demo");return;}
-          pushHistory();const second=Object.assign({},found.clip,{id:"clip-"+Date.now(),name:found.clip.name+" · B",start:found.clip.start+found.clip.duration/2,duration:found.clip.duration/2});found.clip.duration=found.clip.duration/2;found.track.clips.push(second);state.selectedClipId=second.id;markChanged();render();toast("Split selected clip");return;
+          const start=found.clip.start,end=start+found.clip.duration,frame=1/state.projectFps;
+          const splitAt=state.currentTime>start+frame&&state.currentTime<end-frame?state.currentTime:start+found.clip.duration/2;
+          pushHistory("Split");const originalEnd=end,second=Object.assign({},found.clip,{id:"clip-"+Date.now(),name:found.clip.name+" · B",start:splitAt,duration:originalEnd-splitAt});found.clip.duration=splitAt-start;found.track.clips.push(second);state.selectedClipId=second.id;state.selectedClipIds=[second.id];markChanged();render();toast("Split applied · prototype");return;
         }
         case "duplicate-clip": {
-          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}pushHistory();const copy=Object.assign({},found.clip,{id:"clip-"+Date.now(),name:found.clip.name+" Copy",start:found.clip.start+found.clip.duration});found.track.clips.push(copy);state.selectedClipId=copy.id;markChanged();render();toast("Duplicated clip");return;
+          const selected=(state.selectedClipIds||[state.selectedClipId]).map(getClip).filter(Boolean);if(!selected.length){toast("Select a clip first");return;}pushHistory("Duplicate");const copies=selected.map((found,index)=>Object.assign({},found.clip,{id:"clip-"+Date.now()+"-"+index,name:found.clip.name+" Copy",start:found.clip.start+found.clip.duration}));copies.forEach((copy,index)=>selected[index].track.clips.push(copy));state.selectedClipId=copies[copies.length-1].id;state.selectedClipIds=copies.map(item=>item.id);markChanged();render();toast("Duplicated selected clips");return;
         }
         case "delete-clip": {
-          const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}pushHistory();found.track.clips=found.track.clips.filter(clip=>clip.id!==found.clip.id);state.selectedClipId=null;markChanged();render();toast("Removed clip from demo timeline");return;
+          const ids=(state.selectedClipIds||[state.selectedClipId]).filter(Boolean);if(!ids.length){toast("Select a clip first");return;}pushHistory("Delete");state.tracks.forEach(track=>track.clips=track.clips.filter(clip=>!ids.includes(clip.id)));state.selectedClipId=null;state.selectedClipIds=[];markChanged();render();toast("Removed selected clips from demo timeline");return;
+        }
+        case "ripple-delete": {
+          const selected=(state.selectedClipIds||[state.selectedClipId]).map(getClip).filter(Boolean);if(!selected.length){toast("Select a clip first");return;}
+          pushHistory("Ripple Delete");selected.forEach(found=>{const start=found.clip.start,end=start+found.clip.duration;found.track.clips=found.track.clips.filter(item=>item.id!==found.clip.id);state.tracks.forEach(track=>track.clips.forEach(item=>{if(item.start>=end)item.start=Math.max(0,item.start-found.clip.duration);}));});state.selectedClipId=null;state.selectedClipIds=[];markChanged();render();toast("Ripple delete applied · prototype");return;
         }
         case "undo": restoreHistory(state.history,state.redoHistory);return;
         case "redo": restoreHistory(state.redoHistory,state.history);return;
         case "toggle-play": startPlayback();return;
-        case "go-start": state.currentTime=0;render();return;
-        case "go-end": state.currentTime=state.duration;render();return;
-        case "next-frame": state.currentTime+=1/30;render();return;
+        case "go-start": stopPlayback();setCurrentTime(0);return;
+        case "go-end": stopPlayback();setCurrentTime(state.duration);return;
+        case "previous-frame": stopPlayback();setCurrentTime(state.currentTime-1/Math.max(1,state.projectFps));return;
+        case "next-frame": stopPlayback();setCurrentTime(state.currentTime+1/Math.max(1,state.projectFps));return;
         case "toggle-guides": state.safeGuides=!state.safeGuides;render();return;
-        case "toggle-loop": state.loop=!state.loop;target.setAttribute("aria-pressed",String(state.loop));toast(state.loop?"Loop enabled":"Loop disabled");return;
-        case "volume": toast("Preview volume: "+state.volume+"%");return;
-        case "add-marker": state.markers.push({id:"marker-"+Date.now(),time:state.currentTime,label:"Marker "+(state.markers.length+1)});render();toast("Marker added at "+fmtTime(state.currentTime));return;
+        case "toggle-loop": state.loop=!state.loop;$$('[data-action="toggle-loop"]').forEach(button=>button.setAttribute("aria-pressed",String(state.loop)));toast(state.loop?"Loop enabled":"Loop disabled");return;
+        case "volume": state.volumeMuted=!state.volumeMuted;{const use=$("[data-action=volume] use");if(use)use.setAttribute("href",state.volumeMuted?"#i-mute":"#i-volume");const button=$("[data-action=volume]");if(button){button.setAttribute("aria-pressed",String(state.volumeMuted));button.setAttribute("aria-label",state.volumeMuted?"Unmute preview":"Mute preview");button.title=state.volumeMuted?"Unmute preview":"Mute preview";}toast(state.volumeMuted?"Preview muted":"Preview volume: "+state.volume+"%");}return;
+        case "add-marker": pushHistory("Marker");state.markers.push({id:"marker-"+Date.now(),time:state.currentTime,label:"Marker "+(state.markers.length+1)});render();toast("Marker added at "+fmtTime(state.currentTime));return;
         case "add-keyframe": {
           const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return;}
           pushHistory();found.clip.keyframes=(found.clip.keyframes||2)+1;markChanged();render();toast("Keyframe added to the selected clip");return;
@@ -1962,8 +2506,9 @@
           const name=($("#new-project-name")||{}).value||"Untitled Project";
           const ratio=($("#new-project-ratio")||{}).value||"16:9";
           const resolution=($("#new-project-resolution")||{}).value||"1080p";
-          const project={id:"p-"+Date.now(),name:name.trim()||"Untitled Project",ratio:ratio,resolution:resolution,duration:"00:00",edited:"Just now",pinned:false,archived:false};
-          state.projects.unshift(project);state.activeProjectId=project.id;state.tracks=JSON.parse(JSON.stringify(tracksSeed)).map(track=>Object.assign({},track,{clips:[]}));state.selectedClipId=null;state.duration=0;state.view="editor";markChanged();closeModal();render();toast("Empty demo project created");return;
+          const fps=Number(($("#new-project-fps")||{}).value)||30;
+          const project={id:"p-"+Date.now(),name:name.trim()||"Untitled Project",ratio:ratio,resolution:resolution,fps:fps,duration:"00:00",edited:"Just now",pinned:false,archived:false};
+          state.projects.unshift(project);state.activeProjectId=project.id;state.projectFps=fps;state.tracks=JSON.parse(JSON.stringify(tracksSeed)).map(track=>Object.assign({},track,{clips:[]}));state.selectedClipId=null;state.duration=0;state.view="editor";markChanged();closeModal();render();toast("Empty demo project created");return;
         }
         case "projects-open-menu": projectMenu(id);return;
         default: if(!handleExtendedAction(action,target,id))toast("Planned capability — prototype only");
@@ -2089,24 +2634,65 @@
           const name=target.dataset.name||"";
           if(name==="Split"){handleAction("split-clip",target);return true;}
           if(name==="Duplicate"){handleAction("duplicate-clip",target);return true;}
-          if(name==="Delete"||name==="Ripple Delete"){handleAction("delete-clip",target);return true;}
+          if(name==="Delete"){handleAction("delete-clip",target);return true;}
+          if(name==="Ripple"||name==="Ripple Delete"){handleAction("ripple-delete",target);return true;}
+          if(name==="Trim"){
+            const found=getClip(state.selectedClipId);if(!found){toast("Select a clip first");return true;}
+            const start=found.clip.start,end=start+found.clip.duration,time=state.currentTime;
+            if(time<=start||time>=end){toast("Move the playhead inside the selected clip to trim");return true;}
+            pushHistory("Trim");found.clip.duration=time-start;markChanged();render();toast("Trim applied · prototype");return true;
+          }
           if(name==="Snap"){state.settings.snap=!state.settings.snap;render();toast("Snap "+(state.settings.snap?"on":"off"));return true;}
           if(name==="Marker"){handleAction("add-marker",target);return true;}
           if(name==="Adjustment Layer"){handleAction("add-adjustment-layer",target);return true;}
-          if(["Link / Unlink","Group"].includes(name)){toast(name+" selection simulated");return true;}
+          if(name==="Add Track"){handleAction("add-track",{dataset:{type:"video"}});return true;}
+          if(name==="Follow Playhead"){state.followPlayhead=!state.followPlayhead;render();toast("Follow Playhead "+(state.followPlayhead?"on":"off"));return true;}
+          if(name==="Link"||name==="Unlink"||name==="Link / Unlink"){const clips=(state.selectedClipIds||[state.selectedClipId]).map(getClip).filter(Boolean);if(clips.length)pushHistory(name);clips.forEach(item=>item.clip.linked=name==="Unlink"?false:!item.clip.linked);render();toast(name+" selection · prototype");return true;}
+          if(name==="Group"||name==="Ungroup"){toast(name+" selection · prototype");return true;}
+          if(["Edit Text","Style","Volume","Fade","Transform","Analyze Beat Grid","Auto Beat Sync"].includes(name)){toast(name+" · Prototype / Planned");return true;}
           toast(name+" workflow simulated");return true;
+        }
+        case "timeline-context-command": {
+          const name=target.dataset.name||"",found=getClip(state.selectedClipId);
+          if(name==="Copy"||name==="Cut"){
+            const clips=(state.selectedClipIds||[state.selectedClipId]).map(getClip).filter(Boolean);
+            state.clipClipboard=clips.map(item=>({trackType:item.track.type,clip:JSON.parse(JSON.stringify(item.clip))}));
+            if(name==="Cut")handleAction("delete-clip",target);else toast("Copied "+clips.length+" clip(s) in demo state");
+            return true;
+          }
+          if(name==="Paste"){
+            if(!state.clipClipboard||!state.clipClipboard.length){toast("Clipboard is empty");return true;}
+            pushHistory("Paste");const pasted=[];
+            state.clipClipboard.forEach((entry,index)=>{const track=state.tracks.find(item=>item.type===entry.trackType)||findTrackForType(entry.clip.kind);const clip=Object.assign({},entry.clip,{id:"clip-"+Date.now()+"-"+index,name:entry.clip.name+" Copy",start:state.currentTime+index*.25});track.clips.push(clip);pasted.push(clip.id);});
+            state.selectedClipIds=pasted;state.selectedClipId=pasted[pasted.length-1];markChanged();render();toast("Pasted mock clip(s)");return true;
+          }
+          if(name==="Duplicate"){handleAction("duplicate-clip",target);return true;}
+          if(name==="Split at Playhead"){
+            if(!found||state.currentTime<=found.clip.start||state.currentTime>=found.clip.start+found.clip.duration){toast("Move the playhead inside the selected clip to split");return true;}
+            handleAction("split-clip",target);return true;
+          }
+          if(name==="Split"){handleAction("split-clip",target);return true;}
+          if(name==="Delete"){handleAction("delete-clip",target);return true;}
+          if(name==="Enable / Disable"&&found){pushHistory("Toggle Clip");found.clip.enabled=found.clip.enabled===false;render();toast(found.clip.enabled?"Clip enabled":"Clip disabled");return true;}
+          if((name==="Link / Unlink"||name==="Link"||name==="Unlink")&&found){pushHistory("Link");found.clip.linked=!found.clip.linked;render();toast(found.clip.linked?"Clip linked · prototype":"Clip unlinked · prototype");return true;}
+          if(name==="Properties"&&found){openModal("Clip Properties",'<dl class="metadata-list"><dt>Name</dt><dd>'+esc(found.clip.name)+'</dd><dt>Track</dt><dd>'+esc(found.track.name)+'</dd><dt>Type</dt><dd>'+esc(found.clip.kind)+'</dd><dt>Start</dt><dd>'+fmtTime(found.clip.start)+'</dd><dt>Duration</dt><dd>'+fmtTime(found.clip.duration)+'</dd><dt>Source</dt><dd>Mock project media</dd></dl>',btn("Close","close-modal",""),"clip-properties");return true;}
+          if(name.includes("Reveal Source")||name.includes("Show in Finder")){toast("Source reveal is a mock action · no file access");return true;}
+          if(name==="Speed"||name==="Create Compound Clip"){advancedTool(name==="Create Compound Clip"?"Compound Clip":name);return true;}
+          if(name==="Cut"||name==="Copy"||name==="Paste")return true;
+          toast(name+" · prototype only");return true;
         }
         case "add-track": {
           const type=target.dataset.type||"video",prefix=type==="caption"?"SUB":type==="audio"?"A":type==="text"?"T":"V";
           const number=state.tracks.filter(item=>item.name.startsWith(prefix)).length+1;
           const track={id:"track-"+Date.now(),name:prefix+number,type:type==="caption"?"text":type,muted:false,locked:false,visible:true,clips:[]};
-          state.tracks.unshift(track);markChanged();render();toast(track.name+" track added");return true;
+          pushHistory("Add Track");state.tracks.unshift(track);markChanged();render();toast(track.name+" track added");return true;
         }
         case "add-adjustment-layer": {
           let track=state.tracks.find(item=>item.type==="adjustment");
+          pushHistory("Adjustment Layer");
           if(!track){track={id:"adj-"+Date.now(),name:"ADJ",type:"adjustment",muted:false,locked:false,visible:true,clips:[]};state.tracks.unshift(track);}
           track.clips.push({id:"clip-adj-"+Date.now(),name:"Adjustment Layer",start:state.currentTime,duration:8,kind:"adjustment"});
-          state.selectedClipId=track.clips[track.clips.length-1].id;state.view="editor";state.selectedEditorTool="More";state.mobileToolSheet=false;markChanged();render();toast("Adjustment layer added to the mock timeline");return true;
+          state.selectedClipId=track.clips[track.clips.length-1].id;state.selectedClipIds=[state.selectedClipId];state.view="editor";state.selectedEditorTool="More";state.mobileToolSheet=false;markChanged();render();toast("Adjustment layer added to the mock timeline");return true;
         }
         case "toggle-graph": state.graphEditor=!state.graphEditor;render();return true;
         case "advanced-tool": advancedTool(target.dataset.name||target.textContent.trim());return true;
@@ -2171,40 +2757,117 @@
       const action=target.dataset.command;if(!action)return;
       closeModal();handleAction(action,target);
     }
+    function persistLayout() { saveLocalJSON("or.layout",{leftPanelWidth:state.leftPanelWidth,inspectorWidth:state.inspectorWidth,timelineHeight:state.timelineHeight}); }
+    function applyWorkspacePreset(name) {
+      state.workspacePreset=name;state.view="editor";state.leftPanelCollapsed=false;state.inspectorCollapsed=false;state.timelineCollapsed=false;
+      const presets={Editing:{tool:"Media",left:252,inspector:260,timeline:258},Captions:{tool:"Captions",left:320,inspector:280,timeline:305},Audio:{tool:"Audio",left:305,inspector:280,timeline:360},Color:{tool:"Filters / Color",left:292,inspector:300,timeline:240},AI:{tool:"AI",left:320,inspector:260,timeline:250}};
+      const preset=presets[name]||presets.Editing;state.selectedEditorTool=preset.tool;state.leftPanelWidth=preset.left;state.inspectorWidth=preset.inspector;state.timelineHeight=preset.timeline;state.mobileToolSheet=isMobileLayout();persistLayout();render();toast(name+" workspace preset applied");
+    }
+    function findSnapTime(time, excludeId) {
+      let nearest=null,distance=8/timelineScale();
+      state.tracks.forEach(track=>track.clips.forEach(clip=>{if(clip.id===excludeId)return;[clip.start,clip.start+clip.duration].forEach(edge=>{const delta=Math.abs(edge-time);if(delta<distance){distance=delta;nearest=edge;}});}));
+      return nearest;
+    }
+    function closeContextMenu() { const menu=$("#or-context-menu");if(menu)menu.remove();state.contextClipId=null; }
+    function openClipContextMenu(id,x,y) {
+      closeContextMenu();state.contextClipId=id;state.selectedClipId=id;state.selectedClipIds=[id];
+      render();
+      const entries=[["Cut","cut"],["Copy","copy"],["Duplicate","duplicate"],["Split at Playhead","split"],["Delete","delete"],["Enable / Disable","eye"],["Link / Unlink","link"],null,["Speed","speed"],["Create Compound Clip","compound"],null,["Show in Finder / Reveal Source","folder"],["Properties","settings"]];
+      const menu=document.createElement("div");menu.id="or-context-menu";menu.className="or-context-menu";menu.setAttribute("role","menu");menu.setAttribute("aria-label","Clip actions");
+      menu.innerHTML=entries.map(item=>item?'<button role="menuitem" data-action="timeline-context-command" data-name="'+esc(item[0])+'" title="'+esc(item[0])+'">'+icon(item[1])+'<span>'+esc(item[0])+'</span></button>':'<div class="menu-divider" role="separator"></div>').join("");
+      document.body.appendChild(menu);
+      const rect=menu.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(window.innerWidth-rect.width-8,x))+"px";menu.style.top=Math.max(8,Math.min(window.innerHeight-rect.height-8,y))+"px";
+      const first=$("button",menu);if(first)first.focus();
+    }
     document.addEventListener("click", event => {
-      const target = event.target.closest("[data-action]");
-      if (target) {
+      const target=event.target.closest("[data-action]");
+      if(target){
         event.preventDefault();
-        handleAction(target.dataset.action,target);
+        if(target.dataset.action==="select-clip"&&event.shiftKey)handleAction("select-clip-add",target);
+        else handleAction(target.dataset.action,target);
       }
-      if (event.target === $("#modal-root")) closeModal();
+      if(event.target===$("#modal-root"))closeModal();
     });
+    document.addEventListener("pointerover",event=>{
+      const target=event.target.closest("[data-tooltip],.tool-btn,.editor-tool-rail button,.editor-mobile-dock button,.track-label button,.viewer-transport button,.viewer-overlays button,[data-resize]");
+      if(!target)return;
+      const text=target.dataset.tooltip||target.getAttribute("title")||target.getAttribute("aria-label")||target.textContent.trim();if(!text)return;
+      let tip=$("#or-tooltip");if(!tip){tip=document.createElement("div");tip.id="or-tooltip";tip.className="or-tooltip";tip.setAttribute("role","tooltip");document.body.appendChild(tip);}
+      tip.textContent=text;tip.hidden=false;const rect=target.getBoundingClientRect();tip.style.left=Math.max(8,Math.min(window.innerWidth-tip.offsetWidth-8,rect.left+rect.width/2-tip.offsetWidth/2))+"px";tip.style.top=Math.max(8,rect.top-tip.offsetHeight-7)+"px";
+    });
+    document.addEventListener("pointerout",event=>{if(event.target.closest("[data-tooltip],.tool-btn,.editor-tool-rail button,.editor-mobile-dock button,.track-label button,.viewer-transport button,.viewer-overlays button,[data-resize]")){const tip=$("#or-tooltip");if(tip)tip.hidden=true;}});
+    document.addEventListener("focusin",event=>{
+      const target=event.target.closest("[data-tooltip],.tool-btn,.editor-tool-rail button,.editor-mobile-dock button,.track-label button,.viewer-transport button,.viewer-overlays button,[data-resize]");
+      if(!target)return;const text=target.dataset.tooltip||target.title||target.getAttribute("aria-label");if(!text)return;
+      let tip=$("#or-tooltip");if(!tip){tip=document.createElement("div");tip.id="or-tooltip";tip.className="or-tooltip";tip.setAttribute("role","tooltip");document.body.appendChild(tip);}tip.textContent=text;tip.hidden=false;const rect=target.getBoundingClientRect();tip.style.left=Math.max(8,Math.min(window.innerWidth-tip.offsetWidth-8,rect.left+rect.width/2-tip.offsetWidth/2))+"px";tip.style.top=Math.max(8,rect.top-tip.offsetHeight-7)+"px";
+    });
+    document.addEventListener("focusout",()=>{const tip=$("#or-tooltip");if(tip)tip.hidden=true;});
+    document.addEventListener("pointerdown",event=>{
+      const context=$("#or-context-menu");if(context&&!event.target.closest("#or-context-menu"))closeContextMenu();
+      if(state.openMenu&&!event.target.closest(".editor-menu-bar-wrap")){state.openMenu=null;$(".menu-popover")?.remove();}
+      if(state.openTimelineMore&&!event.target.closest(".timeline-more-wrap")){state.openTimelineMore=false;$(".timeline-more-popover")?.remove();}
+      const head=event.target.closest(".playhead"),ruler=event.target.closest(".timeline-ruler"),scrubTarget=head||ruler;
+      if(scrubTarget&&event.button===0){
+        event.preventDefault();if(state.playing)stopPlayback();state.scrubPointerId=event.pointerId;state.scrubTarget=scrubTarget;
+        if(scrubTarget.setPointerCapture)scrubTarget.setPointerCapture(event.pointerId);
+        setCurrentTime(pixelToTimelineTime(event.clientX,scrubTarget.closest(".timeline-scroller")));return;
+      }
+      const handle=event.target.closest("[data-resize]");if(!handle)return;
+      const shell=$(".editor-shell");if(!shell)return;
+      state.resizeState={type:handle.dataset.resize,startX:event.clientX,startY:event.clientY,left:state.leftPanelWidth,inspector:state.inspectorWidth,timeline:state.timelineHeight,shell:shell,handle:handle,pointerId:event.pointerId};
+      if(handle.setPointerCapture)handle.setPointerCapture(event.pointerId);document.body.dataset.resizing=handle.dataset.resize;event.preventDefault();
+    });
+    document.addEventListener("pointermove",event=>{
+      if(state.scrubPointerId===event.pointerId){setCurrentTime(pixelToTimelineTime(event.clientX,state.scrubTarget&&state.scrubTarget.closest(".timeline-scroller")));return;}
+      const resize=state.resizeState;if(!resize)return;
+      const leftMax=Math.max(190,Math.min(390,window.innerWidth-48-280-220-12));
+      if(resize.type==="left")state.leftPanelWidth=Math.max(190,Math.min(leftMax,resize.left+event.clientX-resize.startX));
+      if(resize.type==="inspector"){const max=Math.max(220,Math.min(390,window.innerWidth-48-280-state.leftPanelWidth-12));state.inspectorWidth=Math.max(220,Math.min(max,resize.inspector+resize.startX-event.clientX));}
+      if(resize.type==="timeline")state.timelineHeight=Math.max(145,Math.min(Math.min(430,window.innerHeight-270),resize.timeline+resize.startY-event.clientY));
+      resize.shell.style.setProperty("--left-panel-width",state.leftPanelWidth+"px");resize.shell.style.setProperty("--inspector-width",state.inspectorWidth+"px");resize.shell.style.setProperty("--timeline-height",state.timelineHeight+"px");sizeViewerCanvas();
+    });
+    function finishPointer(event) {
+      if(state.scrubPointerId===event.pointerId){const target=state.scrubTarget;if(target&&target.hasPointerCapture&&target.hasPointerCapture(event.pointerId))target.releasePointerCapture(event.pointerId);state.scrubPointerId=null;state.scrubTarget=null;return;}
+      const resize=state.resizeState;if(!resize)return;
+      if(resize.handle&&resize.handle.hasPointerCapture&&resize.handle.hasPointerCapture(event.pointerId))resize.handle.releasePointerCapture(event.pointerId);
+      state.resizeState=null;delete document.body.dataset.resizing;persistLayout();
+    }
+    document.addEventListener("pointerup",finishPointer);
+    document.addEventListener("pointercancel",finishPointer);
     document.addEventListener("input", event => {
       const target=event.target;
       const searchable={"template-search":"templateSearch","asset-search":"assetSearch","feature-search":"featureSearch","audio-search":"audioSearch","transcript-search":"transcriptSearch"};
-      if(searchable[target.id]){state[searchable[target.id]]=target.value;const caret=target.selectionStart;render();const replacement=$("#"+target.id);if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
-      if(target.id==="project-search"){state.projectSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#project-search");if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
-      if(target.id==="media-search"){state.mediaSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#media-search");if(replacement){replacement.focus();replacement.setSelectionRange(caret,caret);}return;}
+      if(searchable[target.id]){state[searchable[target.id]]=target.value;const caret=target.selectionStart;render();const replacement=$("#"+target.id);if(replacement){replacement.focus();if(caret!=null)replacement.setSelectionRange(caret,caret);}return;}
+      if(target.id==="project-search"){state.projectSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#project-search");if(replacement){replacement.focus();if(caret!=null)replacement.setSelectionRange(caret,caret);}return;}
+      if(target.id==="media-search"){state.mediaSearch=target.value;const caret=target.selectionStart;render();const replacement=$("#media-search");if(replacement){replacement.focus();if(caret!=null)replacement.setSelectionRange(caret,caret);}return;}
       if(target.id==="voiceover-text"){state.voiceoverText=target.value;return;}
-      if(target.matches('[data-action="caption-edit"]')){const caption=state.captions.find(item=>item.id===target.dataset.id);if(caption){if(state.translationApplied)caption.translated=target.value;else caption.text=target.value;}return;}
-      if(target.id==="timeline-zoom"){
-        state.zoom=Number(target.value);
-        $$(".clip").forEach(node=>{
-          const found=getClip(node.dataset.id);
-          if(found){node.style.left=Math.max(0,found.clip.start*18*state.zoom)+"px";node.style.width=Math.max(48,found.clip.duration*18*state.zoom)+"px";}
-        });
-        const head=$("#playhead");if(head)head.style.left=(68+state.currentTime*18*state.zoom)+"px";
-        return;
-      }
-      if(target.matches(".setting-toggle")){state.settings[target.dataset.setting]=target.checked;toast("Preference updated in demo state");return;}
-      if(target.matches('[data-action="clip-property"]')){const found=getClip(state.selectedClipId);if(found){found.clip.properties=found.clip.properties||{};found.clip.properties[target.dataset.property]=target.value;}markChanged();return;}
+      if(target.matches('[data-action="caption-edit"]')){if(state.propertyEditTarget!==target){pushHistory("Caption Edit");state.propertyEditTarget=target;}const caption=state.captions.find(item=>item.id===target.dataset.id);if(caption){if(state.translationApplied)caption.translated=target.value;else caption.text=target.value;}return;}
+      if(target.id==="timeline-zoom"){state.zoom=Number(target.value);updateTimelineScale();return;}
+      if(target.matches("[data-theme-color]")){const key=target.dataset.themeColor;if(state.themeDraft&&themeTokenDefs.some(([name])=>name===key)){state.themeDraft.tokens[key]=target.value;const hex=$("[data-theme-hex='"+key+"']");if(hex)hex.value=target.value;applyThemePreview(state.themeDraft.tokens);updateThemeEditorPreview();}return;}
+      if(target.matches("[data-theme-hex]")){const key=target.dataset.themeHex,value=target.value.trim();if(state.themeDraft&&/^#[0-9a-f]{6}$/i.test(value)){state.themeDraft.tokens[key]=value;const color=$("[data-theme-color='"+key+"']");if(color)color.value=value;applyThemePreview(state.themeDraft.tokens);updateThemeEditorPreview();}return;}
+      if(target.id==="theme-name"&&state.themeDraft){state.themeDraft.name=target.value;return;}
+      if(target.id==="text-scale"){state.textScale=Number(target.value);document.documentElement.style.setProperty("--or-text-scale",String(state.textScale/100));saveLocalJSON("or.text-scale",state.textScale);return;}
+      if(target.matches('[data-action="clip-property"]')){if(state.propertyEditTarget!==target){pushHistory("Property Change");state.propertyEditTarget=target;}const found=getClip(state.selectedClipId);if(found){found.clip.properties=found.clip.properties||{};found.clip.properties[target.dataset.property]=target.value;}markChanged();return;}
       if(target.matches(".range-row input[type=range]")){const value=target.parentElement.querySelector("span:last-child");if(value)value.textContent=String(target.value);return;}
     });
-    document.addEventListener("change", event => {
+    document.addEventListener("change", async event => {
       const target=event.target;
+      if(target.matches('[data-action="clip-property"],[data-action="caption-edit"]'))state.propertyEditTarget=null;
       if(target.id==="project-sort"){state.projectSort=target.value;render();}
       if(target.matches(".setting-toggle")){state.settings[target.dataset.setting]=target.checked;toast("Preference updated in demo state");}
       if(target.id==="density"){state.settings.uiDensity=target.value;toast("Density changed in demo state");}
+      if(target.id==="appearance-density"){state.appearanceDensity=target.value;state.settings.uiDensity=target.value;applyAppearanceSettings();saveLocalJSON("or.density",state.appearanceDensity);toast("Density changed");}
+      if(target.id==="corner-style"){state.cornerRadius=target.value;applyAppearanceSettings();saveLocalJSON("or.corner-radius",state.cornerRadius);}
+      if(target.id==="reduced-motion"){state.reducedMotion=target.checked;applyAppearanceSettings();saveLocalJSON("or.reduced-motion",state.reducedMotion);}
+      if(target.id==="playback-loop-setting"){state.loop=target.checked;$$('[data-action="toggle-loop"]').forEach(button=>button.setAttribute("aria-pressed",String(state.loop)));}
+      if(target.id==="follow-playhead-setting"){state.followPlayhead=target.checked;}
+      if(target.id==="playback-fps"){state.projectFps=Number(target.value)||30;syncTimelineGeometry();setCurrentTime(state.currentTime);}
+      if(target.id==="theme-radius"&&state.themeDraft){state.themeDraft.radius=Number(target.value);}
+      if(target.id==="theme-density"&&state.themeDraft){state.themeDraft.density=target.value;}
+      if(target.id==="theme-import-file"&&target.files&&target.files[0]){
+        try{const parsed=JSON.parse(await target.files[0].text()),theme=validateImportedTheme(parsed);state.customThemes.unshift(theme);persistThemes();state.currentThemeId=theme.id;state.cornerRadius=String(theme.radius);state.appearanceDensity=theme.density;state.themePreviewing=false;applyThemeById(theme.id,true);closeModal();if(state.view==="settings"&&state.selectedSettings==="Appearance")render();toast("Theme imported and applied");}
+        catch(error){closeModal();toast("Theme import rejected · "+error.message);}
+      }
       if(target.id==="template-category"){state.templateCategory=target.value;render();}
       if(target.id==="template-ratio"){state.templateRatio=target.value;render();}
       if(target.id==="template-duration"){state.templateDuration=target.value;render();}
@@ -2214,107 +2877,159 @@
       if(target.id==="feature-status"){state.featureStatus=target.value;render();}
       if(target.id==="viewer-zoom"){state.viewerZoom=target.value;sizeViewerCanvas();}
       if(target.id==="workspace-complexity"){state.workspaceComplexity=target.value;state.settings.complexity=target.value;render();toast(target.value+" workspace controls selected");}
+      if(target.id==="workspace-preset")applyWorkspacePreset(target.value);
       if(target.id==="developer-mode-toggle"){state.developerMode=target.checked;state.settings.developerMode=target.checked;render();toast(target.checked?"Developer surfaces revealed":"Developer surfaces hidden");}
       if(target.id==="dubbing-language")state.dubbingTarget=target.value;
       if(target.id==="dubbing-mode")state.dubbingMode=target.value;
       if(target.id==="voiceover-voice")state.voiceoverVoice=target.value;
       if(target.matches(".speaker-map")){const speaker="Speaker "+target.dataset.speaker;state.speakerVoices[speaker]=target.value;state.dubbingSegments.forEach(item=>{if(item.speaker===speaker)item.voice=target.value;});}
     });
-    document.addEventListener("pointerdown",event=>{
-      const handle=event.target.closest("[data-resize]");if(!handle)return;
-      const shell=$(".editor-shell");if(!shell)return;
-      state.resizeState={type:handle.dataset.resize,startX:event.clientX,startY:event.clientY,left:state.leftPanelWidth,inspector:state.inspectorWidth,timeline:state.timelineHeight,shell:shell};
-      if(handle.setPointerCapture)handle.setPointerCapture(event.pointerId);
-      event.preventDefault();
-    });
-    document.addEventListener("pointermove",event=>{
-      const resize=state.resizeState;if(!resize)return;
-      if(resize.type==="left")state.leftPanelWidth=Math.max(190,Math.min(390,resize.left+event.clientX-resize.startX));
-      if(resize.type==="inspector")state.inspectorWidth=Math.max(220,Math.min(390,resize.inspector+resize.startX-event.clientX));
-      if(resize.type==="timeline")state.timelineHeight=Math.max(145,Math.min(430,window.innerHeight-event.clientY));
-      resize.shell.style.setProperty("--left-panel-width",state.leftPanelWidth+"px");
-      resize.shell.style.setProperty("--inspector-width",state.inspectorWidth+"px");
-      resize.shell.style.setProperty("--timeline-height",state.timelineHeight+"px");
-      sizeViewerCanvas();
-    });
-    document.addEventListener("pointerup",()=>{state.resizeState=null;});
     document.addEventListener("submit", event => {
       if(event.target.id==="terminal-form"){event.preventDefault();runCli(($("#terminal-input")||{}).value||"");return;}
     });
     document.addEventListener("keydown", event => {
-      const typing=event.target.matches("input,textarea,select,[contenteditable=true]");
       const command=event.metaKey||event.ctrlKey;
-      if(event.key==="Escape"&&state.modal){closeModal();return;}
-      if(event.key==="Escape"&&(state.viewerFocus||state.fullscreenPreview||state.viewOnly||state.mobileToolSheet||state.mobileInspector)){state.viewerFocus=false;state.fullscreenPreview=false;state.viewOnly=false;state.mobileToolSheet=false;state.mobileInspector=false;render();return;}
-      if(state.modal==="palette"&&event.key==="Enter"){const first=$(".palette-item");if(first){event.preventDefault();first.click();return;}}
+      const target=event.target;
+      const typing=target instanceof HTMLElement&&(target.matches("input,textarea,select,[contenteditable=true]")||target.isContentEditable);
+      if(event.key==="Escape"){
+        if($("#or-context-menu")){closeContextMenu();return;}
+        if(state.openMenu){state.openMenu=null;$(".menu-popover")?.remove();return;}
+        if(state.openTimelineMore){state.openTimelineMore=false;$(".timeline-more-popover")?.remove();return;}
+        if(state.modal){closeModal();return;}
+        if(state.viewerFocus||state.fullscreenPreview||state.viewOnly||state.mobileToolSheet||state.mobileInspector){state.viewerFocus=false;state.fullscreenPreview=false;state.viewOnly=false;state.mobileToolSheet=false;state.mobileInspector=false;render();return;}
+      }
+      if(state.modal==="palette"&&event.key==="Enter"){const active=document.activeElement&&document.activeElement.matches(".palette-item")?document.activeElement:$(".palette-item");if(active){event.preventDefault();active.click();return;}}
       if(state.modal==="palette"&&event.key==="ArrowDown"&&typing){const first=$(".palette-item");if(first){event.preventDefault();first.focus();return;}}
-      if(command&&event.key.toLowerCase()==="k"){event.preventDefault();openPalette();return;}
+      if(state.modal==="palette"&&["ArrowDown","ArrowUp"].includes(event.key)&&!typing){const items=$$(".palette-item"),index=items.indexOf(document.activeElement);if(items.length){event.preventDefault();items[(index+(event.key==="ArrowDown"?1:-1)+items.length)%items.length].focus();return;}}
+      const contextMenu=$("#or-context-menu");
+      if(contextMenu&&["ArrowDown","ArrowUp","Home","End"].includes(event.key)){
+        const items=$$("button[role=menuitem]",contextMenu),index=items.indexOf(document.activeElement);
+        if(items.length){event.preventDefault();const next=event.key==="Home"?0:event.key==="End"?items.length-1:(index+(event.key==="ArrowDown"?1:-1)+items.length)%items.length;items[next].focus();return;}
+      }
+      if(state.modal)return;
       if(typing)return;
-      if(event.code==="Space"){event.preventDefault();startPlayback();return;}
-      if(command&&event.key.toLowerCase()==="s"){event.preventDefault();setSaved(true);toast("Demo project saved");return;}
-      if(command&&event.key.toLowerCase()==="z"){event.preventDefault();handleAction(event.shiftKey?"redo":"undo",{});return;}
-      if((event.key==="Delete"||event.key==="Backspace")&&state.view==="editor"){event.preventDefault();handleAction("delete-clip",{});}
+      if(command&&event.key.toLowerCase()==="k"){event.preventDefault();openPalette();return;}
       if(event.target.matches('[data-resize]')&&["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)){
         event.preventDefault();const type=event.target.dataset.resize;
         if(type==="left")state.leftPanelWidth=Math.max(190,Math.min(390,state.leftPanelWidth+(event.key==="ArrowRight"?12:-12)));
         if(type==="inspector")state.inspectorWidth=Math.max(220,Math.min(390,state.inspectorWidth+(event.key==="ArrowLeft"?12:-12)));
         if(type==="timeline")state.timelineHeight=Math.max(145,Math.min(430,state.timelineHeight+(event.key==="ArrowUp"?12:-12)));
-        render();
+        persistLayout();render();return;
+      }
+      if(command&&event.key.toLowerCase()==="s"){event.preventDefault();setSaved(true);toast("Demo project saved");return;}
+      if(command&&event.key.toLowerCase()==="z"){event.preventDefault();handleAction(event.shiftKey?"redo":"undo",{});return;}
+      if(command&&event.key.toLowerCase()==="b"&&state.view==="editor"){event.preventDefault();handleAction("split-clip",{});return;}
+      if(command)return;
+      if(state.view!=="editor")return;
+      if(event.code==="Space"){event.preventDefault();startPlayback();return;}
+      if(event.key==="k"||event.key==="K"){event.preventDefault();stopPlayback();return;}
+      if(event.key==="j"||event.key==="J"){event.preventDefault();startPlayback(-1);return;}
+      if(event.key==="l"||event.key==="L"){event.preventDefault();startPlayback(1);return;}
+      if((event.key==="Delete"||event.key==="Backspace")){event.preventDefault();handleAction("delete-clip",{});return;}
+      if(event.key==="Home"){event.preventDefault();stopPlayback();setCurrentTime(0);return;}
+      if(event.key==="End"){event.preventDefault();stopPlayback();setCurrentTime(state.duration);return;}
+      if(event.key==="ArrowLeft"||event.key==="ArrowRight"){
+        event.preventDefault();stopPlayback();
+        if(event.shiftKey){
+          const frame=1/Math.max(1,state.projectFps),points=state.tracks.flatMap(track=>track.clips.flatMap(clip=>[clip.start,clip.start+clip.duration])).sort((a,b)=>a-b);
+          const point=event.key==="ArrowLeft"?points.filter(time=>time<state.currentTime-frame).pop():points.find(time=>time>state.currentTime+frame);
+          setCurrentTime(point==null?(event.key==="ArrowLeft"?0:state.duration):point);
+        }else setCurrentTime(state.currentTime+(event.key==="ArrowLeft"?-1:1)/Math.max(1,state.projectFps));
       }
     });
     function openPalette() {
-      state.paletteCommands=[
-        {label:"New Project",action:"new-project"},
-        {label:"Open Projects",action:"navigate",view:"projects"},
-        {label:"Import Media",action:"import-media"},
-        {label:"Open Templates",action:"navigate",view:"templates"},
-        {label:"Create Template",action:"create-template"},
-        {label:"Open Asset Library",action:"navigate",view:"assets"},
-        {label:"Add Text",action:"open-editor-tool",tool:"Text"},
-        {label:"Auto Captions",action:"open-editor-tool",tool:"Captions"},
-        {label:"Translate & Dub",action:"open-editor-tool",tool:"Translate"},
-        {label:"Generate Voiceover",action:"open-editor-tool",tool:"Voiceover"},
-        {label:"Open Effects",action:"open-editor-tool",tool:"Effects"},
-        {label:"Add Adjustment Layer",action:"add-adjustment-layer"},
-        {label:"Create Snapshot",action:"snapshot-create"},
-        {label:"Cinema Mode",action:"viewer-only"},
-        {label:"Export",action:"navigate",view:"export"},
-        {label:"Open Agent Hub",action:"navigate",view:"agents"},
-        {label:"Open CLI",action:"navigate",view:"agents",agentTab:"CLI"},
-        {label:"Manage Models",action:"navigate",view:"settings",section:"AI & Models"},
-        {label:"Manage Downloads",action:"download-manager"},
-        {label:"Open Settings",action:"navigate",view:"settings"},
-        {label:"Advanced / Developer",action:"navigate",view:"settings",section:"Advanced / Developer"}
+      const commands=[
+        ["New Project","new-project","Project","project.new"],
+        ["Open Projects","navigate","Project","project.open",{"view":"projects"}],
+        ["Import Media","import-media","Media","media.import"],
+        ["Open Templates","navigate","Templates","template.browse",{"view":"templates"}],
+        ["Create Template","create-template","Templates","template.create"],
+        ["Select Tool","editor-tool","Editor","editor.tool.select",{tool:"Select"}],
+        ["Split Clip","editor-tool","Editor","video.split",{tool:"Split"},"⌘/Ctrl+B"],
+        ["Trim Clip","timeline-command","Editor","timeline.trim",{name:"Trim"}],
+        ["Ripple Delete","timeline-command","Editor","timeline.ripple_delete",{name:"Ripple"}],
+        ["Duplicate Clip","editor-tool","Editor","clip.duplicate",{tool:"Duplicate"}],
+        ["Delete Clip","editor-tool","Editor","clip.delete",{tool:"Delete"}],
+        ["Add Marker","timeline-command","Editor","timeline.marker",{name:"Marker"}],
+        ["Toggle Snap","timeline-command","Editor","timeline.snap",{name:"Snap"}],
+        ["Follow Playhead","timeline-command","View","timeline.follow_playhead",{name:"Follow Playhead"}],
+        ["Open Asset Library","navigate","Assets","asset.library",{"view":"assets"}],
+        ["Create Snapshot","snapshot-create","Project","project.snapshot.create"],
+        ["Export","export-dialog","Project","render.export"],
+        ["Open Settings","navigate","Settings","settings.open",{"view":"settings"}],
+        ["Open Appearance","navigate","Settings","appearance.open",{"view":"settings","section":"Appearance"}],
+        ["Browse Themes","theme-browser","Appearance","appearance.themes"],
+        ["Create Theme","theme-editor-open","Appearance","appearance.theme.create"],
+        ["Command Palette","open-palette","View","view.command_palette",{},"⌘/Ctrl+K"],
+        ["Viewer Only","viewer-only","View","view.viewer_only"],
+        ["Show / Hide Left Panel","toggle-left-panel","View","view.left_panel"],
+        ["Show / Hide Inspector","toggle-inspector","View","view.inspector"],
+        ["Show / Hide Timeline","toggle-timeline","View","view.timeline"],
+        ["Undo","undo","Edit","edit.undo",{},"⌘/Ctrl+Z"],
+        ["Redo","redo","Edit","edit.redo",{},"⌘/Ctrl+Shift+Z"],
+        ["Save","save-project","Edit","project.save",{},"⌘/Ctrl+S"]
       ];
-      const content='<div class="field"><label for="palette-search">Search navigation, tools, templates, assets, commands, and settings</label><input id="palette-search" class="input" placeholder="Type a workflow…" autocomplete="off"></div><div id="palette-results" class="palette-results"></div>';
+      state.paletteCommands=commands.map(([label,action,category,commandId,extra,shortcut])=>Object.assign({label,action,category,commandId,shortcut},extra||{}));
+      Object.values(featureRegistry).forEach(feature=>state.paletteCommands.push({label:feature.label,action:"editor-tool-panel",tool:feature.label,category:feature.group,commandId:feature.command,feature:feature.group,shortcut:feature.shortcut||""}));
+      const content='<div class="field"><label for="palette-search">Search actions, features, categories, shortcuts, and command IDs</label><input id="palette-search" class="input" placeholder="Type a command…" autocomplete="off"></div><div id="palette-results" class="palette-results" role="listbox"></div>';
       openModal("Command Palette",content,"","palette");
       filterPalette();
       const input=$("#palette-search");if(input)input.addEventListener("input",filterPalette);
     }
     function filterPalette() {
-      const query=(($("#palette-search")||{}).value||"").trim().toLowerCase();
-      const entries=(state.paletteCommands||[]).map(item=>({label:item.label,action:item.action,view:item.view,tool:item.tool,section:item.section,agentTab:item.agentTab,id:item.id,kind:"command"}))
-        .filter(item=>!query||item.label.toLowerCase().includes(query));
+      const query=((($("#palette-search")||{}).value)||"").trim().toLowerCase();
+      const entries=(state.paletteCommands||[]).map(item=>Object.assign({},item,{kind:"command"}))
+        .filter(item=>!query||[item.label,item.category,item.shortcut,item.commandId,item.feature].join(" ").toLowerCase().includes(query));
       if(query){
-        state.templates.filter(item=>(item.name+" "+item.category+" "+item.creator).toLowerCase().includes(query)).slice(0,8).forEach(item=>entries.push({label:"Template · "+item.name,action:"template-details",id:item.id,kind:"template"}));
-        state.assets.filter(item=>(item.name+" "+item.category+" "+item.creator).toLowerCase().includes(query)).slice(0,10).forEach(item=>entries.push({label:"Asset · "+item.name,action:"asset-details",id:item.id,kind:"asset"}));
+        state.templates.filter(item=>(item.name+" "+item.category+" "+item.creator).toLowerCase().includes(query)).slice(0,8).forEach(item=>entries.push({label:"Template · "+item.name,action:"template-details",id:item.id,category:"Templates",commandId:"template.open."+item.id,kind:"template"}));
+        state.assets.filter(item=>(item.name+" "+item.category+" "+item.creator).toLowerCase().includes(query)).slice(0,10).forEach(item=>entries.push({label:"Asset · "+item.name,action:"asset-details",id:item.id,category:"Assets",commandId:"asset.open."+item.id,kind:"asset"}));
       }
       state.paletteMatches=entries.slice(0,24);
       const results=$("#palette-results");if(!results)return;
-      results.innerHTML=state.paletteMatches.map((item,index)=>'<button class="palette-item" data-action="palette-run" data-index="'+index+'" '+(item.view?'data-view="'+esc(item.view)+'"':'')+(item.tool?' data-tool="'+esc(item.tool)+'"':'')+(item.section?' data-section="'+esc(item.section)+'"':'')+(item.agentTab?' data-agent-tab="'+esc(item.agentTab)+'"':'')+(item.id?' data-id="'+esc(item.id)+'"':'')+'><span>'+esc(item.label)+'</span><kbd class="chip">'+(query?"Enter":"↵")+'</kbd></button>').join("")||'<div class="empty-state"><strong>No matching commands</strong><p>Search tools, project content, or settings.</p></div>';
+      results.innerHTML=state.paletteMatches.map((item,index)=>'<button class="palette-item" role="option" aria-selected="false" data-action="palette-run" data-index="'+index+'" '+(item.view?'data-view="'+esc(item.view)+'"':'')+(item.tool?' data-tool="'+esc(item.tool)+'"':'')+(item.name?' data-name="'+esc(item.name)+'"':'')+(item.section?' data-section="'+esc(item.section)+'"':'')+(item.agentTab?' data-agent-tab="'+esc(item.agentTab)+'"':'')+(item.id?' data-id="'+esc(item.id)+'"':'')+'><span>'+icon(item.icon||"more")+' '+esc(item.label)+'<small class="muted">'+esc(item.commandId||item.category||"")+'</small></span><kbd class="chip">'+esc(item.shortcut||"↵")+'</kbd></button>').join("")||'<div class="empty-state"><strong>No matching commands</strong><p>Search tools, project content, or settings.</p></div>';
     }
+    document.addEventListener("contextmenu",event=>{
+      const clip=event.target.closest(".clip");if(!clip)return;
+      event.preventDefault();openClipContextMenu(clip.dataset.id,event.clientX,event.clientY);
+    });
     document.addEventListener("dblclick",event=>{
+      const clip=event.target.closest(".clip");
+      if(clip){const found=getClip(clip.dataset.id);if(found){stopPlayback();setCurrentTime(found.clip.start);}return;}
+      const resize=event.target.closest("[data-resize]");
+      if(resize){if(resize.dataset.resize==="left")state.leftPanelWidth=252;if(resize.dataset.resize==="inspector")state.inspectorWidth=260;if(resize.dataset.resize==="timeline")state.timelineHeight=258;persistLayout();render();return;}
       if(event.target.closest(".viewer-canvas")&&!event.target.closest(".viewer-focus-button"))handleAction("viewer-focus",{});
     });
     document.addEventListener("dragstart",event=>{
-      const clip=event.target.closest(".clip");if(clip&&event.dataTransfer){event.dataTransfer.setData("text/plain",clip.dataset.id);event.dataTransfer.effectAllowed="move";}
+      const clip=event.target.closest(".clip");if(!clip||!event.dataTransfer)return;
+      const found=getClip(clip.dataset.id),scroller=clip.closest(".timeline-scroller");if(!found)return;
+      state.draggedClipId=clip.dataset.id;
+      state.dragClipOffset=Math.max(0,pixelToTimelineTime(event.clientX,scroller)-found.clip.start);
+      clip.classList.add("is-dragging");event.dataTransfer.setData("text/plain",clip.dataset.id);event.dataTransfer.effectAllowed="move";
     });
-    document.addEventListener("dragover",event=>{if(event.target.closest("[data-drop-track]"))event.preventDefault();});
+    document.addEventListener("dragend",event=>{
+      event.target.closest(".clip")?.classList.remove("is-dragging");state.draggedClipId=null;state.pendingClipStart=null;
+      const guide=$(".snap-guide");if(guide)guide.classList.remove("is-visible");
+    });
+    document.addEventListener("dragover",event=>{
+      const lane=event.target.closest("[data-drop-track]");if(!lane||!state.draggedClipId)return;
+      event.preventDefault();event.dataTransfer.dropEffect="move";
+      const found=getClip(state.draggedClipId);if(!found)return;
+      const raw=Math.max(0,pixelToTimelineTime(event.clientX,lane.closest(".timeline-scroller"))-(state.dragClipOffset||0));
+      let start=raw,snap=null;
+      if(state.settings.snap){
+        const startEdge=findSnapTime(raw,found.clip.id),endEdge=findSnapTime(raw+found.clip.duration,found.clip.id);
+        const candidates=[startEdge==null?null:{edge:startEdge,start:startEdge},endEdge==null?null:{edge:endEdge,start:endEdge-found.clip.duration}].filter(Boolean);
+        if(candidates.length){const candidate=candidates.reduce((best,item)=>Math.abs(item.start-raw)<Math.abs(best.start-raw)?item:best);snap=candidate.edge;start=Math.max(0,candidate.start);}
+      }
+      state.pendingClipStart=start;
+      const guide=$(".snap-guide");if(guide&&snap!=null){guide.style.left=timelineTimeToPixel(snap)+"px";guide.classList.add("is-visible");}else if(guide)guide.classList.remove("is-visible");
+    });
     document.addEventListener("drop",event=>{
       const lane=event.target.closest("[data-drop-track]");if(!lane)return;event.preventDefault();
-      const found=getClip(event.dataTransfer.getData("text/plain"));if(!found)return;
+      const clipId=event.dataTransfer?.getData("text/plain")||state.draggedClipId,found=getClip(clipId);if(!found)return;
       const targetTrack=state.tracks.find(item=>item.id===lane.dataset.dropTrack);if(!targetTrack||targetTrack.locked){toast("Track is locked");return;}
-      pushHistory();const clip=found.clip;found.track.clips=found.track.clips.filter(item=>item.id!==clip.id);clip.start=Math.max(0,(event.offsetX||0)/(18*state.zoom));targetTrack.clips.push(clip);state.selectedClipId=clip.id;markChanged();render();toast("Moved clip in the mock timeline");
+      const pointerTime=Math.max(0,pixelToTimelineTime(event.clientX,lane.closest(".timeline-scroller"))-(state.dragClipOffset||0));
+      pushHistory("Move Clip");const clip=found.clip;found.track.clips=found.track.clips.filter(item=>item.id!==clip.id);clip.start=state.pendingClipStart==null?pointerTime:state.pendingClipStart;targetTrack.clips.push(clip);state.selectedClipId=clip.id;state.selectedClipIds=[clip.id];markChanged();render();toast("Moved clip in the mock timeline");
     });
     document.addEventListener("click",event=>{
       if(state.mobileInspector&&event.target.matches(".mobile-inspector-backdrop")){state.mobileInspector=false;render();}
