@@ -11,7 +11,7 @@ pub struct ProjectId(Uuid);
 
 impl ProjectId {
     /// Generates a new UUID version 4 project identity.
-    pub fn new() -> Self {
+    pub fn generate() -> Self {
         Self(Uuid::new_v4())
     }
 }
@@ -53,7 +53,7 @@ pub struct ProjectInstanceId(Uuid);
 
 impl ProjectInstanceId {
     /// Generates a new UUID version 4 runtime-instance identity.
-    pub fn new() -> Self {
+    pub fn generate() -> Self {
         Self(Uuid::new_v4())
     }
 }
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn project_id_generates_and_formats_uuid_v4() {
-        let id = ProjectId::new();
+        let id = ProjectId::generate();
         assert_eq!(id.0.get_version(), Some(Version::Random));
 
         let text = id.to_string();
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn project_id_serde_round_trips_as_canonical_text() {
-        let id = ProjectId::new();
+        let id = ProjectId::generate();
         let serialized = serde_json::to_string(&id).unwrap();
 
         assert_eq!(
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn project_instance_id_generates_and_round_trips() {
-        let id = ProjectInstanceId::new();
+        let id = ProjectInstanceId::generate();
         assert_eq!(id.0.get_version(), Some(Version::Random));
 
         let text = id.to_string();
