@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. The remaining project, editing, media, rendering, and automation designs below are planned boundaries, not implemented product behavior. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds only foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. A project document, command/query system, editing, media, rendering, and automation remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -72,13 +72,13 @@ The Phase 3 application-info capability query is a bootstrap capability concept 
 
 ## 2. Time model
 
-Do not use floating-point seconds as canonical timeline time. Use rational or integer time suitable for video frame rates, audio sample rates, source rates, and timeline rates. A time value must carry or resolve through an explicit rate/timebase.
+Phase 4A implements `RationalTime` as exact seconds with a signed `i64` numerator and positive `u32` denominator. Fractions normalize to one canonical representation. `RationalRate` is exact units per second with positive, nonzero `u32` numerator and denominator. `RationalTime::from_units` converts integer frame or sample counts through the rate without floating point.
 
-Conversions to display seconds are derived and non-canonical. Define overflow, rounding, frame-boundary, and invalid-rate behavior in domain tests. Timeline math must remain exact for common rational frame rates and sample positions.
+Canonical time is never stored as `f32` or `f64`. Rational values remain exact: there is no implicit rounding. Any future conversion from exact time to integer frames, samples, or ticks must select an explicit rounding policy. `TimeRange` enforces nonnegative duration while allowing a negative start at this low-level layer. This is a foundational time layer, not full timeline behavior.
 
 ## 3. Native project format
 
-The native project is a versioned UTF-8 structured .orproj document. It is agent-readable and uses stable opaque persistent IDs for projects, tracks, clips, effects, markers, and other persistent objects. IDs must remain stable for the project lifetime, be unique in their required scope, serializable, comparable, and safe for CLI/API references; they must not encode mutable display names or array indexes. The ID representation, exact serialization syntax, and schema are not permanently selected here.
+The native project is planned as a versioned structured .orproj document. It is agent-readable and will use stable opaque persistent IDs for projects and other persistent objects. Phase 4A selects typed UUID version 4 for `ProjectId`; it is independent of names, paths, and collection indexes. Future persistent object IDs should follow the same typed opaque-ID pattern unless evidence justifies another representation. No `TrackId`, `ClipId`, or other object IDs exist yet. Exact .orproj serialization syntax and schema remain undecided; serde support does not select JSON or another file format.
 
 Projects reference external media. Media paths and fingerprints support relink, replace, offline state, and project collection without embedding source media by default. Cache entries never become canonical project state.
 
@@ -94,7 +94,9 @@ A crash journal records recoverable changes between durable checkpoints. Startup
 
 ### Project revisions
 
-Canonical Project state exposes a monotonically increasing `ProjectRevision`, conceptually an unsigned integer. Each successful project-mutating transaction increments the revision exactly once, including a multi-command atomic group; read-only queries and failed or rolled-back commands do not increment it.
+`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; command mutation is not implemented yet. Once canonical mutation exists, each successful mutation will increment the revision exactly once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is not part of the future project document.
+
+Future live mutation preconditions conceptually identify state by `ProjectId` + `ProjectInstanceId` + `ProjectRevision`. This distinguishes a stale client attached to a previous runtime session even when the same project reopens at the same revision. The command wire schema remains deferred. Revision overflow is checked and must never wrap. Restoring older snapshot content through OR is a new mutation: at current revision 100, restoring content captured at revision 20 results in revision 101, not 20.
 
 ## 4. Command system
 
@@ -307,7 +309,7 @@ Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is 
 The following are deliberately not permanently selected:
 
 - exact FFmpeg Rust binding
-- exact .orproj serialization syntax and persistent ID representation
+- exact .orproj serialization syntax
 - exact Flutter/native texture implementation
 - exact Flutter state management framework and state-change event schema, event bus/library, and transport
 - exact text shaping library

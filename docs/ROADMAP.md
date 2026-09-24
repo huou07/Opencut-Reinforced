@@ -33,10 +33,18 @@ Complete product scope, architecture, implementation workflow, roadmap, testing,
 - cross-platform Rust and Flutter CI, including macOS runtime bridge verification
 
 ### Phase 4 — Project and command foundation
-**Status: NEXT**
+**Status: IN PROGRESS**
 
-- project schema and rational time
-- stable IDs
+Phase 4A foundational values are implemented in `or_core`:
+
+- exact rational time, rate, and range primitives
+- typed UUIDv4 persistent project identity
+- ephemeral runtime project-instance identity
+- checked persistent project revision
+
+Remaining Phase 4 work:
+
+- ProjectDocument and .orproj schema
 - commands and queries
 - undo and redo
 - serialization and migrations

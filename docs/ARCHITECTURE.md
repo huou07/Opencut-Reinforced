@@ -2,13 +2,13 @@
 
 ## Status
 
-This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton is implemented; planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
+This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton and Phase 4A foundational values are implemented; planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
 
 ## Implemented today
 
-The repository contains a minimal Rust workspace with `or_core`, a semantic `or` CLI, and a Flutter shell at `apps/or_app`. `or_core` provides application info, health, and capability discovery. The CLI and Flutter obtain these values from the same core. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
+The repository contains a minimal Rust workspace with `or_core`, a semantic `or` CLI, and a Flutter shell at `apps/or_app`. `or_core` provides application info, health, and capability discovery, plus Phase 4A foundation values for project identity, runtime project-instance identity, project revision, exact rational time and rate, and time ranges. The CLI and Flutter obtain bootstrap values from the same core. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
 
-GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, and Android targets, and runs a macOS integration smoke that calls the native bridge and compares its results with the CLI. The Flutter shell is not an editor. There is no project document, editing or timeline model, media engine, renderer, FFmpeg, wgpu, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
+GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, and Android targets, and runs a macOS integration smoke that calls the native bridge and compares its results with the CLI. These value types do not form a project document or editor. The Flutter shell is not an editor. There is no `ProjectDocument`, Command Registry, Query Registry, timeline engine, media engine, renderer, FFmpeg, wgpu, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
 
 ## Planned full target architecture
 

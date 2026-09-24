@@ -13,6 +13,15 @@ Phase 3 has executable tests for the bootstrap core, CLI, Flutter shell, and nat
 
 These checks prove the bootstrap architecture only. They do not demonstrate editing, media, or release behavior.
 
+## Current Phase 4A coverage
+
+- `ProjectId` and `ProjectInstanceId`: UUIDv4 generation, canonical display and parse round trips, serde round trips, and invalid/non-v4 project ID rejection.
+- `ProjectRevision`: initial zero, checked increments, overflow rejection, and serde round trip.
+- `RationalTime` and `RationalRate`: normalization, invalid denominator/rate rejection, serde validation and normalization, and exact 24, 24000/1001, 30000/1001, and 48000/1 unit conversions.
+- Checked exact addition/subtraction and overflow, rational ordering, and `TimeRange` duration validation including serde rejection of negative duration.
+
+There are no ProjectDocument, project save/reopen, command, transaction, or history tests in Phase 4A.
+
 ## Test pyramid
 
 ### Rust domain and application unit tests
