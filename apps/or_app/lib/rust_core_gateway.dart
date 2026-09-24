@@ -1,5 +1,6 @@
 import 'core_gateway.dart';
-import 'src/rust/api.dart' as rust;
+
+import 'package:or_app_bridge/or_app_bridge.dart' as rust;
 
 class RustCoreGateway implements CoreGateway {
   const RustCoreGateway();

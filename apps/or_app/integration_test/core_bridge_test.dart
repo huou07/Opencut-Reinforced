@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/rust_core_gateway.dart';
-import 'package:or_app/src/rust/frb_generated.dart';
+import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

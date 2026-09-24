@@ -1,6 +1,8 @@
-import 'src/rust/api.dart' show AppInfo, Capability, HealthStatus;
+import 'package:or_app_bridge/or_app_bridge.dart'
+    show AppInfo, Capability, HealthStatus;
 
-export 'src/rust/api.dart' show AppInfo, Capability, HealthStatus;
+export 'package:or_app_bridge/or_app_bridge.dart'
+    show AppInfo, Capability, HealthStatus;
 
 abstract interface class CoreGateway {
   Future<AppInfo> appInfo();

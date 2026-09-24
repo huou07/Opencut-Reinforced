@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:or_app/core_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
-import 'package:or_app/src/rust/frb_generated.dart';
+import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

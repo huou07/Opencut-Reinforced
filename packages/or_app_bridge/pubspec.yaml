@@ -1,0 +1,11 @@
+name: or_app_bridge
+description: Typed Flutter bridge for the OR bootstrap API.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter_rust_bridge: '>=2.13.0 <2.13.1'
+  flutter_rust_bridge_hooks: '>=2.13.0 <2.13.1'
