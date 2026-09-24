@@ -1,0 +1,84 @@
+use serde::Serialize;
+
+const APP_NAME: &str = "Opencut Reinforced";
+const CORE_API_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AppInfo {
+    pub name: String,
+    pub version: String,
+    pub core_api_version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HealthStatus {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Capability {
+    pub id: String,
+    pub version: u32,
+}
+
+pub fn app_info() -> AppInfo {
+    AppInfo {
+        name: APP_NAME.to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        core_api_version: CORE_API_VERSION,
+    }
+}
+
+pub fn health() -> HealthStatus {
+    HealthStatus {
+        status: "ok".to_owned(),
+    }
+}
+
+pub fn capabilities() -> Vec<Capability> {
+    ["core.app_info", "core.health", "core.capabilities"]
+        .into_iter()
+        .map(|id| Capability {
+            id: id.to_owned(),
+            version: 1,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{app_info, capabilities, health};
+    use std::collections::HashSet;
+
+    #[test]
+    fn app_info_has_bootstrap_identity() {
+        let info = app_info();
+
+        assert_eq!(info.name, "Opencut Reinforced");
+        assert!(!info.version.is_empty());
+        assert_eq!(info.core_api_version, 1);
+    }
+
+    #[test]
+    fn health_is_ok() {
+        assert_eq!(health().status, "ok");
+    }
+
+    #[test]
+    fn capabilities_are_unique_and_limited_to_implemented_core_api() {
+        let capabilities = capabilities();
+        let ids: Vec<_> = capabilities
+            .iter()
+            .map(|capability| capability.id.as_str())
+            .collect();
+        let unique_ids: HashSet<_> = ids.iter().collect();
+
+        assert_eq!(ids, ["core.app_info", "core.health", "core.capabilities"]);
+        assert_eq!(unique_ids.len(), capabilities.len());
+        assert!(
+            capabilities
+                .iter()
+                .all(|capability| capability.version == 1)
+        );
+    }
+}
