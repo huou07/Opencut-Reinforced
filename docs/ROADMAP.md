@@ -48,10 +48,16 @@ Phase 4B — DONE:
 - `.orproj` UTF-8 JSON schema v1 and strict in-memory codec
 - explicit domain/wire conversion and schema-version dispatch
 
+Phase 4C — DONE:
+
+- runtime `ProjectSession` and stale project/session/revision protection
+- versioned command/query envelopes and deterministic discovery catalogs
+- `project.rename` v1 and `project.summary` v1
+- structured errors, checked revision mutation, and read-only query proof
+
 Remaining Phase 4 work:
 
-- commands and queries
-- transactions, history, undo, and redo
+- Phase 4D: transaction groups, ChangeSet, history, undo/redo, and atomic grouped commands
 - real migrations when a later schema exists
 - filesystem save/load and atomic replace
 - crash journal and recovery

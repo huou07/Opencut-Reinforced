@@ -5,7 +5,7 @@
 
 Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
 
-The project is currently in bootstrap/architecture phase.
+The project is in pre-MVP Phase 4 project/application foundation work. It has no timeline, media, or editor implementation yet.
 
 Do not assume unfinished features already exist.
 

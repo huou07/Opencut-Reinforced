@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict in-memory `.orproj` v1 JSON codec. Commands, queries, filesystem save/load, migrations, editing, media, rendering, and automation remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict in-memory `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Transactions/history, filesystem save/load, migrations, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -41,7 +41,7 @@ No client keeps an independent editing engine. The browser prototype is not the 
 
 The architecture has two related but distinct planes:
 
-- **Control/project plane:** commands and queries, project mutations, undo/redo, canonical `ProjectRevision`, persistence, and timeline editing decisions. Only validated application transactions change canonical project state.
+- **Control/project plane:** commands and queries, project mutations, undo/redo, canonical `ProjectRevision`, persistence, and timeline editing decisions. Only validated application commands mutate canonical project state; grouped transactions remain future work.
 - **Real-time media plane:** transient decoded frames, audio buffers, playback clock, frame queues, render resources and GPU textures, frames in flight, render scheduling, dropped-frame decisions, and transient playback position.
 
     Flutter / CLI / Agent
@@ -108,36 +108,29 @@ A crash journal records recoverable changes between durable checkpoints. Startup
 
 ### Project revisions
 
-`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; Phase 4B's v1 codec preserves the stored revision during encode/decode. Command mutation is not implemented yet. Once canonical mutation exists, each successful mutation will increment the revision exactly once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
+`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; Phase 4B's v1 codec preserves the stored revision during encode/decode. Phase 4C's `project.rename` increments once for a real name change, while an exact no-op and read-only query leave the revision unchanged. Future successful canonical mutations must each increment once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
 
-Future live mutation preconditions conceptually identify state by `ProjectId` + `ProjectInstanceId` + `ProjectRevision`. This distinguishes a stale client attached to a previous runtime session even when the same project reopens at the same revision. The command wire schema remains deferred. Revision overflow is checked and must never wrap. Restoring older snapshot content through OR is a new mutation: at current revision 100, restoring content captured at revision 20 results in revision 101, not 20.
+Phase 4C's `CommandEnvelope` v1 uses `ProjectId` + `ProjectInstanceId` + `expected_project_revision` as live mutation preconditions. This distinguishes a stale client attached to a previous runtime session even when the same project reopens at the same revision. Revision overflow is checked and reported without mutation; it must never wrap. Restoring older snapshot content through OR is a new mutation: at current revision 100, restoring content captured at revision 20 results in revision 101, not 20.
 
 ## 4. Command system
 
-A Command Registry describes stable command IDs, schema versions, arguments, target IDs, preconditions, permissions, and availability. A Command Envelope contains:
+Phase 4C establishes the first command contract without a dynamic registry framework. Its deterministic catalog contains exactly `project.rename` schema v1, marked as project-mutating. `CommandEnvelope` v1 has `command_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, `expected_project_revision`, and `arguments`. The envelope uses `serde_json::Value` only at the structured argument boundary; dispatch immediately decodes rename arguments into a strict private typed structure. This does not select JSON as the future IPC transport.
 
-- command ID
-- schema version
-- arguments
-- target IDs
-- preconditions
-- expected project revision (conceptually `expected_project_revision`) when the operation depends on previously inspected state; exact wire/schema naming is not frozen
+The dispatcher checks command ID, schema version, project ID, project-instance ID, and expected revision before decoding arguments or mutating state; unknown envelope and argument fields are rejected. The current command preserves its supplied UTF-8 name exactly. Renaming to the same name succeeds as a no-op (`changed = false`) without incrementing revision. A real rename checks the next revision before applying the paired name/revision update. Stable error codes are `UNKNOWN_COMMAND`, `UNSUPPORTED_COMMAND_SCHEMA`, `PROJECT_ID_MISMATCH`, `PROJECT_INSTANCE_MISMATCH`, `REVISION_CONFLICT`, `INVALID_ARGUMENTS`, and `REVISION_OVERFLOW`. The result identifies the command, session, before/after revisions, and whether state changed.
 
-Only the command/application execution path may mutate canonical Project state. Flutter widgets, CLI presentation code, agents, render workers, media decoders, background jobs, AI workers, and provider adapters may submit commands, results, proposals, events, generated assets, or analysis, but must not directly mutate the canonical project.
+`ProjectSession` owns a canonical `ProjectDocument` and a runtime-only `ProjectInstanceId`. It exposes read-only project access and the command/query entry points, with no public mutable document accessor. The command/application path is the only public project-mutation path. Flutter widgets, CLI presentation code, agents, render workers, media decoders, background jobs, AI workers, and provider adapters must not directly mutate the canonical project.
 
-Validate shape, permissions, object existence, revision preconditions, and domain invariants before mutation. Apply a valid command as a transaction and return a structured result and ChangeSet. If the expected project revision is stale, reject with a stable `REVISION_CONFLICT` error and make no change. Attached CLI commands, agent EditPlans, long-running UI workflows, and background analysis proposals use this protection when based on inspected state. The caller must query current state and revalidate, dry-run again, or regenerate its proposal; it must not silently apply an old plan to new state. A caller already holding the active mutation transaction need not redundantly provide this precondition for every internal operation. Errors are machine-readable and do not leak secrets or sensitive file contents.
-
-Commands can be grouped atomically. An agent's multi-command edit can therefore preview and apply as one undoable transaction.
+This is single-command validation and atomic application only. It does not provide permissions, generic transactions, ChangeSet, command groups, dry-run, or history. Future multi-command edits may be grouped atomically once that phase is implemented.
 
 ## 5. Query system
 
-Queries are read-only and return structured data. Initial query families cover project summary and metadata, timeline and selection inspection, media and offline state, captions, supported commands, and capabilities.
+Phase 4C's deterministic query catalog contains exactly `project.summary` schema v1. `QueryEnvelope` v1 has `query_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, and `arguments`; the current query accepts exactly an empty object. The structured result reports query ID/version and a summary containing project ID, runtime instance ID, current revision, and name. It reads current canonical state and cannot mutate it or increment revision.
 
-Queries must not mutate state, start hidden destructive work, or return provider credentials. Output fields and schema versions are discoverable for automation clients.
+Unknown queries and unsupported query schemas return `UNKNOWN_QUERY` and `UNSUPPORTED_QUERY_SCHEMA`; project/session mismatches use the corresponding shared codes, and invalid arguments return `INVALID_ARGUMENTS`. Timeline, selection, media, caption, and other query families remain future work. Queries must not start hidden destructive work or return provider credentials. Output fields and schema versions are discoverable for automation clients.
 
 ## 6. History and transactions
 
-Do not require full event sourcing. Use command transactions and ChangeSets with enough inverse information to support reliable undo and redo. Define what a command contributes to history and how a failed transaction is rolled back.
+Phase 4C does not implement grouped transactions, ChangeSet, history, undo, or redo. When that phase begins, do not require full event sourcing. Use command transactions and ChangeSets with enough inverse information to support reliable undo and redo. Define what a command contributes to history and how a failed transaction is rolled back.
 
 Group a multi-command agent edit into one history entry and one atomic commit; it increments the project revision once. Any successful project-mutating transaction increments the revision exactly once. Read-only queries and failed or rolled-back transactions leave it unchanged. Persistence and crash recovery do not depend on keeping an unbounded event log.
 

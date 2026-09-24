@@ -43,6 +43,16 @@ Phase 4A has no project-document, project save/reopen, command, transaction, or 
 
 There are no filesystem save/load, migration, command, transaction, or history tests.
 
+## Current Phase 4C coverage
+
+- Exact one-entry command and query catalogs, and `ProjectSession::open` preserving the document while owning a valid runtime instance ID.
+- Strict command/query envelope serde round trips, unknown-field rejection, and validation order for operation ID, schema, project, instance, revision, and arguments.
+- `project.rename`: exact Unicode preservation, one revision increment per real rename, same-name no-op, stale revision/current-revision reporting, project/session mismatch, unknown/unsupported command rejection, malformed/extra arguments, and overflow without partial mutation.
+- `project.summary`: current IDs, revision, and name; read-only behavior; visibility of renamed state; project/session mismatch; unknown/unsupported query rejection; and empty-object-only arguments.
+- Rename → `.orproj` encode/decode preserves the changed name and revision without persisting the runtime instance ID.
+
+Phase 4C does not test transaction groups, ChangeSet/history, undo/redo, filesystem persistence, IPC, or client integrations.
+
 ## Test pyramid
 
 ### Rust domain and application unit tests

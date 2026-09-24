@@ -2,13 +2,13 @@
 
 ## Status
 
-This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton and Phase 4A/4B project foundations are implemented; planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
+This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton and Phase 4A–4C project/application foundations are implemented; planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
 
 ## Implemented today
 
-The repository contains a minimal Rust workspace with `or_core`, a semantic `or` CLI, and a Flutter shell at `apps/or_app`. `or_core` provides application info, health, and capability discovery; Phase 4A values for project identity, runtime project-instance identity, project revision, exact rational time and rate, and time ranges; and a minimal `ProjectDocument` with a strict `.orproj` v1 JSON encoder/decoder. The CLI and Flutter obtain bootstrap values from the same core. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
+The repository contains a minimal Rust workspace with `or_core`, a semantic `or` CLI, and a Flutter shell at `apps/or_app`. `or_core` provides application info, health, and capability discovery; Phase 4A values for project identity, runtime project-instance identity, project revision, exact rational time and rate, and time ranges; a minimal `ProjectDocument` with a strict `.orproj` v1 JSON encoder/decoder; and Phase 4C's `ProjectSession`, static command/query catalogs, versioned envelopes, `project.rename`, and `project.summary`. The CLI and Flutter obtain bootstrap values from the same core. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
 
-GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, and Android targets, and runs a macOS integration smoke that calls the native bridge and compares its results with the CLI. The project document codec is in-memory; there is no filesystem save/load or migration implementation. The Flutter shell is not an editor. There is no Command Registry, Query Registry, timeline engine, media engine, renderer, FFmpeg, wgpu, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
+GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, and Android targets, and runs a macOS integration smoke that calls the native bridge and compares its results with the CLI. The project document codec is in-memory; there is no filesystem save/load or migration implementation. The Flutter shell is not an editor. There is no general command/query registry framework, ChangeSet, transaction/history layer, timeline engine, media engine, renderer, FFmpeg, wgpu, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
 
 ## Planned full target architecture
 
@@ -61,7 +61,7 @@ Render workers consume a stable, versioned evaluated view of project/timeline st
 
 ### Canonical mutation and concurrency
 
-Only the command/application execution path may mutate canonical Project state. GUI, CLI, agents, renderers, decoders, jobs, and AI workers submit validated commands or structured results and proposals; none writes the canonical project directly. Each active project exposes a monotonically increasing revision. A successful transaction increments it once; reads and failed or rolled-back work do not. A client acting on inspected state supplies its expected revision, and stale work is rejected for re-query and revalidation rather than silently applied. This command path is for project edits, never a per-frame playback or render execution path.
+Only the command/application execution path may mutate canonical Project state. Phase 4C currently implements one validated `project.rename` operation; it requires matching `ProjectId`, `ProjectInstanceId`, and expected `ProjectRevision`. A real rename increments once, a same-name no-op and reads do not, and stale requests are rejected for re-query and revalidation. GUI, CLI, agents, renderers, decoders, jobs, and AI workers must not write canonical project state directly. This command path is for project edits, never a per-frame playback or render execution path.
 
 ## Planned boundaries
 
