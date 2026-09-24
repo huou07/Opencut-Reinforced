@@ -38,6 +38,12 @@ impl ProjectDocument {
         &self.name
     }
 
+    /// Applies the fully validated rename mutation from the application command path.
+    pub(crate) fn rename_for_command(&mut self, name: String, revision: ProjectRevision) {
+        self.name = name;
+        self.revision = revision;
+    }
+
     fn from_v1(project: ProjectStateV1) -> Self {
         Self {
             id: project.id,

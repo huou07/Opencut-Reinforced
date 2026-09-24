@@ -1,9 +1,15 @@
 use serde::Serialize;
 
+mod application;
 mod project;
 mod project_document;
 mod time;
 
+pub use application::{
+    CommandDescriptor, CommandEnvelope, CommandResult, OperationError, OperationErrorCode,
+    ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, command_catalog,
+    query_catalog,
+};
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
 };
