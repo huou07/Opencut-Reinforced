@@ -1,10 +1,15 @@
 use serde::Serialize;
 
 mod project;
+mod project_document;
 mod time;
 
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
+};
+pub use project_document::{
+    CURRENT_PROJECT_SCHEMA_VERSION, ProjectCodecError, ProjectDocument, decode_project,
+    encode_project,
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 
