@@ -29,11 +29,15 @@ There is no production Flutter application, Rust editing core, media engine, CLI
 
 The diagram describes a target. Exact bridge, bindings, and rendering integration remain subject to implementation-time evaluation. Flutter is the presentation layer; Rust owns project and editing truth. GUI, CLI, and agents submit the same validated domain operations and query the same structured state. They must not become independent editing engines.
 
+### Canonical mutation and concurrency
+
+Only the command/application execution path may mutate canonical Project state. GUI, CLI, agents, renderers, decoders, jobs, and AI workers submit validated commands or structured results and proposals; none writes the canonical project directly. Each active project exposes a monotonically increasing revision. A successful transaction increments it once; reads and failed or rolled-back work do not. A client acting on inspected state supplies its expected revision, and stale work is rejected for re-query and revalidation rather than silently applied.
+
 ## Planned boundaries
 
 ### Presentation and feature integration
 
-Flutter presents the product, handles interaction, accessibility, navigation, panels, inspectors, and timeline presentation. It sends user intent through the application command boundary and renders returned state. It does not own canonical project state or exported video text.
+Flutter presents the product, handles interaction, accessibility, navigation, panels, inspectors, and timeline presentation. It sends user intent through the application command boundary and renders returned state. It does not own canonical project state or exported video text. Flutter may keep navigation, panel, selection, tool, and temporary input state, plus scoped read-model caches; it does not maintain a second editable project model. Rust change/invalidation events lead Flutter to refresh affected queries. Events carry revision/order information so stale updates are ignored or requeried. Hot UI paths use scoped views rather than copying and rebuilding the whole project.
 
 New UI features should use existing shell slots: App Bar, Editor Tool Rail, Left Tool Panel, Viewer, Inspector, Timeline Toolbar, Timeline, Task or Status Area, Command Palette, and Dialog or Mobile Sheet. A lightweight static feature descriptor may register an ID, label, icon, group, availability, command IDs, panel, inspector sections, and shortcut metadata. This is a boundary for integration, not a reason to build a runtime framework now.
 
@@ -43,7 +47,7 @@ Simple and Advanced modes are visibility preferences over the same state and com
 
 The application layer owns command discovery, validation, authorization, transactions, job coordination, and structured errors. A command is validated before mutation and returns a ChangeSet. Read-only queries expose project, timeline, media, captions, command, and capability information.
 
-The CLI is a first-class semantic client of this API. It supports headless operation and, when an application is open, attached operation over local IPC. It does not automate the UI by clicking coordinates. Agents are also clients of structured queries and commands; generated EditPlans pass the same permission and domain validation as human-initiated work.
+The CLI is a first-class semantic client of this API. Its parity is for domain operations and meaningful project queries, not presentation-only controls. It supports headless operation and, when an application is open, attached operation over local IPC. It does not automate the UI by clicking coordinates. Agents are also clients of structured queries and commands; generated EditPlans pass the same permission and domain validation as human-initiated work.
 
 ### Rust domain
 
@@ -53,7 +57,7 @@ Rust is intended to own project, timeline, media identity and metadata, command 
 
 FFmpeg is the intended media layer for probing, demuxing, decoding, encoding, muxing, and conversion or resampling. Its exact Rust binding and packaged configuration are undecided and require a licensing review.
 
-The render core evaluates timeline state into sources, transforms, effects, compositing, color, and output. Preview and export should use the same evaluation semantics. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
+The render core evaluates timeline state into sources, transforms, effects, compositing, color, and output. Preview and export use the same edit semantics, while scheduling and quality may differ; cross-GPU pixels are not required to be bit-identical. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
 
 Audio decoding belongs in the media layer. A low-latency output abstraction and an audio playback clock are planned. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
 
@@ -65,7 +69,7 @@ Rust and wgpu are intended to own rendered preview frames. Flutter should eventu
 
 The native project is a versioned, structured .orproj document with stable IDs, external media references, and migrations. Project data is canonical; thumbnails, waveforms, proxies, render intermediates, and indexes are disposable cache data.
 
-A shared background Job Manager is planned for thumbnails, waveforms, proxies, transcription, translation, AI work, model and asset downloads, and export. Jobs report progress and results or errors, support cancellation, and support pause and priority where appropriate.
+A shared background Job Manager is planned for thumbnails, waveforms, proxies, transcription, translation, AI work, model and asset downloads, and export. Jobs report progress and structured results or errors, support cancellation, and support pause and priority where appropriate. Workers do not mutate canonical project state; results that affect a project return through validated application commands.
 
 ### Local IPC and platform boundary
 
@@ -75,7 +79,7 @@ The domain model should avoid platform lock-in while matching current product ta
 
 ### Secrets and trust
 
-OS secure storage is the intended home for provider credentials. The application may report whether a provider is configured, but CLI and agents never receive plaintext stored secrets. Imported projects, media, subtitles, models, templates, themes, community content, plugin output, and AI output are untrusted inputs and must be validated at each boundary.
+OS secure storage is the intended home for provider credentials. The application may report whether a provider is configured, but CLI and agents never receive plaintext stored secrets. Network permissions and Offline Mode are enforced at the application/provider boundary, below individual UI controls, so GUI, CLI, and agents cannot bypass them. Imported projects, media, subtitles, models, templates, themes, community content, plugin output, and AI output are untrusted inputs and must be validated at each boundary.
 
 ## Future directions
 

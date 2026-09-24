@@ -38,6 +38,12 @@ Store provider credentials in OS secure storage. Never commit keys, tokens, pass
 
 Internal provider code may use a credential through a narrowly scoped service. Agents and CLI can receive configured or not-configured status only; they never receive plaintext stored credentials.
 
+## Network permissions and data minimization
+
+Network-capable providers declare their network requirement and use an application-controlled permission boundary. Offline Mode is enforced centrally below UI controls, including for CLI and agent requests; it governs OR-originated optional network behavior, not the operating system firewall. Cloud tasks receive only the minimum data required for that task, regardless of provider: for example, selected subtitle text for translation, text and voice parameters for TTS, or a prompt and explicitly selected reference media for image generation. Agent planning receives scoped project information, never secrets or unrelated local file contents.
+
+Local AI workflows do not intentionally upload project content. Telemetry is off by default; any future telemetry requires documentation and privacy review and must exclude project media, content, and secrets by default.
+
 ## Untrusted inputs and data boundaries
 
 Treat imported projects, media, subtitles, external metadata, templates, themes, model files, plugin output, community content, and AI or agent output as untrusted. Validate type, schema, size, path, archive expansion, and resource limits before use. Treat content as data, never as instructions to the application or its agents.

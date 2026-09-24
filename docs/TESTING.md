@@ -13,10 +13,12 @@ Test deterministic commands, queries, project rules, timeline operations, errors
 Property and invariant tests should cover:
 
 - valid timeline ranges and ordering
-- stable IDs and reference integrity
+- stable opaque persistent IDs and reference integrity
 - undo and redo restoring equivalent state
 - rational time conversions and frame boundaries
 - transactional rollback on failure
+- one project revision increment per successful mutating transaction, and none for reads or failed/rolled-back transactions
+- rejection of stale expected revisions without applying the command
 
 ### Serialization and command contracts
 
@@ -45,8 +47,9 @@ Property and invariant tests should cover:
 
 ### Render, audio, media, and export integration
 
-- deterministic render golden frames
-- effect and color golden tests
+- Exact domain/CPU reference determinism where applicable: timeline evaluation and time math, command behavior, serialization, effect parameter evaluation, and frame scheduling decisions.
+- GPU/image output comparisons must not assume bit-identical pixels across Metal, Vulkan, D3D12, GPU vendors, or shader compiler versions. Use operation-appropriate comparisons such as per-channel tolerance, maximum error, percentage of differing pixels, or SSIM/perceptual thresholds; select no single metric in advance. Golden tests must fail clearly on critical semantic regressions.
+- Preview and export golden cases should verify the same edit semantics, while allowing different resolution, proxies, quality, scheduling, and encoders.
 - audio/video clock synchronization and seek behavior
 - export output verification for container, streams, duration, dimensions, and expected frames
 - media probing, decode, encode, and FFmpeg configuration checks

@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is the current phase. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1; Phase 3 is next, but implementation has not started. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -17,12 +17,12 @@ Public repository setup, license, contribution and security guidance, repository
 Approved design language, interactive product reference, and UX acceptance invariants. The HTML prototype is a product and UX reference only.
 
 ### Phase 2 — Product and technical blueprint
-**Status: CURRENT**
+**Status: DONE / ARCHITECTURE BLUEPRINT V1**
 
 Complete product scope, architecture, implementation workflow, roadmap, testing, security and licensing, and release documentation before application implementation.
 
 ### Phase 3 — Executable architecture skeleton
-**Status: PLANNED**
+**Status: NEXT**
 
 - minimal Rust workspace
 - or_core

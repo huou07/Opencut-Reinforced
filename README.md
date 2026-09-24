@@ -4,7 +4,7 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP: product definition and architecture planning.** This repository does not yet contain a production Flutter or Rust editing application and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
+**Pre-MVP: architecture blueprint v1 complete; application implementation has not started.** This repository does not yet contain a production Flutter or Rust editing application and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 

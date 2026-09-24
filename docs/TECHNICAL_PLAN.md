@@ -45,7 +45,7 @@ Conversions to display seconds are derived and non-canonical. Define overflow, r
 
 ## 3. Native project format
 
-The native project is a versioned UTF-8 structured .orproj document. It is agent-readable and uses stable UUIDs for projects, tracks, clips, effects, markers, and other persistent objects. The exact serialization syntax and schema are not permanently selected here.
+The native project is a versioned UTF-8 structured .orproj document. It is agent-readable and uses stable opaque persistent IDs for projects, tracks, clips, effects, markers, and other persistent objects. IDs must remain stable for the project lifetime, be unique in their required scope, serializable, comparable, and safe for CLI/API references; they must not encode mutable display names or array indexes. The ID representation, exact serialization syntax, and schema are not permanently selected here.
 
 Projects reference external media. Media paths and fingerprints support relink, replace, offline state, and project collection without embedding source media by default. Cache entries never become canonical project state.
 
@@ -59,6 +59,10 @@ A safe-save sequence is:
 
 A crash journal records recoverable changes between durable checkpoints. Startup recovery validates journal data before offering recovery. Migrations are explicit, ordered, versioned, and tested on old and malformed inputs.
 
+### Project revisions
+
+Canonical Project state exposes a monotonically increasing `ProjectRevision`, conceptually an unsigned integer. Each successful project-mutating transaction increments the revision exactly once, including a multi-command atomic group; read-only queries and failed or rolled-back commands do not increment it.
+
 ## 4. Command system
 
 A Command Registry describes stable command IDs, schema versions, arguments, target IDs, preconditions, permissions, and availability. A Command Envelope contains:
@@ -68,8 +72,11 @@ A Command Registry describes stable command IDs, schema versions, arguments, tar
 - arguments
 - target IDs
 - preconditions
+- expected project revision (conceptually `expected_project_revision`) when the operation depends on previously inspected state; exact wire/schema naming is not frozen
 
-Validate shape, permissions, object existence, and domain invariants before mutation. Apply a valid command as a transaction and return a structured result and ChangeSet. Errors are stable, machine-readable, and do not leak secrets or sensitive file contents.
+Only the command/application execution path may mutate canonical Project state. Flutter widgets, CLI presentation code, agents, render workers, media decoders, background jobs, AI workers, and provider adapters may submit commands, results, proposals, events, generated assets, or analysis, but must not directly mutate the canonical project.
+
+Validate shape, permissions, object existence, revision preconditions, and domain invariants before mutation. Apply a valid command as a transaction and return a structured result and ChangeSet. If the expected project revision is stale, reject with a stable `REVISION_CONFLICT` error and make no change. Attached CLI commands, agent EditPlans, long-running UI workflows, and background analysis proposals use this protection when based on inspected state. The caller must query current state and revalidate, dry-run again, or regenerate its proposal; it must not silently apply an old plan to new state. A caller already holding the active mutation transaction need not redundantly provide this precondition for every internal operation. Errors are machine-readable and do not leak secrets or sensitive file contents.
 
 Commands can be grouped atomically. An agent's multi-command edit can therefore preview and apply as one undoable transaction.
 
@@ -83,11 +90,11 @@ Queries must not mutate state, start hidden destructive work, or return provider
 
 Do not require full event sourcing. Use command transactions and ChangeSets with enough inverse information to support reliable undo and redo. Define what a command contributes to history and how a failed transaction is rolled back.
 
-Group a multi-command agent edit into one history entry. Persistence and crash recovery do not depend on keeping an unbounded event log.
+Group a multi-command agent edit into one history entry and one atomic commit; it increments the project revision once. Any successful project-mutating transaction increments the revision exactly once. Read-only queries and failed or rolled-back transactions leave it unchanged. Persistence and crash recovery do not depend on keeping an unbounded event log.
 
 ## 7. CLI
 
-The CLI is a first-class semantic interface to the shared application and domain operations.
+The CLI is a first-class semantic interface to the shared application and domain operations. Parity means semantic/domain operation parity for project changes and meaningful project queries, not exposure of presentation-only UI controls; see [PRODUCT.md](PRODUCT.md) for examples.
 
 Planned contract:
 
@@ -109,7 +116,11 @@ Define protocol versioning, connection lifecycle, command timeout and cancellati
 
 ## 9. Flutter and Rust bridge
 
-Flutter is a thin UI over the application API. The current preferred structured call and event bridge candidate is flutter_rust_bridge. It generates Flutter/Dart-to-Rust bindings and supports structured types, errors, asynchronous calls, and stream-style results. Confirm exact generator and native-build workflows on macOS, Windows, Linux, and Android when implementation starts.
+Flutter is a thin UI over the application API. Rust remains the only canonical project/timeline state. Flutter may own presentation, navigation, panel, selected-tool, temporary text/input state, and scoped cached read models/view models, but not a second authoritative editable project model.
+
+After a command is validated and applied, Rust emits a domain change or state-invalidation event; Flutter refreshes affected scoped queries/read models and rebuilds the relevant surface. Conceptual event categories include `ProjectChanged`, `TimelineChanged`, `SelectionChanged`, `MediaChanged`, `JobChanged`, and `CapabilitiesChanged`; exact names and schema are not frozen. Events or query results carry enough project revision/order information for Flutter to ignore or requery stale state when a newer revision is known.
+
+Hot UI paths use scoped queries such as timeline viewport, track list, selection inspector, media bin, and job list. Do not serialize and copy the whole project into Dart or rebuild every surface for each timeline interaction. Start with simple scoped queries and invalidation; do not introduce a reactive state framework before it is needed. The current preferred structured call and event bridge candidate is flutter_rust_bridge. It generates Flutter/Dart-to-Rust bindings and supports structured types, errors, asynchronous calls, and stream-style results. Confirm exact generator and native-build workflows on macOS, Windows, Linux, and Android when implementation starts.
 
 Keep high-volume media transport separate from ordinary bridge messages. Do not send decoded real-time video frames as copied Dart objects.
 
@@ -135,7 +146,7 @@ The render evaluation order is:
     -> color processing
     -> output frame
 
-Preview and export share the same timeline evaluation and render semantics. Export may use offscreen frames and different quality or scheduling settings, but must not silently select a different edit result.
+Preview and export share the same edit semantics: clip timing, transforms, effects, compositing, text, keyframe evaluation, and color intent. This does not require identical implementation scheduling or bit-identical pixels. Preview may use lower resolution, proxies, reduced quality, or different scheduling; export may use full-quality sources, offline evaluation, and a different encoder. Equivalent source and quality conditions must still represent the same edit.
 
 ## 12. Audio and text
 
@@ -148,6 +159,8 @@ Final video text is rendered by the render core. Exported text must not depend o
 Use a shared Job Manager for thumbnail and waveform generation, proxy creation, transcription, translation, AI work, model and asset downloads, and export. Each job exposes stable identity, status, progress, cancellation, result or structured error, and pause or priority only where the operation supports it.
 
 Cache keys are deterministic over source fingerprint, operation, parameters, and cache schema version. Cache storage may use a local database or index, but the exact database crate is not selected. Cache contents are disposable and never authoritative project state. Provide bounded storage and a clear-cache operation.
+
+Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, `CaptionProposal`, or `EditProposal` outputs. They may update disposable cache/job state but must not directly mutate the canonical ProjectDocument. If an output should change a project, the application layer checks its permissions and expected revision/preconditions, then applies it through a validated command/transaction. This preserves undo/redo and rejects stale analysis instead of applying it silently.
 
 ## 14. AI providers and local inference
 
@@ -162,6 +175,8 @@ Candidate runtime categories for evaluation:
 These are candidates, not required MVP components or final dependency decisions. Keep heavyweight Python-centric generation stacks behind a supervised sidecar or provider boundary rather than making them core Rust dependencies by default.
 
 Runtime code licenses do not establish the license or redistribution rights for a model's weights, tokenizer, or associated assets. Verify each exact model artifact independently.
+
+Network-capable providers/services declare whether a task is local-only or requires network access; those are conceptual capability categories, not frozen enum/API names. Provider calls go through an application-controlled permission boundary. Offline Mode is enforced below UI controls, so GUI, CLI, and agent clients cannot bypass it. Cloud tasks receive only the minimum project-derived context needed for that task; do not serialize the whole project into prompts by default.
 
 ## 15. Model management and secrets
 
@@ -216,11 +231,15 @@ Simple and Advanced modes are visibility settings over one state and command mod
 
 Android uses the same Rust core and project model with touch-native Flutter presentation, Android Storage Access Framework or platform storage abstraction, and mobile-appropriate resource and proxy policies.
 
+Visible Flutter strings and accessibility labels use a localization-capable resource boundary when production UI work begins. Do not scatter user-facing English strings through domain/business logic. Human-readable errors may be localized at the presentation boundary; command IDs, JSON field names, and machine-readable error codes remain stable technical identifiers. Do not select a localization package or generate localization files in this planning phase.
+
 ## 21. Security
 
 Treat project files, media, subtitles, templates, themes, downloaded assets, models, plugin output, and agent or AI output as untrusted. Validate input at every serialization, IPC, plugin, model, and community boundary. Enforce limits for file sizes, dimensions, durations, archive expansion, and job resources before implementation exposes those inputs.
 
 Keep secrets out of logs, project files, CLI output, and agent context. Require explicit capabilities for plugins and community actions. Security and licensing constraints are part of feature design, not follow-up cleanup.
+
+Provider network capability and permission are enforced centrally by the application, including when a request originates from CLI or an agent. Offline Mode denies OR-originated optional network calls regardless of UI path; it does not claim to firewall the operating system. Send the minimum required data to each cloud task, without unrelated project context or secret values.
 
 ## 22. Implementation structure
 
@@ -231,15 +250,20 @@ Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is 
 The following are deliberately not permanently selected:
 
 - exact FFmpeg Rust binding
+- exact .orproj serialization syntax and persistent ID representation
 - exact Flutter/native texture implementation
+- exact Flutter state management framework and state-change event schema, event bus/library, and transport
 - exact text shaping library
 - exact audio output library
 - exact SQLite or storage crate
+- exact Flutter localization package and generated resource format
+- exact GPU image-comparison tolerance metric
 - exact translation model
 - exact segmentation model
 - exact text-to-speech model or runtime
 - exact diffusion or video-generation runtimes
 - exact WASM plugin runtime
+- exact cloud provider/vendor
 - exact release package formats
 
 Choose these when the relevant phase begins, using implementation prototypes, target-platform benchmarks, security review, and license analysis. Do not pin versions here without an implementation need.

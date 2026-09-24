@@ -32,6 +32,8 @@ Implement only the scope requested by the current task.
 
 Human UI, CLI, and AI agents should eventually operate on the same underlying command/state model.
 
+Project mutations must go through the documented command/application path; clients and workers must not directly mutate canonical project state.
+
 Do not build agent automation by visually clicking UI controls when a structured command/API can represent the operation.
 
 Long-term preferred direction:

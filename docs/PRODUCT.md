@@ -131,11 +131,23 @@ Generation is not required for MVP. Local and cloud provider use stays optional 
 
 ## Agent-native workflows
 
-**MVP FOUNDATION:** the shared command model, semantic CLI, JSON output where appropriate, stable exit codes and IDs, command and capability discovery, project and timeline inspection, dry-run support, and operation parity with the GUI.
+**MVP FOUNDATION:** the shared command model, semantic CLI, JSON output where appropriate, stable exit codes and IDs, command and capability discovery, project and timeline inspection, dry-run support, and semantic/domain operation parity with the GUI.
 
 **PLANNED:** strict EditPlan schema; permission review; validation; dry run; diff preview; apply as one undoable transaction; undo agent edit; task queue; declarative automation recipes.
 
 Agents do not control normal editing by visual UI clicks, do not receive plaintext API keys, and cannot bypass command, permission, or validation layers.
+
+CLI parity means semantic/domain operation parity: if an operation changes or meaningfully inspects project state and can be represented semantically, it should normally be available to CLI and agents. Examples include creating, opening, and inspecting projects; importing media; listing timelines; splitting, moving, and trimming clips; setting opacity or text properties; adding text or effects; generating or translating captions; exporting; creating snapshots; and inspecting capabilities. Parity does not require CLI exposure for presentation-only controls such as collapsing an inspector, viewer zoom, cinema mode, hover tooltips, mobile sheets, sidebar resizing, or moving the application window.
+
+## Privacy and network control
+
+**MVP FOUNDATION:** core project editing works locally without an OR cloud service.
+
+**PLANNED:** an application-level Offline Mode denies OR-originated optional network provider calls, community browsing and downloads, and cloud AI while leaving local editing available. This governs OR's own network behavior; it is not an operating-system firewall.
+
+**PLANNED:** local AI workflows do not intentionally upload project content. Cloud providers are optional. Before sending project-derived data, the provider/task boundary identifies its kind—such as prompt text, subtitles, audio, images, video or reference media, or project metadata—and the UI communicates meaningful network and data-use status. Agents cannot bypass the same provider and network permissions.
+
+**PLANNED:** telemetry is off by default. Any future telemetry requires documentation and privacy review and must not include project media, content, or secrets by default.
 
 ## Model management
 
@@ -178,6 +190,10 @@ OpenTimelineIO is an interchange format and API for editorial cut information, n
 **MVP FOUNDATION:** keyboard navigation, visible focus, usable touch targets, and status that is not communicated by color alone.
 
 **PLANNED:** shortcut editor, screen-reader support, text scaling, and reduced-motion preference. Accessibility work applies across product areas; minimal visual design must not reduce access.
+
+## Localization
+
+**PLANNED:** English may be the initial source language, and Vietnamese is an intended UI language. The architecture should support additional translations without promising completeness or delivery dates. Visible application strings and accessibility labels should be localizable; date, number, and time formatting should be locale-aware where appropriate; layouts must tolerate translated text length. Community translations may be considered later.
 
 ## Platforms
 

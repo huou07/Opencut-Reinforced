@@ -21,8 +21,17 @@ required_files=(
   DESIGN.md
   CONTRIBUTING.md
   SECURITY.md
+  docs/INDEX.md
+  docs/PRODUCT.md
   docs/ARCHITECTURE.md
+  docs/TECHNICAL_PLAN.md
+  docs/DEVELOPMENT_WORKFLOW.md
+  docs/ROADMAP.md
+  docs/TESTING.md
+  docs/SECURITY_LICENSING.md
+  docs/RELEASE.md
   docs/TOOLING.md
+  docs/UX_ACCEPTANCE.md
 )
 
 for path in "${required_files[@]}"; do
