@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1; Phase 3 is next, but implementation has not started. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1 and Phase 3's executable architecture skeleton is complete. Phase 4 is next; it starts project and command foundations, not a finished editor. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -22,7 +22,7 @@ Approved design language, interactive product reference, and UX acceptance invar
 Complete product scope, architecture, implementation workflow, roadmap, testing, security and licensing, and release documentation before application implementation.
 
 ### Phase 3 — Executable architecture skeleton
-**Status: NEXT**
+**Status: DONE**
 
 - minimal Rust workspace
 - or_core
@@ -30,10 +30,10 @@ Complete product scope, architecture, implementation workflow, roadmap, testing,
 - Flutter shell
 - typed bridge
 - version, health, and capability commands
-- CI for Rust and Flutter
+- cross-platform Rust and Flutter CI, including macOS runtime bridge verification
 
 ### Phase 4 — Project and command foundation
-**Status: PLANNED**
+**Status: NEXT**
 
 - project schema and rational time
 - stable IDs

@@ -2,7 +2,16 @@
 
 ## Status
 
-The production application test suites below are planned. The repository currently has documentation, repository safeguards, and an interactive prototype rather than a production Flutter or Rust editor. Repository hygiene checks and prototype acceptance checks do not demonstrate production product behavior.
+Phase 3 has executable tests for the bootstrap core, CLI, Flutter shell, and native bridge. This is still a pre-MVP skeleton, not a production editor. The test layers below distinguish the checks that exist from the planned product coverage.
+
+## Current Phase 3 checks
+
+- Rust unit tests cover core bootstrap values and bridge DTO mapping; CLI contract tests execute the real binary and verify human output, JSON, help, and invalid input.
+- Flutter widget tests cover desktop and compact navigation and diagnostics rendering with a fake gateway.
+- A macOS integration test initializes the native Rust library, calls app info, health, and capability discovery through the typed bridge, and compares the results with the CLI snapshot.
+- GitHub Actions runs Rust format, Clippy, and tests; Flutter dependency, format, analysis, and widget checks; and native builds for macOS, Linux, Windows, and Android. The macOS job includes the real bridge smoke test.
+
+These checks prove the bootstrap architecture only. They do not demonstrate editing, media, or release behavior.
 
 ## Test pyramid
 

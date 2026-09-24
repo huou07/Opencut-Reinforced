@@ -15,3 +15,5 @@ Opencut Reinforced is in a pre-MVP product and architecture phase. Keep contribu
 9. Open a focused pull request describing what changed, why, architecture impact, checks, docs, and risks.
 
 External contributors do not need CodeGraph, Ponytail, proprietary software, or private tooling. Keep secrets, model weights, build outputs, and generated media out of Git. Review dependency, model, and asset licenses before distribution.
+
+Contributors are not expected to install every target platform SDK or own a Mac, Windows PC, or Linux machine. See [docs/TOOLING.md](docs/TOOLING.md) for the local development baseline and GitHub-hosted platform checks.

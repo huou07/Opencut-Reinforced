@@ -2,7 +2,7 @@
 
 ## Current status
 
-The repository does not yet release Opencut Reinforced application binaries. No production Flutter or Rust application has been started.
+The repository does not yet release Opencut Reinforced application binaries. Phase 3 provides an executable architecture skeleton, but production editor behavior has not started.
 
 ## Future GitHub-first workflow
 

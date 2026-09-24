@@ -2,7 +2,7 @@
 
 ## Status
 
-This workflow applies when implementation begins. Today, the repository is in product and architecture planning.
+This workflow applies to the Phase 3 architecture skeleton and all later implementation. Project and editor behavior has not started; see [ROADMAP.md](ROADMAP.md) for the current phase boundary.
 
 ## Feature path
 

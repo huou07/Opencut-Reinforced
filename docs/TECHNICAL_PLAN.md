@@ -2,7 +2,7 @@
 
 ## Status
 
-This document describes a planned implementation boundary, not current production code. It avoids selecting dependencies where practical until a concrete implementation can be benchmarked and checked for license, security, and platform fit.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. The remaining project, editing, media, rendering, and automation designs below are planned boundaries, not implemented product behavior. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -120,7 +120,9 @@ Flutter is a thin UI over the application API. Rust remains the only canonical p
 
 After a command is validated and applied, Rust emits a domain change or state-invalidation event; Flutter refreshes affected scoped queries/read models and rebuilds the relevant surface. Conceptual event categories include `ProjectChanged`, `TimelineChanged`, `SelectionChanged`, `MediaChanged`, `JobChanged`, and `CapabilitiesChanged`; exact names and schema are not frozen. Events or query results carry enough project revision/order information for Flutter to ignore or requery stale state when a newer revision is known.
 
-Hot UI paths use scoped queries such as timeline viewport, track list, selection inspector, media bin, and job list. Do not serialize and copy the whole project into Dart or rebuild every surface for each timeline interaction. Start with simple scoped queries and invalidation; do not introduce a reactive state framework before it is needed. The current preferred structured call and event bridge candidate is flutter_rust_bridge. It generates Flutter/Dart-to-Rust bindings and supports structured types, errors, asynchronous calls, and stream-style results. Confirm exact generator and native-build workflows on macOS, Windows, Linux, and Android when implementation starts.
+Hot UI paths should use scoped queries such as timeline viewport, track list, selection inspector, media bin, and job list. Do not serialize and copy the whole project into Dart or rebuild every surface for each timeline interaction. Start with simple scoped queries and invalidation; do not introduce a reactive state framework before it is needed.
+
+The Phase 3 bootstrap uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in the `packages/or_app_bridge` Dart package and a thin `crates/or_app_bridge` adapter that calls `or_core`. Its native-assets hook builds the Rust library for the consuming Flutter target. The demonstrated API is limited to app info, health, and capabilities; the future command/query/event model and media transport remain planned. CI verifies target builds and exercises the real macOS bridge.
 
 Keep high-volume media transport separate from ordinary bridge messages. Do not send decoded real-time video frames as copied Dart objects.
 
@@ -273,7 +275,7 @@ Choose these when the relevant phase begins, using implementation prototypes, ta
 These official upstream references support the current candidate descriptions. Re-check them when selecting versions or packaging dependencies.
 
 - [Flutter supported platforms](https://docs.flutter.dev/reference/supported-platforms) documents Flutter's platform matrix; OR currently selects macOS, Windows, Linux, and Android from that broader support.
-- [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) documents generated bindings, structured values, asynchronous functions, streams, errors, and platform support. It remains the preferred bridge candidate, not a locked dependency.
+- [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) documents generated bindings, structured values, asynchronous functions, streams, errors, and platform support. Version 2.13.0 is used by the Phase 3 bootstrap bridge; this does not settle the future command, event, or media-transport architecture.
 - [wgpu supported platforms](https://github.com/gfx-rs/wgpu#supported-platforms) lists OS and graphics-backend support, including first-class and best-effort distinctions.
 - [FFmpeg license and legal considerations](https://ffmpeg.org/legal.html) describes LGPL defaults and optional GPL components. The packaged configuration determines the review required.
 - [OpenTimelineIO](https://github.com/academysoftwarefoundation/opentimelineio) describes an editorial interchange format and API.

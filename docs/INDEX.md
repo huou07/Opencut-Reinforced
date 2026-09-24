@@ -21,10 +21,10 @@ This map points to the current source of truth. Read the documents relevant to y
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
 | [ROADMAP.md](ROADMAP.md) | Phased plan, dependencies, and MVP boundary |
-| [TESTING.md](TESTING.md) | Planned verification layers and reporting rules |
+| [TESTING.md](TESTING.md) | Current bootstrap checks, planned verification layers, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
 | [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |
-| [TOOLING.md](TOOLING.md) | Optional local maintainer tools and repository safeguards |
+| [TOOLING.md](TOOLING.md) | Local development baseline, hosted platform verification, optional tools, and repository safeguards |
 | [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) | Preserved prototype behavior and future UI regression guards |
 
 ## Suggested task routing

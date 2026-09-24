@@ -4,15 +4,15 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP: architecture blueprint v1 complete; application implementation has not started.** This repository does not yet contain a production Flutter or Rust editing application and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
+**Pre-MVP: executable architecture skeleton implemented; project/editor implementation has not started.** The repository contains a bootstrap Rust core and CLI, a minimal Flutter shell, and a typed Flutter-to-Rust bridge. It is not yet usable as a video editor and does not release application binaries. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 
 OR aims to be a powerful but approachable editor that is desktop-first, Android-capable, local-first where practical, agent-native, and open to community-created content. Editing state should stay structured and inspectable, and editing behavior should be deterministic across the GUI, CLI, and agents.
 
-## Core architecture
+## Architecture direction
 
-The following is the intended direction, not an implemented application:
+The implemented skeleton proves that the CLI and Flutter shell receive bootstrap data from the same Rust core. The broader product architecture remains the intended direction:
 
     Flutter UI
         |
@@ -23,6 +23,8 @@ The following is the intended direction, not an implemented application:
     Timeline / Media / Render
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
+
+Project documents, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
 
 ## Product direction
 
@@ -45,7 +47,7 @@ The application design source of truth is [DESIGN.md](DESIGN.md). The full docum
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor path and repository expectations.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor path and repository expectations, and [docs/TOOLING.md](docs/TOOLING.md) for local checks and hosted platform verification.
 
 ## License
 

@@ -1,6 +1,40 @@
-# Local Agent Tooling
+# Development Tooling
 
-This tooling supports development and is not part of the Opencut Reinforced application.
+This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
+
+## Local development baseline
+
+Install only the tools needed for the part you are changing. The repository pins Rust 1.98.0; Flutter CI uses Flutter 3.47.5 stable.
+
+Rust checks run from the repository root:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
+
+Flutter checks run from `apps/or_app`:
+
+```sh
+flutter pub get
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+```
+
+Flutter's Rust native-assets hook builds the bridge for the host target during Flutter builds and tests. On macOS, the Command Line Tools are sufficient for general Rust work and widget tests. If an unaccepted full Xcode selection blocks Flutter's native-asset packaging, run the Flutter command with `DEVELOPER_DIR=/Library/Developer/CommandLineTools` when those tools are installed.
+
+## Hosted platform verification
+
+GitHub Actions is the canonical place for native platform builds. Contributors do not need to own a Mac, Windows PC, or Linux machine, and do not need to install every platform SDK.
+
+- macOS: native app build and real Rust bridge smoke test
+- Linux: native app build
+- Windows: native app build
+- Android: debug APK build; no emulator runtime test is currently configured
+
+Full Xcode is optional for general OR development. It is required only for contributors who want to build or debug the macOS app locally; GitHub-hosted macOS runners provide canonical verification. Android SDK, JDK, and emulator setup are optional unless actively developing or debugging Android-specific behavior.
 
 ## CodeGraph
 
@@ -38,11 +72,9 @@ Review third-party agent tooling before installing it. Do not install additional
 - GitHub Private Vulnerability Reporting is enabled; see [SECURITY.md](../SECURITY.md).
 - The active `main-safety` ruleset applies only to `main` and blocks branch deletion and non-fast-forward updates. It does not require pull requests, approvals, status checks, or signed commits.
 
-## Future, not yet enabled
+## Future tooling
 
-- Add Rust build/test CI when a Cargo workspace exists.
-- Add Flutter analyze/test CI when a Flutter app exists.
-- Enable CodeQL after source code is introduced. Scan Rust and GitHub Actions workflows where useful. Verify CodeQL coverage for each supported language; Flutter/Dart should also use its own static-analysis and test tooling.
+- CodeQL is not enabled yet. Evaluate coverage for Rust and GitHub Actions workflows; Flutter/Dart should continue to use its own static-analysis and test tooling.
 - Add release workflows when real build artifacts exist.
 - Add artifact signing and attestations when releases exist.
 

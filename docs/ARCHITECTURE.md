@@ -2,15 +2,15 @@
 
 ## Status
 
-This is the canonical high-level architecture. It records intended boundaries; planned and future components do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
+This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton is implemented; planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
 
 ## Implemented today
 
-The repository contains public-project documentation and safeguards, hygiene checks and CI, the approved [DESIGN.md](../DESIGN.md), [UX acceptance guards](UX_ACCEPTANCE.md), and the frozen [interactive HTML prototype](../prototypes/or-ui-demo.html).
+The repository contains a minimal Rust workspace with `or_core`, a semantic `or` CLI, and a Flutter shell at `apps/or_app`. `or_core` provides application info, health, and capability discovery. The CLI and Flutter obtain these values from the same core. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
 
-There is no production Flutter application, Rust editing core, media engine, CLI, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
+GitHub Actions checks Rust and Flutter code, builds the macOS, Windows, Linux, and Android targets, and runs a macOS integration smoke that calls the native bridge and compares its results with the CLI. The Flutter shell is not an editor. There is no project document, editing or timeline model, media engine, renderer, FFmpeg, wgpu, IPC service, or AI system. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
 
-## Planned target architecture
+## Planned full target architecture
 
     Flutter GUI
         | typed bridge and events
