@@ -384,12 +384,13 @@ jobs:
           Build classification: DEBUG / DEVELOPER
           Flutter version: 3.47.5 (revision 6a19cca56475dbfba1478ee68d7bd0c2ef891da1)
           Rust version: 1.98.0
+          Signing: no production signing; Android uses the standard debug build key
 
           Supported artifacts produced:
           - opencut-reinforced-macos-debug.zip (unsigned, not notarized)
-          - opencut-reinforced-windows-x64-debug.zip
-          - opencut-reinforced-linux-x64-debug.tar.gz
-          - opencut-reinforced-android-debug.apk
+          - opencut-reinforced-windows-x64-debug.zip (unsigned)
+          - opencut-reinforced-linux-x64-debug.tar.gz (unsigned)
+          - opencut-reinforced-android-debug.apk (debug signing only)
 
           Warning: Pre-MVP developer build; not a stable release and not yet a functional video editor.
           EOF
@@ -412,6 +413,7 @@ jobs:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
           - `ProjectDocument` and `.orproj` v1 codec
+          - Bounded `.orproj` file loading and atomic save
           - Command and query contracts
           - Transactions
           - Undo and redo
@@ -422,8 +424,11 @@ jobs:
           - Playback
           - Rendering
           - Export
+          - Crash recovery journal and recovery workflow
+          - Autosave and filesystem watching
+          - CLI project-file commands and Android Storage Access Framework integration
 
-          These are debug developer builds for testing only. Desktop builds are unsigned and not notarized. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
+          These are debug developer builds for testing only, with no production signing. Desktop builds are unsigned and macOS is not notarized; Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
           EOF
 
       - name: Create commit-specific GitHub prerelease

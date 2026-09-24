@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict in-memory `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Filesystem save/load, migrations, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load and atomic save around the existing v1 codec. Migrations, crash recovery, autosave, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -92,19 +92,25 @@ The initial `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
 }
 ```
 
-The `ProjectDocument` domain type stores a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, and UTF-8 name. Its fields are not the wire schema: private v1 DTOs and explicit conversion keep internal domain changes from silently changing the file contract. V1 decoding validates IDs and required fields and rejects unknown fields; the version probe rejects unsupported versions before v1 decoding. The current Rust encoder emits deterministic pretty JSON with a trailing newline for the same document; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The codec has no filesystem save/load or migration behavior yet. Future persistent object IDs should follow the same typed opaque-ID pattern unless evidence justifies another representation. No `TrackId`, `ClipId`, or other object IDs exist yet.
+The `ProjectDocument` domain type stores a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, and UTF-8 name. Its fields are not the wire schema: private v1 DTOs and explicit conversion keep internal domain changes from silently changing the file contract. V1 decoding validates IDs and required fields and rejects unknown fields; the version probe rejects unsupported versions before v1 decoding. The current Rust encoder emits deterministic pretty JSON with a trailing newline for the same document; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. Phase 4E1 wraps this codec in filesystem load/save without changing schema version 1. Migrations remain future work. Future persistent object IDs should follow the same typed opaque-ID pattern unless evidence justifies another representation. No `TrackId`, `ClipId`, or other object IDs exist yet.
 
 Projects reference external media. Media paths and fingerprints support relink, replace, offline state, and project collection without embedding source media by default. Cache entries never become canonical project state.
 
-A safe-save sequence is:
+A Phase 4E1 safe-save sequence is:
 
-1. Validate the in-memory project and target path.
-2. Write a complete temporary file in the destination filesystem.
-3. Flush buffered data and fsync where appropriate.
-4. Atomically replace the prior project where the platform supports it.
-5. Report success only after the replacement is complete.
+1. Encode the canonical `ProjectDocument` in memory and reject output larger than `MAX_PROJECT_FILE_BYTES` (64 MiB) before creating any file.
+2. Create a unique hidden sibling named `.<target-name>.or-tmp-<uuid>` with `create_new(true)`, retrying only bounded name collisions. The caller's parent directory is never created automatically.
+3. Write all bytes through a buffer, flush the buffer, sync the temporary file, and close it before replacement.
+4. Replace the destination without deleting it first. Unix-like targets (macOS, Linux, and direct-filesystem Android paths) use same-directory `rename` and sync the containing directory. Windows uses `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH`.
+5. Report success only after the replacement and platform durability step. A failure to sync the Unix directory after replacement returns a durability-uncertain error; the new file may already be present.
 
-A crash journal records recoverable changes between durable checkpoints. Startup recovery validates journal data before offering recovery. Migrations are explicit, ordered, versioned, and tested on old and malformed inputs.
+`load_project_file` opens the file, checks its metadata size, and reads at most `MAX_PROJECT_FILE_BYTES + 1`; it rejects larger input, validates strict UTF-8, then calls the existing `decode_project`. Neither load nor save changes `ProjectId` or `ProjectRevision`. Session instance IDs and undo/redo history are not passed to the storage API and remain absent from `.orproj`.
+
+`ProjectStorageError` distinguishes I/O, oversize input, invalid UTF-8, codec failures, temporary-file create/write/flush/sync failures, replacement failures, and post-replace durability uncertainty.
+
+The replacement primitive provides atomic namespace/file replacement on supported local filesystems. File sync and directory sync or write-through improve durability but do not guarantee survival of every power-loss, controller, or filesystem failure. Phase 4E1 assumes one OR application/session owns a save target at a time; it does not provide a file-locking or concurrent-writer coordinator. Crash journaling, recovery validation, selection, and cleanup are Phase 4E2.
+
+Future crash recovery will record recoverable changes between durable checkpoints. Startup recovery must validate journal data before offering recovery. Migrations are explicit, ordered, versioned, and tested on old and malformed inputs.
 
 ### Project revisions
 

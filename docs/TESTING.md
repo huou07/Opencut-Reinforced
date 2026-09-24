@@ -41,7 +41,7 @@ Phase 4A tests foundational values only; later sections record project and appli
 - Malformed, nil, and non-v4 project ID rejection through the existing `ProjectId` invariant.
 - Runtime-instance ID and field leakage guard; decoding returns only canonical project state.
 
-There are no filesystem save/load or migration tests.
+Filesystem save/load tests are recorded under Phase 4E1. Schema migrations remain unimplemented.
 
 ## Current Phase 4C coverage
 
@@ -59,7 +59,18 @@ There are no filesystem save/load or migration tests.
 - `history.undo` and `history.redo`: inverse/forward changes, one new revision each, grouped undo, redo invalidation after a real edit, no-op/failed-edit redo preservation, empty-stack errors, history conflicts, and overflow without partial mutation.
 - Transaction and history effects round-trip through the `.orproj` v1 codec as canonical name/revision only; runtime instance ID and history remain absent, and a reopened session starts with empty history.
 
-There are no filesystem save/load, migration, IPC, or client-integration tests.
+Filesystem save/load tests are recorded under Phase 4E1. Migration, IPC, and client-integration tests are not implemented.
+
+## Current Phase 4E1 coverage
+
+- Bounded load accepts canonical `.orproj` v1 through the existing codec and rejects files over 64 MiB, invalid UTF-8, invalid codec data, and missing files.
+- Save/load preserves `ProjectId`, nonzero `ProjectRevision`, and exact project name without mutating the source session; runtime instance ID and undo/redo history are not persisted.
+- New and existing destinations, Unicode paths, and the caller-owned parent-directory rule are covered.
+- Failed replacement preserves the existing destination and removes the temporary sibling; oversized encoded state is rejected before temporary creation and leaves an existing destination unchanged.
+- Unit checks confirm the temp file is a same-directory sibling and a failed platform replacement leaves the destination intact.
+- The storage integration test runs in the Linux workspace Rust checks and on macOS and Windows in Platform Verification. Android CI builds the Rust bridge for Android but does not run storage tests on an Android device.
+
+Crash-journal and recovery testing is Phase 4E2 and is not implemented.
 
 ## Test pyramid
 

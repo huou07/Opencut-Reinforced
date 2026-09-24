@@ -46,10 +46,11 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `Repository hygiene`: repository checks from `scripts/check-repo.sh`.
 - `Rust checks`: formatting, workspace Clippy, and workspace tests on Ubuntu.
 - `Flutter static and widget checks`: dependency resolution, Dart formatting, analysis, and Flutter widget tests on Ubuntu.
-- `macOS native build and bridge smoke`: macOS app build, CLI bootstrap capture, and a real native Rust bridge smoke test.
+- `macOS native build and bridge smoke`: core project-storage integration tests, macOS app build, CLI bootstrap capture, and a real native Rust bridge smoke test.
 - `Linux native build`: Linux app build.
-- `Windows native build`: Windows app build.
+- `Windows native build`: core project-storage integration tests and Windows app build.
 - `Android APK build`: debug APK build; no emulator runtime test is currently configured.
+- `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit.
 
 Full Xcode, CocoaPods, Android SDK/JDK, Windows SDK, and Linux platform packages are optional for general OR development. Install or configure them only when explicitly choosing local platform development; GitHub-hosted jobs provide canonical coverage for the configured targets.
 
@@ -92,8 +93,8 @@ Review third-party agent tooling before installing it. Do not install additional
 ## Future tooling
 
 - CodeQL is not enabled yet. Evaluate coverage for Rust and GitHub Actions workflows; Flutter/Dart should continue to use its own static-analysis and test tooling.
-- Add release workflows when real build artifacts exist.
-- Add artifact signing and attestations when releases exist.
+- Add stable-release signing, notarization, and attestations when distribution requirements are scoped.
+- Add Android runtime and Storage Access Framework checks when Android project-file integration is implemented.
 
 ## Approved agent tooling
 

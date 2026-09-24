@@ -4,7 +4,7 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP: Phase 3 bootstrap and Phase 4A–4D project/application foundations implemented; timeline and media editing have not started.** The repository contains a bootstrap Rust core and CLI, foundational identity, revision, exact-time, versioned project-document, command/query, in-memory transaction, and session-local history contracts, a minimal Flutter shell, and a typed Flutter-to-Rust bridge. No stable application release exists. Developer Preview prereleases may be downloaded from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for native-shell and architecture testing only; they are not usable video editors. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
+**Pre-MVP: Phase 3 bootstrap and Phase 4A–4E1 project/application foundations implemented; timeline and media editing have not started.** The repository contains a bootstrap Rust core and CLI, foundational identity, revision, exact-time, versioned project-document, command/query, in-memory transaction, session-local history, and bounded `.orproj` v1 filesystem storage, plus a minimal Flutter shell and typed Flutter-to-Rust bridge. Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for native-shell and architecture testing only; they are not usable video editors. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 
@@ -24,7 +24,7 @@ The implemented skeleton proves that the CLI and Flutter shell receive bootstrap
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-Project documents, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
+The project format has bounded filesystem load and atomic save, but crash recovery, autosave, CLI project-file commands, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
 
 ## Product direction
 

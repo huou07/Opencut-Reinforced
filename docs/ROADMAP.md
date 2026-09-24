@@ -61,15 +61,24 @@ Phase 4D — DONE:
 - one persistent revision increment per changed transaction; no increment for net no-ops or failed groups
 - in-memory, per-session undo/redo history that is not part of `.orproj`
 
-Remaining Phase 4 work:
+Phase 4E1 — DONE:
+
+- bounded 64 MiB `.orproj` filesystem load with strict UTF-8 and v1 codec validation
+- same-directory temporary writes, file sync, atomic replacement, and post-replace durability reporting
+- macOS, Linux, and Windows storage integration verification
+
+Phase 4E2 — NEXT:
+
+- crash journal and recovery foundation
+- recovery validation, selection, and cleanup/checkpoint semantics
+
+After 4E2, Phase 4 continues with:
 
 - real migrations when a later schema exists
-- filesystem save/load and atomic replace
-- crash journal and recovery
 - local IPC
-- CLI parity
+- attached/headless CLI parity, including future project-file commands
 
-Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, commands and queries, transactions and history, serialization, and IPC while preserving control-plane/media-plane separation, a snapshot-ready project/timeline evaluation boundary, and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
+Phase 4 remains in progress. It does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, commands and queries, transactions and history, serialization, and bounded filesystem persistence while preserving control-plane/media-plane separation, a snapshot-ready project/timeline evaluation boundary, and the rule that per-frame work never mutates Project or increments `ProjectRevision`. Local IPC remains planned.
 
 ### Phase 5 — Media foundation
 **Status: PLANNED**

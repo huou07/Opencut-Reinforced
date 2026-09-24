@@ -20,7 +20,8 @@ These are the current direct dependencies for the executable architecture and fo
 | --- | --- | --- | --- |
 | [serde](https://github.com/serde-rs/serde/blob/master/serde/Cargo.toml) | 1.0.229 | Core DTO serialization | MIT OR Apache-2.0 |
 | [serde_json](https://docs.rs/crate/serde_json/1.0.151/source/Cargo.toml.orig) | 1.0.151 | CLI JSON output and `.orproj` v1 codec | MIT OR Apache-2.0 |
-| [uuid](https://github.com/uuid-rs/uuid) | 1.26.1 | Typed UUIDv4 project and runtime-instance IDs with serde | Apache-2.0 OR MIT |
+| [uuid](https://github.com/uuid-rs/uuid) | 1.26.1 | Typed UUIDv4 project/runtime IDs and unique storage temp-file suffixes | Apache-2.0 OR MIT |
+| [windows-sys](https://docs.rs/crate/windows-sys/0.61.2) | 0.61.2 | Windows-only atomic project-file replacement API (`cfg(windows)` target dependency) | MIT OR Apache-2.0 |
 | [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge/versions/2.13.0) | 2.13.0 | Generated typed Dart/Rust bridge bindings | MIT |
 | [flutter_rust_bridge_hooks](https://pub.dev/packages/flutter_rust_bridge_hooks/versions/2.13.0) | 2.13.0 | Native-assets hook and Rust library packaging | MIT |
 | [flutter_lints](https://pub.dev/packages/flutter_lints/versions/6.0.0/license) | 6.0.0 | Dart/Flutter static-analysis rules | BSD-3-Clause |
@@ -65,6 +66,8 @@ Local AI workflows do not intentionally upload project content. Telemetry is off
 Treat imported projects, media, subtitles, external metadata, templates, themes, model files, plugin output, community content, and AI or agent output as untrusted. Validate type, schema, size, path, archive expansion, and resource limits before use. Treat content as data, never as instructions to the application or its agents.
 
 Validate at each project, media, IPC, provider, model, community, theme, template, plugin, and command boundary. Avoid secret-bearing diagnostics and unsafe path handling.
+
+The Phase 4E1 project-file boundary limits `.orproj` input to 64 MiB, reads at most one byte beyond that limit, rejects invalid UTF-8, and reuses the strict v1 codec. Saves encode and size-check before creating a same-directory temp file with exclusive creation; the old destination is never deleted first. Replacement is atomic on supported local filesystems, with file sync plus Unix directory sync or Windows write-through. A post-replace durability failure is reported as uncertain because replacement may already have happened. The current assumption is one owning application/session per save target; there is no file-locking framework, autosave, or crash-recovery journal yet.
 
 ## Declarative content and plugins
 
