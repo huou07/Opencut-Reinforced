@@ -3,15 +3,17 @@ use serde::Serialize;
 mod application;
 mod project;
 mod project_document;
+mod project_file_session;
 mod project_recovery;
 mod project_storage;
 mod time;
 
 pub use application::{
-    CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet, CommandCall, CommandDescriptor, CommandEnvelope,
-    CommandResult, OperationError, OperationErrorCode, ProjectChange, ProjectSession,
-    ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TransactionEnvelope,
-    TransactionResult, command_catalog, query_catalog,
+    ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, OperationError,
+    OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor,
+    QueryEnvelope, QueryResult, TransactionEnvelope, TransactionResult, command_catalog,
+    query_catalog,
 };
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
@@ -19,6 +21,9 @@ pub use project::{
 pub use project_document::{
     CURRENT_PROJECT_SCHEMA_VERSION, ProjectCodecError, ProjectDocument, decode_project,
     encode_project,
+};
+pub use project_file_session::{
+    ProjectFileSession, ProjectFileSessionError, ProjectFileSessionErrorCode,
 };
 pub use project_recovery::{
     CURRENT_RECOVERY_SCHEMA_VERSION, MAX_RECOVERY_FILE_BYTES, ProjectRecoveryError,

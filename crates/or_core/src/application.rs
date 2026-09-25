@@ -106,7 +106,7 @@ pub struct QueryEnvelope {
 }
 
 /// One canonical project-state delta produced by a transaction.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectChange {
     ProjectName { before: String, after: String },
@@ -115,7 +115,8 @@ pub enum ProjectChange {
 /// Net canonical content changes produced by one transaction.
 ///
 /// A ChangeSet is a result description, not a mutation request.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChangeSet {
     changes: Vec<ProjectChange>,
 }
@@ -165,7 +166,8 @@ impl ChangeSet {
 }
 
 /// Result of applying one command to a project session.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CommandResult {
     pub command_id: String,
     pub schema_version: u64,
@@ -178,7 +180,8 @@ pub struct CommandResult {
 }
 
 /// Result of applying one transaction.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TransactionResult {
     pub schema_version: u64,
     pub project_id: ProjectId,
@@ -191,7 +194,8 @@ pub struct TransactionResult {
 }
 
 /// Canonical and runtime identity values returned by project.summary.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectSummary {
     pub project_id: ProjectId,
     pub project_instance_id: ProjectInstanceId,
@@ -200,7 +204,8 @@ pub struct ProjectSummary {
 }
 
 /// Result of a project query. The summary is a read-only snapshot of current state.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QueryResult {
     pub query_id: String,
     pub schema_version: u64,
@@ -294,6 +299,35 @@ impl fmt::Display for OperationError {
 
 impl Error for OperationError {}
 
+/// A transport-independent operation accepted by an active project session.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ApplicationRequest {
+    Command(CommandEnvelope),
+    Query(QueryEnvelope),
+    Transaction(TransactionEnvelope),
+}
+
+/// The typed result of dispatching an [`ApplicationRequest`].
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "result",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ApplicationResponse {
+    Command(CommandResult),
+    Query(QueryResult),
+    Transaction(TransactionResult),
+    Error(OperationError),
+}
+
 #[derive(Debug, Default, Eq, PartialEq)]
 struct SessionHistory {
     undo: Vec<ChangeSet>,
@@ -341,6 +375,27 @@ impl ProjectSession {
 
     pub const fn project(&self) -> &ProjectDocument {
         &self.project
+    }
+
+    /// Dispatches a supported application operation through the existing semantic paths.
+    pub fn handle_application_request(
+        &mut self,
+        request: ApplicationRequest,
+    ) -> ApplicationResponse {
+        match request {
+            ApplicationRequest::Command(envelope) => self
+                .execute_command(envelope)
+                .map(ApplicationResponse::Command)
+                .unwrap_or_else(ApplicationResponse::Error),
+            ApplicationRequest::Query(envelope) => self
+                .execute_query(envelope)
+                .map(ApplicationResponse::Query)
+                .unwrap_or_else(ApplicationResponse::Error),
+            ApplicationRequest::Transaction(envelope) => self
+                .execute_transaction(envelope)
+                .map(ApplicationResponse::Transaction)
+                .unwrap_or_else(ApplicationResponse::Error),
+        }
     }
 
     pub fn into_project(self) -> ProjectDocument {
@@ -619,9 +674,10 @@ struct RenameArguments {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMMANDS, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet, CommandCall, CommandDescriptor,
-        CommandEnvelope, OperationErrorCode, ProjectChange, ProjectSession, QUERIES,
-        QueryDescriptor, QueryEnvelope, TransactionEnvelope, command_catalog, query_catalog,
+        ApplicationRequest, ApplicationResponse, COMMANDS, CURRENT_TRANSACTION_SCHEMA_VERSION,
+        ChangeSet, CommandCall, CommandDescriptor, CommandEnvelope, OperationErrorCode,
+        ProjectChange, ProjectSession, QUERIES, QueryDescriptor, QueryEnvelope,
+        TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
         ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, decode_project,
@@ -734,6 +790,31 @@ mod tests {
 
     fn code<T>(result: &Result<T, super::OperationError>) -> OperationErrorCode {
         result.as_ref().err().expect("operation should fail").code
+    }
+
+    #[test]
+    fn common_dispatch_reuses_command_query_and_transaction_paths() {
+        let mut session = fixed_session();
+        let command =
+            session.handle_application_request(ApplicationRequest::Command(rename("B", 0)));
+        assert!(
+            matches!(command, ApplicationResponse::Command(result) if result.after_revision == ProjectRevision::new(1))
+        );
+
+        let query = session.handle_application_request(ApplicationRequest::Query(summary_query()));
+        assert!(matches!(query, ApplicationResponse::Query(result) if result.summary.name == "B"));
+
+        let transaction = session.handle_application_request(ApplicationRequest::Transaction(
+            transaction(vec![rename_call("C"), rename_call("D")], 1),
+        ));
+        assert!(
+            matches!(transaction, ApplicationResponse::Transaction(result) if result.after_revision == ProjectRevision::new(2) && result.command_count == 2)
+        );
+
+        let stale = session.handle_application_request(ApplicationRequest::Command(rename("E", 1)));
+        assert!(
+            matches!(stale, ApplicationResponse::Error(error) if error.code == OperationErrorCode::RevisionConflict)
+        );
     }
 
     #[test]
