@@ -307,8 +307,8 @@ mod tests {
             ConvertStringSidToSidW, GetSecurityInfo, SE_FILE_OBJECT, SE_KERNEL_OBJECT,
         },
         Security::{
-            ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACE_HEADER, ACL_SIZE_INFORMATION,
-            AclSizeInformation, DACL_SECURITY_INFORMATION, EqualSid, GetAce, GetAclInformation,
+            ACCESS_ALLOWED_ACE, ACE_HEADER, ACL_SIZE_INFORMATION, AclSizeInformation,
+            DACL_SECURITY_INFORMATION, EqualSid, GetAce, GetAclInformation,
             OWNER_SECURITY_INFORMATION,
         },
         Storage::FileSystem::{
