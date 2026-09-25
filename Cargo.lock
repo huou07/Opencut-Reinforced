@@ -497,6 +497,7 @@ name = "or_cli"
 version = "0.1.0"
 dependencies = [
  "or_core",
+ "or_ipc",
  "serde_json",
 ]
 

@@ -1,8 +1,47 @@
+mod commands;
+
 use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    match run(std::env::args_os().skip(1)) {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|argument| is_semantic_command(argument))
+    {
+        return match commands::run(args) {
+            Ok(commands::CommandOutput::Immediate(output)) => {
+                println!("{output}");
+                ExitCode::SUCCESS
+            }
+            Ok(commands::CommandOutput::Serve {
+                server,
+                startup,
+                json,
+            }) => {
+                println!("{startup}");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                match server.wait() {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(error) => {
+                        let error = commands::CliError::ipc(error, json);
+                        eprintln!("{}", error.render());
+                        ExitCode::from(error.exit_code())
+                    }
+                }
+            }
+            Err(error) => {
+                if error.json() {
+                    println!("{}", error.render());
+                } else {
+                    eprintln!("{}", error.render());
+                }
+                ExitCode::from(error.exit_code())
+            }
+        };
+    }
+
+    match run_bootstrap(args) {
         Ok(output) => {
             println!("{output}");
             ExitCode::SUCCESS
@@ -14,9 +53,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(args: impl IntoIterator<Item = OsString>) -> Result<String, String> {
-    let args: Vec<_> = args.into_iter().collect();
-
+fn run_bootstrap(args: Vec<OsString>) -> Result<String, String> {
     if args.is_empty()
         || (args.len() == 1 && is(&args[0], "--help"))
         || (args.len() == 1 && is(&args[0], "-h"))
@@ -83,5 +120,13 @@ fn is(value: &OsStr, expected: &str) -> bool {
 }
 
 fn usage() -> &'static str {
-    "Usage: or <version|health|capabilities> [--json]\n       or --help"
+    "Usage:\n  or <version|health|capabilities> [--json]\n  or <commands|queries> [--json]\n  or project summary --file PATH|--attach DESCRIPTOR [--json]\n  or project rename --file PATH|--attach DESCRIPTOR --name NAME [--json]\n  or project save --attach DESCRIPTOR [--json]\n  or history <undo|redo> --attach DESCRIPTOR [--json]\n  or recovery <status|apply|discard> --file PATH [--json]\n  or session serve --file PATH [--descriptor PATH] [--json]\n  or session describe --attach DESCRIPTOR [--json]\n  or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]\n  or --help"
+}
+
+fn is_semantic_command(value: &OsStr) -> bool {
+    [
+        "commands", "queries", "project", "history", "recovery", "session",
+    ]
+    .iter()
+    .any(|command| is(value, command))
 }

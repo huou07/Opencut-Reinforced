@@ -11,4 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 or_core = { path = "../or_core" }
+or_ipc = { path = "../or_ipc" }
 serde_json = "1.0.151"

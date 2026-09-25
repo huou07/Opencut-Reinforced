@@ -50,7 +50,9 @@ fn capabilities_json_contains_only_bootstrap_capabilities() {
 
 #[test]
 fn help_and_invalid_input_have_expected_exit_behavior() {
-    assert!(run(&["--help"]).status.success());
+    let help = run(&["--help"]);
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("recovery <status|apply|discard>"));
 
     let unknown = run(&["timeline"]);
     assert!(!unknown.status.success());
