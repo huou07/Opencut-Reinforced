@@ -223,9 +223,14 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
             .contains("\"schema_version\": 1")
     );
 
-    let undo = session.handle_application_request(ApplicationRequest::Command(
-        CommandEnvelope::undo(project_id, instance_id, ProjectRevision::INITIAL),
-    ));
+    let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+        command_id: "history.undo".to_owned(),
+        schema_version: 1,
+        project_id,
+        project_instance_id: instance_id,
+        expected_project_revision: ProjectRevision::INITIAL,
+        arguments: json!({}),
+    }));
     assert!(matches!(undo, ApplicationResponse::Error(_)));
 
     let original = ProjectDocument::new("Do not replace");
