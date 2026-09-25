@@ -1,3 +1,4 @@
+use crate::project_storage::create_project_file_new;
 use crate::{
     ApplicationRequest, ApplicationResponse, ProjectDocument, ProjectSession, ProjectStorageError,
     RecoveryInspection, inspect_project_recovery, load_project_file, save_project_file_atomic,
@@ -15,6 +16,7 @@ use std::{
 pub enum ProjectFileSessionErrorCode {
     RecoveryRequired,
     ProjectFileChanged,
+    DestinationExists,
     StorageFailure,
 }
 
@@ -44,6 +46,7 @@ impl ProjectFileSessionErrorCode {
         match self {
             Self::RecoveryRequired => "RECOVERY_REQUIRED",
             Self::ProjectFileChanged => "PROJECT_FILE_CHANGED",
+            Self::DestinationExists => "DESTINATION_EXISTS",
             Self::StorageFailure => "STORAGE_FAILURE",
         }
     }
@@ -58,6 +61,23 @@ pub struct ProjectFileSession {
 }
 
 impl ProjectFileSession {
+    /// Creates a new file-backed project without replacing an existing destination.
+    pub fn create_new(
+        path: impl AsRef<Path>,
+        name: impl Into<String>,
+    ) -> Result<Self, ProjectFileSessionError> {
+        let project_path = path.as_ref().to_path_buf();
+        check_recovery(&project_path)?;
+        let project = ProjectDocument::new(name);
+        create_project_file_new(&project_path, &project).map_err(storage_error)?;
+
+        Ok(Self {
+            project_path,
+            last_saved_project: project.clone(),
+            session: ProjectSession::open(project),
+        })
+    }
+
     /// Loads a project without applying or discarding any recovery checkpoint.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ProjectFileSessionError> {
         let project_path = path.as_ref().to_path_buf();
@@ -120,8 +140,12 @@ fn check_recovery(path: &Path) -> Result<(), ProjectFileSessionError> {
 }
 
 fn storage_error(error: ProjectStorageError) -> ProjectFileSessionError {
+    let code = match &error {
+        ProjectStorageError::DestinationExists => ProjectFileSessionErrorCode::DestinationExists,
+        _ => ProjectFileSessionErrorCode::StorageFailure,
+    };
     ProjectFileSessionError {
-        code: ProjectFileSessionErrorCode::StorageFailure,
+        code,
         detail: error.to_string(),
     }
 }
@@ -214,6 +238,49 @@ mod tests {
             session.session().project_revision(),
             ProjectRevision::new(9)
         );
+    }
+
+    #[test]
+    fn create_new_writes_a_v1_project_with_fresh_identity_and_empty_history() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+
+        let mut session = ProjectFileSession::create_new(&path, "Exact Name ").unwrap();
+        let summary = session.session().project();
+        let instance_id = session.session().project_instance_id();
+
+        assert_eq!(summary.name(), "Exact Name ");
+        assert_eq!(summary.revision(), ProjectRevision::INITIAL);
+        assert!(!session.is_dirty());
+        assert_eq!(load_project_file(&path).unwrap(), *summary);
+        let reopened = ProjectFileSession::open(&path).unwrap();
+        assert_eq!(reopened.session().project_id(), summary.id());
+        assert_ne!(reopened.session().project_instance_id(), instance_id);
+        let undo =
+            session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+                command_id: "history.undo".to_owned(),
+                schema_version: 1,
+                project_id: session.session().project_id(),
+                project_instance_id: session.session().project_instance_id(),
+                expected_project_revision: ProjectRevision::INITIAL,
+                arguments: serde_json::json!({}),
+            }));
+        assert!(matches!(undo, ApplicationResponse::Error(_)));
+    }
+
+    #[test]
+    fn create_new_never_clobbers_an_existing_destination() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let existing = document("Keep me", 17);
+        save_project_file_atomic(&path, &existing).unwrap();
+        let original_bytes = std::fs::read(&path).unwrap();
+
+        let error = ProjectFileSession::create_new(&path, "Replacement").unwrap_err();
+
+        assert_eq!(error.code(), ProjectFileSessionErrorCode::DestinationExists);
+        assert_eq!(std::fs::read(&path).unwrap(), original_bytes);
+        assert_eq!(load_project_file(&path).unwrap(), existing);
     }
 
     #[test]

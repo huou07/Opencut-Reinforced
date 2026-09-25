@@ -441,6 +441,7 @@ fn map_file_error(code: ProjectFileSessionErrorCode) -> IpcErrorCode {
     match code {
         ProjectFileSessionErrorCode::RecoveryRequired => IpcErrorCode::RecoveryRequired,
         ProjectFileSessionErrorCode::ProjectFileChanged => IpcErrorCode::ProjectFileChanged,
+        ProjectFileSessionErrorCode::DestinationExists => IpcErrorCode::ServerStateError,
         ProjectFileSessionErrorCode::StorageFailure => IpcErrorCode::ServerStateError,
     }
 }

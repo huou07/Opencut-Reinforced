@@ -55,6 +55,47 @@ pub fn save_project_file_atomic(
     atomic_replace_bytes(path.as_ref(), encoded.as_bytes())
 }
 
+/// Creates a new project file without replacing a destination created by another process.
+///
+/// The fully written and synced sibling is installed with a hard link, which fails atomically
+/// when the destination already exists on the same filesystem.
+pub(crate) fn create_project_file_new(
+    path: &Path,
+    document: &ProjectDocument,
+) -> Result<(), ProjectStorageError> {
+    let encoded = encode_project(document).map_err(ProjectStorageError::Codec)?;
+    if encoded.len() as u64 > MAX_PROJECT_FILE_BYTES {
+        return Err(ProjectStorageError::TooLarge {
+            max_bytes: MAX_PROJECT_FILE_BYTES,
+        });
+    }
+
+    let target_name = path.file_name().ok_or_else(|| {
+        ProjectStorageError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "project path must name a file",
+        ))
+    })?;
+    let parent = parent_directory(path);
+    let (temporary_path, file) = create_temporary_file(parent, target_name)?;
+    if let Err(error) = write_temporary_file(file, encoded.as_bytes()) {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error);
+    }
+
+    if let Err(error) = fs::hard_link(&temporary_path, path) {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(if error.kind() == io::ErrorKind::AlreadyExists {
+            ProjectStorageError::DestinationExists
+        } else {
+            ProjectStorageError::Install(error)
+        });
+    }
+
+    fs::remove_file(&temporary_path).map_err(ProjectStorageError::DurabilityUncertain)?;
+    sync_parent(parent).map_err(ProjectStorageError::DurabilityUncertain)
+}
+
 /// Atomically replaces a file with bytes using the shared storage durability boundary.
 ///
 /// This stays crate-private so only the project and recovery storage APIs can use it.
@@ -99,6 +140,8 @@ pub enum ProjectStorageError {
         source: io::Error,
     },
     Replace(io::Error),
+    DestinationExists,
+    Install(io::Error),
     DurabilityUncertain(io::Error),
 }
 
@@ -118,6 +161,12 @@ impl fmt::Display for ProjectStorageError {
                 )
             }
             Self::Replace(error) => write!(formatter, "project file replacement failed: {error}"),
+            Self::DestinationExists => {
+                formatter.write_str("a file already exists at the new project location")
+            }
+            Self::Install(error) => {
+                write!(formatter, "new project file installation failed: {error}")
+            }
             Self::DurabilityUncertain(error) => write!(
                 formatter,
                 "project file was replaced, but its directory could not be synced: {error}"
@@ -131,10 +180,11 @@ impl Error for ProjectStorageError {
         match self {
             Self::Io(error)
             | Self::Replace(error)
+            | Self::Install(error)
             | Self::DurabilityUncertain(error)
             | Self::TemporaryFile { source: error, .. } => Some(error),
             Self::Codec(error) => Some(error),
-            Self::TooLarge { .. } | Self::InvalidUtf8 => None,
+            Self::DestinationExists | Self::TooLarge { .. } | Self::InvalidUtf8 => None,
         }
     }
 }
