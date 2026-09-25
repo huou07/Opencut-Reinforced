@@ -406,10 +406,18 @@ jobs:
 
           Source commit: ${GITHUB_SHA}
 
-          This build is for developer testing of the current native shell and architecture foundation. It is a pre-MVP project, not a usable video editor.
+          This build is for developer testing of the current native UI shell and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
-          Current foundation:
-          - Cross-platform Flutter shell
+          **UI FOUNDATION UPDATE**
+
+          - Native Flutter UI follows the OR Focused Monochrome design.
+          - Home, Projects, Templates, Asset Library, and Settings visual foundations.
+          - Responsive desktop and mobile application shell.
+          - Editor Shell Preview for visual evaluation.
+
+          Editor Shell Preview is not a working editor. There is no usable timeline editor, media ingest, playback, rendering, or export.
+
+          Core foundation:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
           - ProjectDocument and .orproj v1 codec

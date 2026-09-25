@@ -67,6 +67,14 @@ Phase 4E1 — DONE:
 - same-directory temporary writes, file sync, atomic replacement, and post-replace durability reporting
 - macOS, Linux, and Windows storage integration verification
 
+Phase 4UI-1 — DONE:
+
+- production-direction Flutter visual foundation using OR Focused Monochrome tokens
+- primary app shell and Home, Projects, Templates, Asset Library, and Settings surfaces
+- Advanced / Developer diagnostics preserved through the Rust gateway
+- responsive desktop and compact/mobile shell
+- non-functional Editor Shell Preview for visual evaluation only
+
 Phase 4E2 — NEXT:
 
 - crash journal and recovery foundation

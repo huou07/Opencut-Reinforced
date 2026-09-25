@@ -4,7 +4,11 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP: Phase 3 bootstrap and Phase 4A–4E1 project/application foundations implemented; timeline and media editing have not started.** The repository contains a bootstrap Rust core and CLI, foundational identity, revision, exact-time, versioned project-document, command/query, in-memory transaction, session-local history, and bounded `.orproj` v1 filesystem storage, plus a minimal Flutter shell and typed Flutter-to-Rust bridge. Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for native-shell and architecture testing only; they are not usable video editors. The interactive HTML prototype is a frozen product and UX reference, not the final application or its production architecture.
+**Pre-MVP:** Phase 3 and Phase 4A–4E1 foundations are implemented, along with Phase 4UI-1's production-direction Flutter visual foundation. Phase 4E2 crash recovery is next; timeline and media editing have not started.
+
+The repository contains a bootstrap Rust core and CLI, project identity and revision, exact-time values, `.orproj` v1 storage, command/query contracts, transactions, session-local history, and a typed Flutter-to-Rust bridge. The native Flutter shell includes Home, Projects, Templates, Asset Library, Settings, and an explicitly non-functional Editor Shell Preview. It is not a usable video editor.
+
+Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for visual shell and architecture evaluation only. The interactive HTML prototype remains a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 
@@ -12,7 +16,7 @@ OR aims to be a powerful but approachable editor that is desktop-first, Android-
 
 ## Architecture direction
 
-The implemented skeleton proves that the CLI and Flutter shell receive bootstrap data from the same Rust core. The broader product architecture remains the intended direction:
+The CLI and Flutter shell receive bootstrap data from the same Rust core. The Flutter UI now has a production-direction native shell aligned with the frozen prototype; the broader product architecture remains the intended direction:
 
     Flutter UI
         |

@@ -2,16 +2,32 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, Flutter shell, and native bridge. This is still a pre-MVP skeleton, not a production editor. The test layers below distinguish the checks that exist from the planned product coverage.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the production-direction Flutter visual foundation. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish the checks that exist from planned product coverage.
 
 ## Current Phase 3 checks
 
 - Rust unit tests cover core bootstrap values and bridge DTO mapping; CLI contract tests execute the real binary and verify human output, JSON, help, and invalid input.
-- Flutter widget tests cover desktop and compact navigation and diagnostics rendering with a fake gateway.
 - A macOS integration test initializes the native Rust library, calls app info, health, and capability discovery through the typed bridge, and compares the results with the CLI snapshot.
-- GitHub Actions runs Rust format, Clippy, and tests; Flutter dependency, format, analysis, and widget checks; and native builds for macOS, Linux, Windows, and Android. The macOS job includes the real bridge smoke test.
 
 These checks prove the bootstrap architecture only. They do not demonstrate editing, media, or release behavior.
+
+## Current Phase 4UI-1 coverage
+
+Structural tests in `apps/or_app/test/widget_test.dart` cover:
+
+- wide desktop shell, OR branding, top bar, and route selection
+- compact shell navigation across all five primary destinations without overflow
+- a medium-width desktop layout, centralized design tokens, and responsive breakpoints
+- Home's empty recent-project state, Projects navigation, and honest New / Open feedback
+- Settings diagnostics provided by a fake `CoreGateway`, including Advanced / Developer
+- Ctrl/Cmd+K command palette navigation to the Editor Shell Preview
+- desktop and compact Editor Shell Preview regions, unavailable tools, and absence of fake media
+
+The frozen prototype is guarded separately by its before/after SHA-256 and an empty `git diff -- prototypes/or-ui-demo.html`; this is not a pixel-golden test. No pixel-perfect parity claim is made.
+
+## Current CI gates
+
+GitHub Actions runs Rust formatting, Clippy, and tests; Flutter dependency, formatting, analysis, and widget checks; native builds for macOS, Linux, Windows, and Android; and the macOS bridge smoke test.
 
 ## CI-first verification status
 
