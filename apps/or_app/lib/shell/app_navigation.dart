@@ -108,11 +108,15 @@ class DesktopNavigation extends StatelessWidget {
                     color: OrColors.textMuted,
                   ),
                   SizedBox(width: OrSpacing.x2),
-                  Text(
-                    'Developer Preview',
-                    style: TextStyle(
-                      color: OrColors.textSecondary,
-                      fontSize: 12,
+                  Expanded(
+                    child: Text(
+                      'Developer Preview',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: OrColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -184,12 +188,16 @@ class _DesktopDestination extends StatelessWidget {
                   color: selected ? OrColors.text : OrColors.textSecondary,
                 ),
                 const SizedBox(width: OrSpacing.x3),
-                Text(
-                  destination.label,
-                  style: TextStyle(
-                    color: selected ? OrColors.text : OrColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                Expanded(
+                  child: Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected ? OrColors.text : OrColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                    ),
                   ),
                 ),
               ],

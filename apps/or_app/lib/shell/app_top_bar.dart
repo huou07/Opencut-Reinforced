@@ -33,8 +33,8 @@ class AppTopBar extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final showFullBrand = constraints.maxWidth >= 560 && !compact;
-          final showPreviewBadge = constraints.maxWidth >= 680 && !compact;
+          final showFullBrand = OrBreakpoints.isWide(constraints.maxWidth);
+          final showPreviewBadge = showFullBrand;
 
           return Row(
             children: [
@@ -94,7 +94,7 @@ class AppTopBar extends StatelessWidget {
                 const _PreviewBadge(),
                 const SizedBox(width: OrSpacing.x3),
               ],
-              if (constraints.maxWidth >= 500 && !compact)
+              if (showFullBrand)
                 OutlinedButton.icon(
                   key: const ValueKey('open-command-palette'),
                   onPressed: onOpenCommandPalette,

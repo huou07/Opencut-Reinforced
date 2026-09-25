@@ -33,25 +33,25 @@ class _AppShellState extends State<AppShell> {
         final compact = OrBreakpoints.isCompact(constraints.maxWidth);
         final editorPreview = _destination == AppDestination.editorPreview;
 
-        return Focus(
-          autofocus: true,
-          child: Shortcuts(
-            shortcuts: const {
-              SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                  _OpenCommandPaletteIntent(),
-              SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-                  _OpenCommandPaletteIntent(),
+        return Shortcuts(
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                _OpenCommandPaletteIntent(),
+            SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+                _OpenCommandPaletteIntent(),
+          },
+          child: Actions(
+            actions: {
+              _OpenCommandPaletteIntent:
+                  CallbackAction<_OpenCommandPaletteIntent>(
+                    onInvoke: (_) {
+                      _openCommandPalette();
+                      return null;
+                    },
+                  ),
             },
-            child: Actions(
-              actions: {
-                _OpenCommandPaletteIntent:
-                    CallbackAction<_OpenCommandPaletteIntent>(
-                      onInvoke: (_) {
-                        _openCommandPalette();
-                        return null;
-                      },
-                    ),
-              },
+            child: Focus(
+              autofocus: true,
               child: Scaffold(
                 body: SafeArea(
                   bottom: false,

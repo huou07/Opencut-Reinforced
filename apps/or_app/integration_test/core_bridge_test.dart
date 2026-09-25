@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -43,16 +44,23 @@ void main() {
     );
 
     await tester.pumpWidget(const OrApp(gateway: RustCoreGateway()));
-    await tester.tap(find.text('Settings').first);
+    await tester.tap(find.byKey(const ValueKey('nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-section-advanced')));
     await tester.pumpAndSettle();
     expect(find.text(appInfo.name), findsWidgets);
     expect(find.text(appInfo.version), findsOneWidget);
     expect(find.text(health.status), findsOneWidget);
     for (final capability in capabilities) {
-      expect(
-        find.text('${capability.id} · v${capability.version}'),
-        findsOneWidget,
-      );
+      expect(find.text(capability.id), findsOneWidget);
+    }
+    final versions = <String, int>{};
+    for (final capability in capabilities) {
+      final label = 'v${capability.version}';
+      versions.update(label, (count) => count + 1, ifAbsent: () => 1);
+    }
+    for (final entry in versions.entries) {
+      expect(find.text(entry.key), findsNWidgets(entry.value));
     }
   });
 }
