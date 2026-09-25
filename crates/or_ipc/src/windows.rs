@@ -28,6 +28,10 @@ pub(crate) struct PipeHandle {
     raw: HANDLE,
 }
 
+// Windows kernel handles are process-wide and have no thread affinity. This
+// wrapper uniquely owns the handle, so moving it to the server worker is safe.
+unsafe impl Send for PipeHandle {}
+
 impl PipeHandle {
     fn new(raw: HANDLE) -> Self {
         Self { raw }
