@@ -9,8 +9,10 @@ use or_core::{
     query_catalog,
 };
 use serde::Deserialize;
+#[cfg(not(windows))]
+use std::fs::OpenOptions;
 use std::{
-    fs::{self, OpenOptions},
+    fs,
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
@@ -239,7 +241,7 @@ fn create_runtime_directory() -> Result<PathBuf, IpcProtocolError> {
             .map_err(IpcProtocolError::Io)?;
     }
     #[cfg(windows)]
-    fs::create_dir(&path).map_err(IpcProtocolError::Io)?;
+    crate::windows::create_private_directory(&path).map_err(IpcProtocolError::Io)?;
     Ok(path)
 }
 
@@ -250,18 +252,23 @@ fn write_descriptor(
 ) -> Result<(), IpcProtocolError> {
     let encoded =
         serde_json::to_vec_pretty(descriptor).map_err(|_| IpcProtocolError::InvalidDescriptor)?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(path).map_err(IpcProtocolError::Io)?;
-    *created = true;
     if encoded.len() as u64 > MAX_DESCRIPTOR_BYTES {
         return Err(IpcProtocolError::InvalidDescriptor);
     }
+    #[cfg(windows)]
+    let mut file = crate::windows::create_private_file(path).map_err(IpcProtocolError::Io)?;
+    #[cfg(not(windows))]
+    let mut file = {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options.open(path).map_err(IpcProtocolError::Io)?
+    };
+    *created = true;
     file.write_all(&encoded).map_err(IpcProtocolError::Io)?;
     file.sync_all().map_err(IpcProtocolError::Io)
 }

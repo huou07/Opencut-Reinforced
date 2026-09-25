@@ -205,6 +205,9 @@ jobs:
       - name: Run real local IPC transport tests
         run: cargo test -p or_ipc --test local_transport
 
+      - name: Verify Windows local endpoint access controls
+        run: cargo test -p or_ipc --lib
+
       - name: Install Flutter 3.47.5
         shell: pwsh
         run: |
