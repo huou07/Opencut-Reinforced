@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the production-direction Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contract coverage. The Flutter app still does not host a live project session, so these are core/CLI/transport tests, not Flutter-attached tests. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish the checks that exist from planned product coverage.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, and real local IPC integration tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and the macOS bridge smoke test. The Linux workspace suite includes the CLI and Unix IPC tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, real local IPC, shared-host/attached-CLI parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge/lifecycle integration tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -95,7 +95,7 @@ Filesystem save/load tests are recorded under Phase 4E1. Migration remains unimp
 - Persistence guards confirm runtime `ProjectInstanceId` and session history are absent. Unicode paths and temporary-file cleanup are covered.
 - Recovery integration tests run in Linux Rust checks and in dedicated macOS and Windows Platform Verification steps. Android CI builds the Rust bridge but does not run recovery tests on an Android device.
 
-Recovery UI and autosave are not implemented or tested.
+Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimplemented and is not tested.
 
 ## Current Phase 4F coverage
 
@@ -105,9 +105,16 @@ Recovery UI and autosave are not implemented or tested.
 - Real local transport tests cover semantic query/command/transaction requests, stale revision and instance protection, explicit save, no autosave, external disk conflict, recovery appearing during a live session, authentication, guarded/discard shutdown, descriptor permissions/collision, endpoint rotation, and cleanup. They use Unix sockets on Linux/macOS and named pipes on Windows.
 - The Windows `or_ipc` unit suite reads back the ACLs from the created runtime directory, descriptor file, and named pipe and verifies that only the owner-rights ACE is present. The pipe creation keeps the remote-client rejection flag enabled.
 - CLI contract tests preserve the bootstrap commands and cover catalog JSON, headless summary/rename, no-op rename, all recovery statuses and explicit actions, attached summary/rename/undo/redo/save/describe/shutdown, semantic parity, dirty shutdown rejection, exact disk conflict protection, clean JSON output, token non-disclosure, OS-path handling, and UTF-8 project-name validation.
-- CLI integration tests run in the Linux Rust workspace job. The macOS and Windows jobs run the transport integration test directly; Windows also runs the `or_ipc` unit suite for endpoint ACL checks. These jobs do not claim Flutter-hosted IPC.
+- CLI integration tests run in the Linux Rust workspace job. The macOS and Windows jobs also run the real attached-CLI contracts directly; Windows additionally runs the `or_ipc` unit suite for endpoint ACL checks.
 
-Flutter project create/open/save and live-session hosting are not implemented or tested; they are Phase 4UI-2 work.
+## Current Phase 4UI-2 coverage
+
+- Widget tests inject fake project gateways and file pickers. They cover desktop create/open, cancellation, exact project-name preservation, revision-zero creation, close and switch Save/Discard/Cancel decisions, save failures, stale-revision refresh without retry, event-sequence invalidation, recovery candidate/stale/conflict/invalid handling, Android's unavailable New/Open state, keyboard shortcuts, and exit cancellation.
+- The macOS native integration test uses the generated Rust bridge to create and open a real `.orproj`, check revision and runtime identity, rename/undo/redo/save through the Flutter workspace, inspect the Advanced / Developer descriptor surface, verify descriptor cleanup, and reopen with the persistent project ID but a fresh runtime instance ID.
+- `crates/or_cli/tests/semantic_cli.rs` launches the actual `or` executable against a `LiveProjectHost`. Direct host commands model the bridge path while attached CLI commands query and mutate the same host. It verifies GUI-style rename → CLI summary, CLI rename and undo → direct summary, direct redo → CLI summary, shared identity/history/revision/dirty state, explicit save, and ordered change/save events.
+- The `LiveProjectHost` tests separately exercise direct access and `LocalIpcClient` access to the same session, revision-conflict behavior, dirty shutdown protection, and endpoint cleanup on Unix and Windows transports.
+- The native UI test does not spawn an external CLI process from the sandboxed application. Process-level CLI parity is exercised by the Rust integration test outside the app sandbox.
+- Project creation uses the Rust no-clobber storage tests; project bytes are never decoded or written by Dart. Recovery inspection/apply/discard contracts remain covered by the Phase 4E2 Rust tests.
 
 ## Test pyramid
 
