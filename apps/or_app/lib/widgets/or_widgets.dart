@@ -294,7 +294,6 @@ class OrUnavailableButton extends StatelessWidget {
     return Tooltip(
       message: reason,
       child: OutlinedButton.icon(
-        key: key,
         onPressed: onPressed,
         icon: Icon(icon ?? Icons.info_outline, size: 18),
         label: Text(label),
