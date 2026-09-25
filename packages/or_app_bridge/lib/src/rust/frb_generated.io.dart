@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/project.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -21,11 +22,52 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ProjectHostHandlePtr => wire
+      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandlePtr;
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectHostHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<ProjectHostEventView>
+  dco_decode_StreamSink_project_host_event_view_Sse(dynamic raw);
+
   @protected
   String dco_decode_String(dynamic raw);
 
   @protected
   AppInfo dco_decode_app_info(dynamic raw);
+
+  @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
+  ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
   Capability dco_decode_capability(dynamic raw);
@@ -40,7 +82,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
+
+  @protected
+  ProjectActionResult dco_decode_project_action_result(dynamic raw);
+
+  @protected
+  ProjectBridgeError dco_decode_project_bridge_error(dynamic raw);
+
+  @protected
+  ProjectHostEventView dco_decode_project_host_event_view(dynamic raw);
+
+  @protected
+  ProjectView dco_decode_project_view(dynamic raw);
+
+  @protected
+  RecoveryActionResult dco_decode_recovery_action_result(dynamic raw);
+
+  @protected
+  RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -49,10 +115,52 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectHostHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<ProjectHostEventView>
+  sse_decode_StreamSink_project_host_event_view_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
   AppInfo sse_decode_app_info(SseDeserializer deserializer);
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
   Capability sse_decode_capability(SseDeserializer deserializer);
@@ -67,7 +175,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  ProjectView? sse_decode_opt_box_autoadd_project_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectActionResult sse_decode_project_action_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectBridgeError sse_decode_project_bridge_error(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectHostEventView sse_decode_project_host_event_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectView sse_decode_project_view(SseDeserializer deserializer);
+
+  @protected
+  RecoveryActionResult sse_decode_recovery_action_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -76,16 +220,65 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_project_host_event_view_Sse(
+    RustStreamSink<ProjectHostEventView> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_app_info(AppInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_project_view(
+    ProjectView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_capability(Capability self, SseSerializer serializer);
@@ -106,7 +299,49 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_project_view(
+    ProjectView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_action_result(
+    ProjectActionResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_bridge_error(
+    ProjectBridgeError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_host_event_view(
+    ProjectHostEventView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_view(ProjectView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_recovery_action_result(
+    RecoveryActionResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_recovery_inspection_view(
+    RecoveryInspectionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
@@ -115,10 +350,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 
   @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class
@@ -134,4 +369,38 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_or_app_bridge_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_or_app_bridge_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }

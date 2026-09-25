@@ -2,10 +2,34 @@ import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
 
 class EditorShellPreviewScreen extends StatefulWidget {
-  const EditorShellPreviewScreen({super.key});
+  const EditorShellPreviewScreen({
+    super.key,
+    this.isProjectWorkspace = false,
+    this.project,
+    this.notice,
+    this.busy = false,
+    this.onSave,
+    this.onRename,
+    this.onUndo,
+    this.onRedo,
+    this.onClose,
+    this.onDiscardRecovery,
+  });
+
+  final bool isProjectWorkspace;
+  final ProjectReadModel? project;
+  final String? notice;
+  final bool busy;
+  final VoidCallback? onSave;
+  final VoidCallback? onRename;
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+  final VoidCallback? onClose;
+  final VoidCallback? onDiscardRecovery;
 
   @override
   State<EditorShellPreviewScreen> createState() =>
@@ -46,7 +70,23 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           color: OrColors.background,
           child: Column(
             children: [
-              const _EditorPreviewHeader(),
+              if (widget.isProjectWorkspace)
+                _ProjectWorkspaceHeader(
+                  project: widget.project,
+                  busy: widget.busy,
+                  onSave: widget.onSave,
+                  onRename: widget.onRename,
+                  onUndo: widget.onUndo,
+                  onRedo: widget.onRedo,
+                  onClose: widget.onClose,
+                )
+              else
+                const _EditorPreviewHeader(),
+              if (widget.notice != null)
+                _ProjectNotice(
+                  message: widget.notice!,
+                  onDiscardRecovery: widget.onDiscardRecovery,
+                ),
               Expanded(
                 child: compact
                     ? _compactLayout()
@@ -113,6 +153,157 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _UnavailableToolSheet(tool: tool),
+    );
+  }
+}
+
+class _ProjectWorkspaceHeader extends StatelessWidget {
+  const _ProjectWorkspaceHeader({
+    required this.project,
+    required this.busy,
+    required this.onSave,
+    required this.onRename,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onClose,
+  });
+
+  final ProjectReadModel? project;
+  final bool busy;
+  final VoidCallback? onSave;
+  final VoidCallback? onRename;
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = project;
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
+      decoration: const BoxDecoration(
+        color: OrColors.backgroundRaised,
+        border: Border(bottom: BorderSide(color: OrColors.border)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.folder_open_outlined,
+            size: 17,
+            color: OrColors.textSecondary,
+          ),
+          const SizedBox(width: OrSpacing.x2),
+          Expanded(
+            child: Text(
+              current?.name ?? 'Opening project…',
+              key: const ValueKey('workspace-project-name'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (current != null) ...[
+            Text(
+              'Revision ${current.revision}',
+              key: const ValueKey('workspace-project-revision'),
+              style: const TextStyle(
+                fontSize: 11,
+                color: OrColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
+          ],
+          const SizedBox(width: OrSpacing.x2),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _WorkspaceAction(
+                    'Rename',
+                    Icons.edit_outlined,
+                    onRename,
+                    busy,
+                  ),
+                  _WorkspaceAction(
+                    'Save',
+                    Icons.save_outlined,
+                    onSave,
+                    busy || current?.dirty != true,
+                  ),
+                  _WorkspaceAction('Undo', Icons.undo_outlined, onUndo, busy),
+                  _WorkspaceAction('Redo', Icons.redo_outlined, onRedo, busy),
+                  _WorkspaceAction(
+                    'Close',
+                    Icons.close_outlined,
+                    onClose,
+                    busy,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceAction extends StatelessWidget {
+  const _WorkspaceAction(this.label, this.icon, this.onPressed, this.disabled);
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) => TextButton.icon(
+    key: ValueKey('workspace-$label'.toLowerCase()),
+    onPressed: disabled ? null : onPressed,
+    icon: Icon(icon, size: 16),
+    label: Text(label),
+  );
+}
+
+class _ProjectNotice extends StatelessWidget {
+  const _ProjectNotice({required this.message, this.onDiscardRecovery});
+
+  final String message;
+  final VoidCallback? onDiscardRecovery;
+
+  @override
+  Widget build(BuildContext context) {
+    final staleCheckpoint = message.toLowerCase().startsWith(
+      'a stale recovery checkpoint',
+    );
+    return Container(
+      key: const ValueKey('project-notice'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: OrSpacing.x3,
+        vertical: OrSpacing.x2,
+      ),
+      color: OrColors.surface,
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline,
+            size: 16,
+            color: OrColors.textSecondary,
+          ),
+          const SizedBox(width: OrSpacing.x2),
+          Expanded(child: Text(message, style: const TextStyle(fontSize: 12))),
+          if (staleCheckpoint && onDiscardRecovery != null)
+            TextButton(
+              key: const ValueKey('discard-stale-recovery'),
+              onPressed: onDiscardRecovery,
+              child: const Text('Discard stale checkpoint'),
+            ),
+        ],
+      ),
     );
   }
 }

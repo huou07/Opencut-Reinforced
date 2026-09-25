@@ -490,6 +490,7 @@ version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
  "or_core",
+ "or_ipc",
 ]
 
 [[package]]

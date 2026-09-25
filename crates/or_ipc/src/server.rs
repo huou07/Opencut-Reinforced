@@ -236,8 +236,10 @@ struct RequestEnvelope {
 
 fn create_runtime_directory() -> Result<PathBuf, IpcProtocolError> {
     let id = Uuid::new_v4();
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     let path = PathBuf::from("/tmp").join(format!("or-ipc-{id}"));
+    #[cfg(target_os = "macos")]
+    let path = std::env::temp_dir().join(format!("o{}", id.simple()));
     #[cfg(windows)]
     let path = std::env::temp_dir().join(format!("or-ipc-{id}"));
     #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]

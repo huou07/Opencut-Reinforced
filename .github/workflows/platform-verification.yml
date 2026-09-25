@@ -100,6 +100,9 @@ jobs:
       - name: Run shared live-host transport tests
         run: cargo test -p or_ipc --test live_host
 
+      - name: Run attached CLI shared-host parity tests
+        run: cargo test -p or_cli --test semantic_cli
+
       - name: Install Flutter 3.47.5
         run: |
           git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -143,11 +146,18 @@ jobs:
               )
           PY
 
-      - name: Run real native bridge smoke test
+      - name: Run native bridge diagnostics smoke test
         working-directory: apps/or_app
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
+          --plain-name "native bridge diagnostics match the CLI snapshot"
           "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
+
+      - name: Run native Flutter project lifecycle test
+        working-directory: apps/or_app
+        run: >-
+          flutter test integration_test/core_bridge_test.dart -d macos
+          --plain-name "native Flutter project lifecycle uses one Rust host"
 
   linux:
     name: Linux native build
@@ -210,6 +220,9 @@ jobs:
 
       - name: Run shared live-host transport tests
         run: cargo test -p or_ipc --test live_host
+
+      - name: Run attached CLI shared-host parity tests
+        run: cargo test -p or_cli --test semantic_cli
 
       - name: Verify Windows local endpoint access controls
         run: cargo test -p or_ipc --lib

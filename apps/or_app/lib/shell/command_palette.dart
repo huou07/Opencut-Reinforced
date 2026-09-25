@@ -6,17 +6,59 @@ import 'app_navigation.dart';
 
 Future<void> showOrCommandPalette(
   BuildContext context,
-  ValueChanged<AppDestination> onSelected,
-) async {
-  final destination = await showDialog<AppDestination>(
+  ValueChanged<AppDestination> onSelected, {
+  List<CommandPaletteAction> actions = const [],
+}) async {
+  final selection = await showDialog<_PaletteSelection>(
     context: context,
-    builder: (_) => const _CommandPaletteDialog(),
+    builder: (_) => _CommandPaletteDialog(actions: actions),
   );
-  if (destination != null) onSelected(destination);
+  if (selection == null) return;
+  final destination = selection.destination;
+  if (destination != null) {
+    onSelected(destination);
+  } else {
+    selection.action?.onSelected();
+  }
+}
+
+class CommandPaletteAction {
+  const CommandPaletteAction({required this.label, required this.onSelected});
+
+  final String label;
+  final VoidCallback onSelected;
+}
+
+class _PaletteSelection {
+  const _PaletteSelection.destination(this.destination) : action = null;
+  const _PaletteSelection.action(this.action) : destination = null;
+
+  final AppDestination? destination;
+  final CommandPaletteAction? action;
+}
+
+class _PaletteItem {
+  const _PaletteItem({
+    required this.label,
+    required this.icon,
+    this.destination,
+    this.action,
+  });
+
+  final String label;
+  final IconData icon;
+  final AppDestination? destination;
+  final CommandPaletteAction? action;
+
+  _PaletteSelection get selection => destination != null
+      ? _PaletteSelection.destination(destination!)
+      : _PaletteSelection.action(action!);
 }
 
 class _CommandPaletteDialog extends StatefulWidget {
-  const _CommandPaletteDialog();
+  const _CommandPaletteDialog({required this.actions});
+
+  final List<CommandPaletteAction> actions;
 
   @override
   State<_CommandPaletteDialog> createState() => _CommandPaletteDialogState();
@@ -39,8 +81,22 @@ class _CommandPaletteDialogState extends State<_CommandPaletteDialog> {
   @override
   Widget build(BuildContext context) {
     final query = _query.text.trim().toLowerCase();
-    final matches = _destinations
-        .where((destination) => destination.label.toLowerCase().contains(query))
+    final items = [
+      for (final destination in _destinations)
+        _PaletteItem(
+          label: destination.label,
+          icon: destination.icon,
+          destination: destination,
+        ),
+      for (final action in widget.actions)
+        _PaletteItem(
+          label: action.label,
+          icon: Icons.bolt_outlined,
+          action: action,
+        ),
+    ];
+    final matches = items
+        .where((item) => item.label.toLowerCase().contains(query))
         .toList();
 
     return Dialog(
@@ -78,7 +134,7 @@ class _CommandPaletteDialogState extends State<_CommandPaletteDialog> {
                     ? const Padding(
                         padding: EdgeInsets.all(OrSpacing.x4),
                         child: Text(
-                          'No matching screens',
+                          'No matching commands',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: OrColors.textSecondary),
                         ),
@@ -88,10 +144,13 @@ class _CommandPaletteDialogState extends State<_CommandPaletteDialog> {
                         itemCount: matches.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 2),
                         itemBuilder: (context, index) {
-                          final destination = matches[index];
+                          final item = matches[index];
                           return InkWell(
-                            key: ValueKey('command-${destination.name}'),
-                            onTap: () => Navigator.of(context).pop(destination),
+                            key: ValueKey(
+                              'command-${item.destination?.name ?? item.label.toLowerCase().replaceAll(' ', '-')}',
+                            ),
+                            onTap: () =>
+                                Navigator.of(context).pop(item.selection),
                             borderRadius: BorderRadius.circular(OrRadii.small),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -101,13 +160,13 @@ class _CommandPaletteDialogState extends State<_CommandPaletteDialog> {
                               child: Row(
                                 children: [
                                   Icon(
-                                    destination.icon,
+                                    item.icon,
                                     size: 18,
                                     color: OrColors.textSecondary,
                                   ),
                                   const SizedBox(width: OrSpacing.x3),
-                                  Expanded(child: Text(destination.label)),
-                                  if (destination ==
+                                  Expanded(child: Text(item.label)),
+                                  if (item.destination ==
                                       AppDestination.editorPreview)
                                     const OrPreviewCaption(),
                                 ],

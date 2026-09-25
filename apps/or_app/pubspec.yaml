@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  file_selector: ^1.1.0
   or_app_bridge:
     path: ../../packages/or_app_bridge
 

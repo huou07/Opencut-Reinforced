@@ -1,7 +1,9 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, ProjectDocument, ProjectRevision,
-    ProjectSession, load_project_file, save_project_file_atomic, write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, ProjectDocument, ProjectFileSession,
+    ProjectRevision, ProjectSession, QueryResult, load_project_file, save_project_file_atomic,
+    write_recovery_checkpoint,
 };
+use or_ipc::{LiveProjectHost, ProjectHostEventKind};
 use serde_json::Value;
 use std::{
     ffi::OsString,
@@ -95,6 +97,20 @@ fn create_project(path: &Path, name: &str) -> ProjectDocument {
     let project = ProjectDocument::new(name);
     save_project_file_atomic(path, &project).unwrap();
     project
+}
+
+fn live_command(summary: &QueryResult, command_id: &str, name: Option<&str>) -> ApplicationRequest {
+    ApplicationRequest::Command(CommandEnvelope {
+        command_id: command_id.to_owned(),
+        schema_version: 1,
+        project_id: summary.summary.project_id,
+        project_instance_id: summary.summary.project_instance_id,
+        expected_project_revision: summary.summary.project_revision,
+        arguments: match name {
+            Some(name) => serde_json::json!({ "name": name }),
+            None => serde_json::json!({}),
+        },
+    })
 }
 
 fn rename_document(project: ProjectDocument, name: &str) -> ProjectDocument {
@@ -433,6 +449,124 @@ fn attached_cli_uses_live_session_and_saves_only_on_request() {
     assert_eq!(shutdown["status"], "shutdown");
     server.wait();
     assert!(!descriptor.exists());
+}
+
+#[test]
+fn attached_cli_and_direct_live_host_access_share_one_session() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let session = ProjectFileSession::create_new(&path, "Native Project").unwrap();
+    let mut host = LiveProjectHost::start(session, None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let events = host.subscribe_events().unwrap();
+    let initial = host.describe().unwrap();
+
+    let direct_rename = host
+        .handle_application_request(live_command(
+            &initial,
+            "project.rename",
+            Some("From Flutter"),
+        ))
+        .unwrap();
+    assert!(matches!(direct_rename, ApplicationResponse::Command(_)));
+    let (attached_after_flutter, _) = json_success(attach_args(
+        &["session", "describe"],
+        &descriptor,
+        &["--json"],
+    ));
+    assert_eq!(attached_after_flutter["protocol_version"], 1);
+    assert_eq!(
+        attached_after_flutter["project_id"],
+        initial.summary.project_id.to_string()
+    );
+    assert_eq!(
+        attached_after_flutter["project_instance_id"],
+        initial.summary.project_instance_id.to_string()
+    );
+    assert_eq!(attached_after_flutter["project_revision"], 1);
+    assert_eq!(attached_after_flutter["dirty"], true);
+    let (summary_after_flutter, _) = json_success(attach_args(
+        &["project", "summary"],
+        &descriptor,
+        &["--json"],
+    ));
+    assert_eq!(summary_after_flutter["name"], "From Flutter");
+
+    let (cli_rename, _) = json_success(attach_args(
+        &["project", "rename"],
+        &descriptor,
+        &["--name", "From attached CLI", "--json"],
+    ));
+    assert_eq!(cli_rename["after_revision"], 2);
+    let after_cli_rename = host.describe().unwrap();
+    assert_eq!(after_cli_rename.summary.name, "From attached CLI");
+    assert_eq!(
+        after_cli_rename.summary.project_instance_id,
+        initial.summary.project_instance_id
+    );
+
+    let (cli_undo, _) = json_success(attach_args(&["history", "undo"], &descriptor, &["--json"]));
+    assert_eq!(cli_undo["after_revision"], 3);
+    assert_eq!(host.describe().unwrap().summary.name, "From Flutter");
+
+    let after_undo = host.describe().unwrap();
+    let direct_redo = host
+        .handle_application_request(live_command(&after_undo, "history.redo", None))
+        .unwrap();
+    assert!(matches!(direct_redo, ApplicationResponse::Command(_)));
+    let (cli_after_redo, _) = json_success(attach_args(
+        &["project", "summary"],
+        &descriptor,
+        &["--json"],
+    ));
+    assert_eq!(cli_after_redo["name"], "From attached CLI");
+    assert_eq!(cli_after_redo["project_revision"], 4);
+    assert_eq!(
+        cli_after_redo["project_instance_id"],
+        initial.summary.project_instance_id.to_string()
+    );
+
+    assert_eq!(host.save().unwrap(), ProjectRevision::new(4));
+    let (saved, _) = json_success(attach_args(
+        &["session", "describe"],
+        &descriptor,
+        &["--json"],
+    ));
+    assert_eq!(saved["dirty"], false);
+    assert_eq!(saved["project_revision"], 4);
+    assert_eq!(
+        load_project_file(&path).unwrap().name(),
+        "From attached CLI"
+    );
+
+    let observed_events = (0..5)
+        .map(|_| {
+            events
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        observed_events
+            .iter()
+            .map(|event| event.sequence)
+            .collect::<Vec<_>>(),
+        [1, 2, 3, 4, 5]
+    );
+    assert_eq!(
+        observed_events
+            .iter()
+            .map(|event| event.kind)
+            .collect::<Vec<_>>(),
+        [
+            ProjectHostEventKind::ProjectChanged,
+            ProjectHostEventKind::ProjectChanged,
+            ProjectHostEventKind::ProjectChanged,
+            ProjectHostEventKind::ProjectChanged,
+            ProjectHostEventKind::ProjectSaved,
+        ]
+    );
+    host.shutdown(false).unwrap();
 }
 
 #[test]

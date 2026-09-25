@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/project.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -67,23 +68,90 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1193953464;
+  int get rustContentHash => 928311489;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
         stem: 'or_app_bridge',
-        ioDirectory: '../../target/release/',
+        ioDirectory: '../../crates/or_app_bridge/target/release/',
         webPrefix: 'pkg/',
         wasmBindgenName: 'wasm_bindgen',
       );
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleClose({
+    required ProjectHostHandle that,
+    required bool discardUnsaved,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleRedo({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleRename({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String name,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
+    required ProjectHostHandle that,
+  });
+
+  Stream<ProjectHostEventView> crateApiProjectProjectHostHandleSubscribeEvents({
+    required ProjectHostHandle that,
+  });
+
+  Future<ProjectView> crateApiProjectProjectHostHandleSummary({
+    required ProjectHostHandle that,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleUndo({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  });
+
   Future<AppInfo> crateApiAppInfo();
+
+  Future<RecoveryActionResult> crateApiProjectApplyRecovery({
+    required String path,
+  });
 
   Future<List<Capability>> crateApiCapabilities();
 
+  Future<ProjectHostHandle> crateApiProjectCreateProject({
+    required String path,
+    required String name,
+  });
+
+  Future<RecoveryActionResult> crateApiProjectDiscardRecovery({
+    required String path,
+  });
+
   Future<HealthStatus> crateApiHealth();
+
+  Future<RecoveryInspectionView> crateApiProjectInspectRecovery({
+    required String path,
+  });
+
+  Future<ProjectHostHandle> crateApiProjectOpenProject({required String path});
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ProjectHostHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ProjectHostHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ProjectHostHandlePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -95,6 +163,301 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleClose({
+    required ProjectHostHandle that,
+    required bool discardUnsaved,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_bool(discardUnsaved, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleCloseConstMeta,
+        argValues: [that, discardUnsaved],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleCloseConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_close",
+        argNames: ["that", "discardUnsaved"],
+      );
+
+  @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleRedo({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleRedoConstMeta,
+        argValues: [that, projectId, projectInstanceId, expectedRevision],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleRedoConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_redo",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleRename({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleRenameConstMeta,
+        argValues: [that, projectId, projectInstanceId, expectedRevision, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleRenameConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_rename",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "name",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
+    required ProjectHostHandle that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleSaveConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleSaveConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_save",
+        argNames: ["that"],
+      );
+
+  @override
+  Stream<ProjectHostEventView> crateApiProjectProjectHostHandleSubscribeEvents({
+    required ProjectHostHandle that,
+  }) {
+    final sink = RustStreamSink<ProjectHostEventView>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+              that,
+              serializer,
+            );
+            sse_encode_StreamSink_project_host_event_view_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 5,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_project_bridge_error,
+          ),
+          constMeta: kCrateApiProjectProjectHostHandleSubscribeEventsConstMeta,
+          argValues: [that, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleSubscribeEventsConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_subscribe_events",
+        argNames: ["that", "sink"],
+      );
+
+  @override
+  Future<ProjectView> crateApiProjectProjectHostHandleSummary({
+    required ProjectHostHandle that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_view,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleSummaryConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleSummaryConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_summary",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleUndo({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleUndoConstMeta,
+        argValues: [that, projectId, projectInstanceId, expectedRevision],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectProjectHostHandleUndoConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_undo",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+        ],
+      );
+
+  @override
   Future<AppInfo> crateApiAppInfo() {
     return handler.executeNormal(
       NormalTask(
@@ -103,7 +466,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 8,
             port: port_,
           );
         },
@@ -122,6 +485,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "app_info", argNames: []);
 
   @override
+  Future<RecoveryActionResult> crateApiProjectApplyRecovery({
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_recovery_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectApplyRecoveryConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectApplyRecoveryConstMeta =>
+      const TaskConstMeta(debugName: "apply_recovery", argNames: ["path"]);
+
+  @override
   Future<List<Capability>> crateApiCapabilities() {
     return handler.executeNormal(
       NormalTask(
@@ -130,7 +523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 10,
             port: port_,
           );
         },
@@ -149,6 +542,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "capabilities", argNames: []);
 
   @override
+  Future<ProjectHostHandle> crateApiProjectCreateProject({
+    required String path,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta: kCrateApiProjectCreateProjectConstMeta,
+        argValues: [path, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectCreateProjectConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_project",
+        argNames: ["path", "name"],
+      );
+
+  @override
+  Future<RecoveryActionResult> crateApiProjectDiscardRecovery({
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_recovery_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectDiscardRecoveryConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectDiscardRecoveryConstMeta =>
+      const TaskConstMeta(debugName: "discard_recovery", argNames: ["path"]);
+
+  @override
   Future<HealthStatus> crateApiHealth() {
     return handler.executeNormal(
       NormalTask(
@@ -157,7 +616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 13,
             port: port_,
           );
         },
@@ -174,6 +633,122 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiHealthConstMeta =>
       const TaskConstMeta(debugName: "health", argNames: []);
+
+  @override
+  Future<RecoveryInspectionView> crateApiProjectInspectRecovery({
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_recovery_inspection_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectInspectRecoveryConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectInspectRecoveryConstMeta =>
+      const TaskConstMeta(debugName: "inspect_recovery", argNames: ["path"]);
+
+  @override
+  Future<ProjectHostHandle> crateApiProjectOpenProject({required String path}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta: kCrateApiProjectOpenProjectConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiProjectOpenProjectConstMeta =>
+      const TaskConstMeta(debugName: "open_project", argNames: ["path"]);
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ProjectHostHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ProjectHostHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle;
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AnyhowException(raw as String);
+  }
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ProjectHostHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ProjectHostHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  RustStreamSink<ProjectHostEventView>
+  dco_decode_StreamSink_project_host_event_view_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
 
   @protected
   String dco_decode_String(dynamic raw) {
@@ -192,6 +767,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       version: dco_decode_String(arr[1]),
       coreApiVersion: dco_decode_u_32(arr[2]),
     );
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  ProjectView dco_decode_box_autoadd_project_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_project_view(raw);
   }
 
   @protected
@@ -228,9 +815,109 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_project_view(raw);
+  }
+
+  @protected
+  ProjectActionResult dco_decode_project_action_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ProjectActionResult(
+      succeeded: dco_decode_bool(arr[0]),
+      errorCode: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      view: dco_decode_opt_box_autoadd_project_view(arr[3]),
+    );
+  }
+
+  @protected
+  ProjectBridgeError dco_decode_project_bridge_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ProjectBridgeError(
+      code: dco_decode_String(arr[0]),
+      message: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  ProjectHostEventView dco_decode_project_host_event_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return ProjectHostEventView(
+      sequence: dco_decode_u_64(arr[0]),
+      kind: dco_decode_String(arr[1]),
+      projectId: dco_decode_String(arr[2]),
+      projectInstanceId: dco_decode_String(arr[3]),
+      revision: dco_decode_u_64(arr[4]),
+      dirty: dco_decode_bool(arr[5]),
+    );
+  }
+
+  @protected
+  ProjectView dco_decode_project_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return ProjectView(
+      projectId: dco_decode_String(arr[0]),
+      projectInstanceId: dco_decode_String(arr[1]),
+      revision: dco_decode_u_64(arr[2]),
+      name: dco_decode_String(arr[3]),
+      dirty: dco_decode_bool(arr[4]),
+      descriptorPath: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  RecoveryActionResult dco_decode_recovery_action_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RecoveryActionResult(
+      succeeded: dco_decode_bool(arr[0]),
+      changed: dco_decode_bool(arr[1]),
+      message: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return RecoveryInspectionView(
+      status: dco_decode_String(arr[0]),
+      projectId: dco_decode_String(arr[1]),
+      baseRevision: dco_decode_u_64(arr[2]),
+      recoveryRevision: dco_decode_u_64(arr[3]),
+      recoveryName: dco_decode_String(arr[4]),
+      conflictReason: dco_decode_String(arr[5]),
+      message: dco_decode_String(arr[6]),
+    );
+  }
+
+  @protected
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -243,6 +930,76 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void dco_decode_unit(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return;
+  }
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_String(deserializer);
+    return AnyhowException(inner);
+  }
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ProjectHostHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ProjectHostHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ProjectHostHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  RustStreamSink<ProjectHostEventView>
+  sse_decode_StreamSink_project_host_event_view_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
   }
 
   @protected
@@ -263,6 +1020,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       version: var_version,
       coreApiVersion: var_coreApiVersion,
     );
+  }
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  ProjectView sse_decode_box_autoadd_project_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_project_view(deserializer));
   }
 
   @protected
@@ -300,9 +1071,133 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectView? sse_decode_opt_box_autoadd_project_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_project_view(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ProjectActionResult sse_decode_project_action_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_succeeded = sse_decode_bool(deserializer);
+    var var_errorCode = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_view = sse_decode_opt_box_autoadd_project_view(deserializer);
+    return ProjectActionResult(
+      succeeded: var_succeeded,
+      errorCode: var_errorCode,
+      message: var_message,
+      view: var_view,
+    );
+  }
+
+  @protected
+  ProjectBridgeError sse_decode_project_bridge_error(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    return ProjectBridgeError(code: var_code, message: var_message);
+  }
+
+  @protected
+  ProjectHostEventView sse_decode_project_host_event_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sequence = sse_decode_u_64(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_projectId = sse_decode_String(deserializer);
+    var var_projectInstanceId = sse_decode_String(deserializer);
+    var var_revision = sse_decode_u_64(deserializer);
+    var var_dirty = sse_decode_bool(deserializer);
+    return ProjectHostEventView(
+      sequence: var_sequence,
+      kind: var_kind,
+      projectId: var_projectId,
+      projectInstanceId: var_projectInstanceId,
+      revision: var_revision,
+      dirty: var_dirty,
+    );
+  }
+
+  @protected
+  ProjectView sse_decode_project_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_projectId = sse_decode_String(deserializer);
+    var var_projectInstanceId = sse_decode_String(deserializer);
+    var var_revision = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_dirty = sse_decode_bool(deserializer);
+    var var_descriptorPath = sse_decode_String(deserializer);
+    return ProjectView(
+      projectId: var_projectId,
+      projectInstanceId: var_projectInstanceId,
+      revision: var_revision,
+      name: var_name,
+      dirty: var_dirty,
+      descriptorPath: var_descriptorPath,
+    );
+  }
+
+  @protected
+  RecoveryActionResult sse_decode_recovery_action_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_succeeded = sse_decode_bool(deserializer);
+    var var_changed = sse_decode_bool(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    return RecoveryActionResult(
+      succeeded: var_succeeded,
+      changed: var_changed,
+      message: var_message,
+    );
+  }
+
+  @protected
+  RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_status = sse_decode_String(deserializer);
+    var var_projectId = sse_decode_String(deserializer);
+    var var_baseRevision = sse_decode_u_64(deserializer);
+    var var_recoveryRevision = sse_decode_u_64(deserializer);
+    var var_recoveryName = sse_decode_String(deserializer);
+    var var_conflictReason = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    return RecoveryInspectionView(
+      status: var_status,
+      projectId: var_projectId,
+      baseRevision: var_baseRevision,
+      recoveryRevision: var_recoveryRevision,
+      recoveryName: var_recoveryName,
+      conflictReason: var_conflictReason,
+      message: var_message,
+    );
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -317,15 +1212,93 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ProjectHostHandleImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ProjectHostHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ProjectHostHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+    ProjectHostHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ProjectHostHandleImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_project_host_event_view_Sse(
+    RustStreamSink<ProjectHostEventView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_host_event_view,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
   }
 
   @protected
@@ -340,6 +1313,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.version, serializer);
     sse_encode_u_32(self.coreApiVersion, serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_project_view(
+    ProjectView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_view(self, serializer);
   }
 
   @protected
@@ -378,9 +1366,101 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_project_view(
+    ProjectView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_project_view(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_project_action_result(
+    ProjectActionResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.succeeded, serializer);
+    sse_encode_String(self.errorCode, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_opt_box_autoadd_project_view(self.view, serializer);
+  }
+
+  @protected
+  void sse_encode_project_bridge_error(
+    ProjectBridgeError self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_project_host_event_view(
+    ProjectHostEventView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.sequence, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.projectId, serializer);
+    sse_encode_String(self.projectInstanceId, serializer);
+    sse_encode_u_64(self.revision, serializer);
+    sse_encode_bool(self.dirty, serializer);
+  }
+
+  @protected
+  void sse_encode_project_view(ProjectView self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.projectId, serializer);
+    sse_encode_String(self.projectInstanceId, serializer);
+    sse_encode_u_64(self.revision, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_bool(self.dirty, serializer);
+    sse_encode_String(self.descriptorPath, serializer);
+  }
+
+  @protected
+  void sse_encode_recovery_action_result(
+    RecoveryActionResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.succeeded, serializer);
+    sse_encode_bool(self.changed, serializer);
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_recovery_inspection_view(
+    RecoveryInspectionView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.status, serializer);
+    sse_encode_String(self.projectId, serializer);
+    sse_encode_u_64(self.baseRevision, serializer);
+    sse_encode_u_64(self.recoveryRevision, serializer);
+    sse_encode_String(self.recoveryName, serializer);
+    sse_encode_String(self.conflictReason, serializer);
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected
@@ -395,14 +1475,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
   }
+}
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
+@sealed
+class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
+  // Not to be used by end users
+  ProjectHostHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  ProjectHostHandleImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_ProjectHostHandle,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ProjectHostHandle,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_ProjectHostHandlePtr,
+  );
+
+  Future<ProjectActionResult> close({required bool discardUnsaved}) =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleClose(
+        that: this,
+        discardUnsaved: discardUnsaved,
+      );
+
+  Future<ProjectActionResult> redo({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleRedo(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+  );
+
+  Future<ProjectActionResult> rename({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String name,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleRename(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    name: name,
+  );
+
+  Future<ProjectActionResult> save() =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleSave(that: this);
+
+  Stream<ProjectHostEventView> subscribeEvents() => RustLib.instance.api
+      .crateApiProjectProjectHostHandleSubscribeEvents(that: this);
+
+  Future<ProjectView> summary() =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleSummary(that: this);
+
+  Future<ProjectActionResult> undo({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleUndo(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+  );
 }

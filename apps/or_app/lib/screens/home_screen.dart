@@ -7,21 +7,23 @@ import '../widgets/or_widgets.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
-    required this.onUnavailable,
+    required this.canPickProjects,
+    required this.onNewProject,
+    required this.onOpenProject,
     required this.onOpenEditorPreview,
     required this.onOpenProjects,
   });
 
-  final ValueChanged<String> onUnavailable;
+  final bool canPickProjects;
+  final VoidCallback onNewProject;
+  final VoidCallback onOpenProject;
   final VoidCallback onOpenEditorPreview;
   final VoidCallback onOpenProjects;
 
   @override
   Widget build(BuildContext context) {
-    const projectActionReason =
-        'Project creation is unavailable in this Developer Preview.';
-    const openActionReason =
-        'Opening projects from the production UI is not available in this Developer Preview.';
+    const androidMessage =
+        'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
 
     return OrPageLayout(
       title: 'Home',
@@ -34,21 +36,37 @@ class HomeScreen extends StatelessWidget {
             spacing: OrSpacing.x3,
             runSpacing: OrSpacing.x3,
             children: [
-              OrUnavailableButton(
-                key: const ValueKey('home-new-project'),
-                label: 'New Project',
-                icon: Icons.add_outlined,
-                reason: projectActionReason,
-                primary: true,
-                onPressed: () => onUnavailable(projectActionReason),
-              ),
-              OrUnavailableButton(
-                key: const ValueKey('home-open-project'),
-                label: 'Open Project',
-                icon: Icons.folder_open_outlined,
-                reason: openActionReason,
-                onPressed: () => onUnavailable(openActionReason),
-              ),
+              if (canPickProjects)
+                FilledButton.icon(
+                  key: const ValueKey('home-new-project'),
+                  onPressed: onNewProject,
+                  icon: const Icon(Icons.add_outlined),
+                  label: const Text('New Project'),
+                )
+              else
+                OrUnavailableButton(
+                  key: const ValueKey('home-new-project'),
+                  label: 'New Project',
+                  icon: Icons.add_outlined,
+                  reason: androidMessage,
+                  primary: true,
+                  onPressed: onNewProject,
+                ),
+              if (canPickProjects)
+                OutlinedButton.icon(
+                  key: const ValueKey('home-open-project'),
+                  onPressed: onOpenProject,
+                  icon: const Icon(Icons.folder_open_outlined),
+                  label: const Text('Open Project'),
+                )
+              else
+                OrUnavailableButton(
+                  key: const ValueKey('home-open-project'),
+                  label: 'Open Project',
+                  icon: Icons.folder_open_outlined,
+                  reason: androidMessage,
+                  onPressed: onOpenProject,
+                ),
             ],
           ),
           const SizedBox(height: OrSpacing.x8),
@@ -62,7 +80,7 @@ class HomeScreen extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: const OrEmptyState(
               title: 'No recent projects yet',
-              message: 'Project open and create UI wiring will arrive in a later foundation step.',
+              message: 'Opened projects appear in the Projects workspace. Recent project history is not stored in this preview.',
             ),
           ),
           const SizedBox(height: OrSpacing.x6),

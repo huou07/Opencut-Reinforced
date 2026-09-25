@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core_gateway.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
 
 enum _SettingsSection { appearance, general, advanced }
@@ -17,10 +18,14 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.gateway,
+    required this.project,
+    required this.onCopyDescriptor,
     required this.onOpenEditorPreview,
   });
 
   final CoreGateway gateway;
+  final ProjectReadModel? project;
+  final VoidCallback onCopyDescriptor;
   final VoidCallback onOpenEditorPreview;
 
   @override
@@ -195,6 +200,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+        if (widget.project != null) ...[
+          const SizedBox(height: OrSpacing.x4),
+          OrPanel(
+            title: 'Local CLI session',
+            trailing: const OrBadge('Available'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Descriptor',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: OrSpacing.x1),
+                SelectableText(
+                  widget.project!.descriptorPath,
+                  key: const ValueKey('local-cli-descriptor-path'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                OutlinedButton.icon(
+                  key: const ValueKey('copy-cli-descriptor-path'),
+                  onPressed: widget.onCopyDescriptor,
+                  icon: const Icon(Icons.copy_outlined, size: 16),
+                  label: const Text('Copy Path'),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                const Text(
+                  'or session describe --attach "<descriptor-path>"',
+                  key: ValueKey('attached-cli-example'),
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+                const SizedBox(height: OrSpacing.x1),
+                const Text(
+                  'The descriptor path is local to this device. Session credentials are never shown here.',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: OrSpacing.x4),
         OrPanel(
           title: 'Core Diagnostics',

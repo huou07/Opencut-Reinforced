@@ -74,6 +74,66 @@ pub struct CommandEnvelope {
     pub arguments: Value,
 }
 
+impl CommandEnvelope {
+    pub fn rename_project(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        name: impl Into<String>,
+    ) -> Self {
+        Self {
+            command_id: PROJECT_RENAME_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "name": name.into() }),
+        }
+    }
+
+    pub fn undo(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+    ) -> Self {
+        history_envelope(
+            HISTORY_UNDO_ID,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+        )
+    }
+
+    pub fn redo(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+    ) -> Self {
+        history_envelope(
+            HISTORY_REDO_ID,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+        )
+    }
+}
+
+fn history_envelope(
+    command_id: &str,
+    project_id: ProjectId,
+    project_instance_id: ProjectInstanceId,
+    expected_project_revision: ProjectRevision,
+) -> CommandEnvelope {
+    CommandEnvelope {
+        command_id: command_id.to_owned(),
+        schema_version: OPERATION_SCHEMA_VERSION,
+        project_id,
+        project_instance_id,
+        expected_project_revision,
+        arguments: serde_json::json!({}),
+    }
+}
+
 /// A child operation in a grouped transaction. State preconditions live on the transaction.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
