@@ -511,6 +511,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "or_ipc"
+version = "0.1.0"
+dependencies = [
+ "or_core",
+ "serde",
+ "serde_json",
+ "uuid",
+ "windows-sys",
+]
+
+[[package]]
 name = "oslog"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

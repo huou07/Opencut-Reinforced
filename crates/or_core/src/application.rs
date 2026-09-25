@@ -108,6 +108,7 @@ pub struct QueryEnvelope {
 /// One canonical project-state delta produced by a transaction.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
 pub enum ProjectChange {
     ProjectName { before: String, after: String },
 }
