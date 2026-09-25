@@ -86,7 +86,16 @@ Filesystem save/load tests are recorded under Phase 4E1. Migration, IPC, and cli
 - Unit checks confirm the temp file is a same-directory sibling and a failed platform replacement leaves the destination intact.
 - The storage integration test runs in the Linux workspace Rust checks and on macOS and Windows in Platform Verification. Android CI builds the Rust bridge for Android but does not run storage tests on an Android device.
 
-Crash-journal and recovery testing is Phase 4E2 and is not implemented.
+## Current Phase 4E2 coverage
+
+- Candidate inspection requires exact saved-base equality; inspection also covers `NONE`, stale checkpoints, same-revision content mismatch, intermediate revisions, rollback below base, foreign projects, and orphaned sidecars.
+- Strict recovery-envelope marker, schema, and unknown-field validation; nested `.orproj` codec failures; bounded oversize rejection; and invalid UTF-8 rejection.
+- Checkpoint creation validates project identity, newer revision, and exact disk base; repeated checkpoints replace the old sidecar atomically without changing the canonical project.
+- Explicit apply revalidates after an earlier inspection, saves the recovery snapshot without a revision increment, and covers save failure preservation plus cleanup-pending behavior. Explicit discard covers valid and malformed checkpoints and leaves the canonical project unchanged.
+- Persistence guards confirm runtime `ProjectInstanceId` and session history are absent. Unicode paths and temporary-file cleanup are covered.
+- Recovery integration tests run in Linux Rust checks and in dedicated macOS and Windows Platform Verification steps. Android CI builds the Rust bridge but does not run recovery tests on an Android device.
+
+Recovery UI and autosave are not implemented or tested.
 
 ## Test pyramid
 

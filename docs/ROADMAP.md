@@ -75,16 +75,21 @@ Phase 4UI-1 — DONE:
 - responsive desktop and compact/mobile shell
 - non-functional Editor Shell Preview for visual evaluation only
 
-Phase 4E2 — NEXT:
+Phase 4E2 — DONE:
 
-- crash journal and recovery foundation
-- recovery validation, selection, and cleanup/checkpoint semantics
+- crash-recovery snapshot checkpoint v1 in a separate bounded sidecar
+- exact saved-base ancestry validation
+- candidate, stale, and conflict inspection
+- explicit apply and discard with atomic replacement and cleanup semantics
+- cross-platform recovery tests
 
-After 4E2, Phase 4 continues with:
+Phase 4F — NEXT:
 
-- real migrations when a later schema exists
 - local IPC
 - attached/headless CLI parity, including future project-file commands
+- shared command/query transport and local-only endpoint security
+
+Real project migrations remain future work when a later schema exists.
 
 Phase 4 remains in progress. It does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, commands and queries, transactions and history, serialization, and bounded filesystem persistence while preserving control-plane/media-plane separation, a snapshot-ready project/timeline evaluation boundary, and the rule that per-frame work never mutates Project or increments `ProjectRevision`. Local IPC remains planned.
 

@@ -12,7 +12,7 @@ Developer Previews are automated nightly or manually dispatched from `main` only
 
 These artifacts are debug developer builds for testing only. Desktop builds are unsigned and not notarized; the Android APK uses the standard debug build signing and no production key. No package has production signing. They are not production releases or performance benchmarks. Each release includes the four raw Flutter outputs for macOS, Windows x64, Linux x64, and Android, plus `SHA256SUMS.txt` and `BUILD-INFO.txt`. Build outputs are not committed to Git.
 
-The updated preview includes the production-direction native Flutter shell using OR Focused Monochrome, visual foundations for Home, Projects, Templates, Asset Library, and Settings, responsive desktop and mobile navigation, and an Editor Shell Preview for visual evaluation. The Editor Shell Preview is not a working editor. There is no usable timeline editor, media ingest, playback, rendering, or export. Project formats and features may evolve before a stable release.
+The updated preview includes the production-direction native Flutter shell using OR Focused Monochrome, visual foundations for Home, Projects, Templates, Asset Library, and Settings, responsive desktop and mobile navigation, an Editor Shell Preview for visual evaluation, and the crash-recovery checkpoint core foundation. The recovery foundation is available through explicit Rust core APIs only: no recovery UI yet and no autosave yet. The Editor Shell Preview is not a working editor. There is no usable timeline editor, media ingest, playback, rendering, or export. Project formats and features may evolve before a stable release.
 
 ## Future Stable Release
 

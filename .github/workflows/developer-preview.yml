@@ -425,6 +425,9 @@ jobs:
           - Command and query contracts
           - Transactions
           - Undo and redo
+          - Crash-recovery checkpoint core foundation
+
+          This is a core snapshot checkpoint foundation only. No recovery UI yet. No autosave yet.
 
           Not implemented:
           - Actual timeline editing
@@ -432,7 +435,7 @@ jobs:
           - Playback
           - Rendering
           - Export
-          - Crash recovery journal and recovery workflow
+          - Recovery UI and automatic startup recovery
           - Autosave and filesystem watching
           - CLI project-file commands and Android Storage Access Framework integration
 

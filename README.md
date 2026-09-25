@@ -4,7 +4,7 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP:** Phase 3 and Phase 4A–4E1 foundations are implemented, along with Phase 4UI-1's production-direction Flutter visual foundation. Phase 4E2 crash recovery is next; timeline and media editing have not started.
+**Pre-MVP:** Phase 3, Phase 4A–4E2 foundations, and Phase 4UI-1's production-direction Flutter visual foundation are implemented. Phase 4E2 adds a Rust crash-recovery checkpoint core; recovery UI and autosave are not implemented. Timeline and media editing have not started.
 
 The repository contains a bootstrap Rust core and CLI, project identity and revision, exact-time values, `.orproj` v1 storage, command/query contracts, transactions, session-local history, and a typed Flutter-to-Rust bridge. The native Flutter shell includes Home, Projects, Templates, Asset Library, Settings, and an explicitly non-functional Editor Shell Preview. It is not a usable video editor.
 
@@ -28,7 +28,7 @@ The CLI and Flutter shell receive bootstrap data from the same Rust core. The Fl
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-The project format has bounded filesystem load and atomic save, but crash recovery, autosave, CLI project-file commands, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
+The project format has bounded filesystem load and atomic save, and `or_core` provides explicit crash-recovery checkpoint APIs. Recovery UI, autosave, CLI project-file commands, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
 
 ## Product direction
 

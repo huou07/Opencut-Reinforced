@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load and atomic save around the existing v1 codec. Migrations, crash recovery, autosave, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load and atomic save around the existing v1 codec. Phase 4E2 adds a separate snapshot recovery checkpoint sidecar, exact saved-base validation, bounded strict inspection, and explicit apply/discard. Recovery UI, autosave, migrations, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -108,9 +108,17 @@ A Phase 4E1 safe-save sequence is:
 
 `ProjectStorageError` distinguishes I/O, oversize input, invalid UTF-8, codec failures, temporary-file create/write/flush/sync failures, replacement failures, and post-replace durability uncertainty.
 
-The replacement primitive provides atomic namespace/file replacement on supported local filesystems. File sync and directory sync or write-through improve durability but do not guarantee survival of every power-loss, controller, or filesystem failure. Phase 4E1 assumes one OR application/session owns a save target at a time; it does not provide a file-locking or concurrent-writer coordinator. Crash journaling, recovery validation, selection, and cleanup are Phase 4E2.
+The replacement primitive provides atomic namespace/file replacement on supported local filesystems. File sync and directory sync or write-through improve durability but do not guarantee survival of every power-loss, controller, or filesystem failure. Phase 4E1 assumes one OR application/session owns a save target at a time; it does not provide a file-locking or concurrent-writer coordinator. Future migrations must be explicit, ordered, versioned, and tested on old and malformed inputs.
 
-Future crash recovery will record recoverable changes between durable checkpoints. Startup recovery must validate journal data before offering recovery. Migrations are explicit, ordered, versioned, and tested on old and malformed inputs.
+### Phase 4E2 snapshot recovery checkpoint
+
+The initial recovery format is a separate versioned sidecar beside the `.orproj` file. It prefixes the project filename with `.` and appends `.or-recovery` (for example, `/projects/movie.orproj` uses `/projects/.movie.orproj.or-recovery`). Its strict envelope uses format marker `opencut-reinforced-recovery`, schema version 1, and contains two `.orproj` v1 snapshots: the exact saved base at revision N and the newer unsaved recovery snapshot at revision M, where M > N. The recovery file is bounded to 136 MiB; each nested project is decoded and validated by the existing project codec and remains subject to the 64 MiB project limit. This snapshot checkpoint is the initial pre-MVP representation and may evolve after real scale measurements.
+
+Writing a checkpoint requires matching `ProjectId` values, a newer recovery revision, and an on-disk canonical `ProjectDocument` exactly equal to the supplied base. The write uses the same same-directory atomic replacement primitive as project saves and does not mutate the canonical project. Neither `.orproj` v1 nor its revision semantics change; runtime `ProjectInstanceId` and session history are not stored.
+
+Inspection reads and classifies without changing files or project state. If the canonical project exactly equals base N, the recovery is a candidate. If it equals the recovery snapshot or has the same project ID with a revision newer than M, the checkpoint is stale. A different project lineage or other state that cannot prove the exact base is a conflict; a missing canonical file is an orphaned conflict. Project loading does not inspect or apply recovery automatically, and conflicts never select a winner silently.
+
+Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. This is a snapshot checkpoint foundation, not event sourcing, command replay, persistent history, autosave, or a recovery UI.
 
 ### Project revisions
 
@@ -140,7 +148,7 @@ Unknown queries and unsupported query schemas return `UNKNOWN_QUERY` and `UNSUPP
 
 Phase 4D implements the first in-memory transaction and history behavior without event sourcing. The current `ChangeSet` contains only a normalized before/after project-name change. A successful single rename or changed group creates one undo entry; an undo/redo is itself a new canonical mutation and increments the current revision once. New real edits clear redo history. No-op edits, failed/rolled-back groups, and reads leave project state, revision, and history unchanged. History lives only inside `ProjectSession`: it is not saved in `.orproj` and resets when the document is opened into a new session.
 
-The transaction envelope currently accepts only `project.rename` child calls. Grouped commands stage all intermediate names and normalize them to one net `ChangeSet`; a net no-op does not increment revision or create history. This proves bounded single-operation atomic grouping, not a general transaction framework. Filesystem persistence, crash recovery, and migrations are not implemented and do not depend on keeping an unbounded event log.
+The transaction envelope currently accepts only `project.rename` child calls. Grouped commands stage all intermediate names and normalize them to one net `ChangeSet`; a net no-op does not increment revision or create history. This proves bounded single-operation atomic grouping, not a general transaction framework. The separate project-storage and recovery-checkpoint APIs do not depend on keeping an unbounded event log; persistent history and migrations remain future work.
 
 ## 7. CLI
 

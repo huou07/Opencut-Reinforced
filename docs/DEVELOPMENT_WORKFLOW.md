@@ -2,7 +2,9 @@
 
 ## Status
 
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4E1 provide project/application foundations, command/query contracts, rename-only atomic transaction groups, session-local undo/redo, and bounded filesystem load/atomic save for `.orproj` v1. Phase 4E2 crash recovery, IPC, CLI project-file commands, timeline, media, and editor behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4E2 provide project/application foundations, command/query contracts, rename-only atomic transaction groups, session-local undo/redo, bounded `.orproj` v1 storage, and a core-only recovery checkpoint foundation. IPC, CLI project-file commands, timeline, media, and editor behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+
+Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
 
 ## Feature path
 
