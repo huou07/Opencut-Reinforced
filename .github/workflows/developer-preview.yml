@@ -323,6 +323,168 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  build-cli-macos:
+    name: Build macOS CLI
+    needs: prepare
+    if: needs.prepare.outputs.should_publish == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Rust for Apple desktop targets
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Build universal macOS CLI
+        run: |
+          cargo build --release -p or_cli --bin or --target aarch64-apple-darwin
+          cargo build --release -p or_cli --bin or --target x86_64-apple-darwin
+          mkdir -p "$RUNNER_TEMP/or-cli-macos"
+          lipo -create \
+            target/aarch64-apple-darwin/release/or \
+            target/x86_64-apple-darwin/release/or \
+            -output "$RUNNER_TEMP/or-cli-macos/or"
+          cat > "$RUNNER_TEMP/or-cli-macos/CLI-README.txt" <<'EOF'
+          Opencut Reinforced CLI — Developer Preview
+
+          This unsigned macOS CLI supports Apple silicon and Intel Macs.
+          No production signing or notarization is applied.
+
+          Examples:
+            or version
+            or project summary --file "/path/to/project.orproj"
+            or session describe --attach "/path/to/descriptor"
+
+          While a project is open in OR, find its descriptor path under
+          Settings > Advanced / Developer. The descriptor path is local to
+          this device. Do not share the descriptor file; it grants local access.
+          This package contains no project session credentials or descriptor.
+          EOF
+          chmod 755 "$RUNNER_TEMP/or-cli-macos/or"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/or-cli-macos" \
+            "$RUNNER_TEMP/opencut-reinforced-cli-macos.zip"
+          test -s "$RUNNER_TEMP/opencut-reinforced-cli-macos.zip"
+
+      - name: Upload macOS CLI package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: developer-preview-cli-macos
+          path: ${{ runner.temp }}/opencut-reinforced-cli-macos.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  build-cli-windows:
+    name: Build Windows x64 CLI
+    needs: prepare
+    if: needs.prepare.outputs.should_publish == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Build and package Windows x64 CLI
+        shell: pwsh
+        run: |
+          cargo build --release -p or_cli --bin or
+          $stage = Join-Path $env:RUNNER_TEMP "or-cli-windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/release/or.exe" (Join-Path $stage "or.exe")
+          @'
+          Opencut Reinforced CLI — Developer Preview
+
+          This unsigned package is for Windows x64. No production signing is applied.
+
+          Examples:
+            or.exe version
+            or.exe project summary --file "C:\path\to\project.orproj"
+            or.exe session describe --attach "C:\path\to\descriptor"
+
+          While a project is open in OR, find its descriptor path under
+          Settings > Advanced / Developer. The descriptor path is local to
+          this device. Do not share the descriptor file; it grants local access.
+          This package contains no project session credentials or descriptor.
+          '@ | Set-Content -LiteralPath (Join-Path $stage "CLI-README.txt")
+          $archive = Join-Path $env:RUNNER_TEMP "opencut-reinforced-cli-windows-x64.zip"
+          Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal
+          if ((Get-Item -LiteralPath $archive).Length -eq 0) { throw "Windows CLI package is empty" }
+
+      - name: Upload Windows CLI package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: developer-preview-cli-windows-x64
+          path: ${{ runner.temp }}/opencut-reinforced-cli-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  build-cli-linux:
+    name: Build Linux x64 CLI
+    needs: prepare
+    if: needs.prepare.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Build and package Linux x64 CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release -p or_cli --bin or
+          stage="$RUNNER_TEMP/or-cli-linux-x64"
+          mkdir -p "$stage"
+          install -m 0755 target/release/or "$stage/or"
+          cat > "$stage/CLI-README.txt" <<'EOF'
+          Opencut Reinforced CLI — Developer Preview
+
+          This unsigned package is for Linux x64. No production signing is applied.
+
+          Examples:
+            ./or version
+            ./or project summary --file "/path/to/project.orproj"
+            ./or session describe --attach "/path/to/descriptor"
+
+          While a project is open in OR, find its descriptor path under
+          Settings > Advanced / Developer. The descriptor path is local to
+          this device. Do not share the descriptor file; it grants local access.
+          This package contains no project session credentials or descriptor.
+          EOF
+          tar -czf "$RUNNER_TEMP/opencut-reinforced-cli-linux-x64.tar.gz" -C "$RUNNER_TEMP" "$(basename "$stage")"
+          test -s "$RUNNER_TEMP/opencut-reinforced-cli-linux-x64.tar.gz"
+
+      - name: Upload Linux CLI package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: developer-preview-cli-linux-x64
+          path: ${{ runner.temp }}/opencut-reinforced-cli-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Verify and publish prerelease
     needs:
@@ -331,6 +493,9 @@ jobs:
       - build-windows
       - build-linux
       - build-android
+      - build-cli-macos
+      - build-cli-windows
+      - build-cli-linux
     if: needs.prepare.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -343,7 +508,7 @@ jobs:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
       GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - name: Download the four platform packages
+      - name: Download the four application and three CLI packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: developer-preview-*
@@ -360,6 +525,9 @@ jobs:
             opencut-reinforced-windows-x64-debug.zip
             opencut-reinforced-linux-x64-debug.tar.gz
             opencut-reinforced-android-debug.apk
+            opencut-reinforced-cli-macos.zip
+            opencut-reinforced-cli-windows-x64.zip
+            opencut-reinforced-cli-linux-x64.tar.gz
           )
 
           for file in "${files[@]}"; do
@@ -369,8 +537,8 @@ jobs:
             fi
           done
           file_count="$(find "$assets" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')"
-          if [[ "$file_count" != "4" ]]; then
-            echo "::error::Expected exactly four platform packages, found $file_count files."
+          if [[ "$file_count" != "7" ]]; then
+            echo "::error::Expected exactly seven application/CLI packages, found $file_count files."
             exit 1
           fi
 
@@ -391,6 +559,9 @@ jobs:
           - opencut-reinforced-windows-x64-debug.zip (unsigned)
           - opencut-reinforced-linux-x64-debug.tar.gz (unsigned)
           - opencut-reinforced-android-debug.apk (debug signing only)
+          - opencut-reinforced-cli-macos.zip (universal Apple silicon + Intel, unsigned)
+          - opencut-reinforced-cli-windows-x64.zip (unsigned)
+          - opencut-reinforced-cli-linux-x64.tar.gz (unsigned)
 
           Warning: Pre-MVP developer build; not a stable release and not yet a functional video editor.
           EOF
@@ -408,14 +579,16 @@ jobs:
 
           This build is for developer testing of the current native UI shell and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
-          **UI FOUNDATION UPDATE**
+          **PHASE 4 FOUNDATION COMPLETE**
 
-          - Native Flutter UI follows the OR Focused Monochrome design.
-          - Home, Projects, Templates, Asset Library, and Settings visual foundations.
-          - Responsive desktop and mobile application shell.
-          - Editor Shell Preview for visual evaluation.
+          - Real desktop New/Open/Save project lifecycle on macOS, Windows, and Linux.
+          - One Rust-owned live project session is shared by Flutter and authenticated local IPC.
+          - Attached CLI operations update the project open in Flutter.
+          - Real Rename, Undo, Redo, and explicit Save with dirty and exit guards.
+          - Explicit recovery handling and safe no-clobber new project creation.
+          - Desktop CLI packages are included for testing this flow.
 
-          Editor Shell Preview is not a working editor. There is no usable timeline editor, media ingest, playback, rendering, or export.
+          OR remains a pre-MVP project, not a usable video editor. The workspace keeps media, timeline, playback, rendering, and export unavailable.
 
           Core foundation:
           - Typed Rust bridge
@@ -428,17 +601,17 @@ jobs:
           - Crash-recovery checkpoint core foundation
           - File-backed ProjectSession with exact external-change protection
 
-          **PHASE 4F LOCAL IPC / CLI FOUNDATION**
+          **ATTACHED CLI TESTING**
 
-          - Headless or project summary --file, or project rename --file, and or recovery status|apply|discard --file commands.
-          - Attached CLI summary, rename, undo/redo, explicit save, describe, and guarded shutdown through local IPC.
-          - Unix-domain sockets on macOS/Linux and Windows named pipes; no TCP listener.
-          - Unix endpoints use owner-only permissions; the Windows runtime directory, descriptor, and named pipe use protected owner-only DACLs and reject remote clients.
-          - or session serve is a developer/headless host. Attached CLI needs its explicit descriptor. Headless rename saves a changed project; attached rename remains unsaved until project save.
+          - Use the `opencut-reinforced-cli-*` package for your desktop OS.
+          - Find the descriptor path in the running app at Settings > Advanced / Developer.
+          - Run `or session describe --attach "<descriptor-path>"` to inspect the attached session.
+          - `or project rename --attach ...`, `or history undo|redo --attach ...`, and `or project save --attach ...` operate on that same live project.
+          - Descriptor contents and authentication tokens are not displayed or included in the CLI packages.
 
-          The Flutter application does not yet host a live project session or integrate attached CLI operations. Flutter project create/open/save and live IPC hosting remain future Phase 4UI-2 work.
+          Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
 
-          Recovery uses a core snapshot checkpoint with explicit CLI status/apply/discard commands. There is no recovery UI, automatic startup recovery, or autosave.
+          Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
 
           Not implemented:
           - Actual timeline editing
@@ -446,12 +619,10 @@ jobs:
           - Playback
           - Rendering
           - Export
-          - Recovery UI and automatic startup recovery
-          - Autosave and filesystem watching
-          - Flutter project create/open/save and live IPC hosting
+          - Autosave scheduling and filesystem watching
           - Android Storage Access Framework integration
 
-          These are debug developer builds for testing only, with no production signing. Desktop builds are unsigned and macOS is not notarized; Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
+          These are debug developer builds for testing only, with no production signing. Desktop application and CLI builds are unsigned, macOS application builds are not notarized, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
           EOF
 
       - name: Create commit-specific GitHub prerelease
@@ -464,6 +635,9 @@ jobs:
             "$assets/opencut-reinforced-windows-x64-debug.zip" \
             "$assets/opencut-reinforced-linux-x64-debug.tar.gz" \
             "$assets/opencut-reinforced-android-debug.apk" \
+            "$assets/opencut-reinforced-cli-macos.zip" \
+            "$assets/opencut-reinforced-cli-windows-x64.zip" \
+            "$assets/opencut-reinforced-cli-linux-x64.tar.gz" \
             "$assets/SHA256SUMS.txt" \
             "$assets/BUILD-INFO.txt" \
             --repo "$GITHUB_REPOSITORY" \
@@ -481,9 +655,9 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${DEVELOPER_TAG}" > "$release_json"
 
           if ! jq -e --arg tag "$DEVELOPER_TAG" \
-            '.tag_name == $tag and .prerelease == true and (.assets | length == 6)' \
+            '.tag_name == $tag and .prerelease == true and (.assets | length == 9)' \
             "$release_json" > /dev/null; then
-            echo "::error::Published release is not the expected six-asset prerelease."
+            echo "::error::Published release is not the expected nine-asset prerelease."
             exit 1
           fi
 
@@ -492,6 +666,9 @@ jobs:
             opencut-reinforced-windows-x64-debug.zip
             opencut-reinforced-linux-x64-debug.tar.gz
             opencut-reinforced-android-debug.apk
+            opencut-reinforced-cli-macos.zip
+            opencut-reinforced-cli-windows-x64.zip
+            opencut-reinforced-cli-linux-x64.tar.gz
             SHA256SUMS.txt
             BUILD-INFO.txt
           )
