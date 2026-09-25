@@ -1,3 +1,4 @@
+use crate::live_host::{LiveProjectHostState, ProjectHostEventKind, shared_host_state};
 use crate::protocol::{
     ApplicationSuccess, DescribeResponse, EndpointDescriptor, IpcCommandDescriptor, IpcErrorCode,
     IpcProtocolError, IpcQueryDescriptor, IpcRequest, IpcResponse, IpcResponseResult, IpcSuccess,
@@ -16,7 +17,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
@@ -37,8 +38,22 @@ impl LocalIpcServer {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, IpcProtocolError> {
-        let project_id = session.session().project_id();
-        let project_instance_id = session.session().project_instance_id();
+        Self::start_shared(shared_host_state(session), descriptor_path)
+    }
+
+    pub(crate) fn start_shared(
+        shared: Arc<Mutex<LiveProjectHostState>>,
+        descriptor_path: Option<&Path>,
+    ) -> Result<Self, IpcProtocolError> {
+        let (project_id, project_instance_id) = {
+            let state = shared.lock().map_err(|_| {
+                IpcProtocolError::Io(std::io::Error::other("project host state is unavailable"))
+            })?;
+            (
+                state.session.session().project_id(),
+                state.session.session().project_instance_id(),
+            )
+        };
         let mut auth_token_uuid = Uuid::new_v4();
         while auth_token_uuid.to_string() == project_id.to_string()
             || auth_token_uuid.to_string() == project_instance_id.to_string()
@@ -108,7 +123,7 @@ impl LocalIpcServer {
         let worker = thread::Builder::new()
             .name("or-local-ipc".to_owned())
             .spawn(move || {
-                let result = serve(bound, session, worker_token, worker_stopping);
+                let result = serve(bound, shared, worker_token, worker_stopping);
                 drop(resources);
                 result
             })
@@ -276,7 +291,7 @@ fn write_descriptor(
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn serve(
     bound: BoundEndpoint,
-    mut session: ProjectFileSession,
+    shared: Arc<Mutex<LiveProjectHostState>>,
     auth_token: String,
     stopping: Arc<AtomicBool>,
 ) -> Result<(), IpcProtocolError> {
@@ -290,7 +305,7 @@ fn serve(
         if stopping.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(shutdown) = handle_connection(&mut stream, &mut session, &auth_token) {
+        if let Ok(shutdown) = handle_shared_connection(&mut stream, &shared, &auth_token) {
             if shutdown {
                 break;
             }
@@ -303,7 +318,7 @@ fn serve(
 #[cfg(windows)]
 fn serve(
     bound: BoundEndpoint,
-    mut session: ProjectFileSession,
+    shared: Arc<Mutex<LiveProjectHostState>>,
     auth_token: String,
     stopping: Arc<AtomicBool>,
 ) -> Result<(), IpcProtocolError> {
@@ -312,24 +327,43 @@ fn serve(
         if stopping.load(Ordering::SeqCst) {
             return Ok(true);
         }
-        handle_connection(stream, &mut session, &auth_token)
+        handle_shared_connection(stream, &shared, &auth_token)
     })
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn serve(
     _bound: BoundEndpoint,
-    _session: ProjectFileSession,
+    _shared: Arc<Mutex<LiveProjectHostState>>,
     _auth_token: String,
     _stopping: Arc<AtomicBool>,
 ) -> Result<(), IpcProtocolError> {
     Err(IpcProtocolError::UnsupportedPlatform)
 }
 
+#[cfg(test)]
 fn handle_connection(
     stream: &mut (impl Read + Write),
     session: &mut ProjectFileSession,
     auth_token: &str,
+) -> Result<bool, IpcProtocolError> {
+    handle_connection_with(stream, auth_token, |request| dispatch(session, request))
+}
+
+fn handle_shared_connection(
+    stream: &mut (impl Read + Write),
+    shared: &Arc<Mutex<LiveProjectHostState>>,
+    auth_token: &str,
+) -> Result<bool, IpcProtocolError> {
+    handle_connection_with(stream, auth_token, |request| {
+        dispatch_shared(shared, request)
+    })
+}
+
+fn handle_connection_with(
+    stream: &mut (impl Read + Write),
+    auth_token: &str,
+    mut dispatch_request: impl FnMut(IpcRequest) -> (IpcResponseResult, bool),
 ) -> Result<bool, IpcProtocolError> {
     let payload = read_frame(stream)?;
     let request_text = std::str::from_utf8(&payload).map_err(|_| IpcProtocolError::InvalidUtf8)?;
@@ -350,7 +384,7 @@ fn handle_connection(
             false,
         )
     } else {
-        dispatch(session, envelope.request)
+        dispatch_request(envelope.request)
     };
 
     let response = IpcResponse {
@@ -409,6 +443,38 @@ fn dispatch(session: &mut ProjectFileSession, request: IpcRequest) -> (IpcRespon
             }
         }
     }
+}
+
+fn dispatch_shared(
+    shared: &Arc<Mutex<LiveProjectHostState>>,
+    request: IpcRequest,
+) -> (IpcResponseResult, bool) {
+    let Ok(mut state) = shared.lock() else {
+        return (
+            IpcResponseResult::Error(IpcErrorCode::ServerStateError),
+            false,
+        );
+    };
+    if state.closing {
+        return (
+            IpcResponseResult::Error(IpcErrorCode::ServerStateError),
+            false,
+        );
+    }
+
+    let before = state.session.session().project_revision();
+    let (result, shutdown) = dispatch(&mut state.session, request);
+    if state.session.session().project_revision() != before {
+        state.publish(ProjectHostEventKind::ProjectChanged);
+    }
+    if matches!(&result, IpcResponseResult::Success(IpcSuccess::Save(_))) {
+        state.publish(ProjectHostEventKind::ProjectSaved);
+    }
+    if shutdown {
+        state.closing = true;
+        state.publish(ProjectHostEventKind::SessionClosing);
+    }
+    (result, shutdown)
 }
 
 fn describe(session: &ProjectFileSession) -> DescribeResponse {

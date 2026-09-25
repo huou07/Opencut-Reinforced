@@ -1,6 +1,8 @@
 use or_core::{
-    CommandEnvelope, MAX_PROJECT_FILE_BYTES, OperationErrorCode, ProjectDocument, ProjectRevision,
-    ProjectSession, ProjectStorageError, load_project_file, save_project_file_atomic,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, MAX_PROJECT_FILE_BYTES,
+    OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectFileSessionErrorCode,
+    ProjectRevision, ProjectSession, ProjectStorageError, load_project_file,
+    save_project_file_atomic,
 };
 use serde_json::json;
 use std::{
@@ -197,4 +199,41 @@ fn rejects_oversized_encoded_state_before_creating_a_temporary_file() {
 
     assert_eq!(fs::read(&path).unwrap(), b"preserve the old project");
     assert_eq!(names(&directory.0), vec!["example.orproj".to_owned()]);
+}
+
+#[test]
+fn create_new_project_round_trips_without_clobbering_existing_files() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let mut session = ProjectFileSession::create_new(&path, "Exact project name ").unwrap();
+    let project_id = session.session().project_id();
+    let instance_id = session.session().project_instance_id();
+    let initial = load_project_file(&path).unwrap();
+
+    assert_eq!(initial.name(), "Exact project name ");
+    assert_eq!(initial.revision(), ProjectRevision::INITIAL);
+    assert_eq!(
+        session.session().project_revision(),
+        ProjectRevision::INITIAL
+    );
+    assert!(!session.is_dirty());
+    assert!(
+        std::str::from_utf8(&fs::read(&path).unwrap())
+            .unwrap()
+            .contains("\"schema_version\": 1")
+    );
+
+    let undo = session.handle_application_request(ApplicationRequest::Command(
+        CommandEnvelope::undo(project_id, instance_id, ProjectRevision::INITIAL),
+    ));
+    assert!(matches!(undo, ApplicationResponse::Error(_)));
+
+    let original = ProjectDocument::new("Do not replace");
+    save_project_file_atomic(&path, &original).unwrap();
+    let original_bytes = fs::read(&path).unwrap();
+    let error = ProjectFileSession::create_new(&path, "Replacement").unwrap_err();
+
+    assert_eq!(error.code(), ProjectFileSessionErrorCode::DestinationExists);
+    assert_eq!(fs::read(&path).unwrap(), original_bytes);
+    assert_eq!(load_project_file(path).unwrap(), original);
 }

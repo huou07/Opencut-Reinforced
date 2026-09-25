@@ -1,10 +1,14 @@
 mod client;
+mod live_host;
 mod protocol;
 mod server;
 #[cfg(windows)]
 mod windows;
 
 pub use client::{IpcClientError, LocalIpcClient};
+pub use live_host::{
+    LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind,
+};
 pub use protocol::{
     ApplicationSuccess, DescribeResponse, EndpointDescriptor, IpcCommandDescriptor, IpcErrorCode,
     IpcProtocolError, IpcQueryDescriptor, IpcRequest, IpcResponse, IpcResponseResult, IpcSuccess,

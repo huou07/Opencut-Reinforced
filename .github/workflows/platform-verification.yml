@@ -97,6 +97,9 @@ jobs:
       - name: Run real local IPC transport tests
         run: cargo test -p or_ipc --test local_transport
 
+      - name: Run shared live-host transport tests
+        run: cargo test -p or_ipc --test live_host
+
       - name: Install Flutter 3.47.5
         run: |
           git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -204,6 +207,9 @@ jobs:
 
       - name: Run real local IPC transport tests
         run: cargo test -p or_ipc --test local_transport
+
+      - name: Run shared live-host transport tests
+        run: cargo test -p or_ipc --test live_host
 
       - name: Verify Windows local endpoint access controls
         run: cargo test -p or_ipc --lib
