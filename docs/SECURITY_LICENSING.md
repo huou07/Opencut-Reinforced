@@ -21,13 +21,15 @@ These are the current direct dependencies for the executable architecture and fo
 | [serde](https://github.com/serde-rs/serde/blob/master/serde/Cargo.toml) | 1.0.229 | Core DTO serialization | MIT OR Apache-2.0 |
 | [serde_json](https://docs.rs/crate/serde_json/1.0.151/source/Cargo.toml.orig) | 1.0.151 | CLI JSON output and `.orproj` v1 codec | MIT OR Apache-2.0 |
 | [uuid](https://github.com/uuid-rs/uuid) | 1.26.1 | Typed UUIDv4 project/runtime IDs and unique storage temp-file suffixes | Apache-2.0 OR MIT |
-| [windows-sys](https://docs.rs/crate/windows-sys/0.61.2) | 0.61.2 | Windows-only atomic project-file replacement API (`cfg(windows)` target dependency) | MIT OR Apache-2.0 |
+| [windows-sys](https://docs.rs/crate/windows-sys/0.61.2) | 0.61.2 | Windows-only atomic project-file replacement, named pipes, and owner-only endpoint ACLs (`cfg(windows)` target dependency) | MIT OR Apache-2.0 |
 | [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge/versions/2.13.0) | 2.13.0 | Generated typed Dart/Rust bridge bindings | MIT |
 | [flutter_rust_bridge_hooks](https://pub.dev/packages/flutter_rust_bridge_hooks/versions/2.13.0) | 2.13.0 | Native-assets hook and Rust library packaging | MIT |
 | [flutter_lints](https://pub.dev/packages/flutter_lints/versions/6.0.0/license) | 6.0.0 | Dart/Flutter static-analysis rules | BSD-3-Clause |
 | [Flutter SDK](https://github.com/flutter/flutter/blob/master/LICENSE) packages (`flutter`, `flutter_test`, `integration_test`) | Flutter 3.47.5 | App framework and Flutter tests | BSD-3-Clause |
 
 This inventory covers direct dependencies, not every transitive crate or Dart package. Cargo and Pub lockfiles record the resolved dependency graphs.
+
+`or_ipc` is an internal workspace crate and adds no new external production dependency. It reuses the existing `or_core`, `serde`, `serde_json`, and `uuid` dependencies; Windows API access uses the listed `windows-sys` dependency.
 
 FFmpeg's upstream states that most of the project is under LGPL version 2.1 or later, while optional GPL components can change the FFmpeg build's licensing posture. Enabled configure options and linked libraries matter. A packaged build must have a recorded configuration and source, dependency, codec, and redistribution review; do not infer the product's obligations from the name FFmpeg alone. [FFmpeg legal information](https://ffmpeg.org/legal.html)
 
@@ -70,6 +72,10 @@ Validate at each project, media, IPC, provider, model, community, theme, templat
 The Phase 4E1 project-file boundary limits `.orproj` input to 64 MiB, reads at most one byte beyond that limit, rejects invalid UTF-8, and reuses the strict v1 codec. Saves encode and size-check before creating a same-directory temp file with exclusive creation; the old destination is never deleted first. Replacement is atomic on supported local filesystems, with file sync plus Unix directory sync or Windows write-through. A post-replace durability failure is reported as uncertain because replacement may already have happened. The current assumption is one owning application/session per save target; there is no file-locking framework or autosave scheduler.
 
 Phase 4E2 recovery sidecars are untrusted input. Reads are bounded to 136 MiB, require strict UTF-8 and a strict v1 envelope, and validate each nested project through the `.orproj` codec and its 64 MiB limit. Checkpoint creation and candidate application require the exact saved base and matching project identity; inspection does not mutate state, and project load never applies recovery automatically. Conflicts require explicit handling, and a failed apply preserves the checkpoint. Recovery snapshots contain `ProjectDocument` data only; credentials and secrets must remain outside project state and recovery files. There is no recovery UI or autosave.
+
+Phase 4F local IPC is limited to control-plane requests. Protocol v1 uses a four-byte big-endian length prefix, a 1 MiB maximum frame, strict versioned JSON, UUIDv4 request IDs, and a fresh random authentication token per server. Authentication occurs before project details are returned or application requests are dispatched. The token is stored in the explicit endpoint descriptor, is never printed or logged, and is not included in `Describe` responses. On Unix, the server-owned runtime directory is mode 0700 and the socket and descriptor are mode 0600. On Windows, the default runtime directory, descriptor file, and named pipe receive protected owner-only DACLs; this also applies when a caller supplies an explicit descriptor path. Windows pipes reject remote clients. The CLI must be given the descriptor path; it does not scan for servers.
+
+The IPC server exposes only `Describe`, shared application requests, explicit `Save`, and guarded `Shutdown`. Application requests carry the existing command/query/transaction envelopes. The server does not accept caller-selected filesystem paths, shell commands, user credentials, or arbitrary file reads/writes. There is no TCP, HTTP, WebSocket, or LAN listener or fallback. Other OS users cannot access the Unix endpoints or Windows objects through their ACLs. A malicious process running as the same OS user may be able to read the descriptor and authenticate, so this is not a same-user isolation boundary. The `session serve` command is a developer/headless host; the Flutter application does not yet host a project session.
 
 ## Declarative content and plugins
 

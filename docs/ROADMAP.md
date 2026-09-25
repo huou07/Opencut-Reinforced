@@ -83,15 +83,25 @@ Phase 4E2 — DONE:
 - explicit apply and discard with atomic replacement and cleanup semantics
 - cross-platform recovery tests
 
-Phase 4F — NEXT:
+Phase 4F — DONE:
 
-- local IPC
-- attached/headless CLI parity, including future project-file commands
-- shared command/query transport and local-only endpoint security
+- transport-independent `ApplicationRequest` / `ApplicationResponse` dispatch and exact-base `ProjectFileSession`
+- bounded, versioned, strictly parsed local IPC with per-server authentication
+- Unix-domain sockets on macOS and Linux; Windows named pipes with protected owner-only DACLs that reject remote clients; no TCP fallback
+- headless project summary, rename, and recovery status/apply/discard commands
+- attached summary, rename, undo/redo, save, describe, and guarded shutdown commands
+- developer/headless `or session serve` host; the Flutter app does not host a live project session
+- Linux, macOS, and Windows IPC integration coverage plus CLI contract tests
+
+Phase 4UI-2 — NEXT:
+
+- real Flutter project create/open/save lifecycle
+- live `ProjectFileSession` hosting in the application
+- integration between the running Flutter application and attached CLI
 
 Real project migrations remain future work when a later schema exists.
 
-Phase 4 remains in progress. It does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, commands and queries, transactions and history, serialization, and bounded filesystem persistence while preserving control-plane/media-plane separation, a snapshot-ready project/timeline evaluation boundary, and the rule that per-frame work never mutates Project or increments `ProjectRevision`. Local IPC remains planned.
+Phase 4 remains in progress until Phase 4UI-2 connects the real Flutter project lifecycle to the Rust session and local IPC host. The current `or session serve` host is a developer/headless host; the Flutter app still cannot open or save a real project or host the session used by attached CLI clients. Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, shared commands and queries, transactions and history, serialization, bounded filesystem persistence, recovery, local IPC, and semantic CLI operations while preserving control-plane/media-plane separation and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
 
 ### Phase 5 — Media foundation
 **Status: PLANNED**
@@ -185,4 +195,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Complete Phase 4UI-2 before starting Phase 5 so the real Flutter application can own the project lifecycle and serve attached clients. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.

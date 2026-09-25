@@ -2,9 +2,11 @@
 
 ## Status
 
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4E2 provide project/application foundations, command/query contracts, rename-only atomic transaction groups, session-local undo/redo, bounded `.orproj` v1 storage, and a core-only recovery checkpoint foundation. IPC, CLI project-file commands, timeline, media, and editor behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` v1 storage, recovery, local IPC, and headless/attached semantic CLI operations. Phase 4UI-1 is the Flutter visual shell; Flutter project create/open/save and live IPC hosting remain Phase 4UI-2. Timeline and media behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
 
 Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
+
+For project mutations, keep headless and attached CLI operations on the shared `ApplicationRequest` path. Headless rename uses `ProjectFileSession` and saves a changed result explicitly; attached rename changes the live session and remains unsaved until `project save`. `or session serve` is currently the developer/headless local session host. Do not describe it as Flutter hosting or automate it by clicking the UI. Preserve exact-disk-base conflict checks and the recovery policy on every save/open path.
 
 ## Feature path
 

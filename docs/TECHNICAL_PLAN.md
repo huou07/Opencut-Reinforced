@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load and atomic save around the existing v1 codec. Phase 4E2 adds a separate snapshot recovery checkpoint sidecar, exact saved-base validation, bounded strict inspection, and explicit apply/discard. Recovery UI, autosave, migrations, timeline editing, media, rendering, and client integrations remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load and atomic save around the existing v1 codec. Phase 4E2 adds a separate snapshot recovery checkpoint sidecar, exact saved-base validation, bounded strict inspection, and explicit apply/discard. Phase 4F adds shared application dispatch, exact-base file sessions, local IPC v1, and headless/attached semantic CLI operations. Phase 4UI-2 remains: the Flutter app does not yet create/open/save real projects or host a live project session. Recovery UI, autosave, migrations, timeline editing, media, and rendering remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) for the current implementation status.
 
 ## Contents
 
@@ -120,6 +120,12 @@ Inspection reads and classifies without changing files or project state. If the 
 
 Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. This is a snapshot checkpoint foundation, not event sourcing, command replay, persistent history, autosave, or a recovery UI.
 
+### Phase 4F file-backed session and shared dispatch
+
+`ApplicationRequest` carries an existing `CommandEnvelope`, `QueryEnvelope`, or `TransactionEnvelope`; `ApplicationResponse` carries the corresponding result or the existing `OperationError`. `ProjectSession::handle_application_request` delegates to the existing command, query, and transaction methods. This is the common semantic path for the headless CLI and IPC server; it does not introduce a second editing implementation.
+
+`ProjectFileSession` owns a project path, a live `ProjectSession`, and the exact `ProjectDocument` last known to be saved. Opening loads the canonical `.orproj`, inspects recovery, then creates a fresh runtime instance without incrementing revision. `NONE` and `STALE` allow opening; candidate, conflict, and invalid recovery require explicit attention. Save re-inspects recovery and reloads the disk document; the save proceeds only when the disk document exactly equals the remembered saved base. It then uses the existing atomic save path and does not increment revision. Dirty state is the in-memory project compared with that exact saved document; neither dirty state, instance ID, nor history is persisted.
+
 ### Project revisions
 
 `ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; Phase 4B's v1 codec preserves the stored revision during encode/decode. A changed rename or transaction increments once; an exact no-op, net-no-op transaction, and read-only query leave the revision unchanged. Undo and redo restore content through new canonical mutations, so they increment from the current revision rather than moving it backward. Future successful canonical mutations must each increment once. Opening/loading or saving without a canonical mutation does not increment it. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
@@ -128,7 +134,7 @@ Applying is explicit and re-inspects the current canonical file before saving. I
 
 ## 4. Command system
 
-Phases 4C–4D establish a small static command catalog without a dynamic registry framework. It contains `project.rename`, `history.undo`, and `history.redo`, each schema v1; only rename is allowed inside a transaction. `CommandEnvelope` v1 has `command_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, `expected_project_revision`, and `arguments`. `TransactionEnvelope` v1 has a schema version, the same three project/session preconditions, and an ordered list of strict `CommandCall` values. The envelope uses `serde_json::Value` only at the structured argument boundary; dispatch immediately decodes rename arguments into a strict private typed structure. This does not select JSON as the future IPC transport.
+Phases 4C–4D establish a small static command catalog without a dynamic registry framework. It contains `project.rename`, `history.undo`, and `history.redo`, each schema v1; only rename is allowed inside a transaction. `CommandEnvelope` v1 has `command_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, `expected_project_revision`, and `arguments`. `TransactionEnvelope` v1 has a schema version, the same three project/session preconditions, and an ordered list of strict `CommandCall` values. The envelope uses `serde_json::Value` at the structured argument boundary; dispatch immediately decodes rename arguments into a strict private typed structure. The transport-independent contracts are now carried by the bounded, strict JSON protocol in `or_ipc` v1.
 
 The dispatcher checks command ID, schema version, project ID, project-instance ID, and expected revision before decoding arguments or mutating state; unknown envelope and argument fields are rejected. Rename preserves its supplied UTF-8 name exactly. Renaming to the same name succeeds as a no-op (`changed = false`) without incrementing revision or changing history. A real rename checks the next revision and reserves history storage before applying the paired name/revision update. Results identify the operation, session, before/after revisions, whether state changed, and the resulting `ChangeSet`.
 
@@ -136,7 +142,7 @@ The dispatcher checks command ID, schema version, project ID, project-instance I
 
 The runtime transaction implementation is deliberately narrow: it stages ordered `project.rename` calls, validates every child, and reduces the group to one net name change. A changed group applies the name and increments revision once, then records one `ChangeSet` in session history. A net no-op creates no revision or history entry. Any validation, precondition, overflow, or history-storage failure occurs before canonical state changes; a failed group preserves the project and both history stacks. `history.undo` and `history.redo` apply the stored name change only when the current name matches its expected side; they increment the current revision once and move the entry between in-memory session stacks. A new real edit clears redo history. History is neither serialized nor carried across a fresh `ProjectSession::open`.
 
-Stable errors include `UNKNOWN_COMMAND`, `UNSUPPORTED_COMMAND_SCHEMA`, `UNKNOWN_QUERY`, `UNSUPPORTED_QUERY_SCHEMA`, `UNSUPPORTED_TRANSACTION_SCHEMA`, `EMPTY_TRANSACTION`, `COMMAND_NOT_ALLOWED_IN_TRANSACTION`, `PROJECT_ID_MISMATCH`, `PROJECT_INSTANCE_MISMATCH`, `REVISION_CONFLICT`, `INVALID_ARGUMENTS`, `REVISION_OVERFLOW`, `NOTHING_TO_UNDO`, `NOTHING_TO_REDO`, `HISTORY_CONFLICT`, and `HISTORY_STORAGE_FAILURE`. Permissions, dry-run, generalized transaction operations, timeline edits, and client integrations remain future work.
+Stable errors include `UNKNOWN_COMMAND`, `UNSUPPORTED_COMMAND_SCHEMA`, `UNKNOWN_QUERY`, `UNSUPPORTED_QUERY_SCHEMA`, `UNSUPPORTED_TRANSACTION_SCHEMA`, `EMPTY_TRANSACTION`, `COMMAND_NOT_ALLOWED_IN_TRANSACTION`, `PROJECT_ID_MISMATCH`, `PROJECT_INSTANCE_MISMATCH`, `REVISION_CONFLICT`, `INVALID_ARGUMENTS`, `REVISION_OVERFLOW`, `NOTHING_TO_UNDO`, `NOTHING_TO_REDO`, `HISTORY_CONFLICT`, and `HISTORY_STORAGE_FAILURE`. The Phase 4F CLI and local IPC client use these same operation errors. Permissions, dry-run, generalized transaction operations, timeline edits, Flutter project commands, and agent clients remain future work.
 
 ## 5. Query system
 
@@ -154,23 +160,41 @@ The transaction envelope currently accepts only `project.rename` child calls. Gr
 
 The CLI is a first-class semantic interface to the shared application and domain operations. Parity means semantic/domain operation parity for project changes and meaningful project queries, not exposure of presentation-only UI controls; see [PRODUCT.md](PRODUCT.md) for examples.
 
-Planned contract:
+Current commands preserve the original `version`, `health`, and `capabilities` output contracts and add deterministic catalog discovery:
 
-- machine-readable JSON output where appropriate
-- stable command and object identifiers
-- stable exit-code categories
-- command, query, and capability introspection
-- dry-run support for destructive or complex operations
-- structured errors and progress for long-running jobs
-- no plaintext secrets in arguments, logs, or output
+```text
+or commands [--json]
+or queries [--json]
+or project summary --file PATH [--json]
+or project summary --attach DESCRIPTOR [--json]
+or project rename --file PATH --name NAME [--json]
+or project rename --attach DESCRIPTOR --name NAME [--json]
+or project save --attach DESCRIPTOR [--json]
+or history undo --attach DESCRIPTOR [--json]
+or history redo --attach DESCRIPTOR [--json]
+or recovery status --file PATH [--json]
+or recovery apply --file PATH [--json]
+or recovery discard --file PATH [--json]
+or session serve --file PATH [--descriptor PATH] [--json]
+or session describe --attach DESCRIPTOR [--json]
+or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]
+```
 
-Support headless operation and attachment to an active project through local IPC. Do not implement editing by synthesizing mouse clicks, keystrokes, or screen coordinates.
+Headless summary and rename use `ProjectFileSession` and the `project.summary` query / `project.rename` command. A changed headless rename saves immediately through exact-base checked atomic persistence; a no-op does not rewrite the file. Recovery status reports `none`, `candidate`, `stale`, or `conflict`; apply and discard call the existing recovery APIs. Unresolved candidate/conflict/invalid recovery blocks mutable file-session opening.
+
+Attached summary, rename, undo/redo, save, describe, and shutdown require an explicit descriptor via `--attach`; there is no endpoint scanning. Attached rename uses the revision returned by describe and does not retry a stale command. It leaves the live session dirty until explicit `project save`. Undo/redo require attachment because history is session-local and not persisted. `session serve` is a developer/headless host; the Flutter application does not yet host a session. It never autosaves.
+
+JSON success responses use the core result or descriptor structures; JSON errors use stable categories and codes. Exit codes are 0 for success, 2 for usage, 3 for application operation errors, 4 for project storage/recovery/session errors, and 5 for IPC errors. Filesystem paths remain OS paths; project names must be UTF-8. No command accepts shell instructions; IPC does not expose arbitrary file reads or writes, and CLI file operations are limited to the documented project and recovery commands.
+
+Dry-run, long-running job progress, agent EditPlans, and Flutter project lifecycle integration remain future work. Do not implement editing by synthesizing mouse clicks, keystrokes, or screen coordinates.
 
 ## 8. Local IPC
 
-IPC is local-only by default. Use Unix domain sockets on Unix-like desktop platforms and an equivalent named pipe on Windows. Authenticate or otherwise constrain local clients using operating-system facilities where available, validate every message, and do not open a public network listener by default.
+Phase 4F implements `or_ipc` protocol v1 for application/control requests only. Frames contain a four-byte big-endian length and strict JSON body, bounded to 1 MiB. Each request uses a UUIDv4 ID echoed by the response; one request is processed per connection. Supported requests are `Describe`, shared `ApplicationRequest`, `Save`, and guarded `Shutdown`. The descriptor is strict and versioned and contains the endpoint, project/runtime IDs, and a random per-server token. Authentication and protocol checks happen before project disclosure or dispatch.
 
-Define protocol versioning, connection lifecycle, command timeout and cancellation, job subscriptions, and stale-client behavior before enabling external clients.
+macOS/Linux use Unix-domain sockets in a server-created private runtime directory, with 0700 directory and 0600 socket/descriptor permissions. Windows uses a named pipe configured to reject remote clients; its runtime directory, descriptor file, and pipe have protected owner-only DACLs. There is no TCP, HTTP, WebSocket, LAN listener, or fallback. The token is not printed or logged; descriptor access is the client credential. This is a same-user local automation boundary, not isolation from malicious processes running as the same OS user. The server owns one `ProjectFileSession`, serializes requests, does not autosave, and exposes no arbitrary path or shell operation. The developer/headless `or session serve` command is the only host today; Flutter hosting and integration remain Phase 4UI-2 work.
+
+Timeout/cancellation, subscriptions, multiple simultaneous sessions, and remote clients are not part of protocol v1.
 
 ## 9. Flutter and Rust bridge
 
@@ -180,7 +204,7 @@ After a command is validated and applied, Rust emits a domain change or state-in
 
 Hot UI paths should use scoped queries such as timeline viewport, track list, selection inspector, media bin, and job list. Do not serialize and copy the whole project into Dart or rebuild every surface for each timeline interaction. Start with simple scoped queries and invalidation; do not introduce a reactive state framework before it is needed.
 
-The Phase 3 bootstrap uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in the `packages/or_app_bridge` Dart package and a thin `crates/or_app_bridge` adapter that calls `or_core`. Its native-assets hook builds the Rust library for the consuming Flutter target. The demonstrated API is limited to app info, health, and capabilities; the future command/query/event model and media transport remain planned. CI verifies target builds and exercises the real macOS bridge.
+The Phase 3 bootstrap uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in the `packages/or_app_bridge` Dart package and a thin `crates/or_app_bridge` adapter that calls `or_core`. Its native-assets hook builds the Rust library for the consuming Flutter target. The demonstrated Flutter bridge API remains limited to app info, health, and capabilities; Flutter does not yet open/save projects, dispatch project commands, or host `ProjectFileSession` over IPC. Phase 4UI-2 connects the real Flutter project lifecycle and live host to the shared Rust application model. CI verifies target builds and exercises the real macOS bootstrap bridge.
 
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
@@ -320,6 +344,8 @@ Visible Flutter strings and accessibility labels use a localization-capable reso
 Treat project files, media, subtitles, templates, themes, downloaded assets, models, plugin output, and agent or AI output as untrusted. Validate input at every serialization, IPC, plugin, model, and community boundary. Enforce limits for file sizes, dimensions, durations, archive expansion, and job resources before implementation exposes those inputs.
 
 Keep secrets out of logs, project files, CLI output, and agent context. Require explicit capabilities for plugins and community actions. Security and licensing constraints are part of feature design, not follow-up cleanup.
+
+Phase 4F bounds `.orproj` input to 64 MiB and recovery sidecars to 136 MiB, validates strict UTF-8/serde envelopes, and preserves the exact disk-base and recovery checks before file-session saves. IPC accepts only the versioned, bounded semantic request types; the server cannot open caller-selected paths or execute shell commands. Unix runtime directory, socket, and descriptor permissions are restricted to the current user. The Windows runtime directory, descriptor file, and named pipe use protected owner-only DACLs, and the pipe rejects remote clients. A random per-server token is stored only in the descriptor and is not logged or returned by `Describe`. Anyone who can read that descriptor as the same OS user can authenticate, so it is not a multi-user security boundary. No API credentials belong in the descriptor, IPC payloads, project files, or CLI output. The implementation creates no TCP listener.
 
 Provider network capability and permission are enforced centrally by the application, including when a request originates from CLI or an agent. Offline Mode denies OR-originated optional network calls regardless of UI path; it does not claim to firewall the operating system. Send the minimum required data to each cloud task, without unrelated project context or secret values.
 

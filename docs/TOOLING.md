@@ -26,6 +26,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+For focused Phase 4F checks, run `cargo test -p or_cli` for executable CLI contracts and `cargo test -p or_ipc --test local_transport` for the host platform's real local transport. On Windows, `cargo test -p or_ipc --lib` also inspects the actual runtime-directory, descriptor, and named-pipe ACLs. The full workspace suite includes the CLI integration tests and the Unix transport tests on Linux/macOS.
+
 Run lightweight checks first. For core-only work, prefer affected-package checks such as `cargo check -p or_core --all-targets`, and use package-scoped Clippy/tests where they work in the current environment. Attempt stronger workspace checks when useful. A native linker failure caused only by unavailable local platform tooling is `LOCAL ENVIRONMENT BLOCKED`; a Rust source or test failure is `FAIL` and must be fixed.
 
 Flutter checks run from `apps/or_app`:
@@ -46,9 +48,9 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `Repository hygiene`: repository checks from `scripts/check-repo.sh`.
 - `Rust checks`: formatting, workspace Clippy, and workspace tests on Ubuntu.
 - `Flutter static and widget checks`: dependency resolution, Dart formatting, analysis, and Flutter widget tests on Ubuntu.
-- `macOS native build and bridge smoke`: core project-storage integration tests, macOS app build, CLI bootstrap capture, and a real native Rust bridge smoke test.
+- `macOS native build and bridge smoke`: project-storage, recovery, and real Unix IPC integration tests, macOS app build, CLI bootstrap capture, and a real native Rust bridge smoke test.
 - `Linux native build`: Linux app build.
-- `Windows native build`: core project-storage integration tests and Windows app build.
+- `Windows native build`: project-storage and recovery tests, real named-pipe IPC integration tests, owner-only endpoint ACL tests, and the Windows app build.
 - `Android APK build`: debug APK build; no emulator runtime test is currently configured.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit.
 

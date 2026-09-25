@@ -426,8 +426,19 @@ jobs:
           - Transactions
           - Undo and redo
           - Crash-recovery checkpoint core foundation
+          - File-backed ProjectSession with exact external-change protection
 
-          This is a core snapshot checkpoint foundation only. No recovery UI yet. No autosave yet.
+          **PHASE 4F LOCAL IPC / CLI FOUNDATION**
+
+          - Headless or project summary --file, or project rename --file, and or recovery status|apply|discard --file commands.
+          - Attached CLI summary, rename, undo/redo, explicit save, describe, and guarded shutdown through local IPC.
+          - Unix-domain sockets on macOS/Linux and Windows named pipes; no TCP listener.
+          - Unix endpoints use owner-only permissions; the Windows runtime directory, descriptor, and named pipe use protected owner-only DACLs and reject remote clients.
+          - or session serve is a developer/headless host. Attached CLI needs its explicit descriptor. Headless rename saves a changed project; attached rename remains unsaved until project save.
+
+          The Flutter application does not yet host a live project session or integrate attached CLI operations. Flutter project create/open/save and live IPC hosting remain future Phase 4UI-2 work.
+
+          Recovery uses a core snapshot checkpoint with explicit CLI status/apply/discard commands. There is no recovery UI, automatic startup recovery, or autosave.
 
           Not implemented:
           - Actual timeline editing
@@ -437,7 +448,8 @@ jobs:
           - Export
           - Recovery UI and automatic startup recovery
           - Autosave and filesystem watching
-          - CLI project-file commands and Android Storage Access Framework integration
+          - Flutter project create/open/save and live IPC hosting
+          - Android Storage Access Framework integration
 
           These are debug developer builds for testing only, with no production signing. Desktop builds are unsigned and macOS is not notarized; Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
           EOF

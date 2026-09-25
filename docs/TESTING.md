@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the production-direction Flutter visual foundation. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish the checks that exist from planned product coverage.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the production-direction Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contract coverage. The Flutter app still does not host a live project session, so these are core/CLI/transport tests, not Flutter-attached tests. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish the checks that exist from planned product coverage.
 
 ## Current Phase 3 checks
 
@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and tests; Flutter dependency, formatting, analysis, and widget checks; native builds for macOS, Linux, Windows, and Android; and the macOS bridge smoke test.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, and real local IPC integration tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and the macOS bridge smoke test. The Linux workspace suite includes the CLI and Unix IPC tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -75,7 +75,7 @@ Filesystem save/load tests are recorded under Phase 4E1. Schema migrations remai
 - `history.undo` and `history.redo`: inverse/forward changes, one new revision each, grouped undo, redo invalidation after a real edit, no-op/failed-edit redo preservation, empty-stack errors, history conflicts, and overflow without partial mutation.
 - Transaction and history effects round-trip through the `.orproj` v1 codec as canonical name/revision only; runtime instance ID and history remain absent, and a reopened session starts with empty history.
 
-Filesystem save/load tests are recorded under Phase 4E1. Migration, IPC, and client-integration tests are not implemented.
+Filesystem save/load tests are recorded under Phase 4E1. Migration remains unimplemented; Phase 4F records IPC and client-integration coverage.
 
 ## Current Phase 4E1 coverage
 
@@ -96,6 +96,18 @@ Filesystem save/load tests are recorded under Phase 4E1. Migration, IPC, and cli
 - Recovery integration tests run in Linux Rust checks and in dedicated macOS and Windows Platform Verification steps. Android CI builds the Rust bridge but does not run recovery tests on an Android device.
 
 Recovery UI and autosave are not implemented or tested.
+
+## Current Phase 4F coverage
+
+- `ProjectSession::handle_application_request` dispatches commands, queries, and transactions through the existing semantic methods; operation errors remain the core `OperationError` values.
+- `ProjectFileSession` tests cover open without revision change, dirty state, exact saved-base comparison including same-revision external replacement, recovery candidate blocking, stale recovery allowance, and safe save behavior.
+- `or_ipc` unit tests cover big-endian framing, empty/oversized/truncated frames, strict endpoint descriptors and redacted debug output, request-ID matching, malformed UTF-8/JSON without mutation, and authentication/protocol rejection before dispatch.
+- Real local transport tests cover semantic query/command/transaction requests, stale revision and instance protection, explicit save, no autosave, external disk conflict, recovery appearing during a live session, authentication, guarded/discard shutdown, descriptor permissions/collision, endpoint rotation, and cleanup. They use Unix sockets on Linux/macOS and named pipes on Windows.
+- The Windows `or_ipc` unit suite reads back the ACLs from the created runtime directory, descriptor file, and named pipe and verifies that only the owner-rights ACE is present. The pipe creation keeps the remote-client rejection flag enabled.
+- CLI contract tests preserve the bootstrap commands and cover catalog JSON, headless summary/rename, no-op rename, all recovery statuses and explicit actions, attached summary/rename/undo/redo/save/describe/shutdown, semantic parity, dirty shutdown rejection, exact disk conflict protection, clean JSON output, token non-disclosure, OS-path handling, and UTF-8 project-name validation.
+- CLI integration tests run in the Linux Rust workspace job. The macOS and Windows jobs run the transport integration test directly; Windows also runs the `or_ipc` unit suite for endpoint ACL checks. These jobs do not claim Flutter-hosted IPC.
+
+Flutter project create/open/save and live-session hosting are not implemented or tested; they are Phase 4UI-2 work.
 
 ## Test pyramid
 
