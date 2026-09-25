@@ -31,6 +31,7 @@ use windows_sys::Win32::{
 };
 
 const PIPE_BUFFER_BYTES: u32 = MAX_IPC_FRAME_BYTES as u32 + 4;
+const PIPE_INSTANCES: u32 = 2;
 const OWNER_ONLY_DACL: &str = "D:P(A;;GA;;;OW)";
 const OWNER_ONLY_DIRECTORY_DACL: &str = "D:P(A;OICI;GA;;;OW)";
 
@@ -211,7 +212,7 @@ pub(crate) fn create_server_pipe(name: &str) -> Result<PipeHandle, IpcProtocolEr
             name.as_ptr(),
             PIPE_ACCESS_DUPLEX,
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-            1,
+            PIPE_INSTANCES,
             PIPE_BUFFER_BYTES,
             PIPE_BUFFER_BYTES,
             0,
@@ -262,6 +263,9 @@ pub(crate) fn serve(
             )));
         }
 
+        // Keep another instance ready before returning the current request so
+        // consecutive CLI connections do not race the server's rebind.
+        let next_pipe = create_server_pipe(pipe_name)?;
         let mut stream = pipe.into_stream();
         let shutdown = if stopping.load(Ordering::SeqCst) {
             true
@@ -283,7 +287,7 @@ pub(crate) fn serve(
         if shutdown || stopping.load(Ordering::SeqCst) {
             break;
         }
-        pipe = create_server_pipe(pipe_name)?;
+        pipe = next_pipe;
     }
     Ok(())
 }

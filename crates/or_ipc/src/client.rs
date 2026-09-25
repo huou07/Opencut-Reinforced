@@ -4,6 +4,8 @@ use crate::protocol::{
     OR_LOCAL_IPC_PROTOCOL_VERSION, read_frame, write_frame,
 };
 use serde::Serialize;
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+use std::io::Write;
 use std::{fs::File, io::Read, path::Path};
 use uuid::Uuid;
 
