@@ -91,6 +91,9 @@ jobs:
       - name: Run project storage tests
         run: cargo test -p or_core --test project_storage
 
+      - name: Run project recovery tests
+        run: cargo test -p or_core --test project_recovery
+
       - name: Install Flutter 3.47.5
         run: |
           git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -192,6 +195,9 @@ jobs:
 
       - name: Run project storage tests
         run: cargo test -p or_core --test project_storage
+
+      - name: Run project recovery tests
+        run: cargo test -p or_core --test project_recovery
 
       - name: Install Flutter 3.47.5
         shell: pwsh

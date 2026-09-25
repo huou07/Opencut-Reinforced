@@ -3,6 +3,7 @@ use serde::Serialize;
 mod application;
 mod project;
 mod project_document;
+mod project_recovery;
 mod project_storage;
 mod time;
 
@@ -18,6 +19,12 @@ pub use project::{
 pub use project_document::{
     CURRENT_PROJECT_SCHEMA_VERSION, ProjectCodecError, ProjectDocument, decode_project,
     encode_project,
+};
+pub use project_recovery::{
+    CURRENT_RECOVERY_SCHEMA_VERSION, MAX_RECOVERY_FILE_BYTES, ProjectRecoveryError,
+    RecoveryApplyOutcome, RecoveryCandidate, RecoveryConflictReason, RecoveryInspection,
+    RecoveryMetadata, apply_project_recovery, discard_project_recovery, inspect_project_recovery,
+    write_recovery_checkpoint,
 };
 pub use project_storage::{
     MAX_PROJECT_FILE_BYTES, ProjectStorageError, TempFileOperation, load_project_file,

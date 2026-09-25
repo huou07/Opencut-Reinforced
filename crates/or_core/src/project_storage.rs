@@ -52,7 +52,16 @@ pub fn save_project_file_atomic(
         });
     }
 
-    let path = path.as_ref();
+    atomic_replace_bytes(path.as_ref(), encoded.as_bytes())
+}
+
+/// Atomically replaces a file with bytes using the shared storage durability boundary.
+///
+/// This stays crate-private so only the project and recovery storage APIs can use it.
+pub(crate) fn atomic_replace_bytes(
+    path: &Path,
+    contents: &[u8],
+) -> Result<(), ProjectStorageError> {
     let target_name = path.file_name().ok_or_else(|| {
         ProjectStorageError::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -62,7 +71,7 @@ pub fn save_project_file_atomic(
     let parent = parent_directory(path);
     let (temporary_path, file) = create_temporary_file(parent, target_name)?;
 
-    let write_result = write_temporary_file(file, encoded.as_bytes());
+    let write_result = write_temporary_file(file, contents);
     if let Err(error) = write_result {
         let _ = fs::remove_file(&temporary_path);
         return Err(error);
@@ -149,7 +158,7 @@ impl fmt::Display for TempFileOperation {
     }
 }
 
-fn parent_directory(path: &Path) -> &Path {
+pub(crate) fn parent_directory(path: &Path) -> &Path {
     path.parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
