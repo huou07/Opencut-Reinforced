@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, real local IPC, shared-host/attached-CLI parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge/lifecycle integration tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, real local IPC, shared-host/attached-CLI parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge/lifecycle integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe integration test. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -119,6 +119,17 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - The native UI test does not spawn an external CLI process from the sandboxed application. Process-level CLI parity is exercised by the Rust integration test outside the app sandbox.
 - Project creation uses the Rust no-clobber storage tests; project bytes are never decoded or written by Dart. Recovery inspection/apply/discard contracts remain covered by the Phase 4E2 Rust tests.
 
+## Current Phase 5A coverage
+
+- `MediaId` and `JobId`: UUIDv4 generation, canonical display/parse, serde round trips, and rejection of malformed and non-v4 IDs.
+- Exact duration parsing: `0`, whole seconds, decimal fractions, normalization, excess precision, invalid signs/text, and overflow. Rates cover `24/1`, `24000/1001`, `30000/1001`, zero values, invalid syntax, and overflow.
+- External JSON conversion: video-only, audio-only, combined streams, subtitle/other streams, missing optional fields, unknown external fields, malformed documents, invalid dimensions, invalid durations, and invalid optional frame rates/audio values.
+- OR metadata serde: stable round trip and rejection of zero dimensions or negative duration.
+- Probe process tests: missing executable, directory input, short injected timeout with child cleanup, oversized stdout and stderr, nonzero exit with bounded sanitized diagnostic, and a path containing spaces and Unicode.
+- CLI contracts: human and OR JSON output, Unicode input path, structured backend-unavailable and missing-file errors, and bounded probe-failure details.
+- Real integration: the hosted Linux Rust job generates a tiny video/audio Matroska file with CI-installed FFmpeg and probes it with the real `ffprobe`. The fixture is generated in a temporary directory and no media sample is committed. The integration test is ignored in the default local suite and is run explicitly on hosted Linux.
+- Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; the macOS bridge/lifecycle evidence comes from hosted CI.
+
 ## Test pyramid
 
 ### Rust domain and application unit tests
@@ -167,7 +178,7 @@ Property and invariant tests should cover:
 - Preview and export golden cases should verify the same edit semantics, while allowing different resolution, proxies, quality, scheduling, and encoders.
 - audio/video clock synchronization and seek behavior
 - export output verification for container, streams, duration, dimensions, and expected frames
-- media probing, decode, encode, and FFmpeg configuration checks
+- decode, encode, and packaged FFmpeg configuration checks; metadata-probe coverage is recorded under Phase 5A
 - platform-specific GPU and texture fallback coverage
 
 ### Data, platform, and security

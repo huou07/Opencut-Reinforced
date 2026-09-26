@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is in progress. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -107,13 +107,34 @@ Real project migrations remain future work when a later schema exists.
 Phase 4 is complete. Both the Flutter application and `or session serve` can host projects; one Rust `LiveProjectHost` shares a single session between direct typed bridge access and attached CLI requests. Android project file access still awaits SAF. Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, shared commands and queries, transactions and history, serialization, bounded filesystem persistence, recovery, local IPC, and semantic CLI operations while preserving control-plane/media-plane separation and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
 
 ### Phase 5 — Media foundation
-**Status: PLANNED**
+**Status: IN PROGRESS**
 
-- media import and probing
-- metadata
-- thumbnails and waveforms
-- shared job system
-- proxy and cache foundation
+Phase 5A — DONE:
+
+- typed UUIDv4 `MediaId` and `JobId`
+- bounded read-only local media probe with structured errors
+- validated format, duration, file-size, video, audio, and other-stream metadata
+- exact decimal duration and rational frame-rate parsing
+- external system-provided `ffprobe` metadata adapter; no linked or bundled FFmpeg
+- minimal `MediaProbe` job kind and lifecycle states, without a scheduler
+- `or media probe --file PATH` human and OR JSON output
+- tiny generated synthetic media fixture probed by hosted Linux CI
+
+Still not implemented:
+
+- project media library or media import mutation
+- media persistence in `.orproj`, schema v2, or v1-to-v2 migration
+- media picker or media library UI
+- thumbnails, waveforms, proxies, or cache database
+- job manager, scheduler, thread pool, priority, or backpressure system
+- timeline, decoder, playback, rendering, or export
+
+Phase 5B — NEXT:
+
+- project media library and real media import persistence
+- first `.orproj` schema migration if required
+- `media.add` / `media.remove` and media query
+- GUI / CLI parity for project media operations
 
 ### Phase 6 — Timeline MVP
 **Status: PLANNED**
@@ -198,4 +219,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete before Phase 5. The first Phase 5 checkpoint should establish a bounded media-ingest and metadata contract, with tiny legal fixtures and CLI-visible inspection, before thumbnails, waveforms, proxies, or timeline work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete, and Phase 5A has established bounded read-only media metadata inspection before project import, thumbnails, waveforms, proxies, or timeline work. Phase 5B is the next checkpoint for project media identity/persistence and a schema migration if required. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.

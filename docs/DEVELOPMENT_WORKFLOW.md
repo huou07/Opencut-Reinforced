@@ -2,9 +2,11 @@
 
 ## Status
 
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` v1 storage, recovery, local IPC, and semantic CLI operations. Phase 4UI-1 provides the Flutter visual shell; Phase 4UI-2 connects desktop create/open/save, explicit recovery, dirty-state guards, and Flutter-hosted IPC to one Rust live project host. Timeline and media behavior have not started. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` v1 storage, recovery, local IPC, and semantic CLI operations. Phase 4UI-1 provides the Flutter visual shell; Phase 4UI-2 connects desktop create/open/save, explicit recovery, dirty-state guards, and Flutter-hosted IPC to one Rust live project host. Phase 5A adds typed media/job identities, structured metadata, a bounded read-only local probe, and CLI inspection. Phase 5 is in progress; media import/persistence, timeline editing, decode, playback, and rendering remain future work. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
 
 Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
+
+Keep the Phase 5A media probe read-only: it accepts a local filesystem `Path`, returns validated metadata, and never creates a `MediaId`, opens or mutates a project, or increments `ProjectRevision`. The CLI requires a system-provided `ffprobe`. Do not add media persistence, import commands, or media UI as part of probe work; those belong to a later checkpoint.
 
 For project mutations, keep Flutter, headless, and attached CLI operations on the shared `ApplicationRequest` path. `LiveProjectHost` must own exactly one `ProjectFileSession`; its opaque Rust bridge handle and IPC server share the same state. Do not add a Dart-editable document or a second IPC-owned project session. Headless rename saves a changed result through exact-base checks; Flutter and attached rename/undo/redo leave the live session dirty until explicit save. The running Flutter application and developer/headless `or session serve` can each host a live project. Preserve recovery inspection and exact-disk-base conflict checks on every open/save path. Android project file access stays unavailable until SAF is implemented; never send content URIs to Rust path APIs.
 
@@ -29,7 +31,9 @@ For project mutations, keep Flutter, headless, and attached CLI operations on th
 17. **Commit one logical change.** Commit only a coherent change with no known-broken state. Use a clear Conventional Commit-style subject.
 18. **Open a focused pull request and pass CI.** External contributors use feature branches and pull requests. Explain what changed, why, architecture impact, tests, docs, and risks. CI must pass before merge. Early maintainer work may continue to fast-forward main pushes under repository policy.
 
-For Flutter project lifecycle changes, run both the fake-gateway widget tests and the native Rust-bridge lifecycle test. Verify attached CLI parity in a process-level test against the same `LiveProjectHost`; a sandboxed macOS UI integration process cannot launch an external CLI binary itself. Confirm that IPC protocol v1 remains unchanged and that the Flutter read model refreshes from Rust summaries after ordered events.
+For Flutter project lifecycle changes, run the fake-gateway widget tests and include the native Rust-bridge lifecycle test in hosted CI. Verify attached CLI parity in a process-level test against the same `LiveProjectHost`; a sandboxed macOS UI integration process cannot launch an external CLI binary itself. Confirm that IPC protocol v1 remains unchanged and that the Flutter read model refreshes from Rust summaries after ordered events.
+
+The real media-probe integration test runs on hosted Linux with CI-installed FFmpeg tooling and a generated synthetic fixture. Do not install FFmpeg locally or run this integration test locally as part of the Phase 5A verification path; the local Rust/CLI tests use a controlled probe helper.
 
 ### CI-first verification ladder
 

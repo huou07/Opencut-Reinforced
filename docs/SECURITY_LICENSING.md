@@ -34,6 +34,8 @@ This inventory covers direct dependencies, not every transitive crate or Dart pa
 
 FFmpeg's upstream states that most of the project is under LGPL version 2.1 or later, while optional GPL components can change the FFmpeg build's licensing posture. Enabled configure options and linked libraries matter. A packaged build must have a recorded configuration and source, dependency, codec, and redistribution review; do not infer the product's obligations from the name FFmpeg alone. [FFmpeg legal information](https://ffmpeg.org/legal.html)
 
+Phase 5A adds no FFmpeg production dependency: it neither links FFmpeg libraries nor bundles `ffmpeg`/`ffprobe`. The developer CLI invokes a system-provided `ffprobe`; `OR_FFPROBE_PATH` is an optional local tooling override and is not stored in a project or accepted through IPC. The path is passed as a direct process argument with no shell. Probe execution is limited to 15 seconds, stdout to 1 MiB, and stderr to 64 KiB; timeout, overflow, and read failures terminate and reap the child. External JSON is parsed as untrusted input, unknown fields are ignored, required OR values are validated, and the source path and arbitrary tags are omitted from `MediaMetadata`. CI installs FFmpeg only on its hosted Linux Rust runner to generate and inspect a tiny synthetic test file; this CI tool is not included in application or CLI release packages. Future FFmpeg linking or packaging still requires the license review above.
+
 This document does not determine patent or codec licensing obligations.
 
 ## AI code and model weights

@@ -4,11 +4,11 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP:** Phase 3, Phase 4A–4F, and Phase 4UI-1/4UI-2 are implemented. The desktop app creates and opens real projects, hosts one Rust-owned live session shared by the Flutter bridge and authenticated local IPC, and supports rename, undo/redo, explicit save, close, recovery decisions, and dirty-state protection. Android builds, but project New/Open remain unavailable until Storage Access Framework support is implemented. There is no autosave. Timeline and media editing have not started.
+**Pre-MVP:** Phase 3, Phase 4A–4F, Phase 4UI-1/4UI-2, and Phase 5A are implemented; Phase 5 is in progress. The desktop app creates and opens real projects, hosts one Rust-owned live session shared by the Flutter bridge and authenticated local IPC, and supports rename, undo/redo, explicit save, close, recovery decisions, and dirty-state protection. Phase 5A adds typed media/job identities, structured metadata, and a bounded read-only local-file probe through system-provided `ffprobe`, exposed as `or media probe`. Probing does not import media or mutate a project. Android builds, but project New/Open remain unavailable until Storage Access Framework support is implemented. There is no autosave, media library, timeline editing, decode, playback, rendering, or export.
 
-The repository contains a Rust core and CLI, project identity and revision, exact-time values, `.orproj` v1 storage, crash-recovery checkpoints, shared command/query/transaction contracts, session-local history, local IPC, and a typed Flutter-to-Rust bridge. Headless CLI operations use the core file session; attached CLI operations can connect to either the Flutter app or developer-run `or session serve` host through an explicit descriptor. The shell includes Home, Projects, Templates, Asset Library, Settings, and an explicitly non-functional Editor Shell Preview. OR is not a usable video editor.
+The repository contains a Rust core and CLI, project identity and revision, exact-time values, `.orproj` v1 storage, crash-recovery checkpoints, shared command/query/transaction contracts, session-local history, local IPC, a typed Flutter-to-Rust bridge, and the Phase 5A media probe foundation. The CLI probe returns OR-structured format, duration, file-size, and stream metadata; it requires a system-provided `ffprobe` and does not persist a `MediaId`. Headless project operations use the core file session; attached CLI operations can connect to either the Flutter app or developer-run `or session serve` host through an explicit descriptor. The shell includes Home, Projects, Templates, Asset Library, Settings, and an explicitly non-functional Editor Shell Preview. OR is not a usable video editor.
 
-Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for visual shell and architecture evaluation only. The interactive HTML prototype remains a frozen product and UX reference, not the final application or its production architecture.
+Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for native shell, project lifecycle, CLI, and architecture evaluation. The interactive HTML prototype remains a frozen product and UX reference, not the final application or its production architecture.
 
 ## Vision
 
@@ -28,7 +28,7 @@ The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFil
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-The project format has bounded filesystem load, race-safe no-clobber creation, and atomic save. `or_core` provides explicit crash-recovery checkpoint APIs and the desktop UI offers explicit recovery choices. Autosave, Android Storage Access Framework integration, timeline editing, media processing, rendering, FFmpeg, wgpu, and AI are not implemented.
+The project format has bounded filesystem load, race-safe no-clobber creation, and atomic save. `or_core` provides explicit crash-recovery checkpoint APIs and the desktop UI offers explicit recovery choices. Autosave, Android Storage Access Framework integration, media import and persistence, timeline editing, media decode/encode processing, FFmpeg library integration, rendering, wgpu, and AI are not implemented. Phase 5A uses only an external `ffprobe` process for metadata inspection; it is not bundled.
 
 ## Product direction
 
