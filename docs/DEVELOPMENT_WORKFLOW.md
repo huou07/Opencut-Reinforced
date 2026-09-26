@@ -33,10 +33,12 @@ For Flutter project lifecycle changes, run both the fake-gateway widget tests an
 
 ### CI-first verification ladder
 
+Local verification is headless by default. Do not launch the native OR application, platform emulator/simulator, or attached physical device locally for verification; do not run native Flutter integration tests that launch OR or open a built/downloaded Developer Preview. GitHub Actions is canonical for native/runtime evidence. If local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching it. This policy does not block local Rust/CLI/headless tests or Flutter format, analysis, and widget tests that do not launch a native application.
+
 1. Run repository hygiene, diff checks, formatting, and static/source checks locally.
 2. Run checks scoped to the affected package or subsystem, such as `cargo check -p or_core --all-targets`, plus relevant tests and linting where available.
 3. Attempt stronger workspace checks when useful; do not let an unrelated missing platform tool prevent source work.
-4. Classify each check as `PASS`, `FAIL`, or `LOCAL ENVIRONMENT BLOCKED`. Fix source/test failures. Use the blocked status only when local platform tooling prevented execution; never report it as passing.
+4. Classify each check as `PASS`, `FAIL`, `LOCAL ENVIRONMENT BLOCKED`, or `NOT RUN`. Use `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY` for a local native/runtime check intentionally skipped by policy. Use `LOCAL ENVIRONMENT BLOCKED` only when an actual missing or unconfigured local tool prevented execution; neither status is a pass.
 5. Push through normal Git and inspect the actual required GitHub Actions jobs for the commit. Hosted CI is canonical for platform/linker/native verification.
 6. Fix implementation failures and rerun relevant local checks before pushing a focused fix. Do not disable or weaken required workflows to get a green result.
 7. Complete only after required remote jobs pass. A local block with no equivalent remote result remains unverified and must be reported. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly asks for local platform development.

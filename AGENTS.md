@@ -5,7 +5,7 @@
 
 Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
 
-The project is in pre-MVP Phase 4 project/application foundation work. It has no timeline, media, or editor implementation yet.
+Phase 4's project/application foundation is complete. Phase 5 Media Foundation is in progress/planned; implement only the explicitly scoped checkpoint.
 
 Do not assume unfinished features already exist.
 
@@ -163,7 +163,7 @@ For documentation-only or local-tooling-only changes where an automated product 
 
 ## CI-first platform verification
 
-Use local machines for editing and available source checks; GitHub Actions is canonical for platform/native verification. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS` and `FAIL`, and require the corresponding remote check to pass. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [docs/TOOLING.md](docs/TOOLING.md).
+Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [docs/TOOLING.md](docs/TOOLING.md).
 
 ## Regression preservation rule
 
