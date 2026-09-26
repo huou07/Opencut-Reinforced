@@ -1,6 +1,7 @@
 use crate::{
-    AudioStreamMetadata, MediaMetadata, MediaStreamMetadata, OtherStreamMetadata, RationalRate,
-    RationalTime, VideoStreamMetadata, media::parse_decimal_duration,
+    AudioStreamMetadata, MAX_MEDIA_STREAMS, MediaMetadata, MediaStreamMetadata,
+    OtherStreamMetadata, RationalRate, RationalTime, VideoStreamMetadata,
+    media::parse_decimal_duration,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -402,6 +403,11 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
         .get("streams")
         .and_then(Value::as_array)
         .ok_or_else(|| MediaProbeError::new(MediaProbeErrorCode::InvalidProbeOutput))?;
+    if streams.len() > MAX_MEDIA_STREAMS {
+        return Err(MediaProbeError::new(
+            MediaProbeErrorCode::InvalidMediaMetadata,
+        ));
+    }
     let format = match root.get("format") {
         None | Some(Value::Null) => None,
         Some(Value::Object(format)) => Some(format),
@@ -474,12 +480,12 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
         parsed_streams.push(stream);
     }
 
-    Ok(MediaMetadata::from_probe(
-        format_names,
-        duration,
-        file_size_bytes,
-        parsed_streams,
-    ))
+    let metadata =
+        MediaMetadata::from_probe(format_names, duration, file_size_bytes, parsed_streams);
+    metadata
+        .validate()
+        .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::InvalidMediaMetadata))?;
+    Ok(metadata)
 }
 
 fn optional_string(

@@ -220,7 +220,7 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 1")
+            .contains("\"schema_version\": 2")
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {

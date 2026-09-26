@@ -1,10 +1,15 @@
-use crate::{ProjectId, ProjectRevision};
+use crate::{
+    AudioStreamMetadata, MAX_MEDIA_FORMAT_NAME_BYTES, MAX_MEDIA_FORMAT_NAMES,
+    MAX_MEDIA_SOURCE_URI_BYTES, MAX_MEDIA_STREAMS, MediaId, MediaItem, MediaMetadata,
+    MediaSourceRef, MediaStreamMetadata, OtherStreamMetadata, ProjectId, ProjectRevision,
+    RationalRate, RationalTime, VideoStreamMetadata,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{error::Error, fmt};
+use std::{collections::HashSet, error::Error, fmt, num::NonZeroU32};
 
 const PROJECT_FORMAT_MARKER: &str = "opencut-reinforced-project";
-pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 2;
 
 /// Canonical persistent state for a project.
 ///
@@ -14,6 +19,7 @@ pub struct ProjectDocument {
     id: ProjectId,
     revision: ProjectRevision,
     name: String,
+    media: Vec<MediaItem>,
 }
 
 impl ProjectDocument {
@@ -23,6 +29,7 @@ impl ProjectDocument {
             id: ProjectId::generate(),
             revision: ProjectRevision::INITIAL,
             name: name.into(),
+            media: Vec::new(),
         }
     }
 
@@ -38,6 +45,10 @@ impl ProjectDocument {
         &self.name
     }
 
+    pub fn media_items(&self) -> &[MediaItem] {
+        &self.media
+    }
+
     /// Applies the fully validated rename mutation from the application command path.
     pub(crate) fn rename_for_command(&mut self, name: String, revision: ProjectRevision) {
         self.name = name;
@@ -49,7 +60,30 @@ impl ProjectDocument {
             id: project.id,
             revision: project.revision,
             name: project.name,
+            media: Vec::new(),
         }
+    }
+
+    fn from_v2(project: ProjectStateV2) -> Result<Self, ProjectCodecError> {
+        let mut media = Vec::with_capacity(project.media.len());
+        for item in project.media {
+            let source = match item.source {
+                MediaSourceRefV2::LocalFile { uri } => {
+                    MediaSourceRef::local_file(uri).map_err(|_| ProjectCodecError::InvalidV2Data)?
+                }
+            };
+            media.push(
+                MediaItem::new(item.id, source, item.metadata.into_domain())
+                    .map_err(|_| ProjectCodecError::InvalidV2Data)?,
+            );
+        }
+        validate_media_library(&media)?;
+        Ok(Self {
+            id: project.id,
+            revision: project.revision,
+            name: project.name,
+            media,
+        })
     }
 }
 
@@ -67,6 +101,256 @@ struct ProjectStateV1 {
     id: ProjectId,
     revision: ProjectRevision,
     name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectFileV2 {
+    format: String,
+    schema_version: u32,
+    project: ProjectStateV2,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectStateV2 {
+    id: ProjectId,
+    revision: ProjectRevision,
+    name: String,
+    media: Vec<MediaItemV2>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaItemV2 {
+    id: MediaId,
+    source: MediaSourceRefV2,
+    metadata: MediaMetadataV2,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum MediaSourceRefV2 {
+    LocalFile {
+        #[serde(deserialize_with = "deserialize_media_uri")]
+        uri: String,
+    },
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaMetadataV2 {
+    #[serde(deserialize_with = "deserialize_v2_format_names")]
+    format_names: Vec<String>,
+    duration: Option<RationalTime>,
+    file_size_bytes: u64,
+    #[serde(deserialize_with = "deserialize_v2_streams")]
+    streams: Vec<MediaStreamMetadataV2>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "metadata",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+enum MediaStreamMetadataV2 {
+    Video(VideoStreamMetadataV2),
+    Audio(AudioStreamMetadataV2),
+    Other(OtherStreamMetadataV2),
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct VideoStreamMetadataV2 {
+    index: u32,
+    #[serde(deserialize_with = "crate::media::deserialize_codec_name")]
+    codec_name: Option<String>,
+    width: NonZeroU32,
+    height: NonZeroU32,
+    #[serde(deserialize_with = "crate::media::deserialize_pixel_format")]
+    pixel_format: Option<String>,
+    average_frame_rate: Option<RationalRate>,
+    duration: Option<RationalTime>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AudioStreamMetadataV2 {
+    index: u32,
+    #[serde(deserialize_with = "crate::media::deserialize_codec_name")]
+    codec_name: Option<String>,
+    sample_rate: Option<NonZeroU32>,
+    channels: Option<NonZeroU32>,
+    #[serde(deserialize_with = "crate::media::deserialize_channel_layout")]
+    channel_layout: Option<String>,
+    duration: Option<RationalTime>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OtherStreamMetadataV2 {
+    index: u32,
+    #[serde(deserialize_with = "crate::media::deserialize_codec_type")]
+    codec_type: Option<String>,
+    #[serde(deserialize_with = "crate::media::deserialize_codec_name")]
+    codec_name: Option<String>,
+}
+
+fn deserialize_media_uri<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let uri = String::deserialize(deserializer)?;
+    if uri.len() > MAX_MEDIA_SOURCE_URI_BYTES {
+        return Err(serde::de::Error::custom(
+            "media source URI exceeds byte limit",
+        ));
+    }
+    Ok(uri)
+}
+
+fn deserialize_v2_format_names<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let values = crate::media::deserialize_limited_vec(
+        deserializer,
+        MAX_MEDIA_FORMAT_NAMES,
+        "format names",
+    )?;
+    if values
+        .iter()
+        .any(|value: &String| value.len() > MAX_MEDIA_FORMAT_NAME_BYTES)
+    {
+        return Err(serde::de::Error::custom("format name exceeds byte limit"));
+    }
+    Ok(values)
+}
+
+fn deserialize_v2_streams<'de, D>(deserializer: D) -> Result<Vec<MediaStreamMetadataV2>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    crate::media::deserialize_limited_vec(deserializer, MAX_MEDIA_STREAMS, "media streams")
+}
+
+impl MediaMetadataV2 {
+    fn into_domain(self) -> MediaMetadata {
+        let streams = self
+            .streams
+            .into_iter()
+            .map(|stream| match stream {
+                MediaStreamMetadataV2::Video(stream) => {
+                    MediaStreamMetadata::Video(VideoStreamMetadata::from_probe(
+                        stream.index,
+                        stream.codec_name,
+                        stream.width,
+                        stream.height,
+                        stream.pixel_format,
+                        stream.average_frame_rate,
+                        stream.duration,
+                    ))
+                }
+                MediaStreamMetadataV2::Audio(stream) => {
+                    MediaStreamMetadata::Audio(AudioStreamMetadata::from_probe(
+                        stream.index,
+                        stream.codec_name,
+                        stream.sample_rate,
+                        stream.channels,
+                        stream.channel_layout,
+                        stream.duration,
+                    ))
+                }
+                MediaStreamMetadataV2::Other(stream) => {
+                    MediaStreamMetadata::Other(OtherStreamMetadata::from_probe(
+                        stream.index,
+                        stream.codec_type,
+                        stream.codec_name,
+                    ))
+                }
+            })
+            .collect();
+        MediaMetadata::from_probe(
+            self.format_names,
+            self.duration,
+            self.file_size_bytes,
+            streams,
+        )
+    }
+}
+
+impl From<&MediaMetadata> for MediaMetadataV2 {
+    fn from(metadata: &MediaMetadata) -> Self {
+        let streams = metadata
+            .streams()
+            .iter()
+            .map(|stream| match stream {
+                MediaStreamMetadata::Video(stream) => {
+                    MediaStreamMetadataV2::Video(VideoStreamMetadataV2 {
+                        index: stream.index(),
+                        codec_name: stream.codec_name().map(str::to_owned),
+                        width: NonZeroU32::new(stream.width()).expect("validated video width"),
+                        height: NonZeroU32::new(stream.height()).expect("validated video height"),
+                        pixel_format: stream.pixel_format().map(str::to_owned),
+                        average_frame_rate: stream.average_frame_rate(),
+                        duration: stream.duration(),
+                    })
+                }
+                MediaStreamMetadata::Audio(stream) => {
+                    MediaStreamMetadataV2::Audio(AudioStreamMetadataV2 {
+                        index: stream.index(),
+                        codec_name: stream.codec_name().map(str::to_owned),
+                        sample_rate: stream.sample_rate().and_then(NonZeroU32::new),
+                        channels: stream.channels().and_then(NonZeroU32::new),
+                        channel_layout: stream.channel_layout().map(str::to_owned),
+                        duration: stream.duration(),
+                    })
+                }
+                MediaStreamMetadata::Other(stream) => {
+                    MediaStreamMetadataV2::Other(OtherStreamMetadataV2 {
+                        index: stream.index(),
+                        codec_type: stream.codec_type().map(str::to_owned),
+                        codec_name: stream.codec_name().map(str::to_owned),
+                    })
+                }
+            })
+            .collect();
+        Self {
+            format_names: metadata.format_names().to_vec(),
+            duration: metadata.duration(),
+            file_size_bytes: metadata.file_size_bytes(),
+            streams,
+        }
+    }
+}
+
+impl From<&ProjectDocument> for ProjectFileV2 {
+    fn from(document: &ProjectDocument) -> Self {
+        Self {
+            format: PROJECT_FORMAT_MARKER.to_owned(),
+            schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
+            project: ProjectStateV2 {
+                id: document.id,
+                revision: document.revision,
+                name: document.name.clone(),
+                media: document
+                    .media
+                    .iter()
+                    .map(|item| MediaItemV2 {
+                        id: item.id(),
+                        source: match item.source() {
+                            MediaSourceRef::LocalFile { uri } => MediaSourceRefV2::LocalFile {
+                                uri: uri.as_str().to_owned(),
+                            },
+                        },
+                        metadata: MediaMetadataV2::from(item.metadata()),
+                    })
+                    .collect(),
+            },
+        }
+    }
 }
 
 impl From<&ProjectDocument> for ProjectFileV1 {
@@ -92,6 +376,7 @@ pub enum ProjectCodecError {
     InvalidSchemaVersion,
     UnsupportedSchemaVersion(u64),
     InvalidV1Data,
+    InvalidV2Data,
     SerializationFailure,
 }
 
@@ -115,6 +400,7 @@ impl fmt::Display for ProjectCodecError {
                 )
             }
             Self::InvalidV1Data => formatter.write_str("project schema version 1 data is invalid"),
+            Self::InvalidV2Data => formatter.write_str("project schema version 2 data is invalid"),
             Self::SerializationFailure => {
                 formatter.write_str("project document could not be serialized")
             }
@@ -126,7 +412,8 @@ impl Error for ProjectCodecError {}
 
 /// Encodes canonical project state as readable UTF-8 JSON with a trailing newline.
 pub fn encode_project(document: &ProjectDocument) -> Result<String, ProjectCodecError> {
-    let mut encoded = serde_json::to_string_pretty(&ProjectFileV1::from(document))
+    validate_media_library(&document.media)?;
+    let mut encoded = serde_json::to_string_pretty(&ProjectFileV2::from(document))
         .map_err(|_| ProjectCodecError::SerializationFailure)?;
     encoded.push('\n');
     Ok(encoded)
@@ -152,13 +439,33 @@ pub fn decode_project(encoded: &str) -> Result<ProjectDocument, ProjectCodecErro
         .get("schema_version")
         .and_then(Value::as_u64)
         .ok_or(ProjectCodecError::InvalidSchemaVersion)?;
-    if schema_version != u64::from(CURRENT_PROJECT_SCHEMA_VERSION) {
-        return Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version));
+    match schema_version {
+        1 => {
+            let file: ProjectFileV1 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV1Data)?;
+            Ok(ProjectDocument::from_v1(file.project))
+        }
+        2 => {
+            let file: ProjectFileV2 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV2Data)?;
+            ProjectDocument::from_v2(file.project)
+        }
+        _ => Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version)),
     }
+}
 
-    let file: ProjectFileV1 =
-        serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV1Data)?;
-    Ok(ProjectDocument::from_v1(file.project))
+fn validate_media_library(media: &[MediaItem]) -> Result<(), ProjectCodecError> {
+    let mut ids = HashSet::with_capacity(media.len());
+    let mut sources = HashSet::with_capacity(media.len());
+    for item in media {
+        item.metadata()
+            .validate()
+            .map_err(|_| ProjectCodecError::InvalidV2Data)?;
+        if !ids.insert(item.id()) || !sources.insert(item.source().uri()) {
+            return Err(ProjectCodecError::InvalidV2Data);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -167,7 +474,10 @@ mod tests {
         CURRENT_PROJECT_SCHEMA_VERSION, ProjectCodecError, ProjectDocument, decode_project,
         encode_project,
     };
-    use crate::{ProjectId, ProjectInstanceId, ProjectRevision};
+    use crate::{
+        MediaId, MediaItem, MediaMetadata, MediaSourceRef, ProjectId, ProjectInstanceId,
+        ProjectRevision, RationalTime,
+    };
     use serde_json::{Value, json};
     use std::str::FromStr;
 
@@ -179,6 +489,7 @@ mod tests {
             id: ProjectId::from_str(PROJECT_ID).unwrap(),
             revision: ProjectRevision::INITIAL,
             name: "Example".to_owned(),
+            media: Vec::new(),
         }
     }
 
@@ -198,7 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn project_round_trips_through_v1_json_without_changing_revision() {
+    fn project_round_trips_through_v2_json_without_changing_revision() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let decoded = decode_project(&encoded).unwrap();
@@ -209,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn encoding_uses_the_v1_envelope_and_a_trailing_newline() {
+    fn encoding_uses_the_v2_envelope_and_a_trailing_newline() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
@@ -218,16 +529,17 @@ mod tests {
             value,
             json!({
                 "format": "opencut-reinforced-project",
-                "schema_version": 1,
+                "schema_version": 2,
                 "project": {
                     "id": project.id().to_string(),
                     "revision": 0,
-                    "name": "Example"
+                    "name": "Example",
+                    "media": []
                 }
             })
         );
         assert!(encoded.ends_with('\n'));
-        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 1);
+        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 2);
     }
 
     #[test]
@@ -261,14 +573,150 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_schema_version_is_rejected_before_v1_parsing() {
+    fn unsupported_schema_version_is_rejected() {
         let input = encoded_project_with_revision("0")
-            .replace("\"schema_version\":1", "\"schema_version\":2");
+            .replace("\"schema_version\":1", "\"schema_version\":3");
 
         assert_eq!(
             decode_project(&input),
-            Err(ProjectCodecError::UnsupportedSchemaVersion(2))
+            Err(ProjectCodecError::UnsupportedSchemaVersion(3))
         );
+    }
+
+    #[test]
+    fn v1_migration_preserves_identity_revision_and_name_then_encodes_v2() {
+        let migrated = decode_project(&encoded_project_with_revision("7")).unwrap();
+        assert_eq!(migrated.id().to_string(), PROJECT_ID);
+        assert_eq!(migrated.revision(), ProjectRevision::new(7));
+        assert_eq!(migrated.name(), "Example");
+        assert!(migrated.media_items().is_empty());
+
+        let encoded = encode_project(&migrated).unwrap();
+        let value: Value = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["project"]["revision"], 7);
+    }
+
+    #[test]
+    fn v2_round_trip_preserves_media_identity_metadata_and_insertion_order() {
+        let mut project = fixed_project();
+        let first = test_media_item(
+            "22222222-2222-4222-8222-222222222222",
+            "file:///tmp/a%20clip.mkv",
+        );
+        let second = test_media_item("33333333-3333-4333-8333-333333333333", "file:///tmp/b.mkv");
+        project.media = vec![first.clone(), second.clone()];
+
+        let decoded = decode_project(&encode_project(&project).unwrap()).unwrap();
+        assert_eq!(decoded, project);
+        assert_eq!(decoded.media_items(), &[first, second]);
+    }
+
+    #[test]
+    fn v2_rejects_unknown_fields_bad_ids_duplicate_ids_and_duplicate_sources() {
+        let item = v2_item_json("22222222-2222-4222-8222-222222222222", "file:///tmp/a.mkv");
+        let duplicate_id =
+            v2_item_json("22222222-2222-4222-8222-222222222222", "file:///tmp/b.mkv");
+        let duplicate_source =
+            v2_item_json("33333333-3333-4333-8333-333333333333", "file:///tmp/a.mkv");
+        let cases = [
+            v2_json(&item, "\"unexpected\":true,"),
+            v2_json(&item, "").replace(
+                "\"name\":\"Example\"",
+                "\"name\":\"Example\",\"unexpected\":true",
+            ),
+            v2_json(&item, "").replace("\"media\":[{", "\"media\":[{\"unexpected\":true,"),
+            v2_json(&item, "").replace("file:///tmp/a.mkv", "https://example.com/a.mkv"),
+            v2_json(&item, "").replace(
+                "22222222-2222-4222-8222-222222222222",
+                "00000000-0000-0000-0000-000000000000",
+            ),
+            v2_json(&format!("{item},{duplicate_id}"), ""),
+            v2_json(&format!("{item},{duplicate_source}"), ""),
+            v2_json(&item, "").replace(
+                "\"uri\":\"file:///tmp/a.mkv\"",
+                "\"uri\":\"file:///tmp/a.mkv\",\"unexpected\":true",
+            ),
+            v2_json(&item, "").replace(
+                "\"format_names\":[]",
+                &format!("\"format_names\":[\"{}\"]", "x".repeat(257)),
+            ),
+        ];
+        for input in cases {
+            assert_eq!(
+                decode_project(&input),
+                Err(ProjectCodecError::InvalidV2Data)
+            );
+        }
+    }
+
+    #[test]
+    fn v2_rejects_oversized_uri_and_excessive_metadata_collections() {
+        let oversized_uri = format!("file:///{}", "a".repeat(crate::MAX_MEDIA_SOURCE_URI_BYTES));
+        let input = v2_json(
+            &v2_item_json("22222222-2222-4222-8222-222222222222", &oversized_uri),
+            "",
+        );
+        assert_eq!(
+            decode_project(&input),
+            Err(ProjectCodecError::InvalidV2Data)
+        );
+
+        let too_many_formats =
+            serde_json::to_string(&vec!["matroska"; crate::MAX_MEDIA_FORMAT_NAMES + 1]).unwrap();
+        let input = v2_json(
+            &v2_item_json("22222222-2222-4222-8222-222222222222", "file:///tmp/a.mkv").replace(
+                "\"format_names\":[]",
+                &format!("\"format_names\":{too_many_formats}"),
+            ),
+            "",
+        );
+        assert_eq!(
+            decode_project(&input),
+            Err(ProjectCodecError::InvalidV2Data)
+        );
+
+        let stream = json!({
+            "kind": "other",
+            "metadata": { "index": 0, "codec_type": null, "codec_name": null }
+        });
+        let too_many_streams =
+            serde_json::to_string(&vec![stream; crate::MAX_MEDIA_STREAMS + 1]).unwrap();
+        let input = v2_json(
+            &v2_item_json("22222222-2222-4222-8222-222222222222", "file:///tmp/a.mkv")
+                .replace("\"streams\":[]", &format!("\"streams\":{too_many_streams}")),
+            "",
+        );
+        assert_eq!(
+            decode_project(&input),
+            Err(ProjectCodecError::InvalidV2Data)
+        );
+    }
+
+    fn test_media_item(id: &str, uri: &str) -> MediaItem {
+        let id = MediaId::from_str(id).unwrap();
+        let source = MediaSourceRef::local_file(uri).unwrap();
+        let metadata = MediaMetadata::from_probe(
+            vec!["matroska".to_owned()],
+            Some(RationalTime::new(3, 2).unwrap()),
+            1024,
+            Vec::new(),
+        );
+        MediaItem::new(id, source, metadata).unwrap()
+    }
+
+    fn v2_item_json(id: &str, uri: &str) -> String {
+        serde_json::to_string(&json!({
+            "id": id,
+            "source": { "kind": "local_file", "uri": uri },
+            "metadata": { "format_names": [], "duration": null, "file_size_bytes": 0, "streams": [] }
+        })).unwrap()
+    }
+
+    fn v2_json(media_items: &str, extra_root: &str) -> String {
+        format!(
+            r#"{{"format":"opencut-reinforced-project","schema_version":2,{extra_root}"project":{{"id":"{PROJECT_ID}","revision":7,"name":"Example","media":[{media_items}]}}}}"#
+        )
     }
 
     #[test]

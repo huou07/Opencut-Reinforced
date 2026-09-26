@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn create_new_writes_a_v1_project_with_fresh_identity_and_empty_history() {
+    fn create_new_writes_a_v2_project_with_fresh_identity_and_empty_history() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
 
@@ -266,6 +266,32 @@ mod tests {
                 arguments: serde_json::json!({}),
             }));
         assert!(matches!(undo, ApplicationResponse::Error(_)));
+    }
+
+    #[test]
+    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v2_without_revision_change() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let legacy = format!(
+            r#"{{"format":"opencut-reinforced-project","schema_version":1,"project":{{"id":"{PROJECT_ID}","revision":7,"name":"Legacy"}}}}"#
+        );
+        std::fs::write(&path, &legacy).unwrap();
+
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        assert!(!session.is_dirty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), legacy);
+        assert_eq!(
+            session.session().project_revision(),
+            ProjectRevision::new(7)
+        );
+        assert!(session.session().project().media_items().is_empty());
+
+        session.save().unwrap();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(encoded["schema_version"], 2);
+        assert_eq!(encoded["project"]["revision"], 7);
+        assert!(!session.is_dirty());
     }
 
     #[test]

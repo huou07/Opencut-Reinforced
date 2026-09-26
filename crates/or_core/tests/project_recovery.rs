@@ -78,6 +78,13 @@ fn recovery_wire(base: &ProjectDocument, recovery: &ProjectDocument) -> Value {
     })
 }
 
+fn v1_project_value(project: &ProjectDocument) -> Value {
+    let mut value: Value = serde_json::from_str(&encode_project(project).unwrap()).unwrap();
+    value["schema_version"] = json!(1);
+    value["project"].as_object_mut().unwrap().remove("media");
+    value
+}
+
 fn write_raw_recovery(project_path: &Path, value: &Value) {
     fs::write(
         recovery_path(project_path),
@@ -147,6 +154,41 @@ fn valid_checkpoint_inspects_candidate_with_metadata_and_recovered_document() {
         wire["recovery_project"]["format"],
         "opencut-reinforced-project"
     );
+}
+
+#[test]
+fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v2() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let base = ProjectDocument::new("Legacy base");
+    let mut recovery_value = v1_project_value(&base);
+    recovery_value["project"]["revision"] = json!(base.revision().value() + 1);
+    recovery_value["project"]["name"] = json!("Recovered legacy");
+    let recovery = decode_project(&serde_json::to_string(&recovery_value).unwrap()).unwrap();
+    fs::write(&path, serde_json::to_vec(&v1_project_value(&base)).unwrap()).unwrap();
+    write_raw_recovery(
+        &path,
+        &json!({
+            "format": "opencut-reinforced-recovery",
+            "schema_version": 1,
+            "base_project": v1_project_value(&base),
+            "recovery_project": recovery_value,
+        }),
+    );
+
+    let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
+        panic!("expected the legacy recovery candidate to remain readable");
+    };
+    assert_eq!(candidate.recovery_project(), &recovery);
+    assert!(matches!(
+        apply_project_recovery(&path).unwrap(),
+        RecoveryApplyOutcome::AppliedAndCleaned
+    ));
+    let applied = load_project_file(&path).unwrap();
+    assert_eq!(applied.revision(), ProjectRevision::new(1));
+    assert_eq!(applied.name(), "Recovered legacy");
+    let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(encoded["schema_version"], 2);
 }
 
 #[test]

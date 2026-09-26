@@ -1714,7 +1714,7 @@ mod tests {
     }
 
     #[test]
-    fn grouped_transaction_persists_only_canonical_state_through_orproj_v1() {
+    fn grouped_transaction_persists_only_canonical_state_through_orproj_v2() {
         let mut session = fixed_session();
         session
             .execute_transaction(transaction(vec![rename_call("B"), rename_call("C")], 0))

@@ -1,11 +1,23 @@
 use crate::{RationalRate, RationalTime, UuidV4ParseError};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{SeqAccess, Visitor},
+};
 use std::{fmt, num::NonZeroU32, str::FromStr};
+use url::Url;
 use uuid::{Uuid, Version};
 
 const MAX_DECIMAL_FRACTION_DIGITS: usize = 9;
+pub const MAX_MEDIA_SOURCE_URI_BYTES: usize = 8192;
+pub const MAX_MEDIA_FORMAT_NAMES: usize = 32;
+pub const MAX_MEDIA_FORMAT_NAME_BYTES: usize = 256;
+pub const MAX_MEDIA_STREAMS: usize = 4096;
+pub const MAX_MEDIA_CODEC_NAME_BYTES: usize = 256;
+pub const MAX_MEDIA_CODEC_TYPE_BYTES: usize = 128;
+pub const MAX_MEDIA_PIXEL_FORMAT_BYTES: usize = 128;
+pub const MAX_MEDIA_CHANNEL_LAYOUT_BYTES: usize = 256;
 
-/// Opaque persistent UUIDv4 identity for a future imported media item.
+/// Opaque persistent UUIDv4 identity for an imported project media item.
 ///
 /// Probing a file does not create or assign a `MediaId`.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
@@ -46,6 +58,147 @@ impl<'de> Deserialize<'de> for MediaId {
     }
 }
 
+/// A validated file URI for a local project media source.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct MediaSourceUri(String);
+
+impl MediaSourceUri {
+    pub fn parse(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
+        let uri = uri.as_ref();
+        if uri.len() > MAX_MEDIA_SOURCE_URI_BYTES {
+            return Err(MediaSourceUriError::TooLong);
+        }
+        let parsed = Url::parse(uri).map_err(|_| MediaSourceUriError::Invalid)?;
+        if uri != parsed.as_str()
+            || !has_valid_percent_escapes(uri)
+            || parsed.scheme() != "file"
+            || parsed.cannot_be_a_base()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.port().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+            || parsed
+                .host_str()
+                .is_some_and(|host| !host.is_empty() && !host.eq_ignore_ascii_case("localhost"))
+            || parsed.to_file_path().is_err()
+        {
+            return Err(MediaSourceUriError::Invalid);
+        }
+        let normalized = parsed.as_str().to_owned();
+        if normalized.len() > MAX_MEDIA_SOURCE_URI_BYTES {
+            return Err(MediaSourceUriError::TooLong);
+        }
+        Ok(Self(normalized))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn has_valid_percent_escapes(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len()
+                || !bytes[index + 1].is_ascii_hexdigit()
+                || !bytes[index + 2].is_ascii_hexdigit()
+            {
+                return false;
+            }
+            index += 3;
+        } else {
+            index += 1;
+        }
+    }
+    true
+}
+
+impl<'de> Deserialize<'de> for MediaSourceUri {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let uri = String::deserialize(deserializer)?;
+        Self::parse(uri).map_err(serde::de::Error::custom)
+    }
+}
+
+/// A media source reference persisted in a project.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum MediaSourceRef {
+    LocalFile { uri: MediaSourceUri },
+}
+
+impl MediaSourceRef {
+    pub fn local_file(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
+        MediaSourceUri::parse(uri).map(|uri| Self::LocalFile { uri })
+    }
+
+    pub fn uri(&self) -> &str {
+        match self {
+            Self::LocalFile { uri } => uri.as_str(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaSourceUriError {
+    Invalid,
+    TooLong,
+}
+
+impl fmt::Display for MediaSourceUriError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Invalid => "media source must be a valid local file URI",
+            Self::TooLong => "media source URI exceeds the configured byte limit",
+        })
+    }
+}
+
+impl std::error::Error for MediaSourceUriError {}
+
+/// One persistent item in the project's ordered media library.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MediaItem {
+    id: MediaId,
+    source: MediaSourceRef,
+    metadata: MediaMetadata,
+}
+
+impl MediaItem {
+    pub fn new(
+        id: MediaId,
+        source: MediaSourceRef,
+        metadata: MediaMetadata,
+    ) -> Result<Self, MediaMetadataValidationError> {
+        metadata.validate()?;
+        Ok(Self {
+            id,
+            source,
+            metadata,
+        })
+    }
+
+    pub const fn id(&self) -> MediaId {
+        self.id
+    }
+
+    pub fn source(&self) -> &MediaSourceRef {
+        &self.source
+    }
+
+    pub fn metadata(&self) -> &MediaMetadata {
+        &self.metadata
+    }
+}
+
 fn validate_v4(uuid: Uuid) -> Result<Uuid, UuidV4ParseError> {
     if uuid.get_version() == Some(Version::Random) {
         Ok(uuid)
@@ -57,11 +210,10 @@ fn validate_v4(uuid: Uuid) -> Result<Uuid, UuidV4ParseError> {
 /// Control-plane metadata returned by a read-only local media probe.
 ///
 /// The source path and arbitrary container tags are intentionally omitted.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MediaMetadata {
     format_names: Vec<String>,
-    #[serde(default, deserialize_with = "deserialize_nonnegative_duration")]
     duration: Option<RationalTime>,
     file_size_bytes: u64,
     streams: Vec<MediaStreamMetadata>,
@@ -97,10 +249,230 @@ impl MediaMetadata {
     pub fn streams(&self) -> &[MediaStreamMetadata] {
         &self.streams
     }
+
+    pub fn validate(&self) -> Result<(), MediaMetadataValidationError> {
+        if self.format_names.len() > MAX_MEDIA_FORMAT_NAMES
+            || self
+                .format_names
+                .iter()
+                .any(|value| value.len() > MAX_MEDIA_FORMAT_NAME_BYTES)
+            || self.streams.len() > MAX_MEDIA_STREAMS
+            || self.duration.is_some_and(RationalTime::is_negative)
+        {
+            return Err(MediaMetadataValidationError::Invalid);
+        }
+        for stream in &self.streams {
+            let valid = match stream {
+                MediaStreamMetadata::Video(stream) => {
+                    bounded_optional(stream.codec_name.as_deref(), MAX_MEDIA_CODEC_NAME_BYTES)
+                        && bounded_optional(
+                            stream.pixel_format.as_deref(),
+                            MAX_MEDIA_PIXEL_FORMAT_BYTES,
+                        )
+                        && stream.duration.is_none_or(|time| !time.is_negative())
+                }
+                MediaStreamMetadata::Audio(stream) => {
+                    bounded_optional(stream.codec_name.as_deref(), MAX_MEDIA_CODEC_NAME_BYTES)
+                        && bounded_optional(
+                            stream.channel_layout.as_deref(),
+                            MAX_MEDIA_CHANNEL_LAYOUT_BYTES,
+                        )
+                        && stream.duration.is_none_or(|time| !time.is_negative())
+                }
+                MediaStreamMetadata::Other(stream) => {
+                    bounded_optional(stream.codec_name.as_deref(), MAX_MEDIA_CODEC_NAME_BYTES)
+                        && bounded_optional(
+                            stream.codec_type.as_deref(),
+                            MAX_MEDIA_CODEC_TYPE_BYTES,
+                        )
+                }
+            };
+            if !valid {
+                return Err(MediaMetadataValidationError::Invalid);
+            }
+        }
+        Ok(())
+    }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaMetadataRepr {
+    #[serde(deserialize_with = "deserialize_bounded_format_names")]
+    format_names: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_nonnegative_duration")]
+    duration: Option<RationalTime>,
+    file_size_bytes: u64,
+    #[serde(deserialize_with = "deserialize_bounded_streams")]
+    streams: Vec<MediaStreamMetadata>,
+}
+
+impl<'de> Deserialize<'de> for MediaMetadata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let repr = MediaMetadataRepr::deserialize(deserializer)?;
+        let metadata = Self {
+            format_names: repr.format_names,
+            duration: repr.duration,
+            file_size_bytes: repr.file_size_bytes,
+            streams: repr.streams,
+        };
+        metadata.validate().map_err(serde::de::Error::custom)?;
+        Ok(metadata)
+    }
+}
+
+fn deserialize_bounded_format_names<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let values: Vec<String> =
+        deserialize_limited_vec(deserializer, MAX_MEDIA_FORMAT_NAMES, "format names")?;
+    if values
+        .iter()
+        .any(|value| value.len() > MAX_MEDIA_FORMAT_NAME_BYTES)
+    {
+        return Err(serde::de::Error::custom(
+            "format names exceed media metadata limits",
+        ));
+    }
+    Ok(values)
+}
+
+fn deserialize_bounded_streams<'de, D>(
+    deserializer: D,
+) -> Result<Vec<MediaStreamMetadata>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_limited_vec(deserializer, MAX_MEDIA_STREAMS, "media streams")
+}
+
+pub(crate) fn deserialize_limited_vec<'de, D, T>(
+    deserializer: D,
+    max_items: usize,
+    label: &'static str,
+) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    struct LimitedVecVisitor<T> {
+        max_items: usize,
+        label: &'static str,
+        marker: std::marker::PhantomData<T>,
+    }
+
+    impl<'de, T: Deserialize<'de>> Visitor<'de> for LimitedVecVisitor<T> {
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "at most {} {}", self.max_items, self.label)
+        }
+
+        fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let capacity = sequence.size_hint().unwrap_or(0).min(self.max_items);
+            let mut values = Vec::with_capacity(capacity);
+            while let Some(value) = sequence.next_element()? {
+                if values.len() == self.max_items {
+                    return Err(serde::de::Error::custom(format!(
+                        "{} exceed configured limit",
+                        self.label
+                    )));
+                }
+                values.push(value);
+            }
+            Ok(values)
+        }
+    }
+
+    deserializer.deserialize_seq(LimitedVecVisitor {
+        max_items,
+        label,
+        marker: std::marker::PhantomData,
+    })
+}
+
+pub(crate) fn deserialize_codec_name<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_optional_string(deserializer, MAX_MEDIA_CODEC_NAME_BYTES, "codec name")
+}
+
+pub(crate) fn deserialize_codec_type<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_optional_string(deserializer, MAX_MEDIA_CODEC_TYPE_BYTES, "codec type")
+}
+
+pub(crate) fn deserialize_pixel_format<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_optional_string(deserializer, MAX_MEDIA_PIXEL_FORMAT_BYTES, "pixel format")
+}
+
+pub(crate) fn deserialize_channel_layout<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_optional_string(
+        deserializer,
+        MAX_MEDIA_CHANNEL_LAYOUT_BYTES,
+        "channel layout",
+    )
+}
+
+fn deserialize_bounded_optional_string<'de, D>(
+    deserializer: D,
+    max_bytes: usize,
+    label: &'static str,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    if value.as_ref().is_some_and(|value| value.len() > max_bytes) {
+        return Err(serde::de::Error::custom(format!(
+            "{label} exceeds configured byte limit"
+        )));
+    }
+    Ok(value)
+}
+
+fn bounded_optional(value: Option<&str>, max_bytes: usize) -> bool {
+    value.is_none_or(|value| value.len() <= max_bytes)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaMetadataValidationError {
+    Invalid,
+}
+
+impl fmt::Display for MediaMetadataValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("media metadata is invalid or exceeds a configured bound")
+    }
+}
+
+impl std::error::Error for MediaMetadataValidationError {}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "metadata", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "metadata",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum MediaStreamMetadata {
     Video(VideoStreamMetadata),
     Audio(AudioStreamMetadata),
@@ -121,9 +493,11 @@ impl MediaStreamMetadata {
 #[serde(deny_unknown_fields)]
 pub struct VideoStreamMetadata {
     index: u32,
+    #[serde(deserialize_with = "deserialize_codec_name")]
     codec_name: Option<String>,
     width: NonZeroU32,
     height: NonZeroU32,
+    #[serde(deserialize_with = "deserialize_pixel_format")]
     pixel_format: Option<String>,
     average_frame_rate: Option<RationalRate>,
     #[serde(default, deserialize_with = "deserialize_nonnegative_duration")]
@@ -184,9 +558,11 @@ impl VideoStreamMetadata {
 #[serde(deny_unknown_fields)]
 pub struct AudioStreamMetadata {
     index: u32,
+    #[serde(deserialize_with = "deserialize_codec_name")]
     codec_name: Option<String>,
     sample_rate: Option<NonZeroU32>,
     channels: Option<NonZeroU32>,
+    #[serde(deserialize_with = "deserialize_channel_layout")]
     channel_layout: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonnegative_duration")]
     duration: Option<RationalTime>,
@@ -240,7 +616,9 @@ impl AudioStreamMetadata {
 #[serde(deny_unknown_fields)]
 pub struct OtherStreamMetadata {
     index: u32,
+    #[serde(deserialize_with = "deserialize_codec_type")]
     codec_type: Option<String>,
+    #[serde(deserialize_with = "deserialize_codec_name")]
     codec_name: Option<String>,
 }
 
@@ -330,8 +708,12 @@ pub(crate) enum DecimalDurationError {
 #[cfg(test)]
 mod tests {
     use super::{
-        AudioStreamMetadata, DecimalDurationError, MediaId, MediaMetadata, MediaStreamMetadata,
-        OtherStreamMetadata, VideoStreamMetadata, parse_decimal_duration,
+        AudioStreamMetadata, DecimalDurationError, MAX_MEDIA_CHANNEL_LAYOUT_BYTES,
+        MAX_MEDIA_CODEC_NAME_BYTES, MAX_MEDIA_CODEC_TYPE_BYTES, MAX_MEDIA_FORMAT_NAME_BYTES,
+        MAX_MEDIA_FORMAT_NAMES, MAX_MEDIA_PIXEL_FORMAT_BYTES, MAX_MEDIA_SOURCE_URI_BYTES,
+        MAX_MEDIA_STREAMS, MediaId, MediaMetadata, MediaSourceRef, MediaSourceUri,
+        MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata, VideoStreamMetadata,
+        parse_decimal_duration,
     };
     use crate::{RationalRate, RationalTime};
     use std::{num::NonZeroU32, str::FromStr};
@@ -357,6 +739,30 @@ mod tests {
         assert!(MediaId::from_str("not-a-uuid").is_err());
         assert!(
             serde_json::from_str::<MediaId>("\"00000000-0000-0000-0000-000000000001\"").is_err()
+        );
+    }
+
+    #[test]
+    fn source_uri_accepts_local_file_uris_and_rejects_other_or_unbounded_sources() {
+        let source = MediaSourceRef::local_file("file:///tmp/a%20clip.mkv").unwrap();
+        assert_eq!(source.uri(), "file:///tmp/a%20clip.mkv");
+        for uri in [
+            "https://example.com/video.mkv",
+            "file://remote.example/video.mkv",
+            "file:///tmp/video.mkv?download=1",
+            "file:///tmp/video.mkv#fragment",
+            "file:///tmp/%ZZ.mkv",
+        ] {
+            assert_eq!(
+                MediaSourceUri::parse(uri),
+                Err(MediaSourceUriError::Invalid),
+                "{uri}"
+            );
+        }
+        let long = format!("file:///{}", "a".repeat(MAX_MEDIA_SOURCE_URI_BYTES));
+        assert_eq!(
+            MediaSourceUri::parse(long),
+            Err(MediaSourceUriError::TooLong)
         );
     }
 
@@ -440,5 +846,91 @@ mod tests {
 
         let negative_duration = r#"{"format_names":[],"duration":{"numerator":-1,"denominator":1},"file_size_bytes":0,"streams":[]}"#;
         assert!(serde_json::from_str::<MediaMetadata>(negative_duration).is_err());
+    }
+
+    #[test]
+    fn media_metadata_serde_enforces_all_persisted_string_and_collection_bounds() {
+        let metadata_with =
+            |format_names, streams| MediaMetadata::from_probe(format_names, None, 0, streams);
+        assert!(
+            metadata_with(vec!["x".to_owned(); MAX_MEDIA_FORMAT_NAMES + 1], Vec::new(),)
+                .validate()
+                .is_err()
+        );
+        assert!(
+            metadata_with(
+                vec!["x".repeat(MAX_MEDIA_FORMAT_NAME_BYTES + 1)],
+                Vec::new(),
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            metadata_with(
+                Vec::new(),
+                vec![MediaStreamMetadata::Other(OtherStreamMetadata::from_probe(
+                    0,
+                    None,
+                    Some("x".repeat(MAX_MEDIA_CODEC_NAME_BYTES + 1)),
+                ))],
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            metadata_with(
+                Vec::new(),
+                vec![MediaStreamMetadata::Other(OtherStreamMetadata::from_probe(
+                    0,
+                    Some("x".repeat(MAX_MEDIA_CODEC_TYPE_BYTES + 1)),
+                    None,
+                ))],
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            metadata_with(
+                Vec::new(),
+                vec![MediaStreamMetadata::Video(VideoStreamMetadata::from_probe(
+                    0,
+                    None,
+                    NonZeroU32::new(1).unwrap(),
+                    NonZeroU32::new(1).unwrap(),
+                    Some("x".repeat(MAX_MEDIA_PIXEL_FORMAT_BYTES + 1)),
+                    None,
+                    None,
+                ))],
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            metadata_with(
+                Vec::new(),
+                vec![MediaStreamMetadata::Audio(AudioStreamMetadata::from_probe(
+                    0,
+                    None,
+                    None,
+                    None,
+                    Some("x".repeat(MAX_MEDIA_CHANNEL_LAYOUT_BYTES + 1)),
+                    None,
+                ))],
+            )
+            .validate()
+            .is_err()
+        );
+
+        let stream = MediaStreamMetadata::Other(OtherStreamMetadata::from_probe(0, None, None));
+        assert!(
+            metadata_with(Vec::new(), vec![stream; MAX_MEDIA_STREAMS + 1])
+                .validate()
+                .is_err()
+        );
+        let invalid_wire = format!(
+            r#"{{"format_names":["{}"],"duration":null,"file_size_bytes":0,"streams":[]}}"#,
+            "x".repeat(MAX_MEDIA_FORMAT_NAME_BYTES + 1)
+        );
+        assert!(serde_json::from_str::<MediaMetadata>(&invalid_wire).is_err());
     }
 }
