@@ -25,6 +25,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install FFmpeg probe tools for generated-media verification
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
@@ -39,6 +46,9 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --workspace
+
+      - name: Verify the real ffprobe adapter with generated media
+        run: cargo test -p or_core --test media_probe_integration -- --ignored
 
   flutter-static:
     name: Flutter static and widget checks
