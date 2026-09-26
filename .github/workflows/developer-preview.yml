@@ -577,7 +577,7 @@ jobs:
 
           Source commit: @SOURCE_COMMIT@
 
-          This build is for developer testing of the native UI shell, project lifecycle, read-only media probe CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
+          This build is for developer testing of the native UI shell, project lifecycle, project media library, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
           **PHASE 4 FOUNDATION COMPLETE**
 
@@ -592,14 +592,23 @@ jobs:
 
           - The desktop CLI provides read-only local metadata inspection: `or media probe --file PATH [--json]`.
           - Media probing requires a system-provided `ffprobe`; it is not bundled with OR.
-          - Probing does not import media or change a project. Media library/persistence, timeline, playback, rendering, and export remain unavailable.
+
+          **PHASE 5B — PROJECT MEDIA LIBRARY**
+
+          - `.orproj` schema v2 persists an ordered project media library; v1 projects still load and migrate on the next explicit save.
+          - Desktop users can Import Media, list items in the Media panel, and remove items through the Rust-owned project session.
+          - Import requires a system-provided `ffprobe`. The selected file is probed locally; project loading never opens or probes stored source references.
+          - The project stores validated local file URIs and bounded metadata, not media bytes. A source can be offline or moved after import.
+          - Headless and attached CLI commands support media list/add/remove; attached import prepares the selected source locally and sends the normal `media.add` command.
+
+          Still unavailable: thumbnails, waveforms, proxies/cache, a background Job Manager, timeline editing, playback, decode/render, and export. FFmpeg is not linked or bundled.
 
           OR remains a pre-MVP project, not a usable video editor.
 
           Core foundation:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
-          - ProjectDocument and .orproj v1 codec
+          - ProjectDocument with `.orproj` v2 encoding and v1 migration
           - Bounded .orproj file loading and atomic save
           - Command and query contracts
           - Transactions
@@ -616,17 +625,19 @@ jobs:
           - `or project rename --attach ...`, `or history undo|redo --attach ...`, and `or project save --attach ...` operate on that same live project.
           - Descriptor contents and authentication tokens are not displayed or included in the CLI packages.
           - `or media probe --file "<local-file-path>" [--json]` inspects metadata without opening or modifying a project. It requires a system-provided `ffprobe`.
+          - `or media list --attach <descriptor> [--json]`, `or media add --attach <descriptor> --source <path>`, and `or media remove --attach <descriptor> --id <media-id>` operate on the same live media library. Attached import probes locally, then dispatches `media.add` with the described revision; stale edits are rejected without retry.
 
           Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
 
           Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
 
           Not implemented:
-          - Project media import, library, and persistence
+          - Thumbnails, waveforms, proxies, media cache storage, or a background Job Manager
           - Actual timeline editing
           - Playback
-          - Rendering
+          - Media decoding or rendering
           - Export
+          - FFmpeg library linking or bundling
           - Autosave scheduling and filesystem watching
           - Android Storage Access Framework integration
 
