@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 mod application;
+mod cache;
 mod jobs;
 mod media;
 mod media_import;
@@ -18,6 +19,10 @@ pub use application::{
     MediaListPage, OperationError, OperationErrorCode, ProjectChange, ProjectSession,
     ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TransactionEnvelope,
     TransactionResult, command_catalog, query_catalog,
+};
+pub use cache::{
+    CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey, CacheStore, CacheStoreConfig,
+    CacheStoreConfigError, ParametersFingerprint, SourceFingerprint,
 };
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
