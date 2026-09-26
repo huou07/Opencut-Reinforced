@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -141,6 +141,32 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - Flutter fake-gateway widget tests cover Media panel fields, import and invalidation refresh, page offsets 0 and 50, exact backend-unavailable text, and confirmed removal. The widget suite contains 30 passing tests.
 - Hosted macOS runs `native media bridge persists offline media through undo and save` alongside the existing native project lifecycle test. It verifies native bridge list/remove/undo, explicit save, reopen persistence, and success when the referenced source is absent. Hosted Rust/CLI jobs also cover migration and attached shared-host parity.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; hosted macOS Actions supplies the native evidence.
+
+## Current Phase 5C coverage
+
+Job Manager unit tests (`crates/or_core/src/jobs/manager.rs`) use synchronization primitives rather than sleeps and cover:
+
+- a fixed worker bound: with `max_workers = 2`, exactly two jobs are `Running` and the other submitted jobs remain `Queued`, so concurrency never exceeds the configured count
+- queue backpressure: a full bounded queue returns `JobSubmitError::QueueFull` without blocking or spawning a thread
+- queued cancellation: a queued job cancelled before execution never runs and is `Cancelled`
+- running cooperative cancellation: a running job observes `JobContext::is_cancelled` and finishes `Cancelled`; no unsafe thread termination is used
+- success (`Queued → Running → Succeeded`) and failure (`Err(JobFailure) → Failed`) with the worker continuing afterward
+- panic containment: a panicking task is `Failed` and the pool survives to run a later job
+- record bound: completed jobs beyond `max_records` reclaim the oldest terminal record; `record_count` never exceeds the bound
+- active record capacity: when all records are non-terminal, a submit returns `JobSubmitError::RecordCapacityExceeded`
+- monotonic manager-local `sequence` (no wall-clock ordering)
+- shutdown: running jobs observe cancellation, workers are joined, and later submissions return `JobSubmitError::Shutdown`
+
+Cache unit tests (`crates/or_core/src/cache.rs`) cover:
+
+- cache-key determinism; separation by artifact kind, source fingerprint, parameters fingerprint, and schema version; and a 64-character lowercase-hex path-safe format
+- exact round trip; normal miss; `EntryTooLarge` rejected before any file is created; an externally oversized/corrupt entry reading as a controlled error with a bounded read
+- total-budget enforcement that leaves existing entries unchanged; replace accounting that counts an existing key once, not twice
+- idempotent remove; clear-namespace preserving the other namespace; clear-all leaving the store usable
+- atomic failure leaving no partial final entry; concurrent same-key writers producing one complete payload
+- a Unicode and spaced root path; and a project-independence check confirming job and cache activity does not change `ProjectRevision` and writes no `.orproj` file
+
+There is no thumbnail or waveform generation test because no generator is implemented. The Phase 5C Rust tests run in the standard workspace Rust job on Linux, macOS, and Windows CI; no native runtime is required. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Test pyramid
 

@@ -577,7 +577,7 @@ jobs:
 
           Source commit: @SOURCE_COMMIT@
 
-          This build is for developer testing of the native UI shell, project lifecycle, project media library, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
+          This build is for developer testing of the native UI shell, project lifecycle, project media library, background job/cache foundation, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
           **PHASE 4 FOUNDATION COMPLETE**
 
@@ -601,7 +601,13 @@ jobs:
           - The project stores validated local file URIs and bounded metadata, not media bytes. A source can be offline or moved after import.
           - Headless and attached CLI commands support media list/add/remove; attached import prepares the selected source locally and sends the normal `media.add` command.
 
-          Still unavailable: thumbnails, waveforms, proxies/cache, a background Job Manager, timeline editing, playback, decode/render, and export. FFmpeg is not linked or bundled.
+          **PHASE 5C — JOB AND CACHE INFRASTRUCTURE FOUNDATION**
+
+          - Bounded background Job Manager: a fixed worker pool, a bounded pending queue with non-blocking backpressure, bounded tracked records, cooperative cancellation, panic containment, and deterministic shutdown.
+          - Disposable thumbnail/waveform cache foundation: deterministic SHA-256 cache keys and bounded, atomic, explicitly cleared storage.
+          - This is infrastructure only. There are no visible thumbnails, no waveform generation, and no cache is wired into the UI, IPC, or CLI. Job and cache activity never changes project revision and is never stored in a project.
+
+          Still unavailable: thumbnail and waveform generation, proxies, a cache database, timeline editing, playback, decode/render, and export. FFmpeg is not linked or bundled.
 
           OR remains a pre-MVP project, not a usable video editor.
 
