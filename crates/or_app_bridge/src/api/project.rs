@@ -458,6 +458,9 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::NothingToRedo => "NOTHING_TO_REDO",
         OperationErrorCode::HistoryConflict => "HISTORY_CONFLICT",
         OperationErrorCode::HistoryStorageFailure => "HISTORY_STORAGE_FAILURE",
+        OperationErrorCode::MediaIdAlreadyExists => "MEDIA_ID_ALREADY_EXISTS",
+        OperationErrorCode::MediaSourceAlreadyExists => "MEDIA_SOURCE_ALREADY_EXISTS",
+        OperationErrorCode::MediaNotFound => "MEDIA_NOT_FOUND",
     }
 }
 

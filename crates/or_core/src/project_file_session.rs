@@ -1,7 +1,9 @@
 use crate::project_storage::create_project_file_new;
 use crate::{
-    ApplicationRequest, ApplicationResponse, ProjectDocument, ProjectSession, ProjectStorageError,
-    RecoveryInspection, inspect_project_recovery, load_project_file, save_project_file_atomic,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaImportError,
+    MediaItem, OperationError, ProjectDocument, ProjectSession, ProjectStorageError,
+    RecoveryInspection, inspect_project_recovery, load_project_file, prepare_media_import,
+    save_project_file_atomic,
 };
 use serde::Serialize;
 use std::{
@@ -40,6 +42,31 @@ impl fmt::Display for ProjectFileSessionError {
 }
 
 impl Error for ProjectFileSessionError {}
+
+/// Failure while preparing or dispatching a file-backed media import.
+#[derive(Debug)]
+pub enum ProjectFileMediaImportError {
+    Preparation(MediaImportError),
+    Operation(OperationError),
+}
+
+impl fmt::Display for ProjectFileMediaImportError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Preparation(error) => write!(formatter, "{error}"),
+            Self::Operation(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
+impl Error for ProjectFileMediaImportError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Preparation(error) => Some(error),
+            Self::Operation(error) => Some(error),
+        }
+    }
+}
 
 impl ProjectFileSessionErrorCode {
     pub const fn as_str(self) -> &'static str {
@@ -109,6 +136,29 @@ impl ProjectFileSession {
         request: ApplicationRequest,
     ) -> ApplicationResponse {
         self.session.handle_application_request(request)
+    }
+
+    /// Prepares an external source, then adds it through the normal command path.
+    pub fn import_media(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<(MediaItem, CommandResult), ProjectFileMediaImportError> {
+        let project_id = self.session.project_id();
+        let project_instance_id = self.session.project_instance_id();
+        let expected_revision = self.session.project_revision();
+        let item = prepare_media_import(path.as_ref())
+            .map_err(ProjectFileMediaImportError::Preparation)?;
+        let command = CommandEnvelope::add_media(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            item.clone(),
+        );
+        let result = self
+            .session
+            .execute_command(command)
+            .map_err(ProjectFileMediaImportError::Operation)?;
+        Ok((item, result))
     }
 
     /// Saves only if recovery state is safe and the canonical file still equals the saved base.

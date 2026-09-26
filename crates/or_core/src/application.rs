@@ -1,4 +1,4 @@
-use crate::{ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision};
+use crate::{MediaId, MediaItem, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{error::Error, fmt};
@@ -7,7 +7,11 @@ const PROJECT_RENAME_ID: &str = "project.rename";
 const PROJECT_SUMMARY_ID: &str = "project.summary";
 const HISTORY_UNDO_ID: &str = "history.undo";
 const HISTORY_REDO_ID: &str = "history.redo";
+const MEDIA_ADD_ID: &str = "media.add";
+const MEDIA_REMOVE_ID: &str = "media.remove";
+const MEDIA_LIST_ID: &str = "media.list";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
+pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
 pub const CURRENT_TRANSACTION_SCHEMA_VERSION: u64 = 1;
 
 /// Static discovery information for a command implemented by the core.
@@ -26,7 +30,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 3] = [
+const COMMANDS: [CommandDescriptor; 5] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -45,12 +49,30 @@ const COMMANDS: [CommandDescriptor; 3] = [
         mutates_project: true,
         allowed_in_transaction: false,
     },
+    CommandDescriptor {
+        id: MEDIA_ADD_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: MEDIA_REMOVE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
 ];
 
-const QUERIES: [QueryDescriptor; 1] = [QueryDescriptor {
-    id: PROJECT_SUMMARY_ID,
-    schema_version: OPERATION_SCHEMA_VERSION,
-}];
+const QUERIES: [QueryDescriptor; 2] = [
+    QueryDescriptor {
+        id: PROJECT_SUMMARY_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+    },
+    QueryDescriptor {
+        id: MEDIA_LIST_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+    },
+];
 
 /// Returns the deterministic catalog of currently supported commands.
 pub fn command_catalog() -> &'static [CommandDescriptor] {
@@ -88,6 +110,38 @@ impl CommandEnvelope {
             project_instance_id,
             expected_project_revision,
             arguments: serde_json::json!({ "name": name.into() }),
+        }
+    }
+
+    pub fn add_media(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        item: MediaItem,
+    ) -> Self {
+        Self {
+            command_id: MEDIA_ADD_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "item": item }),
+        }
+    }
+
+    pub fn remove_media(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        id: MediaId,
+    ) -> Self {
+        Self {
+            command_id: MEDIA_REMOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "id": id }),
         }
     }
 
@@ -165,12 +219,31 @@ pub struct QueryEnvelope {
     pub arguments: Value,
 }
 
+impl QueryEnvelope {
+    pub fn media_list(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        offset: usize,
+        limit: usize,
+    ) -> Self {
+        Self {
+            query_id: MEDIA_LIST_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({ "offset": offset, "limit": limit }),
+        }
+    }
+}
+
 /// One canonical project-state delta produced by a transaction.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[serde(deny_unknown_fields)]
 pub enum ProjectChange {
     ProjectName { before: String, after: String },
+    MediaAdded { item: MediaItem, index: usize },
+    MediaRemoved { item: MediaItem, index: usize },
 }
 
 /// Net canonical content changes produced by one transaction.
@@ -205,25 +278,86 @@ impl ChangeSet {
         }
     }
 
-    fn apply_to_name(
+    fn stage_history_change(
         &self,
-        current_name: &str,
+        project: &ProjectDocument,
         reverse: bool,
-    ) -> Result<(String, Self), OperationError> {
-        let [ProjectChange::ProjectName { before, after }] = self.changes.as_slice() else {
+    ) -> Result<(StagedHistoryChange, Self), OperationError> {
+        let [change] = self.changes.as_slice() else {
             return Err(OperationError::new(OperationErrorCode::HistoryConflict));
         };
-        let (expected, target) = if reverse {
-            (after, before)
-        } else {
-            (before, after)
-        };
-        if current_name != expected {
-            return Err(OperationError::new(OperationErrorCode::HistoryConflict));
-        }
 
-        Ok((target.clone(), Self::project_name(current_name, target)))
+        match change {
+            ProjectChange::ProjectName { before, after } => {
+                let (expected, target) = if reverse {
+                    (after, before)
+                } else {
+                    (before, after)
+                };
+                if project.name() != expected {
+                    return Err(OperationError::new(OperationErrorCode::HistoryConflict));
+                }
+                Ok((
+                    StagedHistoryChange::Rename(target.clone()),
+                    Self::project_name(project.name(), target),
+                ))
+            }
+            ProjectChange::MediaAdded { item, index } => {
+                if reverse {
+                    ensure_media_matches_at(project, *index, item)?;
+                    Ok((
+                        StagedHistoryChange::RemoveMedia { index: *index },
+                        Self::media_removed(item.clone(), *index),
+                    ))
+                } else {
+                    ensure_media_insertable(project, *index, item)?;
+                    Ok((
+                        StagedHistoryChange::InsertMedia {
+                            item: item.clone(),
+                            index: *index,
+                        },
+                        Self::media_added(item.clone(), *index),
+                    ))
+                }
+            }
+            ProjectChange::MediaRemoved { item, index } => {
+                if reverse {
+                    ensure_media_insertable(project, *index, item)?;
+                    Ok((
+                        StagedHistoryChange::InsertMedia {
+                            item: item.clone(),
+                            index: *index,
+                        },
+                        Self::media_added(item.clone(), *index),
+                    ))
+                } else {
+                    ensure_media_matches_at(project, *index, item)?;
+                    Ok((
+                        StagedHistoryChange::RemoveMedia { index: *index },
+                        Self::media_removed(item.clone(), *index),
+                    ))
+                }
+            }
+        }
     }
+
+    fn media_added(item: MediaItem, index: usize) -> Self {
+        Self {
+            changes: vec![ProjectChange::MediaAdded { item, index }],
+        }
+    }
+
+    fn media_removed(item: MediaItem, index: usize) -> Self {
+        Self {
+            changes: vec![ProjectChange::MediaRemoved { item, index }],
+        }
+    }
+}
+
+enum StagedHistoryChange {
+    Rename(String),
+    InsertMedia { item: MediaItem, index: usize },
+    RemoveMedia { index: usize },
 }
 
 /// Result of applying one command to a project session.
@@ -272,6 +406,20 @@ pub struct QueryResult {
     pub schema_version: u64,
     #[serde(flatten)]
     pub summary: ProjectSummary,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_page: Option<MediaListPage>,
+}
+
+/// One bounded, insertion-ordered page from the persistent media library.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MediaListPage {
+    pub items: Vec<MediaItem>,
+    pub total_count: usize,
+    pub offset: usize,
+    pub limit: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_offset: Option<usize>,
 }
 
 /// Stable machine-readable operation failure categories.
@@ -294,6 +442,9 @@ pub enum OperationErrorCode {
     NothingToRedo,
     HistoryConflict,
     HistoryStorageFailure,
+    MediaIdAlreadyExists,
+    MediaSourceAlreadyExists,
+    MediaNotFound,
 }
 
 /// A safe structured operation error with a stable code and optional context.
@@ -348,6 +499,11 @@ impl fmt::Display for OperationError {
             OperationErrorCode::HistoryStorageFailure => {
                 "session history could not reserve storage"
             }
+            OperationErrorCode::MediaIdAlreadyExists => "media ID already exists in the project",
+            OperationErrorCode::MediaSourceAlreadyExists => {
+                "media source already exists in the project"
+            }
+            OperationErrorCode::MediaNotFound => "media item was not found in the project",
         };
 
         formatter.write_str(message)?;
@@ -503,6 +659,8 @@ impl ProjectSession {
                 parse_empty_arguments(envelope.arguments)?;
                 self.apply_history(HistoryDirection::Redo)?.2
             }
+            MEDIA_ADD_ID => self.apply_media_add(envelope.arguments)?,
+            MEDIA_REMOVE_ID => self.apply_media_remove(envelope.arguments)?,
             _ => return Err(OperationError::new(OperationErrorCode::UnknownCommand)),
         };
 
@@ -555,10 +713,11 @@ impl ProjectSession {
 
     /// Dispatches and executes a read-only query against current session state.
     pub fn execute_query(&self, envelope: QueryEnvelope) -> Result<QueryResult, OperationError> {
-        if envelope.query_id != PROJECT_SUMMARY_ID {
-            return Err(OperationError::new(OperationErrorCode::UnknownQuery));
-        }
-        if envelope.schema_version != OPERATION_SCHEMA_VERSION {
+        let descriptor = QUERIES
+            .iter()
+            .find(|descriptor| descriptor.id == envelope.query_id)
+            .ok_or_else(|| OperationError::new(OperationErrorCode::UnknownQuery))?;
+        if envelope.schema_version != descriptor.schema_version {
             return Err(OperationError::new(
                 OperationErrorCode::UnsupportedQuerySchema,
             ));
@@ -571,23 +730,114 @@ impl ProjectSession {
                 OperationErrorCode::ProjectInstanceMismatch,
             ));
         }
-        if !envelope
-            .arguments
-            .as_object()
-            .is_some_and(|arguments| arguments.is_empty())
-        {
-            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
-        }
+
+        let media_page = if envelope.query_id == PROJECT_SUMMARY_ID {
+            if !is_empty_object(&envelope.arguments) {
+                return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+            }
+            None
+        } else if envelope.query_id == MEDIA_LIST_ID {
+            Some(self.media_list(envelope.arguments)?)
+        } else {
+            return Err(OperationError::new(OperationErrorCode::UnknownQuery));
+        };
 
         Ok(QueryResult {
-            query_id: PROJECT_SUMMARY_ID.to_owned(),
-            schema_version: OPERATION_SCHEMA_VERSION,
+            query_id: envelope.query_id,
+            schema_version: descriptor.schema_version,
             summary: ProjectSummary {
                 project_id: self.project_id(),
                 project_instance_id: self.project_instance_id,
                 project_revision: self.project_revision(),
                 name: self.project.name().to_owned(),
             },
+            media_page,
+        })
+    }
+
+    fn apply_media_add(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: MediaAddArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if arguments.item.metadata().validate().is_err() {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        ensure_media_id_available(&self.project, arguments.item.id())?;
+        ensure_media_source_available(&self.project, arguments.item.source())?;
+
+        let before_revision = self.project_revision();
+        let after_revision = before_revision
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        self.project
+            .try_reserve_media_items(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        let index = self.project.media_items().len();
+        let change_set = ChangeSet::media_added(arguments.item.clone(), index);
+        // All validation, revision checks, and required storage allocations are complete.
+        self.project
+            .insert_media_for_command(arguments.item, index, after_revision);
+        self.history.undo.push(change_set.clone());
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_media_remove(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: MediaRemoveArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some(index) = self
+            .project
+            .media_items()
+            .iter()
+            .position(|item| item.id() == arguments.id)
+        else {
+            return Err(OperationError::new(OperationErrorCode::MediaNotFound));
+        };
+
+        let before_revision = self.project_revision();
+        let after_revision = before_revision
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        let item = self.project.media_items()[index].clone();
+        let change_set = ChangeSet::media_removed(item, index);
+        // All validation, revision checks, and history allocation are complete.
+        self.project.remove_media_for_command(index, after_revision);
+        self.history.undo.push(change_set.clone());
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn media_list(&self, arguments: Value) -> Result<MediaListPage, OperationError> {
+        let arguments: MediaListArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let offset = usize::try_from(arguments.offset)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let limit = usize::try_from(arguments.limit)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if limit == 0 || limit > MAX_MEDIA_PAGE_SIZE {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+
+        let items = self.project.media_items();
+        let total_count = items.len();
+        let start = offset.min(total_count);
+        let end = offset.saturating_add(limit).min(total_count);
+        let page_items = items[start..end].to_vec();
+        Ok(MediaListPage {
+            items: page_items,
+            total_count,
+            offset,
+            limit,
+            next_offset: (end < total_count).then_some(end),
         })
     }
 
@@ -661,10 +911,8 @@ impl ProjectSession {
                 .cloned()
                 .ok_or_else(|| OperationError::new(OperationErrorCode::NothingToRedo))?,
         };
-        let (target_name, applied_change) = entry.apply_to_name(
-            self.project.name(),
-            matches!(direction, HistoryDirection::Undo),
-        )?;
+        let (staged_change, applied_change) = entry
+            .stage_history_change(&self.project, matches!(direction, HistoryDirection::Undo))?;
         let before_revision = self.project_revision();
         let after_revision = before_revision
             .checked_next()
@@ -676,6 +924,12 @@ impl ProjectSession {
         }
         .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
 
+        if matches!(staged_change, StagedHistoryChange::InsertMedia { .. }) {
+            self.project
+                .try_reserve_media_items(1)
+                .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        }
+
         let moved_entry = match direction {
             HistoryDirection::Undo => self.history.undo.pop(),
             HistoryDirection::Redo => self.history.redo.pop(),
@@ -683,12 +937,104 @@ impl ProjectSession {
         .ok_or_else(|| OperationError::new(OperationErrorCode::HistoryConflict))?;
 
         // The destination stack was reserved and the paired document update cannot fail.
-        self.project.rename_for_command(target_name, after_revision);
+        match staged_change {
+            StagedHistoryChange::Rename(name) => {
+                self.project.rename_for_command(name, after_revision);
+            }
+            StagedHistoryChange::InsertMedia { item, index } => {
+                self.project
+                    .insert_media_for_command(item, index, after_revision);
+            }
+            StagedHistoryChange::RemoveMedia { index } => {
+                self.project.remove_media_for_command(index, after_revision);
+            }
+        }
         match direction {
             HistoryDirection::Undo => self.history.redo.push(moved_entry),
             HistoryDirection::Redo => self.history.undo.push(moved_entry),
         }
         Ok((before_revision, after_revision, applied_change))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaAddArguments {
+    item: MediaItem,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaRemoveArguments {
+    id: MediaId,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaListArguments {
+    offset: u64,
+    limit: u64,
+}
+
+fn is_empty_object(arguments: &Value) -> bool {
+    arguments
+        .as_object()
+        .is_some_and(|arguments| arguments.is_empty())
+}
+
+fn ensure_media_id_available(project: &ProjectDocument, id: MediaId) -> Result<(), OperationError> {
+    if project.media_items().iter().any(|item| item.id() == id) {
+        Err(OperationError::new(
+            OperationErrorCode::MediaIdAlreadyExists,
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_media_source_available(
+    project: &ProjectDocument,
+    source: &crate::MediaSourceRef,
+) -> Result<(), OperationError> {
+    if project
+        .media_items()
+        .iter()
+        .any(|item| item.source() == source)
+    {
+        Err(OperationError::new(
+            OperationErrorCode::MediaSourceAlreadyExists,
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_media_matches_at(
+    project: &ProjectDocument,
+    index: usize,
+    item: &MediaItem,
+) -> Result<(), OperationError> {
+    if project.media_items().get(index) == Some(item) {
+        Ok(())
+    } else {
+        Err(OperationError::new(OperationErrorCode::HistoryConflict))
+    }
+}
+
+fn ensure_media_insertable(
+    project: &ProjectDocument,
+    index: usize,
+    item: &MediaItem,
+) -> Result<(), OperationError> {
+    if index > project.media_items().len()
+        || project
+            .media_items()
+            .iter()
+            .any(|current| current.id() == item.id() || current.source() == item.source())
+    {
+        Err(OperationError::new(OperationErrorCode::HistoryConflict))
+    } else {
+        Ok(())
     }
 }
 
@@ -741,8 +1087,8 @@ mod tests {
         TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
-        ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, decode_project,
-        encode_project,
+        MAX_MEDIA_PAGE_SIZE, MediaId, MediaItem, MediaMetadata, MediaSourceRef, ProjectDocument,
+        ProjectId, ProjectInstanceId, ProjectRevision, decode_project, encode_project,
     };
     use serde_json::{Value, json};
     use std::str::FromStr;
@@ -765,6 +1111,33 @@ mod tests {
             project_instance_id: ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
             history: super::SessionHistory::default(),
         }
+    }
+
+    fn media_item(id: &str, uri: &str) -> MediaItem {
+        MediaItem::new(
+            MediaId::from_str(id).unwrap(),
+            MediaSourceRef::local_file(uri).unwrap(),
+            MediaMetadata::from_probe(vec!["matroska".to_owned()], None, 42, Vec::new()),
+        )
+        .unwrap()
+    }
+
+    fn media_add(item: MediaItem, revision: u64) -> CommandEnvelope {
+        CommandEnvelope::add_media(
+            ProjectId::from_str(PROJECT_ID).unwrap(),
+            ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
+            ProjectRevision::new(revision),
+            item,
+        )
+    }
+
+    fn media_remove(id: &str, revision: u64) -> CommandEnvelope {
+        CommandEnvelope::remove_media(
+            ProjectId::from_str(PROJECT_ID).unwrap(),
+            ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
+            ProjectRevision::new(revision),
+            MediaId::from_str(id).unwrap(),
+        )
     }
 
     fn session_with_state(name: &str, revision: u64) -> ProjectSession {
@@ -901,18 +1274,36 @@ mod tests {
                     mutates_project: true,
                     allowed_in_transaction: false,
                 },
+                CommandDescriptor {
+                    id: "media.add",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "media.remove",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
             ]
         );
         assert_eq!(
             query_catalog(),
-            &[QueryDescriptor {
-                id: "project.summary",
-                schema_version: 1,
-            }]
+            &[
+                QueryDescriptor {
+                    id: "project.summary",
+                    schema_version: 1,
+                },
+                QueryDescriptor {
+                    id: "media.list",
+                    schema_version: 1,
+                },
+            ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 3);
-        assert_eq!(QUERIES.len(), 1);
+        assert_eq!(COMMANDS.len(), 5);
+        assert_eq!(QUERIES.len(), 2);
     }
 
     #[test]
@@ -940,6 +1331,353 @@ mod tests {
                 format!("\"{expected}\"")
             );
         }
+    }
+
+    #[test]
+    fn media_operation_error_codes_serialize_to_stable_machine_names() {
+        for (code, expected) in [
+            (
+                OperationErrorCode::MediaIdAlreadyExists,
+                "MEDIA_ID_ALREADY_EXISTS",
+            ),
+            (
+                OperationErrorCode::MediaSourceAlreadyExists,
+                "MEDIA_SOURCE_ALREADY_EXISTS",
+            ),
+            (OperationErrorCode::MediaNotFound, "MEDIA_NOT_FOUND"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&code).unwrap(),
+                format!("\"{expected}\"")
+            );
+        }
+    }
+
+    #[test]
+    fn media_add_mutates_once_and_reports_the_persisted_item() {
+        let mut session = fixed_session();
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+
+        let result = session.execute_command(media_add(item.clone(), 0)).unwrap();
+
+        assert_eq!(result.before_revision, ProjectRevision::new(0));
+        assert_eq!(result.after_revision, ProjectRevision::new(1));
+        assert!(result.changed);
+        assert_eq!(session.project().media_items(), std::slice::from_ref(&item));
+        assert_eq!(session.history.undo.len(), 1);
+        assert!(session.history.redo.is_empty());
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::MediaAdded { item: added, index: 0 }] if added == &item
+        ));
+        let persisted = decode_project(&encode_project(session.project()).unwrap()).unwrap();
+        assert_eq!(persisted.media_items(), &[item]);
+        assert_eq!(persisted.revision(), ProjectRevision::new(1));
+    }
+
+    #[test]
+    fn duplicate_media_id_and_source_are_rejected_without_state_change() {
+        let mut session = fixed_session();
+        let original = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        session
+            .execute_command(media_add(original.clone(), 0))
+            .unwrap();
+        let before = session.project().clone();
+        let history_len = session.history.undo.len();
+
+        let duplicate_id = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/two.mkv",
+        );
+        assert_eq!(
+            code(&session.execute_command(media_add(duplicate_id, 1))),
+            OperationErrorCode::MediaIdAlreadyExists
+        );
+
+        let duplicate_source = media_item(
+            "00000000-0000-4000-8000-000000000002",
+            "file:///media/one.mkv",
+        );
+        assert_eq!(
+            code(&session.execute_command(media_add(duplicate_source, 1))),
+            OperationErrorCode::MediaSourceAlreadyExists
+        );
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history.undo.len(), history_len);
+        assert!(session.history.redo.is_empty());
+    }
+
+    #[test]
+    fn stale_prepared_media_add_returns_revision_conflict_without_retry() {
+        let mut session = fixed_session();
+        let prepared = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        let captured_revision_command = media_add(prepared, 0);
+        session
+            .execute_command(rename("Changed during probe", 0))
+            .unwrap();
+        let before = session.project().clone();
+        let undo_len = session.history.undo.len();
+
+        assert_eq!(
+            code(&session.execute_command(captured_revision_command)),
+            OperationErrorCode::RevisionConflict
+        );
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.project_revision(), ProjectRevision::new(1));
+        assert_eq!(session.history.undo.len(), undo_len);
+        assert!(session.history.redo.is_empty());
+    }
+
+    #[test]
+    fn media_add_rejects_invalid_arguments_and_is_not_transactional() {
+        let mut session = fixed_session();
+        for arguments in [json!({}), json!({ "item": {}, "extra": true })] {
+            let mut command = media_add(
+                media_item(
+                    "00000000-0000-4000-8000-000000000001",
+                    "file:///media/one.mkv",
+                ),
+                0,
+            );
+            command.arguments = arguments;
+            assert_eq!(
+                code(&session.execute_command(command)),
+                OperationErrorCode::InvalidArguments
+            );
+        }
+        let result = session.execute_transaction(transaction(
+            vec![call(
+                "media.add",
+                1,
+                json!({ "item": media_item(
+                    "00000000-0000-4000-8000-000000000001",
+                    "file:///media/one.mkv"
+                ) }),
+            )],
+            0,
+        ));
+        assert_eq!(
+            code(&result),
+            OperationErrorCode::CommandNotAllowedInTransaction
+        );
+        assert_eq!(session.project_revision(), ProjectRevision::INITIAL);
+        assert!(session.project().media_items().is_empty());
+        assert!(session.history.undo.is_empty());
+    }
+
+    #[test]
+    fn media_remove_rejects_unknown_id_and_success_increments_once() {
+        let mut session = fixed_session();
+        assert_eq!(
+            code(&session.execute_command(media_remove("00000000-0000-4000-8000-000000000001", 0))),
+            OperationErrorCode::MediaNotFound
+        );
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        session.execute_command(media_add(item.clone(), 0)).unwrap();
+
+        let result = session
+            .execute_command(media_remove("00000000-0000-4000-8000-000000000001", 1))
+            .unwrap();
+        assert_eq!(result.before_revision, ProjectRevision::new(1));
+        assert_eq!(result.after_revision, ProjectRevision::new(2));
+        assert!(session.project().media_items().is_empty());
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::MediaRemoved { item: removed, index: 0 }] if removed == &item
+        ));
+        assert_eq!(
+            code(&session.execute_command(media_remove("00000000-0000-4000-8000-000000000001", 2))),
+            OperationErrorCode::MediaNotFound
+        );
+        assert_eq!(session.project_revision(), ProjectRevision::new(2));
+    }
+
+    #[test]
+    fn undo_and_redo_media_add_restore_the_same_identity_and_metadata() {
+        let mut session = fixed_session();
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        session.execute_command(media_add(item.clone(), 0)).unwrap();
+
+        let undo_result = session.execute_command(undo(1)).unwrap();
+        assert!(session.project().media_items().is_empty());
+        assert_eq!(undo_result.after_revision, ProjectRevision::new(2));
+        assert!(matches!(
+            undo_result.change_set.changes(),
+            [ProjectChange::MediaRemoved { item: removed, index: 0 }] if removed == &item
+        ));
+
+        let redo_result = session.execute_command(redo(2)).unwrap();
+        assert_eq!(session.project().media_items(), std::slice::from_ref(&item));
+        assert_eq!(redo_result.after_revision, ProjectRevision::new(3));
+        assert!(matches!(
+            redo_result.change_set.changes(),
+            [ProjectChange::MediaAdded { item: added, index: 0 }] if added == &item
+        ));
+    }
+
+    #[test]
+    fn undo_remove_restores_original_media_order_and_redo_removes_it_again() {
+        let mut session = fixed_session();
+        let a = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/a.mkv",
+        );
+        let b = media_item(
+            "00000000-0000-4000-8000-000000000002",
+            "file:///media/b.mkv",
+        );
+        let c = media_item(
+            "00000000-0000-4000-8000-000000000003",
+            "file:///media/c.mkv",
+        );
+        session.execute_command(media_add(a.clone(), 0)).unwrap();
+        session.execute_command(media_add(b.clone(), 1)).unwrap();
+        session.execute_command(media_add(c.clone(), 2)).unwrap();
+        session
+            .execute_command(media_remove("00000000-0000-4000-8000-000000000002", 3))
+            .unwrap();
+        assert_eq!(session.project().media_items(), &[a.clone(), c.clone()]);
+
+        let undo_result = session.execute_command(undo(4)).unwrap();
+        assert_eq!(
+            session.project().media_items(),
+            &[a.clone(), b.clone(), c.clone()]
+        );
+        assert!(matches!(
+            undo_result.change_set.changes(),
+            [ProjectChange::MediaAdded { item, index: 1 }] if item == &b
+        ));
+
+        session.execute_command(redo(5)).unwrap();
+        assert_eq!(session.project().media_items(), &[a, c]);
+        assert_eq!(session.project_revision(), ProjectRevision::new(6));
+    }
+
+    #[test]
+    fn media_history_conflicts_do_not_partially_change_state_or_stacks() {
+        let mut session = fixed_session();
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        session.execute_command(media_add(item, 0)).unwrap();
+        session
+            .project
+            .remove_media_for_command(0, ProjectRevision::new(1));
+        let before = session.project().clone();
+        let undo_len = session.history.undo.len();
+        let redo_len = session.history.redo.len();
+
+        assert_eq!(
+            code(&session.execute_command(undo(1))),
+            OperationErrorCode::HistoryConflict
+        );
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history.undo.len(), undo_len);
+        assert_eq!(session.history.redo.len(), redo_len);
+    }
+
+    #[test]
+    fn media_list_pages_are_bounded_ordered_and_read_only() {
+        let mut session = fixed_session();
+        let expected_ids = (0..250)
+            .map(|index| {
+                let item = MediaItem::new(
+                    MediaId::generate(),
+                    MediaSourceRef::local_file(format!("file:///generated/{index}.mkv")).unwrap(),
+                    MediaMetadata::from_probe(vec!["matroska".to_owned()], None, 42, Vec::new()),
+                )
+                .unwrap();
+                let id = item.id();
+                let revision = session.project_revision().value();
+                session.execute_command(media_add(item, revision)).unwrap();
+                id
+            })
+            .collect::<Vec<_>>();
+        let before = session.project().clone();
+        let mut collected = Vec::new();
+        let mut offset = 0;
+
+        loop {
+            let result = session
+                .execute_query(QueryEnvelope::media_list(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    offset,
+                    MAX_MEDIA_PAGE_SIZE,
+                ))
+                .unwrap();
+            let page = result.media_page.as_ref().unwrap();
+            assert_eq!(page.total_count, expected_ids.len());
+            assert_eq!(page.offset, offset);
+            assert!(page.items.len() <= MAX_MEDIA_PAGE_SIZE);
+            let encoded = serde_json::to_vec(&result).unwrap();
+            assert!(encoded.len() < 1024 * 1024);
+            assert_eq!(
+                serde_json::from_slice::<super::QueryResult>(&encoded).unwrap(),
+                result
+            );
+            collected.extend(page.items.iter().map(MediaItem::id));
+            match page.next_offset {
+                Some(next) => offset = next,
+                None => break,
+            }
+        }
+
+        assert_eq!(collected, expected_ids);
+        let beyond_end = session
+            .execute_query(QueryEnvelope::media_list(
+                session.project_id(),
+                session.project_instance_id(),
+                1_000,
+                MAX_MEDIA_PAGE_SIZE,
+            ))
+            .unwrap()
+            .media_page
+            .unwrap();
+        assert!(beyond_end.items.is_empty());
+        assert_eq!(beyond_end.total_count, expected_ids.len());
+        assert_eq!(beyond_end.next_offset, None);
+        assert_eq!(session.project(), &before);
+    }
+
+    #[test]
+    fn media_list_rejects_invalid_page_bounds_and_argument_shapes() {
+        let session = fixed_session();
+        for arguments in [
+            json!({ "offset": 0, "limit": 0 }),
+            json!({ "offset": 0, "limit": MAX_MEDIA_PAGE_SIZE + 1 }),
+            json!({ "offset": "0", "limit": 1 }),
+            json!({ "offset": 0, "limit": 1, "extra": true }),
+        ] {
+            let mut query = QueryEnvelope::media_list(
+                session.project_id(),
+                session.project_instance_id(),
+                0,
+                1,
+            );
+            query.arguments = arguments;
+            assert_eq!(
+                code(&session.execute_query(query)),
+                OperationErrorCode::InvalidArguments
+            );
+        }
+        assert_eq!(session.project_revision(), ProjectRevision::INITIAL);
     }
 
     #[test]

@@ -3,7 +3,7 @@ use serde::{
     Deserialize, Deserializer, Serialize,
     de::{SeqAccess, Visitor},
 };
-use std::{fmt, num::NonZeroU32, str::FromStr};
+use std::{fmt, num::NonZeroU32, path::Path, str::FromStr};
 use url::Url;
 use uuid::{Uuid, Version};
 
@@ -95,6 +95,11 @@ impl MediaSourceUri {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub(crate) fn from_canonical_path(path: &Path) -> Result<Self, MediaSourceUriError> {
+        let uri = Url::from_file_path(path).map_err(|_| MediaSourceUriError::Invalid)?;
+        Self::parse(uri.as_str())
     }
 }
 

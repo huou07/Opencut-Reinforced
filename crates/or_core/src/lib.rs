@@ -3,6 +3,7 @@ use serde::Serialize;
 mod application;
 mod jobs;
 mod media;
+mod media_import;
 mod media_probe;
 mod project;
 mod project_document;
@@ -13,10 +14,10 @@ mod time;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, OperationError,
-    OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor,
-    QueryEnvelope, QueryResult, TransactionEnvelope, TransactionResult, command_catalog,
-    query_catalog,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, MAX_MEDIA_PAGE_SIZE,
+    MediaListPage, OperationError, OperationErrorCode, ProjectChange, ProjectSession,
+    ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TransactionEnvelope,
+    TransactionResult, command_catalog, query_catalog,
 };
 pub use jobs::{JobId, JobKind, JobState};
 pub use media::{
@@ -26,6 +27,7 @@ pub use media::{
     MediaItem, MediaMetadata, MediaMetadataValidationError, MediaSourceRef, MediaSourceUri,
     MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata, VideoStreamMetadata,
 };
+pub use media_import::{MediaImportError, prepare_media_import};
 pub use media_probe::{MediaProbeError, MediaProbeErrorCode, probe_media_file};
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
@@ -35,7 +37,8 @@ pub use project_document::{
     encode_project,
 };
 pub use project_file_session::{
-    ProjectFileSession, ProjectFileSessionError, ProjectFileSessionErrorCode,
+    ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
+    ProjectFileSessionErrorCode,
 };
 pub use project_recovery::{
     CURRENT_RECOVERY_SCHEMA_VERSION, MAX_RECOVERY_FILE_BYTES, ProjectRecoveryError,

@@ -55,6 +55,35 @@ impl ProjectDocument {
         self.revision = revision;
     }
 
+    pub(crate) fn try_reserve_media_items(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.media.try_reserve(additional)
+    }
+
+    /// Inserts a validated library item at an index checked by the command path.
+    pub(crate) fn insert_media_for_command(
+        &mut self,
+        item: MediaItem,
+        index: usize,
+        revision: ProjectRevision,
+    ) {
+        self.media.insert(index, item);
+        self.revision = revision;
+    }
+
+    /// Removes an item at an index checked by the command path.
+    pub(crate) fn remove_media_for_command(
+        &mut self,
+        index: usize,
+        revision: ProjectRevision,
+    ) -> MediaItem {
+        let item = self.media.remove(index);
+        self.revision = revision;
+        item
+    }
+
     fn from_v1(project: ProjectStateV1) -> Self {
         Self {
             id: project.id,
