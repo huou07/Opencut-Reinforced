@@ -268,6 +268,13 @@ impl FfprobeBackend {
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    if stdout_bytes.is_some() && stderr_bytes.is_some() {
+                        // The child may close both pipes just before it exits.
+                        // Keep polling it instead of treating that short race
+                        // as a reader failure.
+                        thread::sleep(POLL_INTERVAL);
+                        continue;
+                    }
                     stop_child(&mut child);
                     join_readers(stdout_reader, stderr_reader);
                     return Err(MediaProbeError::with_diagnostic(
