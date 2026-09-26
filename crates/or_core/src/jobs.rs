@@ -1,3 +1,10 @@
+mod manager;
+
+pub use manager::{
+    JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobManager, JobManagerConfig,
+    JobManagerConfigError, JobSnapshot, JobSubmitError,
+};
+
 use crate::UuidV4ParseError;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};

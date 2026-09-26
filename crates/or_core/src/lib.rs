@@ -19,7 +19,10 @@ pub use application::{
     ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TransactionEnvelope,
     TransactionResult, command_catalog, query_catalog,
 };
-pub use jobs::{JobId, JobKind, JobState};
+pub use jobs::{
+    JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
+    JobManagerConfig, JobManagerConfigError, JobSnapshot, JobState, JobSubmitError,
+};
 pub use media::{
     AudioStreamMetadata, MAX_MEDIA_CHANNEL_LAYOUT_BYTES, MAX_MEDIA_CODEC_NAME_BYTES,
     MAX_MEDIA_CODEC_TYPE_BYTES, MAX_MEDIA_FORMAT_NAME_BYTES, MAX_MEDIA_FORMAT_NAMES,
