@@ -1,6 +1,9 @@
 use serde::Serialize;
 
 mod application;
+mod jobs;
+mod media;
+mod media_probe;
 mod project;
 mod project_document;
 mod project_file_session;
@@ -15,6 +18,12 @@ pub use application::{
     QueryEnvelope, QueryResult, TransactionEnvelope, TransactionResult, command_catalog,
     query_catalog,
 };
+pub use jobs::{JobId, JobKind, JobState};
+pub use media::{
+    AudioStreamMetadata, MediaId, MediaMetadata, MediaStreamMetadata, OtherStreamMetadata,
+    VideoStreamMetadata,
+};
+pub use media_probe::{MediaProbeError, MediaProbeErrorCode, probe_media_file};
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
 };
