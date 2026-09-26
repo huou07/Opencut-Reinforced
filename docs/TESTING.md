@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, recovery, real local IPC, shared-host/attached-CLI parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge/lifecycle integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe integration test. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe integration test. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -60,7 +60,7 @@ Phase 4A tests foundational values only; later sections record project and appli
 - Malformed, nil, and non-v4 project ID rejection through the existing `ProjectId` invariant.
 - Runtime-instance ID and field leakage guard; decoding returns only canonical project state.
 
-Filesystem save/load tests are recorded under Phase 4E1. Schema migrations remain unimplemented.
+Filesystem save/load tests are recorded under Phase 4E1. The initial v1-to-v2 project migration and current-format codec coverage are recorded under Phase 5B below; further migrations remain future work.
 
 ## Current Phase 4C coverage
 
@@ -78,7 +78,7 @@ Filesystem save/load tests are recorded under Phase 4E1. Schema migrations remai
 - `history.undo` and `history.redo`: inverse/forward changes, one new revision each, grouped undo, redo invalidation after a real edit, no-op/failed-edit redo preservation, empty-stack errors, history conflicts, and overflow without partial mutation.
 - Transaction and history effects round-trip through the `.orproj` v1 codec as canonical name/revision only; runtime instance ID and history remain absent, and a reopened session starts with empty history.
 
-Filesystem save/load tests are recorded under Phase 4E1. Migration remains unimplemented; Phase 4F records IPC and client-integration coverage.
+Filesystem save/load tests are recorded under Phase 4E1. Phase 5B migration and media-query coverage is recorded below; Phase 4F records IPC and client-integration coverage.
 
 ## Current Phase 4E1 coverage
 
@@ -129,6 +129,18 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - CLI contracts: human and OR JSON output, Unicode input path, structured backend-unavailable and missing-file errors, and bounded probe-failure details.
 - Real integration: the hosted Linux Rust job generates a tiny video/audio Matroska file with CI-installed FFmpeg and probes it with the real `ffprobe`. The fixture is generated in a temporary directory and no media sample is committed. The integration test is ignored in the default local suite and is run explicitly on hosted Linux.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; the macOS bridge/lifecycle evidence comes from hosted CI.
+
+## Current Phase 5B coverage
+
+- `.orproj` codec tests cover v1-to-v2 migration with exact project ID/revision/name preservation and an empty library, v2 empty and media round trips, strict unknown-field rejection, malformed/oversized URI and metadata values, duplicate IDs/sources, and deterministic media order. A clean v1 open is checked not to rewrite disk; explicit save emits v2 without a conversion-only revision increment.
+- Recovery tests cover the v1 recovery envelope with old/new nested project formats, including cross-schema saved-base and recovery snapshots, while preserving exact-base conflict checks.
+- Media domain/import tests cover local `file:` URI validation and byte bounds, metadata persistence bounds, source canonicalization before probing, generated UUIDv4 identity, missing/directory paths, and source loss after import. A tiny generated-media integration fixture verifies import/save/reopen when the source is offline.
+- `media.add`/`media.remove` tests cover exactly one revision increment on success, zero changes on malformed/stale/duplicate/missing failures, transaction rejection, semantic error codes, `ChangeSet` contents, and undo/redo restoring item identity and original order without full-project snapshots.
+- `media.list` tests cover deterministic insertion order, read-only behavior, page sizes up to 100, all pages and `next_offset`, valid out-of-range empty pages, invalid bounds/argument shapes, offline source listing, and unchanged `project.summary` result shape.
+- `crates/or_cli/tests/semantic_cli.rs` covers headless media add/list/remove and save, plus attached list/add/remove against one live host, shared history/revision, explicit save, and stale-revision rejection without retry. CLI output uses OR-structured values rather than raw ffprobe JSON.
+- Flutter fake-gateway widget tests cover Media panel fields, import and invalidation refresh, page offsets 0 and 50, exact backend-unavailable text, and confirmed removal. The widget suite contains 30 passing tests.
+- Hosted macOS runs `native media bridge persists offline media through undo and save` alongside the existing native project lifecycle test. It verifies native bridge list/remove/undo, explicit save, reopen persistence, and success when the referenced source is absent. Hosted Rust/CLI jobs also cover migration and attached shared-host parity.
+- Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; hosted macOS Actions supplies the native evidence.
 
 ## Test pyramid
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is in progress. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is in progress: Phase 5A and 5B are done, and Phase 5C is next. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -102,7 +102,7 @@ Phase 4UI-2 — DONE:
 - attached CLI parity against the same host, including project/runtime IDs, revision, history, dirty state, save, and event ordering
 - Android project New/Open remain unavailable pending Storage Access Framework integration
 
-Real project migrations remain future work when a later schema exists.
+The first real project migration, schema v1 to v2, is implemented and tested. Further schema migrations remain future work and must stay explicit, ordered, and tested.
 
 Phase 4 is complete. Both the Flutter application and `or session serve` can host projects; one Rust `LiveProjectHost` shares a single session between direct typed bridge access and attached CLI requests. Android project file access still awaits SAF. Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, shared commands and queries, transactions and history, serialization, bounded filesystem persistence, recovery, local IPC, and semantic CLI operations while preserving control-plane/media-plane separation and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
 
@@ -129,12 +129,30 @@ Still not implemented:
 - job manager, scheduler, thread pool, priority, or backpressure system
 - timeline, decoder, playback, rendering, or export
 
-Phase 5B — NEXT:
+Phase 5B — DONE:
 
-- project media library and real media import persistence
-- first `.orproj` schema migration if required
-- `media.add` / `media.remove` and media query
-- GUI / CLI parity for project media operations
+- persistent project media library in `.orproj` schema v2
+- schema v1 loads into an empty in-memory media library; the next explicit save writes v2 without incrementing revision solely for conversion
+- validated local-file source references and bounded persisted metadata; source bytes remain external
+- prepared import, `media.add`, and `media.remove` through the shared command path
+- undo/redo with item identity and insertion order preserved
+- bounded, paginated `media.list`
+- headless and attached CLI list/add/remove parity
+- desktop Flutter media import, list, and remove through the Rust-owned project host
+- save/reopen and recovery compatibility, including an offline source reference
+
+Still not implemented:
+
+- thumbnails, waveforms, proxies, or cache storage
+- a background Job Manager or scheduler
+- decode, timeline editing, playback, rendering, or export
+
+Phase 5C — NEXT:
+
+- bounded background Job Manager
+- thumbnail cache foundation
+- waveform cache foundation
+- cancellation and backpressure basics
 
 ### Phase 6 — Timeline MVP
 **Status: PLANNED**
@@ -219,4 +237,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete, and Phase 5A has established bounded read-only media metadata inspection before project import, thumbnails, waveforms, proxies, or timeline work. Phase 5B is the next checkpoint for project media identity/persistence and a schema migration if required. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, and Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration. Phase 5C is the next checkpoint for a bounded background Job Manager and thumbnail/waveform cache foundations. Timeline and playback work remain later. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
