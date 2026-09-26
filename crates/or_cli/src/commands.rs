@@ -93,6 +93,22 @@ impl CliError {
         )
     }
 
+    fn media(error: or_core::MediaProbeError, json: bool) -> Self {
+        let diagnostic = error.diagnostic().map(str::to_owned);
+        let message = match (&diagnostic, json) {
+            (Some(diagnostic), false) => format!("{}: {diagnostic}", error.message()),
+            _ => error.message().to_owned(),
+        };
+        Self {
+            exit_code: 4,
+            json,
+            category: "media_probe",
+            code: error.code_str().to_owned(),
+            message,
+            details: diagnostic.map(|diagnostic| json!({"diagnostic": diagnostic})),
+        }
+    }
+
     fn recovery(error: or_core::ProjectRecoveryError, json: bool) -> Self {
         let code = match &error {
             or_core::ProjectRecoveryError::Io(_) => "IO_ERROR",
@@ -233,6 +249,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "project" => run_project(&args[1..], json)?,
         "history" => run_history(&args[1..], json)?,
         "recovery" => run_recovery(&args[1..], json)?,
+        "media" => run_media(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
     };
@@ -281,6 +298,91 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
             json,
             "unknown project action; expected summary, rename, or save",
         )),
+    }
+}
+
+fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(json, "expected media probe"));
+    };
+    if action != "probe" {
+        return Err(CliError::usage(
+            json,
+            "unknown media action; expected probe",
+        ));
+    }
+    let options = Options::parse(&args[1..], &["--file"], &[], json)?;
+    let path = required_path(&options, "--file", json)?;
+    let metadata =
+        or_core::probe_media_file(&path).map_err(|error| CliError::media(error, json))?;
+    if json {
+        Ok(json_string(
+            serde_json::to_value(metadata).expect("media metadata is serializable"),
+        ))
+    } else {
+        Ok(render_media_metadata(&metadata))
+    }
+}
+
+fn render_media_metadata(metadata: &or_core::MediaMetadata) -> String {
+    let format = if metadata.format_names().is_empty() {
+        "unknown".to_owned()
+    } else {
+        metadata.format_names().join(", ")
+    };
+    let duration = metadata
+        .duration()
+        .map(format_rational_time)
+        .unwrap_or_else(|| "unknown".to_owned());
+    let mut lines = vec![
+        format!("Format: {format}"),
+        format!("Duration: {duration}"),
+        format!("File size: {} bytes", metadata.file_size_bytes()),
+        format!("Streams: {}", metadata.streams().len()),
+    ];
+
+    for stream in metadata.streams() {
+        match stream {
+            or_core::MediaStreamMetadata::Video(stream) => {
+                let mut details = vec![
+                    stream.codec_name().unwrap_or("unknown").to_owned(),
+                    format!("{}x{}", stream.width(), stream.height()),
+                ];
+                if let Some(rate) = stream.average_frame_rate() {
+                    details.push(format!("{}/{} fps", rate.numerator(), rate.denominator()));
+                }
+                lines.push(format!("Video #{}: {}", stream.index(), details.join(", ")));
+            }
+            or_core::MediaStreamMetadata::Audio(stream) => {
+                let sample_rate = stream
+                    .sample_rate()
+                    .map(|rate| format!("{rate} Hz"))
+                    .unwrap_or_else(|| "unknown sample rate".to_owned());
+                let channels = stream
+                    .channels()
+                    .map(|count| format!("{count} channels"))
+                    .unwrap_or_else(|| "unknown channels".to_owned());
+                lines.push(format!(
+                    "Audio #{}: {}, {sample_rate}, {channels}",
+                    stream.index(),
+                    stream.codec_name().unwrap_or("unknown")
+                ));
+            }
+            or_core::MediaStreamMetadata::Other(stream) => {
+                let kind = stream.codec_type().unwrap_or("unknown");
+                let codec = stream.codec_name().unwrap_or("unknown");
+                lines.push(format!("Other #{}: {kind}, {codec}", stream.index()));
+            }
+        }
+    }
+    lines.join("\n")
+}
+
+fn format_rational_time(time: or_core::RationalTime) -> String {
+    if time.denominator() == 1 {
+        format!("{} s", time.numerator())
+    } else {
+        format!("{}/{} s", time.numerator(), time.denominator())
     }
 }
 

@@ -32,6 +32,35 @@ impl TestDirectory {
     fn project_path(&self) -> PathBuf {
         self.0.join("project with spaces.orproj")
     }
+
+    fn media_path(&self, name: &str) -> PathBuf {
+        let path = self.0.join(name);
+        fs::write(&path, b"small generated CLI test input").unwrap();
+        path
+    }
+
+    fn probe_stub(&self) -> PathBuf {
+        let executable = self.0.join(if cfg!(windows) {
+            "probe-stub.exe"
+        } else {
+            "probe-stub"
+        });
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../or_core/tests/support/media_probe_stub.rs");
+        let output = Command::new("rustc")
+            .arg("--edition=2024")
+            .arg(source)
+            .arg("-o")
+            .arg(&executable)
+            .output()
+            .expect("run rustc to build a test-only probe helper");
+        assert!(
+            output.status.success(),
+            "test helper compilation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        executable
+    }
 }
 
 impl Drop for TestDirectory {
@@ -67,6 +96,14 @@ fn cli(args: impl IntoIterator<Item = OsString>) -> Output {
         .args(args)
         .output()
         .expect("run or executable")
+}
+
+fn cli_with_probe(args: impl IntoIterator<Item = OsString>, executable: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_or"))
+        .env("OR_FFPROBE_PATH", executable)
+        .args(args)
+        .output()
+        .expect("run or executable with a test probe")
 }
 
 fn words(args: &[&str]) -> Vec<OsString> {
@@ -342,6 +379,93 @@ fn recovery_cli_reports_all_states_and_requires_explicit_actions() {
         &["--json"],
     ));
     assert_eq!(discarded["discarded"], true);
+}
+
+#[test]
+fn media_probe_cli_renders_human_and_or_json_for_unicode_path() {
+    let directory = TestDirectory::new();
+    let path = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+
+    let human = cli_with_probe(
+        path_args(&["media", "probe"], "--file", &path, &[]),
+        &probe_stub,
+    );
+    assert!(
+        human.status.success(),
+        "media probe failed: {}",
+        String::from_utf8_lossy(&human.stderr)
+    );
+    assert!(human.stderr.is_empty());
+    let human = String::from_utf8(human.stdout).unwrap();
+    assert!(human.contains("Format: matroska, webm"));
+    assert!(human.contains("Duration: 3/2 s"));
+    assert!(human.contains("Streams: 2"));
+    assert!(human.contains("Video #0: ffv1, 16x16, 24000/1001 fps"));
+    assert!(human.contains("Audio #1: pcm_s16le, 48000 Hz, 2 channels"));
+
+    let output = cli_with_probe(
+        path_args(&["media", "probe"], "--file", &path, &["--json"]),
+        &probe_stub,
+    );
+    assert!(
+        output.status.success(),
+        "media probe JSON failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let metadata: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        metadata["format_names"],
+        serde_json::json!(["matroska", "webm"])
+    );
+    assert_eq!(metadata["duration"]["numerator"], 3);
+    assert_eq!(metadata["duration"]["denominator"], 2);
+    assert_eq!(metadata["streams"][0]["kind"], "video");
+    assert_eq!(metadata["streams"][1]["kind"], "audio");
+    assert!(metadata.get("path").is_none());
+}
+
+#[test]
+fn media_probe_cli_returns_structured_backend_unavailable_error() {
+    let directory = TestDirectory::new();
+    let path = directory.media_path("input.mkv");
+    let args = path_args(&["media", "probe"], "--file", &path, &["--json"]);
+    let output = cli_with_probe(args, &directory.0.join("missing-probe"));
+    assert!(!output.status.success());
+    assert!(output.stderr.is_empty());
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["category"], "media_probe");
+    assert_eq!(error["error"]["code"], "PROBE_BACKEND_UNAVAILABLE");
+}
+
+#[test]
+fn media_probe_cli_reports_missing_files_and_bounded_probe_failure() {
+    let directory = TestDirectory::new();
+    let missing = directory.0.join("missing.mkv");
+    let output = cli_with_probe(
+        path_args(&["media", "probe"], "--file", &missing, &["--json"]),
+        &directory.0.join("missing-probe"),
+    );
+    assert!(!output.status.success());
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "MEDIA_NOT_FOUND");
+
+    let failure_path = directory.media_path("failure.mkv");
+    let probe_stub = directory.probe_stub();
+    let output = cli_with_probe(
+        path_args(&["media", "probe"], "--file", &failure_path, &["--json"]),
+        &probe_stub,
+    );
+    assert!(!output.status.success());
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "PROBE_FAILED");
+    let diagnostic = error["error"]["details"]["diagnostic"]
+        .as_str()
+        .unwrap_or_else(|| panic!("expected bounded diagnostic in CLI error: {error}"));
+    assert!(diagnostic.len() <= 512);
+    assert!(!diagnostic.contains(&directory.0.to_string_lossy().to_string()));
 }
 
 #[test]
