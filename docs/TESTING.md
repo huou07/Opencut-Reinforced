@@ -123,7 +123,7 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 
 - `MediaId` and `JobId`: UUIDv4 generation, canonical display/parse, serde round trips, and rejection of malformed and non-v4 IDs.
 - Exact duration parsing: `0`, whole seconds, decimal fractions, normalization, excess precision, invalid signs/text, and overflow. Rates cover `24/1`, `24000/1001`, `30000/1001`, zero values, invalid syntax, and overflow.
-- External JSON conversion: video-only, audio-only, combined streams, subtitle/other streams, missing optional fields, unknown external fields, malformed documents, invalid dimensions, invalid durations, and invalid optional frame rates/audio values.
+- External JSON conversion: video-only, audio-only, combined streams, subtitle/other streams, missing optional fields, unknown external fields, malformed documents, invalid dimensions, invalid durations, and invalid optional frame rates/audio values. Invalid optional rates and audio sample-rate/channel-count values become unavailable; invalid required dimensions or durations fail with a structured metadata error.
 - OR metadata serde: stable round trip and rejection of zero dimensions or negative duration.
 - Probe process tests: missing executable, directory input, short injected timeout with child cleanup, oversized stdout and stderr, nonzero exit with bounded sanitized diagnostic, and a path containing spaces and Unicode.
 - CLI contracts: human and OR JSON output, Unicode input path, structured backend-unavailable and missing-file errors, and bounded probe-failure details.
