@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 abstract interface class ProjectFilePicker {
   bool get isSupported;
   Future<String?> openProjectPath();
+  Future<String?> openMediaPath();
   Future<String?> saveProjectPath({required String suggestedName});
 }
 
@@ -24,6 +25,13 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   Future<String?> openProjectPath() async {
     if (!isSupported) return null;
     final file = await openFile(acceptedTypeGroups: [_projectType]);
+    return file?.path;
+  }
+
+  @override
+  Future<String?> openMediaPath() async {
+    if (!isSupported) return null;
+    final file = await openFile();
     return file?.path;
   }
 

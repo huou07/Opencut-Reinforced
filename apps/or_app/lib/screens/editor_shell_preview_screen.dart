@@ -12,6 +12,14 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.project,
     this.notice,
     this.busy = false,
+    this.mediaPage,
+    this.mediaLoading = false,
+    this.mediaLoadingMore = false,
+    this.mediaLoadError,
+    this.onImportMedia,
+    this.onLoadMoreMedia,
+    this.onRefreshMedia,
+    this.onRemoveMedia,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -24,6 +32,14 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final ProjectReadModel? project;
   final String? notice;
   final bool busy;
+  final ProjectMediaPage? mediaPage;
+  final bool mediaLoading;
+  final bool mediaLoadingMore;
+  final String? mediaLoadError;
+  final VoidCallback? onImportMedia;
+  final VoidCallback? onLoadMoreMedia;
+  final VoidCallback? onRefreshMedia;
+  final ValueChanged<ProjectMediaItem>? onRemoveMedia;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -111,12 +127,24 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             children: [
               _EditorToolRail(
                 selected: _selectedTool,
+                isProjectWorkspace: widget.isProjectWorkspace,
                 onSelected: (tool) => setState(() => _selectedTool = tool),
               ),
               const VerticalDivider(width: 1),
               SizedBox(
                 width: wide ? 224 : 172,
-                child: _EditorToolPanel(selectedTool: _selectedTool),
+                child: _EditorToolPanel(
+                  selectedTool: _selectedTool,
+                  isProjectWorkspace: widget.isProjectWorkspace,
+                  mediaPage: widget.mediaPage,
+                  mediaLoading: widget.mediaLoading,
+                  mediaLoadingMore: widget.mediaLoadingMore,
+                  mediaLoadError: widget.mediaLoadError,
+                  onImportMedia: widget.busy ? null : widget.onImportMedia,
+                  onLoadMoreMedia: widget.onLoadMoreMedia,
+                  onRefreshMedia: widget.onRefreshMedia,
+                  onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
+                ),
               ),
               const VerticalDivider(width: 1),
               const Expanded(child: _ViewerPanel(compact: false)),
@@ -342,9 +370,14 @@ class _EditorPreviewHeader extends StatelessWidget {
 }
 
 class _EditorToolRail extends StatelessWidget {
-  const _EditorToolRail({required this.selected, required this.onSelected});
+  const _EditorToolRail({
+    required this.selected,
+    required this.isProjectWorkspace,
+    required this.onSelected,
+  });
 
   final String selected;
+  final bool isProjectWorkspace;
   final ValueChanged<String> onSelected;
 
   @override
@@ -358,12 +391,14 @@ class _EditorToolRail extends StatelessWidget {
             children: [
               for (final tool in _editorTools)
                 Tooltip(
-                  message:
-                      '${tool.label} — unavailable in this Developer Preview',
+                  message: isProjectWorkspace && tool.label == 'Media'
+                      ? 'Media library'
+                      : '${tool.label} — unavailable in this Developer Preview',
                   child: Semantics(
                     button: true,
-                    label:
-                        '${tool.label}, unavailable in this Developer Preview',
+                    label: isProjectWorkspace && tool.label == 'Media'
+                        ? 'Media library'
+                        : '${tool.label}, unavailable in this Developer Preview',
                     child: InkWell(
                       key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
                       onTap: () => onSelected(tool.label),
@@ -410,12 +445,45 @@ class _EditorToolRail extends StatelessWidget {
 }
 
 class _EditorToolPanel extends StatelessWidget {
-  const _EditorToolPanel({required this.selectedTool});
+  const _EditorToolPanel({
+    required this.selectedTool,
+    required this.isProjectWorkspace,
+    required this.mediaPage,
+    required this.mediaLoading,
+    required this.mediaLoadingMore,
+    required this.mediaLoadError,
+    required this.onImportMedia,
+    required this.onLoadMoreMedia,
+    required this.onRefreshMedia,
+    required this.onRemoveMedia,
+  });
 
   final String selectedTool;
+  final bool isProjectWorkspace;
+  final ProjectMediaPage? mediaPage;
+  final bool mediaLoading;
+  final bool mediaLoadingMore;
+  final String? mediaLoadError;
+  final VoidCallback? onImportMedia;
+  final VoidCallback? onLoadMoreMedia;
+  final VoidCallback? onRefreshMedia;
+  final ValueChanged<ProjectMediaItem>? onRemoveMedia;
 
   @override
   Widget build(BuildContext context) {
+    if (selectedTool == 'Media' && isProjectWorkspace) {
+      return _MediaLibraryPanel(
+        page: mediaPage,
+        loading: mediaLoading,
+        loadingMore: mediaLoadingMore,
+        error: mediaLoadError,
+        onImport: onImportMedia,
+        onLoadMore: onLoadMoreMedia,
+        onRefresh: onRefreshMedia,
+        onRemove: onRemoveMedia,
+      );
+    }
+
     final message = selectedTool == 'Media'
         ? 'Media tools unavailable in this Developer Preview'
         : 'Unavailable in this Developer Preview';
@@ -451,6 +519,226 @@ class _EditorToolPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MediaLibraryPanel extends StatelessWidget {
+  const _MediaLibraryPanel({
+    required this.page,
+    required this.loading,
+    required this.loadingMore,
+    required this.error,
+    required this.onImport,
+    required this.onLoadMore,
+    required this.onRefresh,
+    required this.onRemove,
+  });
+
+  final ProjectMediaPage? page;
+  final bool loading;
+  final bool loadingMore;
+  final String? error;
+  final VoidCallback? onImport;
+  final VoidCallback? onLoadMore;
+  final VoidCallback? onRefresh;
+  final ValueChanged<ProjectMediaItem>? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = page?.items ?? const <ProjectMediaItem>[];
+    return ColoredBox(
+      key: const ValueKey('project-media-panel'),
+      color: OrColors.backgroundRaised,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _PanelHeader(title: 'Media'),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              OrSpacing.x2,
+              OrSpacing.x2,
+              OrSpacing.x2,
+              0,
+            ),
+            child: OutlinedButton.icon(
+              key: const ValueKey('media-import'),
+              onPressed: onImport,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Import Media'),
+            ),
+          ),
+          if (page != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                OrSpacing.x3,
+                OrSpacing.x2,
+                OrSpacing.x3,
+                0,
+              ),
+              child: Text(
+                '${page!.totalCount} ${page!.totalCount == 1 ? 'item' : 'items'}',
+                style: const TextStyle(color: OrColors.textMuted, fontSize: 10),
+              ),
+            ),
+          if (loading && items.isEmpty)
+            const Expanded(
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (items.isEmpty && error == null)
+            const Expanded(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(OrSpacing.x3),
+                  child: Text(
+                    'No media imported',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(OrSpacing.x2),
+                children: [
+                  for (final item in items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: OrSpacing.x2),
+                      child: _MediaLibraryItem(
+                        item: item,
+                        onRemove: onRemove == null
+                            ? null
+                            : () => onRemove!(item),
+                      ),
+                    ),
+                  if (error != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.all(OrSpacing.x2),
+                      child: Text(
+                        error!,
+                        style: const TextStyle(
+                          color: OrColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: onRefresh,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                  if (page?.nextOffset != null)
+                    TextButton.icon(
+                      key: const ValueKey('media-load-more'),
+                      onPressed: loadingMore ? null : onLoadMore,
+                      icon: loadingMore
+                          ? const SizedBox.square(
+                              dimension: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.expand_more, size: 17),
+                      label: const Text('Load more'),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaLibraryItem extends StatelessWidget {
+  const _MediaLibraryItem({required this.item, required this.onRemove});
+
+  final ProjectMediaItem item;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _mediaDisplayName(item.sourceUri);
+    final details = <String>[
+      if (item.formatNames.isNotEmpty) item.formatNames.join(', '),
+      if (item.duration != null) item.duration!,
+      if (item.videoDetails != null) item.videoDetails!,
+      if (item.audioDetails != null) 'Audio · ${item.audioDetails}',
+    ];
+    return Tooltip(
+      message: 'Media ID: ${item.mediaId}\n${item.sourceUri}',
+      child: Container(
+        key: ValueKey('media-item-${item.mediaId}'),
+        padding: const EdgeInsets.only(left: OrSpacing.x2),
+        decoration: BoxDecoration(
+          color: OrColors.surface,
+          border: Border.all(color: OrColors.border),
+          borderRadius: BorderRadius.circular(OrRadii.small),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.perm_media_outlined,
+              size: 16,
+              color: OrColors.textMuted,
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      key: ValueKey('media-name-${item.mediaId}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: OrColors.text,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (details.isNotEmpty)
+                      Text(
+                        details.join(' · '),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: 9,
+                          height: 1.35,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            IconButton(
+              key: ValueKey('media-remove-${item.mediaId}'),
+              tooltip: 'Remove from Project',
+              onPressed: onRemove,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.remove_circle_outline, size: 17),
+              color: OrColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _mediaDisplayName(String sourceUri) {
+  final uri = Uri.tryParse(sourceUri);
+  if (uri != null && uri.pathSegments.isNotEmpty) {
+    return uri.pathSegments.last;
+  }
+  final normalized = sourceUri.replaceAll('\\', '/');
+  return normalized.split('/').last;
 }
 
 class _ViewerPanel extends StatelessWidget {

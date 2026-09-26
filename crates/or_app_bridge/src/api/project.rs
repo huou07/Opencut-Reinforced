@@ -1,10 +1,11 @@
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, OperationError, OperationErrorCode,
-    ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError, ProjectRevision,
-    QueryResult, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection,
-    apply_project_recovery, discard_project_recovery, inspect_project_recovery,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, MediaId, MediaItem,
+    MediaStreamMetadata, OperationError, OperationErrorCode, ProjectFileSession, ProjectId,
+    ProjectInstanceId, ProjectRecoveryError, ProjectRevision, QueryEnvelope, QueryResult,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, apply_project_recovery,
+    discard_project_recovery, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{path::Path, str::FromStr, sync::mpsc, thread};
@@ -25,6 +26,28 @@ pub struct ProjectActionResult {
     pub error_code: String,
     pub message: String,
     pub view: Option<ProjectView>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectMediaItemView {
+    pub media_id: String,
+    pub source_uri: String,
+    pub format_names: Vec<String>,
+    pub duration: Option<String>,
+    pub video_details: Option<String>,
+    pub audio_details: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectMediaPageView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub items: Vec<ProjectMediaItemView>,
+    pub total_count: u64,
+    pub offset: u64,
+    pub limit: u64,
+    pub next_offset: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -179,6 +202,111 @@ impl ProjectHostHandle {
         self.project_view().map_err(host_error)
     }
 
+    pub fn list_media_page(
+        &self,
+        offset: u64,
+        limit: u64,
+    ) -> Result<ProjectMediaPageView, ProjectBridgeError> {
+        let summary = self.host.describe().map_err(host_error)?;
+        let offset = usize::try_from(offset).map_err(|_| invalid_arguments())?;
+        let limit = usize::try_from(limit).map_err(|_| invalid_arguments())?;
+        let request = QueryEnvelope::media_list(
+            summary.summary.project_id,
+            summary.summary.project_instance_id,
+            offset,
+            limit,
+        );
+        let result = match self
+            .host
+            .handle_application_request(ApplicationRequest::Query(request))
+        {
+            Ok(ApplicationResponse::Query(result)) => result,
+            Ok(ApplicationResponse::Error(error)) => {
+                return Err(operation_bridge_error(error));
+            }
+            Ok(_) => return Err(unexpected_response_error()),
+            Err(error) => return Err(host_error(error)),
+        };
+        let page = result
+            .media_page
+            .as_ref()
+            .ok_or_else(unexpected_response_error)?;
+        Ok(ProjectMediaPageView {
+            project_id: result.summary.project_id.to_string(),
+            project_instance_id: result.summary.project_instance_id.to_string(),
+            project_revision: result.summary.project_revision.value(),
+            items: page.items.iter().map(media_item_view).collect(),
+            total_count: u64::try_from(page.total_count).expect("usize fits in u64"),
+            offset: u64::try_from(page.offset).expect("usize fits in u64"),
+            limit: u64::try_from(page.limit).expect("usize fits in u64"),
+            next_offset: page
+                .next_offset
+                .map(|offset| u64::try_from(offset).expect("usize fits in u64")),
+        })
+    }
+
+    /// Prepares media without holding the live-host lock, then dispatches with the
+    /// identity and revision captured by the caller before probing started.
+    pub fn import_media(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        path: String,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        let item = match prepare_media_import(Path::new(&path)) {
+            Ok(item) => item,
+            Err(error) => {
+                return ProjectActionResult {
+                    succeeded: false,
+                    error_code: error.code_str().to_owned(),
+                    message: error.to_string(),
+                    view: None,
+                };
+            }
+        };
+        self.dispatch_command(CommandEnvelope::add_media(
+            project_id,
+            project_instance_id,
+            revision,
+            item,
+        ))
+    }
+
+    pub fn remove_media(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        media_id: String,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        let media_id = match MediaId::from_str(&media_id) {
+            Ok(media_id) => media_id,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_MEDIA_ID".to_owned(),
+                    message: error.to_string(),
+                });
+            }
+        };
+        self.dispatch_command(CommandEnvelope::remove_media(
+            project_id,
+            project_instance_id,
+            revision,
+            media_id,
+        ))
+    }
+
     pub fn rename(
         &self,
         project_id: String,
@@ -272,25 +400,11 @@ impl ProjectHostHandle {
         command_id: &str,
         name: Option<String>,
     ) -> ProjectActionResult {
-        let project_id = match ProjectId::from_str(&project_id) {
-            Ok(project_id) => project_id,
-            Err(error) => {
-                return action_error(ProjectBridgeError {
-                    code: "INVALID_PROJECT_ID".to_owned(),
-                    message: error.to_string(),
-                });
-            }
-        };
-        let project_instance_id = match ProjectInstanceId::from_str(&project_instance_id) {
-            Ok(project_instance_id) => project_instance_id,
-            Err(error) => {
-                return action_error(ProjectBridgeError {
-                    code: "INVALID_PROJECT_INSTANCE_ID".to_owned(),
-                    message: error.to_string(),
-                });
-            }
-        };
-        let revision = ProjectRevision::new(expected_revision);
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
         let envelope = match (command_id, name) {
             ("project.rename", Some(name)) => {
                 CommandEnvelope::rename_project(project_id, project_instance_id, revision, name)
@@ -310,6 +424,10 @@ impl ProjectHostHandle {
                 };
             }
         };
+        self.dispatch_command(envelope)
+    }
+
+    fn dispatch_command(&self, envelope: CommandEnvelope) -> ProjectActionResult {
         match self
             .host
             .handle_application_request(ApplicationRequest::Command(envelope))
@@ -340,6 +458,101 @@ impl ProjectHostHandle {
             self.host.is_dirty()?,
             self.host.descriptor_path()?,
         ))
+    }
+}
+
+fn parse_session_identity(
+    project_id: &str,
+    project_instance_id: &str,
+    expected_revision: u64,
+) -> Result<(ProjectId, ProjectInstanceId, ProjectRevision), ProjectBridgeError> {
+    let project_id = ProjectId::from_str(project_id).map_err(|error| ProjectBridgeError {
+        code: "INVALID_PROJECT_ID".to_owned(),
+        message: error.to_string(),
+    })?;
+    let project_instance_id =
+        ProjectInstanceId::from_str(project_instance_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_PROJECT_INSTANCE_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+    Ok((
+        project_id,
+        project_instance_id,
+        ProjectRevision::new(expected_revision),
+    ))
+}
+
+fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
+    let metadata = item.metadata();
+    let video_details = metadata.streams().iter().find_map(|stream| match stream {
+        MediaStreamMetadata::Video(video) => {
+            let codec = video
+                .codec_name()
+                .map(|codec| format!(" {codec}"))
+                .unwrap_or_default();
+            Some(format!("{}×{}{}", video.width(), video.height(), codec))
+        }
+        _ => None,
+    });
+    let audio_details = metadata.streams().iter().find_map(|stream| match stream {
+        MediaStreamMetadata::Audio(audio) => {
+            let mut details = Vec::new();
+            if let Some(rate) = audio.sample_rate() {
+                details.push(format!("{rate} Hz"));
+            }
+            if let Some(channels) = audio.channels() {
+                details.push(format!("{channels} ch"));
+            }
+            if let Some(layout) = audio.channel_layout() {
+                details.push(layout.to_owned());
+            }
+            if let Some(codec) = audio.codec_name() {
+                details.push(codec.to_owned());
+            }
+            Some(if details.is_empty() {
+                "Audio".to_owned()
+            } else {
+                details.join(" ")
+            })
+        }
+        _ => None,
+    });
+    ProjectMediaItemView {
+        media_id: item.id().to_string(),
+        source_uri: item.source().uri().to_owned(),
+        format_names: metadata.format_names().to_vec(),
+        duration: metadata.duration().map(|duration| {
+            let value = duration.numerator();
+            let denominator = duration.denominator();
+            if denominator == 1 {
+                format!("{value} s")
+            } else {
+                format!("{value}/{denominator} s")
+            }
+        }),
+        video_details,
+        audio_details,
+    }
+}
+
+fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: operation_error_code(error.code).to_owned(),
+        message: error.to_string(),
+    }
+}
+
+fn invalid_arguments() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "INVALID_ARGUMENTS".to_owned(),
+        message: "media page bounds are invalid".to_owned(),
+    }
+}
+
+fn unexpected_response_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "UNEXPECTED_RESPONSE".to_owned(),
+        message: "The project host returned an unexpected response.".to_owned(),
     }
 }
 

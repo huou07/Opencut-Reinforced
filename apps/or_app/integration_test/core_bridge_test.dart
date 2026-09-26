@@ -194,7 +194,112 @@ void main() {
       'session_closing',
     ]);
   });
+
+  testWidgets(
+    'native media bridge persists offline media through undo and save',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync('or-media-bridge-');
+      final projectPath = '${directory.path}/media-project.orproj';
+      final missingSourcePath = '${directory.path}/offline-source.mkv';
+      await File(projectPath).writeAsString(
+        jsonEncode(
+          _offlineMediaProject(Uri.file(missingSourcePath).toString()),
+        ),
+      );
+      final gateway = _ObservedRustProjectGateway();
+      addTearDown(() async {
+        final session = gateway.activeSession;
+        if (session != null) {
+          await gateway.close(session, discardUnsaved: true);
+        }
+        directory.deleteSync(recursive: true);
+      });
+
+      final session = await gateway.openProject(projectPath);
+      final original = await gateway.listMediaPage(
+        session,
+        offset: 0,
+        limit: 50,
+      );
+      expect(original.items, hasLength(1));
+      expect(
+        original.items.single.mediaId,
+        '22222222-2222-4222-8222-222222222222',
+      );
+      expect(original.items.single.formatNames, ['matroska']);
+      expect(
+        original.items.single.sourceUri,
+        Uri.file(missingSourcePath).toString(),
+      );
+      expect(File(missingSourcePath).existsSync(), isFalse);
+
+      final removed = await gateway.removeMedia(
+        session,
+        await gateway.summary(session),
+        original.items.single.mediaId,
+      );
+      expect(removed.succeeded, isTrue);
+      expect(
+        (await gateway.listMediaPage(session, offset: 0, limit: 50)).items,
+        isEmpty,
+      );
+
+      final undone = await gateway.undo(session, removed.view!);
+      expect(undone.succeeded, isTrue);
+      final restored = await gateway.listMediaPage(
+        session,
+        offset: 0,
+        limit: 50,
+      );
+      expect(restored.items.single.mediaId, original.items.single.mediaId);
+      expect(restored.items.single.sourceUri, original.items.single.sourceUri);
+      expect(
+        restored.items.single.formatNames,
+        original.items.single.formatNames,
+      );
+
+      final saved = await gateway.save(session);
+      expect(saved.succeeded, isTrue);
+      expect(saved.view?.dirty, isFalse);
+      await gateway.close(session, discardUnsaved: false);
+
+      final reopenedSession = await gateway.openProject(projectPath);
+      final reopened = await gateway.listMediaPage(
+        reopenedSession,
+        offset: 0,
+        limit: 50,
+      );
+      expect(reopened.items, hasLength(1));
+      expect(reopened.items.single.mediaId, original.items.single.mediaId);
+      expect(reopened.items.single.sourceUri, original.items.single.sourceUri);
+      expect(reopened.items.single.formatNames, ['matroska']);
+      expect((await gateway.summary(reopenedSession)).dirty, isFalse);
+      expect(File(missingSourcePath).existsSync(), isFalse);
+    },
+  );
 }
+
+Map<String, Object?> _offlineMediaProject(String sourceUri) => {
+  'format': 'opencut-reinforced-project',
+  'schema_version': 2,
+  'project': {
+    'id': '01234567-89ab-4def-8123-456789abcdef',
+    'revision': 0,
+    'name': 'Offline media fixture',
+    'media': [
+      {
+        'id': '22222222-2222-4222-8222-222222222222',
+        'source': {'kind': 'local_file', 'uri': sourceUri},
+        'metadata': {
+          'format_names': ['matroska'],
+          'duration': null,
+          'file_size_bytes': 0,
+          'streams': [],
+        },
+      },
+    ],
+  },
+};
 
 Future<void> _renameProject(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
@@ -224,6 +329,9 @@ class _NativeProjectPicker implements ProjectFilePicker {
 
   @override
   Future<String?> openProjectPath() async => openPath;
+
+  @override
+  Future<String?> openMediaPath() async => null;
 
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>
@@ -271,6 +379,27 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectSessionHandle session,
     ProjectReadModel current,
   ) => _gateway.redo(session, current);
+
+  @override
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) => _gateway.listMediaPage(session, offset: offset, limit: limit);
+
+  @override
+  Future<ProjectActionResult> importMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  ) => _gateway.importMedia(session, current, path);
+
+  @override
+  Future<ProjectActionResult> removeMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  ) => _gateway.removeMedia(session, current, mediaId);
 
   @override
   Future<ProjectActionResult> save(ProjectSessionHandle session) =>

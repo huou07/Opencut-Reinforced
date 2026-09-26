@@ -70,10 +70,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
   Capability dco_decode_capability(dynamic raw);
 
   @protected
   HealthStatus dco_decode_health_status(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
 
   @protected
   List<Capability> dco_decode_list_capability(dynamic raw);
@@ -82,7 +88,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ProjectMediaItemView> dco_decode_list_project_media_item_view(
+    dynamic raw,
+  );
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   ProjectActionResult dco_decode_project_action_result(dynamic raw);
@@ -92,6 +109,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectHostEventView dco_decode_project_host_event_view(dynamic raw);
+
+  @protected
+  ProjectMediaItemView dco_decode_project_media_item_view(dynamic raw);
+
+  @protected
+  ProjectMediaPageView dco_decode_project_media_page_view(dynamic raw);
 
   @protected
   ProjectView dco_decode_project_view(dynamic raw);
@@ -163,10 +186,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   Capability sse_decode_capability(SseDeserializer deserializer);
 
   @protected
   HealthStatus sse_decode_health_status(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
   List<Capability> sse_decode_list_capability(SseDeserializer deserializer);
@@ -175,9 +204,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ProjectMediaItemView> sse_decode_list_project_media_item_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
   ProjectView? sse_decode_opt_box_autoadd_project_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   ProjectActionResult sse_decode_project_action_result(
@@ -191,6 +231,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectHostEventView sse_decode_project_host_event_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectMediaItemView sse_decode_project_media_item_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectMediaPageView sse_decode_project_media_page_view(
     SseDeserializer deserializer,
   );
 
@@ -281,10 +331,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
   void sse_encode_capability(Capability self, SseSerializer serializer);
 
   @protected
   void sse_encode_health_status(HealthStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_capability(
@@ -299,10 +355,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_media_item_view(
+    List<ProjectMediaItemView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_project_view(
     ProjectView? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_project_action_result(
@@ -319,6 +387,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_host_event_view(
     ProjectHostEventView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_media_item_view(
+    ProjectMediaItemView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_media_page_view(
+    ProjectMediaPageView self,
     SseSerializer serializer,
   );
 

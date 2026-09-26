@@ -73,6 +73,70 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    try {
+      final page = await _host(
+        session,
+      ).listMediaPage(offset: BigInt.from(offset), limit: BigInt.from(limit));
+      return ProjectMediaPage(
+        projectId: page.projectId,
+        projectInstanceId: page.projectInstanceId,
+        projectRevision: page.projectRevision,
+        items: page.items
+            .map(
+              (item) => ProjectMediaItem(
+                mediaId: item.mediaId,
+                sourceUri: item.sourceUri,
+                formatNames: List.unmodifiable(item.formatNames),
+                duration: item.duration,
+                videoDetails: item.videoDetails,
+                audioDetails: item.audioDetails,
+              ),
+            )
+            .toList(growable: false),
+        totalCount: page.totalCount.toInt(),
+        offset: page.offset.toInt(),
+        limit: page.limit.toInt(),
+        nextOffset: page.nextOffset?.toInt(),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> importMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  ) async => _action(
+    await _host(session).importMedia(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      path: path,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> removeMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  ) async => _action(
+    await _host(session).removeMedia(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      mediaId: mediaId,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> save(ProjectSessionHandle session) async =>
       _action(await _host(session).save());
 

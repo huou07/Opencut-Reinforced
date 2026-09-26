@@ -21,6 +21,7 @@ import 'command_palette.dart';
 
 const _androidProjectAccessMessage =
     'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
+const _mediaPageSize = 50;
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -48,6 +49,11 @@ class _AppShellState extends State<AppShell> {
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
+  ProjectMediaPage? _mediaPage;
+  bool _mediaLoading = false;
+  bool _mediaLoadingMore = false;
+  String? _mediaLoadError;
+  int _mediaRefreshGeneration = 0;
   late final AppLifecycleListener _lifecycleListener;
 
   bool get _hasProjectWorkspace =>
@@ -218,6 +224,14 @@ class _AppShellState extends State<AppShell> {
               project: _activeProject,
               notice: _projectNotice,
               busy: _busy,
+              mediaPage: _mediaPage,
+              mediaLoading: _mediaLoading,
+              mediaLoadingMore: _mediaLoadingMore,
+              mediaLoadError: _mediaLoadError,
+              onImportMedia: _importMedia,
+              onLoadMoreMedia: _loadMoreMedia,
+              onRefreshMedia: _refreshMediaLibrary,
+              onRemoveMedia: _removeMedia,
               onSave: _saveProject,
               onRename: _renameProject,
               onUndo: _undoProject,
@@ -611,6 +625,7 @@ class _AppShellState extends State<AppShell> {
     String path, {
     String? notice,
   }) async {
+    final refreshGeneration = ++_mediaRefreshGeneration;
     _eventSubscription = widget.projectGateway
         .watch(session)
         .listen(
@@ -631,14 +646,27 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _activeSession = session;
       _activeProject = null;
+      _mediaPage = null;
+      _mediaLoading = true;
+      _mediaLoadingMore = false;
+      _mediaLoadError = null;
       _activeProjectPath = path;
       _projectNotice = notice;
       _destination = AppDestination.editorPreview;
     });
     try {
       final view = await widget.projectGateway.summary(session);
-      if (!mounted || !identical(session, _activeSession)) return;
+      if (!mounted ||
+          !identical(session, _activeSession) ||
+          refreshGeneration != _mediaRefreshGeneration) {
+        return;
+      }
       setState(() => _activeProject = view);
+      await _refreshMediaPage(
+        session,
+        project: view,
+        refreshGeneration: refreshGeneration,
+      );
     } catch (_) {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
@@ -660,15 +688,7 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (event.kind == 'project_changed' || event.kind == 'project_saved') {
-      try {
-        final view = await widget.projectGateway.summary(session);
-        if (!mounted || !identical(session, _activeSession)) return;
-        setState(() => _activeProject = view);
-      } catch (_) {
-        _showUnavailable(
-          'The project changed, but its summary could not be refreshed.',
-        );
-      }
+      await _refreshProjectState(session);
     }
   }
 
@@ -685,12 +705,13 @@ class _AppShellState extends State<AppShell> {
       if (!mounted || !identical(session, _activeSession)) return null;
       if (!result.succeeded) {
         if (result.errorCode == 'REVISION_CONFLICT') {
-          final refreshed = await widget.projectGateway.summary(session);
-          if (mounted && identical(session, _activeSession)) {
-            setState(() => _activeProject = refreshed);
-          }
+          await _refreshProjectState(session);
           _showUnavailable(
             'The project changed in the attached CLI. The summary is refreshed; this action was not retried.',
+          );
+        } else if (result.errorCode == 'PROBE_BACKEND_UNAVAILABLE') {
+          _showUnavailable(
+            'Media probe backend is unavailable.\nThis Developer Preview currently requires a system-provided ffprobe.',
           );
         } else if (result.errorCode == 'PROJECT_FILE_CHANGED') {
           _showUnavailable(
@@ -707,8 +728,13 @@ class _AppShellState extends State<AppShell> {
       }
       final updated =
           result.view ?? await widget.projectGateway.summary(session);
+      final changed = updated.revision != current.revision;
       if (mounted && identical(session, _activeSession)) {
-        setState(() => _activeProject = updated);
+        setState(() {
+          _activeProject = updated;
+          if (changed) _mediaLoading = true;
+        });
+        if (changed) await _refreshProjectState(session);
       }
       return updated;
     } on ProjectGatewayException catch (error) {
@@ -749,6 +775,221 @@ class _AppShellState extends State<AppShell> {
       (session, view) => widget.projectGateway.rename(session, view, name),
     );
   }
+
+  Future<void> _importMedia() async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    String? path;
+    try {
+      path = await widget.projectFilePicker.openMediaPath();
+    } catch (_) {
+      _showUnavailable('A media file could not be selected.');
+      return;
+    }
+    if (path == null || !mounted || !identical(session, _activeSession)) {
+      return;
+    }
+
+    await _runProjectAction((session, _) async {
+      // Capture the identity and revision immediately before Rust probes the
+      // file. The bridge keeps this pre-probe revision for the add command.
+      final current = await widget.projectGateway.summary(session);
+      if (!mounted || !identical(session, _activeSession)) {
+        return const ProjectActionResult(
+          succeeded: false,
+          errorCode: 'PROJECT_CLOSING',
+          message: 'The project is closing.',
+        );
+      }
+      setState(() => _activeProject = current);
+      return widget.projectGateway.importMedia(session, current, path!);
+    });
+  }
+
+  Future<void> _removeMedia(ProjectMediaItem item) async {
+    final session = _activeSession;
+    if (session == null || _activeProject == null || _busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove media from project?'),
+        content: const Text(
+          'This removes the item from the project library. The source file will not be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-remove-media'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove from Project'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !identical(session, _activeSession)) {
+      return;
+    }
+    await _runProjectAction(
+      (session, current) =>
+          widget.projectGateway.removeMedia(session, current, item.mediaId),
+    );
+  }
+
+  Future<void> _loadMoreMedia() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    final page = _mediaPage;
+    final offset = page?.nextOffset;
+    final refreshGeneration = _mediaRefreshGeneration;
+    if (session == null || project == null || page == null || offset == null) {
+      return;
+    }
+    if (_mediaLoading || _mediaLoadingMore) return;
+    setState(() => _mediaLoadingMore = true);
+    try {
+      final next = await widget.projectGateway.listMediaPage(
+        session,
+        offset: offset,
+        limit: _mediaPageSize,
+      );
+      if (!mounted ||
+          !identical(session, _activeSession) ||
+          refreshGeneration != _mediaRefreshGeneration) {
+        return;
+      }
+      if (!_matchesProject(next, project)) {
+        await _refreshProjectState(session);
+        return;
+      }
+      setState(() {
+        _mediaPage = ProjectMediaPage(
+          projectId: page.projectId,
+          projectInstanceId: page.projectInstanceId,
+          projectRevision: page.projectRevision,
+          items: List.unmodifiable([...page.items, ...next.items]),
+          totalCount: next.totalCount,
+          offset: 0,
+          limit: page.limit,
+          nextOffset: next.nextOffset,
+        );
+        _mediaLoadError = null;
+      });
+    } on ProjectGatewayException catch (error) {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() => _mediaLoadError = error.message);
+      }
+    } catch (_) {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() => _mediaLoadError = 'The media library could not load.');
+      }
+    } finally {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() => _mediaLoadingMore = false);
+      }
+    }
+  }
+
+  Future<void> _refreshMediaLibrary() async {
+    final session = _activeSession;
+    if (session != null) await _refreshProjectState(session);
+  }
+
+  Future<void> _refreshProjectState(ProjectSessionHandle session) async {
+    if (!mounted || !identical(session, _activeSession)) return;
+    final refreshGeneration = ++_mediaRefreshGeneration;
+    try {
+      final view = await widget.projectGateway.summary(session);
+      if (!mounted ||
+          !identical(session, _activeSession) ||
+          refreshGeneration != _mediaRefreshGeneration) {
+        return;
+      }
+      setState(() {
+        _activeProject = view;
+        _mediaLoading = true;
+        _mediaLoadError = null;
+      });
+      await _refreshMediaPage(
+        session,
+        project: view,
+        refreshGeneration: refreshGeneration,
+      );
+    } catch (_) {
+      if (mounted && identical(session, _activeSession)) {
+        _showUnavailable('The project summary could not be refreshed.');
+      }
+    }
+  }
+
+  Future<void> _refreshMediaPage(
+    ProjectSessionHandle session, {
+    required ProjectReadModel project,
+    int? refreshGeneration,
+  }) async {
+    final generation = refreshGeneration ?? ++_mediaRefreshGeneration;
+    var current = project;
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final page = await widget.projectGateway.listMediaPage(
+          session,
+          offset: 0,
+          limit: _mediaPageSize,
+        );
+        if (!mounted ||
+            !identical(session, _activeSession) ||
+            generation != _mediaRefreshGeneration) {
+          return;
+        }
+        if (_matchesProject(page, current)) {
+          setState(() {
+            _activeProject = current;
+            _mediaPage = page;
+            _mediaLoading = false;
+            _mediaLoadError = null;
+          });
+          return;
+        }
+        current = await widget.projectGateway.summary(session);
+        if (!mounted ||
+            !identical(session, _activeSession) ||
+            generation != _mediaRefreshGeneration) {
+          return;
+        }
+        setState(() => _activeProject = current);
+      }
+      setState(() {
+        _mediaPage = null;
+        _mediaLoading = false;
+        _mediaLoadError = 'The media library changed while it was refreshing.';
+      });
+    } on ProjectGatewayException catch (error) {
+      if (mounted &&
+          identical(session, _activeSession) &&
+          generation == _mediaRefreshGeneration) {
+        setState(() {
+          _mediaLoading = false;
+          _mediaLoadError = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted &&
+          identical(session, _activeSession) &&
+          generation == _mediaRefreshGeneration) {
+        setState(() {
+          _mediaLoading = false;
+          _mediaLoadError = 'The media library could not load.';
+        });
+      }
+    }
+  }
+
+  bool _matchesProject(ProjectMediaPage page, ProjectReadModel project) =>
+      page.projectId == project.projectId &&
+      page.projectInstanceId == project.projectInstanceId &&
+      page.projectRevision == project.revision;
 
   Future<String?> _askProjectRename(String currentName) async {
     return showDialog<String>(
@@ -793,12 +1034,17 @@ class _AppShellState extends State<AppShell> {
 
   void _clearActiveProject(ProjectSessionHandle session) {
     if (!identical(session, _activeSession)) return;
+    _mediaRefreshGeneration++;
     unawaited(_eventSubscription?.cancel());
     if (!mounted) return;
     setState(() {
       _eventSubscription = null;
       _activeSession = null;
       _activeProject = null;
+      _mediaPage = null;
+      _mediaLoading = false;
+      _mediaLoadingMore = false;
+      _mediaLoadError = null;
       _activeProjectPath = null;
       _projectNotice = null;
     });

@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `command`, `event_view`, `forward_events`, `host_error`, `operation_error_code`, `project_session_error`, `project_view`, `recovery_action_error`, `recovery_conflict_name`, `view_from_query`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `command`, `dispatch_command`, `event_view`, `forward_events`, `host_error`, `invalid_arguments`, `media_item_view`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `recovery_action_error`, `recovery_conflict_name`, `unexpected_response_error`, `view_from_query`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -31,10 +31,31 @@ Future<RecoveryActionResult> discardRecovery({required String path}) =>
 abstract class ProjectHostHandle implements RustOpaqueInterface {
   Future<ProjectActionResult> close({required bool discardUnsaved});
 
+  /// Prepares media without holding the live-host lock, then dispatches with the
+  /// identity and revision captured by the caller before probing started.
+  Future<ProjectActionResult> importMedia({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String path,
+  });
+
+  Future<ProjectMediaPageView> listMediaPage({
+    required BigInt offset,
+    required BigInt limit,
+  });
+
   Future<ProjectActionResult> redo({
     required String projectId,
     required String projectInstanceId,
     required BigInt expectedRevision,
+  });
+
+  Future<ProjectActionResult> removeMedia({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String mediaId,
   });
 
   Future<ProjectActionResult> rename({
@@ -143,6 +164,92 @@ class ProjectHostEventView {
           projectInstanceId == other.projectInstanceId &&
           revision == other.revision &&
           dirty == other.dirty;
+}
+
+class ProjectMediaItemView {
+  final String mediaId;
+  final String sourceUri;
+  final List<String> formatNames;
+  final String? duration;
+  final String? videoDetails;
+  final String? audioDetails;
+
+  const ProjectMediaItemView({
+    required this.mediaId,
+    required this.sourceUri,
+    required this.formatNames,
+    this.duration,
+    this.videoDetails,
+    this.audioDetails,
+  });
+
+  @override
+  int get hashCode =>
+      mediaId.hashCode ^
+      sourceUri.hashCode ^
+      formatNames.hashCode ^
+      duration.hashCode ^
+      videoDetails.hashCode ^
+      audioDetails.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectMediaItemView &&
+          runtimeType == other.runtimeType &&
+          mediaId == other.mediaId &&
+          sourceUri == other.sourceUri &&
+          formatNames == other.formatNames &&
+          duration == other.duration &&
+          videoDetails == other.videoDetails &&
+          audioDetails == other.audioDetails;
+}
+
+class ProjectMediaPageView {
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectMediaItemView> items;
+  final BigInt totalCount;
+  final BigInt offset;
+  final BigInt limit;
+  final BigInt? nextOffset;
+
+  const ProjectMediaPageView({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    this.nextOffset,
+  });
+
+  @override
+  int get hashCode =>
+      projectId.hashCode ^
+      projectInstanceId.hashCode ^
+      projectRevision.hashCode ^
+      items.hashCode ^
+      totalCount.hashCode ^
+      offset.hashCode ^
+      limit.hashCode ^
+      nextOffset.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectMediaPageView &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          projectInstanceId == other.projectInstanceId &&
+          projectRevision == other.projectRevision &&
+          items == other.items &&
+          totalCount == other.totalCount &&
+          offset == other.offset &&
+          limit == other.limit &&
+          nextOffset == other.nextOffset;
 }
 
 class ProjectView {

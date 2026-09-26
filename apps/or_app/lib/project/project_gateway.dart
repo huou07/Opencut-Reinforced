@@ -32,6 +32,48 @@ class ProjectActionResult {
   final ProjectReadModel? view;
 }
 
+/// Read-only media data returned by the bounded project query.
+class ProjectMediaItem {
+  const ProjectMediaItem({
+    required this.mediaId,
+    required this.sourceUri,
+    required this.formatNames,
+    required this.duration,
+    required this.videoDetails,
+    required this.audioDetails,
+  });
+
+  final String mediaId;
+  final String sourceUri;
+  final List<String> formatNames;
+  final String? duration;
+  final String? videoDetails;
+  final String? audioDetails;
+}
+
+/// One bounded page from the project's insertion-ordered media library.
+class ProjectMediaPage {
+  const ProjectMediaPage({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    required this.nextOffset,
+  });
+
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectMediaItem> items;
+  final int totalCount;
+  final int offset;
+  final int limit;
+  final int? nextOffset;
+}
+
 class ProjectHostEvent {
   const ProjectHostEvent({
     required this.sequence,
@@ -110,6 +152,21 @@ abstract interface class ProjectGateway {
   Future<ProjectActionResult> redo(
     ProjectSessionHandle session,
     ProjectReadModel current,
+  );
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  });
+  Future<ProjectActionResult> importMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  );
+  Future<ProjectActionResult> removeMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
   );
   Future<ProjectActionResult> save(ProjectSessionHandle session);
   Future<void> close(

@@ -189,6 +189,137 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('active project shows its media library without loading media', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final item = _mediaFixture('media-seeded', '/tmp/source clip.mp4');
+    final gateway = _FakeProjectGateway()..initialMedia = [item];
+    final picker = _FakeProjectPicker()..savePath = '/tmp/media-library.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Media Library');
+
+    expect(find.byKey(const ValueKey('project-media-panel')), findsOneWidget);
+    expect(find.text('source clip.mp4'), findsOneWidget);
+    expect(
+      find.text('mp4 · 10 s · 1920×1080 h264 · Audio · AAC'),
+      findsOneWidget,
+    );
+    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Import Media calls the gateway and refreshes the page', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-import.orproj'
+      ..mediaPath = '/tmp/imported.mov';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import Media');
+
+    final queriesBeforeImport = gateway.mediaListCalls;
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaCalls, 1);
+    expect(gateway.lastImportPath, '/tmp/imported.mov');
+    expect(gateway.mediaListCalls, greaterThan(queriesBeforeImport));
+    expect(find.text('imported.mov'), findsOneWidget);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('No media loaded'), findsOneWidget);
+  });
+
+  testWidgets('media library loads later items through bounded pages', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = List.generate(
+        55,
+        (index) => _mediaFixture('media-$index', '/tmp/clip-$index.mp4'),
+      );
+    final picker = _FakeProjectPicker()..savePath = '/tmp/paginated.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Paginated Media');
+
+    final panelScroll = find.descendant(
+      of: find.byKey(const ValueKey('project-media-panel')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('media-load-more')),
+      160,
+      scrollable: panelScroll.first,
+    );
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.mediaListOffsets, [0, 50]);
+    expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('media-name-media-54')),
+      160,
+      scrollable: panelScroll.first,
+    );
+    expect(find.text('clip-54.mp4'), findsOneWidget);
+  });
+
+  testWidgets('probe backend unavailability is shown honestly', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()..nextImportBackendUnavailable = true;
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-backend.orproj'
+      ..mediaPath = '/tmp/clip.mp4';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Backend');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.importMediaCalls, 1);
+    expect(
+      find.text(
+        'Media probe backend is unavailable.\nThis Developer Preview currently requires a system-provided ffprobe.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('clip.mp4'), findsNothing);
+  });
+
+  testWidgets('removing media requires confirmation and updates the library', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-remove', '/tmp/remove me.wav')];
+    final picker = _FakeProjectPicker()..savePath = '/tmp/media-remove.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Remove Media');
+
+    await tester.tap(find.byKey(const ValueKey('media-remove-media-remove')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('source file will not be deleted'),
+      findsOneWidget,
+    );
+    expect(gateway.removeMediaCalls, 0);
+
+    await tester.tap(find.byKey(const ValueKey('confirm-remove-media')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.removeMediaCalls, 1);
+    expect(gateway.lastRemovedMediaId, 'media-remove');
+    expect(find.text('remove me.wav'), findsNothing);
+    expect(find.text('No media imported'), findsOneWidget);
+    expect(find.text('No media loaded'), findsOneWidget);
+  });
+
   testWidgets(
     'Projects shows one active project row and only saves when dirty',
     (tester) async {
@@ -745,8 +876,10 @@ class _FakeProjectPicker implements ProjectFilePicker {
 
   final bool supported;
   String? openPath;
+  String? mediaPath;
   String? savePath;
   int openCalls = 0;
+  int mediaOpenCalls = 0;
   int saveCalls = 0;
 
   @override
@@ -756,6 +889,12 @@ class _FakeProjectPicker implements ProjectFilePicker {
   Future<String?> openProjectPath() async {
     openCalls++;
     return openPath;
+  }
+
+  @override
+  Future<String?> openMediaPath() async {
+    mediaOpenCalls++;
+    return mediaPath;
   }
 
   @override
@@ -772,8 +911,10 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRecoveryInspection recoveryInspection = _inspection(
     ProjectRecoveryKind.none,
   );
+  List<ProjectMediaItem> initialMedia = [];
   String? nextSaveFailure;
   bool nextRenameConflict = false;
+  bool nextImportBackendUnavailable = false;
   String? lastCreatePath;
   String? lastCreateName;
   String? lastOpenPath;
@@ -781,6 +922,12 @@ class _FakeProjectGateway implements ProjectGateway {
   int openCalls = 0;
   int summaryCalls = 0;
   int renameCalls = 0;
+  int mediaListCalls = 0;
+  final List<int> mediaListOffsets = [];
+  int importMediaCalls = 0;
+  int removeMediaCalls = 0;
+  String? lastImportPath;
+  String? lastRemovedMediaId;
   int saveCalls = 0;
   int closeCalls = 0;
   bool? lastCloseDiscard;
@@ -801,7 +948,7 @@ class _FakeProjectGateway implements ProjectGateway {
       dirty: false,
       descriptorPath: '/tmp/or-session-$createCalls.json',
     );
-    final session = _FakeSession(path, view);
+    final session = _FakeSession(path, view)..media.addAll(initialMedia);
     _sessionsByPath[path] = session;
     _savedByPath[path] = view;
     lastSession = session;
@@ -950,6 +1097,90 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle handle, {
+    required int offset,
+    required int limit,
+  }) async {
+    mediaListCalls++;
+    mediaListOffsets.add(offset);
+    final session = _session(handle);
+    final start = offset.clamp(0, session.media.length).toInt();
+    final end = (start + limit).clamp(start, session.media.length).toInt();
+    return ProjectMediaPage(
+      projectId: session.view.projectId,
+      projectInstanceId: session.view.projectInstanceId,
+      projectRevision: session.view.revision,
+      items: List.unmodifiable(session.media.sublist(start, end)),
+      totalCount: session.media.length,
+      offset: start,
+      limit: limit,
+      nextOffset: end < session.media.length ? end : null,
+    );
+  }
+
+  @override
+  Future<ProjectActionResult> importMedia(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String path,
+  ) async {
+    importMediaCalls++;
+    lastImportPath = path;
+    if (nextImportBackendUnavailable) {
+      nextImportBackendUnavailable = false;
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'PROBE_BACKEND_UNAVAILABLE',
+        message: 'probe unavailable',
+      );
+    }
+    final session = _session(handle);
+    if (current.revision != session.view.revision) {
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'REVISION_CONFLICT',
+        message: 'revision changed',
+      );
+    }
+    final item = _mediaFixture('media-imported', path);
+    session.media.add(item);
+    session.view = _copyView(
+      session.view,
+      revision: session.view.revision + BigInt.one,
+      dirty: true,
+    );
+    session.emit('project_changed');
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> removeMedia(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String mediaId,
+  ) async {
+    removeMediaCalls++;
+    lastRemovedMediaId = mediaId;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) {
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'REVISION_CONFLICT',
+        message: 'revision changed',
+      );
+    }
+    session.media.removeWhere((item) => item.mediaId == mediaId);
+    session.view = _copyView(
+      session.view,
+      revision: session.view.revision + BigInt.one,
+      dirty: true,
+    );
+    session.emit('project_changed');
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
   Future<ProjectActionResult> save(ProjectSessionHandle handle) async {
     saveCalls++;
     final session = _session(handle);
@@ -1049,6 +1280,7 @@ class _FakeSession implements ProjectSessionHandle {
 
   final String path;
   ProjectReadModel view;
+  final List<ProjectMediaItem> media = [];
   final List<String> undo = [];
   final List<String> redo = [];
   final StreamController<ProjectHostEvent> events =
@@ -1069,3 +1301,12 @@ class _FakeSession implements ProjectSessionHandle {
     );
   }
 }
+
+ProjectMediaItem _mediaFixture(String id, String path) => ProjectMediaItem(
+  mediaId: id,
+  sourceUri: Uri.file(path).toString(),
+  formatNames: const ['mp4'],
+  duration: '10 s',
+  videoDetails: '1920×1080 h264',
+  audioDetails: 'AAC',
+);
