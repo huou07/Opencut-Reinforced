@@ -12,6 +12,8 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
     sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::{Duration, Instant},
 };
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
@@ -104,6 +106,37 @@ fn cli_with_probe(args: impl IntoIterator<Item = OsString>, executable: &Path) -
         .args(args)
         .output()
         .expect("run or executable with a test probe")
+}
+
+fn spawn_cli_with_probe_marker(
+    args: impl IntoIterator<Item = OsString>,
+    executable: &Path,
+    marker: &Path,
+) -> Child {
+    Command::new(env!("CARGO_BIN_EXE_or"))
+        .env("OR_FFPROBE_PATH", executable)
+        .env("OR_FFPROBE_MARKER", marker)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run or executable with a marked test probe")
+}
+
+fn json_success_with_probe(
+    args: impl IntoIterator<Item = OsString>,
+    executable: &Path,
+) -> (Value, Output) {
+    let output = cli_with_probe(args, executable);
+    assert!(
+        output.status.success(),
+        "expected success, stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    (value, output)
 }
 
 fn words(args: &[&str]) -> Vec<OsString> {
@@ -466,6 +499,261 @@ fn media_probe_cli_reports_missing_files_and_bounded_probe_failure() {
         .unwrap_or_else(|| panic!("expected bounded diagnostic in CLI error: {error}"));
     assert!(diagnostic.len() <= 512);
     assert!(!diagnostic.contains(&directory.0.to_string_lossy().to_string()));
+}
+
+#[test]
+fn headless_media_commands_import_page_remove_and_save() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Media CLI");
+    let first_source = directory.media_path("cli sample café.mkv");
+    let second_source = directory.media_path("path with spaces-媒体.mkv");
+    let probe_stub = directory.probe_stub();
+
+    let mut add_first_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_first_args.extend(words(&["--source"]));
+    add_first_args.push(first_source.as_os_str().to_owned());
+    add_first_args.push("--json".into());
+    let (add_first, _) = json_success_with_probe(add_first_args, &probe_stub);
+    assert_eq!(add_first["media"]["source"]["kind"], "local_file");
+    assert!(
+        add_first["media"]["source"]["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("file://")
+    );
+    assert_eq!(
+        add_first["media"]["metadata"]["format_names"],
+        serde_json::json!(["matroska", "webm"])
+    );
+    assert_eq!(add_first["command"]["command_id"], "media.add");
+    assert_eq!(add_first["command"]["changed"], true);
+    assert_eq!(add_first["command"]["after_revision"], 1);
+    let first_id = add_first["media"]["id"].as_str().unwrap().to_owned();
+
+    let mut add_second_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_second_args.extend(words(&["--source"]));
+    add_second_args.push(second_source.as_os_str().to_owned());
+    add_second_args.push("--json".into());
+    let (add_second, _) = json_success_with_probe(add_second_args, &probe_stub);
+    let second_id = add_second["media"]["id"].as_str().unwrap().to_owned();
+    assert_ne!(second_id, first_id);
+    assert_eq!(
+        load_project_file(&project_path)
+            .unwrap()
+            .media_items()
+            .len(),
+        2
+    );
+    let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
+    assert_eq!(saved_bytes["schema_version"], 2);
+
+    let mut first_page_args = path_args(
+        &["media", "list"],
+        "--project",
+        &project_path,
+        &["--offset", "0", "--limit", "1", "--json"],
+    );
+    let (first_page, _) = json_success(first_page_args.drain(..));
+    assert_eq!(first_page["query_id"], "media.list");
+    assert_eq!(first_page["media_page"]["total_count"], 2);
+    assert_eq!(first_page["media_page"]["offset"], 0);
+    assert_eq!(first_page["media_page"]["limit"], 1);
+    assert_eq!(first_page["media_page"]["next_offset"], 1);
+    assert_eq!(first_page["media_page"]["items"][0]["id"], first_id);
+
+    let (second_page, _) = json_success(path_args(
+        &["media", "list"],
+        "--project",
+        &project_path,
+        &["--offset", "1", "--limit", "1", "--json"],
+    ));
+    assert_eq!(second_page["media_page"]["items"][0]["id"], second_id);
+    assert!(second_page["media_page"]["next_offset"].is_null());
+
+    let human = cli(path_args(
+        &["media", "list"],
+        "--project",
+        &project_path,
+        &[],
+    ));
+    assert!(human.status.success());
+    let human = String::from_utf8(human.stdout).unwrap();
+    assert!(human.contains(&first_id));
+    assert!(human.contains(add_first["media"]["source"]["uri"].as_str().unwrap()));
+    assert!(human.contains("matroska, webm"));
+    assert!(human.contains("3/2 s"));
+    assert!(human.contains("video 16x16 ffv1"));
+    assert!(human.contains("audio 48000 Hz 2 ch pcm_s16le"));
+
+    let mut duplicate_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    duplicate_args.extend(words(&["--source"]));
+    duplicate_args.push(first_source.as_os_str().to_owned());
+    duplicate_args.push("--json".into());
+    let duplicate = cli_with_probe(duplicate_args, &probe_stub);
+    assert_eq!(duplicate.status.code(), Some(3));
+    let duplicate_error: Value = serde_json::from_slice(&duplicate.stdout).unwrap();
+    assert_eq!(
+        duplicate_error["error"]["code"],
+        "MEDIA_SOURCE_ALREADY_EXISTS"
+    );
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::new(2)
+    );
+
+    let bad_limit = cli(path_args(
+        &["media", "list"],
+        "--project",
+        &project_path,
+        &["--limit", "0", "--json"],
+    ));
+    assert_eq!(bad_limit.status.code(), Some(3));
+    let bad_limit: Value = serde_json::from_slice(&bad_limit.stdout).unwrap();
+    assert_eq!(bad_limit["error"]["code"], "INVALID_ARGUMENTS");
+
+    let wrong_file_option = cli(words(&[
+        "media",
+        "list",
+        "--file",
+        "unused.orproj",
+        "--json",
+    ]));
+    assert_eq!(wrong_file_option.status.code(), Some(2));
+    let wrong_file_option: Value = serde_json::from_slice(&wrong_file_option.stdout).unwrap();
+    assert_eq!(wrong_file_option["error"]["category"], "usage");
+
+    let remove = json_success(path_args(
+        &["media", "remove"],
+        "--project",
+        &project_path,
+        &["--id", &first_id, "--json"],
+    ))
+    .0;
+    assert_eq!(remove["media_id"], first_id);
+    assert_eq!(remove["command"]["command_id"], "media.remove");
+    assert_eq!(remove["command"]["after_revision"], 3);
+    let saved = load_project_file(&project_path).unwrap();
+    assert_eq!(saved.revision(), ProjectRevision::new(3));
+    assert_eq!(saved.media_items().len(), 1);
+    assert_eq!(saved.media_items()[0].id().to_string(), second_id);
+}
+
+#[test]
+fn attached_media_commands_share_history_and_wait_for_explicit_save() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let session = ProjectFileSession::create_new(&project_path, "Attached media").unwrap();
+    let mut host = LiveProjectHost::start(session, None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+
+    let mut add_args = attach_args(&["media", "add"], &descriptor, &[]);
+    add_args.extend(words(&["--source"]));
+    add_args.push(source.as_os_str().to_owned());
+    add_args.push("--json".into());
+    let (added, _) = json_success_with_probe(add_args, &probe_stub);
+    let media_id = added["media"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(added["command"]["after_revision"], 1);
+    assert!(host.is_dirty().unwrap());
+    assert!(
+        load_project_file(&project_path)
+            .unwrap()
+            .media_items()
+            .is_empty()
+    );
+
+    let (listed, _) = json_success(attach_args(
+        &["media", "list"],
+        &descriptor,
+        &["--limit", "1", "--json"],
+    ));
+    assert_eq!(listed["media_page"]["items"][0]["id"], media_id);
+    assert_eq!(listed["project_revision"], 1);
+
+    let removed = json_success(attach_args(
+        &["media", "remove"],
+        &descriptor,
+        &["--id", &media_id, "--json"],
+    ))
+    .0;
+    assert_eq!(removed["command"]["after_revision"], 2);
+    assert!(host.is_dirty().unwrap());
+
+    let undone = json_success(attach_args(&["history", "undo"], &descriptor, &["--json"])).0;
+    assert_eq!(undone["after_revision"], 3);
+    let (restored, _) = json_success(attach_args(&["media", "list"], &descriptor, &["--json"]));
+    assert_eq!(restored["media_page"]["items"][0], added["media"]);
+
+    let redone = json_success(attach_args(&["history", "redo"], &descriptor, &["--json"])).0;
+    assert_eq!(redone["after_revision"], 4);
+    let (removed_again, _) =
+        json_success(attach_args(&["media", "list"], &descriptor, &["--json"]));
+    assert_eq!(removed_again["media_page"]["items"], serde_json::json!([]));
+
+    let restored_again =
+        json_success(attach_args(&["history", "undo"], &descriptor, &["--json"])).0;
+    assert_eq!(restored_again["after_revision"], 5);
+    assert_eq!(host.save().unwrap(), ProjectRevision::new(5));
+    assert!(!host.is_dirty().unwrap());
+    let saved = load_project_file(&project_path).unwrap();
+    assert_eq!(saved.revision(), ProjectRevision::new(5));
+    assert_eq!(saved.media_items()[0].id().to_string(), media_id);
+    assert_eq!(
+        saved.media_items()[0].source().uri(),
+        added["media"]["source"]["uri"]
+    );
+    host.shutdown(false).unwrap();
+}
+
+#[test]
+fn attached_media_import_rejects_revision_change_during_probe_without_retry() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let session = ProjectFileSession::create_new(&project_path, "Before probe").unwrap();
+    let mut host = LiveProjectHost::start(session, None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let source = directory.media_path("sleep.mkv");
+    let probe_stub = directory.probe_stub();
+    let marker = directory.0.join("probe-started");
+    let mut args = attach_args(&["media", "add"], &descriptor, &[]);
+    args.extend(words(&["--source"]));
+    args.push(source.as_os_str().to_owned());
+    args.push("--json".into());
+    let child = spawn_cli_with_probe_marker(args, &probe_stub, &marker);
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !marker.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        marker.exists(),
+        "fake probe did not announce it had started"
+    );
+
+    let during_probe = host.describe().unwrap();
+    let change = host
+        .handle_application_request(live_command(
+            &during_probe,
+            "project.rename",
+            Some("Changed during probe"),
+        ))
+        .unwrap();
+    assert!(matches!(change, ApplicationResponse::Command(result) if result.changed));
+
+    let output = child.wait_with_output().expect("wait for attached import");
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stderr.is_empty());
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "REVISION_CONFLICT");
+    let current = host.describe().unwrap();
+    assert_eq!(current.summary.name, "Changed during probe");
+    assert_eq!(current.summary.project_revision, ProjectRevision::new(1));
+    let (list, _) = json_success(attach_args(&["media", "list"], &descriptor, &["--json"]));
+    assert_eq!(list["media_page"]["items"], serde_json::json!([]));
+    assert!(host.is_dirty().unwrap());
+    host.shutdown(true).unwrap();
 }
 
 #[test]

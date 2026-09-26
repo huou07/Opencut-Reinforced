@@ -1,8 +1,9 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, OperationError, ProjectFileSession,
-    ProjectFileSessionError, QueryEnvelope, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, apply_project_recovery, command_catalog, discard_project_recovery,
-    inspect_project_recovery, query_catalog,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaId, MediaItem,
+    OperationError, ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
+    QueryEnvelope, QueryResult, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection,
+    apply_project_recovery, command_catalog, discard_project_recovery, inspect_project_recovery,
+    prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -103,6 +104,22 @@ impl CliError {
             exit_code: 4,
             json,
             category: "media_probe",
+            code: error.code_str().to_owned(),
+            message,
+            details: diagnostic.map(|diagnostic| json!({"diagnostic": diagnostic})),
+        }
+    }
+
+    fn media_import(error: or_core::MediaImportError, json: bool) -> Self {
+        let diagnostic = error.diagnostic().map(str::to_owned);
+        let message = match (&diagnostic, json) {
+            (Some(diagnostic), false) => format!("{}: {diagnostic}", error.message()),
+            _ => error.message().to_owned(),
+        };
+        Self {
+            exit_code: 4,
+            json,
+            category: "media_import",
             code: error.code_str().to_owned(),
             message,
             details: diagnostic.map(|diagnostic| json!({"diagnostic": diagnostic})),
@@ -303,15 +320,25 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
 
 fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
-        return Err(CliError::usage(json, "expected media probe"));
-    };
-    if action != "probe" {
         return Err(CliError::usage(
             json,
-            "unknown media action; expected probe",
+            "expected media probe, list, add, or remove",
         ));
+    };
+    match action {
+        "probe" => run_media_probe(&args[1..], json),
+        "list" => run_media_list(&args[1..], json),
+        "add" => run_media_add(&args[1..], json),
+        "remove" => run_media_remove(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown media action; expected probe, list, add, or remove",
+        )),
     }
-    let options = Options::parse(&args[1..], &["--file"], &[], json)?;
+}
+
+fn run_media_probe(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
     let path = required_path(&options, "--file", json)?;
     let metadata =
         or_core::probe_media_file(&path).map_err(|error| CliError::media(error, json))?;
@@ -321,6 +348,350 @@ fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
         ))
     } else {
         Ok(render_media_metadata(&metadata))
+    }
+}
+
+fn run_media_list(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--project", "--attach", "--offset", "--limit"],
+        &[],
+        json,
+    )?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let offset = optional_usize(&options, "--offset", 0, json)?;
+    let limit = optional_usize(&options, "--limit", or_core::MAX_MEDIA_PAGE_SIZE, json)?;
+    let result = if attached {
+        attached_media_list(&path, offset, limit, json)?
+    } else {
+        headless_media_list(&path, offset, limit, json)?
+    };
+    render_media_list(&result, json)
+}
+
+fn run_media_add(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--project", "--attach", "--source"], &[], json)?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let source = required_path(&options, "--source", json)?;
+    let (item, result) = if attached {
+        attached_media_add(&path, &source, json)?
+    } else {
+        headless_media_add(&path, &source, json)?
+    };
+    Ok(render_media_add(&item, &result, attached, json))
+}
+
+fn run_media_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--project", "--attach", "--id"], &[], json)?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let id = required_name(&options, "--id", json)?
+        .parse::<MediaId>()
+        .map_err(|_| CliError::usage(json, "--id must be a UUIDv4 media ID"))?;
+    let result = if attached {
+        attached_media_remove(&path, id, json)?
+    } else {
+        headless_media_remove(&path, id, json)?
+    };
+    Ok(render_media_remove(id, &result, attached, json))
+}
+
+fn headless_media_list(
+    path: &Path,
+    offset: usize,
+    limit: usize,
+    json: bool,
+) -> Result<QueryResult, CliError> {
+    let mut session =
+        ProjectFileSession::open(path).map_err(|error| CliError::file(error, json))?;
+    let request = media_list_request(
+        session.session().project_id(),
+        session.session().project_instance_id(),
+        offset,
+        limit,
+        json,
+    )?;
+    expect_query(
+        session.handle_application_request(ApplicationRequest::Query(request)),
+        json,
+    )
+}
+
+fn attached_media_list(
+    path: &Path,
+    offset: usize,
+    limit: usize,
+    json: bool,
+) -> Result<QueryResult, CliError> {
+    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let request = media_list_request(
+        description.project_id,
+        description.project_instance_id,
+        offset,
+        limit,
+        json,
+    )?;
+    expect_remote_query(
+        client
+            .application(ApplicationRequest::Query(request))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )
+}
+
+fn headless_media_add(
+    project_path: &Path,
+    source_path: &Path,
+    json: bool,
+) -> Result<(MediaItem, CommandResult), CliError> {
+    let mut session =
+        ProjectFileSession::open(project_path).map_err(|error| CliError::file(error, json))?;
+    let (item, result) = session
+        .import_media(source_path)
+        .map_err(|error| match error {
+            ProjectFileMediaImportError::Preparation(error) => CliError::media_import(error, json),
+            ProjectFileMediaImportError::Operation(error) => CliError::operation(error, json),
+        })?;
+    if result.changed {
+        session
+            .save()
+            .map_err(|error| CliError::file(error, json))?;
+    }
+    Ok((item, result))
+}
+
+fn attached_media_add(
+    descriptor_path: &Path,
+    source_path: &Path,
+    json: bool,
+) -> Result<(MediaItem, CommandResult), CliError> {
+    let client =
+        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+
+    // The host request releases its project lock before this local probe begins.
+    let item =
+        prepare_media_import(source_path).map_err(|error| CliError::media_import(error, json))?;
+    let request = command_request(
+        "media.add",
+        description.project_id,
+        description.project_instance_id,
+        description.project_revision,
+        json!({"item": item}),
+        json,
+    )?;
+    let result = expect_remote_command(
+        client
+            .application(ApplicationRequest::Command(request))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )?;
+    Ok((item, result))
+}
+
+fn headless_media_remove(
+    project_path: &Path,
+    id: MediaId,
+    json: bool,
+) -> Result<CommandResult, CliError> {
+    let mut session =
+        ProjectFileSession::open(project_path).map_err(|error| CliError::file(error, json))?;
+    let request = command_request(
+        "media.remove",
+        session.session().project_id(),
+        session.session().project_instance_id(),
+        session.session().project_revision(),
+        json!({"id": id}),
+        json,
+    )?;
+    let result = expect_command(
+        session.handle_application_request(ApplicationRequest::Command(request)),
+        json,
+    )?;
+    if result.changed {
+        session
+            .save()
+            .map_err(|error| CliError::file(error, json))?;
+    }
+    Ok(result)
+}
+
+fn attached_media_remove(
+    descriptor_path: &Path,
+    id: MediaId,
+    json: bool,
+) -> Result<CommandResult, CliError> {
+    let client =
+        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let request = command_request(
+        "media.remove",
+        description.project_id,
+        description.project_instance_id,
+        description.project_revision,
+        json!({"id": id}),
+        json,
+    )?;
+    expect_remote_command(
+        client
+            .application(ApplicationRequest::Command(request))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )
+}
+
+fn media_list_request(
+    project_id: or_core::ProjectId,
+    project_instance_id: or_core::ProjectInstanceId,
+    offset: usize,
+    limit: usize,
+    json: bool,
+) -> Result<QueryEnvelope, CliError> {
+    let schema_version = query_catalog()
+        .iter()
+        .find(|descriptor| descriptor.id == "media.list")
+        .map(|descriptor| descriptor.schema_version)
+        .ok_or_else(|| CliError::operation_message(json, "query catalog is missing media.list"))?;
+    Ok(QueryEnvelope {
+        query_id: "media.list".to_owned(),
+        schema_version,
+        project_id,
+        project_instance_id,
+        arguments: json!({"offset": offset, "limit": limit}),
+    })
+}
+
+fn render_media_list(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let page = result
+        .media_page
+        .as_ref()
+        .ok_or_else(|| CliError::operation_message(json, "media.list returned no media page"))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("media list result is serializable"),
+        ));
+    }
+
+    let mut lines = if page.items.is_empty() {
+        vec![format!("No media items ({} total).", page.total_count)]
+    } else {
+        let first = page.offset.saturating_add(1);
+        let last = page.offset.saturating_add(page.items.len());
+        vec![format!(
+            "Media at revision {} (showing {first}-{last} of {}):",
+            result.summary.project_revision, page.total_count
+        )]
+    };
+    lines.extend(page.items.iter().map(render_media_item));
+    if let Some(next_offset) = page.next_offset {
+        lines.push(format!("Next offset: {next_offset}"));
+    }
+    Ok(lines.join("\n"))
+}
+
+fn render_media_item(item: &MediaItem) -> String {
+    let metadata = item.metadata();
+    let format = if metadata.format_names().is_empty() {
+        "unknown".to_owned()
+    } else {
+        metadata.format_names().join(", ")
+    };
+    let duration = metadata
+        .duration()
+        .map(format_rational_time)
+        .unwrap_or_else(|| "unknown duration".to_owned());
+    let mut characteristics = Vec::new();
+    let mut saw_video = false;
+    let mut saw_audio = false;
+    for stream in metadata.streams() {
+        match stream {
+            or_core::MediaStreamMetadata::Video(video) if !saw_video => {
+                saw_video = true;
+                characteristics.push(format!(
+                    "video {}x{}{}",
+                    video.width(),
+                    video.height(),
+                    video
+                        .codec_name()
+                        .map(|codec| format!(" {codec}"))
+                        .unwrap_or_default()
+                ));
+            }
+            or_core::MediaStreamMetadata::Audio(audio) if !saw_audio => {
+                saw_audio = true;
+                let mut details = vec!["audio".to_owned()];
+                if let Some(rate) = audio.sample_rate() {
+                    details.push(format!("{rate} Hz"));
+                }
+                if let Some(channels) = audio.channels() {
+                    details.push(format!("{channels} ch"));
+                }
+                if let Some(codec) = audio.codec_name() {
+                    details.push(codec.to_owned());
+                }
+                characteristics.push(details.join(" "));
+            }
+            _ => {}
+        }
+    }
+    format!(
+        "{} | {} | {} | {}{}",
+        item.id(),
+        item.source().uri(),
+        format,
+        duration,
+        if characteristics.is_empty() {
+            String::new()
+        } else {
+            format!(" | {}", characteristics.join(" | "))
+        }
+    )
+}
+
+fn render_media_add(
+    item: &MediaItem,
+    result: &CommandResult,
+    attached: bool,
+    json: bool,
+) -> String {
+    if json {
+        return json_string(json!({"media": item, "command": result}));
+    }
+    if attached {
+        format!(
+            "Imported media {} at revision {}. Save the live project explicitly to persist it.",
+            item.id(),
+            result.after_revision
+        )
+    } else {
+        format!(
+            "Imported and saved media {} at revision {}.",
+            item.id(),
+            result.after_revision
+        )
+    }
+}
+
+fn render_media_remove(id: MediaId, result: &CommandResult, attached: bool, json: bool) -> String {
+    if json {
+        return json_string(json!({"media_id": id, "command": result}));
+    }
+    if attached {
+        format!(
+            "Removed media {} from the live session at revision {}. Save the project explicitly to persist it.",
+            id, result.after_revision
+        )
+    } else {
+        format!(
+            "Removed and saved media {} at revision {}.",
+            id, result.after_revision
+        )
     }
 }
 
@@ -874,6 +1245,38 @@ fn project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliErr
             "one of --file or --attach is required",
         )),
     }
+}
+
+fn media_project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliError> {
+    match (
+        options.optional_path("--project"),
+        options.optional_path("--attach"),
+    ) {
+        (Some(path), None) => Ok((path, false)),
+        (None, Some(path)) => Ok((path, true)),
+        (Some(_), Some(_)) => Err(CliError::usage(json, "choose either --project or --attach")),
+        (None, None) => Err(CliError::usage(
+            json,
+            "one of --project or --attach is required",
+        )),
+    }
+}
+
+fn optional_usize(
+    options: &Options,
+    flag: &str,
+    default: usize,
+    json: bool,
+) -> Result<usize, CliError> {
+    let Some(value) = options.value(flag) else {
+        return Ok(default);
+    };
+    let value = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?;
+    value
+        .parse::<usize>()
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an unsigned integer")))
 }
 
 fn required_name(options: &Options, flag: &str, json: bool) -> Result<String, CliError> {

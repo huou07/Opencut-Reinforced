@@ -1,5 +1,6 @@
 use std::{
     env,
+    fs,
     io::{self, Write},
     path::Path,
     process,
@@ -22,8 +23,10 @@ fn main() {
 
     match name {
         "sleep.mkv" => {
+            if let Some(marker) = env::var_os("OR_FFPROBE_MARKER") {
+                let _ = fs::write(marker, b"started");
+            }
             thread::sleep(Duration::from_secs(2));
-            process::exit(0);
         }
         "oversized.mkv" => {
             let mut stdout = io::stdout().lock();

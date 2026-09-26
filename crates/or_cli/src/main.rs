@@ -120,7 +120,7 @@ fn is(value: &OsStr, expected: &str) -> bool {
 }
 
 fn usage() -> &'static str {
-    "Usage:\n  or <version|health|capabilities> [--json]\n  or <commands|queries> [--json]\n  or project summary --file PATH|--attach DESCRIPTOR [--json]\n  or project rename --file PATH|--attach DESCRIPTOR --name NAME [--json]\n  or project save --attach DESCRIPTOR [--json]\n  or history <undo|redo> --attach DESCRIPTOR [--json]\n  or recovery <status|apply|discard> --file PATH [--json]\n  or media probe --file PATH [--json]\n  or session serve --file PATH [--descriptor PATH] [--json]\n  or session describe --attach DESCRIPTOR [--json]\n  or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]\n  or --help"
+    "Usage:\n  or <version|health|capabilities> [--json]\n  or <commands|queries> [--json]\n  or project summary --file PATH|--attach DESCRIPTOR [--json]\n  or project rename --file PATH|--attach DESCRIPTOR --name NAME [--json]\n  or project save --attach DESCRIPTOR [--json]\n  or history <undo|redo> --attach DESCRIPTOR [--json]\n  or recovery <status|apply|discard> --file PATH [--json]\n  or media probe --file PATH [--json]\n  or media list --project PATH|--attach DESCRIPTOR [--offset N] [--limit N] [--json]\n  or media add --project PATH|--attach DESCRIPTOR --source PATH [--json]\n  or media remove --project PATH|--attach DESCRIPTOR --id MEDIA_ID [--json]\n  or session serve --file PATH [--descriptor PATH] [--json]\n  or session describe --attach DESCRIPTOR [--json]\n  or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]\n  or --help"
 }
 
 fn is_semantic_command(value: &OsStr) -> bool {
