@@ -638,7 +638,7 @@ jobs:
           Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
 
           Not implemented:
-          - Thumbnails, waveforms, proxies, media cache storage, or a background Job Manager
+          - Thumbnail and waveform generation, proxies, or a cache database
           - Actual timeline editing
           - Playback
           - Media decoding or rendering
