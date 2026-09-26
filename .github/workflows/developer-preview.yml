@@ -570,12 +570,12 @@ jobs:
           sha256sum "${files[@]}" > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
 
-          cat > "$RUNNER_TEMP/RELEASE-NOTES.md" <<EOF
+          cat > "$RUNNER_TEMP/RELEASE-NOTES.md" <<'EOF'
           # Opencut Reinforced Developer Preview
 
           **PRERELEASE — DEBUG / DEVELOPER BUILD**
 
-          Source commit: ${GITHUB_SHA}
+          Source commit: @SOURCE_COMMIT@
 
           This build is for developer testing of the native UI shell, project lifecycle, read-only media probe CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
@@ -590,8 +590,8 @@ jobs:
 
           **PHASE 5A — MEDIA PROBE FOUNDATION**
 
-          - The desktop CLI provides read-only local metadata inspection: or media probe --file PATH [--json].
-          - Media probing requires a system-provided ffprobe; it is not bundled with OR.
+          - The desktop CLI provides read-only local metadata inspection: `or media probe --file PATH [--json]`.
+          - Media probing requires a system-provided `ffprobe`; it is not bundled with OR.
           - Probing does not import media or change a project. Media library/persistence, timeline, playback, rendering, and export remain unavailable.
 
           OR remains a pre-MVP project, not a usable video editor.
@@ -606,7 +606,7 @@ jobs:
           - Undo and redo
           - Crash-recovery checkpoint core foundation
           - File-backed ProjectSession with exact external-change protection
-          - Typed MediaId/JobId, structured metadata, and bounded external ffprobe adapter
+          - Typed `MediaId`/`JobId`, structured metadata, and bounded external `ffprobe` adapter
 
           **ATTACHED CLI TESTING**
 
@@ -615,7 +615,7 @@ jobs:
           - Run `or session describe --attach "<descriptor-path>"` to inspect the attached session.
           - `or project rename --attach ...`, `or history undo|redo --attach ...`, and `or project save --attach ...` operate on that same live project.
           - Descriptor contents and authentication tokens are not displayed or included in the CLI packages.
-          - or media probe --file "<local-file-path>" [--json] inspects metadata without opening or modifying a project. It requires a system-provided ffprobe.
+          - `or media probe --file "<local-file-path>" [--json]` inspects metadata without opening or modifying a project. It requires a system-provided `ffprobe`.
 
           Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
 
@@ -632,6 +632,9 @@ jobs:
 
           These are debug developer builds for testing only, with no production signing. Desktop application and CLI builds are unsigned, macOS application builds are not notarized, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
           EOF
+
+          sed "s/@SOURCE_COMMIT@/${GITHUB_SHA}/" "$RUNNER_TEMP/RELEASE-NOTES.md" > "$RUNNER_TEMP/RELEASE-NOTES.tmp"
+          mv "$RUNNER_TEMP/RELEASE-NOTES.tmp" "$RUNNER_TEMP/RELEASE-NOTES.md"
 
       - name: Create commit-specific GitHub prerelease
         shell: bash
