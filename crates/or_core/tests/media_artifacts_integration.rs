@@ -148,9 +148,10 @@ fn system_ffmpeg_generates_cached_thumbnail_and_waveform_previews() {
         "same-size, same-mtime sampled byte changes must change the fingerprint"
     );
 
+    let changed_uri = url::Url::from_file_path(&changed_path).expect("changed source file URI");
     let changed_item = MediaItem::new(
         item.id(),
-        MediaSourceRef::local_file(changed_path.to_string_lossy()).expect("same-size source path"),
+        MediaSourceRef::local_file(changed_uri.as_str()).expect("same-size source URI"),
         item.metadata().clone(),
     )
     .unwrap();
