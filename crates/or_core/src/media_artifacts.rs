@@ -1,13 +1,14 @@
 use crate::{
     cache::{
-        CacheArtifactKind, CacheKey, CacheStore, CacheStoreConfig, ParametersFingerprint,
-        SourceFingerprint,
+        CacheArtifactKind, CacheKey, CacheStagingFile, CacheStore, CacheStoreConfig,
+        PROXY_MAX_ARTIFACT_BYTES, ParametersFingerprint, SourceFingerprint,
     },
     jobs::{
         JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
         JobManagerConfig, JobSnapshot, JobState, JobSubmitError,
     },
     media::{MediaId, MediaItem, MediaStreamMetadata},
+    time::RationalTime,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -31,11 +32,16 @@ const SOURCE_FINGERPRINT_DOMAIN: &str = "opencut-reinforced-source-fingerprint-v
 const THUMBNAIL_PROFILE: &str =
     "opencut-reinforced-thumbnail-v1\nformat=png\nframe=first\nmax_edge=320\npreserve_aspect=true";
 const WAVEFORM_PROFILE: &str = "opencut-reinforced-waveform-v1\nformat=png\nwidth=512\nheight=96\nstream=first_audio\nchannels=combined\ncolor=white";
+const PROXY_PROFILE: &str = "opencut-reinforced-proxy-v1\ncontainer=matroska\nvideo_codec=mpeg4\nmax_width=960\nmax_height=540\nupscale=false\nsquare_pixels=true\npixel_format=yuv420p\nqscale=6\ngop=12\nbframes=0\nfps_mode=passthrough\npts=start_at_zero\naudio=none\nmetadata=none";
 const THUMBNAIL_TIMEOUT: Duration = Duration::from_secs(20);
 const WAVEFORM_TIMEOUT: Duration = Duration::from_secs(30);
+const PROXY_UNKNOWN_DURATION_TIMEOUT: Duration = Duration::from_secs(1800);
+const PROXY_MIN_TIMEOUT: u64 = 120;
+const PROXY_MAX_TIMEOUT: u64 = 7200;
 const MAX_ARTIFACT_STDOUT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ARTIFACT_STDERR_BYTES: usize = 64 * 1024;
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const PROXY_PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SourceFingerprintError {
@@ -227,6 +233,7 @@ impl MediaArtifactErrorCode {
 pub enum MediaArtifactRequestError {
     SourceUnavailable,
     CacheUnavailable,
+    ArtifactNotReadable,
     QueueFull,
     RecordCapacityExceeded,
     ServiceShutdown,
@@ -237,6 +244,7 @@ impl MediaArtifactRequestError {
         match self {
             Self::SourceUnavailable => "SOURCE_UNAVAILABLE",
             Self::CacheUnavailable => "CACHE_UNAVAILABLE",
+            Self::ArtifactNotReadable => "ARTIFACT_NOT_READABLE",
             Self::QueueFull => "QUEUE_FULL",
             Self::RecordCapacityExceeded => "JOB_RECORD_CAPACITY_EXCEEDED",
             Self::ServiceShutdown => "ARTIFACT_SERVICE_SHUTDOWN",
@@ -249,6 +257,9 @@ impl fmt::Display for MediaArtifactRequestError {
         formatter.write_str(match self {
             Self::SourceUnavailable => "media source is unavailable",
             Self::CacheUnavailable => "media preview cache is unavailable",
+            Self::ArtifactNotReadable => {
+                "proxy artifacts are file-backed and cannot be read as bytes"
+            }
             Self::QueueFull => "media preview queue is full",
             Self::RecordCapacityExceeded => "media preview job capacity is full",
             Self::ServiceShutdown => "media preview service is shutting down",
@@ -338,6 +349,8 @@ struct GenerationLimits {
     stdout_limit: usize,
     stderr_limit: usize,
     poll_interval: Duration,
+    proxy_poll_interval: Duration,
+    proxy_timeout_override: Option<Duration>,
 }
 
 const DEFAULT_GENERATION_LIMITS: GenerationLimits = GenerationLimits {
@@ -346,6 +359,8 @@ const DEFAULT_GENERATION_LIMITS: GenerationLimits = GenerationLimits {
     stdout_limit: MAX_ARTIFACT_STDOUT_BYTES,
     stderr_limit: MAX_ARTIFACT_STDERR_BYTES,
     poll_interval: PROCESS_POLL_INTERVAL,
+    proxy_poll_interval: PROXY_PROCESS_POLL_INTERVAL,
+    proxy_timeout_override: None,
 };
 
 #[derive(Default)]
@@ -402,6 +417,14 @@ impl MediaArtifactService {
         self.request(item, CacheArtifactKind::Waveform)
     }
 
+    /// Requests a disposable, file-backed video proxy through the shared job service.
+    pub fn request_proxy(
+        &self,
+        item: &MediaItem,
+    ) -> Result<MediaArtifactRequest, MediaArtifactRequestError> {
+        self.request(item, CacheArtifactKind::Proxy)
+    }
+
     fn request(
         &self,
         item: &MediaItem,
@@ -410,6 +433,7 @@ impl MediaArtifactService {
         let applicable = item.metadata().streams().iter().any(|stream| match kind {
             CacheArtifactKind::Thumbnail => matches!(stream, MediaStreamMetadata::Video(_)),
             CacheArtifactKind::Waveform => matches!(stream, MediaStreamMetadata::Audio(_)),
+            CacheArtifactKind::Proxy => matches!(stream, MediaStreamMetadata::Video(_)),
         });
         if !applicable {
             return Ok(MediaArtifactRequest {
@@ -421,6 +445,7 @@ impl MediaArtifactService {
                 not_applicable_reason: Some(match kind {
                     CacheArtifactKind::Thumbnail => MediaArtifactNotApplicableReason::NoVideoStream,
                     CacheArtifactKind::Waveform => MediaArtifactNotApplicableReason::NoAudioStream,
+                    CacheArtifactKind::Proxy => MediaArtifactNotApplicableReason::NoVideoStream,
                 }),
             });
         }
@@ -490,6 +515,15 @@ impl MediaArtifactService {
         let cache = self.cache.clone();
         let executable = self.ffmpeg_executable.clone();
         let limits = self.limits;
+        let proxy_duration = item
+            .metadata()
+            .streams()
+            .iter()
+            .find_map(|stream| match stream {
+                MediaStreamMetadata::Video(video) => video.duration(),
+                MediaStreamMetadata::Audio(_) | MediaStreamMetadata::Other(_) => None,
+            })
+            .or_else(|| item.metadata().duration());
         let completion_state = Arc::clone(&self.state);
         let completion_job_id = Arc::new(Mutex::new(None));
         let job_id_slot = Arc::clone(&completion_job_id);
@@ -497,17 +531,30 @@ impl MediaArtifactService {
         let job_kind = match kind {
             CacheArtifactKind::Thumbnail => JobKind::ThumbnailGenerate,
             CacheArtifactKind::Waveform => JobKind::WaveformGenerate,
+            CacheArtifactKind::Proxy => JobKind::ProxyGenerate,
         };
         let body = move |context: &JobContext| {
-            let result = generate_artifact(
-                &executable,
-                &source_path,
-                kind,
-                cache_key,
-                &cache,
-                context,
-                limits,
-            );
+            let result = if kind == CacheArtifactKind::Proxy {
+                generate_proxy(
+                    &executable,
+                    &source_path,
+                    cache_key,
+                    &cache,
+                    context,
+                    limits,
+                    proxy_duration,
+                )
+            } else {
+                generate_artifact(
+                    &executable,
+                    &source_path,
+                    kind,
+                    cache_key,
+                    &cache,
+                    context,
+                    limits,
+                )
+            };
             let code = result.err();
             *lock_value(&body_failure) = code;
             if code.is_some() {
@@ -547,6 +594,9 @@ impl MediaArtifactService {
         kind: CacheArtifactKind,
         cache_key: CacheKey,
     ) -> Result<Option<Vec<u8>>, MediaArtifactRequestError> {
+        if kind == CacheArtifactKind::Proxy {
+            return Err(MediaArtifactRequestError::ArtifactNotReadable);
+        }
         self.cache
             .get(kind, cache_key)
             .map_err(|_| MediaArtifactRequestError::CacheUnavailable)
@@ -557,6 +607,13 @@ impl MediaArtifactService {
         kind: CacheArtifactKind,
         cache_key: CacheKey,
     ) -> Result<bool, MediaArtifactRequestError> {
+        if kind == CacheArtifactKind::Proxy {
+            return self
+                .cache
+                .proxy_path_if_present(cache_key)
+                .map(|path| path.is_some())
+                .map_err(|_| MediaArtifactRequestError::CacheUnavailable);
+        }
         match self.cache.get(kind, cache_key) {
             Ok(Some(bytes)) if validate_png(kind, &bytes) => Ok(true),
             Ok(Some(_)) => {
@@ -618,6 +675,7 @@ fn parameters_fingerprint(kind: CacheArtifactKind) -> ParametersFingerprint {
     ParametersFingerprint::from_bytes(match kind {
         CacheArtifactKind::Thumbnail => THUMBNAIL_PROFILE.as_bytes(),
         CacheArtifactKind::Waveform => WAVEFORM_PROFILE.as_bytes(),
+        CacheArtifactKind::Proxy => PROXY_PROFILE.as_bytes(),
     })
 }
 
@@ -637,6 +695,7 @@ fn generate_artifact(
     let timeout = match kind {
         CacheArtifactKind::Thumbnail => limits.thumbnail_timeout,
         CacheArtifactKind::Waveform => limits.waveform_timeout,
+        CacheArtifactKind::Proxy => unreachable!("proxy generation is handled above"),
     };
     let bytes = run_ffmpeg(
         executable,
@@ -659,6 +718,233 @@ fn generate_artifact(
     cache
         .put(kind, cache_key, &bytes)
         .map_err(|_| MediaArtifactErrorCode::CacheError)
+}
+
+fn proxy_timeout(duration: Option<RationalTime>) -> Duration {
+    let seconds = match duration {
+        Some(duration) if !duration.is_negative() => {
+            let numerator = i128::from(duration.numerator());
+            let denominator = i128::from(duration.denominator());
+            let rounded_up = (numerator + denominator - 1) / denominator;
+            (rounded_up * 3).clamp(i128::from(PROXY_MIN_TIMEOUT), i128::from(PROXY_MAX_TIMEOUT))
+                as u64
+        }
+        Some(_) => PROXY_MIN_TIMEOUT,
+        None => PROXY_UNKNOWN_DURATION_TIMEOUT.as_secs(),
+    };
+    Duration::from_secs(seconds)
+}
+
+fn generate_proxy(
+    executable: &Path,
+    source: &Path,
+    cache_key: CacheKey,
+    cache: &CacheStore,
+    context: &JobContext,
+    limits: GenerationLimits,
+    duration: Option<RationalTime>,
+) -> Result<(), MediaArtifactErrorCode> {
+    let staging = cache
+        .create_proxy_staging_file(cache_key)
+        .map_err(|_| MediaArtifactErrorCode::CacheError)?;
+    let arguments = proxy_ffmpeg_arguments(source, staging.path());
+    let timeout = limits
+        .proxy_timeout_override
+        .unwrap_or_else(|| proxy_timeout(duration));
+    run_ffmpeg_to_file(
+        executable,
+        &arguments,
+        context,
+        timeout,
+        limits.stderr_limit,
+        limits.proxy_poll_interval,
+        &staging,
+    )?;
+    if context.is_cancelled() {
+        return Err(MediaArtifactErrorCode::Cancelled);
+    }
+    if !validate_proxy_file(staging.path()) {
+        return Err(MediaArtifactErrorCode::InvalidGeneratedArtifact);
+    }
+    if context.is_cancelled() {
+        return Err(MediaArtifactErrorCode::Cancelled);
+    }
+    cache
+        .commit_proxy(staging)
+        .map(|_| ())
+        .map_err(|_| MediaArtifactErrorCode::CacheError)
+}
+
+fn proxy_ffmpeg_arguments(source: &Path, output: &Path) -> Vec<OsString> {
+    vec![
+        OsString::from("-v"),
+        OsString::from("error"),
+        OsString::from("-nostdin"),
+        OsString::from("-i"),
+        source.as_os_str().to_owned(),
+        OsString::from("-map"),
+        OsString::from("0:v:0"),
+        OsString::from("-vf"),
+        OsString::from(
+            "setpts=PTS-STARTPTS,scale=w='min(960\\,iw)':h='min(540\\,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2:reset_sar=1,format=yuv420p",
+        ),
+        OsString::from("-an"),
+        OsString::from("-sn"),
+        OsString::from("-dn"),
+        OsString::from("-map_metadata"),
+        OsString::from("-1"),
+        OsString::from("-map_metadata:s:v:0"),
+        OsString::from("-1"),
+        OsString::from("-map_chapters"),
+        OsString::from("-1"),
+        OsString::from("-c:v"),
+        OsString::from("mpeg4"),
+        OsString::from("-q:v"),
+        OsString::from("6"),
+        OsString::from("-g"),
+        OsString::from("12"),
+        OsString::from("-bf"),
+        OsString::from("0"),
+        OsString::from("-fps_mode"),
+        OsString::from("passthrough"),
+        OsString::from("-f"),
+        OsString::from("matroska"),
+        OsString::from("-y"),
+        output.as_os_str().to_owned(),
+    ]
+}
+
+fn validate_proxy_file(path: &Path) -> bool {
+    const EBML_HEADER: &[u8; 4] = b"\x1a\x45\xdf\xa3";
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !metadata.file_type().is_file()
+        || metadata.len() == 0
+        || metadata.len() > PROXY_MAX_ARTIFACT_BYTES
+    {
+        return false;
+    }
+    let mut header = [0_u8; 4];
+    File::open(path)
+        .and_then(|mut file| file.read_exact(&mut header))
+        .is_ok()
+        && &header == EBML_HEADER
+}
+
+fn run_ffmpeg_to_file(
+    executable: &Path,
+    arguments: &[OsString],
+    context: &JobContext,
+    timeout: Duration,
+    stderr_limit: usize,
+    poll_interval: Duration,
+    staging: &CacheStagingFile,
+) -> Result<(), MediaArtifactErrorCode> {
+    if context.is_cancelled() {
+        return Err(MediaArtifactErrorCode::Cancelled);
+    }
+    let mut child = Command::new(executable)
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| MediaArtifactErrorCode::BackendUnavailable)?;
+    let Some(stderr) = child.stderr.take() else {
+        stop_child(&mut child);
+        return Err(MediaArtifactErrorCode::GenerationFailed);
+    };
+    let (sender, receiver) = mpsc::channel();
+    let stderr_reader = match spawn_output_reader(OutputKind::Stderr, stderr, stderr_limit, sender)
+    {
+        Ok(reader) => reader,
+        Err(_) => {
+            stop_child(&mut child);
+            return Err(MediaArtifactErrorCode::GenerationFailed);
+        }
+    };
+    let started = Instant::now();
+    let mut status = None;
+    let mut stderr_complete = false;
+    while status.is_none() || !stderr_complete {
+        if context.is_cancelled() {
+            stop_child(&mut child);
+            let _ = stderr_reader.join();
+            return Err(MediaArtifactErrorCode::Cancelled);
+        }
+        match staging_file_size(staging.path()) {
+            Ok(Some(size)) if size > staging.max_bytes() => {
+                stop_child(&mut child);
+                let _ = stderr_reader.join();
+                return Err(MediaArtifactErrorCode::OutputTooLarge);
+            }
+            Ok(Some(_)) | Ok(None) => {}
+            Err(_) => {
+                stop_child(&mut child);
+                let _ = stderr_reader.join();
+                return Err(MediaArtifactErrorCode::GenerationFailed);
+            }
+        }
+        if status.is_none() {
+            match child.try_wait() {
+                Ok(Some(exited)) => status = Some(exited),
+                Ok(None) => {}
+                Err(_) => {
+                    stop_child(&mut child);
+                    let _ = stderr_reader.join();
+                    return Err(MediaArtifactErrorCode::GenerationFailed);
+                }
+            }
+        }
+        if status.is_some() && stderr_complete {
+            break;
+        }
+        if started.elapsed() >= timeout {
+            stop_child(&mut child);
+            let _ = stderr_reader.join();
+            return Err(MediaArtifactErrorCode::GenerationTimeout);
+        }
+        match receiver.recv_timeout(poll_interval) {
+            Ok(OutputEvent::Complete(OutputKind::Stderr, Ok(_))) => stderr_complete = true,
+            Ok(OutputEvent::Complete(_, Err(_))) | Ok(OutputEvent::TooLarge) => {
+                stop_child(&mut child);
+                let _ = stderr_reader.join();
+                return Err(MediaArtifactErrorCode::GenerationFailed);
+            }
+            Ok(OutputEvent::Complete(OutputKind::Stdout, Ok(_))) => {
+                stop_child(&mut child);
+                let _ = stderr_reader.join();
+                return Err(MediaArtifactErrorCode::GenerationFailed);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) if stderr_complete => {
+                thread::sleep(poll_interval);
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                stop_child(&mut child);
+                let _ = stderr_reader.join();
+                return Err(MediaArtifactErrorCode::GenerationFailed);
+            }
+        }
+    }
+    if stderr_reader.join().is_err()
+        || !status
+            .expect("child status is read before success")
+            .success()
+    {
+        return Err(MediaArtifactErrorCode::GenerationFailed);
+    }
+    Ok(())
+}
+
+fn staging_file_size(path: &Path) -> io::Result<Option<u64>> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => Ok(Some(metadata.len())),
+        Ok(_) => Err(io::Error::other("proxy staging path is not a regular file")),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 fn ffmpeg_arguments(source: &Path, kind: CacheArtifactKind) -> Vec<OsString> {
@@ -688,6 +974,7 @@ fn ffmpeg_arguments(source: &Path, kind: CacheArtifactKind) -> Vec<OsString> {
             OsString::from("-frames:v"),
             OsString::from("1"),
         ]),
+        CacheArtifactKind::Proxy => unreachable!("proxy output is file-backed"),
     }
     arguments.extend([
         OsString::from("-f"),
@@ -713,6 +1000,7 @@ fn validate_png(kind: CacheArtifactKind, bytes: &[u8]) -> bool {
     match kind {
         CacheArtifactKind::Thumbnail => width > 0 && height > 0 && width <= 320 && height <= 320,
         CacheArtifactKind::Waveform => width == 512 && height == 96,
+        CacheArtifactKind::Proxy => false,
     }
 }
 
@@ -994,6 +1282,30 @@ mod tests {
                 .map(|bytes| bytes.len())
                 .unwrap_or(0)
         }
+
+        fn proxy_staging_count(&self) -> usize {
+            let root = self.0.join("cache").join("proxy");
+            if !root.exists() {
+                return 0;
+            }
+            let mut pending = vec![root];
+            let mut count = 0;
+            while let Some(directory) = pending.pop() {
+                for entry in fs::read_dir(directory).unwrap() {
+                    let entry = entry.unwrap();
+                    if entry.file_type().unwrap().is_dir() {
+                        pending.push(entry.path());
+                    } else if entry
+                        .file_name()
+                        .to_string_lossy()
+                        .contains(".or-proxy-tmp-")
+                    {
+                        count += 1;
+                    }
+                }
+            }
+            count
+        }
     }
 
     impl Drop for TestDirectory {
@@ -1039,11 +1351,6 @@ fn main() {
     if !input.file_name().is_some_and(|name| name.to_string_lossy().ends_with("path with spaces-媒体.mkv")) {
         std::process::exit(73);
     }
-    if !args.windows(2).any(|pair| pair[0] == "-frames:v" && pair[1] == "1")
-        || !args.windows(2).any(|pair| pair[0] == "-f" && pair[1] == "image2pipe")
-        || !args.windows(2).any(|pair| pair[0] == "-vcodec" && pair[1] == "png") {
-        std::process::exit(74);
-    }
     let parent = input.parent().unwrap();
     let mut count = OpenOptions::new().create(true).append(true).open(parent.join("process-count")).unwrap();
     count.write_all(b"x").unwrap();
@@ -1054,6 +1361,41 @@ fn main() {
     if name.starts_with("failure-") {
         eprintln!("controlled stub failure");
         std::process::exit(1);
+    }
+    let proxy = args.windows(2).any(|pair| pair[0] == "-fps_mode" && pair[1] == "passthrough");
+    if proxy {
+        let expected_scale = "setpts=PTS-STARTPTS,scale=w='min(960\\,iw)':h='min(540\\,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2:reset_sar=1,format=yuv420p";
+        let has = |key: &str, value: &str| args.windows(2).any(|pair| pair[0] == key && pair[1] == value);
+        if !has("-map", "0:v:0") || !has("-vf", expected_scale)
+            || !has("-c:v", "mpeg4") || !has("-q:v", "6") || !has("-g", "12")
+            || !has("-bf", "0") || !has("-f", "matroska")
+            || !has("-map_metadata", "-1") || !has("-map_chapters", "-1")
+            || !args.iter().any(|arg| arg == "-an") || !args.iter().any(|arg| arg == "-sn")
+            || !args.iter().any(|arg| arg == "-dn") || args.iter().any(|arg| arg == "-r")
+        {
+            std::process::exit(79);
+        }
+        let output = PathBuf::from(args.last().unwrap());
+        if output.extension().is_none_or(|extension| extension != "mkv") {
+            std::process::exit(80);
+        }
+        if name.starts_with("proxy-grow-") {
+            let mut file = OpenOptions::new().write(true).open(output).unwrap();
+            file.write_all(&vec![b'x'; 4096]).unwrap();
+            file.flush().unwrap();
+            loop { thread::sleep(Duration::from_secs(60)); }
+        }
+        let output_name = if name.starts_with("oversized-") { "proxy-oversized-output" }
+            else if name.starts_with("malformed-") { "proxy-malformed-output" }
+            else { "proxy-output" };
+        let bytes = std::fs::read(parent.join(output_name)).unwrap_or_else(|_| std::process::exit(81));
+        std::fs::write(output, bytes).unwrap_or_else(|_| std::process::exit(82));
+        return;
+    }
+    if !args.windows(2).any(|pair| pair[0] == "-frames:v" && pair[1] == "1")
+        || !args.windows(2).any(|pair| pair[0] == "-f" && pair[1] == "image2pipe")
+        || !args.windows(2).any(|pair| pair[0] == "-vcodec" && pair[1] == "png") {
+        std::process::exit(74);
     }
     if name.starts_with("stderr-oversized-") {
         io::stderr().write_all(&vec![b'x'; 8192]).unwrap();
@@ -1162,6 +1504,8 @@ fn main() {
         stdout_limit: 1024 * 1024,
         stderr_limit: 4096,
         poll_interval: Duration::from_millis(10),
+        proxy_poll_interval: Duration::from_millis(10),
+        proxy_timeout_override: None,
     };
 
     fn item(path: &Path, id: u128, video: bool, audio: bool) -> MediaItem {
@@ -1315,9 +1659,80 @@ fn main() {
             source,
             parameters_fingerprint(CacheArtifactKind::Waveform),
         );
+        let proxy = CacheKey::new(
+            CacheArtifactKind::Proxy,
+            source,
+            parameters_fingerprint(CacheArtifactKind::Proxy),
+        );
         assert_ne!(thumbnail, waveform);
+        assert_ne!(thumbnail, proxy);
+        assert_ne!(waveform, proxy);
         assert!(THUMBNAIL_PROFILE.starts_with("opencut-reinforced-thumbnail-v1\n"));
         assert!(WAVEFORM_PROFILE.starts_with("opencut-reinforced-waveform-v1\n"));
+        assert_eq!(
+            thumbnail.to_hex(),
+            "139fa366d3dd700c0f5707e0a5c2c1fbf0bf8863eaf7055957777286eac35a4f"
+        );
+        assert_eq!(
+            waveform.to_hex(),
+            "a12589b4ad1b69143d795c1c5dfa8b85ffd5e76934b8b5a52ca2ccc128cef8d8"
+        );
+        assert_eq!(
+            PROXY_PROFILE,
+            "opencut-reinforced-proxy-v1\ncontainer=matroska\nvideo_codec=mpeg4\nmax_width=960\nmax_height=540\nupscale=false\nsquare_pixels=true\npixel_format=yuv420p\nqscale=6\ngop=12\nbframes=0\nfps_mode=passthrough\npts=start_at_zero\naudio=none\nmetadata=none"
+        );
+        assert_eq!(
+            proxy.to_hex(),
+            "efcb593b6ef519f3d23e26f38059e72158f87e08268c95baf3ba096df455b7d3"
+        );
+        assert_eq!(
+            CacheKey::new(
+                CacheArtifactKind::Proxy,
+                source,
+                parameters_fingerprint(CacheArtifactKind::Proxy),
+            ),
+            CacheKey::new(
+                CacheArtifactKind::Proxy,
+                source,
+                ParametersFingerprint::from_bytes(PROXY_PROFILE.as_bytes()),
+            )
+        );
+        let arguments = proxy_ffmpeg_arguments(Path::new("source.mkv"), Path::new("stage.mkv"));
+        let argument_text = arguments
+            .iter()
+            .map(|argument| argument.to_string_lossy())
+            .collect::<Vec<_>>();
+        for pair in [
+            ["-map", "0:v:0"],
+            ["-c:v", "mpeg4"],
+            ["-q:v", "6"],
+            ["-g", "12"],
+            ["-bf", "0"],
+            ["-fps_mode", "passthrough"],
+            ["-f", "matroska"],
+            ["-map_metadata", "-1"],
+            ["-map_chapters", "-1"],
+        ] {
+            assert!(argument_text.windows(2).any(|args| args == pair));
+        }
+        assert!(!argument_text.iter().any(|argument| *argument == "-r"));
+        assert_eq!(proxy_timeout(None), Duration::from_secs(1800));
+        assert_eq!(
+            proxy_timeout(Some(RationalTime::ZERO)),
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            proxy_timeout(Some(RationalTime::new(50, 1).unwrap())),
+            Duration::from_secs(150)
+        );
+        assert_eq!(
+            proxy_timeout(Some(RationalTime::new(3000, 1).unwrap())),
+            Duration::from_secs(7200)
+        );
+        assert_eq!(
+            proxy_timeout(Some(RationalTime::new(i64::MAX, 1).unwrap())),
+            Duration::from_secs(7200)
+        );
     }
 
     #[test]
@@ -1570,6 +1985,9 @@ fn main() {
         let no_audio = service
             .request_waveform(&item(&video_path, 7, true, false))
             .unwrap();
+        let no_proxy_video = service
+            .request_proxy(&item(&audio_path, 23, false, true))
+            .unwrap();
         assert_eq!(
             no_video.not_applicable_reason,
             Some(MediaArtifactNotApplicableReason::NoVideoStream)
@@ -1578,8 +1996,205 @@ fn main() {
             no_audio.not_applicable_reason,
             Some(MediaArtifactNotApplicableReason::NoAudioStream)
         );
+        assert_eq!(no_proxy_video.kind, CacheArtifactKind::Proxy);
+        assert_eq!(
+            no_proxy_video.state,
+            MediaArtifactRequestState::NotApplicable
+        );
+        assert_eq!(
+            no_proxy_video.not_applicable_reason,
+            Some(MediaArtifactNotApplicableReason::NoVideoStream)
+        );
         assert_eq!(service.jobs.record_count(), 0);
         assert_eq!(directory.process_count(), 0);
+    }
+
+    #[test]
+    fn proxy_generation_is_file_backed_and_a_hit_starts_no_new_job() {
+        let directory = TestDirectory::new();
+        let path = directory.media("proxy cache path with spaces-媒体.mkv", b"source");
+        directory.output("proxy-output", b"\x1a\x45\xdf\xa3synthetic Matroska proxy");
+        let service = service(
+            &directory,
+            TEST_LIMITS,
+            1,
+            2,
+            4,
+            8 * 1024 * 1024,
+            16 * 1024 * 1024,
+        );
+        let events = service.subscribe_events();
+        let media_item = item(&path, 24, true, true);
+        let first = service.request_proxy(&media_item).unwrap();
+        assert_eq!(first.kind, CacheArtifactKind::Proxy);
+        assert_eq!(first.state, MediaArtifactRequestState::Queued);
+        let job_id = first.job_id.unwrap();
+        let event = wait_event(&events);
+        assert_eq!(event.kind, CacheArtifactKind::Proxy);
+        assert_eq!(event.job_id, job_id);
+        assert_eq!(event.state, MediaArtifactEventState::Succeeded);
+        assert_eq!(event.error_code, None);
+        wait_for_state(&service, job_id, JobState::Succeeded);
+
+        let key = first.cache_key.unwrap();
+        let hex = key.to_hex();
+        let final_path = service
+            .cache
+            .root()
+            .join("proxy")
+            .join(&hex[..2])
+            .join(format!("{hex}.mkv"));
+        assert_eq!(final_path.extension().unwrap(), "mkv");
+        assert!(final_path.is_file());
+        assert_eq!(
+            service.cache.proxy_path_if_present(key).unwrap(),
+            Some(final_path)
+        );
+        assert_eq!(
+            service.read_artifact(CacheArtifactKind::Proxy, key),
+            Err(MediaArtifactRequestError::ArtifactNotReadable)
+        );
+        let second = service.request_proxy(&media_item).unwrap();
+        assert_eq!(second.state, MediaArtifactRequestState::Ready);
+        assert_eq!(second.cache_key, Some(key));
+        assert_eq!(second.job_id, None);
+        assert_eq!(directory.process_count(), 1);
+    }
+
+    #[test]
+    fn proxy_in_flight_requests_share_one_job_and_cancel_removes_staging() {
+        let directory = TestDirectory::new();
+        let path = directory.media("block-proxy path with spaces-媒体.mkv", b"blocking source");
+        let service = service(&directory, TEST_LIMITS, 1, 2, 4, 1024, 2048);
+        let events = service.subscribe_events();
+        let first = service
+            .request_proxy(&item(&path, 25, true, false))
+            .unwrap();
+        let job_id = first.job_id.unwrap();
+        wait_for_state(&service, job_id, JobState::Running);
+        wait_for_process_count(&directory, 1);
+        let second = service
+            .request_proxy(&item(&path, 26, true, false))
+            .unwrap();
+        assert_eq!(second.job_id, Some(job_id));
+        assert_eq!(second.cache_key, first.cache_key);
+        assert_eq!(directory.process_count(), 1);
+
+        service.cancel(job_id).unwrap();
+        let event = wait_event(&events);
+        assert_eq!(event.state, MediaArtifactEventState::Cancelled);
+        assert_eq!(event.error_code, Some(MediaArtifactErrorCode::Cancelled));
+        wait_for_state(&service, job_id, JobState::Cancelled);
+        assert_eq!(directory.proxy_staging_count(), 0);
+        assert_eq!(
+            service
+                .cache
+                .proxy_path_if_present(first.cache_key.unwrap())
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn proxy_timeout_oversize_failure_and_invalid_container_clean_staging() {
+        let directory = TestDirectory::new();
+        let timeout_path = directory.media("timeout-proxy path with spaces-媒体.mkv", b"timeout");
+        let oversized_path = directory.media("proxy-grow- path with spaces-媒体.mkv", b"large");
+        let failed_path = directory.media("failure-proxy path with spaces-媒体.mkv", b"failure");
+        let malformed_path = directory.media("malformed-proxy path with spaces-媒体.mkv", b"bad");
+        directory.output("proxy-output", b"\x1a\x45\xdf\xa3valid synthetic proxy");
+        directory.output("proxy-malformed-output", b"not a Matroska container");
+        let limits = GenerationLimits {
+            proxy_timeout_override: Some(Duration::from_secs(1)),
+            ..TEST_LIMITS
+        };
+        let service = service(&directory, limits, 4, 8, 8, 1024 * 1024, 128);
+        let events = service.subscribe_events();
+        let requests = [
+            service
+                .request_proxy(&item(&timeout_path, 27, true, false))
+                .unwrap(),
+            service
+                .request_proxy(&item(&oversized_path, 28, true, false))
+                .unwrap(),
+            service
+                .request_proxy(&item(&failed_path, 29, true, false))
+                .unwrap(),
+            service
+                .request_proxy(&item(&malformed_path, 30, true, false))
+                .unwrap(),
+        ];
+        let mut errors = HashMap::new();
+        for _ in 0..requests.len() {
+            let event = wait_event(&events);
+            errors.insert(event.job_id, event.error_code.unwrap());
+        }
+        assert_eq!(
+            errors[&requests[0].job_id.unwrap()],
+            MediaArtifactErrorCode::GenerationTimeout
+        );
+        assert_eq!(
+            errors[&requests[1].job_id.unwrap()],
+            MediaArtifactErrorCode::OutputTooLarge
+        );
+        assert_eq!(
+            errors[&requests[2].job_id.unwrap()],
+            MediaArtifactErrorCode::GenerationFailed
+        );
+        assert_eq!(
+            errors[&requests[3].job_id.unwrap()],
+            MediaArtifactErrorCode::InvalidGeneratedArtifact
+        );
+        for request in requests {
+            wait_for_state(&service, request.job_id.unwrap(), JobState::Failed);
+            assert_eq!(
+                service
+                    .cache
+                    .proxy_path_if_present(request.cache_key.unwrap())
+                    .unwrap(),
+                None
+            );
+        }
+        assert_eq!(directory.proxy_staging_count(), 0);
+    }
+
+    #[test]
+    fn proxy_requests_share_the_existing_job_backpressure() {
+        let directory = TestDirectory::new();
+        for name in ["block-proxy-one", "proxy-two", "proxy-three"] {
+            directory.media(
+                &format!("{name} path with spaces-媒体.mkv"),
+                name.as_bytes(),
+            );
+        }
+        let service = service(&directory, TEST_LIMITS, 1, 1, 4, 1024, 4096);
+        let first_path = directory
+            .0
+            .join("block-proxy-one path with spaces-媒体.mkv");
+        let first = service
+            .request_proxy(&item(&first_path, 31, true, false))
+            .unwrap();
+        wait_for_state(&service, first.job_id.unwrap(), JobState::Running);
+        let second = service
+            .request_proxy(&item(
+                &directory.0.join("proxy-two path with spaces-媒体.mkv"),
+                32,
+                true,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(second.state, MediaArtifactRequestState::Queued);
+        assert_eq!(
+            service.request_proxy(&item(
+                &directory.0.join("proxy-three path with spaces-媒体.mkv"),
+                33,
+                true,
+                false,
+            )),
+            Err(MediaArtifactRequestError::QueueFull)
+        );
+        service.cancel(first.job_id.unwrap()).unwrap();
+        service.cancel(second.job_id.unwrap()).unwrap();
     }
 
     #[test]

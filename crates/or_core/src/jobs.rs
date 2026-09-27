@@ -64,6 +64,7 @@ pub enum JobKind {
     MediaProbe,
     ThumbnailGenerate,
     WaveformGenerate,
+    ProxyGenerate,
 }
 
 /// Lifecycle state shared by future bounded background jobs.
@@ -117,6 +118,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&JobKind::WaveformGenerate).unwrap(),
             "\"waveform_generate\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobKind::ProxyGenerate).unwrap(),
+            "\"proxy_generate\""
         );
         assert_eq!(
             serde_json::to_string(&JobState::Queued).unwrap(),

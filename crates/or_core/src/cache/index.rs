@@ -589,6 +589,10 @@ fn scan_artifacts_bounded(
         else {
             continue;
         };
+        let extension = match kind {
+            CacheArtifactKind::Proxy => ".mkv",
+            CacheArtifactKind::Thumbnail | CacheArtifactKind::Waveform => ".cache",
+        };
         if !namespace.file_type().map_err(CacheError::Io)?.is_dir() {
             continue;
         }
@@ -613,7 +617,7 @@ fn scan_artifacts_bounded(
                 let Some(file_name) = candidate.file_name().to_str().map(str::to_owned) else {
                     continue;
                 };
-                let Some(key_text) = file_name.strip_suffix(".cache") else {
+                let Some(key_text) = file_name.strip_suffix(extension) else {
                     continue;
                 };
                 let Ok(key) = CacheKey::from_hex(key_text) else {

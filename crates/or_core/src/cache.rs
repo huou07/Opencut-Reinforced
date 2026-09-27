@@ -22,12 +22,14 @@ pub const CACHE_INDEX_SCHEMA_VERSION: u32 = 1;
 
 const CACHE_ENTRY_EXTENSION: &str = "cache";
 const TEMP_FILE_ATTEMPTS: usize = 8;
+pub(crate) const PROXY_MAX_ARTIFACT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Concrete disposable cache namespaces. These are not job kinds.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CacheArtifactKind {
     Thumbnail,
     Waveform,
+    Proxy,
 }
 
 impl CacheArtifactKind {
@@ -35,6 +37,14 @@ impl CacheArtifactKind {
         match self {
             Self::Thumbnail => "thumbnail",
             Self::Waveform => "waveform",
+            Self::Proxy => "proxy",
+        }
+    }
+
+    const fn extension(self) -> &'static str {
+        match self {
+            Self::Proxy => "mkv",
+            Self::Thumbnail | Self::Waveform => CACHE_ENTRY_EXTENSION,
         }
     }
 
@@ -42,6 +52,7 @@ impl CacheArtifactKind {
         match self {
             Self::Thumbnail => 1,
             Self::Waveform => 2,
+            Self::Proxy => 3,
         }
     }
 
@@ -49,6 +60,7 @@ impl CacheArtifactKind {
         match namespace {
             "thumbnail" => Some(Self::Thumbnail),
             "waveform" => Some(Self::Waveform),
+            "proxy" => Some(Self::Proxy),
             _ => None,
         }
     }
@@ -244,6 +256,8 @@ pub enum CacheError {
         max_entries: usize,
     },
     IndexSequenceExhausted,
+    FileBackedApiRequired,
+    InvalidFileArtifact,
     Index(String),
     Io(io::Error),
 }
@@ -278,6 +292,12 @@ impl fmt::Display for CacheError {
             Self::IndexSequenceExhausted => {
                 formatter.write_str("cache access sequence is exhausted")
             }
+            Self::FileBackedApiRequired => {
+                formatter.write_str("proxy artifacts require the file-backed cache API")
+            }
+            Self::InvalidFileArtifact => {
+                formatter.write_str("file-backed cache artifact is empty or not a regular file")
+            }
             Self::Index(message) => write!(formatter, "cache index failed: {message}"),
             Self::Io(error) => write!(formatter, "cache I/O failed: {error}"),
         }
@@ -293,6 +313,8 @@ impl Error for CacheError {
             | Self::CorruptOrOversizedEntry { .. }
             | Self::IndexTooLarge { .. }
             | Self::IndexSequenceExhausted
+            | Self::FileBackedApiRequired
+            | Self::InvalidFileArtifact
             | Self::Index(_) => None,
         }
     }
@@ -313,6 +335,29 @@ pub struct CacheStore {
     root: PathBuf,
     config: CacheStoreConfig,
     index: Arc<Mutex<index::IndexState>>,
+}
+
+/// Reserved same-directory staging path for one typed proxy key.
+pub(crate) struct CacheStagingFile {
+    key: CacheKey,
+    path: PathBuf,
+    max_bytes: u64,
+}
+
+impl CacheStagingFile {
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) const fn max_bytes(&self) -> u64 {
+        self.max_bytes
+    }
+}
+
+impl Drop for CacheStagingFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 impl CacheStore {
@@ -340,6 +385,9 @@ impl CacheStore {
         key: CacheKey,
         bytes: &[u8],
     ) -> Result<(), CacheError> {
+        if kind == CacheArtifactKind::Proxy {
+            return Err(CacheError::FileBackedApiRequired);
+        }
         let entry_bytes = bytes.len() as u64;
         if entry_bytes > self.config.max_entry_bytes() {
             return Err(CacheError::EntryTooLarge {
@@ -460,6 +508,9 @@ impl CacheStore {
         kind: CacheArtifactKind,
         key: CacheKey,
     ) -> Result<Option<Vec<u8>>, CacheError> {
+        if kind == CacheArtifactKind::Proxy {
+            return Err(CacheError::FileBackedApiRequired);
+        }
         let mut state = lock_index(&self.index);
         let transaction = state
             .connection(&self.root)?
@@ -501,6 +552,224 @@ impl CacheStore {
             Ok(Some(bytes))
         })();
         let (result, discard) = finish_transaction(transaction, false, result);
+        if discard {
+            state.discard_connection();
+        }
+        result
+    }
+
+    /// Reserves a hidden proxy staging file beside its derived final path.
+    pub(crate) fn create_proxy_staging_file(
+        &self,
+        key: CacheKey,
+    ) -> Result<CacheStagingFile, CacheError> {
+        let final_path = self.entry_path(CacheArtifactKind::Proxy, key);
+        let parent = final_path.parent().ok_or_else(|| {
+            CacheError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proxy path must have a parent directory",
+            ))
+        })?;
+        create_entry_parent(&self.root, CacheArtifactKind::Proxy, key)?;
+        let hex = key.to_hex();
+        let max_bytes = PROXY_MAX_ARTIFACT_BYTES.min(self.config.max_total_bytes());
+        let mut last_collision = None;
+        for _ in 0..TEMP_FILE_ATTEMPTS {
+            let path = parent.join(format!(".{hex}.or-proxy-tmp-{}.mkv", Uuid::new_v4()));
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(file) => {
+                    drop(file);
+                    return Ok(CacheStagingFile {
+                        key,
+                        path,
+                        max_bytes,
+                    });
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    last_collision = Some(error);
+                }
+                Err(error) => return Err(CacheError::Io(error)),
+            }
+        }
+        Err(CacheError::Io(last_collision.unwrap_or_else(|| {
+            io::Error::other("proxy staging file attempts were exhausted")
+        })))
+    }
+
+    /// Looks up a proxy without reading its contents and touches its LRU entry.
+    pub(crate) fn proxy_path_if_present(
+        &self,
+        key: CacheKey,
+    ) -> Result<Option<PathBuf>, CacheError> {
+        let kind = CacheArtifactKind::Proxy;
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let path = self.entry_path(kind, key);
+        let mut filesystem_changed = false;
+        let result = (|| match entry_file_state(&self.root, kind, key)? {
+            EntryFileState::File(size) if size > 0 && size <= PROXY_MAX_ARTIFACT_BYTES => {
+                let sequence = index::allocate_sequence(&transaction)?;
+                index::upsert_entry(&transaction, kind, key, size, sequence)?;
+                Ok(Some(path))
+            }
+            EntryFileState::File(_) => {
+                match fs::remove_file(&path) {
+                    Ok(()) => filesystem_changed = true,
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        filesystem_changed = true;
+                    }
+                    Err(error) => return Err(CacheError::Io(error)),
+                }
+                index::delete_entry(&transaction, kind, key)?;
+                Ok(None)
+            }
+            EntryFileState::Missing | EntryFileState::Unsafe => {
+                index::delete_entry(&transaction, kind, key)?;
+                Ok(None)
+            }
+        })();
+        let (result, discard) = finish_transaction(transaction, filesystem_changed, result);
+        if discard {
+            state.discard_connection();
+        }
+        result
+    }
+
+    /// Atomically installs one validated staged proxy and accounts it in the global LRU.
+    pub(crate) fn commit_proxy(&self, staging: CacheStagingFile) -> Result<PathBuf, CacheError> {
+        let kind = CacheArtifactKind::Proxy;
+        let key = staging.key;
+        let path = self.entry_path(kind, key);
+        if staging.path.parent() != path.parent()
+            || !staging
+                .path
+                .file_name()
+                .and_then(OsStr::to_str)
+                .is_some_and(|name| {
+                    name.starts_with(&format!(".{}.or-proxy-tmp-", key.to_hex()))
+                        && name.ends_with(".mkv")
+                })
+        {
+            return Err(CacheError::InvalidFileArtifact);
+        }
+        let metadata = fs::symlink_metadata(&staging.path).map_err(CacheError::Io)?;
+        if !metadata.file_type().is_file() || metadata.len() == 0 {
+            return Err(CacheError::InvalidFileArtifact);
+        }
+        let entry_bytes = metadata.len();
+        if entry_bytes > PROXY_MAX_ARTIFACT_BYTES {
+            return Err(CacheError::EntryTooLarge {
+                max_bytes: PROXY_MAX_ARTIFACT_BYTES,
+                actual_bytes: entry_bytes,
+            });
+        }
+        if entry_bytes > self.config.max_total_bytes() {
+            return Err(CacheError::BudgetExceeded {
+                max_total_bytes: self.config.max_total_bytes(),
+                projected_total_bytes: entry_bytes,
+            });
+        }
+        OpenOptions::new()
+            .write(true)
+            .open(&staging.path)
+            .and_then(|file| file.sync_all())
+            .map_err(CacheError::Io)?;
+
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let mut filesystem_changed = false;
+        let result = (|| {
+            let target_size = match entry_file_state(&self.root, kind, key)? {
+                EntryFileState::File(size) => {
+                    let sequence = index::entry_sequence(&transaction, kind, key)?.unwrap_or(0);
+                    index::upsert_entry(&transaction, kind, key, size, sequence)?;
+                    filesystem_changed = true;
+                    size
+                }
+                EntryFileState::Missing => {
+                    index::delete_entry(&transaction, kind, key)?;
+                    filesystem_changed = true;
+                    0
+                }
+                EntryFileState::Unsafe => {
+                    return Err(CacheError::Index(
+                        "proxy cache path contains a symlink or non-file".to_owned(),
+                    ));
+                }
+            };
+            index::check_sequence_available(&transaction)?;
+
+            let current_total = index::current_total(&transaction)?;
+            let mut projected_total =
+                u128::from(current_total - target_size) + u128::from(entry_bytes);
+            let budget = u128::from(self.config.max_total_bytes());
+            if projected_total > budget {
+                for victim in index::lru_entries(&transaction, (kind, key))? {
+                    if projected_total <= budget {
+                        break;
+                    }
+                    let victim_path = self.entry_path(victim.kind, victim.key);
+                    match entry_file_state(&self.root, victim.kind, victim.key)? {
+                        EntryFileState::File(size) => {
+                            if size != victim.size_bytes {
+                                index::upsert_entry(
+                                    &transaction,
+                                    victim.kind,
+                                    victim.key,
+                                    size,
+                                    victim.last_access_sequence,
+                                )?;
+                                filesystem_changed = true;
+                            }
+                            match fs::remove_file(&victim_path) {
+                                Ok(()) => {
+                                    filesystem_changed = true;
+                                    index::delete_entry(&transaction, victim.kind, victim.key)?;
+                                    projected_total = projected_total
+                                        .saturating_sub(u128::from(victim.size_bytes));
+                                }
+                                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                                    filesystem_changed = true;
+                                    index::delete_entry(&transaction, victim.kind, victim.key)?;
+                                    projected_total = projected_total
+                                        .saturating_sub(u128::from(victim.size_bytes));
+                                }
+                                Err(error) => {
+                                    filesystem_changed = true;
+                                    return Err(CacheError::Io(error));
+                                }
+                            }
+                        }
+                        EntryFileState::Missing | EntryFileState::Unsafe => {
+                            filesystem_changed = true;
+                            index::delete_entry(&transaction, victim.kind, victim.key)?;
+                            projected_total =
+                                projected_total.saturating_sub(u128::from(victim.size_bytes));
+                        }
+                    }
+                }
+            }
+            if projected_total > budget {
+                return Err(CacheError::BudgetExceeded {
+                    max_total_bytes: self.config.max_total_bytes(),
+                    projected_total_bytes: u64::try_from(projected_total).unwrap_or(u64::MAX),
+                });
+            }
+
+            create_entry_parent(&self.root, kind, key)?;
+            fs::rename(&staging.path, &path).map_err(CacheError::Io)?;
+            filesystem_changed = true;
+            let sequence = index::allocate_sequence(&transaction)?;
+            index::upsert_entry(&transaction, kind, key, entry_bytes, sequence)?;
+            Ok(path.clone())
+        })();
+        let (result, discard) = finish_transaction(transaction, filesystem_changed, result);
         if discard {
             state.discard_connection();
         }
@@ -549,7 +818,7 @@ impl CacheStore {
         self.root
             .join(kind.namespace())
             .join(prefix)
-            .join(format!("{hex}.{CACHE_ENTRY_EXTENSION}"))
+            .join(format!("{hex}.{}", kind.extension()))
     }
 
     fn clear_managed(&self, kind: Option<CacheArtifactKind>) -> Result<(), CacheError> {
@@ -671,7 +940,7 @@ fn entry_file_state(
         }
     }
 
-    let path = prefix.join(format!("{hex}.{CACHE_ENTRY_EXTENSION}"));
+    let path = prefix.join(format!("{hex}.{}", kind.extension()));
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_file() => Ok(EntryFileState::File(metadata.len())),
         Ok(_) => Ok(EntryFileState::Unsafe),
@@ -862,6 +1131,16 @@ mod tests {
             .unwrap()
     }
 
+    fn proxy_staging_with_bytes(
+        store: &CacheStore,
+        key: CacheKey,
+        bytes: &[u8],
+    ) -> CacheStagingFile {
+        let staging = store.create_proxy_staging_file(key).unwrap();
+        fs::write(staging.path(), bytes).unwrap();
+        staging
+    }
+
     fn wait_for_state(manager: &JobManager, id: crate::JobId, state: JobState) {
         let deadline = Instant::now() + Duration::from_secs(5);
         while manager.snapshot(id).map(|snapshot| snapshot.state) != Some(state) {
@@ -896,6 +1175,9 @@ mod tests {
             base,
             key(CacheArtifactKind::Thumbnail, b"media-1", b"params-2")
         );
+        assert_eq!(CacheArtifactKind::Thumbnail.tag(), 1);
+        assert_eq!(CacheArtifactKind::Waveform.tag(), 2);
+        assert_eq!(CacheArtifactKind::Proxy.tag(), 3);
 
         let next_schema = CacheKey::derive(
             CacheArtifactKind::Thumbnail,
@@ -937,6 +1219,233 @@ mod tests {
                 .as_deref(),
             Some(&b"artifact-bytes"[..])
         );
+    }
+
+    #[test]
+    fn proxy_file_api_keeps_large_artifacts_out_of_the_byte_api_and_reopens() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 8 * 1024 * 1024, 9 * 1024 * 1024);
+        let proxy_key = key(CacheArtifactKind::Proxy, b"proxy source", b"profile v1");
+        let staging = store.create_proxy_staging_file(proxy_key).unwrap();
+        let final_path = store.entry_path(CacheArtifactKind::Proxy, proxy_key);
+        assert_eq!(final_path.extension().unwrap(), "mkv");
+        assert_eq!(staging.path().parent(), final_path.parent());
+        assert!(
+            staging
+                .path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with(&format!(".{}.or-proxy-tmp-", proxy_key.to_hex()))
+        );
+        assert_eq!(staging.max_bytes(), 9 * 1024 * 1024);
+
+        let mut file = OpenOptions::new().write(true).open(staging.path()).unwrap();
+        let chunk = [0x5a_u8; 64 * 1024];
+        for _ in 0..=128 {
+            file.write_all(&chunk).unwrap();
+        }
+        drop(file);
+        let installed = store.commit_proxy(staging).unwrap();
+        assert_eq!(installed, final_path);
+        assert_eq!(fs::metadata(&installed).unwrap().len(), 129 * 64 * 1024);
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Proxy, proxy_key),
+            Some(129 * 64 * 1024)
+        );
+        assert!(matches!(
+            store.get(CacheArtifactKind::Proxy, proxy_key),
+            Err(CacheError::FileBackedApiRequired)
+        ));
+        assert!(matches!(
+            store.put(CacheArtifactKind::Proxy, proxy_key, b"never bytes"),
+            Err(CacheError::FileBackedApiRequired)
+        ));
+
+        let reopened = CacheStore::new(
+            directory.path(),
+            CacheStoreConfig::new(8 * 1024 * 1024, 9 * 1024 * 1024).unwrap(),
+        );
+        assert_eq!(
+            reopened.proxy_path_if_present(proxy_key).unwrap(),
+            Some(installed.clone())
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Proxy, proxy_key),
+            Some(2)
+        );
+
+        fs::write(&installed, b"repaired-size").unwrap();
+        assert_eq!(
+            reopened.proxy_path_if_present(proxy_key).unwrap(),
+            Some(installed.clone())
+        );
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Proxy, proxy_key),
+            Some(13)
+        );
+        assert!(
+            reopened
+                .remove(CacheArtifactKind::Proxy, proxy_key)
+                .unwrap()
+        );
+        assert_eq!(reopened.proxy_path_if_present(proxy_key).unwrap(), None);
+
+        let clear_key = key(CacheArtifactKind::Proxy, b"clear proxy", b"p");
+        reopened
+            .commit_proxy(proxy_staging_with_bytes(&reopened, clear_key, b"mkv"))
+            .unwrap();
+        reopened.clear_namespace(CacheArtifactKind::Proxy).unwrap();
+        assert_eq!(reopened.proxy_path_if_present(clear_key).unwrap(), None);
+
+        let empty_key = key(CacheArtifactKind::Proxy, b"empty proxy", b"p");
+        let empty_stage = reopened.create_proxy_staging_file(empty_key).unwrap();
+        let empty_stage_path = empty_stage.path().to_path_buf();
+        assert!(matches!(
+            reopened.commit_proxy(empty_stage),
+            Err(CacheError::InvalidFileArtifact)
+        ));
+        assert!(!empty_stage_path.exists());
+    }
+
+    #[test]
+    fn proxy_budget_failure_preserves_existing_artifacts_and_cleans_stage() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 8, 5);
+        let thumbnail = key(CacheArtifactKind::Thumbnail, b"budget thumbnail", b"p");
+        let proxy = key(CacheArtifactKind::Proxy, b"budget proxy", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, thumbnail, b"keep")
+            .unwrap();
+        let staging = proxy_staging_with_bytes(&store, proxy, b"too big");
+        let staging_path = staging.path().to_path_buf();
+        assert!(matches!(
+            store.commit_proxy(staging),
+            Err(CacheError::BudgetExceeded {
+                max_total_bytes: 5,
+                projected_total_bytes: 7,
+            })
+        ));
+        assert!(!staging_path.exists());
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, thumbnail).unwrap(),
+            Some(b"keep".to_vec())
+        );
+        assert_eq!(store.proxy_path_if_present(proxy).unwrap(), None);
+    }
+
+    #[test]
+    fn proxy_commit_replaces_its_target_without_evicting_the_target_key() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 16, 16);
+        let proxy = key(CacheArtifactKind::Proxy, b"replacement proxy", b"p");
+        let thumbnail = key(CacheArtifactKind::Thumbnail, b"replacement neighbor", b"p");
+        store
+            .commit_proxy(proxy_staging_with_bytes(&store, proxy, b"first"))
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Thumbnail, thumbnail, b"keep")
+            .unwrap();
+        let path = store.entry_path(CacheArtifactKind::Proxy, proxy);
+
+        store
+            .commit_proxy(proxy_staging_with_bytes(&store, proxy, b"replacement!!"))
+            .unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), b"replacement!!");
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Proxy, proxy),
+            Some(13)
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, thumbnail).unwrap(),
+            None,
+            "the replacement proxy key is protected while the oldest other entry is evicted"
+        );
+    }
+
+    #[test]
+    fn proxy_artifacts_share_global_lru_and_clear_leaves_active_staging_alone() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 8, 10);
+        let thumbnail = key(CacheArtifactKind::Thumbnail, b"lru thumbnail", b"p");
+        let proxy = key(CacheArtifactKind::Proxy, b"lru proxy", b"p");
+        let waveform = key(CacheArtifactKind::Waveform, b"lru waveform", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, thumbnail, b"1111")
+            .unwrap();
+        store
+            .commit_proxy(proxy_staging_with_bytes(&store, proxy, b"2222"))
+            .unwrap();
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, thumbnail).unwrap(),
+            Some(b"1111".to_vec())
+        );
+        store
+            .put(CacheArtifactKind::Waveform, waveform, b"33333")
+            .unwrap();
+        assert_eq!(store.proxy_path_if_present(proxy).unwrap(), None);
+        assert!(
+            store
+                .entry_path(CacheArtifactKind::Thumbnail, thumbnail)
+                .is_file()
+        );
+        assert!(
+            store
+                .entry_path(CacheArtifactKind::Waveform, waveform)
+                .is_file()
+        );
+
+        let staging_key = key(CacheArtifactKind::Proxy, b"active staging", b"p");
+        let staging = store.create_proxy_staging_file(staging_key).unwrap();
+        let staging_path = staging.path().to_path_buf();
+        store.clear_all().unwrap();
+        assert!(
+            staging_path.is_file(),
+            "clear_all must leave an active stage untouched"
+        );
+        drop(staging);
+        assert!(
+            !staging_path.exists(),
+            "the stage owner cleans up its own path"
+        );
+        assert_eq!(store.proxy_path_if_present(staging_key).unwrap(), None);
+    }
+
+    #[test]
+    fn proxy_reconciliation_accepts_only_canonical_mkv_paths() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 1024, 4096);
+        let valid = key(CacheArtifactKind::Proxy, b"valid proxy", b"p");
+        let valid_path = store.entry_path(CacheArtifactKind::Proxy, valid);
+        create_entry_parent(store.root(), CacheArtifactKind::Proxy, valid).unwrap();
+        fs::write(&valid_path, b"valid").unwrap();
+
+        let wrong_extension = key(CacheArtifactKind::Proxy, b"wrong extension", b"p");
+        let wrong_path = store.entry_path(CacheArtifactKind::Proxy, wrong_extension);
+        create_entry_parent(store.root(), CacheArtifactKind::Proxy, wrong_extension).unwrap();
+        fs::write(wrong_path.with_extension("cache"), b"unknown").unwrap();
+
+        let mismatched_prefix = key(CacheArtifactKind::Proxy, b"mismatched prefix", b"p");
+        let mismatched_hex = mismatched_prefix.to_hex();
+        let valid_prefix = &mismatched_hex[..2];
+        let wrong_prefix =
+            store
+                .root()
+                .join("proxy")
+                .join(if valid_prefix == "00" { "01" } else { "00" });
+        fs::create_dir_all(&wrong_prefix).unwrap();
+        fs::write(
+            wrong_prefix.join(format!("{mismatched_hex}.mkv")),
+            b"unknown",
+        )
+        .unwrap();
+
+        let scan = index::scan_artifacts(store.root()).unwrap();
+        assert_eq!(scan.len(), 1);
+        assert_eq!(scan[0].kind, CacheArtifactKind::Proxy);
+        assert_eq!(scan[0].key, valid);
+        assert_eq!(scan[0].size_bytes, 5);
     }
 
     #[test]

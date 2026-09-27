@@ -925,20 +925,25 @@ fn forward_media_artifact_events(
     sink: StreamSink<MediaArtifactEventView>,
 ) {
     for event in receiver {
-        if sink.add(media_artifact_event_view(event)).is_err() {
+        let Some(event) = media_artifact_event_view(event) else {
+            continue;
+        };
+        if sink.add(event).is_err() {
             break;
         }
     }
 }
 
-fn media_artifact_event_view(event: MediaArtifactEvent) -> MediaArtifactEventView {
-    MediaArtifactEventView {
+fn media_artifact_event_view(event: MediaArtifactEvent) -> Option<MediaArtifactEventView> {
+    let kind = match event.kind {
+        CacheArtifactKind::Thumbnail => MediaArtifactKindView::Thumbnail,
+        CacheArtifactKind::Waveform => MediaArtifactKindView::Waveform,
+        CacheArtifactKind::Proxy => return None,
+    };
+    Some(MediaArtifactEventView {
         sequence: event.sequence,
         media_id: event.media_id.to_string(),
-        kind: match event.kind {
-            CacheArtifactKind::Thumbnail => MediaArtifactKindView::Thumbnail,
-            CacheArtifactKind::Waveform => MediaArtifactKindView::Waveform,
-        },
+        kind,
         cache_key: event.cache_key.to_hex(),
         job_id: event.job_id.to_string(),
         state: match event.state {
@@ -947,7 +952,7 @@ fn media_artifact_event_view(event: MediaArtifactEvent) -> MediaArtifactEventVie
             MediaArtifactEventState::Cancelled => MediaArtifactEventStateView::Cancelled,
         },
         error_code: event.error_code.map(|code| code.as_str().to_owned()),
-    }
+    })
 }
 
 fn event_view(event: ProjectHostEvent) -> ProjectHostEventView {
@@ -1063,7 +1068,14 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{CachePlatform, configured_media_artifact_cache_root};
+    use super::{
+        CachePlatform, MediaArtifactKindView, configured_media_artifact_cache_root,
+        media_artifact_event_view,
+    };
+    use or_core::{
+        CacheArtifactKind, CacheKey, JobId, MediaArtifactEvent, MediaArtifactEventState, MediaId,
+        ParametersFingerprint, SourceFingerprint,
+    };
     use std::path::PathBuf;
 
     #[test]
@@ -1137,5 +1149,40 @@ mod tests {
             ),
             None,
         );
+    }
+
+    #[test]
+    fn proxy_artifact_events_stay_internal_to_the_core_service() {
+        let mut event = MediaArtifactEvent {
+            sequence: 1,
+            media_id: MediaId::generate(),
+            kind: CacheArtifactKind::Thumbnail,
+            cache_key: CacheKey::new(
+                CacheArtifactKind::Thumbnail,
+                SourceFingerprint::from_bytes(b"source"),
+                ParametersFingerprint::from_bytes(b"thumbnail"),
+            ),
+            job_id: JobId::generate(),
+            state: MediaArtifactEventState::Succeeded,
+            error_code: None,
+        };
+
+        for (kind, expected) in [
+            (
+                CacheArtifactKind::Thumbnail,
+                Some(MediaArtifactKindView::Thumbnail),
+            ),
+            (
+                CacheArtifactKind::Waveform,
+                Some(MediaArtifactKindView::Waveform),
+            ),
+            (CacheArtifactKind::Proxy, None),
+        ] {
+            event.kind = kind;
+            assert_eq!(
+                media_artifact_event_view(event.clone()).map(|view| view.kind),
+                expected
+            );
+        }
     }
 }

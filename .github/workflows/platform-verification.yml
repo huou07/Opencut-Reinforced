@@ -110,6 +110,9 @@ jobs:
       - name: Run persistent cache index tests
         run: cargo test -p or_core cache::tests
 
+      - name: Run media artifact service tests with fake FFmpeg
+        run: cargo test -p or_core media_artifacts::tests
+
       - name: Run real local IPC transport tests
         run: cargo test -p or_ipc --test local_transport
 
@@ -234,6 +237,9 @@ jobs:
 
       - name: Run persistent cache index tests
         run: cargo test -p or_core cache::tests
+
+      - name: Run media artifact service tests with fake FFmpeg
+        run: cargo test -p or_core media_artifacts::tests
 
       - name: Run real local IPC transport tests
         run: cargo test -p or_ipc --test local_transport
