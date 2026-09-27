@@ -1,14 +1,22 @@
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, MediaId, MediaItem,
-    MediaStreamMetadata, OperationError, OperationErrorCode, ProjectFileSession, ProjectId,
-    ProjectInstanceId, ProjectRecoveryError, ProjectRevision, QueryEnvelope, QueryResult,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, apply_project_recovery,
-    discard_project_recovery, inspect_project_recovery, prepare_media_import,
+    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig,
+    CommandEnvelope, JobManagerConfig, MediaArtifactEvent, MediaArtifactEventState,
+    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
+    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
+    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
+    ProjectRevision, QueryEnvelope, QueryResult, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, apply_project_recovery, discard_project_recovery,
+    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
-use std::{path::Path, str::FromStr, sync::mpsc, thread};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::mpsc,
+    thread,
+};
 
 #[derive(Clone, Debug)]
 pub struct ProjectView {
@@ -60,6 +68,56 @@ pub struct ProjectHostEventView {
     pub dirty: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaArtifactKindView {
+    Thumbnail,
+    Waveform,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaArtifactRequestStateView {
+    Ready,
+    Queued,
+    Running,
+    NotApplicable,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaArtifactEventStateView {
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaArtifactRequestView {
+    pub media_id: String,
+    pub kind: MediaArtifactKindView,
+    pub cache_key: Option<String>,
+    pub job_id: Option<String>,
+    pub state: MediaArtifactRequestStateView,
+    pub error_code: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaArtifactBytesView {
+    pub bytes: Vec<u8>,
+    pub mime_type: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaArtifactEventView {
+    pub sequence: u64,
+    pub media_id: String,
+    pub kind: MediaArtifactKindView,
+    pub cache_key: String,
+    pub job_id: String,
+    pub state: MediaArtifactEventStateView,
+    pub error_code: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct RecoveryInspectionView {
     pub status: String,
@@ -96,21 +154,115 @@ impl std::error::Error for ProjectBridgeError {}
 #[frb(opaque)]
 pub struct ProjectHostHandle {
     host: LiveProjectHost,
+    media_artifact_service: Option<MediaArtifactService>,
 }
 
 pub fn create_project(path: String, name: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
     let session =
         ProjectFileSession::create_new(Path::new(&path), name).map_err(project_session_error)?;
-    LiveProjectHost::start(session, None)
-        .map(|host| ProjectHostHandle { host })
-        .map_err(host_error)
+    start_project_host(session)
 }
 
 pub fn open_project(path: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
     let session = ProjectFileSession::open(Path::new(&path)).map_err(project_session_error)?;
-    LiveProjectHost::start(session, None)
-        .map(|host| ProjectHostHandle { host })
-        .map_err(host_error)
+    start_project_host(session)
+}
+
+fn start_project_host(
+    session: ProjectFileSession,
+) -> Result<ProjectHostHandle, ProjectBridgeError> {
+    let host = LiveProjectHost::start(session, None).map_err(host_error)?;
+    Ok(ProjectHostHandle {
+        host,
+        media_artifact_service: create_media_artifact_service(),
+    })
+}
+
+fn create_media_artifact_service() -> Option<MediaArtifactService> {
+    #[cfg(target_os = "android")]
+    {
+        None
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let cache_root = media_artifact_cache_root()?;
+        let jobs = JobManagerConfig::new(2, 32, 128).ok()?;
+        let cache = CacheStoreConfig::new(8 * 1024 * 1024, 256 * 1024 * 1024).ok()?;
+        MediaArtifactService::new(MediaArtifactServiceConfig::new(
+            cache_root,
+            jobs,
+            cache,
+            ffmpeg_executable_from_environment(),
+        ))
+        .ok()
+    }
+}
+
+#[allow(dead_code)] // Every desktop target constructs only its own variant; tests cover all paths.
+#[derive(Clone, Copy)]
+enum CachePlatform {
+    MacOs,
+    Linux,
+    Windows,
+    Unsupported,
+}
+
+fn configured_media_artifact_cache_root(
+    platform: CachePlatform,
+    home: Option<PathBuf>,
+    xdg_cache_home: Option<PathBuf>,
+    local_app_data: Option<PathBuf>,
+) -> Option<PathBuf> {
+    match platform {
+        CachePlatform::MacOs => home.map(|home| {
+            home.join("Library")
+                .join("Caches")
+                .join("Opencut-Reinforced")
+                .join("media-artifacts")
+        }),
+        CachePlatform::Linux => xdg_cache_home
+            .or_else(|| home.map(|home| home.join(".cache")))
+            .map(|root| root.join("opencut-reinforced").join("media-artifacts")),
+        CachePlatform::Windows => local_app_data.map(|root| {
+            root.join("Opencut Reinforced")
+                .join("Cache")
+                .join("media-artifacts")
+        }),
+        CachePlatform::Unsupported => None,
+    }
+}
+
+fn non_empty_environment_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn media_artifact_cache_root() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    let platform = CachePlatform::MacOs;
+    #[cfg(target_os = "linux")]
+    let platform = CachePlatform::Linux;
+    #[cfg(target_os = "windows")]
+    let platform = CachePlatform::Windows;
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    let platform = CachePlatform::Unsupported;
+
+    configured_media_artifact_cache_root(
+        platform,
+        non_empty_environment_path("HOME"),
+        non_empty_environment_path("XDG_CACHE_HOME"),
+        non_empty_environment_path("LOCALAPPDATA"),
+    )
+}
+
+impl Drop for ProjectHostHandle {
+    fn drop(&mut self) {
+        if let Some(service) = self.media_artifact_service.take() {
+            service.shutdown();
+        }
+    }
 }
 
 pub fn inspect_recovery(path: String) -> RecoveryInspectionView {
@@ -245,6 +397,131 @@ impl ProjectHostHandle {
         })
     }
 
+    pub fn request_media_thumbnail(&self, media_id: String) -> MediaArtifactRequestView {
+        self.request_media_artifact(media_id, MediaArtifactKindView::Thumbnail)
+    }
+
+    pub fn request_media_waveform(&self, media_id: String) -> MediaArtifactRequestView {
+        self.request_media_artifact(media_id, MediaArtifactKindView::Waveform)
+    }
+
+    pub fn read_media_artifact(
+        &self,
+        kind: MediaArtifactKindView,
+        cache_key: String,
+    ) -> Result<Option<MediaArtifactBytesView>, ProjectBridgeError> {
+        let cache_key = CacheKey::from_hex(&cache_key).map_err(|error| ProjectBridgeError {
+            code: "INVALID_CACHE_KEY".to_owned(),
+            message: error.to_string(),
+        })?;
+        let service = self
+            .media_artifact_service
+            .as_ref()
+            .ok_or_else(cache_unavailable_error)?;
+        let bytes = service
+            .read_artifact(cache_artifact_kind(kind), cache_key)
+            .map_err(|error| ProjectBridgeError {
+                code: error.code().to_owned(),
+                message: error.to_string(),
+            })?;
+        Ok(bytes.map(|bytes| MediaArtifactBytesView {
+            bytes,
+            mime_type: "image/png".to_owned(),
+        }))
+    }
+
+    pub fn subscribe_media_artifact_events(
+        &self,
+        sink: StreamSink<MediaArtifactEventView>,
+    ) -> Result<(), ProjectBridgeError> {
+        let service = self
+            .media_artifact_service
+            .as_ref()
+            .ok_or_else(cache_unavailable_error)?;
+        let receiver = service.subscribe_events();
+        thread::Builder::new()
+            .name("or-flutter-media-artifact-events".to_owned())
+            .spawn(move || forward_media_artifact_events(receiver, sink))
+            .map_err(|error| ProjectBridgeError {
+                code: "EVENT_SUBSCRIPTION_FAILED".to_owned(),
+                message: error.to_string(),
+            })?;
+        Ok(())
+    }
+
+    fn request_media_artifact(
+        &self,
+        media_id: String,
+        kind: MediaArtifactKindView,
+    ) -> MediaArtifactRequestView {
+        let id = match MediaId::from_str(&media_id) {
+            Ok(id) => id,
+            Err(error) => {
+                return MediaArtifactRequestView::failed(
+                    media_id,
+                    kind,
+                    "INVALID_MEDIA_ID",
+                    error.to_string(),
+                );
+            }
+        };
+        let summary = match self.host.describe() {
+            Ok(summary) => summary,
+            Err(error) => {
+                let error = host_error(error);
+                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
+            }
+        };
+        let request = QueryEnvelope::media_get(
+            summary.summary.project_id,
+            summary.summary.project_instance_id,
+            id,
+        );
+        let item = match self
+            .host
+            .handle_application_request(ApplicationRequest::Query(request))
+        {
+            Ok(ApplicationResponse::Query(result)) => match result.media_item {
+                Some(item) => *item,
+                None => {
+                    let error = unexpected_response_error();
+                    return MediaArtifactRequestView::failed(
+                        media_id,
+                        kind,
+                        error.code,
+                        error.message,
+                    );
+                }
+            },
+            Ok(ApplicationResponse::Error(error)) => {
+                let error = operation_bridge_error(error);
+                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
+            }
+            Ok(_) => {
+                let error = unexpected_response_error();
+                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
+            }
+            Err(error) => {
+                let error = host_error(error);
+                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
+            }
+        };
+        let Some(service) = self.media_artifact_service.as_ref() else {
+            let error = cache_unavailable_error();
+            return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
+        };
+        let result = match kind {
+            MediaArtifactKindView::Thumbnail => service.request_thumbnail(&item),
+            MediaArtifactKindView::Waveform => service.request_waveform(&item),
+        };
+        match result {
+            Ok(result) => MediaArtifactRequestView::from_request(media_id, kind, result),
+            Err(error) => {
+                MediaArtifactRequestView::failed(media_id, kind, error.code(), error.to_string())
+            }
+        }
+    }
+
     /// Prepares media without holding the live-host lock, then dispatches with the
     /// identity and revision captured by the caller before probing started.
     pub fn import_media(
@@ -367,12 +644,17 @@ impl ProjectHostHandle {
 
     pub fn close(&mut self, discard_unsaved: bool) -> ProjectActionResult {
         match self.host.shutdown(discard_unsaved) {
-            Ok(()) => ProjectActionResult {
-                succeeded: true,
-                error_code: String::new(),
-                message: String::new(),
-                view: None,
-            },
+            Ok(()) => {
+                if let Some(service) = self.media_artifact_service.take() {
+                    service.shutdown();
+                }
+                ProjectActionResult {
+                    succeeded: true,
+                    error_code: String::new(),
+                    message: String::new(),
+                    view: None,
+                }
+            }
             Err(error) => action_error(host_error(error)),
         }
     }
@@ -458,6 +740,62 @@ impl ProjectHostHandle {
             self.host.is_dirty()?,
             self.host.descriptor_path()?,
         ))
+    }
+}
+
+impl MediaArtifactRequestView {
+    fn failed(
+        media_id: String,
+        kind: MediaArtifactKindView,
+        error_code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            media_id,
+            kind,
+            cache_key: None,
+            job_id: None,
+            state: MediaArtifactRequestStateView::Failed,
+            error_code: Some(error_code.into()),
+            message: Some(message.into()),
+        }
+    }
+
+    fn from_request(
+        media_id: String,
+        kind: MediaArtifactKindView,
+        request: MediaArtifactRequest,
+    ) -> Self {
+        Self {
+            media_id,
+            kind,
+            cache_key: request.cache_key.map(|cache_key| cache_key.to_hex()),
+            job_id: request.job_id.map(|job_id| job_id.to_string()),
+            state: match request.state {
+                MediaArtifactRequestState::Ready => MediaArtifactRequestStateView::Ready,
+                MediaArtifactRequestState::Queued => MediaArtifactRequestStateView::Queued,
+                MediaArtifactRequestState::Running => MediaArtifactRequestStateView::Running,
+                MediaArtifactRequestState::NotApplicable => {
+                    MediaArtifactRequestStateView::NotApplicable
+                }
+            },
+            error_code: None,
+            message: None,
+        }
+    }
+}
+
+fn cache_artifact_kind(kind: MediaArtifactKindView) -> CacheArtifactKind {
+    match kind {
+        MediaArtifactKindView::Thumbnail => CacheArtifactKind::Thumbnail,
+        MediaArtifactKindView::Waveform => CacheArtifactKind::Waveform,
+    }
+}
+
+fn cache_unavailable_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "CACHE_UNAVAILABLE".to_owned(),
+        message: "media preview cache is unavailable".to_owned(),
     }
 }
 
@@ -582,6 +920,36 @@ fn forward_events(
     }
 }
 
+fn forward_media_artifact_events(
+    receiver: mpsc::Receiver<MediaArtifactEvent>,
+    sink: StreamSink<MediaArtifactEventView>,
+) {
+    for event in receiver {
+        if sink.add(media_artifact_event_view(event)).is_err() {
+            break;
+        }
+    }
+}
+
+fn media_artifact_event_view(event: MediaArtifactEvent) -> MediaArtifactEventView {
+    MediaArtifactEventView {
+        sequence: event.sequence,
+        media_id: event.media_id.to_string(),
+        kind: match event.kind {
+            CacheArtifactKind::Thumbnail => MediaArtifactKindView::Thumbnail,
+            CacheArtifactKind::Waveform => MediaArtifactKindView::Waveform,
+        },
+        cache_key: event.cache_key.to_hex(),
+        job_id: event.job_id.to_string(),
+        state: match event.state {
+            MediaArtifactEventState::Succeeded => MediaArtifactEventStateView::Succeeded,
+            MediaArtifactEventState::Failed => MediaArtifactEventStateView::Failed,
+            MediaArtifactEventState::Cancelled => MediaArtifactEventStateView::Cancelled,
+        },
+        error_code: event.error_code.map(|code| code.as_str().to_owned()),
+    }
+}
+
 fn event_view(event: ProjectHostEvent) -> ProjectHostEventView {
     ProjectHostEventView {
         sequence: event.sequence,
@@ -690,5 +1058,84 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
         RecoveryConflictReason::Orphaned => "orphaned",
         RecoveryConflictReason::ForeignProject => "foreign_project",
         RecoveryConflictReason::ChangedLineage => "changed_lineage",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CachePlatform, configured_media_artifact_cache_root};
+    use std::path::PathBuf;
+
+    #[test]
+    fn artifact_cache_roots_follow_desktop_platform_conventions() {
+        assert_eq!(
+            configured_media_artifact_cache_root(
+                CachePlatform::MacOs,
+                Some(PathBuf::from("/Users/test")),
+                None,
+                None,
+            ),
+            Some(PathBuf::from(
+                "/Users/test/Library/Caches/Opencut-Reinforced/media-artifacts"
+            )),
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(
+                CachePlatform::Linux,
+                Some(PathBuf::from("/home/test")),
+                Some(PathBuf::from("/tmp/cache")),
+                None,
+            ),
+            Some(PathBuf::from(
+                "/tmp/cache/opencut-reinforced/media-artifacts"
+            )),
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(
+                CachePlatform::Linux,
+                Some(PathBuf::from("/home/test")),
+                None,
+                None,
+            ),
+            Some(PathBuf::from(
+                "/home/test/.cache/opencut-reinforced/media-artifacts"
+            )),
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(
+                CachePlatform::Windows,
+                None,
+                None,
+                Some(PathBuf::from("C:/Users/test/AppData/Local")),
+            ),
+            Some(PathBuf::from(
+                "C:/Users/test/AppData/Local/Opencut Reinforced/Cache/media-artifacts"
+            )),
+        );
+    }
+
+    #[test]
+    fn artifact_cache_root_is_unavailable_without_required_environment_paths() {
+        assert_eq!(
+            configured_media_artifact_cache_root(CachePlatform::MacOs, None, None, None),
+            None,
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(CachePlatform::Linux, None, None, None),
+            None,
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(CachePlatform::Windows, None, None, None),
+            None,
+        );
+        assert_eq!(
+            configured_media_artifact_cache_root(
+                CachePlatform::Unsupported,
+                Some(PathBuf::from("/home/test")),
+                None,
+                None,
+            ),
+            None,
+        );
     }
 }

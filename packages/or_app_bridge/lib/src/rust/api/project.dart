@@ -7,8 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `command`, `dispatch_command`, `event_view`, `forward_events`, `host_error`, `invalid_arguments`, `media_item_view`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `recovery_action_error`, `recovery_conflict_name`, `unexpected_response_error`, `view_from_query`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `unexpected_response_error`, `view_from_query`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -45,6 +46,11 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required BigInt limit,
   });
 
+  Future<MediaArtifactBytesView?> readMediaArtifact({
+    required MediaArtifactKindView kind,
+    required String cacheKey,
+  });
+
   Future<ProjectActionResult> redo({
     required String projectId,
     required String projectInstanceId,
@@ -65,9 +71,19 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String name,
   });
 
+  Future<MediaArtifactRequestView> requestMediaThumbnail({
+    required String mediaId,
+  });
+
+  Future<MediaArtifactRequestView> requestMediaWaveform({
+    required String mediaId,
+  });
+
   Future<ProjectActionResult> save();
 
   Stream<ProjectHostEventView> subscribeEvents();
+
+  Stream<MediaArtifactEventView> subscribeMediaArtifactEvents();
 
   Future<ProjectView> summary();
 
@@ -76,6 +92,122 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
   });
+}
+
+class MediaArtifactBytesView {
+  final Uint8List bytes;
+  final String mimeType;
+
+  const MediaArtifactBytesView({required this.bytes, required this.mimeType});
+
+  @override
+  int get hashCode => bytes.hashCode ^ mimeType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaArtifactBytesView &&
+          runtimeType == other.runtimeType &&
+          bytes == other.bytes &&
+          mimeType == other.mimeType;
+}
+
+enum MediaArtifactEventStateView { succeeded, failed, cancelled }
+
+class MediaArtifactEventView {
+  final BigInt sequence;
+  final String mediaId;
+  final MediaArtifactKindView kind;
+  final String cacheKey;
+  final String jobId;
+  final MediaArtifactEventStateView state;
+  final String? errorCode;
+
+  const MediaArtifactEventView({
+    required this.sequence,
+    required this.mediaId,
+    required this.kind,
+    required this.cacheKey,
+    required this.jobId,
+    required this.state,
+    this.errorCode,
+  });
+
+  @override
+  int get hashCode =>
+      sequence.hashCode ^
+      mediaId.hashCode ^
+      kind.hashCode ^
+      cacheKey.hashCode ^
+      jobId.hashCode ^
+      state.hashCode ^
+      errorCode.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaArtifactEventView &&
+          runtimeType == other.runtimeType &&
+          sequence == other.sequence &&
+          mediaId == other.mediaId &&
+          kind == other.kind &&
+          cacheKey == other.cacheKey &&
+          jobId == other.jobId &&
+          state == other.state &&
+          errorCode == other.errorCode;
+}
+
+enum MediaArtifactKindView { thumbnail, waveform }
+
+enum MediaArtifactRequestStateView {
+  ready,
+  queued,
+  running,
+  notApplicable,
+  failed,
+}
+
+class MediaArtifactRequestView {
+  final String mediaId;
+  final MediaArtifactKindView kind;
+  final String? cacheKey;
+  final String? jobId;
+  final MediaArtifactRequestStateView state;
+  final String? errorCode;
+  final String? message;
+
+  const MediaArtifactRequestView({
+    required this.mediaId,
+    required this.kind,
+    this.cacheKey,
+    this.jobId,
+    required this.state,
+    this.errorCode,
+    this.message,
+  });
+
+  @override
+  int get hashCode =>
+      mediaId.hashCode ^
+      kind.hashCode ^
+      cacheKey.hashCode ^
+      jobId.hashCode ^
+      state.hashCode ^
+      errorCode.hashCode ^
+      message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaArtifactRequestView &&
+          runtimeType == other.runtimeType &&
+          mediaId == other.mediaId &&
+          kind == other.kind &&
+          cacheKey == other.cacheKey &&
+          jobId == other.jobId &&
+          state == other.state &&
+          errorCode == other.errorCode &&
+          message == other.message;
 }
 
 class ProjectActionResult {

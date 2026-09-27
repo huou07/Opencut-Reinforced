@@ -233,6 +233,41 @@ void main() {
       );
       expect(File(missingSourcePath).existsSync(), isFalse);
 
+      final thumbnailRequest = await gateway.requestMediaThumbnail(
+        session,
+        original.items.single.mediaId,
+      );
+      expect(thumbnailRequest.kind, ProjectMediaArtifactKind.thumbnail);
+      expect(
+        thumbnailRequest.state,
+        ProjectMediaArtifactRequestState.notApplicable,
+      );
+      expect(thumbnailRequest.cacheKey, isNull);
+      final waveformRequest = await gateway.requestMediaWaveform(
+        session,
+        original.items.single.mediaId,
+      );
+      expect(waveformRequest.kind, ProjectMediaArtifactKind.waveform);
+      expect(
+        waveformRequest.state,
+        ProjectMediaArtifactRequestState.notApplicable,
+      );
+      expect((await gateway.summary(session)).revision, BigInt.zero);
+      await expectLater(
+        gateway.readMediaArtifact(
+          session,
+          kind: ProjectMediaArtifactKind.thumbnail,
+          cacheKey: 'A' * 64,
+        ),
+        throwsA(
+          isA<ProjectGatewayException>().having(
+            (error) => error.code,
+            'code',
+            'INVALID_CACHE_KEY',
+          ),
+        ),
+      );
+
       final removed = await gateway.removeMedia(
         session,
         await gateway.summary(session),
@@ -386,6 +421,30 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required int offset,
     required int limit,
   }) => _gateway.listMediaPage(session, offset: offset, limit: limit);
+
+  @override
+  Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
+    ProjectSessionHandle session,
+    String mediaId,
+  ) => _gateway.requestMediaThumbnail(session, mediaId);
+
+  @override
+  Future<ProjectMediaArtifactRequest> requestMediaWaveform(
+    ProjectSessionHandle session,
+    String mediaId,
+  ) => _gateway.requestMediaWaveform(session, mediaId);
+
+  @override
+  Future<ProjectMediaArtifact?> readMediaArtifact(
+    ProjectSessionHandle session, {
+    required ProjectMediaArtifactKind kind,
+    required String cacheKey,
+  }) => _gateway.readMediaArtifact(session, kind: kind, cacheKey: cacheKey);
+
+  @override
+  Stream<ProjectMediaArtifactEvent> watchMediaArtifacts(
+    ProjectSessionHandle session,
+  ) => _gateway.watchMediaArtifacts(session);
 
   @override
   Future<ProjectActionResult> importMedia(

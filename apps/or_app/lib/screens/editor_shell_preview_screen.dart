@@ -13,6 +13,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.notice,
     this.busy = false,
     this.mediaPage,
+    this.mediaPreviews = const {},
     this.mediaLoading = false,
     this.mediaLoadingMore = false,
     this.mediaLoadError,
@@ -33,6 +34,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final String? notice;
   final bool busy;
   final ProjectMediaPage? mediaPage;
+  final Map<String, ProjectMediaPreview> mediaPreviews;
   final bool mediaLoading;
   final bool mediaLoadingMore;
   final String? mediaLoadError;
@@ -137,6 +139,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   selectedTool: _selectedTool,
                   isProjectWorkspace: widget.isProjectWorkspace,
                   mediaPage: widget.mediaPage,
+                  mediaPreviews: widget.mediaPreviews,
                   mediaLoading: widget.mediaLoading,
                   mediaLoadingMore: widget.mediaLoadingMore,
                   mediaLoadError: widget.mediaLoadError,
@@ -449,6 +452,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.selectedTool,
     required this.isProjectWorkspace,
     required this.mediaPage,
+    required this.mediaPreviews,
     required this.mediaLoading,
     required this.mediaLoadingMore,
     required this.mediaLoadError,
@@ -461,6 +465,7 @@ class _EditorToolPanel extends StatelessWidget {
   final String selectedTool;
   final bool isProjectWorkspace;
   final ProjectMediaPage? mediaPage;
+  final Map<String, ProjectMediaPreview> mediaPreviews;
   final bool mediaLoading;
   final bool mediaLoadingMore;
   final String? mediaLoadError;
@@ -474,6 +479,7 @@ class _EditorToolPanel extends StatelessWidget {
     if (selectedTool == 'Media' && isProjectWorkspace) {
       return _MediaLibraryPanel(
         page: mediaPage,
+        previews: mediaPreviews,
         loading: mediaLoading,
         loadingMore: mediaLoadingMore,
         error: mediaLoadError,
@@ -524,6 +530,7 @@ class _EditorToolPanel extends StatelessWidget {
 class _MediaLibraryPanel extends StatelessWidget {
   const _MediaLibraryPanel({
     required this.page,
+    required this.previews,
     required this.loading,
     required this.loadingMore,
     required this.error,
@@ -534,6 +541,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   });
 
   final ProjectMediaPage? page;
+  final Map<String, ProjectMediaPreview> previews;
   final bool loading;
   final bool loadingMore;
   final String? error;
@@ -610,6 +618,7 @@ class _MediaLibraryPanel extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: OrSpacing.x2),
                       child: _MediaLibraryItem(
                         item: item,
+                        preview: previews[item.mediaId],
                         onRemove: onRemove == null
                             ? null
                             : () => onRemove!(item),
@@ -653,9 +662,14 @@ class _MediaLibraryPanel extends StatelessWidget {
 }
 
 class _MediaLibraryItem extends StatelessWidget {
-  const _MediaLibraryItem({required this.item, required this.onRemove});
+  const _MediaLibraryItem({
+    required this.item,
+    required this.preview,
+    required this.onRemove,
+  });
 
   final ProjectMediaItem item;
+  final ProjectMediaPreview? preview;
   final VoidCallback? onRemove;
 
   @override
@@ -679,11 +693,7 @@ class _MediaLibraryItem extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.perm_media_outlined,
-              size: 16,
-              color: OrColors.textMuted,
-            ),
+            _MediaItemPreview(item: item, preview: preview),
             const SizedBox(width: OrSpacing.x2),
             Expanded(
               child: Padding(
@@ -728,6 +738,60 @@ class _MediaLibraryItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MediaItemPreview extends StatelessWidget {
+  const _MediaItemPreview({required this.item, required this.preview});
+
+  final ProjectMediaItem item;
+  final ProjectMediaPreview? preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasVideo = item.videoDetails != null;
+    final kind = hasVideo
+        ? ProjectMediaArtifactKind.thumbnail
+        : item.audioDetails != null
+        ? ProjectMediaArtifactKind.waveform
+        : null;
+    final bytes = preview?.kind == kind ? preview?.bytes : null;
+    final label = kind == ProjectMediaArtifactKind.thumbnail
+        ? 'Thumbnail preview for ${_mediaDisplayName(item.sourceUri)}'
+        : 'Waveform preview for ${_mediaDisplayName(item.sourceUri)}';
+    return SizedBox(
+      key: ValueKey('media-preview-${item.mediaId}'),
+      width: 52,
+      height: 36,
+      child: bytes == null
+          ? Center(
+              child: Icon(
+                hasVideo
+                    ? Icons.movie_outlined
+                    : kind == ProjectMediaArtifactKind.waveform
+                    ? Icons.graphic_eq
+                    : Icons.perm_media_outlined,
+                size: 16,
+                color: OrColors.textMuted,
+              ),
+            )
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(OrRadii.small),
+              child: Image.memory(
+                bytes,
+                key: ValueKey('media-preview-image-${item.mediaId}'),
+                fit: BoxFit.contain,
+                semanticLabel: label,
+                errorBuilder: (context, error, stackTrace) => const Center(
+                  child: Icon(
+                    Icons.perm_media_outlined,
+                    size: 16,
+                    color: OrColors.textMuted,
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }

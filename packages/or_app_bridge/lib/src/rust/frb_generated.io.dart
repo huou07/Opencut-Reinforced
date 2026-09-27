@@ -54,6 +54,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<MediaArtifactEventView>
+  dco_decode_StreamSink_media_artifact_event_view_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<ProjectHostEventView>
   dco_decode_StreamSink_project_host_event_view_Sse(dynamic raw);
 
@@ -67,6 +71,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  MediaArtifactBytesView dco_decode_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
@@ -77,6 +86,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HealthStatus dco_decode_health_status(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -93,7 +105,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  MediaArtifactBytesView dco_decode_media_artifact_bytes_view(dynamic raw);
+
+  @protected
+  MediaArtifactEventStateView dco_decode_media_artifact_event_state_view(
+    dynamic raw,
+  );
+
+  @protected
+  MediaArtifactEventView dco_decode_media_artifact_event_view(dynamic raw);
+
+  @protected
+  MediaArtifactKindView dco_decode_media_artifact_kind_view(dynamic raw);
+
+  @protected
+  MediaArtifactRequestStateView dco_decode_media_artifact_request_state_view(
+    dynamic raw,
+  );
+
+  @protected
+  MediaArtifactRequestView dco_decode_media_artifact_request_view(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  MediaArtifactBytesView? dco_decode_opt_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
@@ -168,6 +207,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<MediaArtifactEventView>
+  sse_decode_StreamSink_media_artifact_event_view_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<ProjectHostEventView>
   sse_decode_StreamSink_project_host_event_view_Sse(
     SseDeserializer deserializer,
@@ -183,6 +228,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
@@ -193,6 +243,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HealthStatus sse_decode_health_status(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -209,7 +262,42 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  MediaArtifactBytesView sse_decode_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MediaArtifactEventStateView sse_decode_media_artifact_event_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MediaArtifactEventView sse_decode_media_artifact_event_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MediaArtifactKindView sse_decode_media_artifact_kind_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MediaArtifactRequestStateView sse_decode_media_artifact_request_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MediaArtifactRequestView sse_decode_media_artifact_request_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  MediaArtifactBytesView? sse_decode_opt_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ProjectView? sse_decode_opt_box_autoadd_project_view(
@@ -273,9 +361,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -310,6 +395,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_media_artifact_event_view_Sse(
+    RustStreamSink<MediaArtifactEventView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_project_host_event_view_Sse(
     RustStreamSink<ProjectHostEventView> self,
     SseSerializer serializer,
@@ -325,6 +416,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_media_artifact_bytes_view(
+    MediaArtifactBytesView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_view(
     ProjectView self,
     SseSerializer serializer,
@@ -338,6 +435,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_health_status(HealthStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -361,7 +461,49 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_media_artifact_bytes_view(
+    MediaArtifactBytesView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_artifact_event_state_view(
+    MediaArtifactEventStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_artifact_event_view(
+    MediaArtifactEventView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_artifact_kind_view(
+    MediaArtifactKindView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_artifact_request_state_view(
+    MediaArtifactRequestStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_artifact_request_view(
+    MediaArtifactRequestView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_media_artifact_bytes_view(
+    MediaArtifactBytesView? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_project_view(
@@ -431,9 +573,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

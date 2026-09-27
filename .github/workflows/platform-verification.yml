@@ -50,6 +50,9 @@ jobs:
       - name: Verify the real ffprobe adapter with generated media
         run: cargo test -p or_core --test media_probe_integration -- --ignored
 
+      - name: Verify real media artifact generation with system FFmpeg
+        run: cargo test -p or_core --test media_artifacts_integration -- --ignored
+
   flutter-static:
     name: Flutter static and widget checks
     runs-on: ubuntu-latest

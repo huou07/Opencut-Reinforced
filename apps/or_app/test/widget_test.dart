@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -189,25 +190,159 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('active project shows its media library without loading media', (
+  testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
-    final item = _mediaFixture('media-seeded', '/tmp/source clip.mp4');
-    final gateway = _FakeProjectGateway()..initialMedia = [item];
+    final video = _mediaFixture('media-video', '/tmp/source clip.mp4');
+    final audio = _audioMediaFixture('media-audio', '/tmp/music.wav');
+    final unavailable = _mediaFixture(
+      'media-unavailable',
+      '/tmp/unavailable.mp4',
+    );
+    final unsupported = _unsupportedMediaFixture(
+      'media-other',
+      '/tmp/other.dat',
+    );
+    final png = await _tinyPngBytes();
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [video, audio, unavailable, unsupported]
+      ..artifactRequestResponses['media-video:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-video',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.queued,
+            cacheKey: 'thumbnail-cache',
+            jobId: 'thumbnail-job',
+          )
+      ..artifactRequestResponses['media-audio:waveform'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-audio',
+            kind: ProjectMediaArtifactKind.waveform,
+            state: ProjectMediaArtifactRequestState.queued,
+            cacheKey: 'waveform-cache',
+            jobId: 'waveform-job',
+          )
+      ..artifactResponses['thumbnail-cache'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      )
+      ..artifactResponses['waveform-cache'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      );
     final picker = _FakeProjectPicker()..savePath = '/tmp/media-library.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Media Library');
 
     expect(find.byKey(const ValueKey('project-media-panel')), findsOneWidget);
     expect(find.text('source clip.mp4'), findsOneWidget);
+    expect(find.text('music.wav'), findsOneWidget);
     expect(
       find.text('mp4 · 10 s · 1920×1080 h264 · Audio · AAC'),
+      findsNWidgets(2),
+    );
+    expect(gateway.thumbnailRequests, 2);
+    expect(gateway.waveformRequests, 1);
+    expect(gateway.mediaPreviewReads, 0);
+    expect(
+      find.byKey(const ValueKey('media-preview-media-unavailable')),
       findsOneWidget,
+    );
+    expect(find.text('CACHE_UNAVAILABLE'), findsNothing);
+    expect(find.text('Preview unavailable'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-video')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-audio')),
+      findsNothing,
+    );
+    expect(gateway.lastSession!.view.revision, BigInt.zero);
+
+    gateway.emitMediaArtifact(
+      gateway.lastSession!,
+      ProjectMediaArtifactEvent(
+        sequence: BigInt.one,
+        mediaId: 'media-video',
+        kind: ProjectMediaArtifactKind.thumbnail,
+        cacheKey: 'thumbnail-cache',
+        jobId: 'thumbnail-job',
+        state: ProjectMediaArtifactEventState.succeeded,
+      ),
+    );
+    gateway.emitMediaArtifact(
+      gateway.lastSession!,
+      ProjectMediaArtifactEvent(
+        sequence: BigInt.from(2),
+        mediaId: 'media-audio',
+        kind: ProjectMediaArtifactKind.waveform,
+        cacheKey: 'waveform-cache',
+        jobId: 'waveform-job',
+        state: ProjectMediaArtifactEventState.succeeded,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.mediaPreviewReads, 2);
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-video')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-audio')),
+      findsOneWidget,
+    );
+    expect(gateway.thumbnailRequests, 2);
+    expect(gateway.waveformRequests, 1);
+    expect(gateway.lastSession!.view.revision, BigInt.zero);
+
+    await tester.tap(find.byKey(const ValueKey('media-remove-media-video')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-remove-media')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('media-name-media-video')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-video')),
+      findsNothing,
     );
     expect(find.text('No media loaded'), findsOneWidget);
     expect(find.text('Timeline engine not implemented'), findsOneWidget);
     expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cached media preview is read without waiting for an event', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final png = await _tinyPngBytes();
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('cached-video', '/tmp/cached.mp4')]
+      ..artifactRequestResponses['cached-video:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'cached-video',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.ready,
+            cacheKey: 'cached-thumbnail',
+          )
+      ..artifactResponses['cached-thumbnail'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/cached-preview.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Cached Preview');
+
+    expect(gateway.thumbnailRequests, 1);
+    expect(gateway.mediaPreviewReads, 1);
+    expect(
+      find.byKey(const ValueKey('media-preview-image-cached-video')),
+      findsOneWidget,
+    );
+    expect(gateway.lastSession!.view.revision, BigInt.zero);
     expect(tester.takeException(), isNull);
   });
 
@@ -912,6 +1047,8 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectRecoveryKind.none,
   );
   List<ProjectMediaItem> initialMedia = [];
+  final Map<String, ProjectMediaArtifactRequest> artifactRequestResponses = {};
+  final Map<String, ProjectMediaArtifact> artifactResponses = {};
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
@@ -923,6 +1060,9 @@ class _FakeProjectGateway implements ProjectGateway {
   int summaryCalls = 0;
   int renameCalls = 0;
   int mediaListCalls = 0;
+  int thumbnailRequests = 0;
+  int waveformRequests = 0;
+  int mediaPreviewReads = 0;
   final List<int> mediaListOffsets = [];
   int importMediaCalls = 0;
   int removeMediaCalls = 0;
@@ -1120,6 +1260,53 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
+    ProjectSessionHandle handle,
+    String mediaId,
+  ) async {
+    thumbnailRequests++;
+    return artifactRequestResponses['$mediaId:thumbnail'] ??
+        ProjectMediaArtifactRequest(
+          mediaId: mediaId,
+          kind: ProjectMediaArtifactKind.thumbnail,
+          state: ProjectMediaArtifactRequestState.failed,
+          errorCode: 'CACHE_UNAVAILABLE',
+          message: 'Preview unavailable',
+        );
+  }
+
+  @override
+  Future<ProjectMediaArtifactRequest> requestMediaWaveform(
+    ProjectSessionHandle handle,
+    String mediaId,
+  ) async {
+    waveformRequests++;
+    return artifactRequestResponses['$mediaId:waveform'] ??
+        ProjectMediaArtifactRequest(
+          mediaId: mediaId,
+          kind: ProjectMediaArtifactKind.waveform,
+          state: ProjectMediaArtifactRequestState.failed,
+          errorCode: 'CACHE_UNAVAILABLE',
+          message: 'Preview unavailable',
+        );
+  }
+
+  @override
+  Future<ProjectMediaArtifact?> readMediaArtifact(
+    ProjectSessionHandle handle, {
+    required ProjectMediaArtifactKind kind,
+    required String cacheKey,
+  }) async {
+    mediaPreviewReads++;
+    return artifactResponses[cacheKey];
+  }
+
+  @override
+  Stream<ProjectMediaArtifactEvent> watchMediaArtifacts(
+    ProjectSessionHandle handle,
+  ) => _session(handle).mediaArtifactEvents.stream;
+
+  @override
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle handle,
     ProjectReadModel current,
@@ -1218,6 +1405,11 @@ class _FakeProjectGateway implements ProjectGateway {
   Stream<ProjectHostEvent> watch(ProjectSessionHandle handle) =>
       _session(handle).events.stream;
 
+  void emitMediaArtifact(
+    ProjectSessionHandle handle,
+    ProjectMediaArtifactEvent event,
+  ) => _session(handle).mediaArtifactEvents.add(event);
+
   @override
   Future<ProjectRecoveryInspection> inspectRecovery(String path) async {
     inspectCalls++;
@@ -1285,6 +1477,8 @@ class _FakeSession implements ProjectSessionHandle {
   final List<String> redo = [];
   final StreamController<ProjectHostEvent> events =
       StreamController<ProjectHostEvent>.broadcast(sync: true);
+  final StreamController<ProjectMediaArtifactEvent> mediaArtifactEvents =
+      StreamController<ProjectMediaArtifactEvent>.broadcast(sync: true);
   int sequence = 0;
   bool closed = false;
 
@@ -1309,4 +1503,27 @@ ProjectMediaItem _mediaFixture(String id, String path) => ProjectMediaItem(
   duration: '10 s',
   videoDetails: '1920×1080 h264',
   audioDetails: 'AAC',
+);
+
+ProjectMediaItem _audioMediaFixture(String id, String path) => ProjectMediaItem(
+  mediaId: id,
+  sourceUri: Uri.file(path).toString(),
+  formatNames: const ['wav'],
+  duration: '10 s',
+  videoDetails: null,
+  audioDetails: '48000 Hz 2 ch stereo AAC',
+);
+
+ProjectMediaItem _unsupportedMediaFixture(String id, String path) =>
+    ProjectMediaItem(
+      mediaId: id,
+      sourceUri: Uri.file(path).toString(),
+      formatNames: const ['dat'],
+      duration: null,
+      videoDetails: null,
+      audioDetails: null,
+    );
+
+Future<Uint8List> _tinyPngBytes() async => base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 );

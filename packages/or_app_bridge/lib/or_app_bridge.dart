@@ -4,6 +4,12 @@ export 'src/rust/api/project.dart'
     show
         ProjectActionResult,
         ProjectBridgeError,
+        MediaArtifactBytesView,
+        MediaArtifactEventStateView,
+        MediaArtifactEventView,
+        MediaArtifactKindView,
+        MediaArtifactRequestStateView,
+        MediaArtifactRequestView,
         ProjectHostEventView,
         ProjectHostHandle,
         ProjectView,

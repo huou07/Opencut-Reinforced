@@ -109,6 +109,63 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
+    ProjectSessionHandle session,
+    String mediaId,
+  ) async => _artifactRequest(
+    await _host(session).requestMediaThumbnail(mediaId: mediaId),
+  );
+
+  @override
+  Future<ProjectMediaArtifactRequest> requestMediaWaveform(
+    ProjectSessionHandle session,
+    String mediaId,
+  ) async => _artifactRequest(
+    await _host(session).requestMediaWaveform(mediaId: mediaId),
+  );
+
+  @override
+  Future<ProjectMediaArtifact?> readMediaArtifact(
+    ProjectSessionHandle session, {
+    required ProjectMediaArtifactKind kind,
+    required String cacheKey,
+  }) async {
+    try {
+      final artifact = await _host(session)
+          .readMediaArtifact(kind: _rustArtifactKind(kind), cacheKey: cacheKey);
+      if (artifact == null) return null;
+      return ProjectMediaArtifact(
+        bytes: artifact.bytes,
+        mimeType: artifact.mimeType,
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Stream<ProjectMediaArtifactEvent> watchMediaArtifacts(
+    ProjectSessionHandle session,
+  ) => _host(session).subscribeMediaArtifactEvents().map(
+    (event) => ProjectMediaArtifactEvent(
+      sequence: event.sequence,
+      mediaId: event.mediaId,
+      kind: _artifactKind(event.kind),
+      cacheKey: event.cacheKey,
+      jobId: event.jobId,
+      state: switch (event.state) {
+        rust.MediaArtifactEventStateView.succeeded =>
+          ProjectMediaArtifactEventState.succeeded,
+        rust.MediaArtifactEventStateView.failed =>
+          ProjectMediaArtifactEventState.failed,
+        rust.MediaArtifactEventStateView.cancelled =>
+          ProjectMediaArtifactEventState.cancelled,
+      },
+      errorCode: event.errorCode,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -220,6 +277,43 @@ class RustProjectGateway implements ProjectGateway {
     succeeded: result.succeeded,
     changed: result.changed,
     message: result.message,
+  );
+
+  static ProjectMediaArtifactKind _artifactKind(
+    rust.MediaArtifactKindView kind,
+  ) => switch (kind) {
+    rust.MediaArtifactKindView.thumbnail => ProjectMediaArtifactKind.thumbnail,
+    rust.MediaArtifactKindView.waveform => ProjectMediaArtifactKind.waveform,
+  };
+
+  static rust.MediaArtifactKindView _rustArtifactKind(
+    ProjectMediaArtifactKind kind,
+  ) => switch (kind) {
+    ProjectMediaArtifactKind.thumbnail => rust.MediaArtifactKindView.thumbnail,
+    ProjectMediaArtifactKind.waveform => rust.MediaArtifactKindView.waveform,
+  };
+
+  static ProjectMediaArtifactRequest _artifactRequest(
+    rust.MediaArtifactRequestView request,
+  ) => ProjectMediaArtifactRequest(
+    mediaId: request.mediaId,
+    kind: _artifactKind(request.kind),
+    cacheKey: request.cacheKey,
+    jobId: request.jobId,
+    state: switch (request.state) {
+      rust.MediaArtifactRequestStateView.ready =>
+        ProjectMediaArtifactRequestState.ready,
+      rust.MediaArtifactRequestStateView.queued =>
+        ProjectMediaArtifactRequestState.queued,
+      rust.MediaArtifactRequestStateView.running =>
+        ProjectMediaArtifactRequestState.running,
+      rust.MediaArtifactRequestStateView.notApplicable =>
+        ProjectMediaArtifactRequestState.notApplicable,
+      rust.MediaArtifactRequestStateView.failed =>
+        ProjectMediaArtifactRequestState.failed,
+    },
+    errorCode: request.errorCode,
+    message: request.message,
   );
 }
 

@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 979466779;
+  int get rustContentHash => -1145760839;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -99,6 +99,13 @@ abstract class RustLibApi extends BaseApi {
     required BigInt limit,
   });
 
+  Future<MediaArtifactBytesView?>
+  crateApiProjectProjectHostHandleReadMediaArtifact({
+    required ProjectHostHandle that,
+    required MediaArtifactKindView kind,
+    required String cacheKey,
+  });
+
   Future<ProjectActionResult> crateApiProjectProjectHostHandleRedo({
     required ProjectHostHandle that,
     required String projectId,
@@ -122,11 +129,28 @@ abstract class RustLibApi extends BaseApi {
     required String name,
   });
 
+  Future<MediaArtifactRequestView>
+  crateApiProjectProjectHostHandleRequestMediaThumbnail({
+    required ProjectHostHandle that,
+    required String mediaId,
+  });
+
+  Future<MediaArtifactRequestView>
+  crateApiProjectProjectHostHandleRequestMediaWaveform({
+    required ProjectHostHandle that,
+    required String mediaId,
+  });
+
   Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
     required ProjectHostHandle that,
   });
 
   Stream<ProjectHostEventView> crateApiProjectProjectHostHandleSubscribeEvents({
+    required ProjectHostHandle that,
+  });
+
+  Stream<MediaArtifactEventView>
+  crateApiProjectProjectHostHandleSubscribeMediaArtifactEvents({
     required ProjectHostHandle that,
   });
 
@@ -313,6 +337,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MediaArtifactBytesView?>
+  crateApiProjectProjectHostHandleReadMediaArtifact({
+    required ProjectHostHandle that,
+    required MediaArtifactKindView kind,
+    required String cacheKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_media_artifact_kind_view(kind, serializer);
+          sse_encode_String(cacheKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_opt_box_autoadd_media_artifact_bytes_view,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleReadMediaArtifactConstMeta,
+        argValues: [that, kind, cacheKey],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleReadMediaArtifactConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_read_media_artifact",
+        argNames: ["that", "kind", "cacheKey"],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleRedo({
     required ProjectHostHandle that,
     required String projectId,
@@ -333,7 +400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -382,7 +449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -438,7 +505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -466,6 +533,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MediaArtifactRequestView>
+  crateApiProjectProjectHostHandleRequestMediaThumbnail({
+    required ProjectHostHandle that,
+    required String mediaId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(mediaId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_media_artifact_request_view,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleRequestMediaThumbnailConstMeta,
+        argValues: [that, mediaId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleRequestMediaThumbnailConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_request_media_thumbnail",
+        argNames: ["that", "mediaId"],
+      );
+
+  @override
+  Future<MediaArtifactRequestView>
+  crateApiProjectProjectHostHandleRequestMediaWaveform({
+    required ProjectHostHandle that,
+    required String mediaId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(mediaId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_media_artifact_request_view,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleRequestMediaWaveformConstMeta,
+        argValues: [that, mediaId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleRequestMediaWaveformConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_request_media_waveform",
+        argNames: ["that", "mediaId"],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
     required ProjectHostHandle that,
   }) {
@@ -480,7 +629,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 10,
             port: port_,
           );
         },
@@ -519,7 +668,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 8,
+              funcId: 11,
               port: port_,
             );
           },
@@ -543,6 +692,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Stream<MediaArtifactEventView>
+  crateApiProjectProjectHostHandleSubscribeMediaArtifactEvents({
+    required ProjectHostHandle that,
+  }) {
+    final sink = RustStreamSink<MediaArtifactEventView>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+              that,
+              serializer,
+            );
+            sse_encode_StreamSink_media_artifact_event_view_Sse(
+              sink,
+              serializer,
+            );
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 12,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_project_bridge_error,
+          ),
+          constMeta:
+              kCrateApiProjectProjectHostHandleSubscribeMediaArtifactEventsConstMeta,
+          argValues: [that, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleSubscribeMediaArtifactEventsConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_subscribe_media_artifact_events",
+        argNames: ["that", "sink"],
+      );
+
+  @override
   Future<ProjectView> crateApiProjectProjectHostHandleSummary({
     required ProjectHostHandle that,
   }) {
@@ -557,7 +753,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 13,
             port: port_,
           );
         },
@@ -599,7 +795,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 14,
             port: port_,
           );
         },
@@ -634,7 +830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 15,
             port: port_,
           );
         },
@@ -664,7 +860,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 16,
             port: port_,
           );
         },
@@ -691,7 +887,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 17,
             port: port_,
           );
         },
@@ -723,7 +919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 18,
             port: port_,
           );
         },
@@ -757,7 +953,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 19,
             port: port_,
           );
         },
@@ -784,7 +980,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 20,
             port: port_,
           );
         },
@@ -814,7 +1010,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 21,
             port: port_,
           );
         },
@@ -842,7 +1038,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 22,
             port: port_,
           );
         },
@@ -912,6 +1108,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustStreamSink<MediaArtifactEventView>
+  dco_decode_StreamSink_media_artifact_event_view_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
   RustStreamSink<ProjectHostEventView>
   dco_decode_StreamSink_project_host_event_view_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -941,6 +1144,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  MediaArtifactBytesView dco_decode_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_media_artifact_bytes_view(raw);
   }
 
   @protected
@@ -977,6 +1188,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
@@ -1005,9 +1222,87 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaArtifactBytesView dco_decode_media_artifact_bytes_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return MediaArtifactBytesView(
+      bytes: dco_decode_list_prim_u_8_strict(arr[0]),
+      mimeType: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  MediaArtifactEventStateView dco_decode_media_artifact_event_state_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MediaArtifactEventStateView.values[raw as int];
+  }
+
+  @protected
+  MediaArtifactEventView dco_decode_media_artifact_event_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return MediaArtifactEventView(
+      sequence: dco_decode_u_64(arr[0]),
+      mediaId: dco_decode_String(arr[1]),
+      kind: dco_decode_media_artifact_kind_view(arr[2]),
+      cacheKey: dco_decode_String(arr[3]),
+      jobId: dco_decode_String(arr[4]),
+      state: dco_decode_media_artifact_event_state_view(arr[5]),
+      errorCode: dco_decode_opt_String(arr[6]),
+    );
+  }
+
+  @protected
+  MediaArtifactKindView dco_decode_media_artifact_kind_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MediaArtifactKindView.values[raw as int];
+  }
+
+  @protected
+  MediaArtifactRequestStateView dco_decode_media_artifact_request_state_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return MediaArtifactRequestStateView.values[raw as int];
+  }
+
+  @protected
+  MediaArtifactRequestView dco_decode_media_artifact_request_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return MediaArtifactRequestView(
+      mediaId: dco_decode_String(arr[0]),
+      kind: dco_decode_media_artifact_kind_view(arr[1]),
+      cacheKey: dco_decode_opt_String(arr[2]),
+      jobId: dco_decode_opt_String(arr[3]),
+      state: dco_decode_media_artifact_request_state_view(arr[4]),
+      errorCode: dco_decode_opt_String(arr[5]),
+      message: dco_decode_opt_String(arr[6]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  MediaArtifactBytesView? dco_decode_opt_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_media_artifact_bytes_view(raw);
   }
 
   @protected
@@ -1230,6 +1525,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustStreamSink<MediaArtifactEventView>
+  sse_decode_StreamSink_media_artifact_event_view_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
   RustStreamSink<ProjectHostEventView>
   sse_decode_StreamSink_project_host_event_view_Sse(
     SseDeserializer deserializer,
@@ -1265,6 +1569,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_media_artifact_bytes_view(deserializer));
+  }
+
+  @protected
   ProjectView sse_decode_box_autoadd_project_view(
     SseDeserializer deserializer,
   ) {
@@ -1291,6 +1603,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_status = sse_decode_String(deserializer);
     return HealthStatus(status: var_status);
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -1339,11 +1657,107 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaArtifactBytesView sse_decode_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_bytes = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_mimeType = sse_decode_String(deserializer);
+    return MediaArtifactBytesView(bytes: var_bytes, mimeType: var_mimeType);
+  }
+
+  @protected
+  MediaArtifactEventStateView sse_decode_media_artifact_event_state_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MediaArtifactEventStateView.values[inner];
+  }
+
+  @protected
+  MediaArtifactEventView sse_decode_media_artifact_event_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sequence = sse_decode_u_64(deserializer);
+    var var_mediaId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_media_artifact_kind_view(deserializer);
+    var var_cacheKey = sse_decode_String(deserializer);
+    var var_jobId = sse_decode_String(deserializer);
+    var var_state = sse_decode_media_artifact_event_state_view(deserializer);
+    var var_errorCode = sse_decode_opt_String(deserializer);
+    return MediaArtifactEventView(
+      sequence: var_sequence,
+      mediaId: var_mediaId,
+      kind: var_kind,
+      cacheKey: var_cacheKey,
+      jobId: var_jobId,
+      state: var_state,
+      errorCode: var_errorCode,
+    );
+  }
+
+  @protected
+  MediaArtifactKindView sse_decode_media_artifact_kind_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MediaArtifactKindView.values[inner];
+  }
+
+  @protected
+  MediaArtifactRequestStateView sse_decode_media_artifact_request_state_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return MediaArtifactRequestStateView.values[inner];
+  }
+
+  @protected
+  MediaArtifactRequestView sse_decode_media_artifact_request_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_mediaId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_media_artifact_kind_view(deserializer);
+    var var_cacheKey = sse_decode_opt_String(deserializer);
+    var var_jobId = sse_decode_opt_String(deserializer);
+    var var_state = sse_decode_media_artifact_request_state_view(deserializer);
+    var var_errorCode = sse_decode_opt_String(deserializer);
+    var var_message = sse_decode_opt_String(deserializer);
+    return MediaArtifactRequestView(
+      mediaId: var_mediaId,
+      kind: var_kind,
+      cacheKey: var_cacheKey,
+      jobId: var_jobId,
+      state: var_state,
+      errorCode: var_errorCode,
+      message: var_message,
+    );
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  MediaArtifactBytesView? sse_decode_opt_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_media_artifact_bytes_view(deserializer));
     } else {
       return null;
     }
@@ -1554,12 +1968,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -1621,6 +2029,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_StreamSink_media_artifact_event_view_Sse(
+    RustStreamSink<MediaArtifactEventView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_media_artifact_event_view,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_project_host_event_view_Sse(
     RustStreamSink<ProjectHostEventView> self,
     SseSerializer serializer,
@@ -1658,6 +2083,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_media_artifact_bytes_view(
+    MediaArtifactBytesView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_media_artifact_bytes_view(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_project_view(
     ProjectView self,
     SseSerializer serializer,
@@ -1683,6 +2117,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_health_status(HealthStatus self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -1729,12 +2169,92 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_media_artifact_bytes_view(
+    MediaArtifactBytesView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.bytes, serializer);
+    sse_encode_String(self.mimeType, serializer);
+  }
+
+  @protected
+  void sse_encode_media_artifact_event_state_view(
+    MediaArtifactEventStateView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_media_artifact_event_view(
+    MediaArtifactEventView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.sequence, serializer);
+    sse_encode_String(self.mediaId, serializer);
+    sse_encode_media_artifact_kind_view(self.kind, serializer);
+    sse_encode_String(self.cacheKey, serializer);
+    sse_encode_String(self.jobId, serializer);
+    sse_encode_media_artifact_event_state_view(self.state, serializer);
+    sse_encode_opt_String(self.errorCode, serializer);
+  }
+
+  @protected
+  void sse_encode_media_artifact_kind_view(
+    MediaArtifactKindView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_media_artifact_request_state_view(
+    MediaArtifactRequestStateView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_media_artifact_request_view(
+    MediaArtifactRequestView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.mediaId, serializer);
+    sse_encode_media_artifact_kind_view(self.kind, serializer);
+    sse_encode_opt_String(self.cacheKey, serializer);
+    sse_encode_opt_String(self.jobId, serializer);
+    sse_encode_media_artifact_request_state_view(self.state, serializer);
+    sse_encode_opt_String(self.errorCode, serializer);
+    sse_encode_opt_String(self.message, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_media_artifact_bytes_view(
+    MediaArtifactBytesView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_media_artifact_bytes_view(self, serializer);
     }
   }
 
@@ -1892,12 +2412,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
   }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
 }
 
 @sealed
@@ -1953,6 +2467,15 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     limit: limit,
   );
 
+  Future<MediaArtifactBytesView?> readMediaArtifact({
+    required MediaArtifactKindView kind,
+    required String cacheKey,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleReadMediaArtifact(
+    that: this,
+    kind: kind,
+    cacheKey: cacheKey,
+  );
+
   Future<ProjectActionResult> redo({
     required String projectId,
     required String projectInstanceId,
@@ -1990,11 +2513,32 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     name: name,
   );
 
+  Future<MediaArtifactRequestView> requestMediaThumbnail({
+    required String mediaId,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleRequestMediaThumbnail(
+        that: this,
+        mediaId: mediaId,
+      );
+
+  Future<MediaArtifactRequestView> requestMediaWaveform({
+    required String mediaId,
+  }) =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleRequestMediaWaveform(
+        that: this,
+        mediaId: mediaId,
+      );
+
   Future<ProjectActionResult> save() =>
       RustLib.instance.api.crateApiProjectProjectHostHandleSave(that: this);
 
   Stream<ProjectHostEventView> subscribeEvents() => RustLib.instance.api
       .crateApiProjectProjectHostHandleSubscribeEvents(that: this);
+
+  Stream<MediaArtifactEventView> subscribeMediaArtifactEvents() => RustLib
+      .instance
+      .api
+      .crateApiProjectProjectHostHandleSubscribeMediaArtifactEvents(that: this);
 
   Future<ProjectView> summary() =>
       RustLib.instance.api.crateApiProjectProjectHostHandleSummary(that: this);

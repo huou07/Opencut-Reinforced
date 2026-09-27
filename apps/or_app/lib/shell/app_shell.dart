@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ import 'command_palette.dart';
 const _androidProjectAccessMessage =
     'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
 const _mediaPageSize = 50;
+const _maxActiveMediaPreviewRequests = 8;
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -46,10 +48,19 @@ class _AppShellState extends State<AppShell> {
   String? _activeProjectPath;
   String? _projectNotice;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
+  StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
   ProjectMediaPage? _mediaPage;
+  final Map<String, ProjectMediaPreview> _mediaPreviews = {};
+  final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
+  final Set<String> _queuedMediaPreviewIds = {};
+  final List<_MediaPreviewTicket> _pendingMediaPreviewTickets = [];
+  final Map<String, ProjectMediaArtifactEvent> _earlyMediaArtifactEvents = {};
+  int _activeMediaPreviewRequests = 0;
+  int _mediaPreviewSubmissionsInFlight = 0;
+  BigInt _lastMediaArtifactSequence = BigInt.zero;
   bool _mediaLoading = false;
   bool _mediaLoadingMore = false;
   String? _mediaLoadError;
@@ -71,6 +82,7 @@ class _AppShellState extends State<AppShell> {
   void dispose() {
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
+    unawaited(_mediaArtifactSubscription?.cancel());
     super.dispose();
   }
 
@@ -225,6 +237,7 @@ class _AppShellState extends State<AppShell> {
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,
+              mediaPreviews: Map.unmodifiable(_mediaPreviews),
               mediaLoading: _mediaLoading,
               mediaLoadingMore: _mediaLoadingMore,
               mediaLoadError: _mediaLoadError,
@@ -642,11 +655,25 @@ class _AppShellState extends State<AppShell> {
             }
           },
         );
+    _mediaArtifactSubscription = widget.projectGateway
+        .watchMediaArtifacts(session)
+        .listen(
+          (event) => _handleMediaArtifactEvent(session, event),
+          onError: (Object _) {},
+        );
     _lastEventSequence = BigInt.zero;
+    _lastMediaArtifactSequence = BigInt.zero;
+    _mediaPreviewQueue.clear();
+    _queuedMediaPreviewIds.clear();
+    _pendingMediaPreviewTickets.clear();
+    _earlyMediaArtifactEvents.clear();
+    _activeMediaPreviewRequests = 0;
+    _mediaPreviewSubmissionsInFlight = 0;
     setState(() {
       _activeSession = session;
       _activeProject = null;
       _mediaPage = null;
+      _mediaPreviews.clear();
       _mediaLoading = true;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
@@ -877,6 +904,7 @@ class _AppShellState extends State<AppShell> {
         );
         _mediaLoadError = null;
       });
+      _queueMediaPreviews(session, next.items);
     } on ProjectGatewayException catch (error) {
       if (mounted && identical(session, _activeSession)) {
         setState(() => _mediaLoadError = error.message);
@@ -950,6 +978,7 @@ class _AppShellState extends State<AppShell> {
             _mediaLoading = false;
             _mediaLoadError = null;
           });
+          _queueMediaPreviews(session, page.items);
           return;
         }
         current = await widget.projectGateway.summary(session);
@@ -983,6 +1012,370 @@ class _AppShellState extends State<AppShell> {
           _mediaLoadError = 'The media library could not load.';
         });
       }
+    }
+  }
+
+  void _queueMediaPreviews(
+    ProjectSessionHandle session,
+    List<ProjectMediaItem> items,
+  ) {
+    if (!mounted || !identical(session, _activeSession)) return;
+
+    final visibleIds = items.map((item) => item.mediaId).toSet();
+    final nextPreviews = Map<String, ProjectMediaPreview>.of(_mediaPreviews)
+      ..removeWhere((mediaId, _) => !visibleIds.contains(mediaId));
+    _mediaPreviewQueue.removeWhere(
+      (item) => !visibleIds.contains(item.mediaId),
+    );
+    _queuedMediaPreviewIds.removeWhere(
+      (mediaId) => !visibleIds.contains(mediaId),
+    );
+
+    for (final item in items) {
+      final kind = _mediaPreviewKind(item);
+      if (kind == null || nextPreviews[item.mediaId]?.kind == kind) continue;
+      nextPreviews[item.mediaId] = ProjectMediaPreview(
+        kind: kind,
+        state: ProjectMediaArtifactRequestState.queued,
+      );
+      if (_queuedMediaPreviewIds.add(item.mediaId)) {
+        _mediaPreviewQueue.addLast(item);
+      }
+    }
+
+    setState(() {
+      _mediaPreviews
+        ..clear()
+        ..addAll(nextPreviews);
+    });
+    _scheduleMediaPreviewRequests(session);
+  }
+
+  void _scheduleMediaPreviewRequests(ProjectSessionHandle session) {
+    if (!mounted || !identical(session, _activeSession)) return;
+    while (_activeMediaPreviewRequests < _maxActiveMediaPreviewRequests &&
+        _mediaPreviewQueue.isNotEmpty) {
+      final page = _mediaPage;
+      if (page == null) return;
+      final item = _mediaPreviewQueue.removeFirst();
+      _queuedMediaPreviewIds.remove(item.mediaId);
+      if (!page.items.any((visible) => visible.mediaId == item.mediaId)) {
+        continue;
+      }
+      final kind = _mediaPreviewKind(item);
+      if (kind == null) continue;
+      _activeMediaPreviewRequests++;
+      unawaited(_requestMediaPreview(session, item, kind));
+    }
+  }
+
+  Future<void> _requestMediaPreview(
+    ProjectSessionHandle session,
+    ProjectMediaItem item,
+    ProjectMediaArtifactKind kind,
+  ) async {
+    _mediaPreviewSubmissionsInFlight++;
+    try {
+      final request = switch (kind) {
+        ProjectMediaArtifactKind.thumbnail =>
+          await widget.projectGateway.requestMediaThumbnail(
+            session,
+            item.mediaId,
+          ),
+        ProjectMediaArtifactKind.waveform =>
+          await widget.projectGateway.requestMediaWaveform(
+            session,
+            item.mediaId,
+          ),
+      };
+      if (!mounted || !identical(session, _activeSession)) return;
+      if (request.kind != kind) {
+        _updateMediaPreview(
+          session,
+          item.mediaId,
+          ProjectMediaPreview(
+            kind: kind,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'INVALID_ARTIFACT_RESPONSE',
+          ),
+        );
+        _finishMediaPreviewRequest(session);
+        return;
+      }
+
+      final preview = ProjectMediaPreview(
+        kind: kind,
+        state: request.state,
+        cacheKey: request.cacheKey,
+        jobId: request.jobId,
+        errorCode: request.errorCode,
+      );
+      _updateMediaPreview(session, item.mediaId, preview);
+      switch (request.state) {
+        case ProjectMediaArtifactRequestState.ready:
+          final cacheKey = request.cacheKey;
+          if (cacheKey == null) {
+            _updateMediaPreview(
+              session,
+              item.mediaId,
+              ProjectMediaPreview(
+                kind: kind,
+                state: ProjectMediaArtifactRequestState.failed,
+                errorCode: 'INVALID_ARTIFACT_RESPONSE',
+              ),
+            );
+          } else {
+            await _readReadyMediaPreview(session, item.mediaId, kind, cacheKey);
+          }
+          _finishMediaPreviewRequest(session);
+        case ProjectMediaArtifactRequestState.queued ||
+            ProjectMediaArtifactRequestState.running:
+          final cacheKey = request.cacheKey;
+          final jobId = request.jobId;
+          if (cacheKey == null || jobId == null) {
+            _updateMediaPreview(
+              session,
+              item.mediaId,
+              ProjectMediaPreview(
+                kind: kind,
+                state: ProjectMediaArtifactRequestState.failed,
+                errorCode: 'INVALID_ARTIFACT_RESPONSE',
+              ),
+            );
+            _finishMediaPreviewRequest(session);
+          } else {
+            final ticket = _MediaPreviewTicket(
+              mediaId: item.mediaId,
+              kind: kind,
+              cacheKey: cacheKey,
+              jobId: jobId,
+            );
+            _pendingMediaPreviewTickets.add(ticket);
+            final earlyEvent =
+                _earlyMediaArtifactEvents[_mediaArtifactEventKey(
+                  kind,
+                  cacheKey,
+                  jobId,
+                )];
+            if (earlyEvent != null) {
+              unawaited(_processMediaArtifactEvent(session, earlyEvent));
+            }
+          }
+        case ProjectMediaArtifactRequestState.notApplicable ||
+            ProjectMediaArtifactRequestState.failed:
+          _finishMediaPreviewRequest(session);
+      }
+    } catch (_) {
+      if (mounted && identical(session, _activeSession)) {
+        _updateMediaPreview(
+          session,
+          item.mediaId,
+          ProjectMediaPreview(
+            kind: kind,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'PREVIEW_UNAVAILABLE',
+          ),
+        );
+        _finishMediaPreviewRequest(session);
+      }
+    } finally {
+      if (identical(session, _activeSession)) {
+        _mediaPreviewSubmissionsInFlight--;
+        if (_mediaPreviewSubmissionsInFlight == 0) {
+          _earlyMediaArtifactEvents.clear();
+        }
+      }
+    }
+  }
+
+  Future<void> _readReadyMediaPreview(
+    ProjectSessionHandle session,
+    String mediaId,
+    ProjectMediaArtifactKind kind,
+    String cacheKey,
+  ) async {
+    try {
+      final artifact = await widget.projectGateway.readMediaArtifact(
+        session,
+        kind: kind,
+        cacheKey: cacheKey,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      final current = _mediaPreviews[mediaId];
+      if (current == null || current.cacheKey != cacheKey) return;
+      _updateMediaPreview(
+        session,
+        mediaId,
+        ProjectMediaPreview(
+          kind: kind,
+          state: artifact?.mimeType == 'image/png'
+              ? ProjectMediaArtifactRequestState.ready
+              : ProjectMediaArtifactRequestState.failed,
+          cacheKey: cacheKey,
+          bytes: artifact?.mimeType == 'image/png' ? artifact?.bytes : null,
+          errorCode: artifact == null ? 'ARTIFACT_NOT_FOUND' : null,
+        ),
+      );
+    } catch (_) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      final current = _mediaPreviews[mediaId];
+      if (current == null || current.cacheKey != cacheKey) return;
+      _updateMediaPreview(
+        session,
+        mediaId,
+        ProjectMediaPreview(
+          kind: kind,
+          state: ProjectMediaArtifactRequestState.failed,
+          cacheKey: cacheKey,
+          errorCode: 'ARTIFACT_READ_FAILED',
+        ),
+      );
+    }
+  }
+
+  void _updateMediaPreview(
+    ProjectSessionHandle session,
+    String mediaId,
+    ProjectMediaPreview preview,
+  ) {
+    if (!mounted ||
+        !identical(session, _activeSession) ||
+        !_mediaPreviews.containsKey(mediaId)) {
+      return;
+    }
+    setState(() => _mediaPreviews[mediaId] = preview);
+  }
+
+  void _finishMediaPreviewRequest(ProjectSessionHandle session) {
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (_activeMediaPreviewRequests > 0) _activeMediaPreviewRequests--;
+    _scheduleMediaPreviewRequests(session);
+  }
+
+  void _handleMediaArtifactEvent(
+    ProjectSessionHandle session,
+    ProjectMediaArtifactEvent event,
+  ) {
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (event.sequence <= _lastMediaArtifactSequence) return;
+    _lastMediaArtifactSequence = event.sequence;
+    _dispatchMediaArtifactEvent(session, event);
+  }
+
+  void _dispatchMediaArtifactEvent(
+    ProjectSessionHandle session,
+    ProjectMediaArtifactEvent event,
+  ) {
+    if (_mediaPreviewSubmissionsInFlight > 0) {
+      _earlyMediaArtifactEvents[_mediaArtifactEventKey(
+            event.kind,
+            event.cacheKey,
+            event.jobId,
+          )] =
+          event;
+    }
+    final matching = _pendingMediaPreviewTickets
+        .where(
+          (ticket) =>
+              ticket.kind == event.kind &&
+              ticket.cacheKey == event.cacheKey &&
+              ticket.jobId == event.jobId,
+        )
+        .toList(growable: false);
+    if (matching.isEmpty) {
+      return;
+    }
+    unawaited(_processMediaArtifactEvent(session, event));
+  }
+
+  Future<void> _processMediaArtifactEvent(
+    ProjectSessionHandle session,
+    ProjectMediaArtifactEvent event,
+  ) async {
+    if (!mounted || !identical(session, _activeSession)) return;
+    final matching = _pendingMediaPreviewTickets
+        .where(
+          (ticket) =>
+              ticket.kind == event.kind &&
+              ticket.cacheKey == event.cacheKey &&
+              ticket.jobId == event.jobId,
+        )
+        .toList(growable: false);
+    if (matching.isEmpty) return;
+    _pendingMediaPreviewTickets.removeWhere(matching.contains);
+    _activeMediaPreviewRequests = _activeMediaPreviewRequests >= matching.length
+        ? _activeMediaPreviewRequests - matching.length
+        : 0;
+
+    final targetIds = matching.map((ticket) => ticket.mediaId).where((mediaId) {
+      final preview = _mediaPreviews[mediaId];
+      return preview != null &&
+          preview.kind == event.kind &&
+          preview.cacheKey == event.cacheKey &&
+          preview.jobId == event.jobId;
+    }).toSet();
+    if (event.state != ProjectMediaArtifactEventState.succeeded) {
+      setState(() {
+        for (final mediaId in targetIds) {
+          final current = _mediaPreviews[mediaId]!;
+          _mediaPreviews[mediaId] = ProjectMediaPreview(
+            kind: current.kind,
+            state: ProjectMediaArtifactRequestState.failed,
+            cacheKey: current.cacheKey,
+            jobId: current.jobId,
+            errorCode: event.errorCode ?? 'PREVIEW_UNAVAILABLE',
+          );
+        }
+      });
+      _scheduleMediaPreviewRequests(session);
+      return;
+    }
+
+    _scheduleMediaPreviewRequests(session);
+    if (targetIds.isEmpty) return;
+    try {
+      final artifact = await widget.projectGateway.readMediaArtifact(
+        session,
+        kind: event.kind,
+        cacheKey: event.cacheKey,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      final hasPng = artifact?.mimeType == 'image/png';
+      setState(() {
+        for (final mediaId in targetIds) {
+          final current = _mediaPreviews[mediaId];
+          if (current == null ||
+              current.cacheKey != event.cacheKey ||
+              current.jobId != event.jobId) {
+            continue;
+          }
+          _mediaPreviews[mediaId] = ProjectMediaPreview(
+            kind: current.kind,
+            state: hasPng
+                ? ProjectMediaArtifactRequestState.ready
+                : ProjectMediaArtifactRequestState.failed,
+            cacheKey: current.cacheKey,
+            jobId: current.jobId,
+            bytes: hasPng ? artifact?.bytes : null,
+            errorCode: hasPng ? null : 'ARTIFACT_READ_FAILED',
+          );
+        }
+      });
+    } catch (_) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        for (final mediaId in targetIds) {
+          final current = _mediaPreviews[mediaId];
+          if (current == null || current.cacheKey != event.cacheKey) continue;
+          _mediaPreviews[mediaId] = ProjectMediaPreview(
+            kind: current.kind,
+            state: ProjectMediaArtifactRequestState.failed,
+            cacheKey: current.cacheKey,
+            jobId: current.jobId,
+            errorCode: 'ARTIFACT_READ_FAILED',
+          );
+        }
+      });
     }
   }
 
@@ -1036,12 +1429,21 @@ class _AppShellState extends State<AppShell> {
     if (!identical(session, _activeSession)) return;
     _mediaRefreshGeneration++;
     unawaited(_eventSubscription?.cancel());
+    unawaited(_mediaArtifactSubscription?.cancel());
+    _mediaPreviewQueue.clear();
+    _queuedMediaPreviewIds.clear();
+    _pendingMediaPreviewTickets.clear();
+    _earlyMediaArtifactEvents.clear();
+    _activeMediaPreviewRequests = 0;
+    _mediaPreviewSubmissionsInFlight = 0;
+    _lastMediaArtifactSequence = BigInt.zero;
     if (!mounted) return;
     setState(() {
       _eventSubscription = null;
       _activeSession = null;
       _activeProject = null;
       _mediaPage = null;
+      _mediaPreviews.clear();
       _mediaLoading = false;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
@@ -1169,6 +1571,32 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
 }
 
 enum _LeaveChoice { save, discard, cancel }
+
+ProjectMediaArtifactKind? _mediaPreviewKind(ProjectMediaItem item) {
+  if (item.videoDetails != null) return ProjectMediaArtifactKind.thumbnail;
+  if (item.audioDetails != null) return ProjectMediaArtifactKind.waveform;
+  return null;
+}
+
+String _mediaArtifactEventKey(
+  ProjectMediaArtifactKind kind,
+  String cacheKey,
+  String jobId,
+) => '${kind.name}\u0000$cacheKey\u0000$jobId';
+
+class _MediaPreviewTicket {
+  const _MediaPreviewTicket({
+    required this.mediaId,
+    required this.kind,
+    required this.cacheKey,
+    required this.jobId,
+  });
+
+  final String mediaId;
+  final ProjectMediaArtifactKind kind;
+  final String cacheKey;
+  final String jobId;
+}
 
 enum _RecoveryChoice { recover, discard, cancel }
 

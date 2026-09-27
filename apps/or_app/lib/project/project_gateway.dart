@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 abstract interface class ProjectSessionHandle {}
 
 class ProjectReadModel {
@@ -72,6 +74,83 @@ class ProjectMediaPage {
   final int offset;
   final int limit;
   final int? nextOffset;
+}
+
+enum ProjectMediaArtifactKind { thumbnail, waveform }
+
+enum ProjectMediaArtifactRequestState {
+  ready,
+  queued,
+  running,
+  notApplicable,
+  failed,
+}
+
+enum ProjectMediaArtifactEventState { succeeded, failed, cancelled }
+
+class ProjectMediaArtifactRequest {
+  const ProjectMediaArtifactRequest({
+    required this.mediaId,
+    required this.kind,
+    required this.state,
+    this.cacheKey,
+    this.jobId,
+    this.errorCode,
+    this.message,
+  });
+
+  final String mediaId;
+  final ProjectMediaArtifactKind kind;
+  final ProjectMediaArtifactRequestState state;
+  final String? cacheKey;
+  final String? jobId;
+  final String? errorCode;
+  final String? message;
+}
+
+class ProjectMediaArtifact {
+  const ProjectMediaArtifact({required this.bytes, required this.mimeType});
+
+  final Uint8List bytes;
+  final String mimeType;
+}
+
+class ProjectMediaArtifactEvent {
+  const ProjectMediaArtifactEvent({
+    required this.sequence,
+    required this.mediaId,
+    required this.kind,
+    required this.cacheKey,
+    required this.jobId,
+    required this.state,
+    this.errorCode,
+  });
+
+  final BigInt sequence;
+  final String mediaId;
+  final ProjectMediaArtifactKind kind;
+  final String cacheKey;
+  final String jobId;
+  final ProjectMediaArtifactEventState state;
+  final String? errorCode;
+}
+
+class ProjectMediaPreview {
+  const ProjectMediaPreview({
+    required this.kind,
+    required this.state,
+    this.cacheKey,
+    this.jobId,
+    this.bytes,
+    this.errorCode,
+  });
+
+  final ProjectMediaArtifactKind kind;
+  final ProjectMediaArtifactRequestState state;
+  final String? cacheKey;
+  final String? jobId;
+  final Uint8List? bytes;
+  final String? errorCode;
 }
 
 class ProjectHostEvent {
@@ -158,6 +237,22 @@ abstract interface class ProjectGateway {
     required int offset,
     required int limit,
   });
+  Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
+    ProjectSessionHandle session,
+    String mediaId,
+  );
+  Future<ProjectMediaArtifactRequest> requestMediaWaveform(
+    ProjectSessionHandle session,
+    String mediaId,
+  );
+  Future<ProjectMediaArtifact?> readMediaArtifact(
+    ProjectSessionHandle session, {
+    required ProjectMediaArtifactKind kind,
+    required String cacheKey,
+  });
+  Stream<ProjectMediaArtifactEvent> watchMediaArtifacts(
+    ProjectSessionHandle session,
+  );
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,
