@@ -155,6 +155,29 @@ impl ProjectDocument {
         clip
     }
 
+    pub(crate) fn replace_timeline_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+        clip: TimelineClip,
+        revision: ProjectRevision,
+    ) {
+        self.timeline
+            .replace_clip_for_command(track_index, index, clip);
+        self.revision = revision;
+    }
+
+    pub(crate) fn replace_timeline_track_clips_for_command(
+        &mut self,
+        track_index: usize,
+        clips: Vec<TimelineClip>,
+        revision: ProjectRevision,
+    ) {
+        self.timeline
+            .replace_track_clips_for_command(track_index, clips);
+        self.revision = revision;
+    }
+
     pub(crate) fn move_timeline_clip_for_command(
         &mut self,
         from_track_index: usize,

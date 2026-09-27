@@ -125,6 +125,9 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.clip.insert",
             "timeline.clip.move",
             "timeline.clip.delete",
+            "timeline.clip.trim",
+            "timeline.clip.split",
+            "timeline.clip.ripple_delete",
         ]
     );
     assert_eq!(

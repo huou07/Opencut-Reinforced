@@ -307,6 +307,121 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
+fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v3() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let seeded = project_with_timeline_media();
+    let project_id = seeded.id();
+    save_project_file_atomic(&path, &seeded).unwrap();
+    let mut session = ProjectFileSession::open(&path).unwrap();
+    let track_id = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let clip_a = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+    let clip_b = ClipId::from_str("55555555-5555-4555-8555-555555555555").unwrap();
+    let media_id = MediaId::from_str("44444444-4444-4444-8444-444444444444").unwrap();
+
+    timeline_command(
+        &mut session,
+        "timeline.track.add",
+        serde_json::json!({"track_id": track_id, "kind": TrackKind::Video}),
+    );
+    timeline_command(
+        &mut session,
+        "timeline.clip.insert",
+        serde_json::json!({
+            "clip_id": clip_a,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": rational(2, 1),
+            "source_range": {"start": rational(1, 1), "duration": rational(4, 1)},
+        }),
+    );
+    timeline_command(
+        &mut session,
+        "timeline.clip.insert",
+        serde_json::json!({
+            "clip_id": clip_b,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": rational(8, 1),
+            "source_range": {"start": rational(4, 1), "duration": rational(1, 1)},
+        }),
+    );
+    timeline_command(
+        &mut session,
+        "timeline.clip.trim",
+        serde_json::json!({
+            "clip_id": clip_a,
+            "edge": "start",
+            "timeline_time": rational(3, 2),
+        }),
+    );
+    timeline_command(
+        &mut session,
+        "timeline.clip.split",
+        serde_json::json!({
+            "clip_id": clip_a,
+            "new_clip_id": ClipId::from_str("66666666-6666-4666-8666-666666666666").unwrap(),
+            "timeline_time": rational(4, 1),
+        }),
+    );
+    let split_right = ClipId::from_str("66666666-6666-4666-8666-666666666666").unwrap();
+    timeline_command(
+        &mut session,
+        "timeline.clip.ripple_delete",
+        serde_json::json!({"clip_id": split_right}),
+    );
+    assert_eq!(
+        session.session().project_revision(),
+        ProjectRevision::new(6)
+    );
+
+    session.save().unwrap();
+    let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(encoded["schema_version"], 3);
+    for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
+        assert!(!encoded.to_string().contains(runtime_state));
+    }
+    let saved = load_project_file(&path).unwrap();
+    assert_eq!(saved.id(), project_id);
+    assert_eq!(saved.revision(), ProjectRevision::new(6));
+    let clips = saved.timeline().tracks()[0].clips();
+    assert_eq!(clips.len(), 2);
+    assert_eq!(clips[0].id(), clip_a);
+    assert_eq!(clips[0].timeline_start(), RationalTime::new(3, 2).unwrap());
+    assert_eq!(
+        clips[0].source_range(),
+        TimeRange::new(
+            RationalTime::new(1, 2).unwrap(),
+            RationalTime::new(5, 2).unwrap()
+        )
+        .unwrap()
+    );
+    assert_eq!(clips[1].id(), clip_b);
+    assert_eq!(clips[1].timeline_start(), RationalTime::new(6, 1).unwrap());
+
+    let reopened = ProjectFileSession::open(&path).unwrap();
+    assert_eq!(reopened.session().project_id(), project_id);
+    assert_eq!(
+        reopened.session().project_revision(),
+        ProjectRevision::new(6)
+    );
+    assert_eq!(reopened.session().project().timeline(), saved.timeline());
+    let mut reopened = reopened;
+    let no_undo =
+        reopened.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+            command_id: "history.undo".to_owned(),
+            schema_version: 1,
+            project_id,
+            project_instance_id: reopened.session().project_instance_id(),
+            expected_project_revision: ProjectRevision::new(6),
+            arguments: serde_json::json!({}),
+        }));
+    assert!(
+        matches!(no_undo, ApplicationResponse::Error(error) if error.code == OperationErrorCode::NothingToUndo)
+    );
+}
+
+#[test]
 fn atomically_replaces_an_existing_project_file() {
     let directory = TestDirectory::new();
     let path = directory.project_path();

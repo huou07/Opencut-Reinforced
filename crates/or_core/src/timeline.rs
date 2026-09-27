@@ -337,6 +337,23 @@ impl ProjectTimeline {
     ) -> TimelineClip {
         self.tracks[track_index].clips.remove(index)
     }
+
+    pub(crate) fn replace_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+        clip: TimelineClip,
+    ) {
+        self.tracks[track_index].clips[index] = clip;
+    }
+
+    pub(crate) fn replace_track_clips_for_command(
+        &mut self,
+        track_index: usize,
+        clips: Vec<TimelineClip>,
+    ) {
+        self.tracks[track_index].clips = clips;
+    }
 }
 
 pub(crate) fn matching_stream(kind: TrackKind, item: &MediaItem) -> (bool, Option<RationalTime>) {

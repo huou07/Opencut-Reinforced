@@ -19,6 +19,9 @@ const TIMELINE_TRACK_REMOVE_ID: &str = "timeline.track.remove";
 const TIMELINE_CLIP_INSERT_ID: &str = "timeline.clip.insert";
 const TIMELINE_CLIP_MOVE_ID: &str = "timeline.clip.move";
 const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
+const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
+const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
+const TIMELINE_CLIP_RIPPLE_DELETE_ID: &str = "timeline.clip.ripple_delete";
 const TIMELINE_TRACKS_ID: &str = "timeline.tracks";
 const TIMELINE_CLIPS_ID: &str = "timeline.clips";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
@@ -42,7 +45,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 10] = [
+const COMMANDS: [CommandDescriptor; 13] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -99,6 +102,24 @@ const COMMANDS: [CommandDescriptor; 10] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_DELETE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_TRIM_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_SPLIT_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_RIPPLE_DELETE_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -297,6 +318,66 @@ impl CommandEnvelope {
         }
     }
 
+    pub fn trim_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        edge: TimelineTrimEdge,
+        timeline_time: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_TRIM_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "clip_id": clip_id,
+                "edge": edge,
+                "timeline_time": timeline_time,
+            }),
+        }
+    }
+
+    pub fn split_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        new_clip_id: ClipId,
+        timeline_time: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_SPLIT_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "clip_id": clip_id,
+                "new_clip_id": new_clip_id,
+                "timeline_time": timeline_time,
+            }),
+        }
+    }
+
+    pub fn ripple_delete_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_RIPPLE_DELETE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "clip_id": clip_id }),
+        }
+    }
+
     pub fn undo(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,
@@ -466,6 +547,13 @@ impl TimelineClipState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimelineTrimEdge {
+    Start,
+    End,
+}
+
 /// One canonical project-state delta produced by a command or transaction.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -514,6 +602,26 @@ pub enum ProjectChange {
         to_index: usize,
         to_timeline_start: RationalTime,
     },
+    TimelineClipTrimmed {
+        track_id: TrackId,
+        index: usize,
+        before: TimelineClipState,
+        after: TimelineClipState,
+    },
+    TimelineClipSplit {
+        track_id: TrackId,
+        index: usize,
+        before: TimelineClipState,
+        left_after: TimelineClipState,
+        right_after: TimelineClipState,
+    },
+    TimelineClipRippleDeleted {
+        track_id: TrackId,
+        index: usize,
+        deleted_clip: TimelineClipState,
+        shifted_count: usize,
+        shift_duration: RationalTime,
+    },
 }
 
 /// Net canonical content changes produced by one transaction.
@@ -523,6 +631,14 @@ pub enum ProjectChange {
 #[serde(deny_unknown_fields)]
 pub struct ChangeSet {
     changes: Vec<ProjectChange>,
+    #[serde(skip)]
+    ripple_history_guard: Option<RippleHistoryGuard>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RippleHistoryGuard {
+    before_fingerprint: u64,
+    after_fingerprint: u64,
 }
 
 impl ChangeSet {
@@ -544,6 +660,7 @@ impl ChangeSet {
                     before: before.to_owned(),
                     after: after.to_owned(),
                 }],
+                ripple_history_guard: None,
             }
         }
     }
@@ -649,6 +766,45 @@ impl ChangeSet {
                 (*to_track_id, *to_index, *to_timeline_start),
                 reverse,
             ),
+            ProjectChange::TimelineClipTrimmed {
+                track_id,
+                index,
+                before,
+                after,
+            } => {
+                stage_clip_trim_history_change(project, *track_id, *index, *before, *after, reverse)
+            }
+            ProjectChange::TimelineClipSplit {
+                track_id,
+                index,
+                before,
+                left_after,
+                right_after,
+            } => stage_clip_split_history_change(
+                project,
+                *track_id,
+                *index,
+                *before,
+                *left_after,
+                *right_after,
+                reverse,
+            ),
+            ProjectChange::TimelineClipRippleDeleted {
+                track_id,
+                index,
+                deleted_clip,
+                shifted_count,
+                shift_duration,
+            } => stage_clip_ripple_history_change(
+                project,
+                *track_id,
+                *index,
+                *deleted_clip,
+                *shifted_count,
+                *shift_duration,
+                reverse,
+                self.ripple_history_guard,
+            ),
         }
     }
 
@@ -658,18 +814,23 @@ impl ChangeSet {
             .try_reserve(1)
             .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
         changes.push(change);
-        Ok(Self { changes })
+        Ok(Self {
+            changes,
+            ripple_history_guard: None,
+        })
     }
 
     fn media_added(item: MediaItem, index: usize) -> Self {
         Self {
             changes: vec![ProjectChange::MediaAdded { item, index }],
+            ripple_history_guard: None,
         }
     }
 
     fn media_removed(item: MediaItem, index: usize) -> Self {
         Self {
             changes: vec![ProjectChange::MediaRemoved { item, index }],
+            ripple_history_guard: None,
         }
     }
 }
@@ -706,6 +867,15 @@ enum StagedHistoryChange {
         to_track_index: usize,
         to_index: usize,
         to_timeline_start: RationalTime,
+    },
+    ReplaceTimelineClip {
+        track_index: usize,
+        index: usize,
+        clip: TimelineClipState,
+    },
+    ReplaceTimelineTrack {
+        track_index: usize,
+        clips: Vec<TimelineClip>,
     },
 }
 
@@ -954,7 +1124,7 @@ pub enum ApplicationResponse {
     Error(OperationError),
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct SessionHistory {
     undo: Vec<ChangeSet>,
     redo: Vec<ChangeSet>,
@@ -1075,6 +1245,11 @@ impl ProjectSession {
             TIMELINE_CLIP_INSERT_ID => self.apply_timeline_clip_insert(envelope.arguments)?,
             TIMELINE_CLIP_MOVE_ID => self.apply_timeline_clip_move(envelope.arguments)?,
             TIMELINE_CLIP_DELETE_ID => self.apply_timeline_clip_delete(envelope.arguments)?,
+            TIMELINE_CLIP_TRIM_ID => self.apply_timeline_clip_trim(envelope.arguments)?,
+            TIMELINE_CLIP_SPLIT_ID => self.apply_timeline_clip_split(envelope.arguments)?,
+            TIMELINE_CLIP_RIPPLE_DELETE_ID => {
+                self.apply_timeline_clip_ripple_delete(envelope.arguments)?
+            }
             _ => return Err(OperationError::new(OperationErrorCode::UnknownCommand)),
         };
 
@@ -1436,6 +1611,244 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    fn apply_timeline_clip_trim(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipTrimArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let target = arguments.timeline_time.into_time()?;
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+
+        let track = &self.project.timeline().tracks()[track_index];
+        let track_id = track.id();
+        let before = TimelineClipState::from(&track.clips()[index]);
+        let timeline_end = timeline_clip_end(before)?;
+        let current_edge = match arguments.edge {
+            TimelineTrimEdge::Start => before.timeline_start,
+            TimelineTrimEdge::End => timeline_end,
+        };
+        if target == current_edge {
+            return Ok(ChangeSet::default());
+        }
+
+        let after = match arguments.edge {
+            TimelineTrimEdge::Start => {
+                if target.is_negative() || target >= timeline_end {
+                    return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+                }
+                let delta = target
+                    .checked_sub(before.timeline_start)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                let source_start = before
+                    .source_range
+                    .start()
+                    .checked_add(delta)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                let duration = timeline_end
+                    .checked_sub(target)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                TimelineClipState {
+                    timeline_start: target,
+                    source_range: TimeRange::new(source_start, duration)
+                        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+                    ..before
+                }
+            }
+            TimelineTrimEdge::End => {
+                if target <= before.timeline_start {
+                    return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+                }
+                let duration = target
+                    .checked_sub(before.timeline_start)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                TimelineClipState {
+                    source_range: TimeRange::new(before.source_range.start(), duration)
+                        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+                    ..before
+                }
+            }
+        };
+
+        let mut states = track_states(&self.project, track_index)?;
+        states[index] = after;
+        validate_track_states(&self.project, track.kind(), &states)?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineClipTrimmed {
+                track_id,
+                index,
+                before,
+                after,
+            })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project.replace_timeline_clip_for_command(
+            track_index,
+            index,
+            after.into_domain(),
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_clip_split(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipSplitArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let split_time = arguments.timeline_time.into_time()?;
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        if find_timeline_clip(&self.project, arguments.new_clip_id).is_some() {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipIdAlreadyExists,
+            ));
+        }
+        ensure_timeline_clip_capacity(
+            &self.project,
+            track_index,
+            1,
+            1,
+            crate::MAX_TIMELINE_CLIPS,
+            crate::MAX_TIMELINE_CLIPS_PER_TRACK,
+        )?;
+
+        let track = &self.project.timeline().tracks()[track_index];
+        let track_id = track.id();
+        let before = TimelineClipState::from(&track.clips()[index]);
+        let original_end = timeline_clip_end(before)?;
+        if split_time <= before.timeline_start || split_time >= original_end {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let left_duration = split_time
+            .checked_sub(before.timeline_start)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let right_duration = before
+            .source_range
+            .duration()
+            .checked_sub(left_duration)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let right_source_start = before
+            .source_range
+            .start()
+            .checked_add(left_duration)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let left_after = TimelineClipState {
+            source_range: TimeRange::new(before.source_range.start(), left_duration)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+            ..before
+        };
+        let right_after = TimelineClipState {
+            clip_id: arguments.new_clip_id,
+            timeline_start: split_time,
+            source_range: TimeRange::new(right_source_start, right_duration)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+            ..before
+        };
+        let mut states = track_states(&self.project, track_index)?;
+        states[index] = left_after;
+        states
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        states.insert(index + 1, right_after);
+        validate_track_states(&self.project, track.kind(), &states)?;
+        let clips = states_into_domain(states)?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) = timeline_change_sets(ProjectChange::TimelineClipSplit {
+            track_id,
+            index,
+            before,
+            left_after,
+            right_after,
+        })?;
+        self.project
+            .try_reserve_timeline_track_clips(track_index, 1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_clip_ripple_delete(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipDeleteArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        let track = &self.project.timeline().tracks()[track_index];
+        let track_id = track.id();
+        let deleted_clip = TimelineClipState::from(&track.clips()[index]);
+        let shift_duration = deleted_clip.source_range.duration();
+        let shifted_count = track.clips().len().saturating_sub(index + 1);
+        let mut states = track_states(&self.project, track_index)?;
+        let before_fingerprint = timeline_states_fingerprint(&states);
+        states.remove(index);
+        for state in states.iter_mut().skip(index) {
+            state.timeline_start = state
+                .timeline_start
+                .checked_sub(shift_duration)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        }
+        validate_track_states(&self.project, track.kind(), &states)?;
+        let after_fingerprint = timeline_states_fingerprint(&states);
+        let clips = states_into_domain(states)?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, mut history_entry) =
+            timeline_change_sets(ProjectChange::TimelineClipRippleDeleted {
+                track_id,
+                index,
+                deleted_clip,
+                shifted_count,
+                shift_duration,
+            })?;
+        history_entry.ripple_history_guard = Some(RippleHistoryGuard {
+            before_fingerprint,
+            after_fingerprint,
+        });
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     fn apply_timeline_clip_move(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
         let arguments: TimelineClipMoveArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -1703,6 +2116,14 @@ impl ProjectSession {
             } if from_track_index != to_track_index => self
                 .project
                 .try_reserve_timeline_track_clips(*to_track_index, 1),
+            StagedHistoryChange::ReplaceTimelineTrack { track_index, clips }
+                if clips.len() > self.project.timeline().tracks()[*track_index].clips().len() =>
+            {
+                self.project.try_reserve_timeline_track_clips(
+                    *track_index,
+                    clips.len() - self.project.timeline().tracks()[*track_index].clips().len(),
+                )
+            }
             _ => Ok(()),
         }
         .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
@@ -1766,6 +2187,19 @@ impl ProjectSession {
                 to_timeline_start,
                 after_revision,
             ),
+            StagedHistoryChange::ReplaceTimelineClip {
+                track_index,
+                index,
+                clip,
+            } => self.project.replace_timeline_clip_for_command(
+                track_index,
+                index,
+                clip.into_domain(),
+                after_revision,
+            ),
+            StagedHistoryChange::ReplaceTimelineTrack { track_index, clips } => self
+                .project
+                .replace_timeline_track_clips_for_command(track_index, clips, after_revision),
         }
         match direction {
             HistoryDirection::Undo => self.history.redo.push(moved_entry),
@@ -1876,6 +2310,22 @@ struct TimelineClipDeleteArguments {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct TimelineClipTrimArguments {
+    clip_id: ClipId,
+    edge: TimelineTrimEdge,
+    timeline_time: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineClipSplitArguments {
+    clip_id: ClipId,
+    new_clip_id: ClipId,
+    timeline_time: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineClipsQueryArguments {
     track_id: TrackId,
     offset: u64,
@@ -1910,15 +2360,75 @@ fn timeline_change_sets(change: ProjectChange) -> Result<(ChangeSet, ChangeSet),
     Ok((
         ChangeSet {
             changes: result_changes,
+            ripple_history_guard: None,
         },
         ChangeSet {
             changes: history_changes,
+            ripple_history_guard: None,
         },
     ))
 }
 
 fn history_conflict() -> OperationError {
     OperationError::new(OperationErrorCode::HistoryConflict)
+}
+
+fn timeline_clip_end(clip: TimelineClipState) -> Result<RationalTime, OperationError> {
+    clip.timeline_start
+        .checked_add(clip.source_range.duration())
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))
+}
+
+fn track_states(
+    project: &ProjectDocument,
+    track_index: usize,
+) -> Result<Vec<TimelineClipState>, OperationError> {
+    let clips = project.timeline().tracks()[track_index].clips();
+    let mut states = Vec::new();
+    states
+        .try_reserve(clips.len())
+        .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+    states.extend(clips.iter().map(TimelineClipState::from));
+    Ok(states)
+}
+
+fn states_into_domain(states: Vec<TimelineClipState>) -> Result<Vec<TimelineClip>, OperationError> {
+    let mut clips = Vec::new();
+    clips
+        .try_reserve(states.len())
+        .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+    clips.extend(states.into_iter().map(TimelineClipState::into_domain));
+    Ok(clips)
+}
+
+fn timeline_states_fingerprint(states: &[TimelineClipState]) -> u64 {
+    let bytes = serde_json::to_vec(states).expect("timeline state serialization is infallible");
+    bytes
+        .iter()
+        .fold(14_695_981_039_346_656_037_u64, |hash, byte| {
+            hash.wrapping_mul(1_099_511_628_211)
+                .wrapping_add(u64::from(*byte))
+        })
+}
+
+fn validate_track_states(
+    project: &ProjectDocument,
+    track_kind: TrackKind,
+    states: &[TimelineClipState],
+) -> Result<(), OperationError> {
+    let mut previous_start = None;
+    let mut previous_end = None;
+    for state in states {
+        let end = validate_clip_state(project, track_kind, *state)?;
+        if previous_start.is_some_and(|start| state.timeline_start <= start)
+            || previous_end.is_some_and(|previous| state.timeline_start < previous)
+        {
+            return Err(OperationError::new(OperationErrorCode::TimelineOverlap));
+        }
+        previous_start = Some(state.timeline_start);
+        previous_end = Some(end);
+    }
+    Ok(())
 }
 
 fn stage_track_history_change(
@@ -2040,6 +2550,163 @@ fn ensure_clip_matches_at(
     } else {
         Err(history_conflict())
     }
+}
+
+fn stage_clip_trim_history_change(
+    project: &ProjectDocument,
+    track_id: TrackId,
+    index: usize,
+    before: TimelineClipState,
+    after: TimelineClipState,
+    reverse: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let (expected, target) = if reverse {
+        (after, before)
+    } else {
+        (before, after)
+    };
+    let track_index = ensure_clip_matches_at(project, track_id, index, expected)?;
+    let track = &project.timeline().tracks()[track_index];
+    let mut states = track_states(project, track_index).map_err(|_| history_conflict())?;
+    states[index] = target;
+    validate_track_states(project, track.kind(), &states).map_err(|_| history_conflict())?;
+    Ok((
+        StagedHistoryChange::ReplaceTimelineClip {
+            track_index,
+            index,
+            clip: target,
+        },
+        ChangeSet::try_single(ProjectChange::TimelineClipTrimmed {
+            track_id,
+            index,
+            before: expected,
+            after: target,
+        })?,
+    ))
+}
+
+fn stage_clip_split_history_change(
+    project: &ProjectDocument,
+    track_id: TrackId,
+    index: usize,
+    before: TimelineClipState,
+    left_after: TimelineClipState,
+    right_after: TimelineClipState,
+    reverse: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let track_index = find_timeline_track_index(project, track_id).ok_or_else(history_conflict)?;
+    let track = &project.timeline().tracks()[track_index];
+    let mut states = track_states(project, track_index).map_err(|_| history_conflict())?;
+    if reverse {
+        if states.get(index) != Some(&left_after) || states.get(index + 1) != Some(&right_after) {
+            return Err(history_conflict());
+        }
+        states.remove(index + 1);
+        states[index] = before;
+    } else {
+        if states.get(index) != Some(&before)
+            || find_timeline_clip(project, right_after.clip_id).is_some()
+            || timeline_clip_count(project).is_none_or(|count| count >= crate::MAX_TIMELINE_CLIPS)
+            || states.len() >= crate::MAX_TIMELINE_CLIPS_PER_TRACK
+        {
+            return Err(history_conflict());
+        }
+        states[index] = left_after;
+        states.try_reserve(1).map_err(|_| history_conflict())?;
+        states.insert(index + 1, right_after);
+    }
+    validate_track_states(project, track.kind(), &states).map_err(|_| history_conflict())?;
+    let clips = states_into_domain(states).map_err(|_| history_conflict())?;
+    Ok((
+        StagedHistoryChange::ReplaceTimelineTrack { track_index, clips },
+        ChangeSet::try_single(ProjectChange::TimelineClipSplit {
+            track_id,
+            index,
+            before,
+            left_after,
+            right_after,
+        })?,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stage_clip_ripple_history_change(
+    project: &ProjectDocument,
+    track_id: TrackId,
+    index: usize,
+    deleted_clip: TimelineClipState,
+    shifted_count: usize,
+    shift_duration: RationalTime,
+    reverse: bool,
+    guard: Option<RippleHistoryGuard>,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let track_index = find_timeline_track_index(project, track_id).ok_or_else(history_conflict)?;
+    let track = &project.timeline().tracks()[track_index];
+    let mut states = track_states(project, track_index).map_err(|_| history_conflict())?;
+    if let Some(guard) = guard {
+        let expected_fingerprint = if reverse {
+            guard.after_fingerprint
+        } else {
+            guard.before_fingerprint
+        };
+        if timeline_states_fingerprint(&states) != expected_fingerprint {
+            return Err(history_conflict());
+        }
+    }
+    if reverse {
+        let expected_len = index
+            .checked_add(shifted_count)
+            .ok_or_else(history_conflict)?;
+        if states.len() != expected_len
+            || timeline_clip_count(project).is_none_or(|count| count >= crate::MAX_TIMELINE_CLIPS)
+            || find_timeline_clip(project, deleted_clip.clip_id).is_some()
+        {
+            return Err(history_conflict());
+        }
+        states.try_reserve(1).map_err(|_| history_conflict())?;
+        states.insert(index, deleted_clip);
+        for state in states.iter_mut().skip(index + 1) {
+            state.timeline_start = state
+                .timeline_start
+                .checked_add(shift_duration)
+                .map_err(|_| history_conflict())?;
+        }
+    } else {
+        let suffix_len = shifted_count.checked_add(1).ok_or_else(history_conflict)?;
+        let expected_len = index.checked_add(suffix_len).ok_or_else(history_conflict)?;
+        if states.len() != expected_len || states.get(index) != Some(&deleted_clip) {
+            return Err(history_conflict());
+        }
+        states.remove(index);
+        for state in states.iter_mut().skip(index) {
+            state.timeline_start = state
+                .timeline_start
+                .checked_sub(shift_duration)
+                .map_err(|_| history_conflict())?;
+        }
+    }
+    validate_track_states(project, track.kind(), &states).map_err(|_| history_conflict())?;
+    if let Some(guard) = guard {
+        let expected_fingerprint = if reverse {
+            guard.before_fingerprint
+        } else {
+            guard.after_fingerprint
+        };
+        if timeline_states_fingerprint(&states) != expected_fingerprint {
+            return Err(history_conflict());
+        }
+    }
+    let clips = states_into_domain(states).map_err(|_| history_conflict())?;
+    Ok((
+        StagedHistoryChange::ReplaceTimelineTrack { track_index, clips },
+        ChangeSet::try_single(ProjectChange::TimelineClipRippleDeleted {
+            track_id,
+            index,
+            deleted_clip,
+            shifted_count,
+            shift_duration,
+        })?,
+    ))
 }
 
 fn ensure_clip_insertable_at(
@@ -2362,11 +3029,11 @@ mod tests {
         TimelineTrackSummary, TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
-        AudioStreamMetadata, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_TRACKS,
-        MediaId, MediaItem, MediaMetadata, MediaSourceRef, MediaStreamMetadata, ProjectDocument,
-        ProjectId, ProjectInstanceId, ProjectRevision, ProjectTimeline, RationalRate, RationalTime,
-        TimeRange, TimelineClip, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata,
-        decode_project, encode_project,
+        AudioStreamMetadata, ClipId, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
+        MAX_TIMELINE_CLIPS, MAX_TIMELINE_TRACKS, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
+        MediaStreamMetadata, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision,
+        ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip, TimelineTrack,
+        TrackId, TrackKind, VideoStreamMetadata, decode_project, encode_project,
     };
     use serde_json::{Value, json};
     use std::{num::NonZeroU32, str::FromStr};
@@ -2381,6 +3048,7 @@ mod tests {
     const CLIP_A: &str = "33333333-3333-4333-8333-333333333333";
     const CLIP_B: &str = "55555555-5555-4555-8555-555555555555";
     const CLIP_C: &str = "66666666-6666-4666-8666-666666666666";
+    const CLIP_D: &str = "99999999-9999-4999-8999-999999999998";
     const MEDIA_A: &str = "44444444-4444-4444-8444-444444444444";
     const MEDIA_B: &str = "77777777-7777-4777-8777-777777777777";
     const MEDIA_C: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
@@ -2790,6 +3458,24 @@ mod tests {
                     mutates_project: true,
                     allowed_in_transaction: false,
                 },
+                CommandDescriptor {
+                    id: "timeline.clip.trim",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.clip.split",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.clip.ripple_delete",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
             ]
         );
         assert_eq!(
@@ -2818,7 +3504,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 10);
+        assert_eq!(COMMANDS.len(), 13);
         assert_eq!(QUERIES.len(), 5);
     }
 
@@ -3360,6 +4046,601 @@ mod tests {
             assert_eq!(session.history.undo, before_undo);
             assert_eq!(session.project_revision(), before_revision);
         }
+    }
+
+    #[test]
+    fn timeline_clip_trim_uses_absolute_exact_edges_and_round_trips_history() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (1, 1),
+            (6, 1),
+        )
+        .unwrap();
+        let original = session.project().timeline().clone();
+
+        let start = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "start",
+                "timeline_time": rational_json(3, 1),
+            }),
+        )
+        .unwrap();
+        assert!(matches!(
+            start.change_set.changes(),
+            [ProjectChange::TimelineClipTrimmed { before, after, .. }]
+                if before.timeline_start == RationalTime::new(2, 1).unwrap()
+                    && after.timeline_start == RationalTime::new(3, 1).unwrap()
+                    && after.source_range.start() == RationalTime::new(2, 1).unwrap()
+                    && after.source_range.duration() == RationalTime::new(5, 1).unwrap()
+        ));
+        assert_eq!(
+            start.after_revision,
+            start.before_revision.checked_next().unwrap()
+        );
+        let trimmed = &session.project().timeline().tracks()[0].clips()[0];
+        assert_eq!(trimmed.timeline_start(), RationalTime::new(3, 1).unwrap());
+        assert_eq!(
+            trimmed.source_range().start(),
+            RationalTime::new(2, 1).unwrap()
+        );
+        assert_eq!(
+            trimmed.source_range().duration(),
+            RationalTime::new(5, 1).unwrap()
+        );
+
+        let end = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "end",
+                "timeline_time": rational_json(7, 1),
+            }),
+        )
+        .unwrap();
+        assert!(end.changed);
+        assert_eq!(
+            session.project().timeline().tracks()[0].clips()[0].source_range(),
+            TimeRange::new(
+                RationalTime::new(2, 1).unwrap(),
+                RationalTime::new(4, 1).unwrap()
+            )
+            .unwrap()
+        );
+
+        session
+            .execute_command(undo(session.project_revision().value()))
+            .unwrap();
+        let no_op_revision = session.project_revision();
+        let no_op_undo = session.history.undo.clone();
+        let no_op_redo = session.history.redo.clone();
+        let no_op = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "start",
+                "timeline_time": rational_json(3, 1),
+            }),
+        )
+        .unwrap();
+        assert!(!no_op.changed);
+        assert_eq!(session.project_revision(), no_op_revision);
+        assert_eq!(session.history.undo, no_op_undo);
+        assert_eq!(session.history.redo, no_op_redo);
+
+        session
+            .execute_command(undo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(session.project().timeline(), &original);
+        session
+            .execute_command(redo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(
+            session.project().timeline().tracks()[0].clips()[0].timeline_start(),
+            RationalTime::new(3, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn timeline_clip_trim_rejects_unknown_fields_overlap_negative_source_and_bounds_atomically() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (3, 1),
+            (2, 1),
+            (4, 1),
+        )
+        .unwrap();
+        let before = session.project().clone();
+        let before_undo = session.history.undo.clone();
+        let overlap = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_B,
+                "edge": "start",
+                "timeline_time": rational_json(1, 1),
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(overlap.code, OperationErrorCode::TimelineOverlap);
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history.undo, before_undo);
+
+        let negative_source = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_B,
+                "edge": "start",
+                "timeline_time": rational_json(0, 1),
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(negative_source.code, OperationErrorCode::InvalidArguments);
+        let strict = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_B,
+                "edge": "end",
+                "timeline_time": rational_json(8, 1),
+                "extra": true,
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(strict.code, OperationErrorCode::InvalidArguments);
+    }
+
+    #[test]
+    fn timeline_clip_trim_allows_exact_earlier_extension_and_enforces_source_bounds() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                video_media_item_with_duration(
+                    MEDIA_A,
+                    "file:///missing/bounded.mov",
+                    Some(RationalTime::new(10, 1).unwrap()),
+                    Some(RationalTime::new(10, 1).unwrap()),
+                ),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (4, 1),
+            (4, 1),
+        )
+        .unwrap();
+
+        let extended = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "start",
+                "timeline_time": rational_json(3, 2),
+            }),
+        )
+        .unwrap();
+        assert!(extended.changed);
+        let clip = &session.project().timeline().tracks()[0].clips()[0];
+        assert_eq!(clip.timeline_start(), RationalTime::new(3, 2).unwrap());
+        assert_eq!(
+            clip.source_range().start(),
+            RationalTime::new(7, 2).unwrap()
+        );
+        assert_eq!(
+            clip.source_range().duration(),
+            RationalTime::new(9, 2).unwrap()
+        );
+
+        let before = session.project().clone();
+        let before_history = session.history.clone();
+        let overrun = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "end",
+                "timeline_time": rational_json(9, 1),
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(overrun.code, OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history, before_history);
+    }
+
+    #[test]
+    fn timeline_clip_split_partitions_exactly_and_restores_history() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (1, 1),
+            (6, 1),
+        )
+        .unwrap();
+        let original = session.project().timeline().clone();
+        let split = execute(
+            &mut session,
+            "timeline.clip.split",
+            json!({
+                "clip_id": CLIP_A,
+                "new_clip_id": CLIP_B,
+                "timeline_time": rational_json(5, 1),
+            }),
+        )
+        .unwrap();
+        assert!(matches!(
+            split.change_set.changes(),
+            [ProjectChange::TimelineClipSplit { before, left_after, right_after, .. }]
+                if before.clip_id == left_after.clip_id
+                    && left_after.timeline_start == RationalTime::new(2, 1).unwrap()
+                    && left_after.source_range == TimeRange::new(RationalTime::new(1, 1).unwrap(), RationalTime::new(3, 1).unwrap()).unwrap()
+                    && right_after.clip_id == ClipId::from_str(CLIP_B).unwrap()
+                    && right_after.timeline_start == RationalTime::new(5, 1).unwrap()
+                    && right_after.source_range == TimeRange::new(RationalTime::new(4, 1).unwrap(), RationalTime::new(3, 1).unwrap()).unwrap()
+        ));
+        let clips = session.project().timeline().tracks()[0].clips();
+        assert_eq!(clips.len(), 2);
+        assert_eq!(clips[0].id().to_string(), CLIP_A);
+        assert_eq!(clips[1].id().to_string(), CLIP_B);
+        assert_eq!(
+            clips[0].source_range().duration(),
+            RationalTime::new(3, 1).unwrap()
+        );
+        assert_eq!(
+            clips[1].source_range().start(),
+            RationalTime::new(4, 1).unwrap()
+        );
+        assert_eq!(
+            clips[1].source_range().duration(),
+            RationalTime::new(3, 1).unwrap()
+        );
+
+        session
+            .execute_command(undo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(session.project().timeline(), &original);
+        session
+            .execute_command(redo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(session.project().timeline().tracks()[0].clips().len(), 2);
+
+        let before = session.project().clone();
+        let before_history = session.history.clone();
+        for (time, expected) in [
+            ((2, 1), OperationErrorCode::InvalidArguments),
+            ((8, 1), OperationErrorCode::InvalidArguments),
+        ] {
+            let error = execute(
+                &mut session,
+                "timeline.clip.split",
+                json!({
+                    "clip_id": CLIP_A,
+                    "new_clip_id": CLIP_C,
+                    "timeline_time": rational_json(time.0, time.1),
+                }),
+            )
+            .unwrap_err();
+            assert_eq!(error.code, expected);
+            assert_eq!(session.project(), &before);
+            assert_eq!(session.history, before_history);
+        }
+        let duplicate = execute(
+            &mut session,
+            "timeline.clip.split",
+            json!({
+                "clip_id": CLIP_A,
+                "new_clip_id": CLIP_B,
+                "timeline_time": rational_json(3, 1),
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(
+            duplicate.code,
+            OperationErrorCode::TimelineClipIdAlreadyExists
+        );
+        let before_strict = session.project().clone();
+        let before_strict_history = session.history.clone();
+        let strict = execute(
+            &mut session,
+            "timeline.clip.split",
+            json!({
+                "clip_id": CLIP_A,
+                "new_clip_id": CLIP_C,
+                "timeline_time": rational_json(3, 1),
+                "extra": true,
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(strict.code, OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project(), &before_strict);
+        assert_eq!(session.history, before_strict_history);
+    }
+
+    #[test]
+    fn timeline_clip_split_rejects_capacity_before_mutation() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        let clips = (0..MAX_TIMELINE_CLIPS)
+            .map(|index| {
+                TimelineClip::from_parts_for_codec(
+                    if index == 0 {
+                        ClipId::from_str(CLIP_A).unwrap()
+                    } else {
+                        ClipId::generate()
+                    },
+                    MediaId::from_str(MEDIA_A).unwrap(),
+                    RationalTime::new(index as i64, 1).unwrap(),
+                    TimeRange::new(
+                        RationalTime::new(0, 1).unwrap(),
+                        RationalTime::new(1, 1).unwrap(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::from_tracks_for_codec(vec![fixture_track(
+                TRACK_A,
+                TrackKind::Video,
+                clips,
+            )]));
+        let before = session.project().clone();
+        let before_history = session.history.clone();
+        let error = execute(
+            &mut session,
+            "timeline.clip.split",
+            json!({
+                "clip_id": CLIP_A,
+                "new_clip_id": CLIP_B,
+                "timeline_time": rational_json(1, 2),
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::TimelineLimitExceeded);
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history, before_history);
+    }
+
+    #[test]
+    fn timeline_clip_ripple_delete_shifts_only_a_track_and_keeps_a_compact_recipe() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        add_track(&mut session, TRACK_B, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (4, 1),
+            (2, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_C,
+            TRACK_A,
+            MEDIA_A,
+            (9, 1),
+            (4, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_D,
+            TRACK_B,
+            MEDIA_A,
+            (1, 1),
+            (5, 1),
+            (1, 1),
+        )
+        .unwrap();
+        let before = session.project().timeline().clone();
+
+        let strict_before = session.project().clone();
+        let strict_history = session.history.clone();
+        let strict = execute(
+            &mut session,
+            "timeline.clip.ripple_delete",
+            json!({"clip_id": CLIP_B, "extra": true}),
+        )
+        .unwrap_err();
+        assert_eq!(strict.code, OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project(), &strict_before);
+        assert_eq!(session.history, strict_history);
+
+        let result = execute(
+            &mut session,
+            "timeline.clip.ripple_delete",
+            json!({"clip_id": CLIP_B}),
+        )
+        .unwrap();
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::TimelineClipRippleDeleted { index: 1, shifted_count: 1, shift_duration, .. }]
+                if *shift_duration == RationalTime::new(2, 1).unwrap()
+        ));
+        let encoded_change = serde_json::to_string(&result.change_set).unwrap();
+        assert!(encoded_change.contains("shifted_count"));
+        assert!(!encoded_change.contains("clips"));
+        let track = &session.project().timeline().tracks()[0];
+        assert_eq!(track.clips().len(), 2);
+        assert_eq!(track.clips()[0].id().to_string(), CLIP_A);
+        assert_eq!(
+            track.clips()[0].timeline_start(),
+            RationalTime::new(0, 1).unwrap()
+        );
+        assert_eq!(track.clips()[1].id().to_string(), CLIP_C);
+        assert_eq!(
+            track.clips()[1].timeline_start(),
+            RationalTime::new(7, 1).unwrap()
+        );
+        assert_eq!(
+            session.project().timeline().tracks()[1].clips()[0]
+                .id()
+                .to_string(),
+            CLIP_D
+        );
+        assert_eq!(
+            session.project().timeline().tracks()[1].clips()[0].timeline_start(),
+            RationalTime::new(1, 1).unwrap()
+        );
+
+        session
+            .execute_command(undo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(session.project().timeline(), &before);
+        session
+            .execute_command(redo(session.project_revision().value()))
+            .unwrap();
+        assert_eq!(
+            session.project().timeline().tracks()[0].clips()[1]
+                .id()
+                .to_string(),
+            CLIP_C
+        );
+        assert_eq!(
+            session.project().timeline().tracks()[0].clips()[1].timeline_start(),
+            RationalTime::new(7, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn timeline_clip_ripple_history_conflict_is_atomic_even_when_the_suffix_stays_valid() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (4, 1),
+            (2, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_C,
+            TRACK_A,
+            MEDIA_A,
+            (9, 1),
+            (4, 1),
+            (1, 1),
+        )
+        .unwrap();
+        execute(
+            &mut session,
+            "timeline.clip.ripple_delete",
+            json!({"clip_id": CLIP_B}),
+        )
+        .unwrap();
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::from_tracks_for_codec(vec![fixture_track(
+                TRACK_A,
+                TrackKind::Video,
+                vec![
+                    fixture_clip(CLIP_A, MEDIA_A, (0, 1), (0, 1), (2, 1)),
+                    fixture_clip(CLIP_C, MEDIA_A, (8, 1), (4, 1), (1, 1)),
+                ],
+            )]));
+        assert_history_conflict(&mut session, "history.undo");
     }
 
     #[test]
@@ -4008,6 +5289,9 @@ mod tests {
             "timeline.clip.insert",
             "timeline.clip.move",
             "timeline.clip.delete",
+            "timeline.clip.trim",
+            "timeline.clip.split",
+            "timeline.clip.ripple_delete",
         ] {
             let mut session = fixed_session();
             let before = session.project().clone();
@@ -4317,7 +5601,60 @@ mod tests {
             OperationErrorCode::RevisionOverflow
         );
         assert_eq!(delete_clip.project(), &delete_before);
-        for session in [&add, &remove, &insert, &move_clip, &delete_clip] {
+        let mut trim_clip = max_revision_session_with_clip(true);
+        let trim_before = trim_clip.project().clone();
+        assert_eq!(
+            code(&execute(
+                &mut trim_clip,
+                "timeline.clip.trim",
+                json!({
+                    "clip_id": CLIP_A,
+                    "edge": "end",
+                    "timeline_time": rational_json(1, 1),
+                }),
+            )),
+            OperationErrorCode::RevisionOverflow
+        );
+        assert_eq!(trim_clip.project(), &trim_before);
+
+        let mut split_clip = max_revision_session_with_clip(true);
+        let split_before = split_clip.project().clone();
+        assert_eq!(
+            code(&execute(
+                &mut split_clip,
+                "timeline.clip.split",
+                json!({
+                    "clip_id": CLIP_A,
+                    "new_clip_id": CLIP_B,
+                    "timeline_time": rational_json(1, 1),
+                }),
+            )),
+            OperationErrorCode::RevisionOverflow
+        );
+        assert_eq!(split_clip.project(), &split_before);
+
+        let mut ripple_delete_clip = max_revision_session_with_clip(true);
+        let ripple_delete_before = ripple_delete_clip.project().clone();
+        assert_eq!(
+            code(&execute(
+                &mut ripple_delete_clip,
+                "timeline.clip.ripple_delete",
+                json!({"clip_id": CLIP_A}),
+            )),
+            OperationErrorCode::RevisionOverflow
+        );
+        assert_eq!(ripple_delete_clip.project(), &ripple_delete_before);
+
+        for session in [
+            &add,
+            &remove,
+            &insert,
+            &move_clip,
+            &delete_clip,
+            &trim_clip,
+            &split_clip,
+            &ripple_delete_clip,
+        ] {
             assert_eq!(session.project_revision(), ProjectRevision::new(u64::MAX));
             assert!(session.history.undo.is_empty());
             assert!(session.history.redo.is_empty());
