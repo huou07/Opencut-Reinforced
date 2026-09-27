@@ -82,6 +82,14 @@ fn v1_project_value(project: &ProjectDocument) -> Value {
     let mut value: Value = serde_json::from_str(&encode_project(project).unwrap()).unwrap();
     value["schema_version"] = json!(1);
     value["project"].as_object_mut().unwrap().remove("media");
+    value["project"].as_object_mut().unwrap().remove("timeline");
+    value
+}
+
+fn v2_project_value(project: &ProjectDocument) -> Value {
+    let mut value: Value = serde_json::from_str(&encode_project(project).unwrap()).unwrap();
+    value["schema_version"] = json!(2);
+    value["project"].as_object_mut().unwrap().remove("timeline");
     value
 }
 
@@ -157,7 +165,7 @@ fn valid_checkpoint_inspects_candidate_with_metadata_and_recovered_document() {
 }
 
 #[test]
-fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v2() {
+fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v3() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Legacy base");
@@ -188,7 +196,113 @@ fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v2() {
     assert_eq!(applied.revision(), ProjectRevision::new(1));
     assert_eq!(applied.name(), "Recovered legacy");
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 2);
+    assert_eq!(encoded["schema_version"], 3);
+}
+
+#[test]
+fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v3() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let base = ProjectDocument::new("Legacy v2 base");
+    let base_value = v2_project_value(&base);
+    let mut recovery_value = v2_project_value(&base);
+    recovery_value["project"]["revision"] = json!(1);
+    recovery_value["project"]["name"] = json!("Recovered v2");
+    let recovery = decode_project(&recovery_value.to_string()).unwrap();
+    fs::write(&path, serde_json::to_vec(&base_value).unwrap()).unwrap();
+    write_raw_recovery(
+        &path,
+        &json!({
+            "format": "opencut-reinforced-recovery",
+            "schema_version": 1,
+            "base_project": base_value,
+            "recovery_project": recovery_value,
+        }),
+    );
+
+    let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
+        panic!("expected the nested v2 recovery candidate to remain readable");
+    };
+    assert_eq!(candidate.recovery_project(), &recovery);
+    assert!(matches!(
+        apply_project_recovery(&path).unwrap(),
+        RecoveryApplyOutcome::AppliedAndCleaned
+    ));
+    assert_eq!(load_project_file(&path).unwrap(), recovery);
+    let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(encoded["schema_version"], 3);
+}
+
+#[test]
+fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_without_revision_change() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let base = ProjectDocument::new("Saved base");
+    save_project_file_atomic(&path, &base).unwrap();
+    let mut recovery_value: Value = serde_json::from_str(&encode_project(&base).unwrap()).unwrap();
+    recovery_value["project"]["revision"] = json!(1);
+    recovery_value["project"]["name"] = json!("Recovered timeline");
+    recovery_value["project"]["media"] = json!([{
+        "id": "22222222-2222-4222-8222-222222222222",
+        "source": {"kind": "local_file", "uri": "file:///missing/offline.mov"},
+        "metadata": {
+            "format_names": ["mov"],
+            "duration": {"numerator": 5, "denominator": 1},
+            "file_size_bytes": 0,
+            "streams": [{
+                "kind": "video",
+                "metadata": {
+                    "index": 0,
+                    "codec_name": "h264",
+                    "width": 1920,
+                    "height": 1080,
+                    "pixel_format": "yuv420p",
+                    "average_frame_rate": {"numerator": 24, "denominator": 1},
+                    "duration": {"numerator": 5, "denominator": 1}
+                }
+            }]
+        }
+    }]);
+    recovery_value["project"]["timeline"] = json!({"tracks": [{
+        "id": "33333333-3333-4333-8333-333333333333",
+        "kind": "video",
+        "clips": [{
+            "id": "44444444-4444-4444-8444-444444444444",
+            "media_id": "22222222-2222-4222-8222-222222222222",
+            "timeline_start": {"numerator": 0, "denominator": 1},
+            "source_range": {
+                "start": {"numerator": 1, "denominator": 1},
+                "duration": {"numerator": 2, "denominator": 1}
+            }
+        }]
+    }]});
+    let recovery = decode_project(&recovery_value.to_string()).unwrap();
+    write_raw_recovery(
+        &path,
+        &json!({
+            "format": "opencut-reinforced-recovery",
+            "schema_version": 1,
+            "base_project": serde_json::from_str::<Value>(&encode_project(&base).unwrap()).unwrap(),
+            "recovery_project": recovery_value,
+        }),
+    );
+
+    let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
+        panic!("expected the v3 recovery candidate");
+    };
+    assert_eq!(candidate.recovery_project(), &recovery);
+    assert_eq!(
+        candidate.metadata().recovery_revision,
+        ProjectRevision::new(1)
+    );
+    assert!(matches!(
+        apply_project_recovery(&path).unwrap(),
+        RecoveryApplyOutcome::AppliedAndCleaned
+    ));
+    let applied = load_project_file(&path).unwrap();
+    assert_eq!(applied, recovery);
+    assert_eq!(applied.revision(), ProjectRevision::new(1));
+    assert_eq!(applied.timeline(), recovery.timeline());
 }
 
 #[test]

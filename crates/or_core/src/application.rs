@@ -466,6 +466,7 @@ pub enum OperationErrorCode {
     MediaIdAlreadyExists,
     MediaSourceAlreadyExists,
     MediaNotFound,
+    MediaInUse,
 }
 
 /// A safe structured operation error with a stable code and optional context.
@@ -525,6 +526,9 @@ impl fmt::Display for OperationError {
                 "media source already exists in the project"
             }
             OperationErrorCode::MediaNotFound => "media item was not found in the project",
+            OperationErrorCode::MediaInUse => {
+                "media item is referenced by one or more timeline clips"
+            }
         };
 
         formatter.write_str(message)?;
@@ -821,6 +825,9 @@ impl ProjectSession {
         else {
             return Err(OperationError::new(OperationErrorCode::MediaNotFound));
         };
+        if self.project.timeline().references_media(arguments.id) {
+            return Err(OperationError::new(OperationErrorCode::MediaInUse));
+        }
 
         let before_revision = self.project_revision();
         let after_revision = before_revision
@@ -1128,11 +1135,13 @@ mod tests {
         TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
-        MAX_MEDIA_PAGE_SIZE, MediaId, MediaItem, MediaMetadata, MediaSourceRef, ProjectDocument,
-        ProjectId, ProjectInstanceId, ProjectRevision, decode_project, encode_project,
+        MAX_MEDIA_PAGE_SIZE, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
+        MediaStreamMetadata, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision,
+        ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip, TimelineTrack,
+        TrackId, TrackKind, VideoStreamMetadata, decode_project, encode_project,
     };
     use serde_json::{Value, json};
-    use std::str::FromStr;
+    use std::{num::NonZeroU32, str::FromStr};
 
     const PROJECT_ID: &str = "01234567-89ab-4def-8123-456789abcdef";
     const OTHER_PROJECT_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -1158,7 +1167,20 @@ mod tests {
         MediaItem::new(
             MediaId::from_str(id).unwrap(),
             MediaSourceRef::local_file(uri).unwrap(),
-            MediaMetadata::from_probe(vec!["matroska".to_owned()], None, 42, Vec::new()),
+            MediaMetadata::from_probe(
+                vec!["matroska".to_owned()],
+                None,
+                42,
+                vec![MediaStreamMetadata::Video(VideoStreamMetadata::from_probe(
+                    0,
+                    None,
+                    NonZeroU32::new(1920).unwrap(),
+                    NonZeroU32::new(1080).unwrap(),
+                    None,
+                    Some(RationalRate::new(24, 1).unwrap()),
+                    None,
+                ))],
+            ),
         )
         .unwrap()
     }
@@ -1390,6 +1412,7 @@ mod tests {
                 "MEDIA_SOURCE_ALREADY_EXISTS",
             ),
             (OperationErrorCode::MediaNotFound, "MEDIA_NOT_FOUND"),
+            (OperationErrorCode::MediaInUse, "MEDIA_IN_USE"),
         ] {
             assert_eq!(
                 serde_json::to_string(&code).unwrap(),
@@ -1550,6 +1573,52 @@ mod tests {
     }
 
     #[test]
+    fn media_remove_rejects_referenced_media_without_changing_state_or_history() {
+        let mut session = fixed_session();
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        let media_id = item.id();
+        session.execute_command(media_add(item, 0)).unwrap();
+        session.execute_command(rename("B", 1)).unwrap();
+        session.execute_command(undo(2)).unwrap();
+        assert_eq!(session.history.redo.len(), 1);
+
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::from_tracks_for_codec(vec![
+                TimelineTrack::from_parts_for_codec(
+                    TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap(),
+                    TrackKind::Video,
+                    vec![TimelineClip::from_parts_for_codec(
+                        crate::ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap(),
+                        media_id,
+                        RationalTime::ZERO,
+                        TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 1).unwrap())
+                            .unwrap(),
+                    )],
+                ),
+            ]));
+        let before_project = session.project().clone();
+        let before_undo = session.history.undo.clone();
+        let before_redo = session.history.redo.clone();
+
+        let result = session.execute_command(media_remove(&media_id.to_string(), 3));
+
+        assert!(matches!(
+            result,
+            Err(error) if error.code == OperationErrorCode::MediaInUse
+        ));
+        assert_eq!(session.project(), &before_project);
+        assert_eq!(session.history.undo, before_undo);
+        assert_eq!(session.history.redo, before_redo);
+        assert_eq!(session.project_revision(), ProjectRevision::new(3));
+        assert_eq!(session.project().media_items().len(), 1);
+        assert_eq!(session.project().timeline(), before_project.timeline());
+    }
+
+    #[test]
     fn undo_and_redo_media_add_restore_the_same_identity_and_metadata() {
         let mut session = fixed_session();
         let item = media_item(
@@ -1673,13 +1742,10 @@ mod tests {
             assert!(page.items.len() <= MAX_MEDIA_PAGE_SIZE);
             let encoded = serde_json::to_vec(&result).unwrap();
             assert!(encoded.len() < 1024 * 1024);
-            assert!(
-                !serde_json::from_slice::<Value>(&encoded)
-                    .unwrap()
-                    .as_object()
-                    .unwrap()
-                    .contains_key("media_item")
-            );
+            let wire = serde_json::from_slice::<Value>(&encoded).unwrap();
+            let wire = wire.as_object().unwrap();
+            assert!(!wire.contains_key("media_item"));
+            assert!(!wire.contains_key("timeline"));
             assert_eq!(
                 serde_json::from_slice::<super::QueryResult>(&encoded).unwrap(),
                 result
@@ -1752,9 +1818,10 @@ mod tests {
         assert_eq!(result.query_id, "media.get");
         assert_eq!(result.media_page, None);
         assert_eq!(result.media_item.as_deref(), Some(&item));
+        let wire = serde_json::to_value(&result).unwrap();
+        assert!(!wire.as_object().unwrap().contains_key("timeline"));
         assert_eq!(
-            serde_json::from_value::<super::QueryResult>(serde_json::to_value(&result).unwrap())
-                .unwrap(),
+            serde_json::from_value::<super::QueryResult>(wire).unwrap(),
             result
         );
         assert_eq!(session.project(), &before);
@@ -2556,7 +2623,7 @@ mod tests {
     }
 
     #[test]
-    fn grouped_transaction_persists_only_canonical_state_through_orproj_v2() {
+    fn grouped_transaction_persists_only_canonical_state_through_orproj_v3() {
         let mut session = fixed_session();
         session
             .execute_transaction(transaction(vec![rename_call("B"), rename_call("C")], 0))

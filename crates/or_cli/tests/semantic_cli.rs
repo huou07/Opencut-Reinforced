@@ -546,7 +546,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 2);
+    assert_eq!(saved_bytes["schema_version"], 3);
 
     let mut first_page_args = path_args(
         &["media", "list"],

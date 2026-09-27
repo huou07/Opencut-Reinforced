@@ -1047,6 +1047,7 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::MediaIdAlreadyExists => "MEDIA_ID_ALREADY_EXISTS",
         OperationErrorCode::MediaSourceAlreadyExists => "MEDIA_SOURCE_ALREADY_EXISTS",
         OperationErrorCode::MediaNotFound => "MEDIA_NOT_FOUND",
+        OperationErrorCode::MediaInUse => "MEDIA_IN_USE",
     }
 }
 
@@ -1070,11 +1071,11 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 mod tests {
     use super::{
         CachePlatform, MediaArtifactKindView, configured_media_artifact_cache_root,
-        media_artifact_event_view,
+        media_artifact_event_view, operation_error_code,
     };
     use or_core::{
         CacheArtifactKind, CacheKey, JobId, MediaArtifactEvent, MediaArtifactEventState, MediaId,
-        ParametersFingerprint, SourceFingerprint,
+        OperationErrorCode, ParametersFingerprint, SourceFingerprint,
     };
     use std::path::PathBuf;
 
@@ -1123,6 +1124,14 @@ mod tests {
             Some(PathBuf::from(
                 "C:/Users/test/AppData/Local/Opencut Reinforced/Cache/media-artifacts"
             )),
+        );
+    }
+
+    #[test]
+    fn media_in_use_keeps_its_stable_bridge_error_code() {
+        assert_eq!(
+            operation_error_code(OperationErrorCode::MediaInUse),
+            "MEDIA_IN_USE"
         );
     }
 

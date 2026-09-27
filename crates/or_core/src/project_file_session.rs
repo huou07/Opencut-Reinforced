@@ -211,11 +211,12 @@ fn recovery_error(detail: &str) -> ProjectFileSessionError {
 mod tests {
     use super::*;
     use crate::{
-        CommandEnvelope, ProjectRevision, RecoveryInspection, decode_project,
-        inspect_project_recovery, save_project_file_atomic, write_recovery_checkpoint,
+        CommandEnvelope, MediaId, MediaItem, MediaMetadata, MediaSourceRef, ProjectRevision,
+        RecoveryInspection, decode_project, inspect_project_recovery, save_project_file_atomic,
+        write_recovery_checkpoint,
     };
     use serde_json::json;
-    use std::fs;
+    use std::{fs, str::FromStr};
     use uuid::Uuid;
 
     const PROJECT_ID: &str = "01234567-89ab-4def-8123-456789abcdef";
@@ -291,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn create_new_writes_a_v2_project_with_fresh_identity_and_empty_history() {
+    fn create_new_writes_a_v3_project_with_fresh_identity_and_empty_history() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
 
@@ -319,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v2_without_revision_change() {
+    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v3_without_revision_change() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let legacy = format!(
@@ -339,8 +340,50 @@ mod tests {
         session.save().unwrap();
         let saved = std::fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 2);
+        assert_eq!(encoded["schema_version"], 3);
         assert_eq!(encoded["project"]["revision"], 7);
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn opening_v2_with_media_stays_clean_until_explicit_v3_save() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let item = MediaItem::new(
+            MediaId::from_str("22222222-2222-4222-8222-222222222222").unwrap(),
+            MediaSourceRef::local_file("file:///offline/clip.mov").unwrap(),
+            MediaMetadata::from_probe(vec!["mov".to_owned()], None, 123, Vec::new()),
+        )
+        .unwrap();
+        let legacy = serde_json::to_string(&json!({
+            "format": "opencut-reinforced-project",
+            "schema_version": 2,
+            "project": {
+                "id": PROJECT_ID,
+                "revision": 11,
+                "name": "Legacy with media",
+                "media": [item]
+            }
+        }))
+        .unwrap();
+        fs::write(&path, &legacy).unwrap();
+
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        assert!(!session.is_dirty());
+        assert_eq!(fs::read_to_string(&path).unwrap(), legacy);
+        assert_eq!(
+            session.session().project_revision(),
+            ProjectRevision::new(11)
+        );
+        assert_eq!(session.session().project().media_items(), &[item]);
+        assert!(session.session().project().timeline().tracks().is_empty());
+
+        session.save().unwrap();
+
+        let saved = fs::read_to_string(&path).unwrap();
+        let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["project"]["revision"], 11);
         assert!(!session.is_dirty());
     }
 

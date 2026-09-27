@@ -13,6 +13,7 @@ mod project_file_session;
 mod project_recovery;
 mod project_storage;
 mod time;
+mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
@@ -69,6 +70,10 @@ pub use project_storage::{
     save_project_file_atomic,
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
+pub use timeline::{
+    ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_TRACKS, ProjectTimeline,
+    TimelineClip, TimelineIdParseError, TimelineTrack, TrackId, TrackKind,
+};
 
 const APP_NAME: &str = "Opencut Reinforced";
 const CORE_API_VERSION: u32 = 1;
