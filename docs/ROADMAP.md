@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is complete: Phase 5A–5F are done. Phase 6 — Timeline MVP is next; its scope remains at the existing phase level until the architecture/planning checkpoint. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A is DONE, 6B is NEXT, and 6C–6E are PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -107,7 +107,7 @@ The first real project migration, schema v1 to v2, is implemented and tested. Fu
 Phase 4 is complete. Both the Flutter application and `or session serve` can host projects; one Rust `LiveProjectHost` shares a single session between direct typed bridge access and attached CLI requests. Android project file access still awaits SAF. Phase 4 does not implement the real-time media pipeline, media engine, renderer, audio playback, or hardware acceleration. It establishes project state, time, shared commands and queries, transactions and history, serialization, bounded filesystem persistence, recovery, local IPC, and semantic CLI operations while preserving control-plane/media-plane separation and the rule that per-frame work never mutates Project or increments `ProjectRevision`.
 
 ### Phase 5 — Media foundation
-**Status: IN PROGRESS**
+**Status: DONE / FOUNDATION COMPLETE**
 
 Phase 5A — DONE:
 
@@ -192,18 +192,42 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is NEXT. Decode and playback remain Phase 7; no Phase 6 subdivisions or implementation are included here.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A is DONE, 6B is NEXT, and 6C–6E are PLANNED. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
-**Status: PLANNED**
+**Status: IN PROGRESS**
 
-- tracks and clips
-- insert and move
-- trim, split, ripple, and delete
-- snap and markers
-- undo and redo
-- save and load
+Phase 6A — Timeline domain and persistence foundation — DONE. This adds canonical timeline state and `.orproj` v3 persistence; it does not add timeline editing commands or user-visible timeline behavior.
+
+Phase 6B — Basic track/clip operations — NEXT:
+
+- track add/remove
+- clip insert/move/delete
+- application commands/query
+- undo/redo
+- semantic CLI parity
+
+Phase 6C — Real Flutter timeline foundation — PLANNED:
+
+- Rust-owned timeline read model
+- real track/clip visualization
+- insert/move/delete interactions through shared commands
+- no playback
+
+Phase 6D — Trim, split, and ripple editing — PLANNED:
+
+- exact edit semantics
+- undo/redo
 - CLI parity
+- Flutter interaction parity
+
+Phase 6E — Snap, markers, and Timeline MVP hardening — PLANNED:
+
+- snap behavior
+- persistent markers
+- CLI/Flutter parity
+- save/reopen/recovery
+- Phase 6 completion
 
 ### Phase 7 — Preview and playback
 **Status: PLANNED**
@@ -277,4 +301,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is NEXT, with no new subdivisions defined. Timeline and playback implementation remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A DONE, 6B NEXT, and 6C–6E PLANNED. Timeline mutation and playback implementation remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
