@@ -577,7 +577,7 @@ jobs:
 
           Source commit: @SOURCE_COMMIT@
 
-          This build is for developer testing of the native UI shell, project lifecycle, project media library, background job/cache foundation, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
+          This build is for developer testing of the native UI shell, project lifecycle, project media library and previews, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
 
           **PHASE 4 FOUNDATION COMPLETE**
 
@@ -605,9 +605,16 @@ jobs:
 
           - Bounded background Job Manager: a fixed worker pool, a bounded pending queue with non-blocking backpressure, bounded tracked records, cooperative cancellation, panic containment, and deterministic shutdown.
           - Disposable thumbnail/waveform cache foundation: deterministic SHA-256 cache keys and bounded, atomic, explicitly cleared storage.
-          - This is infrastructure only. There are no visible thumbnails, no waveform generation, and no cache is wired into the UI, IPC, or CLI. Job and cache activity never changes project revision and is never stored in a project.
+          - Phase 5D uses this infrastructure for generated, read-only Media-panel previews. Job and cache activity never changes project revision and is never stored in a project.
 
-          Still unavailable: thumbnail and waveform generation, proxies, a cache database, timeline editing, playback, decode/render, and export. FFmpeg is not linked or bundled.
+          **PHASE 5D — MEDIA LIBRARY PREVIEWS**
+
+          - The desktop Media panel can show cached PNG thumbnails for video media and a combined waveform preview for audio-only media.
+          - Bounded background generation uses a disposable cache and bounded source fingerprint for cache invalidation; preview artifacts do not enter the project file.
+          - Media import requires a system-provided `ffprobe`; preview generation requires a system-provided `ffmpeg`.
+          - FFmpeg is not linked or bundled. These are library images only; timeline editing, clips, playback, rendering, export, and proxy generation remain unavailable.
+
+          Still unavailable: proxies, a cache database or index, automatic cache eviction, timeline editing, playback, decode/render, and export.
 
           OR remains a pre-MVP project, not a usable video editor.
 

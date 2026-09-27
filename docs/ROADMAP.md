@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is in progress: Phase 5A, 5B, and 5C are done, and Phase 5D is next. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation remains in progress: Phase 5A, 5B, 5C, and 5D are done. Its remaining documented gaps are proxy generation and any future cache database/index or automatic-eviction work; no follow-on Phase 5 checkpoint is defined here. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -160,19 +160,21 @@ Phase 5C — DONE:
 
 Still not implemented:
 
-- actual thumbnail or waveform generation
-- production source-fingerprint acquisition
-- Job Manager or CacheStore integration with the application, IPC, CLI, or Flutter UI
-- proxies or a cache database or index
-- decode, timeline editing, playback, rendering, or export
+- automatic cache eviction or a cache database/index
+- proxy generation
 
-Phase 5D — NEXT:
+Phase 5D — DONE:
 
-- actual thumbnail generation
-- actual waveform generation
-- production source-fingerprint integration
-- Job Manager and CacheStore integration
-- read-only cache consumption where appropriate
+- production bounded source-fingerprint v1 for disposable cache invalidation
+- actual `Library Thumbnail V1` PNG generation from the first video stream's first decodable frame, scaled to a maximum 320-pixel edge without upscaling
+- actual `Library Waveform V1` white 512×96 PNG generation from the first audio stream with channels combined
+- bounded Job Manager and CacheStore integration, including same-key in-flight deduplication, backpressure, cancellation, and artifact events
+- typed Rust bridge requests, reads, and events, plus desktop Flutter read-only Media-panel preview consumption
+- system-provided `ffmpeg` execution; no linking or bundling
+
+These are read-only library images; Phase 5D adds no proxy generation, timeline, playback, or render graph.
+
+Phase 5 remains IN PROGRESS only for the documented gaps above. This roadmap does not define another Phase 5 checkpoint. Timeline editing remains Phase 6; decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
 **Status: PLANNED**
@@ -257,4 +259,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, and Phase 5C added the bounded background Job Manager and thumbnail/waveform cache foundations. Phase 5D is the next checkpoint for actual thumbnail and waveform generation, production source fingerprints, and Job Manager/CacheStore integration. Timeline and playback work remain later. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, and Phase 5D added production cache-invalidation fingerprints, generated library PNG previews, and desktop bridge/UI integration. Proxy generation and any future cache database/index or automatic eviction remain undocumented as a next checkpoint; do not infer a Phase 5E or begin Phase 6 from this status summary. Timeline and playback work remain later. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe integration test. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -138,7 +138,7 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - `media.add`/`media.remove` tests cover exactly one revision increment on success, zero changes on malformed/stale/duplicate/missing failures, transaction rejection, semantic error codes, `ChangeSet` contents, and undo/redo restoring item identity and original order without full-project snapshots.
 - `media.list` tests cover deterministic insertion order, read-only behavior, page sizes up to 100, all pages and `next_offset`, valid out-of-range empty pages, invalid bounds/argument shapes, offline source listing, and unchanged `project.summary` result shape.
 - `crates/or_cli/tests/semantic_cli.rs` covers headless media add/list/remove and save, plus attached list/add/remove against one live host, shared history/revision, explicit save, and stale-revision rejection without retry. CLI output uses OR-structured values rather than raw ffprobe JSON.
-- Flutter fake-gateway widget tests cover Media panel fields, import and invalidation refresh, page offsets 0 and 50, exact backend-unavailable text, and confirmed removal. The widget suite contains 30 passing tests.
+- Flutter fake-gateway widget tests cover Media panel fields, import and invalidation refresh, page offsets 0 and 50, exact backend-unavailable text, and confirmed removal. The widget suite contains 31 passing tests.
 - Hosted macOS runs `native media bridge persists offline media through undo and save` alongside the existing native project lifecycle test. It verifies native bridge list/remove/undo, explicit save, reopen persistence, and success when the referenced source is absent. Hosted Rust/CLI jobs also cover migration and attached shared-host parity.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; hosted macOS Actions supplies the native evidence.
 
@@ -166,7 +166,16 @@ Cache unit tests (`crates/or_core/src/cache.rs`) cover:
 - atomic failure leaving no partial final entry; concurrent same-key writers producing one complete payload
 - a Unicode and spaced root path; and a project-independence check confirming job and cache activity does not change `ProjectRevision` and writes no `.orproj` file
 
-There is no thumbnail or waveform generation test because no generator is implemented. The Phase 5C Rust tests run in the standard workspace Rust job on Linux, macOS, and Windows CI; no native runtime is required. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+The Phase 5C Rust tests run in the standard workspace Rust job on Linux, macOS, and Windows CI; no native runtime is required. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Current Phase 5D coverage
+
+- Source-fingerprint tests cover stable small-file content hashing, changed bytes in a large file, bounded large-file sampling, and errors for unavailable or non-regular sources. The fingerprint includes file size, available modification time, and sampled bytes; it is used only for disposable cache invalidation.
+- `MediaArtifactService` tests cover locked profile-key separation, valid cached PNG generation for both profiles, terminal event ordering, ready cache hits without a second job, same-key in-flight deduplication, unsupported streams without spawning `ffmpeg`, queue and record backpressure, cache-budget failure, timeout/cancellation, bounded output, malformed PNG rejection, and child cleanup.
+- Bridge tests cover desktop cache-root policy. The hosted macOS offline-media bridge test checks thumbnail and waveform requests return `notApplicable`, artifact work does not change the project revision, and malformed cache keys are rejected.
+- Flutter widget tests check supported video/audio requests, unsupported media, cached previews, success events loading PNGs, neutral failure placeholders, media removal clearing the preview row, and unchanged project revision.
+- The ignored `crates/or_core/tests/media_artifacts_integration.rs` test runs only on hosted Linux CI. It generates a tiny video/audio Matroska fixture with the CI-installed system `ffmpeg`, verifies real thumbnail and waveform PNG dimensions, confirms cache hits do not create another job, and changes sampled source bytes while preserving size and modification time to verify cache-key invalidation. It also checks that artifact generation leaves project revision unchanged. Do not install FFmpeg locally or run this real-media integration test locally.
+- Hosted macOS CI runs the native Flutter project lifecycle and offline-media bridge tests. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Test pyramid
 
