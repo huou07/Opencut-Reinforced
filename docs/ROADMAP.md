@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A is DONE, 6B is NEXT, and 6C–6E are PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A and 6B are DONE, 6C is NEXT, and 6D–6E are PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -192,22 +192,25 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A is DONE, 6B is NEXT, and 6C–6E are PLANNED. Decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A and 6B are DONE, 6C is NEXT, and 6D–6E are PLANNED. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
 **Status: IN PROGRESS**
 
-Phase 6A — Timeline domain and persistence foundation — DONE. This adds canonical timeline state and `.orproj` v3 persistence; it does not add timeline editing commands or user-visible timeline behavior.
+Phase 6A — Timeline domain and persistence foundation — DONE. This adds canonical timeline state and `.orproj` v3 persistence. It does not add user-visible timeline behavior.
 
-Phase 6B — Basic track/clip operations — NEXT:
+Phase 6B — Basic track/clip operations — DONE:
 
-- track add/remove
-- clip insert/move/delete
-- application commands/query
-- undo/redo
-- semantic CLI parity
+- append-only track add and empty-track-only remove
+- clip insert in canonical start-time order, same-kind move, and explicit delete
+- same-track overlap rejection, adjacency acceptance, and allowed cross-track overlap
+- shared schema-v1 application commands and read-only, bounded timeline queries
+- existing session-local ChangeSet history with undo/redo and monotonic revisions
+- headless and attached semantic CLI parity using exact rational times
+- `.orproj` remains schema v3; save/reopen and recovery preserve timeline state
+- no grouped timeline transactions or Flutter timeline UI
 
-Phase 6C — Real Flutter timeline foundation — PLANNED:
+Phase 6C — Real Flutter timeline foundation — NEXT:
 
 - Rust-owned timeline read model
 - real track/clip visualization
@@ -301,4 +304,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A DONE, 6B NEXT, and 6C–6E PLANNED. Timeline mutation and playback implementation remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A and 6B DONE, 6C NEXT, and 6D–6E PLANNED. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Flutter timeline UI and playback remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
