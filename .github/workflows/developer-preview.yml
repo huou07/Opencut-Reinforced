@@ -612,7 +612,7 @@ jobs:
           - The desktop Media panel can show cached PNG thumbnails for video media and a combined waveform preview for audio-only media.
           - Bounded background generation uses a disposable cache and bounded source fingerprint for cache invalidation; preview artifacts do not enter the project file.
           - Media import requires a system-provided `ffprobe`; preview generation requires a system-provided `ffmpeg`.
-          - FFmpeg is not linked or bundled. These are library images only; timeline editing, clips, playback, rendering, export, and proxy generation remain unavailable.
+          - FFmpeg is not linked or bundled. These are library images only; playback, rendering, export, and proxy playback remain unavailable.
 
           **PHASE 5E — PERSISTENT CACHE INDEX AND AUTOMATIC EVICTION**
 
@@ -621,14 +621,26 @@ jobs:
           - The index stores only artifact kind, opaque cache key, byte size, and access sequence; it is disposable cache metadata, not project data.
           - The artifact-byte budget excludes the SQLite index and its metadata.
 
-          Still unavailable: proxies, timeline editing, playback, decode/render, and export.
+          **PHASE 5F — FILE-BACKED PROXY FOUNDATION**
+
+          - Rust can generate a bounded file-backed video proxy into the disposable artifact cache.
+          - Proxy generation is not exposed through the UI, CLI, or IPC, is not a playback source, and does not change project state.
+
+          **PHASE 6C — REAL PROJECT TIMELINE FOUNDATION**
+
+          - Real project workspaces display canonical Video/Audio tracks and timeline clip blocks.
+          - Users can add Video/Audio tracks, insert and move media clips through explicit exact-time dialogs, and explicitly delete clips.
+          - Timeline edits use the shared Rust command and session-history system; attached CLI edits refresh the open GUI through project-change events.
+          - Clip pages are bounded to 100 items and additional items load on demand.
+
+          Still unavailable: playback, decode/render, and export.
 
           OR remains a pre-MVP project, not a usable video editor.
 
           Core foundation:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
-          - ProjectDocument with `.orproj` v2 encoding and v1 migration
+          - ProjectDocument with `.orproj` v3 encoding and v1/v2 migration
           - Bounded .orproj file loading and atomic save
           - Command and query contracts
           - Transactions
@@ -646,14 +658,16 @@ jobs:
           - Descriptor contents and authentication tokens are not displayed or included in the CLI packages.
           - `or media probe --file "<local-file-path>" [--json]` inspects metadata without opening or modifying a project. It requires a system-provided `ffprobe`.
           - `or media list --attach <descriptor> [--json]`, `or media add --attach <descriptor> --source <path>`, and `or media remove --attach <descriptor> --id <media-id>` operate on the same live media library. Attached import probes locally, then dispatches `media.add` with the described revision; stale edits are rejected without retry.
+          - Timeline edits made from the Flutter project workspace use the same live Rust host as attached CLI operations; timeline commands are also available through the semantic CLI.
 
           Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
 
           Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
 
           Not implemented:
-          - Proxy generation
-          - Actual timeline editing
+          - Drag/drop timeline editing
+          - Trim, split, and ripple editing
+          - Snapping and markers
           - Playback
           - Media decoding or rendering
           - Export

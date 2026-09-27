@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A and 6B are DONE, 6C is NEXT, and 6D–6E are PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, and 6C are DONE, 6D is NEXT, and 6E is PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -192,7 +192,7 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A and 6B are DONE, 6C is NEXT, and 6D–6E are PLANNED. Decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, and 6C are DONE, 6D is NEXT, and 6E is PLANNED. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
 **Status: IN PROGRESS**
@@ -210,14 +210,17 @@ Phase 6B — Basic track/clip operations — DONE:
 - `.orproj` remains schema v3; save/reopen and recovery preserve timeline state
 - no grouped timeline transactions or Flutter timeline UI
 
-Phase 6C — Real Flutter timeline foundation — NEXT:
+Phase 6C — Real Flutter timeline foundation — DONE:
 
-- Rust-owned timeline read model
-- real track/clip visualization
-- insert/move/delete interactions through shared commands
-- no playback
+- typed Rust bridge for the existing bounded timeline queries and Phase 6B commands, using the same live host and Rust-generated track/clip IDs
+- immutable exact-rational Dart read models with persisted media stream/container duration presentation data
+- real project track/clip visualization in canonical order, with derived V#/A# labels, a time ruler, and position/width proportional clip blocks
+- add Video/Audio tracks, remove empty tracks, insert media through an exact-time dialog, move between same-kind tracks through a dialog, and explicitly delete clips
+- bounded first pages of 100 clips per populated track, on-demand Load more, revision/identity consistency checks, event-driven refresh, and read-snapshot clearing on project close/switch
+- no new commands, queries, IPC version, dependency, project schema, or independent Flutter history/editing state
+- no drag/drop, trim, split, ripple, snap, markers, playback, decode, rendering, or timeline thumbnail/waveform strips
 
-Phase 6D — Trim, split, and ripple editing — PLANNED:
+Phase 6D — Trim, split, and ripple editing — NEXT:
 
 - exact edit semantics
 - undo/redo
@@ -304,4 +307,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A and 6B DONE, 6C NEXT, and 6D–6E PLANNED. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Flutter timeline UI and playback remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A, 6B, and 6C DONE, 6D NEXT, and 6E PLANNED. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host. Playback and advanced editing remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
