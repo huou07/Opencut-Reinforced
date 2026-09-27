@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
+Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. OR remains pre-MVP and is not a usable video editor. The test layers below distinguish implemented coverage from future product tests.
 
 ## Current Phase 3 checks
 
@@ -161,12 +161,12 @@ Cache unit tests (`crates/or_core/src/cache.rs`) cover:
 
 - cache-key determinism; separation by artifact kind, source fingerprint, parameters fingerprint, and schema version; and a 64-character lowercase-hex path-safe format
 - exact round trip; normal miss; `EntryTooLarge` rejected before any file is created; an externally oversized/corrupt entry reading as a controlled error with a bounded read
-- total-budget enforcement that leaves existing entries unchanged; replace accounting that counts an existing key once, not twice
+- `BudgetExceeded` when an artifact itself cannot fit the total budget, with no unrelated eviction; indexed replacement accounting that counts an existing key once, not twice
 - idempotent remove; clear-namespace preserving the other namespace; clear-all leaving the store usable
 - atomic failure leaving no partial final entry; concurrent same-key writers producing one complete payload
 - a Unicode and spaced root path; and a project-independence check confirming job and cache activity does not change `ProjectRevision` and writes no `.orproj` file
 
-The Phase 5C Rust tests run in the standard workspace Rust job on Linux, macOS, and Windows CI; no native runtime is required. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache::tests` explicitly on hosted macOS and Windows. No local native/runtime test is used for cache verification. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Current Phase 5D coverage
 
@@ -176,6 +176,17 @@ The Phase 5C Rust tests run in the standard workspace Rust job on Linux, macOS, 
 - Flutter widget tests check supported video/audio requests, unsupported media, cached previews, success events loading PNGs, neutral failure placeholders, media removal clearing the preview row, and unchanged project revision.
 - The ignored `crates/or_core/tests/media_artifacts_integration.rs` test runs only on hosted Linux CI. It generates a tiny video/audio Matroska fixture with the CI-installed system `ffmpeg`, verifies real thumbnail and waveform PNG dimensions, confirms cache hits do not create another job, and changes sampled source bytes while preserving size and modification time to verify cache-key invalidation. It also checks that artifact generation leaves project revision unchanged. Do not install FFmpeg locally or run this real-media integration test locally.
 - Hosted macOS CI runs the native Flutter project lifecycle and offline-media bridge tests. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Current Phase 5E coverage
+
+- Lazy index creation and exact schema-v1 table/index shape; existing Phase 5D thumbnail and waveform files are discovered without regeneration.
+- Reopen reconciliation preserves access sequences, repairs size drift, adds orphan files, removes missing-file rows, and rebuilds corrupt, unsupported-version, or inconsistent index metadata without deleting artifacts.
+- Bounded artifact scans return `IndexTooLarge`; symlinked cache entries are not followed. Unknown files and the SQLite index do not consume the managed artifact-byte budget.
+- Successful `get` and `put` access ordering persists across restarts, uses no clock, and breaks sequence ties by kind then cache key. Eviction removes only the oldest minimum set required, protects the replacement target, and leaves newer unrelated entries intact.
+- An artifact larger than the total budget returns `BudgetExceeded` without evicting existing entries. Remove and clear operations update rows, preserve unrelated namespaces and unknown files, and leave the index usable.
+- Cloned stores serialize budget changes; independent stores coordinate through SQLite; a held database lock returns within the one-second busy bound. Sequence exhaustion is controlled and does not wrap.
+- Cache/index operations leave `ProjectDocument` and `ProjectRevision` unchanged. An evicted preview is regenerated through the existing `MediaArtifactService` on the next request, with existing terminal event semantics unchanged.
+- Hosted Linux runs the full workspace and generated-media checks; hosted macOS and Windows run the persistent cache-index tests; Android verifies the Rust-backed APK build. No proxy behavior is claimed or tested.
 
 ## Test pyramid
 
