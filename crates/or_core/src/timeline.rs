@@ -86,7 +86,8 @@ impl Error for TimelineIdParseError {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TrackKind {
     Video,
     Audio,
@@ -130,6 +131,30 @@ impl TimelineClip {
             source_range,
         }
     }
+
+    pub(crate) const fn from_parts_for_command(
+        id: ClipId,
+        media_id: MediaId,
+        timeline_start: RationalTime,
+        source_range: TimeRange,
+    ) -> Self {
+        Self {
+            id,
+            media_id,
+            timeline_start,
+            source_range,
+        }
+    }
+
+    pub(crate) const fn with_timeline_start_for_command(
+        self,
+        timeline_start: RationalTime,
+    ) -> Self {
+        Self {
+            timeline_start,
+            ..self
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -158,6 +183,14 @@ impl TimelineTrack {
         clips: Vec<TimelineClip>,
     ) -> Self {
         Self { id, kind, clips }
+    }
+
+    pub(crate) fn empty_for_command(id: TrackId, kind: TrackKind) -> Self {
+        Self {
+            id,
+            kind,
+            clips: Vec::new(),
+        }
     }
 }
 
@@ -264,9 +297,49 @@ impl ProjectTimeline {
             .flat_map(|track| &track.clips)
             .any(|clip| clip.media_id == media_id)
     }
+
+    pub(crate) fn try_reserve_tracks(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.tracks.try_reserve(additional)
+    }
+
+    pub(crate) fn try_reserve_track_clips(
+        &mut self,
+        track_index: usize,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.tracks[track_index].clips.try_reserve(additional)
+    }
+
+    pub(crate) fn insert_track_for_command(&mut self, index: usize, track: TimelineTrack) {
+        self.tracks.insert(index, track);
+    }
+
+    pub(crate) fn remove_track_for_command(&mut self, index: usize) -> TimelineTrack {
+        self.tracks.remove(index)
+    }
+
+    pub(crate) fn insert_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+        clip: TimelineClip,
+    ) {
+        self.tracks[track_index].clips.insert(index, clip);
+    }
+
+    pub(crate) fn remove_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+    ) -> TimelineClip {
+        self.tracks[track_index].clips.remove(index)
+    }
 }
 
-fn matching_stream(kind: TrackKind, item: &MediaItem) -> (bool, Option<RationalTime>) {
+pub(crate) fn matching_stream(kind: TrackKind, item: &MediaItem) -> (bool, Option<RationalTime>) {
     let stream = item.metadata().streams().iter().find(|stream| {
         matches!(
             (kind, stream),

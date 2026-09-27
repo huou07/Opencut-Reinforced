@@ -1,14 +1,15 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, MAX_PROJECT_FILE_BYTES,
-    OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectFileSessionErrorCode,
-    ProjectRevision, ProjectSession, ProjectStorageError, load_project_file,
-    save_project_file_atomic,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_PROJECT_FILE_BYTES,
+    MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectFileSessionErrorCode,
+    ProjectRevision, ProjectSession, ProjectStorageError, RationalTime, TimeRange, TrackId,
+    TrackKind, decode_project, encode_project, load_project_file, save_project_file_atomic,
 };
 use serde_json::json;
 use std::{
     fs::{self, File},
     io,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use uuid::Uuid;
 
@@ -43,6 +44,59 @@ fn rename(session: &mut ProjectSession, name: &str) {
             arguments: json!({ "name": name }),
         })
         .unwrap();
+}
+
+fn project_with_timeline_media() -> ProjectDocument {
+    let project = ProjectDocument::new("Timeline storage");
+    let mut wire: serde_json::Value =
+        serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
+    wire["project"]["media"] = serde_json::json!([{
+        "id": "44444444-4444-4444-8444-444444444444",
+        "source": {"kind": "local_file", "uri": "file:///missing/timeline-fixture.mov"},
+        "metadata": {
+            "format_names": ["matroska"],
+            "duration": null,
+            "file_size_bytes": 42,
+            "streams": [{
+                "kind": "video",
+                "metadata": {
+                    "index": 0,
+                    "codec_name": null,
+                    "width": 1920,
+                    "height": 1080,
+                    "pixel_format": null,
+                    "average_frame_rate": {"numerator": 24, "denominator": 1},
+                    "duration": null
+                }
+            }]
+        }
+    }]);
+    decode_project(&wire.to_string()).unwrap()
+}
+
+fn timeline_command(
+    session: &mut ProjectFileSession,
+    command_id: &str,
+    arguments: serde_json::Value,
+) {
+    let project = session.session();
+    let request = ApplicationRequest::Command(CommandEnvelope {
+        command_id: command_id.to_owned(),
+        schema_version: 1,
+        project_id: project.project_id(),
+        project_instance_id: project.project_instance_id(),
+        expected_project_revision: project.project_revision(),
+        arguments,
+    });
+    match session.handle_application_request(request) {
+        ApplicationResponse::Command(result) => assert!(result.changed),
+        ApplicationResponse::Error(error) => panic!("{command_id} failed: {error}"),
+        response => panic!("{command_id} returned unexpected response: {response:?}"),
+    }
+}
+
+fn rational(numerator: i64, denominator: u32) -> serde_json::Value {
+    serde_json::json!({"numerator": numerator, "denominator": denominator})
 }
 
 fn names(directory: &Path) -> Vec<String> {
@@ -85,6 +139,171 @@ fn saves_and_loads_canonical_state_without_runtime_session_history() {
         arguments: json!({}),
     });
     assert_eq!(undo.unwrap_err().code, OperationErrorCode::NothingToUndo);
+}
+
+#[test]
+fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let seeded = project_with_timeline_media();
+    let project_id = seeded.id();
+    save_project_file_atomic(&path, &seeded).unwrap();
+    let mut session = ProjectFileSession::open(&path).unwrap();
+    let track_a = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let track_b = TrackId::from_str("88888888-8888-4888-8888-888888888888").unwrap();
+    let track_c = TrackId::from_str("99999999-9999-4999-8999-999999999999").unwrap();
+    let clip_a = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+    let clip_b = ClipId::from_str("55555555-5555-4555-8555-555555555555").unwrap();
+    let media_id = MediaId::from_str("44444444-4444-4444-8444-444444444444").unwrap();
+    for (track_id, kind) in [
+        (track_a, TrackKind::Video),
+        (track_b, TrackKind::Audio),
+        (track_c, TrackKind::Video),
+    ] {
+        timeline_command(
+            &mut session,
+            "timeline.track.add",
+            serde_json::json!({"track_id": track_id, "kind": kind}),
+        );
+    }
+    for (clip_id, at, source_start) in [(clip_b, 4, 3), (clip_a, 0, 0)] {
+        timeline_command(
+            &mut session,
+            "timeline.clip.insert",
+            serde_json::json!({
+                "clip_id": clip_id,
+                "track_id": track_a,
+                "media_id": media_id,
+                "timeline_start": rational(at, 1),
+                "source_range": {
+                    "start": rational(source_start, 2),
+                    "duration": rational(2, 1),
+                },
+            }),
+        );
+    }
+    timeline_command(
+        &mut session,
+        "timeline.clip.move",
+        serde_json::json!({
+            "clip_id": clip_a,
+            "track_id": track_c,
+            "timeline_start": rational(8, 1),
+        }),
+    );
+    assert_eq!(
+        session.session().project_revision(),
+        ProjectRevision::new(6)
+    );
+    assert!(session.is_dirty());
+    session.save().unwrap();
+
+    let saved = load_project_file(&path).unwrap();
+    assert_eq!(saved.id(), project_id);
+    assert_eq!(saved.revision(), ProjectRevision::new(6));
+    let tracks = saved.timeline().tracks();
+    assert_eq!(
+        tracks.iter().map(|track| track.id()).collect::<Vec<_>>(),
+        [track_a, track_b, track_c]
+    );
+    assert_eq!(tracks[0].kind(), TrackKind::Video);
+    assert_eq!(tracks[1].kind(), TrackKind::Audio);
+    assert_eq!(tracks[2].kind(), TrackKind::Video);
+    assert_eq!(tracks[0].clips().len(), 1);
+    assert_eq!(tracks[0].clips()[0].id(), clip_b);
+    assert_eq!(tracks[0].clips()[0].media_id(), media_id);
+    assert_eq!(
+        tracks[0].clips()[0].timeline_start(),
+        RationalTime::new(4, 1).unwrap()
+    );
+    assert_eq!(
+        tracks[0].clips()[0].source_range(),
+        TimeRange::new(
+            RationalTime::new(3, 2).unwrap(),
+            RationalTime::new(2, 1).unwrap()
+        )
+        .unwrap()
+    );
+    assert_eq!(tracks[2].clips().len(), 1);
+    assert_eq!(tracks[2].clips()[0].id(), clip_a);
+    assert_eq!(tracks[2].clips()[0].media_id(), media_id);
+    assert_eq!(
+        tracks[2].clips()[0].timeline_start(),
+        RationalTime::new(8, 1).unwrap()
+    );
+    assert_eq!(
+        tracks[2].clips()[0].source_range(),
+        TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap()).unwrap()
+    );
+
+    let reopened = ProjectFileSession::open(&path).unwrap();
+    assert_eq!(reopened.session().project_id(), project_id);
+    assert_eq!(
+        reopened.session().project_revision(),
+        ProjectRevision::new(6)
+    );
+    assert_eq!(reopened.session().project().timeline(), saved.timeline());
+    let mut reopened = reopened;
+    let no_undo =
+        reopened.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+            command_id: "history.undo".to_owned(),
+            schema_version: 1,
+            project_id,
+            project_instance_id: reopened.session().project_instance_id(),
+            expected_project_revision: ProjectRevision::new(6),
+            arguments: serde_json::json!({}),
+        }));
+    assert!(
+        matches!(no_undo, ApplicationResponse::Error(error) if error.code == OperationErrorCode::NothingToUndo)
+    );
+
+    let mut undo_session = ProjectFileSession::open(&path).unwrap();
+    timeline_command(
+        &mut undo_session,
+        "timeline.clip.move",
+        serde_json::json!({
+            "clip_id": clip_a,
+            "track_id": track_a,
+            "timeline_start": rational(8, 1),
+        }),
+    );
+    let undone =
+        undo_session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+            command_id: "history.undo".to_owned(),
+            schema_version: 1,
+            project_id,
+            project_instance_id: undo_session.session().project_instance_id(),
+            expected_project_revision: ProjectRevision::new(7),
+            arguments: serde_json::json!({}),
+        }));
+    assert!(
+        matches!(undone, ApplicationResponse::Command(result) if result.after_revision == ProjectRevision::new(8))
+    );
+    undo_session.save().unwrap();
+    let after_undo_save = load_project_file(&path).unwrap();
+    assert_eq!(after_undo_save.revision(), ProjectRevision::new(8));
+    assert_eq!(
+        after_undo_save.timeline().tracks()[2].clips()[0].id(),
+        clip_a
+    );
+    assert_eq!(
+        after_undo_save.timeline().tracks()[2].clips()[0].timeline_start(),
+        RationalTime::new(8, 1).unwrap()
+    );
+    let mut after_undo_reopen = ProjectFileSession::open(&path).unwrap();
+    let no_redo = after_undo_reopen.handle_application_request(ApplicationRequest::Command(
+        CommandEnvelope {
+            command_id: "history.redo".to_owned(),
+            schema_version: 1,
+            project_id,
+            project_instance_id: after_undo_reopen.session().project_instance_id(),
+            expected_project_revision: ProjectRevision::new(8),
+            arguments: serde_json::json!({}),
+        },
+    ));
+    assert!(
+        matches!(no_redo, ApplicationResponse::Error(error) if error.code == OperationErrorCode::NothingToRedo)
+    );
 }
 
 #[test]

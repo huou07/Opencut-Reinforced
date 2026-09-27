@@ -18,9 +18,10 @@ mod timeline;
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
     CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, MAX_MEDIA_PAGE_SIZE,
-    MediaListPage, OperationError, OperationErrorCode, ProjectChange, ProjectSession,
-    ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TransactionEnvelope,
-    TransactionResult, command_catalog, query_catalog,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode, ProjectChange,
+    ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage,
+    TimelineClipState, TimelineTrackSummary, TransactionEnvelope, TransactionResult,
+    command_catalog, query_catalog,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,

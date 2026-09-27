@@ -1048,6 +1048,14 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::MediaSourceAlreadyExists => "MEDIA_SOURCE_ALREADY_EXISTS",
         OperationErrorCode::MediaNotFound => "MEDIA_NOT_FOUND",
         OperationErrorCode::MediaInUse => "MEDIA_IN_USE",
+        OperationErrorCode::TimelineTrackIdAlreadyExists => "TIMELINE_TRACK_ID_ALREADY_EXISTS",
+        OperationErrorCode::TimelineTrackNotFound => "TIMELINE_TRACK_NOT_FOUND",
+        OperationErrorCode::TimelineTrackNotEmpty => "TIMELINE_TRACK_NOT_EMPTY",
+        OperationErrorCode::TimelineClipIdAlreadyExists => "TIMELINE_CLIP_ID_ALREADY_EXISTS",
+        OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
+        OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
+        OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
+        OperationErrorCode::TimelineLimitExceeded => "TIMELINE_LIMIT_EXCEEDED",
     }
 }
 

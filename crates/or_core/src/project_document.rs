@@ -96,6 +96,83 @@ impl ProjectDocument {
         item
     }
 
+    pub(crate) fn try_reserve_timeline_tracks(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.timeline.try_reserve_tracks(additional)
+    }
+
+    pub(crate) fn try_reserve_timeline_track_clips(
+        &mut self,
+        track_index: usize,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.timeline
+            .try_reserve_track_clips(track_index, additional)
+    }
+
+    pub(crate) fn insert_timeline_track_for_command(
+        &mut self,
+        index: usize,
+        track: TimelineTrack,
+        revision: ProjectRevision,
+    ) {
+        self.timeline.insert_track_for_command(index, track);
+        self.revision = revision;
+    }
+
+    pub(crate) fn remove_timeline_track_for_command(
+        &mut self,
+        index: usize,
+        revision: ProjectRevision,
+    ) -> TimelineTrack {
+        let track = self.timeline.remove_track_for_command(index);
+        self.revision = revision;
+        track
+    }
+
+    pub(crate) fn insert_timeline_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+        clip: TimelineClip,
+        revision: ProjectRevision,
+    ) {
+        self.timeline
+            .insert_clip_for_command(track_index, index, clip);
+        self.revision = revision;
+    }
+
+    pub(crate) fn remove_timeline_clip_for_command(
+        &mut self,
+        track_index: usize,
+        index: usize,
+        revision: ProjectRevision,
+    ) -> TimelineClip {
+        let clip = self.timeline.remove_clip_for_command(track_index, index);
+        self.revision = revision;
+        clip
+    }
+
+    pub(crate) fn move_timeline_clip_for_command(
+        &mut self,
+        from_track_index: usize,
+        from_index: usize,
+        to_track_index: usize,
+        to_index: usize,
+        timeline_start: RationalTime,
+        revision: ProjectRevision,
+    ) {
+        let clip = self
+            .timeline
+            .remove_clip_for_command(from_track_index, from_index)
+            .with_timeline_start_for_command(timeline_start);
+        self.timeline
+            .insert_clip_for_command(to_track_index, to_index, clip);
+        self.revision = revision;
+    }
+
     fn from_v1(project: ProjectStateV1) -> Self {
         Self {
             id: project.id,

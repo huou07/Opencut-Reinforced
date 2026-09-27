@@ -120,6 +120,11 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "history.redo",
             "media.add",
             "media.remove",
+            "timeline.track.add",
+            "timeline.track.remove",
+            "timeline.clip.insert",
+            "timeline.clip.move",
+            "timeline.clip.delete",
         ]
     );
     assert_eq!(
@@ -128,7 +133,13 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             .iter()
             .map(|query| query.id.as_str())
             .collect::<Vec<_>>(),
-        ["project.summary", "media.list", "media.get"]
+        [
+            "project.summary",
+            "media.list",
+            "media.get",
+            "timeline.tracks",
+            "timeline.clips",
+        ]
     );
     let describe_json = serde_json::to_string(&describe).unwrap();
     assert!(!describe_json.contains("auth_token"));

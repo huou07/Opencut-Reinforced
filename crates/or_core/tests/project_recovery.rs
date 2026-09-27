@@ -1,15 +1,17 @@
 use or_core::{
-    CommandEnvelope, MAX_RECOVERY_FILE_BYTES, ProjectDocument, ProjectRecoveryError,
-    ProjectRevision, ProjectSession, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, apply_project_recovery, decode_project, discard_project_recovery,
-    encode_project, inspect_project_recovery, load_project_file, save_project_file_atomic,
-    write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_RECOVERY_FILE_BYTES,
+    MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectRecoveryError,
+    ProjectRevision, ProjectSession, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, TimeRange, TrackId, TrackKind, apply_project_recovery, decode_project,
+    discard_project_recovery, encode_project, inspect_project_recovery, load_project_file,
+    save_project_file_atomic, write_recovery_checkpoint,
 };
 use serde_json::{Value, json};
 use std::{
     ffi::OsString,
     fs::{self, File},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use uuid::Uuid;
 
@@ -111,6 +113,50 @@ fn assert_no_temp_orphans(directory: &Path) {
     }
 }
 
+fn recovery_project_with_timeline_media() -> ProjectDocument {
+    let project = ProjectDocument::new("Timeline recovery");
+    let mut wire: Value = serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
+    wire["project"]["media"] = json!([{
+        "id": "44444444-4444-4444-8444-444444444444",
+        "source": {"kind": "local_file", "uri": "file:///missing/recovery-timeline.mov"},
+        "metadata": {
+            "format_names": ["matroska"],
+            "duration": null,
+            "file_size_bytes": 42,
+            "streams": [{
+                "kind": "video",
+                "metadata": {
+                    "index": 0,
+                    "codec_name": null,
+                    "width": 1920,
+                    "height": 1080,
+                    "pixel_format": null,
+                    "average_frame_rate": {"numerator": 24, "denominator": 1},
+                    "duration": null
+                }
+            }]
+        }
+    }]);
+    decode_project(&wire.to_string()).unwrap()
+}
+
+fn recovery_timeline_command(session: &mut ProjectFileSession, command_id: &str, arguments: Value) {
+    let project = session.session();
+    let request = ApplicationRequest::Command(CommandEnvelope {
+        command_id: command_id.to_owned(),
+        schema_version: 1,
+        project_id: project.project_id(),
+        project_instance_id: project.project_instance_id(),
+        expected_project_revision: project.project_revision(),
+        arguments,
+    });
+    match session.handle_application_request(request) {
+        ApplicationResponse::Command(result) => assert!(result.changed),
+        ApplicationResponse::Error(error) => panic!("{command_id} failed: {error}"),
+        response => panic!("{command_id} returned unexpected response: {response:?}"),
+    }
+}
+
 #[test]
 fn no_sidecar_inspects_none_and_apply_is_controlled() {
     let directory = TestDirectory::new();
@@ -161,6 +207,100 @@ fn valid_checkpoint_inspects_candidate_with_metadata_and_recovered_document() {
     assert_eq!(
         wire["recovery_project"]["format"],
         "opencut-reinforced-project"
+    );
+}
+
+#[test]
+fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let base = recovery_project_with_timeline_media();
+    save_project_file_atomic(&path, &base).unwrap();
+    let mut session = ProjectFileSession::open(&path).unwrap();
+    let project_id = session.session().project_id();
+    let track_id = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let clip_id = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+    let media_id = MediaId::from_str("44444444-4444-4444-8444-444444444444").unwrap();
+
+    recovery_timeline_command(
+        &mut session,
+        "timeline.track.add",
+        json!({"track_id": track_id, "kind": "video"}),
+    );
+    recovery_timeline_command(
+        &mut session,
+        "timeline.clip.insert",
+        json!({
+            "clip_id": clip_id,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": {"numerator": 3004, "denominator": 1001},
+            "source_range": {
+                "start": {"numerator": 1, "denominator": 2},
+                "duration": {"numerator": 2, "denominator": 1},
+            }
+        }),
+    );
+    let recovery = session.session().project().clone();
+    assert_eq!(recovery.revision(), ProjectRevision::new(2));
+    assert!(session.is_dirty());
+    assert_eq!(load_project_file(&path).unwrap(), base);
+
+    write_recovery_checkpoint(&path, &base, &recovery).unwrap();
+    let sidecar: Value = serde_json::from_slice(&fs::read(recovery_path(&path)).unwrap()).unwrap();
+    assert_eq!(sidecar["schema_version"], 1);
+    assert_eq!(sidecar["recovery_project"]["schema_version"], 3);
+    let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
+        panic!("expected a timeline recovery candidate");
+    };
+    assert_eq!(candidate.metadata().project_id, project_id);
+    assert_eq!(candidate.metadata().base_revision, ProjectRevision::INITIAL);
+    assert_eq!(
+        candidate.metadata().recovery_revision,
+        ProjectRevision::new(2)
+    );
+    assert_eq!(candidate.recovery_project(), &recovery);
+
+    assert!(matches!(
+        apply_project_recovery(&path).unwrap(),
+        RecoveryApplyOutcome::AppliedAndCleaned
+    ));
+    let applied = load_project_file(&path).unwrap();
+    assert_eq!(applied.id(), project_id);
+    assert_eq!(applied.revision(), ProjectRevision::new(2));
+    assert_eq!(applied.timeline().tracks().len(), 1);
+    assert_eq!(applied.timeline().tracks()[0].id(), track_id);
+    assert_eq!(applied.timeline().tracks()[0].kind(), TrackKind::Video);
+    assert_eq!(applied.timeline().tracks()[0].clips().len(), 1);
+    let clip = &applied.timeline().tracks()[0].clips()[0];
+    assert_eq!(clip.id(), clip_id);
+    assert_eq!(clip.media_id(), media_id);
+    assert_eq!(
+        clip.timeline_start(),
+        RationalTime::new(3004, 1001).unwrap()
+    );
+    assert_eq!(
+        clip.source_range(),
+        TimeRange::new(
+            RationalTime::new(1, 2).unwrap(),
+            RationalTime::new(2, 1).unwrap()
+        )
+        .unwrap()
+    );
+    assert!(!recovery_path(&path).exists());
+
+    let mut reopened = ProjectFileSession::open(&path).unwrap();
+    let no_undo =
+        reopened.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
+            command_id: "history.undo".to_owned(),
+            schema_version: 1,
+            project_id,
+            project_instance_id: reopened.session().project_instance_id(),
+            expected_project_revision: ProjectRevision::new(2),
+            arguments: json!({}),
+        }));
+    assert!(
+        matches!(no_undo, ApplicationResponse::Error(error) if error.code == OperationErrorCode::NothingToUndo)
     );
 }
 
