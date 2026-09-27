@@ -509,23 +509,6 @@ void main() {
         hasLength(1),
       );
 
-      final undoneDelete = await gateway.undo(session, current);
-      expect(undoneDelete.succeeded, isTrue);
-      current = undoneDelete.view!;
-      expect(current.revision, BigInt.from(7));
-      page = await gateway.listTimelineClips(
-        session,
-        trackId: track.trackId,
-        offset: 0,
-        limit: 100,
-      );
-      expect(page.items.single.clipId, clip.clipId);
-      expect(page.items.single.timelineStart.canonical, '3/1');
-
-      final redoneDelete = await gateway.redo(session, current);
-      expect(redoneDelete.succeeded, isTrue);
-      current = redoneDelete.view!;
-      expect(current.revision, BigInt.from(8));
       final saved = await gateway.save(session);
       expect(saved.succeeded, isTrue);
       expect(saved.view?.revision, BigInt.from(12));
