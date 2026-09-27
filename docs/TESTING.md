@@ -168,7 +168,7 @@ Cache unit tests (`crates/or_core/src/cache.rs`) cover:
 
 The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache::tests` explicitly on hosted macOS and Windows. No local native/runtime test is used for cache verification. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
-## Current Phase 5D coverage
+## Phase 5D coverage
 
 - Source-fingerprint tests cover stable small-file content hashing, changed bytes in a large file, bounded large-file sampling, and errors for unavailable or non-regular sources. The fingerprint includes file size, available modification time, and sampled bytes; it is used only for disposable cache invalidation.
 - `MediaArtifactService` tests cover locked profile-key separation, valid cached PNG generation for both profiles, terminal event ordering, ready cache hits without a second job, same-key in-flight deduplication, unsupported streams without spawning `ffmpeg`, queue and record backpressure, cache-budget failure, timeout/cancellation, bounded output, malformed PNG rejection, and child cleanup.
@@ -177,16 +177,19 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - The ignored `crates/or_core/tests/media_artifacts_integration.rs` test runs only on hosted Linux CI. It generates a tiny video/audio Matroska fixture with the CI-installed system `ffmpeg`, verifies real thumbnail and waveform PNG dimensions, confirms cache hits do not create another job, and changes sampled source bytes while preserving size and modification time to verify cache-key invalidation. It also checks that artifact generation leaves project revision unchanged. Do not install FFmpeg locally or run this real-media integration test locally.
 - Hosted macOS CI runs the native Flutter project lifecycle and offline-media bridge tests. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
-## Current Phase 5E coverage
+## Current Phase 5F and cache-index coverage
 
-- Lazy index creation and exact schema-v1 table/index shape; existing Phase 5D thumbnail and waveform files are discovered without regeneration.
+- Lazy index creation and exact schema-v1 table/index shape; existing thumbnail and waveform cache files and canonical proxy `.mkv` files are discovered without regeneration.
 - Reopen reconciliation preserves access sequences, repairs size drift, adds orphan files, removes missing-file rows, and rebuilds corrupt, unsupported-version, or inconsistent index metadata without deleting artifacts.
 - Bounded artifact scans return `IndexTooLarge`; symlinked cache entries are not followed. Unknown files and the SQLite index do not consume the managed artifact-byte budget.
 - Successful `get` and `put` access ordering persists across restarts, uses no clock, and breaks sequence ties by kind then cache key. Eviction removes only the oldest minimum set required, protects the replacement target, and leaves newer unrelated entries intact.
 - An artifact larger than the total budget returns `BudgetExceeded` without evicting existing entries. Remove and clear operations update rows, preserve unrelated namespaces and unknown files, and leave the index usable.
 - Cloned stores serialize budget changes; independent stores coordinate through SQLite; a held database lock returns within the one-second busy bound. Sequence exhaustion is controlled and does not wrap.
-- Cache/index operations leave `ProjectDocument` and `ProjectRevision` unchanged. An evicted preview is regenerated through the existing `MediaArtifactService` on the next request, with existing terminal event semantics unchanged.
-- Hosted Linux runs the full workspace and generated-media checks; hosted macOS and Windows run the persistent cache-index tests; Android verifies the Rust-backed APK build. No proxy behavior is claimed or tested.
+- Proxy file API tests cover same-directory reserved staging, files larger than the 8 MiB preview byte limit, byte API rejection, index repair and LRU touch after reopen, remove/clear, atomic replacement with target protection, global LRU participation, budget rejection, and active-stage preservation during clear.
+- Proxy service tests cover the exact profile descriptor and stable existing thumbnail/waveform cache keys, no-video handling, file-backed success and cache hit without a new job, same-key in-flight deduplication, shared queue backpressure, cancellation/reap, duration-aware timeout bounds, output growth limit, non-zero exit, invalid EBML output, and normal staging cleanup.
+- Cache/index and artifact operations leave `ProjectDocument` and `ProjectRevision` unchanged. Existing thumbnail/waveform tests remain in the same suite and continue to verify their event, cache, cancellation, and error behavior.
+- The ignored `system_ffmpeg_generates_v1_video_only_proxy_and_preserves_vfr_timing` integration runs only on hosted Linux CI. It generates a tiny VFR video/audio source, requests a proxy through production `MediaArtifactService`, checks Matroska/`mpeg4`/video-only/`yuv420p`/dimensions/duration with `ffprobe`, compares frame ordering and relative timestamps, confirms a ready cache hit without a job, and changes the source to verify a new key and generation. The existing ignored thumbnail/waveform integration remains in that same hosted Linux command. Do not install FFmpeg locally or run these real-media integration tests locally.
+- Hosted macOS and Windows run the file-backed cache and proxy fake-executable tests through `cache::tests` and `media_artifacts::tests`; Android verifies the Rust-backed APK build and does not run proxy generation. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Test pyramid
 

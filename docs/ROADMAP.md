@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation remains in progress: Phase 5A–5E are done. Proxy generation is the remaining Phase 5 gap and is defined at a high level as the next Phase 5F checkpoint. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 media foundation is complete: Phase 5A–5F are done. Phase 6 — Timeline MVP is next; its scope remains at the existing phase level until the architecture/planning checkpoint. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -183,11 +183,16 @@ Phase 5E — DONE:
 - automatic eviction removes only the minimum oldest set needed under the global artifact budget; the index database and journal are excluded from that budget
 - cache artifacts and index metadata remain outside canonical project state and do not affect `ProjectRevision`
 
-Phase 5F — NEXT:
+Phase 5F — DONE:
 
-- high-level proxy-generation foundation only; format and policy decisions remain for that checkpoint
+- disposable, file-backed `OR Library Proxy V1` generation through the existing `MediaArtifactService` and bounded `JobManager`
+- Matroska `.mkv`, native FFmpeg `mpeg4`, first video stream only, bounded to 960×540 without upscaling, even dimensions, square pixels, and `yuv420p`
+- preserves relative frame timing and normalizes the first presentation timestamp to zero; disables audio, subtitles, data, source metadata, and chapters
+- proxy artifacts use the existing source fingerprint, schema-v1 cache key/index, shared global LRU, and total cache budget; preview byte reads stay bounded and proxies remain file-backed
+- core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
+- no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 remains IN PROGRESS only for proxy generation. Timeline editing remains Phase 6; decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is NEXT. Decode and playback remain Phase 7; no Phase 6 subdivisions or implementation are included here.
 
 ### Phase 6 — Timeline MVP
 **Status: PLANNED**
@@ -272,4 +277,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, and Phase 5E added a persistent disposable cache index with automatic LRU eviction. Proxy-generation foundation is the next Phase 5F checkpoint; its detailed choices remain open. Timeline and playback work remain later. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is NEXT, with no new subdivisions defined. Timeline and playback implementation remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
