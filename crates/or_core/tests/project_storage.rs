@@ -52,7 +52,7 @@ fn project_with_timeline_media() -> ProjectDocument {
         serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
     wire["project"]["media"] = serde_json::json!([{
         "id": "44444444-4444-4444-8444-444444444444",
-        "source": {"kind": "local_file", "uri": "file:///missing/timeline-fixture.mov"},
+        "source": {"kind": "local_file", "uri": "file:///C:/missing/timeline-fixture.mov"},
         "metadata": {
             "format_names": ["matroska"],
             "duration": null,

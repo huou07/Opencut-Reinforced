@@ -118,7 +118,7 @@ fn recovery_project_with_timeline_media() -> ProjectDocument {
     let mut wire: Value = serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
     wire["project"]["media"] = json!([{
         "id": "44444444-4444-4444-8444-444444444444",
-        "source": {"kind": "local_file", "uri": "file:///missing/recovery-timeline.mov"},
+        "source": {"kind": "local_file", "uri": "file:///C:/missing/recovery-timeline.mov"},
         "metadata": {
             "format_names": ["matroska"],
             "duration": null,
