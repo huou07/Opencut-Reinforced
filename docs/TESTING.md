@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Linux Rust job installs FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI only, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
