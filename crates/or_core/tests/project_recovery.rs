@@ -244,7 +244,7 @@ fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_without_revision_c
     recovery_value["project"]["name"] = json!("Recovered timeline");
     recovery_value["project"]["media"] = json!([{
         "id": "22222222-2222-4222-8222-222222222222",
-        "source": {"kind": "local_file", "uri": "file:///missing/offline.mov"},
+        "source": {"kind": "local_file", "uri": "file:///C:/missing/offline.mov"},
         "metadata": {
             "format_names": ["mov"],
             "duration": {"numerator": 5, "denominator": 1},
