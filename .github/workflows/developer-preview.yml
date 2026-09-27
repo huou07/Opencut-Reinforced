@@ -614,7 +614,14 @@ jobs:
           - Media import requires a system-provided `ffprobe`; preview generation requires a system-provided `ffmpeg`.
           - FFmpeg is not linked or bundled. These are library images only; timeline editing, clips, playback, rendering, export, and proxy generation remain unavailable.
 
-          Still unavailable: proxies, a cache database or index, automatic cache eviction, timeline editing, playback, decode/render, and export.
+          **PHASE 5E — PERSISTENT CACHE INDEX AND AUTOMATIC EVICTION**
+
+          - A disposable SQLite index persists accounting and access order for generated thumbnail and waveform artifacts, and reconciles existing Phase 5D cache files.
+          - Persistent sequence-based LRU eviction removes the minimum required managed artifacts under cache budget pressure.
+          - The index stores only artifact kind, opaque cache key, byte size, and access sequence; it is disposable cache metadata, not project data.
+          - The artifact-byte budget excludes the SQLite index and its metadata.
+
+          Still unavailable: proxies, timeline editing, playback, decode/render, and export.
 
           OR remains a pre-MVP project, not a usable video editor.
 
@@ -645,7 +652,7 @@ jobs:
           Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
 
           Not implemented:
-          - Proxies, a cache database or index, or automatic cache eviction
+          - Proxy generation
           - Actual timeline editing
           - Playback
           - Media decoding or rendering
