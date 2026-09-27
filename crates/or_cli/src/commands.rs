@@ -574,6 +574,86 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
         }
+        "trim-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--edge", "--to"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let edge = required_name(&options, "--edge", json)?;
+            if !matches!(edge.as_str(), "start" | "end") {
+                return Err(CliError::usage(json, "--edge must be start or end"));
+            }
+            let timeline_time =
+                parse_cli_rational(&required_name(&options, "--to", json)?, "--to", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.trim",
+                json!({
+                    "clip_id": clip_id,
+                    "edge": edge,
+                    "timeline_time": rational_value(timeline_time),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "split-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--at", "--id"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let timeline_time =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let new_clip_id = match options.value("--id") {
+                Some(value) => parse_clip_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--id must be valid UTF-8"))?,
+                    json,
+                )?,
+                None => ClipId::generate(),
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.split",
+                json!({
+                    "clip_id": clip_id,
+                    "new_clip_id": new_clip_id,
+                    "timeline_time": rational_value(timeline_time),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", new_clip_id.to_string())),
+            ))
+        }
+        "ripple-delete-clip" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--clip"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.ripple_delete",
+                json!({"clip_id": clip_id}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "delete-clip" => {
             let options =
                 Options::parse(action_args, &["--project", "--attach", "--clip"], &[], json)?;
@@ -590,7 +670,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, add-track, remove-track, insert-clip, move-clip, or delete-clip",
+            "unknown timeline action; expected tracks, clips, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }

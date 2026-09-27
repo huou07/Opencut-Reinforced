@@ -1451,6 +1451,226 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v3_result() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Advanced timeline CLI");
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+    let mut add_media_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_media_args.extend(words(&["--source"]));
+    add_media_args.push(source.as_os_str().to_owned());
+    add_media_args.push("--json".into());
+    let (media, _) = json_success_with_probe(add_media_args, &probe_stub);
+    let media_id = media["media"]["id"].as_str().unwrap().to_owned();
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    let clip_id = "33333333-3333-4333-8333-333333333333";
+    json_success(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/1",
+            "--id",
+            clip_id,
+            "--json",
+        ],
+    ));
+    let second_clip_id = "55555555-5555-4555-8555-555555555555";
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "3/1",
+            "--source-start",
+            "1/1",
+            "--duration",
+            "1/2",
+            "--id",
+            second_clip_id,
+            "--json",
+        ],
+    ));
+
+    let trimmed = json_success(path_args(
+        &["timeline", "trim-clip"],
+        "--project",
+        &project_path,
+        &["--clip", clip_id, "--edge", "end", "--to", "3/4", "--json"],
+    ))
+    .0;
+    assert_eq!(trimmed["command"]["command_id"], "timeline.clip.trim");
+    assert_eq!(trimmed["command"]["after_revision"], 5);
+
+    let split = json_success(path_args(
+        &["timeline", "split-clip"],
+        "--project",
+        &project_path,
+        &["--clip", clip_id, "--at", "1/2", "--json"],
+    ))
+    .0;
+    let generated_right_id = split["clip_id"].as_str().unwrap();
+    assert!(generated_right_id.parse::<ClipId>().is_ok());
+    assert_eq!(split["command"]["command_id"], "timeline.clip.split");
+    assert_eq!(split["command"]["after_revision"], 6);
+
+    let ripple = json_success(path_args(
+        &["timeline", "ripple-delete-clip"],
+        "--project",
+        &project_path,
+        &["--clip", generated_right_id, "--json"],
+    ))
+    .0;
+    assert_eq!(
+        ripple["command"]["command_id"],
+        "timeline.clip.ripple_delete"
+    );
+    assert_eq!(ripple["command"]["after_revision"], 7);
+
+    let no_op = json_success(path_args(
+        &["timeline", "trim-clip"],
+        "--project",
+        &project_path,
+        &["--clip", clip_id, "--edge", "end", "--to", "1/2", "--json"],
+    ))
+    .0;
+    assert_eq!(no_op["command"]["changed"], false);
+    assert_eq!(no_op["command"]["after_revision"], 7);
+
+    let clips = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(clips["timeline_clip_page"]["total_count"], 2);
+    assert_eq!(clips["timeline_clip_page"]["items"][0]["clip_id"], clip_id);
+    assert_eq!(
+        clips["timeline_clip_page"]["items"][0]["source_range"]["duration"]["numerator"],
+        1
+    );
+    assert_eq!(
+        clips["timeline_clip_page"]["items"][1]["clip_id"],
+        second_clip_id
+    );
+    assert_eq!(
+        clips["timeline_clip_page"]["items"][1]["timeline_start"]["numerator"],
+        11
+    );
+    assert_eq!(
+        clips["timeline_clip_page"]["items"][1]["timeline_start"]["denominator"],
+        4
+    );
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::new(7)
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
+        3
+    );
+}
+
+#[test]
+fn attached_advanced_timeline_cli_dispatches_shared_commands_until_explicit_save() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Attached advanced timeline CLI");
+    let mut host =
+        LiveProjectHost::start(ProjectFileSession::open(&project_path).unwrap(), None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+    let mut add_media_args = attach_args(&["media", "add"], &descriptor, &[]);
+    add_media_args.extend(words(&["--source"]));
+    add_media_args.push(source.as_os_str().to_owned());
+    add_media_args.push("--json".into());
+    let (media, _) = json_success_with_probe(add_media_args, &probe_stub);
+    let media_id = media["media"]["id"].as_str().unwrap().to_owned();
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    let clip_id = "33333333-3333-4333-8333-333333333333";
+    let right_id = "55555555-5555-4555-8555-555555555555";
+    json_success(attach_args(
+        &["timeline", "add-track"],
+        &descriptor,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ));
+    json_success(attach_args(
+        &["timeline", "insert-clip"],
+        &descriptor,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/1",
+            "--id",
+            clip_id,
+            "--json",
+        ],
+    ));
+    json_success(attach_args(
+        &["timeline", "trim-clip"],
+        &descriptor,
+        &["--clip", clip_id, "--edge", "end", "--to", "3/4", "--json"],
+    ));
+    json_success(attach_args(
+        &["timeline", "split-clip"],
+        &descriptor,
+        &["--clip", clip_id, "--at", "1/2", "--id", right_id, "--json"],
+    ));
+    let ripple = json_success(attach_args(
+        &["timeline", "ripple-delete-clip"],
+        &descriptor,
+        &["--clip", right_id, "--json"],
+    ))
+    .0;
+    assert_eq!(
+        ripple["command"]["command_id"],
+        "timeline.clip.ripple_delete"
+    );
+    assert!(host.is_dirty().unwrap());
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::INITIAL
+    );
+    let saved = json_success(attach_args(&["project", "save"], &descriptor, &["--json"])).0;
+    assert_eq!(saved["project_revision"], 6);
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::new(6)
+    );
+    host.shutdown(false).unwrap();
+}
+
+#[test]
 fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_save() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
