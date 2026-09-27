@@ -1405,6 +1405,76 @@ fn main() {
     }
 
     #[test]
+    fn an_evicted_preview_is_generated_again_on_the_next_request() {
+        let directory = TestDirectory::new();
+        let first_path = directory.media("first path with spaces-媒体.mkv", b"source one");
+        let second_path = directory.media(
+            "second path with spaces-媒体.mkv",
+            b"source two has a different length",
+        );
+        let output = png(32, 18);
+        directory.output("thumbnail-output", &output);
+        let service = service(
+            &directory,
+            TEST_LIMITS,
+            1,
+            4,
+            8,
+            1024 * 1024,
+            output.len() as u64,
+        );
+        let events = service.subscribe_events();
+        let first_item = item(&first_path, 21, true, false);
+        let second_item = item(&second_path, 22, true, false);
+
+        let first = service.request_thumbnail(&first_item).unwrap();
+        assert_eq!(
+            wait_event(&events).state,
+            MediaArtifactEventState::Succeeded
+        );
+        let second = service.request_thumbnail(&second_item).unwrap();
+        assert_eq!(
+            wait_event(&events).state,
+            MediaArtifactEventState::Succeeded
+        );
+        assert!(
+            service
+                .read_artifact(CacheArtifactKind::Thumbnail, first.cache_key.unwrap())
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            service
+                .read_artifact(CacheArtifactKind::Thumbnail, second.cache_key.unwrap())
+                .unwrap()
+                .is_some()
+        );
+
+        let regenerated = service.request_thumbnail(&first_item).unwrap();
+        assert!(matches!(
+            regenerated.state,
+            MediaArtifactRequestState::Queued | MediaArtifactRequestState::Running
+        ));
+        assert_eq!(
+            wait_event(&events).state,
+            MediaArtifactEventState::Succeeded
+        );
+        assert!(
+            service
+                .read_artifact(CacheArtifactKind::Thumbnail, first.cache_key.unwrap())
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            service
+                .read_artifact(CacheArtifactKind::Thumbnail, second.cache_key.unwrap())
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(directory.process_count(), 3);
+    }
+
+    #[test]
     fn in_flight_requests_share_one_job_and_running_cancel_cleans_child() {
         let directory = TestDirectory::new();
         let path = directory.media("block- path with spaces-媒体.mkv", b"block");

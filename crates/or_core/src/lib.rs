@@ -22,8 +22,9 @@ pub use application::{
     TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{
-    CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey, CacheKeyParseError, CacheStore,
-    CacheStoreConfig, CacheStoreConfigError, ParametersFingerprint, SourceFingerprint,
+    CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
+    CacheKeyParseError, CacheStore, CacheStoreConfig, CacheStoreConfigError, ParametersFingerprint,
+    SourceFingerprint,
 };
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,

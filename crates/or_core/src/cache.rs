@@ -1,3 +1,4 @@
+use rusqlite::{Transaction, TransactionBehavior};
 use sha2::{Digest, Sha256};
 use std::{
     error::Error,
@@ -7,11 +8,17 @@ use std::{
     io::{self, BufWriter, Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
+    sync::{Arc, Mutex},
 };
 use uuid::Uuid;
 
+mod index;
+
 /// Version of the cache-key derivation contract.
 pub const CACHE_SCHEMA_VERSION: u32 = 1;
+
+/// Version of the disposable SQLite cache-index schema.
+pub const CACHE_INDEX_SCHEMA_VERSION: u32 = 1;
 
 const CACHE_ENTRY_EXTENSION: &str = "cache";
 const TEMP_FILE_ATTEMPTS: usize = 8;
@@ -35,6 +42,14 @@ impl CacheArtifactKind {
         match self {
             Self::Thumbnail => 1,
             Self::Waveform => 2,
+        }
+    }
+
+    pub(super) fn from_namespace(namespace: &str) -> Option<Self> {
+        match namespace {
+            "thumbnail" => Some(Self::Thumbnail),
+            "waveform" => Some(Self::Waveform),
+            _ => None,
         }
     }
 }
@@ -225,6 +240,11 @@ pub enum CacheError {
     CorruptOrOversizedEntry {
         max_bytes: u64,
     },
+    IndexTooLarge {
+        max_entries: usize,
+    },
+    IndexSequenceExhausted,
+    Index(String),
     Io(io::Error),
 }
 
@@ -251,6 +271,14 @@ impl fmt::Display for CacheError {
                     "cache entry is corrupt or exceeds the {max_bytes}-byte limit"
                 )
             }
+            Self::IndexTooLarge { max_entries } => write!(
+                formatter,
+                "cache index contains more than {max_entries} managed artifacts"
+            ),
+            Self::IndexSequenceExhausted => {
+                formatter.write_str("cache access sequence is exhausted")
+            }
+            Self::Index(message) => write!(formatter, "cache index failed: {message}"),
             Self::Io(error) => write!(formatter, "cache I/O failed: {error}"),
         }
     }
@@ -262,7 +290,10 @@ impl Error for CacheError {
             Self::Io(error) => Some(error),
             Self::EntryTooLarge { .. }
             | Self::BudgetExceeded { .. }
-            | Self::CorruptOrOversizedEntry { .. } => None,
+            | Self::CorruptOrOversizedEntry { .. }
+            | Self::IndexTooLarge { .. }
+            | Self::IndexSequenceExhausted
+            | Self::Index(_) => None,
         }
     }
 }
@@ -281,6 +312,7 @@ impl From<io::Error> for CacheError {
 pub struct CacheStore {
     root: PathBuf,
     config: CacheStoreConfig,
+    index: Arc<Mutex<index::IndexState>>,
 }
 
 impl CacheStore {
@@ -289,6 +321,7 @@ impl CacheStore {
         Self {
             root: root.into(),
             config,
+            index: Arc::new(Mutex::new(index::IndexState::default())),
         }
     }
 
@@ -314,21 +347,111 @@ impl CacheStore {
                 actual_bytes: entry_bytes,
             });
         }
-
-        let path = self.entry_path(kind, key);
-        let existing = file_len(&path)?;
-        let current_total = self.total_bytes()?;
-        let projected_total = current_total
-            .saturating_sub(existing.unwrap_or(0))
-            .saturating_add(entry_bytes);
-        if projected_total > self.config.max_total_bytes() {
+        if entry_bytes > self.config.max_total_bytes() {
             return Err(CacheError::BudgetExceeded {
                 max_total_bytes: self.config.max_total_bytes(),
-                projected_total_bytes: projected_total,
+                projected_total_bytes: entry_bytes,
             });
         }
 
-        atomic_write(&path, bytes)
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let mut filesystem_changed = false;
+        let result = (|| {
+            let path = self.entry_path(kind, key);
+            let target = entry_file_state(&self.root, kind, key)?;
+            let target_size = match target {
+                EntryFileState::File(size) => {
+                    let sequence = index::entry_sequence(&transaction, kind, key)?.unwrap_or(0);
+                    index::upsert_entry(&transaction, kind, key, size, sequence)?;
+                    filesystem_changed = true;
+                    size
+                }
+                EntryFileState::Missing => {
+                    index::delete_entry(&transaction, kind, key)?;
+                    filesystem_changed = true;
+                    0
+                }
+                EntryFileState::Unsafe => {
+                    return Err(CacheError::Index(
+                        "cache entry path contains a symlink or non-file".to_owned(),
+                    ));
+                }
+            };
+            index::check_sequence_available(&transaction)?;
+
+            let current_total = index::current_total(&transaction)?;
+            let mut projected_total =
+                u128::from(current_total - target_size) + u128::from(entry_bytes);
+            let budget = u128::from(self.config.max_total_bytes());
+            if projected_total > budget {
+                for victim in index::lru_entries(&transaction, (kind, key))? {
+                    if projected_total <= budget {
+                        break;
+                    }
+                    let victim_path = self.entry_path(victim.kind, victim.key);
+                    match entry_file_state(&self.root, victim.kind, victim.key)? {
+                        EntryFileState::File(size) => {
+                            if size != victim.size_bytes {
+                                index::upsert_entry(
+                                    &transaction,
+                                    victim.kind,
+                                    victim.key,
+                                    size,
+                                    victim.last_access_sequence,
+                                )?;
+                                filesystem_changed = true;
+                            }
+                            match fs::remove_file(&victim_path) {
+                                Ok(()) => {
+                                    filesystem_changed = true;
+                                    index::delete_entry(&transaction, victim.kind, victim.key)?;
+                                    projected_total = projected_total
+                                        .saturating_sub(u128::from(victim.size_bytes));
+                                }
+                                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                                    filesystem_changed = true;
+                                    index::delete_entry(&transaction, victim.kind, victim.key)?;
+                                    projected_total = projected_total
+                                        .saturating_sub(u128::from(victim.size_bytes));
+                                }
+                                Err(error) => {
+                                    filesystem_changed = true;
+                                    return Err(CacheError::Io(error));
+                                }
+                            }
+                        }
+                        EntryFileState::Missing | EntryFileState::Unsafe => {
+                            filesystem_changed = true;
+                            index::delete_entry(&transaction, victim.kind, victim.key)?;
+                            projected_total =
+                                projected_total.saturating_sub(u128::from(victim.size_bytes));
+                        }
+                    }
+                }
+            }
+
+            if projected_total > budget {
+                return Err(CacheError::BudgetExceeded {
+                    max_total_bytes: self.config.max_total_bytes(),
+                    projected_total_bytes: u64::try_from(projected_total).unwrap_or(u64::MAX),
+                });
+            }
+
+            create_entry_parent(&self.root, kind, key)?;
+            atomic_write(&path, bytes)?;
+            filesystem_changed = true;
+            let sequence = index::allocate_sequence(&transaction)?;
+            index::upsert_entry(&transaction, kind, key, entry_bytes, sequence)
+        })();
+        let (result, discard) = finish_transaction(transaction, filesystem_changed, result);
+        if discard {
+            state.discard_connection();
+        }
+        result
     }
 
     /// Reads a bounded entry, or `Ok(None)` for a normal cache miss.
@@ -337,50 +460,87 @@ impl CacheStore {
         kind: CacheArtifactKind,
         key: CacheKey,
     ) -> Result<Option<Vec<u8>>, CacheError> {
-        let path = self.entry_path(kind, key);
-        let file = match File::open(&path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(CacheError::Io(error)),
-        };
-
-        let metadata = file.metadata().map_err(CacheError::Io)?;
-        if metadata.len() > self.config.max_entry_bytes() {
-            return Err(CacheError::CorruptOrOversizedEntry {
-                max_bytes: self.config.max_entry_bytes(),
-            });
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let result = (|| {
+            let path = self.entry_path(kind, key);
+            let size = match entry_file_state(&self.root, kind, key)? {
+                EntryFileState::File(size) => size,
+                EntryFileState::Missing | EntryFileState::Unsafe => {
+                    index::delete_entry(&transaction, kind, key)?;
+                    return Ok(None);
+                }
+            };
+            if size > self.config.max_entry_bytes() {
+                return Err(CacheError::CorruptOrOversizedEntry {
+                    max_bytes: self.config.max_entry_bytes(),
+                });
+            }
+            let file = match File::open(&path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    index::delete_entry(&transaction, kind, key)?;
+                    return Ok(None);
+                }
+                Err(error) => return Err(CacheError::Io(error)),
+            };
+            let mut bytes = Vec::new();
+            file.take(self.config.max_entry_bytes().saturating_add(1))
+                .read_to_end(&mut bytes)
+                .map_err(CacheError::Io)?;
+            if bytes.len() as u64 > self.config.max_entry_bytes() {
+                return Err(CacheError::CorruptOrOversizedEntry {
+                    max_bytes: self.config.max_entry_bytes(),
+                });
+            }
+            let sequence = index::allocate_sequence(&transaction)?;
+            index::upsert_entry(&transaction, kind, key, bytes.len() as u64, sequence)?;
+            Ok(Some(bytes))
+        })();
+        let (result, discard) = finish_transaction(transaction, false, result);
+        if discard {
+            state.discard_connection();
         }
-
-        let mut bytes = Vec::new();
-        file.take(self.config.max_entry_bytes() + 1)
-            .read_to_end(&mut bytes)
-            .map_err(CacheError::Io)?;
-        if bytes.len() as u64 > self.config.max_entry_bytes() {
-            return Err(CacheError::CorruptOrOversizedEntry {
-                max_bytes: self.config.max_entry_bytes(),
-            });
-        }
-        Ok(Some(bytes))
+        result
     }
 
     /// Removes one exact key. Missing entries are an idempotent no-op.
     pub fn remove(&self, kind: CacheArtifactKind, key: CacheKey) -> Result<bool, CacheError> {
-        match fs::remove_file(self.entry_path(kind, key)) {
-            Ok(()) => Ok(true),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-            Err(error) => Err(CacheError::Io(error)),
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let path = self.entry_path(kind, key);
+        let file_state = entry_file_state(&self.root, kind, key)?;
+        let repair_needed = !matches!(file_state, EntryFileState::File(_));
+        let removed = match file_state {
+            EntryFileState::File(_) => match fs::remove_file(&path) {
+                Ok(()) => true,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                Err(error) => return Err(CacheError::Io(error)),
+            },
+            EntryFileState::Missing | EntryFileState::Unsafe => false,
+        };
+        let result = index::delete_entry(&transaction, kind, key).map(|()| removed);
+        let (result, discard) = finish_transaction(transaction, removed || repair_needed, result);
+        if discard {
+            state.discard_connection();
         }
+        result
     }
 
     /// Removes one managed namespace.
     pub fn clear_namespace(&self, kind: CacheArtifactKind) -> Result<(), CacheError> {
-        remove_dir_if_present(&self.root.join(kind.namespace()))
+        self.clear_managed(Some(kind))
     }
 
     /// Removes every managed namespace. The store remains usable afterward.
     pub fn clear_all(&self) -> Result<(), CacheError> {
-        self.clear_namespace(CacheArtifactKind::Thumbnail)?;
-        self.clear_namespace(CacheArtifactKind::Waveform)
+        self.clear_managed(None)
     }
 
     fn entry_path(&self, kind: CacheArtifactKind, key: CacheKey) -> PathBuf {
@@ -392,30 +552,69 @@ impl CacheStore {
             .join(format!("{hex}.{CACHE_ENTRY_EXTENSION}"))
     }
 
-    fn total_bytes(&self) -> Result<u64, CacheError> {
-        if !self.root.exists() {
-            return Ok(0);
-        }
-
-        let mut total = 0u64;
-        let mut stack = vec![self.root.clone()];
-        while let Some(directory) = stack.pop() {
-            let entries = match fs::read_dir(&directory) {
-                Ok(entries) => entries,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(CacheError::Io(error)),
-            };
-            for entry in entries {
-                let entry = entry.map_err(CacheError::Io)?;
-                let file_type = entry.file_type().map_err(CacheError::Io)?;
-                if file_type.is_dir() {
-                    stack.push(entry.path());
-                } else if file_type.is_file() {
-                    total = total.saturating_add(entry.metadata().map_err(CacheError::Io)?.len());
+    fn clear_managed(&self, kind: Option<CacheArtifactKind>) -> Result<(), CacheError> {
+        let mut state = lock_index(&self.index);
+        let transaction = state
+            .connection(&self.root)?
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(index::index_error)?;
+        let artifacts = index::scan_artifacts(&self.root)?;
+        let mut filesystem_changed = false;
+        let mut failure = None;
+        for artifact in artifacts
+            .into_iter()
+            .filter(|artifact| kind.is_none_or(|kind| kind == artifact.kind))
+        {
+            let path = self.entry_path(artifact.kind, artifact.key);
+            match fs::remove_file(&path) {
+                Ok(()) => {
+                    filesystem_changed = true;
+                    if let Err(error) =
+                        index::delete_entry(&transaction, artifact.kind, artifact.key)
+                    {
+                        failure = Some(error);
+                        break;
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    filesystem_changed = true;
+                    if let Err(error) =
+                        index::delete_entry(&transaction, artifact.kind, artifact.key)
+                    {
+                        failure = Some(error);
+                        break;
+                    }
+                }
+                Err(error) => {
+                    failure = Some(CacheError::Io(error));
+                    break;
                 }
             }
         }
-        Ok(total)
+        if failure.is_none() {
+            failure = match kind {
+                Some(kind) => index::delete_kind(&transaction, kind),
+                None => index::reset_entries(&transaction),
+            }
+            .err();
+        }
+        match failure {
+            Some(error) => {
+                let (result, discard) =
+                    finish_transaction(transaction, filesystem_changed, Err(error));
+                if discard {
+                    state.discard_connection();
+                }
+                result
+            }
+            None => {
+                let (result, discard) = finish_transaction(transaction, filesystem_changed, Ok(()));
+                if discard {
+                    state.discard_connection();
+                }
+                result
+            }
+        }
     }
 }
 
@@ -435,13 +634,106 @@ fn hex_lower(bytes: &[u8]) -> String {
     output
 }
 
-fn file_len(path: &Path) -> Result<Option<u64>, CacheError> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EntryFileState {
+    Missing,
+    File(u64),
+    Unsafe,
+}
+
+fn entry_file_state(
+    root: &Path,
+    kind: CacheArtifactKind,
+    key: CacheKey,
+) -> Result<EntryFileState, CacheError> {
+    let root_metadata = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(EntryFileState::Missing);
+        }
+        Err(error) => return Err(CacheError::Io(error)),
+    };
+    if !root_metadata.file_type().is_dir() {
+        return Ok(EntryFileState::Unsafe);
+    }
+
+    let hex = key.to_hex();
+    let namespace = root.join(kind.namespace());
+    let prefix = namespace.join(&hex[..2]);
+    for directory in [&namespace, &prefix] {
+        match fs::symlink_metadata(directory) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => return Ok(EntryFileState::Unsafe),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(EntryFileState::Missing);
+            }
+            Err(error) => return Err(CacheError::Io(error)),
+        }
+    }
+
+    let path = prefix.join(format!("{hex}.{CACHE_ENTRY_EXTENSION}"));
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_file() => Ok(Some(metadata.len())),
-        Ok(_) => Ok(None),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Ok(metadata) if metadata.file_type().is_file() => Ok(EntryFileState::File(metadata.len())),
+        Ok(_) => Ok(EntryFileState::Unsafe),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(EntryFileState::Missing),
         Err(error) => Err(CacheError::Io(error)),
     }
+}
+
+fn create_entry_parent(
+    root: &Path,
+    kind: CacheArtifactKind,
+    key: CacheKey,
+) -> Result<(), CacheError> {
+    ensure_real_directory(root)?;
+    let hex = key.to_hex();
+    ensure_real_directory(&root.join(kind.namespace()))?;
+    ensure_real_directory(&root.join(kind.namespace()).join(&hex[..2]))
+}
+
+fn ensure_real_directory(path: &Path) -> Result<(), CacheError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
+        Ok(_) => Err(CacheError::Index(
+            "cache entry parent is not a real directory".to_owned(),
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => match fs::create_dir(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                ensure_real_directory(path)
+            }
+            Err(error) => Err(CacheError::Io(error)),
+        },
+        Err(error) => Err(CacheError::Io(error)),
+    }
+}
+
+fn finish_transaction<T>(
+    transaction: Transaction<'_>,
+    filesystem_changed: bool,
+    result: Result<T, CacheError>,
+) -> (Result<T, CacheError>, bool) {
+    match result {
+        Ok(value) => match transaction.commit() {
+            Ok(()) => (Ok(value), false),
+            Err(error) => (Err(index::index_error(error)), true),
+        },
+        Err(error) if filesystem_changed => match transaction.commit() {
+            Ok(()) => (Err(error), true),
+            Err(commit_error) => (Err(index::index_error(commit_error)), true),
+        },
+        Err(error) => {
+            let discard = matches!(error, CacheError::Index(_));
+            drop(transaction);
+            (Err(error), discard)
+        }
+    }
+}
+
+fn lock_index(index: &Mutex<index::IndexState>) -> std::sync::MutexGuard<'_, index::IndexState> {
+    index
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), CacheError> {
@@ -451,8 +743,6 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), CacheError> {
             "cache entry path must have a parent directory",
         ))
     })?;
-    fs::create_dir_all(parent).map_err(CacheError::Io)?;
-
     let file_name = path.file_name().ok_or_else(|| {
         CacheError::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -499,21 +789,11 @@ fn write_and_sync(file: File, bytes: &[u8]) -> io::Result<()> {
     writer.get_ref().sync_all()
 }
 
-fn remove_dir_if_present(directory: &Path) -> Result<(), CacheError> {
-    match fs::symlink_metadata(directory) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            fs::remove_file(directory).map_err(CacheError::Io)
-        }
-        Ok(_) => fs::remove_dir_all(directory).map_err(CacheError::Io),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(CacheError::Io(error)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{JobKind, JobManager, JobManagerConfig, JobState, ProjectDocument, ProjectSession};
+    use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
     use std::{
         path::Path,
         sync::{Arc, Barrier},
@@ -554,6 +834,32 @@ mod tests {
             directory.path(),
             CacheStoreConfig::new(max_entry, max_total).unwrap(),
         )
+    }
+
+    fn open_index(root: &Path) -> Connection {
+        Connection::open(index::index_path(root)).unwrap()
+    }
+
+    fn indexed_sequence(root: &Path, kind: CacheArtifactKind, key: CacheKey) -> Option<i64> {
+        open_index(root)
+            .query_row(
+                "SELECT last_access_sequence FROM cache_entries WHERE kind = ?1 AND cache_key = ?2",
+                rusqlite::params![kind.namespace(), key.to_hex()],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap()
+    }
+
+    fn indexed_size(root: &Path, kind: CacheArtifactKind, key: CacheKey) -> Option<i64> {
+        open_index(root)
+            .query_row(
+                "SELECT size_bytes FROM cache_entries WHERE kind = ?1 AND cache_key = ?2",
+                rusqlite::params![kind.namespace(), key.to_hex()],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap()
     }
 
     fn wait_for_state(manager: &JobManager, id: crate::JobId, state: JobState) {
@@ -634,6 +940,531 @@ mod tests {
     }
 
     #[test]
+    fn index_is_lazy_and_uses_only_the_v1_cache_schema() {
+        let directory = TestDirectory::new();
+        let root = directory.path().join("lazy-cache");
+        let store = CacheStore::new(&root, CacheStoreConfig::new(1024, 4096).unwrap());
+        assert!(!root.exists());
+
+        let missing = key(CacheArtifactKind::Thumbnail, b"missing", b"p");
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, missing).unwrap(),
+            None
+        );
+        assert!(index::index_path(&root).is_file());
+
+        let connection = open_index(&root);
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        let journal_mode: String = connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, i64::from(CACHE_INDEX_SCHEMA_VERSION));
+        assert_eq!(journal_mode.to_ascii_lowercase(), "delete");
+        let tables: Vec<String> = connection
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(tables, ["cache_entries", "cache_meta"]);
+        let columns: Vec<String> = connection
+            .prepare("PRAGMA table_info(cache_entries)")
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            ["kind", "cache_key", "size_bytes", "last_access_sequence"]
+        );
+    }
+
+    #[test]
+    fn legacy_phase_5d_artifacts_are_discovered_without_regeneration() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 1024, 4096);
+        let artifact = key(CacheArtifactKind::Thumbnail, b"legacy", b"profile");
+        let path = store.entry_path(CacheArtifactKind::Thumbnail, artifact);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"phase 5d preview").unwrap();
+
+        let missing = key(CacheArtifactKind::Waveform, b"not present", b"profile");
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(16)
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(0)
+        );
+        assert_eq!(
+            store
+                .get(CacheArtifactKind::Thumbnail, artifact)
+                .unwrap()
+                .as_deref(),
+            Some(&b"phase 5d preview"[..])
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn reopen_reconciliation_preserves_order_repairs_sizes_and_removes_stale_rows() {
+        let directory = TestDirectory::new();
+        let first = key(CacheArtifactKind::Thumbnail, b"first", b"p");
+        let stale = key(CacheArtifactKind::Waveform, b"stale", b"p");
+        let new_file = key(CacheArtifactKind::Waveform, b"new file", b"p");
+        {
+            let store = store(&directory, 1024, 4096);
+            store
+                .put(CacheArtifactKind::Thumbnail, first, b"old")
+                .unwrap();
+            store
+                .put(CacheArtifactKind::Waveform, stale, b"remove me")
+                .unwrap();
+        }
+
+        fs::write(
+            store(&directory, 1024, 4096).entry_path(CacheArtifactKind::Thumbnail, first),
+            b"changed size",
+        )
+        .unwrap();
+        fs::remove_file(
+            store(&directory, 1024, 4096).entry_path(CacheArtifactKind::Waveform, stale),
+        )
+        .unwrap();
+        let new_path =
+            store(&directory, 1024, 4096).entry_path(CacheArtifactKind::Waveform, new_file);
+        fs::create_dir_all(new_path.parent().unwrap()).unwrap();
+        fs::write(&new_path, b"added without a row").unwrap();
+
+        let reopened = store(&directory, 1024, 4096);
+        let missing = key(CacheArtifactKind::Thumbnail, b"miss", b"p");
+        assert_eq!(
+            reopened.get(CacheArtifactKind::Thumbnail, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Thumbnail, first),
+            Some(12)
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, first),
+            Some(1)
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, stale),
+            None
+        );
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Waveform, new_file),
+            Some(19)
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, new_file),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn corrupt_index_rebuilds_without_deleting_artifacts() {
+        let directory = TestDirectory::new();
+        let artifact = key(CacheArtifactKind::Thumbnail, b"corrupt", b"p");
+        {
+            let store = store(&directory, 1024, 4096);
+            store
+                .put(CacheArtifactKind::Thumbnail, artifact, b"keep")
+                .unwrap();
+        }
+        fs::write(
+            index::index_path(directory.path()),
+            b"not a sqlite database",
+        )
+        .unwrap();
+
+        let reopened = store(&directory, 1024, 4096);
+        let missing = key(CacheArtifactKind::Thumbnail, b"missing", b"p");
+        assert_eq!(
+            reopened.get(CacheArtifactKind::Thumbnail, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(0)
+        );
+        assert_eq!(
+            reopened
+                .get(CacheArtifactKind::Thumbnail, artifact)
+                .unwrap()
+                .as_deref(),
+            Some(&b"keep"[..])
+        );
+    }
+
+    #[test]
+    fn unsupported_index_version_rebuilds_from_existing_artifacts() {
+        let directory = TestDirectory::new();
+        let artifact = key(CacheArtifactKind::Waveform, b"unsupported", b"p");
+        {
+            let store = store(&directory, 1024, 4096);
+            store
+                .put(CacheArtifactKind::Waveform, artifact, b"keep")
+                .unwrap();
+        }
+        open_index(directory.path())
+            .pragma_update(None, "user_version", 99)
+            .unwrap();
+
+        let reopened = store(&directory, 1024, 4096);
+        let missing = key(CacheArtifactKind::Thumbnail, b"missing", b"p");
+        assert_eq!(
+            reopened.get(CacheArtifactKind::Thumbnail, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, artifact),
+            Some(0)
+        );
+        assert_eq!(
+            open_index(directory.path())
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn inconsistent_index_metadata_is_disposable_and_rebuilt() {
+        let directory = TestDirectory::new();
+        let artifact = key(CacheArtifactKind::Thumbnail, b"invalid kind", b"p");
+        {
+            let store = store(&directory, 1024, 4096);
+            store
+                .put(CacheArtifactKind::Thumbnail, artifact, b"keep")
+                .unwrap();
+        }
+        open_index(directory.path())
+            .execute("UPDATE cache_entries SET kind = 'proxy'", [])
+            .unwrap();
+
+        let reopened = store(&directory, 1024, 4096);
+        let missing = key(CacheArtifactKind::Waveform, b"miss", b"p");
+        assert_eq!(
+            reopened.get(CacheArtifactKind::Waveform, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(0)
+        );
+        assert!(
+            reopened
+                .entry_path(CacheArtifactKind::Thumbnail, artifact)
+                .is_file()
+        );
+    }
+
+    #[test]
+    fn misses_and_oversized_reads_do_not_touch_lru_order() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 4, 20);
+        let artifact = key(CacheArtifactKind::Thumbnail, b"bounded", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, artifact, b"1234")
+            .unwrap();
+        let miss = key(CacheArtifactKind::Thumbnail, b"miss", b"p");
+        assert_eq!(store.get(CacheArtifactKind::Thumbnail, miss).unwrap(), None);
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(1)
+        );
+
+        fs::write(
+            store.entry_path(CacheArtifactKind::Thumbnail, artifact),
+            b"12345",
+        )
+        .unwrap();
+        assert!(matches!(
+            store.get(CacheArtifactKind::Thumbnail, artifact),
+            Err(CacheError::CorruptOrOversizedEntry { .. })
+        ));
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(1)
+        );
+        let next: i64 = open_index(directory.path())
+            .query_row(
+                "SELECT next_access_sequence FROM cache_meta WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(next, 2);
+    }
+
+    #[test]
+    fn lru_order_persists_and_evicts_only_the_oldest_minimum_set() {
+        let directory = TestDirectory::new();
+        let first = key(CacheArtifactKind::Thumbnail, b"first", b"p");
+        let second = key(CacheArtifactKind::Waveform, b"second", b"p");
+        let third = key(CacheArtifactKind::Thumbnail, b"third", b"p");
+        let incoming = key(CacheArtifactKind::Waveform, b"incoming", b"p");
+        {
+            let store = store(&directory, 100, 100);
+            store
+                .put(CacheArtifactKind::Thumbnail, first, &[1; 40])
+                .unwrap();
+            store
+                .put(CacheArtifactKind::Waveform, second, &[2; 30])
+                .unwrap();
+            store
+                .put(CacheArtifactKind::Thumbnail, third, &[3; 20])
+                .unwrap();
+            store.get(CacheArtifactKind::Thumbnail, first).unwrap();
+        }
+        let reopened = store(&directory, 100, 100);
+        reopened
+            .put(CacheArtifactKind::Waveform, incoming, &[4; 35])
+            .unwrap();
+
+        assert_eq!(
+            reopened.get(CacheArtifactKind::Waveform, second).unwrap(),
+            None
+        );
+        assert_eq!(
+            reopened
+                .get(CacheArtifactKind::Thumbnail, first)
+                .unwrap()
+                .unwrap()
+                .len(),
+            40
+        );
+        assert_eq!(
+            reopened
+                .get(CacheArtifactKind::Thumbnail, third)
+                .unwrap()
+                .unwrap()
+                .len(),
+            20
+        );
+        assert_eq!(
+            reopened
+                .get(CacheArtifactKind::Waveform, incoming)
+                .unwrap()
+                .unwrap()
+                .len(),
+            35
+        );
+        let total: i64 = open_index(directory.path())
+            .query_row("SELECT SUM(size_bytes) FROM cache_entries", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 95);
+    }
+
+    #[test]
+    fn lru_ties_use_kind_then_cache_key_order() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 4);
+        let thumbnail = key(CacheArtifactKind::Thumbnail, b"old thumbnail", b"p");
+        let waveform = key(CacheArtifactKind::Waveform, b"old waveform", b"p");
+        for (kind, key, bytes) in [
+            (CacheArtifactKind::Thumbnail, thumbnail, b"123".as_slice()),
+            (CacheArtifactKind::Waveform, waveform, b"4".as_slice()),
+        ] {
+            let path = store.entry_path(kind, key);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+        let miss = key(CacheArtifactKind::Thumbnail, b"miss", b"p");
+        assert_eq!(store.get(CacheArtifactKind::Thumbnail, miss).unwrap(), None);
+        let incoming = key(CacheArtifactKind::Thumbnail, b"incoming", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, incoming, b"12")
+            .unwrap();
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, thumbnail).unwrap(),
+            None
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, waveform).unwrap(),
+            Some(b"4".to_vec())
+        );
+    }
+
+    #[test]
+    fn lru_key_ties_use_ascending_cache_key_order() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 4);
+        let first = key(CacheArtifactKind::Thumbnail, b"first tie", b"p");
+        let second = key(CacheArtifactKind::Thumbnail, b"second tie", b"p");
+        let (lower, higher) = if first.to_hex() < second.to_hex() {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        for (artifact, bytes) in [(lower, b"123".as_slice()), (higher, b"4".as_slice())] {
+            let path = store.entry_path(CacheArtifactKind::Thumbnail, artifact);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+        let missing = key(CacheArtifactKind::Waveform, b"tie miss", b"p");
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, missing).unwrap(),
+            None
+        );
+        let incoming = key(CacheArtifactKind::Waveform, b"tie incoming", b"p");
+        store
+            .put(CacheArtifactKind::Waveform, incoming, b"12")
+            .unwrap();
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, lower).unwrap(),
+            None
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, higher).unwrap(),
+            Some(b"4".to_vec())
+        );
+    }
+
+    #[test]
+    fn lru_evicts_only_the_oldest_prefix_needed_to_fit() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 10);
+        let first = key(CacheArtifactKind::Thumbnail, b"prefix first", b"p");
+        let second = key(CacheArtifactKind::Waveform, b"prefix second", b"p");
+        let third = key(CacheArtifactKind::Thumbnail, b"prefix third", b"p");
+        let incoming = key(CacheArtifactKind::Waveform, b"prefix incoming", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, first, b"111")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Waveform, second, b"222")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Thumbnail, third, b"333")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Waveform, incoming, b"44444")
+            .unwrap();
+
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, first).unwrap(),
+            None
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, second).unwrap(),
+            None
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, third).unwrap(),
+            Some(b"333".to_vec())
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, incoming).unwrap(),
+            Some(b"44444".to_vec())
+        );
+    }
+
+    #[test]
+    fn replacing_a_key_protects_it_from_lru_eviction() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 8);
+        let target = key(CacheArtifactKind::Thumbnail, b"target", b"p");
+        let other = key(CacheArtifactKind::Waveform, b"other", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, target, b"1234")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Waveform, other, b"abcd")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Thumbnail, target, b"123456")
+            .unwrap();
+        assert_eq!(store.get(CacheArtifactKind::Waveform, other).unwrap(), None);
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, target).unwrap(),
+            Some(b"123456".to_vec())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn eviction_delete_failure_keeps_index_reconciled_and_returns_an_error() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 10);
+        let victim = key(CacheArtifactKind::Thumbnail, b"victim", b"p");
+        let incoming = key(CacheArtifactKind::Waveform, b"incoming", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, victim, b"123456")
+            .unwrap();
+        let victim_path = store.entry_path(CacheArtifactKind::Thumbnail, victim);
+        let parent = victim_path.parent().unwrap();
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o500)).unwrap();
+
+        let result = store.put(CacheArtifactKind::Waveform, incoming, b"abcdef");
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert!(matches!(result, Err(CacheError::Io(_))));
+        assert!(victim_path.is_file());
+        assert_eq!(
+            indexed_size(directory.path(), CacheArtifactKind::Thumbnail, victim),
+            Some(6)
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, incoming).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn cache_index_entry_scan_has_a_hard_bound() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 20);
+        for source in [b"one".as_slice(), b"two".as_slice(), b"three".as_slice()] {
+            let artifact = key(CacheArtifactKind::Thumbnail, source, b"p");
+            let path = store.entry_path(CacheArtifactKind::Thumbnail, artifact);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"x").unwrap();
+        }
+        assert!(matches!(
+            index::scan_artifacts_with_limit(directory.path(), 2),
+            Err(CacheError::IndexTooLarge { max_entries: 2 })
+        ));
+    }
+
+    #[test]
+    fn index_and_unknown_files_do_not_consume_artifact_budget() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 10, 1);
+        fs::write(directory.path().join("unmanaged.bin"), [0u8; 1024]).unwrap();
+        let artifact = key(CacheArtifactKind::Thumbnail, b"small budget", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, artifact, b"x")
+            .unwrap();
+        assert_eq!(index::MAX_CACHE_INDEX_ENTRIES, 100_000);
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, artifact).unwrap(),
+            Some(b"x".to_vec())
+        );
+    }
+
+    #[test]
     fn missing_entry_is_a_normal_miss() {
         let directory = TestDirectory::new();
         let store = store(&directory, 1024, 4096);
@@ -668,7 +1499,7 @@ mod tests {
     }
 
     #[test]
-    fn total_budget_is_enforced_without_touching_existing_entries() {
+    fn total_budget_evicts_the_oldest_entry_when_one_victim_is_enough() {
         let directory = TestDirectory::new();
         let store = store(&directory, 100, 100);
         let first = key(CacheArtifactKind::Thumbnail, b"a", b"p");
@@ -677,16 +1508,38 @@ mod tests {
             .unwrap();
 
         let second = key(CacheArtifactKind::Thumbnail, b"b", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, second, &[0u8; 60])
+            .unwrap();
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, second).unwrap(),
+            Some(vec![0u8; 60])
+        );
+        assert_eq!(
+            store.get(CacheArtifactKind::Thumbnail, first).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn impossible_budget_write_fails_without_evicting_existing_entries() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 10);
+        let first = key(CacheArtifactKind::Thumbnail, b"a", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, first, &[0u8; 6])
+            .unwrap();
+        let second = key(CacheArtifactKind::Thumbnail, b"b", b"p");
         assert!(matches!(
-            store.put(CacheArtifactKind::Thumbnail, second, &[0u8; 60]),
-            Err(CacheError::BudgetExceeded { .. })
+            store.put(CacheArtifactKind::Thumbnail, second, &[0u8; 11]),
+            Err(CacheError::BudgetExceeded {
+                max_total_bytes: 10,
+                projected_total_bytes: 11
+            })
         ));
         assert_eq!(
-            store
-                .get(CacheArtifactKind::Thumbnail, first)
-                .unwrap()
-                .map(|b| b.len()),
-            Some(60)
+            store.get(CacheArtifactKind::Thumbnail, first).unwrap(),
+            Some(vec![0u8; 6])
         );
         assert_eq!(
             store.get(CacheArtifactKind::Thumbnail, second).unwrap(),
@@ -790,6 +1643,69 @@ mod tests {
     }
 
     #[test]
+    fn clear_operations_preserve_unknown_files_and_update_the_index() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 1024, 4096);
+        let thumbnail = key(CacheArtifactKind::Thumbnail, b"managed t", b"p");
+        let waveform = key(CacheArtifactKind::Waveform, b"managed w", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, thumbnail, b"t")
+            .unwrap();
+        store
+            .put(CacheArtifactKind::Waveform, waveform, b"w")
+            .unwrap();
+
+        let root_unknown = directory.path().join("keep-me.txt");
+        let namespace_unknown = directory
+            .path()
+            .join("thumbnail")
+            .join(&thumbnail.to_hex()[..2])
+            .join("notes.txt");
+        fs::write(&root_unknown, b"unknown root file").unwrap();
+        fs::write(&namespace_unknown, b"unknown namespace file").unwrap();
+
+        store.clear_namespace(CacheArtifactKind::Thumbnail).unwrap();
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, thumbnail),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, waveform),
+            Some(2)
+        );
+        assert!(root_unknown.is_file());
+        assert!(namespace_unknown.is_file());
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, waveform).unwrap(),
+            Some(b"w".to_vec())
+        );
+
+        store.clear_all().unwrap();
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, waveform),
+            None
+        );
+        assert!(root_unknown.is_file());
+        assert!(namespace_unknown.is_file());
+        let next: i64 = open_index(directory.path())
+            .query_row(
+                "SELECT next_access_sequence FROM cache_meta WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(next, 1);
+        let after_clear = key(CacheArtifactKind::Thumbnail, b"after clear", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, after_clear, b"x")
+            .unwrap();
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, after_clear),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn failed_replacement_leaves_no_partial_entry() {
         let directory = TestDirectory::new();
         let store = store(&directory, 1024, 4096);
@@ -846,6 +1762,181 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(bytes == payload_a || bytes == payload_b);
+    }
+
+    #[test]
+    fn cloned_stores_serialize_concurrent_budget_updates() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 100);
+        let clone = store.clone();
+        let first = key(CacheArtifactKind::Thumbnail, b"clone first", b"p");
+        let second = key(CacheArtifactKind::Waveform, b"clone second", b"p");
+        let barrier = Arc::new(Barrier::new(3));
+        let handles = [
+            (store, CacheArtifactKind::Thumbnail, first),
+            (clone, CacheArtifactKind::Waveform, second),
+        ]
+        .into_iter()
+        .map(|(store, kind, key)| {
+            let barrier = Arc::clone(&barrier);
+            thread::spawn(move || {
+                barrier.wait();
+                store.put(kind, key, &[7; 60])
+            })
+        })
+        .collect::<Vec<_>>();
+        barrier.wait();
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+
+        let total: i64 = open_index(directory.path())
+            .query_row(
+                "SELECT COALESCE(SUM(size_bytes), 0) FROM cache_entries",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(total <= 100);
+    }
+
+    #[test]
+    fn independent_stores_coordinate_budget_updates_through_sqlite() {
+        let directory = TestDirectory::new();
+        let first_store = store(&directory, 100, 100);
+        let second_store = store(&directory, 100, 100);
+        let first = key(CacheArtifactKind::Thumbnail, b"store first", b"p");
+        let second = key(CacheArtifactKind::Waveform, b"store second", b"p");
+        let barrier = Arc::new(Barrier::new(3));
+        let first_barrier = Arc::clone(&barrier);
+        let first_handle = thread::spawn(move || {
+            first_barrier.wait();
+            first_store.put(CacheArtifactKind::Thumbnail, first, &[1; 60])
+        });
+        let second_barrier = Arc::clone(&barrier);
+        let second_handle = thread::spawn(move || {
+            second_barrier.wait();
+            second_store.put(CacheArtifactKind::Waveform, second, &[2; 60])
+        });
+        barrier.wait();
+        first_handle.join().unwrap().unwrap();
+        second_handle.join().unwrap().unwrap();
+
+        let total: i64 = open_index(directory.path())
+            .query_row(
+                "SELECT COALESCE(SUM(size_bytes), 0) FROM cache_entries",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(total <= 100);
+    }
+
+    #[test]
+    fn sqlite_lock_wait_is_bounded_to_one_second() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 100);
+        let artifact = key(CacheArtifactKind::Thumbnail, b"lock", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, artifact, b"x")
+            .unwrap();
+
+        let mut blocker = open_index(directory.path());
+        let transaction = blocker
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+        let started = Instant::now();
+        let result = store.get(CacheArtifactKind::Thumbnail, artifact);
+        let elapsed = started.elapsed();
+        assert!(matches!(result, Err(CacheError::Index(_))));
+        assert!(elapsed >= Duration::from_millis(900));
+        assert!(elapsed < Duration::from_secs(3));
+        drop(transaction);
+    }
+
+    #[test]
+    fn access_sequence_exhaustion_is_controlled_and_does_not_wrap() {
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 100);
+        let artifact = key(CacheArtifactKind::Thumbnail, b"sequence", b"p");
+        store
+            .put(CacheArtifactKind::Thumbnail, artifact, b"x")
+            .unwrap();
+        open_index(directory.path())
+            .execute(
+                "UPDATE cache_meta SET next_access_sequence = ?1 WHERE id = 1",
+                [i64::MAX],
+            )
+            .unwrap();
+        assert!(matches!(
+            store.get(CacheArtifactKind::Thumbnail, artifact),
+            Err(CacheError::IndexSequenceExhausted)
+        ));
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, artifact),
+            Some(1)
+        );
+        let next: i64 = open_index(directory.path())
+            .query_row(
+                "SELECT next_access_sequence FROM cache_meta WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(next, i64::MAX);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reconciliation_and_clear_do_not_follow_cache_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let directory = TestDirectory::new();
+        let store = store(&directory, 100, 100);
+        let target = directory.path().join("outside.cache");
+        fs::write(&target, b"outside").unwrap();
+        let linked = key(CacheArtifactKind::Thumbnail, b"linked", b"p");
+        let linked_path = store.entry_path(CacheArtifactKind::Thumbnail, linked);
+        fs::create_dir_all(linked_path.parent().unwrap()).unwrap();
+        symlink(&target, &linked_path).unwrap();
+
+        let prefix_linked = key(CacheArtifactKind::Waveform, b"prefix", b"p");
+        let outside_prefix = directory.path().join("outside-prefix");
+        fs::create_dir(&outside_prefix).unwrap();
+        let outside_artifact = outside_prefix.join(format!("{}.cache", prefix_linked.to_hex()));
+        fs::write(&outside_artifact, b"not managed").unwrap();
+        let prefix_path = store.entry_path(CacheArtifactKind::Waveform, prefix_linked);
+        fs::create_dir_all(prefix_path.parent().unwrap().parent().unwrap()).unwrap();
+        symlink(&outside_prefix, prefix_path.parent().unwrap()).unwrap();
+
+        let missing = key(CacheArtifactKind::Waveform, b"miss", b"p");
+        assert_eq!(
+            store.get(CacheArtifactKind::Waveform, missing).unwrap(),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Thumbnail, linked),
+            None
+        );
+        assert_eq!(
+            indexed_sequence(directory.path(), CacheArtifactKind::Waveform, prefix_linked),
+            None
+        );
+        store.clear_all().unwrap();
+        assert!(
+            fs::symlink_metadata(&linked_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::symlink_metadata(prefix_path.parent().unwrap())
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(target.is_file());
+        assert!(outside_artifact.is_file());
     }
 
     #[test]
