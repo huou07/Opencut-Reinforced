@@ -128,7 +128,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             .iter()
             .map(|query| query.id.as_str())
             .collect::<Vec<_>>(),
-        ["project.summary", "media.list"]
+        ["project.summary", "media.list", "media.get"]
     );
     let describe_json = serde_json::to_string(&describe).unwrap();
     assert!(!describe_json.contains("auth_token"));

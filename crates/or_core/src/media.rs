@@ -97,6 +97,15 @@ impl MediaSourceUri {
         &self.0
     }
 
+    /// Converts this validated local file URI back to a native path without
+    /// passing through UTF-8 path conversion.
+    pub fn to_file_path(&self) -> Result<std::path::PathBuf, MediaSourceUriError> {
+        Url::parse(&self.0)
+            .map_err(|_| MediaSourceUriError::Invalid)?
+            .to_file_path()
+            .map_err(|_| MediaSourceUriError::Invalid)
+    }
+
     pub(crate) fn from_canonical_path(path: &Path) -> Result<Self, MediaSourceUriError> {
         let uri = Url::from_file_path(path).map_err(|_| MediaSourceUriError::Invalid)?;
         Self::parse(uri.as_str())
@@ -147,6 +156,12 @@ impl MediaSourceRef {
     pub fn uri(&self) -> &str {
         match self {
             Self::LocalFile { uri } => uri.as_str(),
+        }
+    }
+
+    pub fn to_file_path(&self) -> Result<std::path::PathBuf, MediaSourceUriError> {
+        match self {
+            Self::LocalFile { uri } => uri.to_file_path(),
         }
     }
 }
@@ -769,6 +784,14 @@ mod tests {
             MediaSourceUri::parse(long),
             Err(MediaSourceUriError::TooLong)
         );
+    }
+
+    #[test]
+    fn local_file_source_converts_back_to_a_native_path_with_unicode_and_spaces() {
+        let path = std::env::temp_dir().join("Opencut preview-媒体 clip.mov");
+        let uri = url::Url::from_file_path(&path).unwrap();
+        let source = MediaSourceRef::local_file(uri.as_str()).unwrap();
+        assert_eq!(source.to_file_path().unwrap(), path);
     }
 
     #[test]

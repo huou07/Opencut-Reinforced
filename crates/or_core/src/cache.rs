@@ -6,6 +6,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, BufWriter, Read, Write},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use uuid::Uuid;
 
@@ -38,10 +39,10 @@ impl CacheArtifactKind {
     }
 }
 
-/// Opaque fixed-size identity for a media source.
+/// Opaque fixed-size cache-invalidation fingerprint for a media source.
 ///
-/// Phase 5C defines the contract only. Acquiring a production fingerprint from a
-/// real media file remains a later checkpoint; no full-file hashing happens here.
+/// Phase 5D acquires this from bounded file metadata and content samples. It is
+/// not a full-file identity or an integrity proof.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SourceFingerprint([u8; 32]);
 
@@ -62,8 +63,6 @@ impl SourceFingerprint {
 }
 
 /// Opaque fixed-size identity for canonical generation parameters.
-///
-/// Phase 5C does not define thumbnail or waveform parameters yet.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ParametersFingerprint([u8; 32]);
 
@@ -114,11 +113,61 @@ impl CacheKey {
     pub fn to_hex(self) -> String {
         hex_lower(&self.0)
     }
+
+    /// Parses the canonical lowercase, 64-character cache-key form.
+    pub fn from_hex(value: &str) -> Result<Self, CacheKeyParseError> {
+        if value.len() != 64 {
+            return Err(CacheKeyParseError::InvalidLength);
+        }
+        let bytes = value.as_bytes();
+        let mut digest = [0_u8; 32];
+        for (index, pair) in bytes.chunks_exact(2).enumerate() {
+            let high = lower_hex_nibble(pair[0]).ok_or(CacheKeyParseError::InvalidCharacter)?;
+            let low = lower_hex_nibble(pair[1]).ok_or(CacheKeyParseError::InvalidCharacter)?;
+            digest[index] = (high << 4) | low;
+        }
+        Ok(Self(digest))
+    }
+}
+
+impl FromStr for CacheKey {
+    type Err = CacheKeyParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(value)
+    }
 }
 
 impl fmt::Display for CacheKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.to_hex())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CacheKeyParseError {
+    InvalidLength,
+    InvalidCharacter,
+}
+
+impl fmt::Display for CacheKeyParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidLength => {
+                "cache key must contain exactly 64 lowercase hexadecimal characters"
+            }
+            Self::InvalidCharacter => "cache key contains a non-canonical hexadecimal character",
+        })
+    }
+}
+
+impl Error for CacheKeyParseError {}
+
+fn lower_hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        _ => None,
     }
 }
 
@@ -560,6 +609,11 @@ mod tests {
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         );
         assert!(!hex.contains('/') && !hex.contains('\\') && !hex.contains(".."));
+        assert_eq!(CacheKey::from_hex(&hex).unwrap().to_hex(), hex);
+        assert!(CacheKey::from_hex(&hex.to_uppercase()).is_err());
+        assert!(CacheKey::from_hex(&format!("{hex}/")).is_err());
+        assert!(CacheKey::from_hex(&hex[..63]).is_err());
+        assert!(CacheKey::from_hex(&format!("{}g", &hex[..63])).is_err());
     }
 
     #[test]

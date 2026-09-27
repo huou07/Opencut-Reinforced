@@ -122,6 +122,7 @@ pub enum JobCancelOutcome {
 }
 
 type JobBody = dyn FnOnce(&JobContext) -> Result<(), JobFailure> + Send + 'static;
+type JobCompletion = dyn FnOnce(JobState) + Send + 'static;
 
 struct JobRecord {
     kind: JobKind,
@@ -135,6 +136,7 @@ struct SharedState {
     records: HashMap<JobId, JobRecord>,
     pending: VecDeque<JobId>,
     tasks: HashMap<JobId, Box<JobBody>>,
+    completions: HashMap<JobId, Box<JobCompletion>>,
     shutdown: bool,
     next_sequence: u64,
 }
@@ -190,6 +192,19 @@ impl JobManager {
     where
         F: FnOnce(&JobContext) -> Result<(), JobFailure> + Send + 'static,
     {
+        self.submit_with_completion(kind, body, |_| {})
+    }
+
+    pub(crate) fn submit_with_completion<F, C>(
+        &self,
+        kind: JobKind,
+        body: F,
+        completion: C,
+    ) -> Result<JobId, JobSubmitError>
+    where
+        F: FnOnce(&JobContext) -> Result<(), JobFailure> + Send + 'static,
+        C: FnOnce(JobState) + Send + 'static,
+    {
         let id = JobId::generate();
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let config = self.shared.config;
@@ -221,6 +236,7 @@ impl JobManager {
             },
         );
         state.tasks.insert(id, Box::new(body));
+        state.completions.insert(id, Box::new(completion));
         state.pending.push_back(id);
         drop(state);
 
@@ -254,7 +270,7 @@ impl JobManager {
             .map(|record| record.state)
             .ok_or(JobCancelError::NotFound)?;
 
-        match current {
+        let (outcome, completion) = match current {
             JobState::Queued => {
                 state.pending.retain(|queued| *queued != id);
                 state.tasks.remove(&id);
@@ -264,7 +280,10 @@ impl JobManager {
                         .cancel
                         .store(true, std::sync::atomic::Ordering::SeqCst);
                 }
-                Ok(JobCancelOutcome::CancelledQueued)
+                (
+                    JobCancelOutcome::CancelledQueued,
+                    state.completions.remove(&id),
+                )
             }
             JobState::Running => {
                 if let Some(record) = state.records.get_mut(&id) {
@@ -272,19 +291,25 @@ impl JobManager {
                         .cancel
                         .store(true, std::sync::atomic::Ordering::SeqCst);
                 }
-                Ok(JobCancelOutcome::CancellationRequested)
+                (JobCancelOutcome::CancellationRequested, None)
             }
-            terminal => Ok(JobCancelOutcome::AlreadyTerminal(terminal)),
+            terminal => return Ok(JobCancelOutcome::AlreadyTerminal(terminal)),
+        };
+        drop(state);
+        if let Some(completion) = completion {
+            notify_completion(completion, JobState::Cancelled);
         }
+        Ok(outcome)
     }
 
     /// Stops accepting work, skips queued jobs, signals running jobs, and joins
     /// every worker thread. Safe to call more than once.
     pub fn shutdown(&self) {
-        {
+        let completions = {
             let mut state = lock(&self.shared);
             state.shutdown = true;
             let pending: Vec<JobId> = state.pending.drain(..).collect();
+            let mut completions = Vec::new();
             for id in pending {
                 state.tasks.remove(&id);
                 if let Some(record) = state.records.get_mut(&id) {
@@ -293,6 +318,9 @@ impl JobManager {
                         record
                             .cancel
                             .store(true, std::sync::atomic::Ordering::SeqCst);
+                        if let Some(completion) = state.completions.remove(&id) {
+                            completions.push(completion);
+                        }
                     }
                 }
             }
@@ -304,6 +332,10 @@ impl JobManager {
                 }
             }
             self.shared.available.notify_all();
+            completions
+        };
+        for completion in completions {
+            notify_completion(completion, JobState::Cancelled);
         }
         self.join_workers();
     }
@@ -363,10 +395,21 @@ fn worker_loop(shared: Arc<Shared>) {
             (Ok(Ok(())), false) => JobState::Succeeded,
             (Ok(Err(_)) | Err(_), false) => JobState::Failed,
         };
-        if let Some(record) = lock(&shared).records.get_mut(&id) {
-            record.state = final_state;
+        let completion = {
+            let mut state = lock(&shared);
+            if let Some(record) = state.records.get_mut(&id) {
+                record.state = final_state;
+            }
+            state.completions.remove(&id)
+        };
+        if let Some(completion) = completion {
+            notify_completion(completion, final_state);
         }
     }
+}
+
+fn notify_completion(completion: Box<JobCompletion>, state: JobState) {
+    let _ = catch_unwind(AssertUnwindSafe(|| completion(state)));
 }
 
 fn lock(shared: &Shared) -> MutexGuard<'_, SharedState> {

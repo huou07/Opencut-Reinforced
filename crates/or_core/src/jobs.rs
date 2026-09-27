@@ -57,11 +57,13 @@ fn validate_v4(uuid: Uuid) -> Result<Uuid, UuidV4ParseError> {
     }
 }
 
-/// Work category at the shared job boundary. Only media probing is implemented.
+/// Work category at the shared job boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobKind {
     MediaProbe,
+    ThumbnailGenerate,
+    WaveformGenerate,
 }
 
 /// Lifecycle state shared by future bounded background jobs.
@@ -103,10 +105,18 @@ mod tests {
     }
 
     #[test]
-    fn job_contract_serializes_only_the_implemented_kind_and_states() {
+    fn job_kinds_keep_the_media_probe_name_and_use_snake_case_for_previews() {
         assert_eq!(
             serde_json::to_string(&JobKind::MediaProbe).unwrap(),
             "\"media_probe\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobKind::ThumbnailGenerate).unwrap(),
+            "\"thumbnail_generate\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobKind::WaveformGenerate).unwrap(),
+            "\"waveform_generate\""
         );
         assert_eq!(
             serde_json::to_string(&JobState::Queued).unwrap(),

@@ -4,6 +4,7 @@ mod application;
 mod cache;
 mod jobs;
 mod media;
+mod media_artifacts;
 mod media_import;
 mod media_probe;
 mod project;
@@ -21,8 +22,8 @@ pub use application::{
     TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{
-    CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey, CacheStore, CacheStoreConfig,
-    CacheStoreConfigError, ParametersFingerprint, SourceFingerprint,
+    CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey, CacheKeyParseError, CacheStore,
+    CacheStoreConfig, CacheStoreConfigError, ParametersFingerprint, SourceFingerprint,
 };
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
@@ -34,6 +35,14 @@ pub use media::{
     MAX_MEDIA_PIXEL_FORMAT_BYTES, MAX_MEDIA_SOURCE_URI_BYTES, MAX_MEDIA_STREAMS, MediaId,
     MediaItem, MediaMetadata, MediaMetadataValidationError, MediaSourceRef, MediaSourceUri,
     MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata, VideoStreamMetadata,
+};
+pub use media_artifacts::{
+    MediaArtifactErrorCode, MediaArtifactEvent, MediaArtifactEventState,
+    MediaArtifactNotApplicableReason, MediaArtifactRequest, MediaArtifactRequestError,
+    MediaArtifactRequestState, MediaArtifactService, MediaArtifactServiceConfig,
+    MediaArtifactServiceInitError, SOURCE_FINGERPRINT_MAX_TOTAL_SAMPLE_BYTES,
+    SOURCE_FINGERPRINT_SAMPLE_WINDOW_BYTES, SourceFingerprintError,
+    ffmpeg_executable_from_environment, fingerprint_media_source,
 };
 pub use media_import::{MediaImportError, prepare_media_import};
 pub use media_probe::{MediaProbeError, MediaProbeErrorCode, probe_media_file};

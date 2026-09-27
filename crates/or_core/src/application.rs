@@ -10,6 +10,7 @@ const HISTORY_REDO_ID: &str = "history.redo";
 const MEDIA_ADD_ID: &str = "media.add";
 const MEDIA_REMOVE_ID: &str = "media.remove";
 const MEDIA_LIST_ID: &str = "media.list";
+const MEDIA_GET_ID: &str = "media.get";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
 pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
 pub const CURRENT_TRANSACTION_SCHEMA_VERSION: u64 = 1;
@@ -63,13 +64,17 @@ const COMMANDS: [CommandDescriptor; 5] = [
     },
 ];
 
-const QUERIES: [QueryDescriptor; 2] = [
+const QUERIES: [QueryDescriptor; 3] = [
     QueryDescriptor {
         id: PROJECT_SUMMARY_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
     },
     QueryDescriptor {
         id: MEDIA_LIST_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+    },
+    QueryDescriptor {
+        id: MEDIA_GET_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
     },
 ];
@@ -220,6 +225,20 @@ pub struct QueryEnvelope {
 }
 
 impl QueryEnvelope {
+    pub fn media_get(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        media_id: MediaId,
+    ) -> Self {
+        Self {
+            query_id: MEDIA_GET_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({ "media_id": media_id }),
+        }
+    }
+
     pub fn media_list(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,
@@ -408,6 +427,8 @@ pub struct QueryResult {
     pub summary: ProjectSummary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_page: Option<MediaListPage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_item: Option<Box<MediaItem>>,
 }
 
 /// One bounded, insertion-ordered page from the persistent media library.
@@ -731,13 +752,15 @@ impl ProjectSession {
             ));
         }
 
-        let media_page = if envelope.query_id == PROJECT_SUMMARY_ID {
+        let (media_page, media_item) = if envelope.query_id == PROJECT_SUMMARY_ID {
             if !is_empty_object(&envelope.arguments) {
                 return Err(OperationError::new(OperationErrorCode::InvalidArguments));
             }
-            None
+            (None, None)
         } else if envelope.query_id == MEDIA_LIST_ID {
-            Some(self.media_list(envelope.arguments)?)
+            (Some(self.media_list(envelope.arguments)?), None)
+        } else if envelope.query_id == MEDIA_GET_ID {
+            (None, Some(Box::new(self.media_get(envelope.arguments)?)))
         } else {
             return Err(OperationError::new(OperationErrorCode::UnknownQuery));
         };
@@ -752,6 +775,7 @@ impl ProjectSession {
                 name: self.project.name().to_owned(),
             },
             media_page,
+            media_item,
         })
     }
 
@@ -839,6 +863,17 @@ impl ProjectSession {
             limit,
             next_offset: (end < total_count).then_some(end),
         })
+    }
+
+    fn media_get(&self, arguments: Value) -> Result<MediaItem, OperationError> {
+        let arguments: MediaGetArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        self.project
+            .media_items()
+            .iter()
+            .find(|item| item.id() == arguments.media_id)
+            .cloned()
+            .ok_or_else(|| OperationError::new(OperationErrorCode::MediaNotFound))
     }
 
     fn check_project_preconditions(
@@ -974,6 +1009,12 @@ struct MediaRemoveArguments {
 struct MediaListArguments {
     offset: u64,
     limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaGetArguments {
+    media_id: MediaId,
 }
 
 fn is_empty_object(arguments: &Value) -> bool {
@@ -1299,11 +1340,15 @@ mod tests {
                     id: "media.list",
                     schema_version: 1,
                 },
+                QueryDescriptor {
+                    id: "media.get",
+                    schema_version: 1,
+                },
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
         assert_eq!(COMMANDS.len(), 5);
-        assert_eq!(QUERIES.len(), 2);
+        assert_eq!(QUERIES.len(), 3);
     }
 
     #[test]
@@ -1628,6 +1673,13 @@ mod tests {
             assert!(page.items.len() <= MAX_MEDIA_PAGE_SIZE);
             let encoded = serde_json::to_vec(&result).unwrap();
             assert!(encoded.len() < 1024 * 1024);
+            assert!(
+                !serde_json::from_slice::<Value>(&encoded)
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .contains_key("media_item")
+            );
             assert_eq!(
                 serde_json::from_slice::<super::QueryResult>(&encoded).unwrap(),
                 result
@@ -1677,6 +1729,58 @@ mod tests {
                 OperationErrorCode::InvalidArguments
             );
         }
+        assert_eq!(session.project_revision(), ProjectRevision::INITIAL);
+    }
+
+    #[test]
+    fn media_get_returns_one_persisted_item_without_mutating_project_or_revision() {
+        let mut session = fixed_session();
+        let item = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/one.mkv",
+        );
+        session.execute_command(media_add(item.clone(), 0)).unwrap();
+        let before = session.project().clone();
+        let result = session
+            .execute_query(QueryEnvelope::media_get(
+                session.project_id(),
+                session.project_instance_id(),
+                item.id(),
+            ))
+            .unwrap();
+
+        assert_eq!(result.query_id, "media.get");
+        assert_eq!(result.media_page, None);
+        assert_eq!(result.media_item.as_deref(), Some(&item));
+        assert_eq!(
+            serde_json::from_value::<super::QueryResult>(serde_json::to_value(&result).unwrap())
+                .unwrap(),
+            result
+        );
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.project_revision(), ProjectRevision::new(1));
+    }
+
+    #[test]
+    fn media_get_rejects_unknown_ids_and_invalid_arguments() {
+        let session = fixed_session();
+        let missing = MediaId::generate();
+        assert_eq!(
+            code(&session.execute_query(QueryEnvelope::media_get(
+                session.project_id(),
+                session.project_instance_id(),
+                missing,
+            ))),
+            OperationErrorCode::MediaNotFound
+        );
+
+        let mut invalid =
+            QueryEnvelope::media_get(session.project_id(), session.project_instance_id(), missing);
+        invalid.arguments = json!({ "media_id": missing, "extra": true });
+        assert_eq!(
+            code(&session.execute_query(invalid)),
+            OperationErrorCode::InvalidArguments
+        );
         assert_eq!(session.project_revision(), ProjectRevision::INITIAL);
     }
 
