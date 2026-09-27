@@ -125,7 +125,7 @@ fn usage() -> &'static str {
 
 fn is_semantic_command(value: &OsStr) -> bool {
     [
-        "commands", "queries", "project", "history", "recovery", "media", "session",
+        "commands", "queries", "project", "history", "recovery", "media", "timeline", "session",
     ]
     .iter()
     .any(|command| is(value, command))

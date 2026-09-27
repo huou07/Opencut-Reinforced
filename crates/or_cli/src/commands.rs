@@ -1,7 +1,8 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaId, MediaItem,
-    OperationError, ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
-    QueryEnvelope, QueryResult, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, CommandResult,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaItem, OperationError, ProjectFileMediaImportError,
+    ProjectFileSession, ProjectFileSessionError, QueryEnvelope, QueryResult, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TrackId, TrackKind,
     apply_project_recovery, command_catalog, discard_project_recovery, inspect_project_recovery,
     prepare_media_import, query_catalog,
 };
@@ -267,6 +268,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "history" => run_history(&args[1..], json)?,
         "recovery" => run_recovery(&args[1..], json)?,
         "media" => run_media(&args[1..], json)?,
+        "timeline" => run_timeline(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
     };
@@ -393,6 +395,462 @@ fn run_media_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
         headless_media_remove(&path, id, json)?
     };
     Ok(render_media_remove(id, &result, attached, json))
+}
+
+fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(json, "expected a timeline action"));
+    };
+    let action_args = &args[1..];
+    match action {
+        "tracks" => {
+            let options = Options::parse(action_args, &["--project", "--attach"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let result = timeline_query(&path, attached, "timeline.tracks", json!({}), json)?;
+            render_timeline_tracks(&result, json)
+        }
+        "clips" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--track", "--offset", "--limit"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let offset = optional_usize(&options, "--offset", 0, json)?;
+            let limit = optional_usize(&options, "--limit", MAX_TIMELINE_CLIP_PAGE_SIZE, json)?;
+            let result = timeline_query(
+                &path,
+                attached,
+                "timeline.clips",
+                json!({"track_id": track_id, "offset": offset, "limit": limit}),
+                json,
+            )?;
+            render_timeline_clips(&result, json)
+        }
+        "add-track" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--kind", "--id"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let kind = parse_track_kind(&required_name(&options, "--kind", json)?, json)?;
+            let track_id = match options.value("--id") {
+                Some(value) => parse_track_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--id must be valid UTF-8"))?,
+                    json,
+                )?,
+                None => TrackId::generate(),
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.track.add",
+                json!({"track_id": track_id, "kind": kind}),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("track_id", track_id.to_string())),
+            ))
+        }
+        "remove-track" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--track"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.track.remove",
+                json!({"track_id": track_id}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "insert-clip" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--media",
+                    "--at",
+                    "--source-start",
+                    "--duration",
+                    "--id",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let media_id_text = required_name(&options, "--media", json)?;
+            let media_id = media_id_text
+                .parse::<MediaId>()
+                .ok()
+                .filter(|id| id.to_string() == media_id_text)
+                .ok_or_else(|| {
+                    CliError::usage(json, "--media must be a canonical lowercase UUIDv4")
+                })?;
+            let timeline_start =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let source_start = parse_cli_rational(
+                &required_name(&options, "--source-start", json)?,
+                "--source-start",
+                json,
+            )?;
+            let duration = parse_cli_rational(
+                &required_name(&options, "--duration", json)?,
+                "--duration",
+                json,
+            )?;
+            let clip_id = match options.value("--id") {
+                Some(value) => parse_clip_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--id must be valid UTF-8"))?,
+                    json,
+                )?,
+                None => ClipId::generate(),
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.insert",
+                json!({
+                    "clip_id": clip_id,
+                    "track_id": track_id,
+                    "media_id": media_id,
+                    "timeline_start": rational_value(timeline_start),
+                    "source_range": {
+                        "start": rational_value(source_start),
+                        "duration": rational_value(duration),
+                    },
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
+        "move-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--track", "--at"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let timeline_start =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.move",
+                json!({
+                    "clip_id": clip_id,
+                    "track_id": track_id,
+                    "timeline_start": rational_value(timeline_start),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "delete-clip" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--clip"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.delete",
+                json!({"clip_id": clip_id}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        _ => Err(CliError::usage(
+            json,
+            "unknown timeline action; expected tracks, clips, add-track, remove-track, insert-clip, move-clip, or delete-clip",
+        )),
+    }
+}
+
+fn timeline_query(
+    path: &Path,
+    attached: bool,
+    query_id: &str,
+    arguments: Value,
+    json: bool,
+) -> Result<QueryResult, CliError> {
+    if attached {
+        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let description = client
+            .describe()
+            .map_err(|error| CliError::ipc(error, json))?;
+        let request = timeline_query_request(
+            query_id,
+            description.project_id,
+            description.project_instance_id,
+            arguments,
+            json,
+        )?;
+        expect_remote_query(
+            client
+                .application(ApplicationRequest::Query(request))
+                .map_err(|error| CliError::ipc(error, json))?,
+            json,
+        )
+    } else {
+        let mut session =
+            ProjectFileSession::open(path).map_err(|error| CliError::file(error, json))?;
+        let request = timeline_query_request(
+            query_id,
+            session.session().project_id(),
+            session.session().project_instance_id(),
+            arguments,
+            json,
+        )?;
+        expect_query(
+            session.handle_application_request(ApplicationRequest::Query(request)),
+            json,
+        )
+    }
+}
+
+fn timeline_mutation(
+    path: &Path,
+    attached: bool,
+    command_id: &str,
+    arguments: Value,
+    json: bool,
+) -> Result<CommandResult, CliError> {
+    if attached {
+        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let description = client
+            .describe()
+            .map_err(|error| CliError::ipc(error, json))?;
+        let request = command_request(
+            command_id,
+            description.project_id,
+            description.project_instance_id,
+            description.project_revision,
+            arguments,
+            json,
+        )?;
+        expect_remote_command(
+            client
+                .application(ApplicationRequest::Command(request))
+                .map_err(|error| CliError::ipc(error, json))?,
+            json,
+        )
+    } else {
+        let mut session =
+            ProjectFileSession::open(path).map_err(|error| CliError::file(error, json))?;
+        let request = command_request(
+            command_id,
+            session.session().project_id(),
+            session.session().project_instance_id(),
+            session.session().project_revision(),
+            arguments,
+            json,
+        )?;
+        let result = expect_command(
+            session.handle_application_request(ApplicationRequest::Command(request)),
+            json,
+        )?;
+        if result.changed {
+            session
+                .save()
+                .map_err(|error| CliError::file(error, json))?;
+        }
+        Ok(result)
+    }
+}
+
+fn timeline_query_request(
+    query_id: &str,
+    project_id: or_core::ProjectId,
+    project_instance_id: or_core::ProjectInstanceId,
+    arguments: Value,
+    json: bool,
+) -> Result<QueryEnvelope, CliError> {
+    let schema_version = query_catalog()
+        .iter()
+        .find(|descriptor| descriptor.id == query_id)
+        .map(|descriptor| descriptor.schema_version)
+        .ok_or_else(|| {
+            CliError::operation_message(json, "query catalog is missing timeline query")
+        })?;
+    Ok(QueryEnvelope {
+        query_id: query_id.to_owned(),
+        schema_version,
+        project_id,
+        project_instance_id,
+        arguments,
+    })
+}
+
+fn render_timeline_tracks(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let tracks = result
+        .timeline_tracks
+        .as_ref()
+        .ok_or_else(|| CliError::operation_message(json, "timeline.tracks returned no tracks"))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("timeline track result is serializable"),
+        ));
+    }
+    let mut lines = vec![format!(
+        "Tracks at revision {}:",
+        result.summary.project_revision
+    )];
+    if tracks.is_empty() {
+        lines.push("No tracks.".to_owned());
+    } else {
+        lines.extend(tracks.iter().map(|track| {
+            let kind = match track.kind {
+                TrackKind::Video => "video",
+                TrackKind::Audio => "audio",
+            };
+            format!("{} {} ({} clips)", track.track_id, kind, track.clip_count)
+        }));
+    }
+    Ok(lines.join("\n"))
+}
+
+fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let page = result
+        .timeline_clip_page
+        .as_ref()
+        .ok_or_else(|| CliError::operation_message(json, "timeline.clips returned no clip page"))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("timeline clip result is serializable"),
+        ));
+    }
+    let mut lines = vec![format!(
+        "Clips on {} at revision {} ({} total, offset {}, limit {}):",
+        page.track_id, result.summary.project_revision, page.total_count, page.offset, page.limit
+    )];
+    if page.items.is_empty() {
+        lines.push("No clips in this page.".to_owned());
+    } else {
+        lines.extend(page.items.iter().map(|clip| {
+            format!(
+                "{} media={} at={} source={} duration={}",
+                clip.clip_id,
+                clip.media_id,
+                format_cli_rational(clip.timeline_start),
+                format_cli_rational(clip.source_range.start()),
+                format_cli_rational(clip.source_range.duration())
+            )
+        }));
+    }
+    if let Some(next_offset) = page.next_offset {
+        lines.push(format!("Next offset: {next_offset}"));
+    }
+    Ok(lines.join("\n"))
+}
+
+fn render_timeline_command(
+    result: &CommandResult,
+    attached: bool,
+    json: bool,
+    identity: Option<(&str, String)>,
+) -> String {
+    if json {
+        let mut output = json!({"command": result});
+        if let Some((key, value)) = identity {
+            output[key] = Value::String(value);
+        }
+        return json_string(output);
+    }
+    let action = if result.changed {
+        "Updated"
+    } else {
+        "No change to"
+    };
+    let persistence = if attached {
+        " Save the live project explicitly to persist it."
+    } else {
+        ""
+    };
+    match identity {
+        Some((kind, id)) => format!(
+            "{action} timeline {kind} {id} at revision {}.{persistence}",
+            result.after_revision
+        ),
+        None => format!(
+            "{action} timeline at revision {}.{persistence}",
+            result.after_revision
+        ),
+    }
+}
+
+fn parse_track_id(value: &str, json: bool) -> Result<TrackId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "track ID must be a canonical lowercase UUIDv4"))
+}
+
+fn parse_clip_id(value: &str, json: bool) -> Result<ClipId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "clip ID must be a canonical lowercase UUIDv4"))
+}
+
+fn parse_track_kind(value: &str, json: bool) -> Result<TrackKind, CliError> {
+    match value {
+        "video" => Ok(TrackKind::Video),
+        "audio" => Ok(TrackKind::Audio),
+        _ => Err(CliError::usage(json, "--kind must be video or audio")),
+    }
+}
+
+fn parse_cli_rational(value: &str, flag: &str, json: bool) -> Result<RationalTime, CliError> {
+    let invalid = || {
+        CliError::usage(
+            json,
+            format!("{flag} must be an exact NUMERATOR/DENOMINATOR rational"),
+        )
+    };
+    let Some((numerator, denominator)) = value.split_once('/') else {
+        return Err(invalid());
+    };
+    if numerator.is_empty() || denominator.is_empty() || denominator.contains('/') {
+        return Err(invalid());
+    }
+    let numerator = numerator.parse::<i64>().map_err(|_| invalid())?;
+    let denominator = denominator.parse::<u32>().map_err(|_| invalid())?;
+    RationalTime::new(numerator, denominator).map_err(|_| invalid())
+}
+
+fn rational_value(value: RationalTime) -> Value {
+    json!({"numerator": value.numerator(), "denominator": value.denominator()})
+}
+
+fn format_cli_rational(value: RationalTime) -> String {
+    format!("{}/{}", value.numerator(), value.denominator())
 }
 
 fn headless_media_list(

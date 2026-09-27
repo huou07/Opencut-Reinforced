@@ -1,7 +1,7 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, ProjectDocument, ProjectFileSession,
-    ProjectRevision, ProjectSession, QueryResult, load_project_file, save_project_file_atomic,
-    write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, ProjectDocument,
+    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, load_project_file,
+    save_project_file_atomic, write_recovery_checkpoint,
 };
 use or_ipc::{LiveProjectHost, ProjectHostEventKind};
 use serde_json::Value;
@@ -1092,4 +1092,573 @@ fn project_paths_remain_os_strings_and_names_require_utf8() {
     let value: Value = serde_json::from_slice(&error.stdout).unwrap();
     assert_eq!(value["error"]["code"], "INVALID_ARGUMENTS");
     assert_eq!(load_project_file(&path).unwrap().name(), "Unicode name");
+}
+
+#[test]
+fn headless_timeline_cli_uses_commands_saves_v3_and_keeps_exact_times() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Timeline CLI");
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+    let mut add_media_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_media_args.extend(words(&["--source"]));
+    add_media_args.push(source.as_os_str().to_owned());
+    add_media_args.push("--json".into());
+    let (media, _) = json_success_with_probe(add_media_args, &probe_stub);
+    let media_id = media["media"]["id"].as_str().unwrap().to_owned();
+
+    let empty_tracks = json_success(path_args(
+        &["timeline", "tracks"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(empty_tracks["query_id"], "timeline.tracks");
+    assert_eq!(empty_tracks["timeline_tracks"], serde_json::json!([]));
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    let added_track = json_success(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(added_track["track_id"], track_id);
+    assert_eq!(added_track["command"]["command_id"], "timeline.track.add");
+    assert_eq!(added_track["command"]["after_revision"], 2);
+
+    let generated_track = json_success(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &["--kind", "audio", "--json"],
+    ))
+    .0;
+    let generated_track_id = generated_track["track_id"].as_str().unwrap();
+    assert!(generated_track_id.parse::<TrackId>().is_ok());
+    assert_eq!(generated_track["command"]["after_revision"], 3);
+    let track_query = json_success(path_args(
+        &["timeline", "tracks"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(track_query["timeline_tracks"][0]["track_id"], track_id);
+    assert_eq!(track_query["timeline_tracks"][0]["kind"], "video");
+    assert_eq!(
+        track_query["timeline_tracks"][1]["track_id"],
+        generated_track_id
+    );
+    assert_eq!(track_query["timeline_tracks"][1]["kind"], "audio");
+    let human_tracks = cli(path_args(
+        &["timeline", "tracks"],
+        "--project",
+        &project_path,
+        &[],
+    ));
+    assert!(human_tracks.status.success());
+    let human_tracks = String::from_utf8(human_tracks.stdout).unwrap();
+    assert!(human_tracks.starts_with("Tracks at revision 3:\n"));
+    assert!(human_tracks.contains(&format!("{track_id} video (0 clips)")));
+    assert!(human_tracks.contains(&format!("{generated_track_id} audio (0 clips)")));
+
+    let supplied_clip_id = "33333333-3333-4333-8333-333333333333";
+    let inserted = json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "1/2",
+            "--duration",
+            "1/2",
+            "--id",
+            supplied_clip_id,
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(inserted["clip_id"], supplied_clip_id);
+    assert_eq!(inserted["command"]["command_id"], "timeline.clip.insert");
+    assert_eq!(inserted["command"]["after_revision"], 4);
+
+    let generated_clip = json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "4/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/2",
+            "--json",
+        ],
+    ))
+    .0;
+    let generated_clip_id = generated_clip["clip_id"].as_str().unwrap();
+    assert!(generated_clip_id.parse::<ClipId>().is_ok());
+    assert_eq!(generated_clip["command"]["after_revision"], 5);
+
+    let moved = json_success(path_args(
+        &["timeline", "move-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--clip",
+            supplied_clip_id,
+            "--track",
+            track_id,
+            "--at",
+            "3004/1001",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(moved["command"]["command_id"], "timeline.clip.move");
+    assert_eq!(moved["command"]["after_revision"], 6);
+
+    let page = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", track_id, "--limit", "1", "--json"],
+    ))
+    .0;
+    assert_eq!(page["query_id"], "timeline.clips");
+    assert_eq!(page["timeline_clip_page"]["total_count"], 2);
+    assert_eq!(
+        page["timeline_clip_page"]["items"][0]["clip_id"],
+        supplied_clip_id
+    );
+    assert_eq!(
+        page["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        3004
+    );
+    assert_eq!(
+        page["timeline_clip_page"]["items"][0]["timeline_start"]["denominator"],
+        1001
+    );
+    assert_eq!(
+        page["timeline_clip_page"]["items"][0]["source_range"]["start"]["numerator"],
+        1
+    );
+    assert_eq!(
+        page["timeline_clip_page"]["items"][0]["source_range"]["duration"]["denominator"],
+        2
+    );
+    assert_eq!(page["timeline_clip_page"]["next_offset"], 1);
+
+    let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
+    assert_eq!(saved_bytes["schema_version"], 3);
+    let saved = load_project_file(&project_path).unwrap();
+    assert_eq!(saved.revision(), ProjectRevision::new(6));
+    assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
+    assert_eq!(
+        saved.timeline().tracks()[0].clips()[0].id().to_string(),
+        supplied_clip_id
+    );
+    assert_eq!(
+        saved.timeline().tracks()[0].clips()[1].id().to_string(),
+        generated_clip_id
+    );
+
+    let invalid_ids = cli(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &[
+            "--kind",
+            "audio",
+            "--id",
+            "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+            "--json",
+        ],
+    ));
+    assert_eq!(invalid_ids.status.code(), Some(2));
+    let invalid_ids: Value = serde_json::from_slice(&invalid_ids.stdout).unwrap();
+    assert_eq!(invalid_ids["error"]["code"], "INVALID_ARGUMENTS");
+    let invalid_clip_id = cli(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "8/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/2",
+            "--id",
+            "33333333-3333-4333-8333-33333333333A",
+            "--json",
+        ],
+    ));
+    assert_eq!(invalid_clip_id.status.code(), Some(2));
+    let invalid_clip_id: Value = serde_json::from_slice(&invalid_clip_id.stdout).unwrap();
+    assert_eq!(invalid_clip_id["error"]["code"], "INVALID_ARGUMENTS");
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::new(6)
+    );
+
+    for clip_id in [supplied_clip_id, generated_clip_id] {
+        let deleted = json_success(path_args(
+            &["timeline", "delete-clip"],
+            "--project",
+            &project_path,
+            &["--clip", clip_id, "--json"],
+        ))
+        .0;
+        assert_eq!(deleted["command"]["command_id"], "timeline.clip.delete");
+    }
+    for track_id in [track_id, generated_track_id] {
+        let removed = json_success(path_args(
+            &["timeline", "remove-track"],
+            "--project",
+            &project_path,
+            &["--track", track_id, "--json"],
+        ))
+        .0;
+        assert_eq!(removed["command"]["command_id"], "timeline.track.remove");
+    }
+    let empty_after_delete = json_success(path_args(
+        &["timeline", "tracks"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(empty_after_delete["timeline_tracks"], serde_json::json!([]));
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::new(10)
+    );
+}
+
+#[test]
+fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Timeline rational CLI");
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+    let mut add_media_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_media_args.extend(words(&["--source"]));
+    add_media_args.push(source.as_os_str().to_owned());
+    add_media_args.push("--json".into());
+    let (media, _) = json_success_with_probe(add_media_args, &probe_stub);
+    let media_id = media["media"]["id"].as_str().unwrap().to_owned();
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    json_success(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ));
+    let accepted = json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "3003/1001",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/2",
+            "--id",
+            "33333333-3333-4333-8333-333333333333",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(accepted["command"]["changed"], true);
+    let accepted_page = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(
+        accepted_page["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        3
+    );
+    assert_eq!(
+        accepted_page["timeline_clip_page"]["items"][0]["timeline_start"]["denominator"],
+        1
+    );
+    let revision_before = load_project_file(&project_path).unwrap().revision();
+
+    for value in [
+        "1.5",
+        "1/0",
+        "abc",
+        "1/",
+        "/1",
+        "9223372036854775808/1",
+        "0/4294967296",
+    ] {
+        let output = cli(path_args(
+            &["timeline", "insert-clip"],
+            "--project",
+            &project_path,
+            &[
+                "--track",
+                track_id,
+                "--media",
+                &media_id,
+                "--at",
+                value,
+                "--source-start",
+                "0/1",
+                "--duration",
+                "1/2",
+                "--json",
+            ],
+        ));
+        assert_eq!(output.status.code(), Some(2), "value {value}");
+        let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(error["error"]["code"], "INVALID_ARGUMENTS", "value {value}");
+        assert_eq!(
+            load_project_file(&project_path).unwrap().revision(),
+            revision_before
+        );
+    }
+}
+
+#[test]
+fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_save() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Attached timeline");
+    let mut host =
+        LiveProjectHost::start(ProjectFileSession::open(&project_path).unwrap(), None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let events = host.subscribe_events().unwrap();
+    let initial = host.describe().unwrap().summary;
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+
+    let mut add_media_args = attach_args(&["media", "add"], &descriptor, &[]);
+    add_media_args.extend(words(&["--source"]));
+    add_media_args.push(source.as_os_str().to_owned());
+    add_media_args.push("--json".into());
+    let (media, _) = json_success_with_probe(add_media_args, &probe_stub);
+    let media_id = media["media"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(media["command"]["after_revision"], 1);
+    assert!(host.is_dirty().unwrap());
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    assert!(
+        load_project_file(&project_path)
+            .unwrap()
+            .media_items()
+            .is_empty()
+    );
+
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    let added_track = json_success(attach_args(
+        &["timeline", "add-track"],
+        &descriptor,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(added_track["command"]["after_revision"], 2);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let inserted = json_success(attach_args(
+        &["timeline", "insert-clip"],
+        &descriptor,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            &media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "1/2",
+            "--duration",
+            "1/2",
+            "--json",
+        ],
+    ))
+    .0;
+    let clip_id = inserted["clip_id"].as_str().unwrap();
+    assert!(clip_id.parse::<ClipId>().is_ok());
+    assert_eq!(inserted["command"]["after_revision"], 3);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let tracks = json_success(attach_args(
+        &["timeline", "tracks"],
+        &descriptor,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(
+        tracks["project_instance_id"],
+        initial.project_instance_id.to_string()
+    );
+    assert_eq!(tracks["project_revision"], 3);
+    assert_eq!(tracks["timeline_tracks"][0]["track_id"], track_id);
+    let clips = json_success(attach_args(
+        &["timeline", "clips"],
+        &descriptor,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(clips["timeline_clip_page"]["items"][0]["clip_id"], clip_id);
+
+    let moved = json_success(attach_args(
+        &["timeline", "move-clip"],
+        &descriptor,
+        &[
+            "--clip", clip_id, "--track", track_id, "--at", "2/1", "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(moved["command"]["command_id"], "timeline.clip.move");
+    assert_eq!(moved["command"]["after_revision"], 4);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let deleted = json_success(attach_args(
+        &["timeline", "delete-clip"],
+        &descriptor,
+        &["--clip", clip_id, "--json"],
+    ))
+    .0;
+    assert_eq!(deleted["command"]["command_id"], "timeline.clip.delete");
+    assert_eq!(deleted["command"]["after_revision"], 5);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let undone = json_success(attach_args(&["history", "undo"], &descriptor, &["--json"])).0;
+    assert_eq!(undone["after_revision"], 6);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    let after_undo = json_success(attach_args(
+        &["timeline", "clips"],
+        &descriptor,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(
+        after_undo["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        2
+    );
+    let undo_move = json_success(attach_args(&["history", "undo"], &descriptor, &["--json"])).0;
+    assert_eq!(undo_move["after_revision"], 7);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    let back_at_start = json_success(attach_args(
+        &["timeline", "clips"],
+        &descriptor,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(
+        back_at_start["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        0
+    );
+    let redone = json_success(attach_args(&["history", "redo"], &descriptor, &["--json"])).0;
+    assert_eq!(redone["after_revision"], 8);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    let deleted_again = json_success(attach_args(
+        &["timeline", "delete-clip"],
+        &descriptor,
+        &["--clip", clip_id, "--json"],
+    ))
+    .0;
+    assert_eq!(deleted_again["command"]["after_revision"], 9);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    let removed_track = json_success(attach_args(
+        &["timeline", "remove-track"],
+        &descriptor,
+        &["--track", track_id, "--json"],
+    ))
+    .0;
+    assert_eq!(removed_track["command"]["after_revision"], 10);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+    let tracks_after_remove = json_success(attach_args(
+        &["timeline", "tracks"],
+        &descriptor,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(
+        tracks_after_remove["timeline_tracks"],
+        serde_json::json!([])
+    );
+    assert!(host.is_dirty().unwrap());
+    assert_eq!(
+        load_project_file(&project_path).unwrap().revision(),
+        ProjectRevision::INITIAL
+    );
+
+    let saved = json_success(attach_args(&["project", "save"], &descriptor, &["--json"])).0;
+    assert_eq!(saved["project_revision"], 10);
+    assert_eq!(
+        events.recv().unwrap().kind,
+        ProjectHostEventKind::ProjectSaved
+    );
+    assert!(!host.is_dirty().unwrap());
+    let persisted = load_project_file(&project_path).unwrap();
+    assert_eq!(persisted.revision(), ProjectRevision::new(10));
+    assert!(persisted.timeline().tracks().is_empty());
+    assert_eq!(persisted.media_items()[0].id().to_string(), media_id);
+    assert_eq!(
+        host.describe().unwrap().summary.project_instance_id,
+        initial.project_instance_id
+    );
+    host.shutdown(false).unwrap();
 }
