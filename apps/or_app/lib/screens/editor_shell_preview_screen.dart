@@ -37,6 +37,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddMediaToTimeline,
     this.onMoveTimelineClip,
     this.onDeleteTimelineClip,
+    this.onTrimTimelineClip,
+    this.onSplitTimelineClip,
+    this.onRippleDeleteTimelineClip,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -90,6 +93,24 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineClip clip,
   )?
   onDeleteTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineClip clip,
+    ProjectTimelineTrimEdge edge,
+    ProjectRationalTime timelineTime,
+  )?
+  onTrimTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineClip clip,
+    ProjectRationalTime timelineTime,
+  )?
+  onSplitTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineClip clip,
+  )?
+  onRippleDeleteTimelineClip;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -238,6 +259,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
             onDeleteClip: widget.onDeleteTimelineClip,
+            onTrimClip: widget.onTrimTimelineClip,
+            onSplitClip: widget.onSplitTimelineClip,
+            onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             mediaItems: widget.mediaPage?.items ?? const [],
           ),
         ),
@@ -276,6 +300,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
             onDeleteClip: widget.onDeleteTimelineClip,
+            onTrimClip: widget.onTrimTimelineClip,
+            onSplitClip: widget.onSplitTimelineClip,
+            onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             mediaItems: widget.mediaPage?.items ?? const [],
           ),
         ),
@@ -1200,10 +1227,6 @@ class _TimelineToolbar extends StatelessWidget {
               ),
             ],
             _UnavailableTimelineAction(
-              tooltip: 'Split is unavailable in this Developer Preview',
-              icon: Icons.content_cut_outlined,
-            ),
-            _UnavailableTimelineAction(
               tooltip: 'Timeline zoom is unavailable in this Developer Preview',
               icon: Icons.zoom_in_outlined,
             ),
@@ -1251,6 +1274,9 @@ class _TimelinePanel extends StatelessWidget {
     required this.onRefresh,
     required this.onMoveClip,
     required this.onDeleteClip,
+    required this.onTrimClip,
+    required this.onSplitClip,
+    required this.onRippleDeleteClip,
     required this.mediaItems,
   });
 
@@ -1278,6 +1304,21 @@ class _TimelinePanel extends StatelessWidget {
   onMoveClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onDeleteClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectTimelineTrimEdge,
+    ProjectRationalTime,
+  )?
+  onTrimClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSplitClip;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
+  onRippleDeleteClip;
   final List<ProjectMediaItem> mediaItems;
 
   @override
@@ -1497,6 +1538,9 @@ class _TimelinePanel extends StatelessWidget {
                                   clip: clip,
                                   onMove: onMoveClip,
                                   onDelete: onDeleteClip,
+                                  onTrim: onTrimClip,
+                                  onSplit: onSplitClip,
+                                  onRippleDelete: onRippleDeleteClip,
                                   busy: busy,
                                 ),
                               ),
@@ -1551,6 +1595,13 @@ String _timelineTimeLabel(double seconds) {
       ? '$mm:$ss'
       : '${hours.toString().padLeft(2, '0')}:$mm:$ss';
 }
+
+int _compareProjectRational(
+  ProjectRationalTime left,
+  ProjectRationalTime right,
+) => (left.numerator * BigInt.from(right.denominator)).compareTo(
+  right.numerator * BigInt.from(left.denominator),
+);
 
 class _TimelineRulerPainter extends CustomPainter {
   const _TimelineRulerPainter({
@@ -2149,6 +2200,21 @@ Future<void> _showTimelineClipActions({
   onMove,
   required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onDelete,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectTimelineTrimEdge,
+    ProjectRationalTime,
+  )?
+  onTrim,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSplit,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
+  onRippleDelete,
   required bool busy,
 }) async {
   final media = clip.mediaId;
@@ -2156,6 +2222,9 @@ Future<void> _showTimelineClipActions({
       project != null &&
       onMove != null &&
       tracks.any((candidate) => candidate.kind == track.kind);
+  final canTrim = project != null && onTrim != null;
+  final canSplit = project != null && onSplit != null;
+  final canRippleDelete = project != null && onRippleDelete != null;
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -2188,6 +2257,40 @@ Future<void> _showTimelineClipActions({
           child: const Text('Move'),
         ),
         TextButton(
+          key: ValueKey('timeline-trim-${clip.clipId}'),
+          onPressed: busy || !canTrim
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showTrimTimelineClipDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onTrim: onTrim,
+                    ),
+                  );
+                },
+          child: const Text('Trim'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-split-${clip.clipId}'),
+          onPressed: busy || !canSplit
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showSplitTimelineClipDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onSplit: onSplit,
+                    ),
+                  );
+                },
+          child: const Text('Split'),
+        ),
+        TextButton(
           key: ValueKey('timeline-delete-${clip.clipId}'),
           onPressed: busy || project == null || onDelete == null
               ? null
@@ -2204,9 +2307,222 @@ Future<void> _showTimelineClipActions({
                 },
           child: const Text('Delete'),
         ),
+        TextButton(
+          key: ValueKey('timeline-ripple-delete-${clip.clipId}'),
+          onPressed: busy || !canRippleDelete
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _confirmRippleDeleteTimelineClip(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onRippleDelete: onRippleDelete,
+                    ),
+                  );
+                },
+          child: const Text('Ripple Delete'),
+        ),
       ],
     ),
   );
+}
+
+Future<void> _showTrimTimelineClipDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectTimelineTrimEdge,
+    ProjectRationalTime,
+  )?
+  onTrim,
+}) async {
+  if (project == null || onTrim == null) return;
+  var selectedEdge = ProjectTimelineTrimEdge.start;
+  var userEditedTimelineEdge = false;
+  final timelineEdgeController = TextEditingController(
+    text: clip.timelineStart.canonical,
+  );
+  bool edgeIsValid() {
+    final target = ProjectRationalTime.tryParse(timelineEdgeController.text);
+    if (target == null || target.numerator < BigInt.zero) return false;
+    return selectedEdge == ProjectTimelineTrimEdge.start
+        ? _compareProjectRational(target, clip.timelineEnd) < 0
+        : _compareProjectRational(target, clip.timelineStart) > 0;
+  }
+
+  final canTrim = ValueNotifier(edgeIsValid());
+  void updateTrimValidity() => canTrim.value = edgeIsValid();
+
+  timelineEdgeController.addListener(updateTrimValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Trim Clip'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Current timing: ${clip.timelineStart.canonical} – ${clip.timelineEnd.canonical}',
+                style: const TextStyle(color: OrColors.textSecondary),
+              ),
+              const SizedBox(height: OrSpacing.x2),
+              DropdownButtonFormField<ProjectTimelineTrimEdge>(
+                key: const ValueKey('timeline-trim-edge'),
+                initialValue: selectedEdge,
+                decoration: const InputDecoration(labelText: 'Edge'),
+                items: const [
+                  DropdownMenuItem(
+                    value: ProjectTimelineTrimEdge.start,
+                    child: Text('Start'),
+                  ),
+                  DropdownMenuItem(
+                    value: ProjectTimelineTrimEdge.end,
+                    child: Text('End'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setDialogState(() {
+                    selectedEdge = value;
+                    if (!userEditedTimelineEdge) {
+                      timelineEdgeController.text =
+                          value == ProjectTimelineTrimEdge.start
+                          ? clip.timelineStart.canonical
+                          : clip.timelineEnd.canonical;
+                    }
+                  });
+                },
+              ),
+              _ExactRationalField(
+                fieldKey: const ValueKey('timeline-trim-time'),
+                label: 'Timeline edge',
+                controller: timelineEdgeController,
+                onChanged: () {
+                  userEditedTimelineEdge = true;
+                  setDialogState(() {});
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canTrim,
+              builder: (context, valid, child) => FilledButton(
+                key: const ValueKey('timeline-confirm-trim'),
+                onPressed: valid
+                    ? () {
+                        final target = ProjectRationalTime.tryParse(
+                          timelineEdgeController.text,
+                        );
+                        if (target == null || !edgeIsValid()) return;
+                        Navigator.of(dialogContext).pop();
+                        unawaited(onTrim(project, clip, selectedEdge, target));
+                      }
+                    : null,
+                child: const Text('Trim'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    timelineEdgeController.removeListener(updateTrimValidity);
+    timelineEdgeController.dispose();
+    canTrim.dispose();
+  }
+}
+
+Future<void> _showSplitTimelineClipDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSplit,
+}) async {
+  if (project == null || onSplit == null) return;
+  final splitAtController = TextEditingController();
+  bool splitIsValid() {
+    final splitAt = ProjectRationalTime.tryParse(splitAtController.text);
+    return splitAt != null &&
+        splitAt.numerator >= BigInt.zero &&
+        _compareProjectRational(splitAt, clip.timelineStart) > 0 &&
+        _compareProjectRational(splitAt, clip.timelineEnd) < 0;
+  }
+
+  final canSplit = ValueNotifier(splitIsValid());
+  void updateSplitValidity() => canSplit.value = splitIsValid();
+
+  splitAtController.addListener(updateSplitValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Split Clip'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Current timing: ${clip.timelineStart.canonical} – ${clip.timelineEnd.canonical}',
+              style: const TextStyle(color: OrColors.textSecondary),
+            ),
+            _ExactRationalField(
+              fieldKey: const ValueKey('timeline-split-time'),
+              label: 'Split at:',
+              controller: splitAtController,
+              onChanged: () {},
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: canSplit,
+            builder: (context, valid, child) => FilledButton(
+              key: const ValueKey('timeline-confirm-split'),
+              onPressed: valid
+                  ? () {
+                      final splitAt = ProjectRationalTime.tryParse(
+                        splitAtController.text,
+                      );
+                      if (splitAt == null || !splitIsValid()) return;
+                      Navigator.of(dialogContext).pop();
+                      unawaited(onSplit(project, clip, splitAt));
+                    }
+                  : null,
+              child: const Text('Split'),
+            ),
+          ),
+        ],
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    splitAtController.removeListener(updateSplitValidity);
+    splitAtController.dispose();
+    canSplit.dispose();
+  }
 }
 
 Future<void> _showMoveTimelineClipDialog({
@@ -2333,7 +2649,7 @@ Future<void> _confirmDeleteTimelineClip({
     builder: (dialogContext) => AlertDialog(
       title: const Text('Delete clip?'),
       content: Text(
-        'Delete clip ${clip.clipId}? The media remains in the project.',
+        'Delete clip ${clip.clipId}? Later clips and other tracks stay in place. The media remains in the project.',
       ),
       actions: [
         TextButton(
@@ -2349,6 +2665,37 @@ Future<void> _confirmDeleteTimelineClip({
     ),
   );
   if (confirmed == true) await onDelete(project, clip);
+}
+
+Future<void> _confirmRippleDeleteTimelineClip({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
+  onRippleDelete,
+}) async {
+  if (project == null || onRippleDelete == null) return;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Ripple delete clip?'),
+      content: const Text(
+        'Delete this clip and shift later clips on this track left by its duration? Other tracks will not move.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: ValueKey('timeline-confirm-ripple-delete-${clip.clipId}'),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Ripple Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await onRippleDelete(project, clip);
 }
 
 class _TimelineRuler extends StatelessWidget {

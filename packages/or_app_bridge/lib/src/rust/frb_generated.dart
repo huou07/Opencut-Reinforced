@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 766737991;
+  int get rustContentHash => 1611710582;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -207,8 +207,28 @@ abstract class RustLibApi extends BaseApi {
     required String mediaId,
   });
 
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleRippleDeleteTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+  });
+
   Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
     required ProjectHostHandle that,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSplitTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
   });
 
   Stream<ProjectHostEventView> crateApiProjectProjectHostHandleSubscribeEvents({
@@ -222,6 +242,17 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ProjectView> crateApiProjectProjectHostHandleSummary({
     required ProjectHostHandle that,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleTrimTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required TimelineTrimEdgeView edge,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
   });
 
   Future<ProjectActionResult> crateApiProjectProjectHostHandleUndo({
@@ -1086,6 +1117,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleRippleDeleteTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(clipId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleRippleDeleteTimelineClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          clipId,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleRippleDeleteTimelineClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_ripple_delete_timeline_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "clipId",
+        ],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleSave({
     required ProjectHostHandle that,
   }) {
@@ -1100,7 +1190,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1122,6 +1212,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSplitTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_i_64(timelineTimeNumerator, serializer);
+          sse_encode_u_32(timelineTimeDenominator, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleSplitTimelineClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          clipId,
+          timelineTimeNumerator,
+          timelineTimeDenominator,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleSplitTimelineClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_split_timeline_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "clipId",
+          "timelineTimeNumerator",
+          "timelineTimeDenominator",
+        ],
+      );
+
+  @override
   Stream<ProjectHostEventView> crateApiProjectProjectHostHandleSubscribeEvents({
     required ProjectHostHandle that,
   }) {
@@ -1139,7 +1295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 18,
+              funcId: 20,
               port: port_,
             );
           },
@@ -1184,7 +1340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 19,
+              funcId: 21,
               port: port_,
             );
           },
@@ -1224,7 +1380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1243,6 +1399,75 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "ProjectHostHandle_summary",
         argNames: ["that"],
+      );
+
+  @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleTrimTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required TimelineTrimEdgeView edge,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_timeline_trim_edge_view(edge, serializer);
+          sse_encode_i_64(timelineTimeNumerator, serializer);
+          sse_encode_u_32(timelineTimeDenominator, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleTrimTimelineClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          clipId,
+          edge,
+          timelineTimeNumerator,
+          timelineTimeDenominator,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleTrimTimelineClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_trim_timeline_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "clipId",
+          "edge",
+          "timelineTimeNumerator",
+          "timelineTimeDenominator",
+        ],
       );
 
   @override
@@ -1266,7 +1491,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1301,7 +1526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1331,7 +1556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1358,7 +1583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1390,7 +1615,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1424,7 +1649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1451,7 +1676,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1481,7 +1706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1509,7 +1734,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 32,
             port: port_,
           );
         },
@@ -2032,6 +2257,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TimelineTrackKindView dco_decode_timeline_track_kind_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return TimelineTrackKindView.values[raw as int];
+  }
+
+  @protected
+  TimelineTrimEdgeView dco_decode_timeline_trim_edge_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TimelineTrimEdgeView.values[raw as int];
   }
 
   @protected
@@ -2699,6 +2930,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TimelineTrimEdgeView sse_decode_timeline_trim_edge_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TimelineTrimEdgeView.values[inner];
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
@@ -3281,6 +3521,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_timeline_trim_edge_view(
+    TimelineTrimEdgeView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
@@ -3525,8 +3774,39 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         mediaId: mediaId,
       );
 
+  Future<ProjectActionResult> rippleDeleteTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleRippleDeleteTimelineClip(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        clipId: clipId,
+      );
+
   Future<ProjectActionResult> save() =>
       RustLib.instance.api.crateApiProjectProjectHostHandleSave(that: this);
+
+  Future<ProjectActionResult> splitTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleSplitTimelineClip(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    clipId: clipId,
+    timelineTimeNumerator: timelineTimeNumerator,
+    timelineTimeDenominator: timelineTimeDenominator,
+  );
 
   Stream<ProjectHostEventView> subscribeEvents() => RustLib.instance.api
       .crateApiProjectProjectHostHandleSubscribeEvents(that: this);
@@ -3538,6 +3818,25 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
 
   Future<ProjectView> summary() =>
       RustLib.instance.api.crateApiProjectProjectHostHandleSummary(that: this);
+
+  Future<ProjectActionResult> trimTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required TimelineTrimEdgeView edge,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleTrimTimelineClip(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    clipId: clipId,
+    edge: edge,
+    timelineTimeNumerator: timelineTimeNumerator,
+    timelineTimeDenominator: timelineTimeDenominator,
+  );
 
   Future<ProjectActionResult> undo({
     required String projectId,

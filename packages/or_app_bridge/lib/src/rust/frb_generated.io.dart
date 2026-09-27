@@ -206,6 +206,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TimelineTrackKindView dco_decode_timeline_track_kind_view(dynamic raw);
 
   @protected
+  TimelineTrimEdgeView dco_decode_timeline_trim_edge_view(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
 
   @protected
@@ -434,6 +437,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimelineTrackKindView sse_decode_timeline_track_kind_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TimelineTrimEdgeView sse_decode_timeline_trim_edge_view(
     SseDeserializer deserializer,
   );
 
@@ -711,6 +719,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_timeline_track_kind_view(
     TimelineTrackKindView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_trim_edge_view(
+    TimelineTrimEdgeView self,
     SseSerializer serializer,
   );
 

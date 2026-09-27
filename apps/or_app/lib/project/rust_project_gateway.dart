@@ -268,6 +268,59 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> trimTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectTimelineTrimEdge edge,
+    required ProjectRationalTime timelineTime,
+  }) async => _action(
+    await _host(session).trimTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      edge: switch (edge) {
+        ProjectTimelineTrimEdge.start => rust.TimelineTrimEdgeView.start,
+        ProjectTimelineTrimEdge.end => rust.TimelineTrimEdgeView.end,
+      },
+      timelineTimeNumerator: timelineTime.numerator.toInt(),
+      timelineTimeDenominator: timelineTime.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> splitTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime timelineTime,
+  }) async => _action(
+    await _host(session).splitTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      timelineTimeNumerator: timelineTime.numerator.toInt(),
+      timelineTimeDenominator: timelineTime.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> rippleDeleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  ) async => _action(
+    await _host(session).rippleDeleteTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+    ),
+  );
+
+  @override
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
     ProjectSessionHandle session,
     String mediaId,

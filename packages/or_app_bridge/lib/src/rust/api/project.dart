@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `query`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_query_arguments_error`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -132,13 +132,39 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String mediaId,
   });
 
+  Future<ProjectActionResult> rippleDeleteTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+  });
+
   Future<ProjectActionResult> save();
+
+  Future<ProjectActionResult> splitTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  });
 
   Stream<ProjectHostEventView> subscribeEvents();
 
   Stream<MediaArtifactEventView> subscribeMediaArtifactEvents();
 
   Future<ProjectView> summary();
+
+  Future<ProjectActionResult> trimTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required TimelineTrimEdgeView edge,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  });
 
   Future<ProjectActionResult> undo({
     required String projectId,
@@ -715,3 +741,5 @@ class RecoveryInspectionView {
 }
 
 enum TimelineTrackKindView { video, audio }
+
+enum TimelineTrimEdgeView { start, end }

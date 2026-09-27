@@ -353,14 +353,148 @@ void main() {
       current = noOpMove.view!;
       expect(current.revision, BigInt.from(5));
 
-      final deleted = await gateway.deleteTimelineClip(
+      final trimmedStart = await gateway.trimTimelineClip(
         session,
         current,
-        clip.clipId,
+        clipId: clip.clipId,
+        edge: ProjectTimelineTrimEdge.start,
+        timelineTime: ProjectRationalTime(BigInt.from(7), 2),
       );
-      expect(deleted.succeeded, isTrue);
-      current = deleted.view!;
+      expect(trimmedStart.succeeded, isTrue);
+      current = trimmedStart.view!;
       expect(current.revision, BigInt.from(6));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items.single.timelineStart.canonical, '7/2');
+      expect(page.items.single.sourceStart.canonical, '1/1');
+      expect(page.items.single.sourceDuration.canonical, '3/2');
+
+      final trimmedEnd = await gateway.trimTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        edge: ProjectTimelineTrimEdge.end,
+        timelineTime: ProjectRationalTime(BigInt.from(9), 2),
+      );
+      expect(trimmedEnd.succeeded, isTrue);
+      current = trimmedEnd.view!;
+      expect(current.revision, BigInt.from(7));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(
+        page.items.single.timelineStart
+            .add(page.items.single.sourceDuration)
+            .canonical,
+        '9/2',
+      );
+      expect(page.items.single.sourceDuration.canonical, '1/1');
+
+      final noOpTrim = await gateway.trimTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        edge: ProjectTimelineTrimEdge.end,
+        timelineTime: ProjectRationalTime(BigInt.from(9), 2),
+      );
+      expect(noOpTrim.succeeded, isTrue);
+      current = noOpTrim.view!;
+      expect(current.revision, BigInt.from(7));
+
+      final split = await gateway.splitTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        timelineTime: ProjectRationalTime(BigInt.from(4), 1),
+      );
+      expect(split.succeeded, isTrue);
+      current = split.view!;
+      expect(current.revision, BigInt.from(8));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items, hasLength(2));
+      final rightClip = page.items.singleWhere(
+        (candidate) => candidate.clipId != clip.clipId,
+      );
+      expect(rightClip.timelineStart.canonical, '4/1');
+      expect(rightClip.sourceStart.canonical, '3/2');
+      expect(rightClip.sourceDuration.canonical, '1/2');
+
+      final insertedLater = await gateway.insertTimelineClip(
+        session,
+        current,
+        trackId: track.trackId,
+        mediaId: media.mediaId,
+        timelineStart: ProjectRationalTime(BigInt.from(6), 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        duration: ProjectRationalTime(BigInt.one, 1),
+      );
+      expect(insertedLater.succeeded, isTrue);
+      current = insertedLater.view!;
+      expect(current.revision, BigInt.from(9));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items, hasLength(3));
+      final laterClip = page.items.singleWhere(
+        (candidate) =>
+            candidate.clipId != clip.clipId &&
+            candidate.clipId != rightClip.clipId,
+      );
+      expect(laterClip.timelineStart.canonical, '6/1');
+
+      final rippleDeleted = await gateway.rippleDeleteTimelineClip(
+        session,
+        current,
+        rightClip.clipId,
+      );
+      expect(rippleDeleted.succeeded, isTrue);
+      current = rippleDeleted.view!;
+      expect(current.revision, BigInt.from(10));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items, hasLength(2));
+      expect(page.items[0].clipId, clip.clipId);
+      expect(page.items[0].timelineStart.canonical, '7/2');
+      expect(page.items[1].clipId, laterClip.clipId);
+      expect(page.items[1].timelineStart.canonical, '11/2');
+
+      final undoneRipple = await gateway.undo(session, current);
+      expect(undoneRipple.succeeded, isTrue);
+      current = undoneRipple.view!;
+      expect(current.revision, BigInt.from(11));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items, hasLength(3));
+      expect(page.items[1].clipId, rightClip.clipId);
+      expect(page.items[2].timelineStart.canonical, '6/1');
+
+      final redoneRipple = await gateway.redo(session, current);
+      expect(redoneRipple.succeeded, isTrue);
+      current = redoneRipple.view!;
+      expect(current.revision, BigInt.from(12));
       expect(
         (await gateway.listTimelineClips(
           session,
@@ -368,7 +502,7 @@ void main() {
           offset: 0,
           limit: 100,
         )).items,
-        isEmpty,
+        hasLength(2),
       );
       expect(
         (await gateway.listMediaPage(session, offset: 0, limit: 10)).items,
@@ -394,7 +528,7 @@ void main() {
       expect(current.revision, BigInt.from(8));
       final saved = await gateway.save(session);
       expect(saved.succeeded, isTrue);
-      expect(saved.view?.revision, BigInt.from(8));
+      expect(saved.view?.revision, BigInt.from(12));
       expect(saved.view?.dirty, isFalse);
       await gateway.close(session, discardUnsaved: false);
 
@@ -402,20 +536,22 @@ void main() {
       final reopened = await gateway.summary(reopenedSession);
       expect(reopened.projectId, originalProjectId);
       expect(reopened.projectInstanceId, isNot(originalInstanceId));
-      expect(reopened.revision, BigInt.from(8));
+      expect(reopened.revision, BigInt.from(12));
       expect(reopened.dirty, isFalse);
       final reopenedTracks = await gateway.listTimelineTracks(reopenedSession);
       expect(reopenedTracks.items.single.trackId, track.trackId);
       expect(reopenedTracks.items.single.kind, ProjectTimelineTrackKind.video);
-      expect(
-        (await gateway.listTimelineClips(
-          reopenedSession,
-          trackId: track.trackId,
-          offset: 0,
-          limit: 100,
-        )).items,
-        isEmpty,
-      );
+      final reopenedClips = (await gateway.listTimelineClips(
+        reopenedSession,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      )).items;
+      expect(reopenedClips, hasLength(2));
+      expect(reopenedClips[0].clipId, clip.clipId);
+      expect(reopenedClips[0].timelineStart.canonical, '7/2');
+      expect(reopenedClips[1].clipId, laterClip.clipId);
+      expect(reopenedClips[1].timelineStart.canonical, '11/2');
       expect(
         (await gateway.listMediaPage(
           reopenedSession,
@@ -765,6 +901,41 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String clipId,
   ) => _gateway.deleteTimelineClip(session, current, clipId);
+
+  @override
+  Future<ProjectActionResult> trimTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectTimelineTrimEdge edge,
+    required ProjectRationalTime timelineTime,
+  }) => _gateway.trimTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    edge: edge,
+    timelineTime: timelineTime,
+  );
+
+  @override
+  Future<ProjectActionResult> splitTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime timelineTime,
+  }) => _gateway.splitTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    timelineTime: timelineTime,
+  );
+
+  @override
+  Future<ProjectActionResult> rippleDeleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  ) => _gateway.rippleDeleteTimelineClip(session, current, clipId);
 
   @override
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(

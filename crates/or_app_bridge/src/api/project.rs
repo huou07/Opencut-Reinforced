@@ -8,8 +8,9 @@ use or_core::{
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
     ProjectRevision, QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
-    TimelineTrackSummary, TrackId, TrackKind, apply_project_recovery, discard_project_recovery,
-    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
+    TimelineTrackSummary, TimelineTrimEdge, TrackId, TrackKind, apply_project_recovery,
+    discard_project_recovery, ffmpeg_executable_from_environment, inspect_project_recovery,
+    prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{
@@ -60,6 +61,12 @@ pub struct RationalTimeView {
 pub enum TimelineTrackKindView {
     Video,
     Audio,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineTrimEdgeView {
+    Start,
+    End,
 }
 
 #[derive(Clone, Debug)]
@@ -665,6 +672,109 @@ impl ProjectHostHandle {
             expected_revision,
             |project_id, project_instance_id, revision| {
                 CommandEnvelope::delete_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn trim_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        edge: TimelineTrimEdgeView,
+        timeline_time_numerator: i64,
+        timeline_time_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let timeline_time =
+            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::trim_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    match edge {
+                        TimelineTrimEdgeView::Start => TimelineTrimEdge::Start,
+                        TimelineTrimEdgeView::End => TimelineTrimEdge::End,
+                    },
+                    timeline_time,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn split_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        timeline_time_numerator: i64,
+        timeline_time_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let timeline_time =
+            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        let new_clip_id = ClipId::generate();
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::split_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    new_clip_id,
+                    timeline_time,
+                )
+            },
+        )
+    }
+
+    pub fn ripple_delete_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::ripple_delete_timeline_clip(
                     project_id,
                     project_instance_id,
                     revision,

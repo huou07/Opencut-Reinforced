@@ -269,6 +269,9 @@ class _AppShellState extends State<AppShell> {
               onAddMediaToTimeline: _insertMediaIntoTimeline,
               onMoveTimelineClip: _moveTimelineClip,
               onDeleteTimelineClip: _deleteTimelineClip,
+              onTrimTimelineClip: _trimTimelineClip,
+              onSplitTimelineClip: _splitTimelineClip,
+              onRippleDeleteTimelineClip: _rippleDeleteTimelineClip,
               onSave: _saveProject,
               onRename: _renameProject,
               onUndo: _undoProject,
@@ -913,6 +916,54 @@ class _AppShellState extends State<AppShell> {
     await _runProjectActionAtSnapshot(
       expected,
       (session, current) => widget.projectGateway.deleteTimelineClip(
+        session,
+        current,
+        clip.clipId,
+      ),
+    );
+  }
+
+  Future<void> _trimTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectTimelineTrimEdge edge,
+    ProjectRationalTime timelineTime,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.trimTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        edge: edge,
+        timelineTime: timelineTime,
+      ),
+    );
+  }
+
+  Future<void> _splitTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectRationalTime timelineTime,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.splitTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        timelineTime: timelineTime,
+      ),
+    );
+  }
+
+  Future<void> _rippleDeleteTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.rippleDeleteTimelineClip(
         session,
         current,
         clip.clipId,

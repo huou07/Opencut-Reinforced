@@ -29,6 +29,25 @@ class ProjectRationalTime {
   double get secondsForDisplay => numerator.toDouble() / denominator;
   bool get isPositive => numerator > BigInt.zero;
 
+  ProjectRationalTime add(ProjectRationalTime other) {
+    final commonDenominator =
+        BigInt.from(denominator) * BigInt.from(other.denominator);
+    final sum =
+        numerator * BigInt.from(other.denominator) +
+        other.numerator * BigInt.from(denominator);
+    var divisor = sum.abs();
+    var remainder = commonDenominator;
+    while (remainder != BigInt.zero) {
+      final next = divisor % remainder;
+      divisor = remainder;
+      remainder = next;
+    }
+    return ProjectRationalTime(
+      sum ~/ divisor,
+      (commonDenominator ~/ divisor).toInt(),
+    );
+  }
+
   static ProjectRationalTime? tryParse(String value) {
     final match = _syntax.firstMatch(value);
     if (match == null) return null;
@@ -129,6 +148,8 @@ class ProjectMediaPage {
 
 enum ProjectTimelineTrackKind { video, audio }
 
+enum ProjectTimelineTrimEdge { start, end }
+
 class ProjectTimelineTrack {
   const ProjectTimelineTrack({
     required this.trackId,
@@ -169,6 +190,8 @@ class ProjectTimelineClip {
   final ProjectRationalTime timelineStart;
   final ProjectRationalTime sourceStart;
   final ProjectRationalTime sourceDuration;
+
+  ProjectRationalTime get timelineEnd => timelineStart.add(sourceDuration);
 }
 
 class ProjectTimelineClipPage {
@@ -392,6 +415,24 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineStart,
   });
   Future<ProjectActionResult> deleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  );
+  Future<ProjectActionResult> trimTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectTimelineTrimEdge edge,
+    required ProjectRationalTime timelineTime,
+  });
+  Future<ProjectActionResult> splitTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime timelineTime,
+  });
+  Future<ProjectActionResult> rippleDeleteTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current,
     String clipId,

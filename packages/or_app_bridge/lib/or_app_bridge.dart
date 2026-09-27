@@ -21,6 +21,7 @@ export 'src/rust/api/project.dart'
         RecoveryActionResult,
         RecoveryInspectionView,
         TimelineTrackKindView,
+        TimelineTrimEdgeView,
         applyRecovery,
         createProject,
         discardRecovery,

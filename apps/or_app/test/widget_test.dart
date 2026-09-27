@@ -1186,6 +1186,215 @@ void main() {
     },
   );
 
+  testWidgets(
+    'timeline clip trim split and ripple delete use exact action dialogs',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final clip = ProjectTimelineClip(
+        clipId: 'edit-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceDuration: ProjectRationalTime(BigInt.from(6), 1),
+      );
+      final laterClip = ProjectTimelineClip(
+        clipId: 'later-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.from(10), 1),
+        sourceStart: ProjectRationalTime(BigInt.from(6), 1),
+        sourceDuration: ProjectRationalTime(BigInt.one, 1),
+      );
+      final otherTrackClip = ProjectTimelineClip(
+        clipId: 'other-track-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.from(1), 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceDuration: ProjectRationalTime(BigInt.one, 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'edit-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 2,
+          ),
+          ProjectTimelineTrack(
+            trackId: 'other-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'edit-track': [clip, laterClip],
+          'other-track': [otherTrackClip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-advanced-dialogs.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Advanced timeline dialogs');
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
+      await tester.pumpAndSettle();
+      expect(find.text('Move'), findsOneWidget);
+      expect(find.text('Trim'), findsOneWidget);
+      expect(find.text('Split'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+      expect(find.text('Ripple Delete'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('timeline-trim-edit-clip')));
+      await tester.pumpAndSettle();
+      expect(find.text('Current timing: 2/1 – 8/1'), findsOneWidget);
+      expect(find.text('Edge'), findsOneWidget);
+      expect(find.text('Timeline edge'), findsOneWidget);
+      expect(find.byKey(const ValueKey('timeline-trim-source')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('timeline-trim-duration')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('timeline-trim-time')))
+            .controller!
+            .text,
+        '2/1',
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-trim-edge')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('End').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('timeline-trim-time')))
+            .controller!
+            .text,
+        '8/1',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-trim-time')),
+        '6/1',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('timeline-trim-edge')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('timeline-trim-time')))
+            .controller!
+            .text,
+        '6/1',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-trim-time')),
+        '3/1',
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-trim')));
+      await tester.pumpAndSettle();
+      expect(gateway.trimTimelineClipCalls, 1);
+      expect(
+        gateway.lastSession!.clips['edit-track']!.first.timelineStart.canonical,
+        '3/1',
+      );
+      expect(
+        gateway.lastSession!.clips['edit-track']!.first.sourceStart.canonical,
+        '1/1',
+      );
+      expect(
+        gateway
+            .lastSession!
+            .clips['edit-track']!
+            .first
+            .sourceDuration
+            .canonical,
+        '5/1',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-split-edit-clip')));
+      await tester.pumpAndSettle();
+      expect(find.text('Split at:'), findsOneWidget);
+      expect(find.text('Current timing: 3/1 – 8/1'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('timeline-split-time')),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-split-time')),
+        '5/1',
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('timeline-split-time')),
+            )
+            .controller!
+            .text,
+        '5/1',
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('timeline-confirm-split')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-split')));
+      await tester.pumpAndSettle();
+      expect(gateway.splitTimelineClipCalls, 1);
+      expect(gateway.lastSession!.clips['edit-track'], hasLength(3));
+      expect(gateway.lastSession!.clips['edit-track']![1].clipId, 'clip-1');
+      expect(
+        gateway.lastSession!.clips['edit-track']![1].timelineStart.canonical,
+        '5/1',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('timeline-ripple-delete-edit-clip')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ripple delete clip?'), findsOneWidget);
+      expect(
+        find.text(
+          'Delete this clip and shift later clips on this track left by its duration? Other tracks will not move.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('timeline-confirm-ripple-delete-edit-clip')),
+      );
+      await tester.pumpAndSettle();
+      expect(gateway.rippleDeleteTimelineClipCalls, 1);
+      expect(gateway.lastSession!.clips['edit-track']![0].clipId, 'clip-1');
+      expect(
+        gateway.lastSession!.clips['edit-track']![0].timelineStart.canonical,
+        '3/1',
+      );
+      expect(
+        gateway.lastSession!.clips['edit-track']![1].timelineStart.canonical,
+        '8/1',
+      );
+      expect(
+        gateway
+            .lastSession!
+            .clips['other-track']!
+            .single
+            .timelineStart
+            .canonical,
+        '1/1',
+      );
+    },
+  );
+
   testWidgets('compact real timeline does not overflow', (tester) async {
     _setViewport(tester, const Size(390, 844));
     final clip = ProjectTimelineClip(
@@ -1622,6 +1831,9 @@ class _FakeProjectGateway implements ProjectGateway {
   int insertTimelineClipCalls = 0;
   int moveTimelineClipCalls = 0;
   int deleteTimelineClipCalls = 0;
+  int trimTimelineClipCalls = 0;
+  int splitTimelineClipCalls = 0;
+  int rippleDeleteTimelineClipCalls = 0;
   String? nextTimelineFailure;
   int thumbnailRequests = 0;
   int waveformRequests = 0;
@@ -2040,6 +2252,139 @@ class _FakeProjectGateway implements ProjectGateway {
     return ProjectActionResult(succeeded: true, view: session.view);
   }
 
+  @override
+  Future<ProjectActionResult> trimTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectTimelineTrimEdge edge,
+    required ProjectRationalTime timelineTime,
+  }) async {
+    trimTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index < 0) continue;
+      final clip = entry.value[index];
+      final currentEdge = edge == ProjectTimelineTrimEdge.start
+          ? clip.timelineStart
+          : clip.timelineEnd;
+      if (_sameRational(currentEdge, timelineTime)) {
+        return ProjectActionResult(succeeded: true, view: session.view);
+      }
+      final duration = edge == ProjectTimelineTrimEdge.start
+          ? _subtractRational(clip.timelineEnd, timelineTime)
+          : _subtractRational(timelineTime, clip.timelineStart);
+      final sourceStart = edge == ProjectTimelineTrimEdge.start
+          ? clip.sourceStart.add(
+              _subtractRational(timelineTime, clip.timelineStart),
+            )
+          : clip.sourceStart;
+      entry.value[index] = ProjectTimelineClip(
+        clipId: clip.clipId,
+        mediaId: clip.mediaId,
+        timelineStart: edge == ProjectTimelineTrimEdge.start
+            ? timelineTime
+            : clip.timelineStart,
+        sourceStart: sourceStart,
+        sourceDuration: duration,
+      );
+      _timelineChanged(session);
+      return ProjectActionResult(succeeded: true, view: session.view);
+    }
+    return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> splitTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime timelineTime,
+  }) async {
+    splitTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index < 0) continue;
+      final clip = entry.value[index];
+      final leftDuration = _subtractRational(timelineTime, clip.timelineStart);
+      final rightDuration = _subtractRational(clip.timelineEnd, timelineTime);
+      final right = ProjectTimelineClip(
+        clipId: 'clip-${session.nextClipId++}',
+        mediaId: clip.mediaId,
+        timelineStart: timelineTime,
+        sourceStart: clip.sourceStart.add(leftDuration),
+        sourceDuration: rightDuration,
+      );
+      entry.value[index] = ProjectTimelineClip(
+        clipId: clip.clipId,
+        mediaId: clip.mediaId,
+        timelineStart: clip.timelineStart,
+        sourceStart: clip.sourceStart,
+        sourceDuration: leftDuration,
+      );
+      entry.value.insert(index + 1, right);
+      session.tracks = [
+        for (final track in session.tracks)
+          ProjectTimelineTrack(
+            trackId: track.trackId,
+            kind: track.kind,
+            clipCount: session.clips[track.trackId]!.length,
+          ),
+      ];
+      _timelineChanged(session);
+      return ProjectActionResult(succeeded: true, view: session.view);
+    }
+    return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> rippleDeleteTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String clipId,
+  ) async {
+    rippleDeleteTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index < 0) continue;
+      final duration = entry.value[index].sourceDuration;
+      entry.value.removeAt(index);
+      for (var suffix = index; suffix < entry.value.length; suffix++) {
+        final clip = entry.value[suffix];
+        entry.value[suffix] = ProjectTimelineClip(
+          clipId: clip.clipId,
+          mediaId: clip.mediaId,
+          timelineStart: _subtractRational(clip.timelineStart, duration),
+          sourceStart: clip.sourceStart,
+          sourceDuration: clip.sourceDuration,
+        );
+      }
+      session.tracks = [
+        for (final track in session.tracks)
+          ProjectTimelineTrack(
+            trackId: track.trackId,
+            kind: track.kind,
+            clipCount: session.clips[track.trackId]!.length,
+          ),
+      ];
+      _timelineChanged(session);
+      return ProjectActionResult(succeeded: true, view: session.view);
+    }
+    return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
   ProjectActionResult? _timelineFailure() {
     final code = nextTimelineFailure;
     nextTimelineFailure = null;
@@ -2281,6 +2626,21 @@ ProjectReadModel _copyView(
   dirty: dirty ?? view.dirty,
   descriptorPath: view.descriptorPath,
 );
+
+bool _sameRational(ProjectRationalTime left, ProjectRationalTime right) =>
+    left.numerator * BigInt.from(right.denominator) ==
+    right.numerator * BigInt.from(left.denominator);
+
+ProjectRationalTime _subtractRational(
+  ProjectRationalTime left,
+  ProjectRationalTime right,
+) {
+  final numerator =
+      left.numerator * BigInt.from(right.denominator) -
+      right.numerator * BigInt.from(left.denominator);
+  final denominator = left.denominator * right.denominator;
+  return ProjectRationalTime.tryParse('$numerator/$denominator')!;
+}
 
 int _compareRational(ProjectRationalTime left, ProjectRationalTime right) =>
     (left.numerator * BigInt.from(right.denominator)).compareTo(
