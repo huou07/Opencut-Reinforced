@@ -37,6 +37,17 @@ re-run affected checks.
 - More opens a visible advanced-command menu.
 - More menu commands remain reachable and clickable.
 - No menu may be visually clipped by its toolbar/container.
+- A project timeline clip action menu exposes exactly Move, Trim, Split, Delete,
+  and Ripple Delete.
+- Trim shows the current timeline start/end, an Edge selector, and an exact
+  Timeline edge field; changing Edge does not overwrite an intentionally edited
+  value.
+- Split shows the current timeline start/end and an empty exact Split at field;
+  it does not ask the UI to generate the right clip ID.
+- Ripple Delete clearly confirms that only later clips on the selected track
+  shift left and that other tracks do not move.
+- Timeline edit dialogs refresh from the Rust project state after the action;
+  they do not optimistically resize or shift clip geometry.
 
 ## Mobile Editor
 
