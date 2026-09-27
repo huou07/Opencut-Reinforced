@@ -95,6 +95,15 @@ class RustProjectGateway implements ProjectGateway {
                 duration: item.duration,
                 videoDetails: item.videoDetails,
                 audioDetails: item.audioDetails,
+                containerDuration: item.containerDuration == null
+                    ? null
+                    : _projectRationalTime(item.containerDuration!),
+                firstVideoDuration: item.firstVideoDuration == null
+                    ? null
+                    : _projectRationalTime(item.firstVideoDuration!),
+                firstAudioDuration: item.firstAudioDuration == null
+                    ? null
+                    : _projectRationalTime(item.firstAudioDuration!),
               ),
             )
             .toList(growable: false),
@@ -107,6 +116,156 @@ class RustProjectGateway implements ProjectGateway {
       throw ProjectGatewayException(error.code, error.message);
     }
   }
+
+  @override
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle session,
+  ) async {
+    try {
+      final result = await _host(session).listTimelineTracks();
+      return ProjectTimelineTracks(
+        projectId: result.projectId,
+        projectInstanceId: result.projectInstanceId,
+        projectRevision: result.projectRevision,
+        items: result.items
+            .map(
+              (track) => ProjectTimelineTrack(
+                trackId: track.trackId,
+                kind: _projectTimelineKind(track.kind),
+                clipCount: track.clipCount.toInt(),
+              ),
+            )
+            .toList(growable: false),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle session, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  }) async {
+    try {
+      final page = await _host(session).listTimelineClips(
+        trackId: trackId,
+        offset: BigInt.from(offset),
+        limit: BigInt.from(limit),
+      );
+      return ProjectTimelineClipPage(
+        projectId: page.projectId,
+        projectInstanceId: page.projectInstanceId,
+        projectRevision: page.projectRevision,
+        trackId: page.trackId,
+        items: page.items
+            .map(
+              (clip) => ProjectTimelineClip(
+                clipId: clip.clipId,
+                mediaId: clip.mediaId,
+                timelineStart: _projectRationalTime(clip.timelineStart),
+                sourceStart: _projectRationalTime(clip.sourceStart),
+                sourceDuration: _projectRationalTime(clip.sourceDuration),
+              ),
+            )
+            .toList(growable: false),
+        totalCount: page.totalCount.toInt(),
+        offset: page.offset.toInt(),
+        limit: page.limit.toInt(),
+        nextOffset: page.nextOffset?.toInt(),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> addTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectTimelineTrackKind kind,
+  ) async => _action(
+    await _host(session).addTimelineTrack(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      kind: _rustTimelineKind(kind),
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> removeTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String trackId,
+  ) async => _action(
+    await _host(session).removeTimelineTrack(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> insertTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String mediaId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime sourceStart,
+    required ProjectRationalTime duration,
+  }) async => _action(
+    await _host(session).insertTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      mediaId: mediaId,
+      timelineStartNumerator: timelineStart.numerator.toInt(),
+      timelineStartDenominator: timelineStart.denominator,
+      sourceStartNumerator: sourceStart.numerator.toInt(),
+      sourceStartDenominator: sourceStart.denominator,
+      durationNumerator: duration.numerator.toInt(),
+      durationDenominator: duration.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> moveTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+  }) async => _action(
+    await _host(session).moveTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      trackId: trackId,
+      timelineStartNumerator: timelineStart.numerator.toInt(),
+      timelineStartDenominator: timelineStart.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> deleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  ) async => _action(
+    await _host(session).deleteTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+    ),
+  );
 
   @override
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
@@ -315,6 +474,24 @@ class RustProjectGateway implements ProjectGateway {
     errorCode: request.errorCode,
     message: request.message,
   );
+
+  static ProjectRationalTime _projectRationalTime(
+    rust.RationalTimeView value,
+  ) => ProjectRationalTime(BigInt.from(value.numerator), value.denominator);
+
+  static ProjectTimelineTrackKind _projectTimelineKind(
+    rust.TimelineTrackKindView kind,
+  ) => switch (kind) {
+    rust.TimelineTrackKindView.video => ProjectTimelineTrackKind.video,
+    rust.TimelineTrackKindView.audio => ProjectTimelineTrackKind.audio,
+  };
+
+  static rust.TimelineTrackKindView _rustTimelineKind(
+    ProjectTimelineTrackKind kind,
+  ) => switch (kind) {
+    ProjectTimelineTrackKind.video => rust.TimelineTrackKindView.video,
+    ProjectTimelineTrackKind.audio => rust.TimelineTrackKindView.audio,
+  };
 }
 
 class _RustProjectSession implements ProjectSessionHandle {

@@ -133,7 +133,7 @@ void main() {
     );
     expect(find.text('Revision 0'), findsOneWidget);
     expect(find.text('Saved'), findsOneWidget);
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.text('No media loaded'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -308,7 +308,7 @@ void main() {
       findsNothing,
     );
     expect(find.text('No media loaded'), findsOneWidget);
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -473,6 +473,168 @@ void main() {
       expect(find.text('Revision 0'), findsOneWidget);
       expect(find.byKey(const ValueKey('active-project-save')), findsNothing);
       expect(find.text('Recent Project'), findsNothing);
+    },
+  );
+
+  testWidgets('timeline clip pages load in bounded, revision-safe batches', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clips = [
+      for (var index = 0; index < 101; index++)
+        ProjectTimelineClip(
+          clipId: 'bulk-clip-$index',
+          mediaId: 'bulk-media',
+          timelineStart: ProjectRationalTime(BigInt.from(index * 2), 1),
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          sourceDuration: ProjectRationalTime(BigInt.one, 1),
+        ),
+    ];
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = [
+        const ProjectTimelineTrack(
+          trackId: 'bulk-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 101,
+        ),
+      ]
+      ..initialTimelineClips = {'bulk-track': clips};
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/paged-timeline.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Paged timeline');
+
+    expect(gateway.timelineClipOffsets, [0]);
+    expect(find.text('100 / 101'), findsOneWidget);
+    final loadMore = find.byKey(
+      const ValueKey('timeline-load-more-bulk-track'),
+    );
+    await tester.ensureVisible(loadMore);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    expect(gateway.timelineClipOffsets, [0, 100]);
+    expect(find.text('101'), findsOneWidget);
+    expect(loadMore, findsNothing);
+  });
+
+  testWidgets('stale timeline page is discarded and refreshed coherently', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clips = [
+      for (var index = 0; index < 101; index++)
+        ProjectTimelineClip(
+          clipId: 'stale-clip-$index',
+          mediaId: 'stale-media',
+          timelineStart: ProjectRationalTime(BigInt.from(index * 2), 1),
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          sourceDuration: ProjectRationalTime(BigInt.one, 1),
+        ),
+    ];
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = [
+        const ProjectTimelineTrack(
+          trackId: 'stale-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 101,
+        ),
+      ]
+      ..initialTimelineClips = {'stale-track': clips};
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/stale-timeline.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Stale timeline page');
+    gateway.revisionChangeOnNextTimelinePage = true;
+
+    final loadMore = find.byKey(
+      const ValueKey('timeline-load-more-stale-track'),
+    );
+    await tester.ensureVisible(loadMore);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    expect(gateway.timelineClipOffsets, [0, 100, 0]);
+    expect(find.text('100 / 101'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'attached timeline event refreshes tracks and rejects stale insert',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          ProjectMediaItem(
+            mediaId: 'event-media',
+            sourceUri: Uri.file('/tmp/event.mp4').toString(),
+            formatNames: const ['mp4'],
+            duration: '2 s',
+            videoDetails: '1920×1080 h264',
+            audioDetails: null,
+            firstVideoDuration: ProjectRationalTime(BigInt.from(2), 1),
+          ),
+        ];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/event-timeline.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Event timeline');
+      gateway.externalAddTimelineTrack(ProjectTimelineTrackKind.video);
+      await tester.pumpAndSettle();
+      expect(find.text('V1'), findsOneWidget);
+      expect(find.text('Revision 1'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-event-media')),
+      );
+      await tester.pumpAndSettle();
+      gateway.externalRename('Changed by attached CLI');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+
+      expect(gateway.insertTimelineClipCalls, 1);
+      expect(gateway.lastSession!.clips['external-track-1'], isEmpty);
+      expect(
+        find.textContaining('this action was not retried'),
+        findsOneWidget,
+      );
+      expect(find.text('Revision 2'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'timeline insert failure leaves canonical presentation unchanged',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          ProjectMediaItem(
+            mediaId: 'failure-media',
+            sourceUri: Uri.file('/tmp/failure.mp4').toString(),
+            formatNames: const ['mp4'],
+            duration: '2 s',
+            videoDetails: '1920×1080 h264',
+            audioDetails: null,
+            firstVideoDuration: ProjectRationalTime(BigInt.from(2), 1),
+          ),
+        ];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/failure-timeline.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Failed timeline insert');
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+      gateway.nextTimelineFailure = 'TIMELINE_OVERLAP';
+
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-failure-media')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+      expect(gateway.insertTimelineClipCalls, 1);
+      expect(gateway.lastSession!.clips['track-1'], isEmpty);
+      expect(gateway.lastSession!.view.revision, BigInt.one);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -664,6 +826,396 @@ void main() {
     );
     expect(find.text('Revision 1'), findsOneWidget);
     expect(find.text('Unsaved changes'), findsOneWidget);
+  });
+
+  test('timeline rational input remains exact and rejects inexact forms', () {
+    expect(ProjectRationalTime.tryParse('0/1')!.canonical, '0/1');
+    expect(ProjectRationalTime.tryParse('1/2')!.canonical, '1/2');
+    expect(ProjectRationalTime.tryParse('3003/1001')!.canonical, '3/1');
+    expect(ProjectRationalTime.tryParse('2/4')!.canonical, '1/2');
+    expect(ProjectRationalTime.tryParse('-2/4')!.canonical, '-1/2');
+    expect(ProjectRationalTime.tryParse('0/11')!.canonical, '0/1');
+    expect(ProjectRationalTime.tryParse('+5/2')!.canonical, '5/2');
+    for (final invalid in [
+      '1.5',
+      '1e2/1',
+      '00:00:01',
+      '1/0',
+      'abc',
+      '1/',
+      ' /1',
+      '9223372036854775808/1',
+      '1/4294967296',
+    ]) {
+      expect(ProjectRationalTime.tryParse(invalid), isNull, reason: invalid);
+    }
+  });
+
+  testWidgets(
+    'real project timeline adds tracks in canonical order and removes only empty tracks',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-tracks.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Timeline tracks');
+
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('V1'), findsOneWidget);
+      expect(find.text('A1'), findsOneWidget);
+      expect(find.text('V2'), findsOneWidget);
+      expect(gateway.lastSession!.tracks.map((track) => track.kind).toList(), [
+        ProjectTimelineTrackKind.video,
+        ProjectTimelineTrackKind.audio,
+        ProjectTimelineTrackKind.video,
+      ]);
+
+      final middleTrack = gateway.lastSession!.tracks[1];
+      await tester.tap(
+        find.byKey(ValueKey('timeline-remove-track-${middleTrack.trackId}')),
+      );
+      await tester.pumpAndSettle();
+      expect(gateway.lastSession!.tracks.map((track) => track.trackId), [
+        'track-1',
+        'track-3',
+      ]);
+    },
+  );
+
+  testWidgets('project switch clears the previous timeline read snapshot', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-first-project.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'First timeline project');
+    await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+    await tester.pumpAndSettle();
+    expect(find.text('V1'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('workspace-close')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    picker.savePath = '/tmp/timeline-second-project.orproj';
+    await _createProject(tester, 'Second timeline project');
+
+    expect(find.text('No timeline tracks'), findsOneWidget);
+    expect(find.text('V1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'project timeline inserts exact clip and shows proportional block',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          ProjectMediaItem(
+            mediaId: 'media-video',
+            sourceUri: Uri.file('/tmp/scene.mp4').toString(),
+            formatNames: const ['mp4'],
+            duration: '4 s',
+            videoDetails: '1920×1080 h264',
+            audioDetails: null,
+            firstVideoDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-clip.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Timeline clip');
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-media-video')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Insert Clip'), findsOneWidget);
+      expect(find.text('4/1'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-insert-start')),
+        '2/1',
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+
+      expect(gateway.lastSession!.view.revision, BigInt.from(2));
+      final clip = gateway.lastSession!.clips.values.single.single;
+      expect(clip.timelineStart.canonical, '2/1');
+      expect(clip.sourceStart.canonical, '0/1');
+      expect(clip.sourceDuration.canonical, '4/1');
+      final tooltip = tester.widget<Tooltip>(
+        find.byKey(ValueKey('timeline-clip-tooltip-${clip.clipId}')),
+      );
+      expect(tooltip.message, contains('Timeline start: 2/1'));
+      expect(tooltip.message, contains('Source range: 0/1 + 4/1'));
+      expect(
+        find.byKey(ValueKey('timeline-clip-${clip.clipId}')),
+        findsOneWidget,
+      );
+      expect(find.text('scene.mp4'), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('timeline-trim')), findsNothing);
+      expect(find.byKey(const ValueKey('timeline-split')), findsNothing);
+      expect(find.byKey(const ValueKey('timeline-ripple')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'insert dialog explains missing compatible tracks and unknown duration stays blank',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [_mediaFixture('media-unknown', '/tmp/unknown.mp4')];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-empty.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Empty tracks');
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-media-unknown')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Add a compatible Video or Audio track first.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Close').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('timeline-empty-add-video')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-media-unknown')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('timeline-insert-duration')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('timeline-insert-duration')),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('timeline-confirm-insert')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-insert-duration')),
+        '5/2',
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('timeline-confirm-insert')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+      expect(
+        gateway
+            .lastSession!
+            .clips
+            .values
+            .single
+            .single
+            .sourceDuration
+            .canonical,
+        '5/2',
+      );
+    },
+  );
+
+  testWidgets(
+    'timeline insert chooses exact duration for the selected stream',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          ProjectMediaItem(
+            mediaId: 'media-multistream',
+            sourceUri: Uri.file('/tmp/multistream.mov').toString(),
+            formatNames: const ['mov'],
+            duration: '5 s',
+            videoDetails: '1920×1080 h264',
+            audioDetails: 'AAC',
+            containerDuration: ProjectRationalTime(BigInt.from(5), 1),
+            firstVideoDuration: ProjectRationalTime(BigInt.from(4), 1),
+            firstAudioDuration: ProjectRationalTime(BigInt.from(3), 1),
+          ),
+        ];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/multistream-timeline.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Multistream timeline');
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-media-multistream')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('timeline-insert-duration')),
+            )
+            .controller!
+            .text,
+        '4/1',
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-insert-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('A1 · audio').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('timeline-insert-duration')),
+            )
+            .controller!
+            .text,
+        '3/1',
+      );
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+      expect(gateway.insertTimelineClipCalls, 1);
+      expect(gateway.lastSession!.clips['track-1'], isEmpty);
+      expect(
+        gateway.lastSession!.clips['track-2']!.single.sourceDuration.canonical,
+        '3/1',
+      );
+    },
+  );
+
+  testWidgets(
+    'timeline clip move and delete use explicit dialogs and keep media',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [_mediaFixture('media-move', '/tmp/move.mp4')];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-move.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Move timeline');
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('media-add-timeline-media-move')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-insert-duration')),
+        '2/1',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+      await tester.pumpAndSettle();
+      final clip = gateway.lastSession!.clips['track-1']!.single;
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('timeline-remove-track-track-1')),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Timeline start: 0/1'), findsOneWidget);
+      await tester.tap(find.byKey(ValueKey('timeline-move-${clip.clipId}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-move-track')));
+      await tester.pumpAndSettle();
+      expect(find.text('A1 · audio'), findsNothing);
+      await tester.tap(find.text('V2').last);
+      await tester.enterText(
+        find.byKey(const ValueKey('timeline-move-start')),
+        '3/1',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('timeline-confirm-move')));
+      await tester.pumpAndSettle();
+      expect(
+        gateway.lastSession!.clips['track-2']!.single.timelineStart.canonical,
+        '3/1',
+      );
+
+      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('timeline-delete-${clip.clipId}')));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete clip?'), findsOneWidget);
+      await tester.tap(
+        find.byKey(ValueKey('timeline-confirm-delete-${clip.clipId}')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        gateway.lastSession!.clips.values.every((clips) => clips.isEmpty),
+        isTrue,
+      );
+      expect(gateway.lastSession!.media, hasLength(1));
+    },
+  );
+
+  testWidgets('compact real timeline does not overflow', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    final clip = ProjectTimelineClip(
+      clipId: 'compact-clip',
+      mediaId: 'missing-media',
+      timelineStart: ProjectRationalTime(BigInt.one, 2),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'compact-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'compact-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-compact.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact timeline');
+    expect(find.text('V1'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('timeline-clip-compact-clip')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('candidate recovery offers recover discard and cancel', (
@@ -1047,6 +1599,8 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectRecoveryKind.none,
   );
   List<ProjectMediaItem> initialMedia = [];
+  List<ProjectTimelineTrack> initialTimelineTracks = [];
+  Map<String, List<ProjectTimelineClip>> initialTimelineClips = {};
   final Map<String, ProjectMediaArtifactRequest> artifactRequestResponses = {};
   final Map<String, ProjectMediaArtifact> artifactResponses = {};
   String? nextSaveFailure;
@@ -1060,10 +1614,20 @@ class _FakeProjectGateway implements ProjectGateway {
   int summaryCalls = 0;
   int renameCalls = 0;
   int mediaListCalls = 0;
+  int timelineTracksCalls = 0;
+  int timelineClipsCalls = 0;
+  bool revisionChangeOnNextTimelinePage = false;
+  int addTimelineTrackCalls = 0;
+  int removeTimelineTrackCalls = 0;
+  int insertTimelineClipCalls = 0;
+  int moveTimelineClipCalls = 0;
+  int deleteTimelineClipCalls = 0;
+  String? nextTimelineFailure;
   int thumbnailRequests = 0;
   int waveformRequests = 0;
   int mediaPreviewReads = 0;
   final List<int> mediaListOffsets = [];
+  final List<int> timelineClipOffsets = [];
   int importMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportPath;
@@ -1088,7 +1652,13 @@ class _FakeProjectGateway implements ProjectGateway {
       dirty: false,
       descriptorPath: '/tmp/or-session-$createCalls.json',
     );
-    final session = _FakeSession(path, view)..media.addAll(initialMedia);
+    final session = _FakeSession(path, view)
+      ..media.addAll(initialMedia)
+      ..tracks = List.of(initialTimelineTracks)
+      ..clips.addAll({
+        for (final entry in initialTimelineClips.entries)
+          entry.key: List.of(entry.value),
+      });
     _sessionsByPath[path] = session;
     _savedByPath[path] = view;
     lastSession = session;
@@ -1109,17 +1679,24 @@ class _FakeProjectGateway implements ProjectGateway {
           dirty: false,
           descriptorPath: '/tmp/or-session-open-$openCalls.json',
         );
-    final session = _FakeSession(
-      path,
-      ProjectReadModel(
-        projectId: saved.projectId,
-        projectInstanceId: 'instance-open-$openCalls',
-        revision: saved.revision,
-        name: saved.name,
-        dirty: false,
-        descriptorPath: '/tmp/or-session-open-$openCalls.json',
-      ),
-    );
+    final session =
+        _FakeSession(
+            path,
+            ProjectReadModel(
+              projectId: saved.projectId,
+              projectInstanceId: 'instance-open-$openCalls',
+              revision: saved.revision,
+              name: saved.name,
+              dirty: false,
+              descriptorPath: '/tmp/or-session-open-$openCalls.json',
+            ),
+          )
+          ..media.addAll(initialMedia)
+          ..tracks = List.of(initialTimelineTracks)
+          ..clips.addAll({
+            for (final entry in initialTimelineClips.entries)
+              entry.key: List.of(entry.value),
+          });
     _sessionsByPath[path] = session;
     lastSession = session;
     return session;
@@ -1257,6 +1834,234 @@ class _FakeProjectGateway implements ProjectGateway {
       limit: limit,
       nextOffset: end < session.media.length ? end : null,
     );
+  }
+
+  @override
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle handle,
+  ) async {
+    timelineTracksCalls++;
+    final session = _session(handle);
+    return ProjectTimelineTracks(
+      projectId: session.view.projectId,
+      projectInstanceId: session.view.projectInstanceId,
+      projectRevision: session.view.revision,
+      items: session.tracks,
+    );
+  }
+
+  @override
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle handle, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  }) async {
+    timelineClipsCalls++;
+    timelineClipOffsets.add(offset);
+    final session = _session(handle);
+    if (offset > 0 && revisionChangeOnNextTimelinePage) {
+      revisionChangeOnNextTimelinePage = false;
+      _timelineChanged(session);
+    }
+    final clips = session.clips[trackId] ?? const <ProjectTimelineClip>[];
+    final start = offset.clamp(0, clips.length).toInt();
+    final end = (start + limit).clamp(start, clips.length).toInt();
+    return ProjectTimelineClipPage(
+      projectId: session.view.projectId,
+      projectInstanceId: session.view.projectInstanceId,
+      projectRevision: session.view.revision,
+      trackId: trackId,
+      items: clips.sublist(start, end),
+      totalCount: clips.length,
+      offset: offset,
+      limit: limit,
+      nextOffset: end < clips.length ? end : null,
+    );
+  }
+
+  @override
+  Future<ProjectActionResult> addTimelineTrack(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    ProjectTimelineTrackKind kind,
+  ) async {
+    addTimelineTrackCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final id = 'track-${session.nextTrackId++}';
+    session.tracks.add(
+      ProjectTimelineTrack(trackId: id, kind: kind, clipCount: 0),
+    );
+    session.clips[id] = [];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> removeTimelineTrack(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String trackId,
+  ) async {
+    removeTimelineTrackCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    session.tracks.removeWhere((track) => track.trackId == trackId);
+    session.clips.remove(trackId);
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> insertTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String mediaId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime sourceStart,
+    required ProjectRationalTime duration,
+  }) async {
+    insertTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final clipId = 'clip-${session.nextClipId++}';
+    final clips = session.clips[trackId]!;
+    clips.add(
+      ProjectTimelineClip(
+        clipId: clipId,
+        mediaId: mediaId,
+        timelineStart: timelineStart,
+        sourceStart: sourceStart,
+        sourceDuration: duration,
+      ),
+    );
+    clips.sort((a, b) => _compareRational(a.timelineStart, b.timelineStart));
+    session.tracks = [
+      for (final track in session.tracks)
+        if (track.trackId == trackId)
+          ProjectTimelineTrack(
+            trackId: track.trackId,
+            kind: track.kind,
+            clipCount: clips.length,
+          )
+        else
+          track,
+    ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> moveTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+  }) async {
+    moveTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    ProjectTimelineClip? clip;
+    for (final clips in session.clips.values) {
+      final index = clips.indexWhere((candidate) => candidate.clipId == clipId);
+      if (index >= 0) {
+        clip = clips.removeAt(index);
+        break;
+      }
+    }
+    if (clip == null) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    final moved = ProjectTimelineClip(
+      clipId: clip.clipId,
+      mediaId: clip.mediaId,
+      timelineStart: timelineStart,
+      sourceStart: clip.sourceStart,
+      sourceDuration: clip.sourceDuration,
+    );
+    final clips = session.clips[trackId]!;
+    clips.add(moved);
+    clips.sort((a, b) => _compareRational(a.timelineStart, b.timelineStart));
+    session.tracks = [
+      for (final track in session.tracks)
+        ProjectTimelineTrack(
+          trackId: track.trackId,
+          kind: track.kind,
+          clipCount: session.clips[track.trackId]!.length,
+        ),
+    ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> deleteTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String clipId,
+  ) async {
+    deleteTimelineClipCalls++;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    var removedTrackId = '';
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index >= 0) {
+        entry.value.removeAt(index);
+        removedTrackId = entry.key;
+        break;
+      }
+    }
+    session.tracks = [
+      for (final track in session.tracks)
+        if (track.trackId == removedTrackId)
+          ProjectTimelineTrack(
+            trackId: track.trackId,
+            kind: track.kind,
+            clipCount: session.clips[track.trackId]!.length,
+          )
+        else
+          track,
+    ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  ProjectActionResult? _timelineFailure() {
+    final code = nextTimelineFailure;
+    nextTimelineFailure = null;
+    return code == null ? null : _timelineOperationFailure(code);
+  }
+
+  ProjectActionResult _timelineOperationFailure(String code) =>
+      ProjectActionResult(succeeded: false, errorCode: code, message: code);
+
+  ProjectActionResult _revisionConflict() => const ProjectActionResult(
+    succeeded: false,
+    errorCode: 'REVISION_CONFLICT',
+    message: 'revision changed',
+  );
+
+  void _timelineChanged(_FakeSession session) {
+    session.view = _copyView(
+      session.view,
+      revision: session.view.revision + BigInt.one,
+      dirty: true,
+    );
+    session.emit('project_changed');
   }
 
   @override
@@ -1447,6 +2252,16 @@ class _FakeProjectGateway implements ProjectGateway {
     session.emit('project_changed');
   }
 
+  void externalAddTimelineTrack(ProjectTimelineTrackKind kind) {
+    final session = lastSession!;
+    final trackId = 'external-track-${session.tracks.length + 1}';
+    session.tracks.add(
+      ProjectTimelineTrack(trackId: trackId, kind: kind, clipCount: 0),
+    );
+    session.clips[trackId] = [];
+    _timelineChanged(session);
+  }
+
   _FakeSession _session(ProjectSessionHandle handle) {
     if (handle is _FakeSession) return handle;
     throw ArgumentError.value(handle);
@@ -1467,12 +2282,21 @@ ProjectReadModel _copyView(
   descriptorPath: view.descriptorPath,
 );
 
+int _compareRational(ProjectRationalTime left, ProjectRationalTime right) =>
+    (left.numerator * BigInt.from(right.denominator)).compareTo(
+      right.numerator * BigInt.from(left.denominator),
+    );
+
 class _FakeSession implements ProjectSessionHandle {
   _FakeSession(this.path, this.view);
 
   final String path;
   ProjectReadModel view;
   final List<ProjectMediaItem> media = [];
+  List<ProjectTimelineTrack> tracks = [];
+  final Map<String, List<ProjectTimelineClip>> clips = {};
+  int nextTrackId = 1;
+  int nextClipId = 1;
   final List<String> undo = [];
   final List<String> redo = [];
   final StreamController<ProjectHostEvent> events =

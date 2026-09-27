@@ -177,7 +177,7 @@ jobs:
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
           --name
-          "^(native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save)$"
+          "^(native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
 
   linux:
     name: Linux native build

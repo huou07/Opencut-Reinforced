@@ -172,7 +172,7 @@ void main() {
     expect(reopened.name, 'From Flutter');
     expect(reopened.revision, BigInt.from(3));
     expect(reopened.dirty, isFalse);
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.text('No timeline tracks'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('workspace-close')));
     await tester.pumpAndSettle();
@@ -194,6 +194,241 @@ void main() {
       'session_closing',
     ]);
   });
+
+  testWidgets(
+    'native timeline bridge edits, history, and save reopen use one Rust host',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'or-timeline-bridge-',
+      );
+      final projectPath = '${directory.path}/timeline-project.orproj';
+      final missingSourcePath = '${directory.path}/offline-video.mov';
+      await File(projectPath).writeAsString(
+        jsonEncode(
+          _offlineVideoTimelineProject(Uri.file(missingSourcePath).toString()),
+        ),
+      );
+      final gateway = _ObservedRustProjectGateway();
+      addTearDown(() async {
+        final session = gateway.activeSession;
+        if (session != null) {
+          await gateway.close(session, discardUnsaved: true);
+        }
+        directory.deleteSync(recursive: true);
+      });
+
+      final session = await gateway.openProject(projectPath);
+      var current = await gateway.summary(session);
+      final originalProjectId = current.projectId;
+      final originalInstanceId = current.projectInstanceId;
+      final emptyTracks = await gateway.listTimelineTracks(session);
+      expect(emptyTracks.items, isEmpty);
+      expect(emptyTracks.projectId, originalProjectId);
+      expect(emptyTracks.projectInstanceId, originalInstanceId);
+      expect(emptyTracks.projectRevision, BigInt.zero);
+
+      final mediaPage = await gateway.listMediaPage(
+        session,
+        offset: 0,
+        limit: 10,
+      );
+      final media = mediaPage.items.single;
+      expect(media.containerDuration?.canonical, '4/1');
+      expect(media.firstVideoDuration?.canonical, '4/1');
+      expect(media.firstAudioDuration, isNull);
+
+      final added = await gateway.addTimelineTrack(
+        session,
+        current,
+        ProjectTimelineTrackKind.video,
+      );
+      expect(added.succeeded, isTrue, reason: gateway.lastError?.toString());
+      current = added.view!;
+      expect(current.revision, BigInt.one);
+      expect(current.projectId, originalProjectId);
+      expect(current.projectInstanceId, originalInstanceId);
+      final tracks = await gateway.listTimelineTracks(session);
+      final track = tracks.items.single;
+      expect(
+        track.trackId,
+        matches(
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          ),
+        ),
+      );
+      expect(track.kind, ProjectTimelineTrackKind.video);
+      expect(track.clipCount, 0);
+      expect(tracks.projectRevision, current.revision);
+
+      final inserted = await gateway.insertTimelineClip(
+        session,
+        current,
+        trackId: track.trackId,
+        mediaId: media.mediaId,
+        timelineStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceStart: ProjectRationalTime(BigInt.one, 2),
+        duration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      expect(inserted.succeeded, isTrue);
+      current = inserted.view!;
+      expect(current.revision, BigInt.from(2));
+      var page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      final clip = page.items.single;
+      expect(
+        clip.clipId,
+        matches(
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          ),
+        ),
+      );
+      expect(clip.mediaId, media.mediaId);
+      expect(clip.timelineStart.canonical, '0/1');
+      expect(clip.sourceStart.canonical, '1/2');
+      expect(clip.sourceDuration.canonical, '2/1');
+      expect(page.projectRevision, current.revision);
+
+      final undoneInsert = await gateway.undo(session, current);
+      expect(undoneInsert.succeeded, isTrue);
+      current = undoneInsert.view!;
+      expect(current.revision, BigInt.from(3));
+      expect(
+        (await gateway.listTimelineClips(
+          session,
+          trackId: track.trackId,
+          offset: 0,
+          limit: 100,
+        )).items,
+        isEmpty,
+      );
+
+      final redoneInsert = await gateway.redo(session, current);
+      expect(redoneInsert.succeeded, isTrue);
+      current = redoneInsert.view!;
+      expect(current.revision, BigInt.from(4));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items.single.clipId, clip.clipId);
+
+      final moved = await gateway.moveTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        trackId: track.trackId,
+        timelineStart: ProjectRationalTime(BigInt.from(3), 1),
+      );
+      expect(moved.succeeded, isTrue);
+      current = moved.view!;
+      expect(current.revision, BigInt.from(5));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items.single.clipId, clip.clipId);
+      expect(page.items.single.mediaId, clip.mediaId);
+      expect(page.items.single.sourceStart.canonical, '1/2');
+      expect(page.items.single.sourceDuration.canonical, '2/1');
+      expect(page.items.single.timelineStart.canonical, '3/1');
+
+      final noOpMove = await gateway.moveTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        trackId: track.trackId,
+        timelineStart: ProjectRationalTime(BigInt.from(3), 1),
+      );
+      expect(noOpMove.succeeded, isTrue);
+      current = noOpMove.view!;
+      expect(current.revision, BigInt.from(5));
+
+      final deleted = await gateway.deleteTimelineClip(
+        session,
+        current,
+        clip.clipId,
+      );
+      expect(deleted.succeeded, isTrue);
+      current = deleted.view!;
+      expect(current.revision, BigInt.from(6));
+      expect(
+        (await gateway.listTimelineClips(
+          session,
+          trackId: track.trackId,
+          offset: 0,
+          limit: 100,
+        )).items,
+        isEmpty,
+      );
+      expect(
+        (await gateway.listMediaPage(session, offset: 0, limit: 10)).items,
+        hasLength(1),
+      );
+
+      final undoneDelete = await gateway.undo(session, current);
+      expect(undoneDelete.succeeded, isTrue);
+      current = undoneDelete.view!;
+      expect(current.revision, BigInt.from(7));
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(page.items.single.clipId, clip.clipId);
+      expect(page.items.single.timelineStart.canonical, '3/1');
+
+      final redoneDelete = await gateway.redo(session, current);
+      expect(redoneDelete.succeeded, isTrue);
+      current = redoneDelete.view!;
+      expect(current.revision, BigInt.from(8));
+      final saved = await gateway.save(session);
+      expect(saved.succeeded, isTrue);
+      expect(saved.view?.revision, BigInt.from(8));
+      expect(saved.view?.dirty, isFalse);
+      await gateway.close(session, discardUnsaved: false);
+
+      final reopenedSession = await gateway.openProject(projectPath);
+      final reopened = await gateway.summary(reopenedSession);
+      expect(reopened.projectId, originalProjectId);
+      expect(reopened.projectInstanceId, isNot(originalInstanceId));
+      expect(reopened.revision, BigInt.from(8));
+      expect(reopened.dirty, isFalse);
+      final reopenedTracks = await gateway.listTimelineTracks(reopenedSession);
+      expect(reopenedTracks.items.single.trackId, track.trackId);
+      expect(reopenedTracks.items.single.kind, ProjectTimelineTrackKind.video);
+      expect(
+        (await gateway.listTimelineClips(
+          reopenedSession,
+          trackId: track.trackId,
+          offset: 0,
+          limit: 100,
+        )).items,
+        isEmpty,
+      );
+      expect(
+        (await gateway.listMediaPage(
+          reopenedSession,
+          offset: 0,
+          limit: 10,
+        )).items.single.mediaId,
+        media.mediaId,
+      );
+      final historyAfterReopen = await gateway.undo(reopenedSession, reopened);
+      expect(historyAfterReopen.succeeded, isFalse);
+      expect(historyAfterReopen.errorCode, 'NOTHING_TO_UNDO');
+    },
+  );
 
   testWidgets(
     'native media bridge persists offline media through undo and save',
@@ -336,6 +571,42 @@ Map<String, Object?> _offlineMediaProject(String sourceUri) => {
   },
 };
 
+Map<String, Object?> _offlineVideoTimelineProject(String sourceUri) => {
+  'format': 'opencut-reinforced-project',
+  'schema_version': 3,
+  'project': {
+    'id': '01234567-89ab-4def-8123-456789abcdef',
+    'revision': 0,
+    'name': 'Offline video timeline fixture',
+    'media': [
+      {
+        'id': '22222222-2222-4222-8222-222222222222',
+        'source': {'kind': 'local_file', 'uri': sourceUri},
+        'metadata': {
+          'format_names': ['mov'],
+          'duration': {'numerator': 4, 'denominator': 1},
+          'file_size_bytes': 0,
+          'streams': [
+            {
+              'kind': 'video',
+              'metadata': {
+                'index': 0,
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+                'pixel_format': 'yuv420p',
+                'average_frame_rate': {'numerator': 24, 'denominator': 1},
+                'duration': {'numerator': 4, 'denominator': 1},
+              },
+            },
+          ],
+        },
+      },
+    ],
+    'timeline': {'tracks': []},
+  },
+};
+
 Future<void> _renameProject(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
   await tester.pumpAndSettle();
@@ -421,6 +692,79 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required int offset,
     required int limit,
   }) => _gateway.listMediaPage(session, offset: offset, limit: limit);
+
+  @override
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle session,
+  ) => _gateway.listTimelineTracks(session);
+
+  @override
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle session, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  }) => _gateway.listTimelineClips(
+    session,
+    trackId: trackId,
+    offset: offset,
+    limit: limit,
+  );
+
+  @override
+  Future<ProjectActionResult> addTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectTimelineTrackKind kind,
+  ) => _gateway.addTimelineTrack(session, current, kind);
+
+  @override
+  Future<ProjectActionResult> removeTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String trackId,
+  ) => _gateway.removeTimelineTrack(session, current, trackId);
+
+  @override
+  Future<ProjectActionResult> insertTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String mediaId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime sourceStart,
+    required ProjectRationalTime duration,
+  }) => _gateway.insertTimelineClip(
+    session,
+    current,
+    trackId: trackId,
+    mediaId: mediaId,
+    timelineStart: timelineStart,
+    sourceStart: sourceStart,
+    duration: duration,
+  );
+
+  @override
+  Future<ProjectActionResult> moveTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+  }) => _gateway.moveTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    trackId: trackId,
+    timelineStart: timelineStart,
+  );
+
+  @override
+  Future<ProjectActionResult> deleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  ) => _gateway.deleteTimelineClip(session, current, clipId);
 
   @override
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(

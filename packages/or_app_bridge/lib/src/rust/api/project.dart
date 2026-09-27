@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `unexpected_response_error`, `view_from_query`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `query`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_query_arguments_error`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -30,7 +30,21 @@ Future<RecoveryActionResult> discardRecovery({required String path}) =>
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>>
 abstract class ProjectHostHandle implements RustOpaqueInterface {
+  Future<ProjectActionResult> addTimelineTrack({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required TimelineTrackKindView kind,
+  });
+
   Future<ProjectActionResult> close({required bool discardUnsaved});
+
+  Future<ProjectActionResult> deleteTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+  });
 
   /// Prepares media without holding the live-host lock, then dispatches with the
   /// identity and revision captured by the caller before probing started.
@@ -41,9 +55,41 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String path,
   });
 
+  Future<ProjectActionResult> insertTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String mediaId,
+    required PlatformInt64 timelineStartNumerator,
+    required int timelineStartDenominator,
+    required PlatformInt64 sourceStartNumerator,
+    required int sourceStartDenominator,
+    required PlatformInt64 durationNumerator,
+    required int durationDenominator,
+  });
+
   Future<ProjectMediaPageView> listMediaPage({
     required BigInt offset,
     required BigInt limit,
+  });
+
+  Future<ProjectTimelineClipPageView> listTimelineClips({
+    required String trackId,
+    required BigInt offset,
+    required BigInt limit,
+  });
+
+  Future<ProjectTimelineTracksView> listTimelineTracks();
+
+  Future<ProjectActionResult> moveTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required String trackId,
+    required PlatformInt64 timelineStartNumerator,
+    required int timelineStartDenominator,
   });
 
   Future<MediaArtifactBytesView?> readMediaArtifact({
@@ -62,6 +108,13 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String mediaId,
+  });
+
+  Future<ProjectActionResult> removeTimelineTrack({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
   });
 
   Future<ProjectActionResult> rename({
@@ -305,6 +358,9 @@ class ProjectMediaItemView {
   final String? duration;
   final String? videoDetails;
   final String? audioDetails;
+  final RationalTimeView? containerDuration;
+  final RationalTimeView? firstVideoDuration;
+  final RationalTimeView? firstAudioDuration;
 
   const ProjectMediaItemView({
     required this.mediaId,
@@ -313,6 +369,9 @@ class ProjectMediaItemView {
     this.duration,
     this.videoDetails,
     this.audioDetails,
+    this.containerDuration,
+    this.firstVideoDuration,
+    this.firstAudioDuration,
   });
 
   @override
@@ -322,7 +381,10 @@ class ProjectMediaItemView {
       formatNames.hashCode ^
       duration.hashCode ^
       videoDetails.hashCode ^
-      audioDetails.hashCode;
+      audioDetails.hashCode ^
+      containerDuration.hashCode ^
+      firstVideoDuration.hashCode ^
+      firstAudioDuration.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -334,7 +396,10 @@ class ProjectMediaItemView {
           formatNames == other.formatNames &&
           duration == other.duration &&
           videoDetails == other.videoDetails &&
-          audioDetails == other.audioDetails;
+          audioDetails == other.audioDetails &&
+          containerDuration == other.containerDuration &&
+          firstVideoDuration == other.firstVideoDuration &&
+          firstAudioDuration == other.firstAudioDuration;
 }
 
 class ProjectMediaPageView {
@@ -384,6 +449,147 @@ class ProjectMediaPageView {
           nextOffset == other.nextOffset;
 }
 
+class ProjectTimelineClipPageView {
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final String trackId;
+  final List<ProjectTimelineClipView> items;
+  final BigInt totalCount;
+  final BigInt offset;
+  final BigInt limit;
+  final BigInt? nextOffset;
+
+  const ProjectTimelineClipPageView({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.trackId,
+    required this.items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    this.nextOffset,
+  });
+
+  @override
+  int get hashCode =>
+      projectId.hashCode ^
+      projectInstanceId.hashCode ^
+      projectRevision.hashCode ^
+      trackId.hashCode ^
+      items.hashCode ^
+      totalCount.hashCode ^
+      offset.hashCode ^
+      limit.hashCode ^
+      nextOffset.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineClipPageView &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          projectInstanceId == other.projectInstanceId &&
+          projectRevision == other.projectRevision &&
+          trackId == other.trackId &&
+          items == other.items &&
+          totalCount == other.totalCount &&
+          offset == other.offset &&
+          limit == other.limit &&
+          nextOffset == other.nextOffset;
+}
+
+class ProjectTimelineClipView {
+  final String clipId;
+  final String mediaId;
+  final RationalTimeView timelineStart;
+  final RationalTimeView sourceStart;
+  final RationalTimeView sourceDuration;
+
+  const ProjectTimelineClipView({
+    required this.clipId,
+    required this.mediaId,
+    required this.timelineStart,
+    required this.sourceStart,
+    required this.sourceDuration,
+  });
+
+  @override
+  int get hashCode =>
+      clipId.hashCode ^
+      mediaId.hashCode ^
+      timelineStart.hashCode ^
+      sourceStart.hashCode ^
+      sourceDuration.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineClipView &&
+          runtimeType == other.runtimeType &&
+          clipId == other.clipId &&
+          mediaId == other.mediaId &&
+          timelineStart == other.timelineStart &&
+          sourceStart == other.sourceStart &&
+          sourceDuration == other.sourceDuration;
+}
+
+class ProjectTimelineTrackView {
+  final String trackId;
+  final TimelineTrackKindView kind;
+  final BigInt clipCount;
+
+  const ProjectTimelineTrackView({
+    required this.trackId,
+    required this.kind,
+    required this.clipCount,
+  });
+
+  @override
+  int get hashCode => trackId.hashCode ^ kind.hashCode ^ clipCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineTrackView &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          kind == other.kind &&
+          clipCount == other.clipCount;
+}
+
+class ProjectTimelineTracksView {
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectTimelineTrackView> items;
+
+  const ProjectTimelineTracksView({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.items,
+  });
+
+  @override
+  int get hashCode =>
+      projectId.hashCode ^
+      projectInstanceId.hashCode ^
+      projectRevision.hashCode ^
+      items.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineTracksView &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          projectInstanceId == other.projectInstanceId &&
+          projectRevision == other.projectRevision &&
+          items == other.items;
+}
+
 class ProjectView {
   final String projectId;
   final String projectInstanceId;
@@ -421,6 +627,24 @@ class ProjectView {
           name == other.name &&
           dirty == other.dirty &&
           descriptorPath == other.descriptorPath;
+}
+
+class RationalTimeView {
+  final PlatformInt64 numerator;
+  final int denominator;
+
+  const RationalTimeView({required this.numerator, required this.denominator});
+
+  @override
+  int get hashCode => numerator.hashCode ^ denominator.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RationalTimeView &&
+          runtimeType == other.runtimeType &&
+          numerator == other.numerator &&
+          denominator == other.denominator;
 }
 
 class RecoveryActionResult {
@@ -489,3 +713,5 @@ class RecoveryInspectionView {
           conflictReason == other.conflictReason &&
           message == other.message;
 }
+
+enum TimelineTrackKindView { video, audio }

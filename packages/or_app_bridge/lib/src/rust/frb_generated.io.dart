@@ -79,6 +79,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
+  RationalTimeView dco_decode_box_autoadd_rational_time_view(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -91,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -101,6 +107,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProjectMediaItemView> dco_decode_list_project_media_item_view(
+    dynamic raw,
+  );
+
+  @protected
+  List<ProjectTimelineClipView> dco_decode_list_project_timeline_clip_view(
+    dynamic raw,
+  );
+
+  @protected
+  List<ProjectTimelineTrackView> dco_decode_list_project_timeline_track_view(
     dynamic raw,
   );
 
@@ -138,6 +154,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
 
   @protected
+  RationalTimeView? dco_decode_opt_box_autoadd_rational_time_view(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -156,13 +175,35 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectMediaPageView dco_decode_project_media_page_view(dynamic raw);
 
   @protected
+  ProjectTimelineClipPageView dco_decode_project_timeline_clip_page_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw);
+
+  @protected
+  ProjectTimelineTrackView dco_decode_project_timeline_track_view(dynamic raw);
+
+  @protected
+  ProjectTimelineTracksView dco_decode_project_timeline_tracks_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectView dco_decode_project_view(dynamic raw);
+
+  @protected
+  RationalTimeView dco_decode_rational_time_view(dynamic raw);
 
   @protected
   RecoveryActionResult dco_decode_recovery_action_result(dynamic raw);
 
   @protected
   RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw);
+
+  @protected
+  TimelineTrackKindView dco_decode_timeline_track_kind_view(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -236,6 +277,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
+  RationalTimeView sse_decode_box_autoadd_rational_time_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -248,6 +294,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -258,6 +307,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProjectMediaItemView> sse_decode_list_project_media_item_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ProjectTimelineClipView> sse_decode_list_project_timeline_clip_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ProjectTimelineTrackView> sse_decode_list_project_timeline_track_view(
     SseDeserializer deserializer,
   );
 
@@ -305,6 +364,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RationalTimeView? sse_decode_opt_box_autoadd_rational_time_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -333,7 +397,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineClipPageView sse_decode_project_timeline_clip_page_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineClipView sse_decode_project_timeline_clip_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineTrackView sse_decode_project_timeline_track_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineTracksView sse_decode_project_timeline_tracks_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectView sse_decode_project_view(SseDeserializer deserializer);
+
+  @protected
+  RationalTimeView sse_decode_rational_time_view(SseDeserializer deserializer);
 
   @protected
   RecoveryActionResult sse_decode_recovery_action_result(
@@ -342,6 +429,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TimelineTrackKindView sse_decode_timeline_track_kind_view(
     SseDeserializer deserializer,
   );
 
@@ -428,6 +520,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rational_time_view(
+    RationalTimeView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -438,6 +536,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -457,6 +558,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_project_media_item_view(
     List<ProjectMediaItemView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_project_timeline_clip_view(
+    List<ProjectTimelineClipView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_project_timeline_track_view(
+    List<ProjectTimelineTrackView> self,
     SseSerializer serializer,
   );
 
@@ -512,6 +625,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_rational_time_view(
+    RationalTimeView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
@@ -545,7 +664,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_timeline_clip_page_view(
+    ProjectTimelineClipPageView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_clip_view(
+    ProjectTimelineClipView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_track_view(
+    ProjectTimelineTrackView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_tracks_view(
+    ProjectTimelineTracksView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_view(ProjectView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rational_time_view(
+    RationalTimeView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_recovery_action_result(
@@ -556,6 +705,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_recovery_inspection_view(
     RecoveryInspectionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_track_kind_view(
+    TimelineTrackKindView self,
     SseSerializer serializer,
   );
 

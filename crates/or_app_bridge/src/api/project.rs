@@ -1,13 +1,14 @@
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig,
+    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
     CommandEnvelope, JobManagerConfig, MediaArtifactEvent, MediaArtifactEventState,
     MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
     MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, apply_project_recovery, discard_project_recovery,
+    ProjectRevision, QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome,
+    RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
+    TimelineTrackSummary, TrackId, TrackKind, apply_project_recovery, discard_project_recovery,
     ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
@@ -44,6 +45,58 @@ pub struct ProjectMediaItemView {
     pub duration: Option<String>,
     pub video_details: Option<String>,
     pub audio_details: Option<String>,
+    pub container_duration: Option<RationalTimeView>,
+    pub first_video_duration: Option<RationalTimeView>,
+    pub first_audio_duration: Option<RationalTimeView>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RationalTimeView {
+    pub numerator: i64,
+    pub denominator: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineTrackKindView {
+    Video,
+    Audio,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineTrackView {
+    pub track_id: String,
+    pub kind: TimelineTrackKindView,
+    pub clip_count: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineTracksView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub items: Vec<ProjectTimelineTrackView>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineClipView {
+    pub clip_id: String,
+    pub media_id: String,
+    pub timeline_start: RationalTimeView,
+    pub source_start: RationalTimeView,
+    pub source_duration: RationalTimeView,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineClipPageView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub track_id: String,
+    pub items: Vec<ProjectTimelineClipView>,
+    pub total_count: u64,
+    pub offset: u64,
+    pub limit: u64,
+    pub next_offset: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -397,6 +450,230 @@ impl ProjectHostHandle {
         })
     }
 
+    pub fn list_timeline_tracks(&self) -> Result<ProjectTimelineTracksView, ProjectBridgeError> {
+        let described = self.host.describe().map_err(host_error)?;
+        let result = self.query(QueryEnvelope::timeline_tracks(
+            described.summary.project_id,
+            described.summary.project_instance_id,
+        ))?;
+        let tracks = result
+            .timeline_tracks
+            .ok_or_else(unexpected_response_error)?;
+        Ok(ProjectTimelineTracksView {
+            project_id: result.summary.project_id.to_string(),
+            project_instance_id: result.summary.project_instance_id.to_string(),
+            project_revision: result.summary.project_revision.value(),
+            items: tracks.iter().map(timeline_track_view).collect(),
+        })
+    }
+
+    pub fn list_timeline_clips(
+        &self,
+        track_id: String,
+        offset: u64,
+        limit: u64,
+    ) -> Result<ProjectTimelineClipPageView, ProjectBridgeError> {
+        let track_id = TrackId::from_str(&track_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_TRACK_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let offset = usize::try_from(offset).map_err(|_| timeline_query_arguments_error())?;
+        let limit = usize::try_from(limit).map_err(|_| timeline_query_arguments_error())?;
+        let described = self.host.describe().map_err(host_error)?;
+        let result = self.query(QueryEnvelope::timeline_clips(
+            described.summary.project_id,
+            described.summary.project_instance_id,
+            track_id,
+            offset,
+            limit,
+        ))?;
+        let page = result
+            .timeline_clip_page
+            .as_ref()
+            .ok_or_else(unexpected_response_error)?;
+        Ok(timeline_clip_page_view(&result, page))
+    }
+
+    pub fn add_timeline_track(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        kind: TimelineTrackKindView,
+    ) -> ProjectActionResult {
+        let track_id = TrackId::generate();
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::add_timeline_track(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    match kind {
+                        TimelineTrackKindView::Video => TrackKind::Video,
+                        TimelineTrackKindView::Audio => TrackKind::Audio,
+                    },
+                )
+            },
+        )
+    }
+
+    pub fn remove_timeline_track(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::remove_timeline_track(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        media_id: String,
+        timeline_start_numerator: i64,
+        timeline_start_denominator: u32,
+        source_start_numerator: i64,
+        source_start_denominator: u32,
+        duration_numerator: i64,
+        duration_denominator: u32,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        let media_id = match MediaId::from_str(&media_id) {
+            Ok(media_id) => media_id,
+            Err(error) => return invalid_timeline_id("INVALID_MEDIA_ID", error.to_string()),
+        };
+        let timeline_start =
+            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        let source_start = match RationalTime::new(source_start_numerator, source_start_denominator)
+        {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        let duration = match RationalTime::new(duration_numerator, duration_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        let source_range = match TimeRange::new(source_start, duration) {
+            Ok(range) => range,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::insert_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    ClipId::generate(),
+                    track_id,
+                    media_id,
+                    timeline_start,
+                    source_range,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn move_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        track_id: String,
+        timeline_start_numerator: i64,
+        timeline_start_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        let timeline_start =
+            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::move_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    track_id,
+                    timeline_start,
+                )
+            },
+        )
+    }
+
+    pub fn delete_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::delete_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                )
+            },
+        )
+    }
+
     pub fn request_media_thumbnail(&self, media_id: String) -> MediaArtifactRequestView {
         self.request_media_artifact(media_id, MediaArtifactKindView::Thumbnail)
     }
@@ -709,6 +986,33 @@ impl ProjectHostHandle {
         self.dispatch_command(envelope)
     }
 
+    fn timeline_command(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        build: impl FnOnce(ProjectId, ProjectInstanceId, ProjectRevision) -> CommandEnvelope,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        self.dispatch_command(build(project_id, project_instance_id, revision))
+    }
+
+    fn query(&self, request: QueryEnvelope) -> Result<QueryResult, ProjectBridgeError> {
+        match self
+            .host
+            .handle_application_request(ApplicationRequest::Query(request))
+        {
+            Ok(ApplicationResponse::Query(result)) => Ok(result),
+            Ok(ApplicationResponse::Error(error)) => Err(operation_bridge_error(error)),
+            Ok(_) => Err(unexpected_response_error()),
+            Err(error) => Err(host_error(error)),
+        }
+    }
+
     fn dispatch_command(&self, envelope: CommandEnvelope) -> ProjectActionResult {
         match self
             .host
@@ -870,7 +1174,80 @@ fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
         }),
         video_details,
         audio_details,
+        container_duration: metadata.duration().map(rational_time_view),
+        first_video_duration: metadata
+            .streams()
+            .iter()
+            .find_map(|stream| match stream {
+                MediaStreamMetadata::Video(video) => Some(video.duration()),
+                _ => None,
+            })
+            .flatten()
+            .map(rational_time_view),
+        first_audio_duration: metadata
+            .streams()
+            .iter()
+            .find_map(|stream| match stream {
+                MediaStreamMetadata::Audio(audio) => Some(audio.duration()),
+                _ => None,
+            })
+            .flatten()
+            .map(rational_time_view),
     }
+}
+
+fn rational_time_view(time: RationalTime) -> RationalTimeView {
+    RationalTimeView {
+        numerator: time.numerator(),
+        denominator: time.denominator(),
+    }
+}
+
+fn timeline_track_view(track: &TimelineTrackSummary) -> ProjectTimelineTrackView {
+    ProjectTimelineTrackView {
+        track_id: track.track_id.to_string(),
+        kind: match track.kind {
+            TrackKind::Video => TimelineTrackKindView::Video,
+            TrackKind::Audio => TimelineTrackKindView::Audio,
+        },
+        clip_count: u64::try_from(track.clip_count).expect("bounded count fits in u64"),
+    }
+}
+
+fn timeline_clip_page_view(
+    result: &QueryResult,
+    page: &TimelineClipPage,
+) -> ProjectTimelineClipPageView {
+    ProjectTimelineClipPageView {
+        project_id: result.summary.project_id.to_string(),
+        project_instance_id: result.summary.project_instance_id.to_string(),
+        project_revision: result.summary.project_revision.value(),
+        track_id: page.track_id.to_string(),
+        items: page.items.iter().map(timeline_clip_view).collect(),
+        total_count: u64::try_from(page.total_count).expect("bounded count fits in u64"),
+        offset: u64::try_from(page.offset).expect("bounded offset fits in u64"),
+        limit: u64::try_from(page.limit).expect("bounded limit fits in u64"),
+        next_offset: page
+            .next_offset
+            .map(|value| u64::try_from(value).expect("bounded offset fits in u64")),
+    }
+}
+
+fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
+    ProjectTimelineClipView {
+        clip_id: clip.clip_id.to_string(),
+        media_id: clip.media_id.to_string(),
+        timeline_start: rational_time_view(clip.timeline_start),
+        source_start: rational_time_view(clip.source_range.start()),
+        source_duration: rational_time_view(clip.source_range.duration()),
+    }
+}
+
+fn invalid_timeline_id(code: &str, message: String) -> ProjectActionResult {
+    action_error(ProjectBridgeError {
+        code: code.to_owned(),
+        message,
+    })
 }
 
 fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
@@ -884,6 +1261,20 @@ fn invalid_arguments() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "INVALID_ARGUMENTS".to_owned(),
         message: "media page bounds are invalid".to_owned(),
+    }
+}
+
+fn timeline_arguments_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "INVALID_ARGUMENTS".to_owned(),
+        message: "timeline time values are invalid".to_owned(),
+    }
+}
+
+fn timeline_query_arguments_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "INVALID_ARGUMENTS".to_owned(),
+        message: "timeline clip page bounds are invalid".to_owned(),
     }
 }
 
@@ -1079,11 +1470,14 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 mod tests {
     use super::{
         CachePlatform, MediaArtifactKindView, configured_media_artifact_cache_root,
-        media_artifact_event_view, operation_error_code,
+        media_artifact_event_view, operation_error_code, rational_time_view,
+        timeline_clip_page_view, timeline_track_view,
     };
     use or_core::{
-        CacheArtifactKind, CacheKey, JobId, MediaArtifactEvent, MediaArtifactEventState, MediaId,
-        OperationErrorCode, ParametersFingerprint, SourceFingerprint,
+        CacheArtifactKind, CacheKey, ClipId, JobId, MediaArtifactEvent, MediaArtifactEventState,
+        MediaId, OperationErrorCode, ParametersFingerprint, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectSummary, QueryResult, RationalTime, SourceFingerprint, TimeRange,
+        TimelineClipPage, TimelineClipState, TimelineTrackSummary, TrackId, TrackKind,
     };
     use std::path::PathBuf;
 
@@ -1140,6 +1534,79 @@ mod tests {
         assert_eq!(
             operation_error_code(OperationErrorCode::MediaInUse),
             "MEDIA_IN_USE"
+        );
+    }
+
+    #[test]
+    fn timeline_bridge_views_keep_ids_identity_and_exact_rational_values() {
+        let track_id = TrackId::generate();
+        let track = timeline_track_view(&TimelineTrackSummary {
+            track_id,
+            kind: TrackKind::Audio,
+            clip_count: 3,
+        });
+        assert_eq!(track.track_id, track_id.to_string());
+        assert_eq!(track.kind, super::TimelineTrackKindView::Audio);
+        assert_eq!(track.clip_count, 3);
+
+        let project_id = ProjectId::generate();
+        let project_instance_id = ProjectInstanceId::generate();
+        let result = QueryResult {
+            query_id: "timeline.clips".to_owned(),
+            schema_version: 1,
+            summary: ProjectSummary {
+                project_id,
+                project_instance_id,
+                project_revision: ProjectRevision::new(17),
+                name: "Bridge fixture".to_owned(),
+            },
+            media_page: None,
+            media_item: None,
+            timeline_tracks: None,
+            timeline_clip_page: None,
+        };
+        let clip_id = ClipId::generate();
+        let media_id = MediaId::generate();
+        let clip_page = TimelineClipPage {
+            track_id,
+            items: vec![TimelineClipState {
+                clip_id,
+                media_id,
+                timeline_start: RationalTime::new(3003, 1001).unwrap(),
+                source_range: TimeRange::new(
+                    RationalTime::new(1, 2).unwrap(),
+                    RationalTime::new(5, 2).unwrap(),
+                )
+                .unwrap(),
+            }],
+            total_count: 9,
+            offset: 4,
+            limit: 5,
+            next_offset: Some(9),
+        };
+        let view = timeline_clip_page_view(&result, &clip_page);
+        assert_eq!(view.project_id, project_id.to_string());
+        assert_eq!(view.project_instance_id, project_instance_id.to_string());
+        assert_eq!(view.project_revision, 17);
+        assert_eq!(view.track_id, track_id.to_string());
+        assert_eq!(view.total_count, 9);
+        assert_eq!(view.offset, 4);
+        assert_eq!(view.limit, 5);
+        assert_eq!(view.next_offset, Some(9));
+        let clip = &view.items[0];
+        assert_eq!(clip.clip_id, clip_id.to_string());
+        assert_eq!(clip.media_id, media_id.to_string());
+        assert_eq!(
+            clip.timeline_start,
+            rational_time_view(RationalTime::new(3003, 1001).unwrap())
+        );
+        assert_eq!(
+            clip.source_start,
+            rational_time_view(RationalTime::new(1, 2).unwrap())
+        );
+        assert_eq!(
+            clip.source_duration,
+            rational_time_view(RationalTime::new(5, 2).unwrap())
         );
     }
 

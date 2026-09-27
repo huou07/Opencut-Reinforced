@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -17,10 +20,23 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.mediaLoading = false,
     this.mediaLoadingMore = false,
     this.mediaLoadError,
+    this.timelineTracks,
+    this.timelineClipPages = const {},
+    this.timelineLoadingMoreTracks = const {},
+    this.timelineLoading = false,
+    this.timelineLoadError,
     this.onImportMedia,
     this.onLoadMoreMedia,
     this.onRefreshMedia,
     this.onRemoveMedia,
+    this.onAddVideoTrack,
+    this.onAddAudioTrack,
+    this.onRemoveTimelineTrack,
+    this.onLoadMoreTimelineClips,
+    this.onRefreshTimeline,
+    this.onAddMediaToTimeline,
+    this.onMoveTimelineClip,
+    this.onDeleteTimelineClip,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -38,10 +54,42 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final bool mediaLoading;
   final bool mediaLoadingMore;
   final String? mediaLoadError;
+  final ProjectTimelineTracks? timelineTracks;
+  final Map<String, ProjectTimelineClipPage> timelineClipPages;
+  final Set<String> timelineLoadingMoreTracks;
+  final bool timelineLoading;
+  final String? timelineLoadError;
   final VoidCallback? onImportMedia;
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
+  final VoidCallback? onAddVideoTrack;
+  final VoidCallback? onAddAudioTrack;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
+  onRemoveTimelineTrack;
+  final ValueChanged<String>? onLoadMoreTimelineClips;
+  final VoidCallback? onRefreshTimeline;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectMediaItem media,
+    String trackId,
+    ProjectRationalTime timelineStart,
+    ProjectRationalTime sourceStart,
+    ProjectRationalTime duration,
+  )?
+  onAddMediaToTimeline;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineClip clip,
+    String trackId,
+    ProjectRationalTime timelineStart,
+  )?
+  onMoveTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineClip clip,
+  )?
+  onDeleteTimelineClip;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -138,11 +186,17 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 child: _EditorToolPanel(
                   selectedTool: _selectedTool,
                   isProjectWorkspace: widget.isProjectWorkspace,
+                  project: widget.project,
                   mediaPage: widget.mediaPage,
+                  timelineTracks: widget.timelineTracks,
                   mediaPreviews: widget.mediaPreviews,
                   mediaLoading: widget.mediaLoading,
                   mediaLoadingMore: widget.mediaLoadingMore,
                   mediaLoadError: widget.mediaLoadError,
+                  onAddMediaToTimeline:
+                      widget.isProjectWorkspace && !widget.busy
+                      ? widget.onAddMediaToTimeline
+                      : null,
                   onImportMedia: widget.busy ? null : widget.onImportMedia,
                   onLoadMoreMedia: widget.onLoadMoreMedia,
                   onRefreshMedia: widget.onRefreshMedia,
@@ -157,8 +211,36 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           ),
         ),
         const _ResizeDivider(horizontal: true),
-        const _TimelineToolbar(compact: false),
-        const Expanded(flex: 2, child: _TimelinePanel(compact: false)),
+        _TimelineToolbar(
+          compact: false,
+          isProjectWorkspace: widget.isProjectWorkspace,
+          busy: widget.busy,
+          onUndo: widget.onUndo,
+          onAddVideoTrack: widget.onAddVideoTrack,
+          onAddAudioTrack: widget.onAddAudioTrack,
+        ),
+        Expanded(
+          flex: 2,
+          child: _TimelinePanel(
+            compact: false,
+            isProjectWorkspace: widget.isProjectWorkspace,
+            project: widget.project,
+            tracks: widget.timelineTracks,
+            clipPages: widget.timelineClipPages,
+            loadingMoreTracks: widget.timelineLoadingMoreTracks,
+            loading: widget.timelineLoading,
+            error: widget.timelineLoadError,
+            busy: widget.busy,
+            onAddVideoTrack: widget.onAddVideoTrack,
+            onAddAudioTrack: widget.onAddAudioTrack,
+            onRemoveTrack: widget.onRemoveTimelineTrack,
+            onLoadMore: widget.onLoadMoreTimelineClips,
+            onRefresh: widget.onRefreshTimeline,
+            onMoveClip: widget.onMoveTimelineClip,
+            onDeleteClip: widget.onDeleteTimelineClip,
+            mediaItems: widget.mediaPage?.items ?? const [],
+          ),
+        ),
       ],
     );
   }
@@ -167,8 +249,36 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     return Column(
       children: [
         const Expanded(flex: 4, child: _ViewerPanel(compact: true)),
-        const _TimelineToolbar(compact: true),
-        const Expanded(flex: 2, child: _TimelinePanel(compact: true)),
+        _TimelineToolbar(
+          compact: true,
+          isProjectWorkspace: widget.isProjectWorkspace,
+          busy: widget.busy,
+          onUndo: widget.onUndo,
+          onAddVideoTrack: widget.onAddVideoTrack,
+          onAddAudioTrack: widget.onAddAudioTrack,
+        ),
+        Expanded(
+          flex: 2,
+          child: _TimelinePanel(
+            compact: true,
+            isProjectWorkspace: widget.isProjectWorkspace,
+            project: widget.project,
+            tracks: widget.timelineTracks,
+            clipPages: widget.timelineClipPages,
+            loadingMoreTracks: widget.timelineLoadingMoreTracks,
+            loading: widget.timelineLoading,
+            error: widget.timelineLoadError,
+            busy: widget.busy,
+            onAddVideoTrack: widget.onAddVideoTrack,
+            onAddAudioTrack: widget.onAddAudioTrack,
+            onRemoveTrack: widget.onRemoveTimelineTrack,
+            onLoadMore: widget.onLoadMoreTimelineClips,
+            onRefresh: widget.onRefreshTimeline,
+            onMoveClip: widget.onMoveTimelineClip,
+            onDeleteClip: widget.onDeleteTimelineClip,
+            mediaItems: widget.mediaPage?.items ?? const [],
+          ),
+        ),
         _MobileToolDock(
           selected: _selectedTool,
           onSelected: _showMobileToolSheet,
@@ -211,6 +321,7 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = project;
     return Container(
+      width: double.infinity,
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
       decoration: const BoxDecoration(
@@ -247,7 +358,7 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
             OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
           ],
           const SizedBox(width: OrSpacing.x2),
-          Flexible(
+          Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -345,6 +456,7 @@ class _EditorPreviewHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
       decoration: const BoxDecoration(
@@ -451,7 +563,9 @@ class _EditorToolPanel extends StatelessWidget {
   const _EditorToolPanel({
     required this.selectedTool,
     required this.isProjectWorkspace,
+    required this.project,
     required this.mediaPage,
+    required this.timelineTracks,
     required this.mediaPreviews,
     required this.mediaLoading,
     required this.mediaLoadingMore,
@@ -460,11 +574,14 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onLoadMoreMedia,
     required this.onRefreshMedia,
     required this.onRemoveMedia,
+    required this.onAddMediaToTimeline,
   });
 
   final String selectedTool;
   final bool isProjectWorkspace;
+  final ProjectReadModel? project;
   final ProjectMediaPage? mediaPage;
+  final ProjectTimelineTracks? timelineTracks;
   final Map<String, ProjectMediaPreview> mediaPreviews;
   final bool mediaLoading;
   final bool mediaLoadingMore;
@@ -473,12 +590,23 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectMediaItem media,
+    String trackId,
+    ProjectRationalTime timelineStart,
+    ProjectRationalTime sourceStart,
+    ProjectRationalTime duration,
+  )?
+  onAddMediaToTimeline;
 
   @override
   Widget build(BuildContext context) {
     if (selectedTool == 'Media' && isProjectWorkspace) {
       return _MediaLibraryPanel(
         page: mediaPage,
+        project: project,
+        tracks: timelineTracks,
         previews: mediaPreviews,
         loading: mediaLoading,
         loadingMore: mediaLoadingMore,
@@ -487,6 +615,7 @@ class _EditorToolPanel extends StatelessWidget {
         onLoadMore: onLoadMoreMedia,
         onRefresh: onRefreshMedia,
         onRemove: onRemoveMedia,
+        onAddMediaToTimeline: onAddMediaToTimeline,
       );
     }
 
@@ -530,6 +659,8 @@ class _EditorToolPanel extends StatelessWidget {
 class _MediaLibraryPanel extends StatelessWidget {
   const _MediaLibraryPanel({
     required this.page,
+    required this.project,
+    required this.tracks,
     required this.previews,
     required this.loading,
     required this.loadingMore,
@@ -538,9 +669,12 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onLoadMore,
     required this.onRefresh,
     required this.onRemove,
+    required this.onAddMediaToTimeline,
   });
 
   final ProjectMediaPage? page;
+  final ProjectReadModel? project;
+  final ProjectTimelineTracks? tracks;
   final Map<String, ProjectMediaPreview> previews;
   final bool loading;
   final bool loadingMore;
@@ -549,10 +683,29 @@ class _MediaLibraryPanel extends StatelessWidget {
   final VoidCallback? onLoadMore;
   final VoidCallback? onRefresh;
   final ValueChanged<ProjectMediaItem>? onRemove;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectMediaItem media,
+    String trackId,
+    ProjectRationalTime timelineStart,
+    ProjectRationalTime sourceStart,
+    ProjectRationalTime duration,
+  )?
+  onAddMediaToTimeline;
 
   @override
   Widget build(BuildContext context) {
     final items = page?.items ?? const <ProjectMediaItem>[];
+    final timelineSnapshotMatches =
+        page != null &&
+        project != null &&
+        tracks != null &&
+        page!.projectId == project!.projectId &&
+        page!.projectInstanceId == project!.projectInstanceId &&
+        page!.projectRevision == project!.revision &&
+        tracks!.projectId == project!.projectId &&
+        tracks!.projectInstanceId == project!.projectInstanceId &&
+        tracks!.projectRevision == project!.revision;
     return ColoredBox(
       key: const ValueKey('project-media-panel'),
       color: OrColors.backgroundRaised,
@@ -619,6 +772,19 @@ class _MediaLibraryPanel extends StatelessWidget {
                       child: _MediaLibraryItem(
                         item: item,
                         preview: previews[item.mediaId],
+                        onAddToTimeline:
+                            onAddMediaToTimeline == null ||
+                                !timelineSnapshotMatches
+                            ? null
+                            : () => unawaited(
+                                _showInsertTimelineDialog(
+                                  context: context,
+                                  project: project!,
+                                  media: item,
+                                  tracks: tracks!,
+                                  onInsert: onAddMediaToTimeline!,
+                                ),
+                              ),
                         onRemove: onRemove == null
                             ? null
                             : () => onRemove!(item),
@@ -665,11 +831,13 @@ class _MediaLibraryItem extends StatelessWidget {
   const _MediaLibraryItem({
     required this.item,
     required this.preview,
+    required this.onAddToTimeline,
     required this.onRemove,
   });
 
   final ProjectMediaItem item;
   final ProjectMediaPreview? preview;
+  final VoidCallback? onAddToTimeline;
   final VoidCallback? onRemove;
 
   @override
@@ -727,6 +895,15 @@ class _MediaLibraryItem extends StatelessWidget {
                 ),
               ),
             ),
+            if (item.videoDetails != null || item.audioDetails != null)
+              IconButton(
+                key: ValueKey('media-add-timeline-${item.mediaId}'),
+                tooltip: 'Add to Timeline',
+                onPressed: onAddToTimeline,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.playlist_add_outlined, size: 18),
+                color: OrColors.textMuted,
+              ),
             IconButton(
               key: ValueKey('media-remove-${item.mediaId}'),
               tooltip: 'Remove from Project',
@@ -949,13 +1126,26 @@ class _InspectorPanel extends StatelessWidget {
 }
 
 class _TimelineToolbar extends StatelessWidget {
-  const _TimelineToolbar({required this.compact});
+  const _TimelineToolbar({
+    required this.compact,
+    required this.isProjectWorkspace,
+    required this.busy,
+    required this.onUndo,
+    required this.onAddVideoTrack,
+    required this.onAddAudioTrack,
+  });
 
   final bool compact;
+  final bool isProjectWorkspace;
+  final bool busy;
+  final VoidCallback? onUndo;
+  final VoidCallback? onAddVideoTrack;
+  final VoidCallback? onAddAudioTrack;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       height: 40,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? OrSpacing.x2 : OrSpacing.x3,
@@ -966,31 +1156,59 @@ class _TimelineToolbar extends StatelessWidget {
           horizontal: BorderSide(color: OrColors.border),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              compact ? 'Timeline preview' : 'Timeline tools unavailable',
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Text(
+              isProjectWorkspace
+                  ? 'Timeline'
+                  : compact
+                  ? 'Timeline preview'
+                  : 'Timeline tools unavailable',
               style: const TextStyle(
                 color: OrColors.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
             ),
-          ),
-          _UnavailableTimelineAction(
-            tooltip: 'Undo is unavailable in this Developer Preview',
-            icon: Icons.undo_outlined,
-          ),
-          _UnavailableTimelineAction(
-            tooltip: 'Split is unavailable in this Developer Preview',
-            icon: Icons.content_cut_outlined,
-          ),
-          _UnavailableTimelineAction(
-            tooltip: 'Timeline zoom is unavailable in this Developer Preview',
-            icon: Icons.zoom_in_outlined,
-          ),
-        ],
+            const SizedBox(width: OrSpacing.x2),
+            if (isProjectWorkspace) ...[
+              TextButton.icon(
+                key: const ValueKey('timeline-add-video-track'),
+                onPressed: busy ? null : onAddVideoTrack,
+                icon: const Icon(Icons.movie_outlined, size: 16),
+                label: Text(compact ? 'Add Video' : 'Add Video Track'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-audio-track'),
+                onPressed: busy ? null : onAddAudioTrack,
+                icon: const Icon(Icons.graphic_eq_outlined, size: 16),
+                label: Text(compact ? 'Add Audio' : 'Add Audio Track'),
+              ),
+              IconButton(
+                key: const ValueKey('timeline-undo'),
+                tooltip: 'Undo',
+                onPressed: busy ? null : onUndo,
+                icon: const Icon(Icons.undo_outlined, size: 17),
+                visualDensity: VisualDensity.compact,
+              ),
+            ] else ...[
+              _UnavailableTimelineAction(
+                tooltip: 'Undo is unavailable in this Developer Preview',
+                icon: Icons.undo_outlined,
+              ),
+            ],
+            _UnavailableTimelineAction(
+              tooltip: 'Split is unavailable in this Developer Preview',
+              icon: Icons.content_cut_outlined,
+            ),
+            _UnavailableTimelineAction(
+              tooltip: 'Timeline zoom is unavailable in this Developer Preview',
+              icon: Icons.zoom_in_outlined,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1016,14 +1234,57 @@ class _UnavailableTimelineAction extends StatelessWidget {
 }
 
 class _TimelinePanel extends StatelessWidget {
-  const _TimelinePanel({required this.compact});
+  const _TimelinePanel({
+    required this.compact,
+    required this.isProjectWorkspace,
+    required this.project,
+    required this.tracks,
+    required this.clipPages,
+    required this.loadingMoreTracks,
+    required this.loading,
+    required this.error,
+    required this.busy,
+    required this.onAddVideoTrack,
+    required this.onAddAudioTrack,
+    required this.onRemoveTrack,
+    required this.onLoadMore,
+    required this.onRefresh,
+    required this.onMoveClip,
+    required this.onDeleteClip,
+    required this.mediaItems,
+  });
 
   final bool compact;
+  final bool isProjectWorkspace;
+  final ProjectReadModel? project;
+  final ProjectTimelineTracks? tracks;
+  final Map<String, ProjectTimelineClipPage> clipPages;
+  final Set<String> loadingMoreTracks;
+  final bool loading;
+  final String? error;
+  final bool busy;
+  final VoidCallback? onAddVideoTrack;
+  final VoidCallback? onAddAudioTrack;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
+  onRemoveTrack;
+  final ValueChanged<String>? onLoadMore;
+  final VoidCallback? onRefresh;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    String,
+    ProjectRationalTime,
+  )?
+  onMoveClip;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
+  onDeleteClip;
+  final List<ProjectMediaItem> mediaItems;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('editor-timeline-region'),
+      width: double.infinity,
       decoration: const BoxDecoration(
         color: Color(0xFF101011),
         border: Border(bottom: BorderSide(color: OrColors.border)),
@@ -1033,34 +1294,1061 @@ class _TimelinePanel extends StatelessWidget {
           _PanelHeader(
             title: 'Timeline',
             height: compact ? 34 : 38,
-            trailing: const OrBadge('Developer Preview'),
+            trailing: isProjectWorkspace
+                ? const OrBadge('Project timeline')
+                : const OrBadge('Developer Preview'),
           ),
-          _TimelineRuler(compact: compact),
-          const Expanded(
-            child: Column(
-              children: [
-                Expanded(child: _EmptyTimelineLane()),
-                Divider(height: 1),
-                Expanded(child: _EmptyTimelineLane()),
-                Divider(height: 1),
-                Expanded(child: _EmptyTimelineLane()),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
-            child: Text(
-              'Timeline engine not implemented',
-              style: TextStyle(
-                color: OrColors.textMuted,
-                fontSize: compact ? 10 : 11,
+          if (!isProjectWorkspace)
+            Expanded(
+              child: Column(
+                children: [
+                  _TimelineRuler(compact: compact),
+                  const Expanded(
+                    child: Column(
+                      children: [
+                        Expanded(child: _EmptyTimelineLane()),
+                        Divider(height: 1),
+                        Expanded(child: _EmptyTimelineLane()),
+                        Divider(height: 1),
+                        Expanded(child: _EmptyTimelineLane()),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
+                    child: Text(
+                      'Timeline engine not implemented',
+                      style: TextStyle(
+                        color: OrColors.textMuted,
+                        fontSize: compact ? 10 : 11,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
+            )
+          else
+            Expanded(child: _buildProjectTimeline(context)),
         ],
       ),
     );
   }
+
+  Widget _buildProjectTimeline(BuildContext context) {
+    final snapshot = tracks;
+    if (loading && snapshot == null) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (snapshot == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              error ?? 'The timeline is unavailable.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: OrColors.textSecondary),
+            ),
+            TextButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh timeline'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (snapshot.items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'No timeline tracks',
+              style: TextStyle(
+                color: OrColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: OrSpacing.x2),
+            Wrap(
+              spacing: OrSpacing.x2,
+              runSpacing: OrSpacing.x2,
+              alignment: WrapAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('timeline-empty-add-video'),
+                  onPressed: busy ? null : onAddVideoTrack,
+                  icon: const Icon(Icons.movie_outlined, size: 16),
+                  label: const Text('Add Video Track'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('timeline-empty-add-audio'),
+                  onPressed: busy ? null : onAddAudioTrack,
+                  icon: const Icon(Icons.graphic_eq_outlined, size: 16),
+                  label: const Text('Add Audio Track'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final labels = _timelineTrackLabels(snapshot.items);
+        var endSeconds = 0.0;
+        for (final page in clipPages.values) {
+          for (final clip in page.items) {
+            final start = clip.timelineStart.secondsForDisplay;
+            final duration = clip.sourceDuration.secondsForDisplay;
+            final end = start + duration;
+            if (start.isFinite && duration.isFinite && end.isFinite) {
+              endSeconds = math.max(endSeconds, end);
+            }
+          }
+        }
+        final displayDuration = math.max(20.0, endSeconds);
+        const maximumWidth = 100000.0;
+        const preferredScale = 64.0;
+        final scale = math.min(preferredScale, maximumWidth / displayDuration);
+        final canvasWidth = math.max(
+          constraints.maxWidth - _timelineTrackHeaderWidth,
+          math.min(maximumWidth, displayDuration * scale),
+        );
+        final tickSeconds = _timelineTickSeconds(displayDuration, canvasWidth);
+        final trackRows = <Widget>[];
+        for (final track in snapshot.items) {
+          final page = clipPages[track.trackId];
+          final loadedCount = page?.items.length ?? 0;
+          final countLabel = loadedCount < track.clipCount
+              ? '$loadedCount / ${track.clipCount}'
+              : '${track.clipCount}';
+          trackRows.add(
+            _TimelineTrackHeader(
+              track: track,
+              label: labels[track.trackId]!,
+              countLabel: countLabel,
+              busy: busy,
+              project: project,
+              onRemove: onRemoveTrack,
+            ),
+          );
+          if (page?.nextOffset != null) {
+            trackRows.add(
+              _TimelineLoadMoreHeader(
+                trackId: track.trackId,
+                loading: loadingMoreTracks.contains(track.trackId),
+                busy: busy,
+                onLoadMore: onLoadMore,
+              ),
+            );
+          }
+        }
+
+        return Scrollbar(
+          child: SingleChildScrollView(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: _timelineTrackHeaderWidth,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: _timelineRulerHeight),
+                      ...trackRows,
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: canvasWidth,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: _timelineRulerHeight,
+                            child: CustomPaint(
+                              painter: _TimelineRulerPainter(
+                                pixelsPerSecond: scale,
+                                tickSeconds: tickSeconds,
+                              ),
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
+                          for (final track in snapshot.items) ...[
+                            _TimelineTrackLane(
+                              track: track,
+                              clips:
+                                  clipPages[track.trackId]?.items ?? const [],
+                              mediaItems: mediaItems,
+                              width: canvasWidth,
+                              pixelsPerSecond: scale,
+                              tickSeconds: tickSeconds,
+                              onOpenClip: (clip) => unawaited(
+                                _showTimelineClipActions(
+                                  context: context,
+                                  project: project,
+                                  tracks: snapshot.items,
+                                  track: track,
+                                  clip: clip,
+                                  onMove: onMoveClip,
+                                  onDelete: onDeleteClip,
+                                  busy: busy,
+                                ),
+                              ),
+                            ),
+                            if (clipPages[track.trackId]?.nextOffset != null)
+                              _TimelineLoadMoreLane(width: canvasWidth),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+const double _timelineTrackHeaderWidth = 132;
+const double _timelineRulerHeight = 27;
+const double _timelineLaneHeight = 58;
+
+Map<String, String> _timelineTrackLabels(List<ProjectTimelineTrack> tracks) {
+  var video = 0;
+  var audio = 0;
+  return {
+    for (final track in tracks)
+      track.trackId: switch (track.kind) {
+        ProjectTimelineTrackKind.video => 'V${++video}',
+        ProjectTimelineTrackKind.audio => 'A${++audio}',
+      },
+  };
+}
+
+double _timelineTickSeconds(double duration, double width) {
+  final marks = (width / 100).ceil().clamp(1, 1000);
+  final needed = duration / marks;
+  return math.max(5, (needed / 5).ceil() * 5).toDouble();
+}
+
+String _timelineTimeLabel(double seconds) {
+  final value = BigInt.tryParse(seconds.toStringAsFixed(0)) ?? BigInt.zero;
+  final hours = value ~/ BigInt.from(3600);
+  final minutes = (value % BigInt.from(3600)) ~/ BigInt.from(60);
+  final remainder = value % BigInt.from(60);
+  final mm = minutes.toString().padLeft(2, '0');
+  final ss = remainder.toString().padLeft(2, '0');
+  return hours == BigInt.zero
+      ? '$mm:$ss'
+      : '${hours.toString().padLeft(2, '0')}:$mm:$ss';
+}
+
+class _TimelineRulerPainter extends CustomPainter {
+  const _TimelineRulerPainter({
+    required this.pixelsPerSecond,
+    required this.tickSeconds,
+  });
+
+  final double pixelsPerSecond;
+  final double tickSeconds;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = OrColors.surface);
+    final line = Paint()
+      ..color = OrColors.border
+      ..strokeWidth = 1;
+    final textStyle = const TextStyle(
+      color: OrColors.textMuted,
+      fontFamily: 'monospace',
+      fontSize: 10,
+    );
+    for (var index = 0; index <= 1000; index++) {
+      final seconds = index * tickSeconds;
+      final x = seconds * pixelsPerSecond;
+      if (!x.isFinite || x > size.width) break;
+      canvas.drawLine(Offset(x, size.height - 8), Offset(x, size.height), line);
+      final label = _timelineTimeLabel(seconds);
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: textStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(canvas, Offset(x + 4, 2));
+    }
+    canvas.drawLine(
+      Offset(0, size.height - 0.5),
+      Offset(size.width, size.height - 0.5),
+      line,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TimelineRulerPainter oldDelegate) =>
+      oldDelegate.pixelsPerSecond != pixelsPerSecond ||
+      oldDelegate.tickSeconds != tickSeconds;
+}
+
+class _TimelineGridPainter extends CustomPainter {
+  const _TimelineGridPainter({
+    required this.pixelsPerSecond,
+    required this.tickSeconds,
+  });
+
+  final double pixelsPerSecond;
+  final double tickSeconds;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = OrColors.border.withValues(alpha: 0.65)
+      ..strokeWidth = 1;
+    for (var index = 0; index <= 1000; index++) {
+      final x = index * tickSeconds * pixelsPerSecond;
+      if (!x.isFinite || x > size.width) break;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+    }
+    canvas.drawLine(
+      Offset(0, size.height - 0.5),
+      Offset(size.width, size.height - 0.5),
+      Paint()
+        ..color = OrColors.border
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TimelineGridPainter oldDelegate) =>
+      oldDelegate.pixelsPerSecond != pixelsPerSecond ||
+      oldDelegate.tickSeconds != tickSeconds;
+}
+
+class _TimelineTrackHeader extends StatelessWidget {
+  const _TimelineTrackHeader({
+    required this.track,
+    required this.label,
+    required this.countLabel,
+    required this.busy,
+    required this.project,
+    required this.onRemove,
+  });
+
+  final ProjectTimelineTrack track;
+  final String label;
+  final String countLabel;
+  final bool busy;
+  final ProjectReadModel? project;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = track.kind == ProjectTimelineTrackKind.video
+        ? 'Video'
+        : 'Audio';
+    final icon = track.kind == ProjectTimelineTrackKind.video
+        ? Icons.movie_outlined
+        : Icons.graphic_eq_outlined;
+    final removable = track.clipCount == 0 && !busy && project != null;
+    return Semantics(
+      container: true,
+      label: '$kind track $label, ${track.clipCount} clips',
+      child: Container(
+        height: _timelineLaneHeight,
+        padding: const EdgeInsets.only(left: OrSpacing.x2),
+        decoration: const BoxDecoration(
+          color: OrColors.backgroundRaised,
+          border: Border(
+            right: BorderSide(color: OrColors.border),
+            bottom: BorderSide(color: OrColors.border),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 15, color: OrColors.textSecondary),
+            const SizedBox(width: OrSpacing.x1),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    countLabel,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: OrColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Tooltip(
+              message: track.clipCount == 0
+                  ? 'Remove Track'
+                  : 'Delete clips before removing this track.',
+              child: IconButton(
+                key: ValueKey('timeline-remove-track-${track.trackId}'),
+                tooltip: track.clipCount == 0
+                    ? 'Remove Track'
+                    : 'Delete clips before removing this track.',
+                onPressed: removable && onRemove != null
+                    ? () => unawaited(onRemove!(project!, track))
+                    : null,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.remove_circle_outline, size: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimelineLoadMoreHeader extends StatelessWidget {
+  const _TimelineLoadMoreHeader({
+    required this.trackId,
+    required this.loading,
+    required this.busy,
+    required this.onLoadMore,
+  });
+
+  final String trackId;
+  final bool loading;
+  final bool busy;
+  final ValueChanged<String>? onLoadMore;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: _timelineTrackHeaderWidth,
+    height: 32,
+    alignment: Alignment.centerLeft,
+    decoration: const BoxDecoration(
+      color: OrColors.backgroundRaised,
+      border: Border(
+        right: BorderSide(color: OrColors.border),
+        bottom: BorderSide(color: OrColors.border),
+      ),
+    ),
+    child: TextButton.icon(
+      key: ValueKey('timeline-load-more-$trackId'),
+      onPressed: loading || busy || onLoadMore == null
+          ? null
+          : () => onLoadMore!(trackId),
+      icon: loading
+          ? const SizedBox.square(
+              dimension: 13,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            )
+          : const Icon(Icons.expand_more, size: 15),
+      label: const Text('Load more'),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 28),
+        padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
+        textStyle: const TextStyle(fontSize: 10),
+      ),
+    ),
+  );
+}
+
+class _TimelineLoadMoreLane extends StatelessWidget {
+  const _TimelineLoadMoreLane({required this.width});
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 32,
+    width: width,
+    decoration: const BoxDecoration(
+      color: OrColors.background,
+      border: Border(bottom: BorderSide(color: OrColors.border)),
+    ),
+  );
+}
+
+class _TimelineTrackLane extends StatelessWidget {
+  const _TimelineTrackLane({
+    required this.track,
+    required this.clips,
+    required this.mediaItems,
+    required this.width,
+    required this.pixelsPerSecond,
+    required this.tickSeconds,
+    required this.onOpenClip,
+  });
+
+  final ProjectTimelineTrack track;
+  final List<ProjectTimelineClip> clips;
+  final List<ProjectMediaItem> mediaItems;
+  final double width;
+  final double pixelsPerSecond;
+  final double tickSeconds;
+  final ValueChanged<ProjectTimelineClip> onOpenClip;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: _timelineLaneHeight,
+    width: width,
+    decoration: const BoxDecoration(
+      color: OrColors.background,
+      border: Border(bottom: BorderSide(color: OrColors.border)),
+    ),
+    child: Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _TimelineGridPainter(
+              pixelsPerSecond: pixelsPerSecond,
+              tickSeconds: tickSeconds,
+            ),
+          ),
+        ),
+        for (final clip in clips) _positionedClip(context, clip),
+      ],
+    ),
+  );
+
+  Widget _positionedClip(BuildContext context, ProjectTimelineClip clip) {
+    final start = clip.timelineStart.secondsForDisplay;
+    final duration = clip.sourceDuration.secondsForDisplay;
+    final rawLeft = start * pixelsPerSecond;
+    final rawWidth = duration * pixelsPerSecond;
+    if (!rawLeft.isFinite || !rawWidth.isFinite || rawWidth <= 0) {
+      return const SizedBox.shrink();
+    }
+    final left = rawLeft.clamp(0.0, width).toDouble();
+    final clipWidth = math.min(math.max(2.0, rawWidth), width - left);
+    if (clipWidth <= 0) return const SizedBox.shrink();
+    final media = _findMedia(mediaItems, clip.mediaId);
+    final title = media == null
+        ? 'Media ${clip.mediaId.substring(0, math.min(8, clip.mediaId.length))}'
+        : _mediaDisplayName(media.sourceUri);
+    final durationLabel = clip.sourceDuration.canonical;
+    final trackKind = track.kind == ProjectTimelineTrackKind.video
+        ? ProjectTimelineTrackKind.video
+        : ProjectTimelineTrackKind.audio;
+    final background = trackKind == ProjectTimelineTrackKind.video
+        ? OrColors.surface
+        : OrColors.backgroundRaised;
+    return Positioned(
+      left: left,
+      top: 5,
+      width: clipWidth,
+      height: _timelineLaneHeight - 10,
+      child: Semantics(
+        button: true,
+        label:
+            '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
+        child: Tooltip(
+          key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
+          message:
+              'Clip ID: ${clip.clipId}\nMedia ID: ${clip.mediaId}\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart.canonical} + ${clip.sourceDuration.canonical}',
+          child: Material(
+            color: background,
+            borderRadius: BorderRadius.circular(OrRadii.small),
+            child: InkWell(
+              key: ValueKey('timeline-clip-${clip.clipId}'),
+              onTap: () => onOpenClip(clip),
+              borderRadius: BorderRadius.circular(OrRadii.small),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: OrColors.borderStrong),
+                  borderRadius: BorderRadius.circular(OrRadii.small),
+                ),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: OrColors.text,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+ProjectMediaItem? _findMedia(List<ProjectMediaItem> items, String mediaId) {
+  for (final item in items) {
+    if (item.mediaId == mediaId) return item;
+  }
+  return null;
+}
+
+Future<void> _showInsertTimelineDialog({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required ProjectMediaItem media,
+  required ProjectTimelineTracks tracks,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectMediaItem,
+    String,
+    ProjectRationalTime,
+    ProjectRationalTime,
+    ProjectRationalTime,
+  )
+  onInsert,
+}) async {
+  if (project.projectId != tracks.projectId ||
+      project.projectInstanceId != tracks.projectInstanceId ||
+      project.revision != tracks.projectRevision) {
+    return;
+  }
+  final compatibleKinds = <ProjectTimelineTrackKind>{
+    if (media.videoDetails != null) ProjectTimelineTrackKind.video,
+    if (media.audioDetails != null) ProjectTimelineTrackKind.audio,
+  };
+  final compatible = tracks.items
+      .where((track) => compatibleKinds.contains(track.kind))
+      .toList(growable: false);
+  if (compatible.isEmpty) {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add to Timeline'),
+        content: const Text('Add a compatible Video or Audio track first.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  final labels = _timelineTrackLabels(tracks.items);
+  var selectedTrack = compatible.first;
+  final timelineStartController = TextEditingController(text: '0/1');
+  final sourceStartController = TextEditingController(text: '0/1');
+  final durationController = TextEditingController(
+    text: _defaultTimelineDuration(media, selectedTrack.kind)?.canonical ?? '',
+  );
+  bool fieldsAreValid() {
+    final start = ProjectRationalTime.tryParse(timelineStartController.text);
+    final source = ProjectRationalTime.tryParse(sourceStartController.text);
+    final duration = ProjectRationalTime.tryParse(durationController.text);
+    return start != null &&
+        start.numerator >= BigInt.zero &&
+        source != null &&
+        source.numerator >= BigInt.zero &&
+        duration != null &&
+        duration.isPositive;
+  }
+
+  final canInsert = ValueNotifier(fieldsAreValid());
+  void updateInsertValidity() => canInsert.value = fieldsAreValid();
+
+  timelineStartController.addListener(updateInsertValidity);
+  sourceStartController.addListener(updateInsertValidity);
+  durationController.addListener(updateInsertValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('Insert Clip'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('timeline-insert-track'),
+                    initialValue: selectedTrack.trackId,
+                    decoration: const InputDecoration(
+                      labelText: 'Target Track',
+                    ),
+                    items: [
+                      for (final track in compatible)
+                        DropdownMenuItem(
+                          value: track.trackId,
+                          child: Text(
+                            '${labels[track.trackId]} · ${track.kind.name}',
+                          ),
+                        ),
+                    ],
+                    onChanged: (id) {
+                      final next = compatible.firstWhere(
+                        (track) => track.trackId == id,
+                      );
+                      setDialogState(() {
+                        selectedTrack = next;
+                        durationController.text =
+                            _defaultTimelineDuration(
+                              media,
+                              next.kind,
+                            )?.canonical ??
+                            '';
+                      });
+                    },
+                  ),
+                  _ExactRationalField(
+                    fieldKey: const ValueKey('timeline-insert-start'),
+                    label: 'Timeline Start',
+                    controller: timelineStartController,
+                    onChanged: () => setDialogState(() {}),
+                  ),
+                  _ExactRationalField(
+                    fieldKey: const ValueKey('timeline-insert-source-start'),
+                    label: 'Source Start',
+                    controller: sourceStartController,
+                    onChanged: () => setDialogState(() {}),
+                  ),
+                  _ExactRationalField(
+                    fieldKey: const ValueKey('timeline-insert-duration'),
+                    label: 'Duration',
+                    controller: durationController,
+                    onChanged: () => setDialogState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: canInsert,
+                builder: (context, valid, child) {
+                  return FilledButton(
+                    key: const ValueKey('timeline-confirm-insert'),
+                    onPressed: valid
+                        ? () {
+                            final submittedStart = ProjectRationalTime.tryParse(
+                              timelineStartController.text,
+                            );
+                            final submittedSource =
+                                ProjectRationalTime.tryParse(
+                                  sourceStartController.text,
+                                );
+                            final submittedDuration =
+                                ProjectRationalTime.tryParse(
+                                  durationController.text,
+                                );
+                            if (submittedStart == null ||
+                                submittedStart.numerator < BigInt.zero ||
+                                submittedSource == null ||
+                                submittedSource.numerator < BigInt.zero ||
+                                submittedDuration == null ||
+                                !submittedDuration.isPositive) {
+                              return;
+                            }
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              onInsert(
+                                project,
+                                media,
+                                selectedTrack.trackId,
+                                submittedStart,
+                                submittedSource,
+                                submittedDuration,
+                              ),
+                            );
+                          }
+                        : null,
+                    child: const Text('Insert'),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    timelineStartController.removeListener(updateInsertValidity);
+    sourceStartController.removeListener(updateInsertValidity);
+    durationController.removeListener(updateInsertValidity);
+    timelineStartController.dispose();
+    sourceStartController.dispose();
+    durationController.dispose();
+    canInsert.dispose();
+  }
+}
+
+ProjectRationalTime? _defaultTimelineDuration(
+  ProjectMediaItem media,
+  ProjectTimelineTrackKind kind,
+) =>
+    (kind == ProjectTimelineTrackKind.video
+        ? media.firstVideoDuration
+        : media.firstAudioDuration) ??
+    media.containerDuration;
+
+class _ExactRationalField extends StatelessWidget {
+  const _ExactRationalField({
+    required this.fieldKey,
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: OrSpacing.x2),
+    child: TextField(
+      key: fieldKey,
+      controller: controller,
+      onChanged: (_) => onChanged(),
+      keyboardType: TextInputType.text,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: 'NUM/DEN',
+        isDense: true,
+      ),
+    ),
+  );
+}
+
+Future<void> _showTimelineClipActions({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required List<ProjectTimelineTrack> tracks,
+  required ProjectTimelineTrack track,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    String,
+    ProjectRationalTime,
+  )?
+  onMove,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
+  onDelete,
+  required bool busy,
+}) async {
+  final media = clip.mediaId;
+  final canMove =
+      project != null &&
+      onMove != null &&
+      tracks.any((candidate) => candidate.kind == track.kind);
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Clip'),
+      content: Text(
+        'Clip ID: ${clip.clipId}\nMedia ID: $media\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart.canonical} + ${clip.sourceDuration.canonical}',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-move-${clip.clipId}'),
+          onPressed: busy || !canMove
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showMoveTimelineClipDialog(
+                      context: context,
+                      project: project,
+                      tracks: tracks,
+                      sourceTrack: track,
+                      clip: clip,
+                      onMove: onMove,
+                    ),
+                  );
+                },
+          child: const Text('Move'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-delete-${clip.clipId}'),
+          onPressed: busy || project == null || onDelete == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _confirmDeleteTimelineClip(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onDelete: onDelete,
+                    ),
+                  );
+                },
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _showMoveTimelineClipDialog({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required List<ProjectTimelineTrack> tracks,
+  required ProjectTimelineTrack sourceTrack,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    String,
+    ProjectRationalTime,
+  )
+  onMove,
+}) async {
+  final targets = tracks
+      .where((candidate) => candidate.kind == sourceTrack.kind)
+      .toList(growable: false);
+  if (targets.isEmpty) return;
+  final labels = _timelineTrackLabels(tracks);
+  var selectedTrackId = sourceTrack.trackId;
+  final timeController = TextEditingController(
+    text: clip.timelineStart.canonical,
+  );
+  bool timeIsValid() {
+    final start = ProjectRationalTime.tryParse(timeController.text);
+    return start != null && start.numerator >= BigInt.zero;
+  }
+
+  final canMove = ValueNotifier(timeIsValid());
+  void updateMoveValidity() => canMove.value = timeIsValid();
+
+  timeController.addListener(updateMoveValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('Move Clip'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('timeline-move-track'),
+                  initialValue: selectedTrackId,
+                  decoration: const InputDecoration(labelText: 'Target Track'),
+                  items: [
+                    for (final track in targets)
+                      DropdownMenuItem(
+                        value: track.trackId,
+                        child: Text(labels[track.trackId]!),
+                      ),
+                  ],
+                  onChanged: (value) => setDialogState(() {
+                    selectedTrackId = value ?? selectedTrackId;
+                  }),
+                ),
+                _ExactRationalField(
+                  fieldKey: const ValueKey('timeline-move-start'),
+                  label: 'Timeline Start',
+                  controller: timeController,
+                  onChanged: () => setDialogState(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: canMove,
+                builder: (context, valid, child) {
+                  return FilledButton(
+                    key: const ValueKey('timeline-confirm-move'),
+                    onPressed: valid
+                        ? () {
+                            final submittedStart = ProjectRationalTime.tryParse(
+                              timeController.text,
+                            );
+                            if (submittedStart == null ||
+                                submittedStart.numerator < BigInt.zero) {
+                              return;
+                            }
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              onMove(
+                                project,
+                                clip,
+                                selectedTrackId,
+                                submittedStart,
+                              ),
+                            );
+                          }
+                        : null,
+                    child: const Text('Move'),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    timeController.removeListener(updateMoveValidity);
+    timeController.dispose();
+    canMove.dispose();
+  }
+}
+
+Future<void> _confirmDeleteTimelineClip({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineClip)
+  onDelete,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete clip?'),
+      content: Text(
+        'Delete clip ${clip.clipId}? The media remains in the project.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: ValueKey('timeline-confirm-delete-${clip.clipId}'),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await onDelete(project, clip);
 }
 
 class _TimelineRuler extends StatelessWidget {

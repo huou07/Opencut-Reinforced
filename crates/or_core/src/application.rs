@@ -199,6 +199,104 @@ impl CommandEnvelope {
         }
     }
 
+    pub fn add_timeline_track(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+        kind: TrackKind,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_TRACK_ADD_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "track_id": track_id, "kind": kind }),
+        }
+    }
+
+    pub fn remove_timeline_track(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_TRACK_REMOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "track_id": track_id }),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        track_id: TrackId,
+        media_id: MediaId,
+        timeline_start: RationalTime,
+        source_range: TimeRange,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_INSERT_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "clip_id": clip_id,
+                "track_id": track_id,
+                "media_id": media_id,
+                "timeline_start": timeline_start,
+                "source_range": source_range,
+            }),
+        }
+    }
+
+    pub fn move_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        track_id: TrackId,
+        timeline_start: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_MOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "clip_id": clip_id,
+                "track_id": track_id,
+                "timeline_start": timeline_start,
+            }),
+        }
+    }
+
+    pub fn delete_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_DELETE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "clip_id": clip_id }),
+        }
+    }
+
     pub fn undo(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,

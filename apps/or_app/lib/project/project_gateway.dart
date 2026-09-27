@@ -2,6 +2,51 @@ import 'dart:typed_data';
 
 abstract interface class ProjectSessionHandle {}
 
+/// Exact project time. `secondsForDisplay` is for layout and ruler labels only.
+class ProjectRationalTime {
+  const ProjectRationalTime(this.numerator, this.denominator);
+
+  static final _minI64 = -(BigInt.one << 63);
+  static final _maxI64 = (BigInt.one << 63) - BigInt.one;
+  static final _maxU32 = (BigInt.one << 32) - BigInt.one;
+  static final _syntax = RegExp(r'^[+-]?[0-9]+/[0-9]+$');
+
+  final BigInt numerator;
+  final int denominator;
+
+  String get canonical {
+    if (denominator <= 0) return '$numerator/$denominator';
+    var left = numerator.abs();
+    var right = BigInt.from(denominator);
+    while (right != BigInt.zero) {
+      final remainder = left % right;
+      left = right;
+      right = remainder;
+    }
+    return '${numerator ~/ left}/${BigInt.from(denominator) ~/ left}';
+  }
+
+  double get secondsForDisplay => numerator.toDouble() / denominator;
+  bool get isPositive => numerator > BigInt.zero;
+
+  static ProjectRationalTime? tryParse(String value) {
+    final match = _syntax.firstMatch(value);
+    if (match == null) return null;
+    final parts = value.split('/');
+    final numerator = BigInt.tryParse(parts[0]);
+    final denominator = BigInt.tryParse(parts[1]);
+    if (numerator == null ||
+        denominator == null ||
+        numerator < _minI64 ||
+        numerator > _maxI64 ||
+        denominator <= BigInt.zero ||
+        denominator > _maxU32) {
+      return null;
+    }
+    return ProjectRationalTime(numerator, denominator.toInt());
+  }
+}
+
 class ProjectReadModel {
   const ProjectReadModel({
     required this.projectId,
@@ -43,6 +88,9 @@ class ProjectMediaItem {
     required this.duration,
     required this.videoDetails,
     required this.audioDetails,
+    this.containerDuration,
+    this.firstVideoDuration,
+    this.firstAudioDuration,
   });
 
   final String mediaId;
@@ -51,6 +99,9 @@ class ProjectMediaItem {
   final String? duration;
   final String? videoDetails;
   final String? audioDetails;
+  final ProjectRationalTime? containerDuration;
+  final ProjectRationalTime? firstVideoDuration;
+  final ProjectRationalTime? firstAudioDuration;
 }
 
 /// One bounded page from the project's insertion-ordered media library.
@@ -70,6 +121,74 @@ class ProjectMediaPage {
   final String projectInstanceId;
   final BigInt projectRevision;
   final List<ProjectMediaItem> items;
+  final int totalCount;
+  final int offset;
+  final int limit;
+  final int? nextOffset;
+}
+
+enum ProjectTimelineTrackKind { video, audio }
+
+class ProjectTimelineTrack {
+  const ProjectTimelineTrack({
+    required this.trackId,
+    required this.kind,
+    required this.clipCount,
+  });
+
+  final String trackId;
+  final ProjectTimelineTrackKind kind;
+  final int clipCount;
+}
+
+class ProjectTimelineTracks {
+  ProjectTimelineTracks({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required List<ProjectTimelineTrack> items,
+  }) : items = List.unmodifiable(items);
+
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectTimelineTrack> items;
+}
+
+class ProjectTimelineClip {
+  const ProjectTimelineClip({
+    required this.clipId,
+    required this.mediaId,
+    required this.timelineStart,
+    required this.sourceStart,
+    required this.sourceDuration,
+  });
+
+  final String clipId;
+  final String mediaId;
+  final ProjectRationalTime timelineStart;
+  final ProjectRationalTime sourceStart;
+  final ProjectRationalTime sourceDuration;
+}
+
+class ProjectTimelineClipPage {
+  ProjectTimelineClipPage({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.trackId,
+    required List<ProjectTimelineClip> items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    required this.nextOffset,
+  }) : items = List.unmodifiable(items);
+
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final String trackId;
+  final List<ProjectTimelineClip> items;
   final int totalCount;
   final int offset;
   final int limit;
@@ -237,6 +356,46 @@ abstract interface class ProjectGateway {
     required int offset,
     required int limit,
   });
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle session, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  });
+  Future<ProjectActionResult> addTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectTimelineTrackKind kind,
+  );
+  Future<ProjectActionResult> removeTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String trackId,
+  );
+  Future<ProjectActionResult> insertTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String mediaId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime sourceStart,
+    required ProjectRationalTime duration,
+  });
+  Future<ProjectActionResult> moveTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+  });
+  Future<ProjectActionResult> deleteTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String clipId,
+  );
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
     ProjectSessionHandle session,
     String mediaId,

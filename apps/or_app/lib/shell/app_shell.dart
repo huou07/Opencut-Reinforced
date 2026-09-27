@@ -23,6 +23,7 @@ import 'command_palette.dart';
 const _androidProjectAccessMessage =
     'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
 const _mediaPageSize = 50;
+const _timelineClipPageSize = 100;
 const _maxActiveMediaPreviewRequests = 8;
 
 class AppShell extends StatefulWidget {
@@ -65,6 +66,12 @@ class _AppShellState extends State<AppShell> {
   bool _mediaLoadingMore = false;
   String? _mediaLoadError;
   int _mediaRefreshGeneration = 0;
+  ProjectTimelineTracks? _timelineTracks;
+  final Map<String, ProjectTimelineClipPage> _timelineClipPages = {};
+  final Set<String> _timelineLoadingMoreTracks = {};
+  bool _timelineLoading = false;
+  String? _timelineLoadError;
+  int _timelineRefreshGeneration = 0;
   late final AppLifecycleListener _lifecycleListener;
 
   bool get _hasProjectWorkspace =>
@@ -241,10 +248,27 @@ class _AppShellState extends State<AppShell> {
               mediaLoading: _mediaLoading,
               mediaLoadingMore: _mediaLoadingMore,
               mediaLoadError: _mediaLoadError,
+              timelineTracks: _timelineTracks,
+              timelineClipPages: Map.unmodifiable(_timelineClipPages),
+              timelineLoadingMoreTracks: Set.unmodifiable(
+                _timelineLoadingMoreTracks,
+              ),
+              timelineLoading: _timelineLoading,
+              timelineLoadError: _timelineLoadError,
               onImportMedia: _importMedia,
               onLoadMoreMedia: _loadMoreMedia,
               onRefreshMedia: _refreshMediaLibrary,
               onRemoveMedia: _removeMedia,
+              onAddVideoTrack: () =>
+                  _addTimelineTrack(ProjectTimelineTrackKind.video),
+              onAddAudioTrack: () =>
+                  _addTimelineTrack(ProjectTimelineTrackKind.audio),
+              onRemoveTimelineTrack: _removeTimelineTrack,
+              onLoadMoreTimelineClips: _loadMoreTimelineClips,
+              onRefreshTimeline: _refreshTimelineFromUi,
+              onAddMediaToTimeline: _insertMediaIntoTimeline,
+              onMoveTimelineClip: _moveTimelineClip,
+              onDeleteTimelineClip: _deleteTimelineClip,
               onSave: _saveProject,
               onRename: _renameProject,
               onUndo: _undoProject,
@@ -663,6 +687,7 @@ class _AppShellState extends State<AppShell> {
         );
     _lastEventSequence = BigInt.zero;
     _lastMediaArtifactSequence = BigInt.zero;
+    _timelineRefreshGeneration++;
     _mediaPreviewQueue.clear();
     _queuedMediaPreviewIds.clear();
     _pendingMediaPreviewTickets.clear();
@@ -677,6 +702,11 @@ class _AppShellState extends State<AppShell> {
       _mediaLoading = true;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
+      _timelineTracks = null;
+      _timelineClipPages.clear();
+      _timelineLoadingMoreTracks.clear();
+      _timelineLoading = true;
+      _timelineLoadError = null;
       _activeProjectPath = path;
       _projectNotice = notice;
       _destination = AppDestination.editorPreview;
@@ -689,11 +719,14 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       setState(() => _activeProject = view);
-      await _refreshMediaPage(
-        session,
-        project: view,
-        refreshGeneration: refreshGeneration,
-      );
+      await Future.wait([
+        _refreshMediaPage(
+          session,
+          project: view,
+          refreshGeneration: refreshGeneration,
+        ),
+        _refreshTimeline(session, project: view),
+      ]);
     } catch (_) {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
@@ -722,19 +755,35 @@ class _AppShellState extends State<AppShell> {
   Future<ProjectReadModel?> _runProjectAction(
     Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
     operation,
+  ) {
+    final current = _activeProject;
+    if (current == null) return Future.value(null);
+    return _runProjectActionAtSnapshot(current, operation);
+  }
+
+  Future<ProjectReadModel?> _runProjectActionAtSnapshot(
+    ProjectReadModel expected,
+    Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
+    operation,
   ) async {
     final session = _activeSession;
     final current = _activeProject;
     if (session == null || current == null || _busy) return null;
+    if (!_sameProjectIdentity(expected, current)) {
+      _showUnavailable(
+        'The project changed while this action was open. Refresh the project before trying again.',
+      );
+      return null;
+    }
     setState(() => _busy = true);
     try {
-      final result = await operation(session, current);
+      final result = await operation(session, expected);
       if (!mounted || !identical(session, _activeSession)) return null;
       if (!result.succeeded) {
         if (result.errorCode == 'REVISION_CONFLICT') {
           await _refreshProjectState(session);
           _showUnavailable(
-            'The project changed in the attached CLI. The summary is refreshed; this action was not retried.',
+            'The project changed while this action was open. The current state is refreshed; this action was not retried.',
           );
         } else if (result.errorCode == 'PROBE_BACKEND_UNAVAILABLE') {
           _showUnavailable(
@@ -755,11 +804,14 @@ class _AppShellState extends State<AppShell> {
       }
       final updated =
           result.view ?? await widget.projectGateway.summary(session);
-      final changed = updated.revision != current.revision;
+      final changed = updated.revision != expected.revision;
       if (mounted && identical(session, _activeSession)) {
         setState(() {
           _activeProject = updated;
-          if (changed) _mediaLoading = true;
+          if (changed) {
+            _mediaLoading = true;
+            _timelineLoading = true;
+          }
         });
         if (changed) await _refreshProjectState(session);
       }
@@ -791,6 +843,81 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _redoProject() async {
     await _runProjectAction(widget.projectGateway.redo);
+  }
+
+  Future<void> _addTimelineTrack(ProjectTimelineTrackKind kind) async {
+    await _runProjectAction(
+      (session, current) =>
+          widget.projectGateway.addTimelineTrack(session, current, kind),
+    );
+  }
+
+  Future<void> _removeTimelineTrack(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.removeTimelineTrack(
+        session,
+        current,
+        track.trackId,
+      ),
+    );
+  }
+
+  Future<void> _insertMediaIntoTimeline(
+    ProjectReadModel expected,
+    ProjectMediaItem media,
+    String trackId,
+    ProjectRationalTime timelineStart,
+    ProjectRationalTime sourceStart,
+    ProjectRationalTime duration,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.insertTimelineClip(
+        session,
+        current,
+        trackId: trackId,
+        mediaId: media.mediaId,
+        timelineStart: timelineStart,
+        sourceStart: sourceStart,
+        duration: duration,
+      ),
+    );
+  }
+
+  Future<void> _moveTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    String trackId,
+    ProjectRationalTime timelineStart,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        trackId: trackId,
+        timelineStart: timelineStart,
+      ),
+    );
+  }
+
+  Future<void> _deleteTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.deleteTimelineClip(
+        session,
+        current,
+        clip.clipId,
+      ),
+    );
   }
 
   Future<void> _renameProject() async {
@@ -925,6 +1052,227 @@ class _AppShellState extends State<AppShell> {
     if (session != null) await _refreshProjectState(session);
   }
 
+  Future<void> _refreshTimelineFromUi() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    if (session != null && project != null) {
+      await _refreshTimeline(session, project: project);
+    }
+  }
+
+  Future<void> _refreshTimeline(
+    ProjectSessionHandle session, {
+    required ProjectReadModel project,
+  }) async {
+    if (!mounted || !identical(session, _activeSession)) return;
+    final generation = ++_timelineRefreshGeneration;
+    final mediaGeneration = _mediaRefreshGeneration;
+    var current = project;
+    setState(() {
+      _timelineTracks = null;
+      _timelineClipPages.clear();
+      _timelineLoadingMoreTracks.clear();
+      _timelineLoading = true;
+      _timelineLoadError = null;
+    });
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var inconsistent = false;
+      try {
+        final tracks = await widget.projectGateway.listTimelineTracks(session);
+        if (!_timelineRequestIsCurrent(session, generation)) return;
+        if (!_matchesTimelineProject(tracks, current)) {
+          inconsistent = true;
+        } else {
+          final pages = <String, ProjectTimelineClipPage>{};
+          for (final track in tracks.items) {
+            final page = track.clipCount == 0
+                ? ProjectTimelineClipPage(
+                    projectId: tracks.projectId,
+                    projectInstanceId: tracks.projectInstanceId,
+                    projectRevision: tracks.projectRevision,
+                    trackId: track.trackId,
+                    items: const [],
+                    totalCount: 0,
+                    offset: 0,
+                    limit: _timelineClipPageSize,
+                    nextOffset: null,
+                  )
+                : await widget.projectGateway.listTimelineClips(
+                    session,
+                    trackId: track.trackId,
+                    offset: 0,
+                    limit: _timelineClipPageSize,
+                  );
+            if (!_timelineRequestIsCurrent(session, generation)) return;
+            if (!_matchesTimelineClipPage(
+              page,
+              current,
+              trackId: track.trackId,
+              offset: 0,
+              clipCount: track.clipCount,
+            )) {
+              inconsistent = true;
+              break;
+            }
+            pages[track.trackId] = page;
+          }
+
+          if (!inconsistent) {
+            setState(() {
+              _activeProject = current;
+              _timelineTracks = tracks;
+              _timelineClipPages
+                ..clear()
+                ..addAll(pages);
+              _timelineLoading = false;
+              _timelineLoadError = null;
+            });
+            if (current.revision != project.revision) {
+              await _refreshMediaPage(
+                session,
+                project: current,
+                refreshGeneration: mediaGeneration,
+              );
+            }
+            return;
+          }
+        }
+      } on ProjectGatewayException catch (error) {
+        if (_timelineRequestIsCurrent(session, generation)) {
+          setState(() {
+            _timelineLoading = false;
+            _timelineLoadError = error.message;
+          });
+        }
+        return;
+      } catch (_) {
+        if (_timelineRequestIsCurrent(session, generation)) {
+          setState(() {
+            _timelineLoading = false;
+            _timelineLoadError = 'The timeline could not load.';
+          });
+        }
+        return;
+      }
+
+      if (!inconsistent) return;
+      if (attempt == 1) break;
+      try {
+        current = await widget.projectGateway.summary(session);
+      } on Object {
+        if (_timelineRequestIsCurrent(session, generation)) {
+          setState(() {
+            _timelineLoading = false;
+            _timelineLoadError = 'The project summary could not be refreshed.';
+          });
+        }
+        return;
+      }
+      if (!_timelineRequestIsCurrent(session, generation)) return;
+      setState(() => _activeProject = current);
+    }
+
+    if (!_timelineRequestIsCurrent(session, generation)) return;
+    setState(() {
+      _activeProject = current;
+      _timelineTracks = null;
+      _timelineClipPages.clear();
+      _timelineLoading = false;
+      _timelineLoadError = 'The timeline changed while it was refreshing.';
+    });
+    if (current.revision != project.revision) {
+      await _refreshMediaPage(
+        session,
+        project: current,
+        refreshGeneration: mediaGeneration,
+      );
+    }
+  }
+
+  bool _timelineRequestIsCurrent(
+    ProjectSessionHandle session,
+    int generation,
+  ) =>
+      mounted &&
+      identical(session, _activeSession) &&
+      generation == _timelineRefreshGeneration;
+
+  Future<void> _loadMoreTimelineClips(String trackId) async {
+    final session = _activeSession;
+    final project = _activeProject;
+    final tracks = _timelineTracks;
+    final page = _timelineClipPages[trackId];
+    final offset = page?.nextOffset;
+    ProjectTimelineTrack? track;
+    for (final candidate in tracks?.items ?? const <ProjectTimelineTrack>[]) {
+      if (candidate.trackId == trackId) {
+        track = candidate;
+        break;
+      }
+    }
+    final generation = _timelineRefreshGeneration;
+    if (session == null ||
+        project == null ||
+        tracks == null ||
+        page == null ||
+        offset == null ||
+        track == null ||
+        _timelineLoading ||
+        _timelineLoadingMoreTracks.contains(trackId)) {
+      return;
+    }
+
+    setState(() => _timelineLoadingMoreTracks.add(trackId));
+    try {
+      final next = await widget.projectGateway.listTimelineClips(
+        session,
+        trackId: trackId,
+        offset: offset,
+        limit: _timelineClipPageSize,
+      );
+      if (!_timelineRequestIsCurrent(session, generation)) return;
+      if (!_matchesTimelineClipPage(
+            next,
+            project,
+            trackId: trackId,
+            offset: offset,
+            clipCount: track.clipCount,
+          ) ||
+          !_matchesTimelineProject(tracks, project) ||
+          page.projectRevision != project.revision) {
+        await _refreshProjectState(session);
+        return;
+      }
+      setState(() {
+        _timelineClipPages[trackId] = ProjectTimelineClipPage(
+          projectId: page.projectId,
+          projectInstanceId: page.projectInstanceId,
+          projectRevision: page.projectRevision,
+          trackId: page.trackId,
+          items: [...page.items, ...next.items],
+          totalCount: next.totalCount,
+          offset: 0,
+          limit: page.limit,
+          nextOffset: next.nextOffset,
+        );
+        _timelineLoadError = null;
+      });
+    } on ProjectGatewayException catch (error) {
+      if (_timelineRequestIsCurrent(session, generation)) {
+        setState(() => _timelineLoadError = error.message);
+      }
+    } catch (_) {
+      if (_timelineRequestIsCurrent(session, generation)) {
+        setState(() => _timelineLoadError = 'The timeline could not load.');
+      }
+    } finally {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() => _timelineLoadingMoreTracks.remove(trackId));
+      }
+    }
+  }
+
   Future<void> _refreshProjectState(ProjectSessionHandle session) async {
     if (!mounted || !identical(session, _activeSession)) return;
     final refreshGeneration = ++_mediaRefreshGeneration;
@@ -939,12 +1287,20 @@ class _AppShellState extends State<AppShell> {
         _activeProject = view;
         _mediaLoading = true;
         _mediaLoadError = null;
+        _timelineTracks = null;
+        _timelineClipPages.clear();
+        _timelineLoadingMoreTracks.clear();
+        _timelineLoading = true;
+        _timelineLoadError = null;
       });
-      await _refreshMediaPage(
-        session,
-        project: view,
-        refreshGeneration: refreshGeneration,
-      );
+      await Future.wait([
+        _refreshMediaPage(
+          session,
+          project: view,
+          refreshGeneration: refreshGeneration,
+        ),
+        _refreshTimeline(session, project: view),
+      ]);
     } catch (_) {
       if (mounted && identical(session, _activeSession)) {
         _showUnavailable('The project summary could not be refreshed.');
@@ -1447,6 +1803,12 @@ class _AppShellState extends State<AppShell> {
       _mediaLoading = false;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
+      _timelineTracks = null;
+      _timelineClipPages.clear();
+      _timelineLoadingMoreTracks.clear();
+      _timelineLoading = false;
+      _timelineLoadError = null;
+      _timelineRefreshGeneration++;
       _activeProjectPath = null;
       _projectNotice = null;
     });
@@ -1628,4 +1990,41 @@ class _UndoProjectIntent extends Intent {
 
 class _RedoProjectIntent extends Intent {
   const _RedoProjectIntent();
+}
+
+bool _sameProjectIdentity(ProjectReadModel first, ProjectReadModel second) =>
+    first.projectId == second.projectId &&
+    first.projectInstanceId == second.projectInstanceId;
+
+bool _matchesTimelineProject(
+  ProjectTimelineTracks tracks,
+  ProjectReadModel project,
+) =>
+    tracks.projectId == project.projectId &&
+    tracks.projectInstanceId == project.projectInstanceId &&
+    tracks.projectRevision == project.revision &&
+    tracks.items.length <= 256;
+
+bool _matchesTimelineClipPage(
+  ProjectTimelineClipPage page,
+  ProjectReadModel project, {
+  required String trackId,
+  required int offset,
+  required int clipCount,
+}) {
+  final expectedItemCount = (clipCount - offset)
+      .clamp(0, _timelineClipPageSize)
+      .toInt();
+  if (page.projectId != project.projectId ||
+      page.projectInstanceId != project.projectInstanceId ||
+      page.projectRevision != project.revision ||
+      page.trackId != trackId ||
+      page.offset != offset ||
+      page.limit != _timelineClipPageSize ||
+      page.totalCount != clipCount ||
+      page.items.length != expectedItemCount) {
+    return false;
+  }
+  final end = offset + page.items.length;
+  return page.nextOffset == (end < clipCount ? end : null);
 }
