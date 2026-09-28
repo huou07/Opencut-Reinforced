@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, and 6E1 are DONE; 6E2 is NEXT. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -192,7 +192,7 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, 6C, 6D, and 6E1 are DONE; 6E2 is NEXT. Decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
 **Status: IN PROGRESS**
@@ -238,11 +238,21 @@ Phase 6E1 — Pointer timeline editing and clip-edge snapping — DONE:
 - default-on non-persisted Snap toggle, temporary cyan snap guide, typed bridge/gateway access, and headless/attached `or timeline snap` inspection
 - exact Move/Trim dialogs remain arbitrary `NUM/DEN`; no live continuous snap loop
 
-Phase 6E2 — Persistent markers — NEXT:
+Phase 6E2A — Persistent marker foundation — DONE:
 
-- marker model and schema decision
-- marker commands, queries, and persistence
-- marker UI and CLI parity
+- global point-marker domain with UUIDv4 `MarkerId`, exact rational time, exact labels, bounded validation, and canonical time/ID ordering
+- strict `.orproj` schema v4 encoder with v1/v2/v3 decoders, explicit-save migration, no conversion revision increment, and bounded marker deserialization
+- four schema-v1 marker commands with semantic undo/redo, no-op/redo preservation, transaction rejection, and clip-edit marker stability
+- bounded read-only `timeline.markers` pages and unchanged existing query wire shapes
+- Snap V1 preservation plus marker-aware Snap V2; the catalog advertises V2 while Flutter remains on V1
+- headless and attached CLI marker list/add/move/rename/delete parity, exact rational parsing, generated IDs, and existing save/dirty semantics
+- storage, recovery, local IPC, frame-bound, migration, and CLI regression coverage; no marker Flutter surface
+
+Phase 6E2B — Persistent marker UI and Snap V2 GUI integration — NEXT:
+
+- marker read models and bridge/gateway methods
+- marker ruler, dialogs, and pointer interactions
+- Flutter Snap V2 integration after marker presentation exists
 
 Phase 6 completion remains after 6E2. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain outside this checkpoint.
 
