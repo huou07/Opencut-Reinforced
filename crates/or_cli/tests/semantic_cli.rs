@@ -1,5 +1,5 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, ProjectDocument,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MarkerId, ProjectDocument,
     ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, load_project_file,
     save_project_file_atomic, write_recovery_checkpoint,
 };
@@ -546,7 +546,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 3);
+    assert_eq!(saved_bytes["schema_version"], 4);
 
     let mut first_page_args = path_args(
         &["media", "list"],
@@ -705,6 +705,201 @@ fn attached_media_commands_share_history_and_wait_for_explicit_save() {
         added["media"]["source"]["uri"]
     );
     host.shutdown(false).unwrap();
+}
+
+#[test]
+fn headless_marker_cli_round_trips_commands_pagination_generated_ids_and_v2_snap() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Marker CLI");
+    let marker_id = "11111111-1111-4111-8111-111111111111";
+    let added = json_success(path_args(
+        &["timeline", "add-marker"],
+        "--project",
+        &project_path,
+        &[
+            "--at", "2/1", "--label", "same", "--id", marker_id, "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(added["marker_id"], marker_id);
+    assert_eq!(added["command"]["command_id"], "timeline.marker.add");
+
+    let generated = json_success(path_args(
+        &["timeline", "add-marker"],
+        "--project",
+        &project_path,
+        &["--at", "1/1", "--label", "same", "--json"],
+    ))
+    .0;
+    let generated_id = generated["marker_id"].as_str().unwrap();
+    assert!(generated_id.parse::<MarkerId>().is_ok());
+
+    let page = json_success(path_args(
+        &["timeline", "markers"],
+        "--project",
+        &project_path,
+        &["--limit", "1", "--json"],
+    ))
+    .0;
+    assert_eq!(page["timeline_marker_page"]["total_count"], 2);
+    assert_eq!(page["timeline_marker_page"]["items"][0]["label"], "same");
+    assert_eq!(page["timeline_marker_page"]["next_offset"], 1);
+
+    let moved = json_success(path_args(
+        &["timeline", "move-marker"],
+        "--project",
+        &project_path,
+        &["--id", marker_id, "--to", "3/1", "--json"],
+    ))
+    .0;
+    assert_eq!(moved["command"]["after_revision"], 3);
+    let renamed = json_success(path_args(
+        &["timeline", "rename-marker"],
+        "--project",
+        &project_path,
+        &["--id", marker_id, "--label", "renamed", "--json"],
+    ))
+    .0;
+    assert_eq!(renamed["command"]["after_revision"], 4);
+    let deleted = json_success(path_args(
+        &["timeline", "delete-marker"],
+        "--project",
+        &project_path,
+        &["--id", generated_id, "--json"],
+    ))
+    .0;
+    assert_eq!(deleted["command"]["after_revision"], 5);
+    let source = directory.media_path("cli sample café.mkv");
+    let probe_stub = directory.probe_stub();
+    let (media, _) = json_success_with_probe(
+        path_args(
+            &["media", "add"],
+            "--project",
+            &project_path,
+            &["--source", source.to_str().unwrap(), "--json"],
+        ),
+        &probe_stub,
+    );
+    let media_id = media["media"]["id"].as_str().unwrap();
+    let track_id = "22222222-2222-4222-8222-222222222222";
+    let clip_id = "33333333-3333-4333-8333-333333333333";
+    json_success(path_args(
+        &["timeline", "add-track"],
+        "--project",
+        &project_path,
+        &["--kind", "video", "--id", track_id, "--json"],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            track_id,
+            "--media",
+            media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/1",
+            "--id",
+            clip_id,
+            "--json",
+        ],
+    ));
+    let marker_b = "55555555-5555-4555-8555-555555555555";
+    json_success(path_args(
+        &["timeline", "add-marker"],
+        "--project",
+        &project_path,
+        &["--at", "5/1", "--label", "snap", "--id", marker_b, "--json"],
+    ));
+    let snap = json_success(path_args(
+        &["timeline", "snap"],
+        "--project",
+        &project_path,
+        &[
+            "--clip",
+            clip_id,
+            "--operation",
+            "trim-end",
+            "--at",
+            "81/16",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(snap["schema_version"], 2);
+    assert_eq!(snap["timeline_snap"]["target_kind"], "marker");
+    assert_eq!(snap["timeline_snap"]["target_marker_id"], marker_b);
+
+    let persisted = load_project_file(&project_path).unwrap();
+    assert_eq!(persisted.timeline().markers().len(), 2);
+    let renamed = persisted
+        .timeline()
+        .markers()
+        .iter()
+        .find(|marker| marker.id().to_string() == marker_id)
+        .unwrap();
+    assert_eq!(renamed.label(), "renamed");
+    assert_eq!(renamed.timeline_time().numerator(), 3);
+}
+
+#[test]
+fn attached_marker_cli_stays_dirty_until_explicit_save() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor = directory.0.join("marker-session.json");
+    create_project(&project_path, "Attached markers");
+    let (mut server, _) = start_server(&project_path, &descriptor);
+    let marker_id = "11111111-1111-4111-8111-111111111111";
+    let added = json_success(attach_args(
+        &["timeline", "add-marker"],
+        &descriptor,
+        &[
+            "--at", "4/1", "--label", "attached", "--id", marker_id, "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(added["command"]["after_revision"], 1);
+    assert!(
+        load_project_file(&project_path)
+            .unwrap()
+            .timeline()
+            .markers()
+            .is_empty()
+    );
+    let page = json_success(attach_args(
+        &["timeline", "markers"],
+        &descriptor,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(
+        page["timeline_marker_page"]["items"][0]["marker_id"],
+        marker_id
+    );
+    json_success(attach_args(&["project", "save"], &descriptor, &["--json"]));
+    assert_eq!(
+        load_project_file(&project_path)
+            .unwrap()
+            .timeline()
+            .markers()[0]
+            .id()
+            .to_string(),
+        marker_id
+    );
+    let shutdown = json_success(attach_args(
+        &["session", "shutdown"],
+        &descriptor,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(shutdown["status"], "shutdown");
+    server.wait();
 }
 
 #[test]
@@ -1095,7 +1290,7 @@ fn project_paths_remain_os_strings_and_names_require_utf8() {
 }
 
 #[test]
-fn headless_timeline_cli_uses_commands_saves_v3_and_keeps_exact_times() {
+fn headless_timeline_cli_uses_commands_saves_v4_and_keeps_exact_times() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Timeline CLI");
@@ -1293,7 +1488,7 @@ fn headless_timeline_cli_uses_commands_saves_v3_and_keeps_exact_times() {
     assert_eq!(page["timeline_clip_page"]["next_offset"], 1);
 
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 3);
+    assert_eq!(saved_bytes["schema_version"], 4);
     let saved = load_project_file(&project_path).unwrap();
     assert_eq!(saved.revision(), ProjectRevision::new(6));
     assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
@@ -1480,7 +1675,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v3_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v4_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -1618,7 +1813,7 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v3_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        3
+        4
     );
 }
 

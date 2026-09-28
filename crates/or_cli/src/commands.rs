@@ -1,10 +1,10 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, CommandResult,
-    MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaItem, OperationError, ProjectFileMediaImportError,
-    ProjectFileSession, ProjectFileSessionError, QueryEnvelope, QueryResult, RationalTime,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TrackId, TrackKind,
-    apply_project_recovery, command_catalog, discard_project_recovery, inspect_project_recovery,
-    prepare_media_import, query_catalog,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
+    OperationError, ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
+    QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, TrackId, TrackKind, apply_project_recovery, command_catalog,
+    discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -429,6 +429,25 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             render_timeline_clips(&result, json)
         }
+        "markers" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--offset", "--limit"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let offset = optional_usize(&options, "--offset", 0, json)?;
+            let limit = optional_usize(&options, "--limit", MAX_TIMELINE_MARKER_PAGE_SIZE, json)?;
+            let result = timeline_query(
+                &path,
+                attached,
+                "timeline.markers",
+                json!({"offset": offset, "limit": limit}),
+                json,
+            )?;
+            render_timeline_markers(&result, json)
+        }
         "snap" => {
             let options = Options::parse(
                 action_args,
@@ -522,6 +541,112 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 attached,
                 json,
                 Some(("track_id", track_id.to_string())),
+            ))
+        }
+        "add-marker" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--at", "--label", "--id"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let timeline_time =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let label = required_name(&options, "--label", json)?;
+            let marker_id = match options.value("--id") {
+                Some(value) => parse_marker_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--id must be valid UTF-8"))?,
+                    json,
+                )?,
+                None => MarkerId::generate(),
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.marker.add",
+                json!({
+                    "marker_id": marker_id,
+                    "timeline_time": rational_value(timeline_time),
+                    "label": label,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("marker_id", marker_id.to_string())),
+            ))
+        }
+        "move-marker" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--id", "--to"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let marker_id = parse_marker_id(&required_name(&options, "--id", json)?, json)?;
+            let timeline_time =
+                parse_cli_rational(&required_name(&options, "--to", json)?, "--to", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.marker.move",
+                json!({"marker_id": marker_id, "timeline_time": rational_value(timeline_time)}),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("marker_id", marker_id.to_string())),
+            ))
+        }
+        "rename-marker" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--id", "--label"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let marker_id = parse_marker_id(&required_name(&options, "--id", json)?, json)?;
+            let label = required_name(&options, "--label", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.marker.rename",
+                json!({"marker_id": marker_id, "label": label}),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("marker_id", marker_id.to_string())),
+            ))
+        }
+        "delete-marker" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--id"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let marker_id = parse_marker_id(&required_name(&options, "--id", json)?, json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.marker.delete",
+                json!({"marker_id": marker_id}),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("marker_id", marker_id.to_string())),
             ))
         }
         "remove-track" => {
@@ -733,7 +858,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, snap, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -915,6 +1040,37 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
     Ok(lines.join("\n"))
 }
 
+fn render_timeline_markers(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let page = result.timeline_marker_page.as_ref().ok_or_else(|| {
+        CliError::operation_message(json, "timeline.markers returned no marker page")
+    })?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("timeline marker result is serializable"),
+        ));
+    }
+    let mut lines = vec![format!(
+        "Markers at revision {} ({} total, offset {}, limit {}):",
+        result.summary.project_revision, page.total_count, page.offset, page.limit
+    )];
+    if page.items.is_empty() {
+        lines.push("No markers in this page.".to_owned());
+    } else {
+        lines.extend(page.items.iter().map(|marker| {
+            format!(
+                "{} at={} label={}",
+                marker.marker_id,
+                format_cli_rational(marker.timeline_time),
+                marker.label
+            )
+        }));
+    }
+    if let Some(next_offset) = page.next_offset {
+        lines.push(format!("Next offset: {next_offset}"));
+    }
+    Ok(lines.join("\n"))
+}
+
 fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliError> {
     let snap = result
         .timeline_snap
@@ -930,8 +1086,9 @@ fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliE
         or_core::TimelineSnapTargetKind::TimelineZero => "timeline_zero".to_owned(),
         or_core::TimelineSnapTargetKind::ClipStart => "clip_start".to_owned(),
         or_core::TimelineSnapTargetKind::ClipEnd => "clip_end".to_owned(),
+        or_core::TimelineSnapTargetKind::Marker => "marker".to_owned(),
     };
-    Ok([
+    let mut lines = vec![
         format!("Raw target: {}", format_cli_rational(snap.raw_target_time)),
         format!(
             "Resolved target: {}",
@@ -939,8 +1096,11 @@ fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliE
         ),
         format!("Snapped: {}", snap.snapped),
         format!("Target kind: {target}"),
-    ]
-    .join("\n"))
+    ];
+    if let Some(marker_id) = snap.target_marker_id {
+        lines.push(format!("Target marker ID: {marker_id}"));
+    }
+    Ok(lines.join("\n"))
 }
 
 fn render_timeline_command(
@@ -988,6 +1148,12 @@ fn parse_clip_id(value: &str, json: bool) -> Result<ClipId, CliError> {
     value
         .parse()
         .map_err(|_| CliError::usage(json, "clip ID must be a canonical lowercase UUIDv4"))
+}
+
+fn parse_marker_id(value: &str, json: bool) -> Result<MarkerId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "marker ID must be a canonical lowercase UUIDv4"))
 }
 
 fn parse_track_kind(value: &str, json: bool) -> Result<TrackKind, CliError> {
