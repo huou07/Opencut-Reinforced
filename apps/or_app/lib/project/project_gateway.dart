@@ -150,6 +150,12 @@ enum ProjectTimelineTrackKind { video, audio }
 
 enum ProjectTimelineTrimEdge { start, end }
 
+enum ProjectTimelineSnapOperation { move, trimStart, trimEnd }
+
+enum ProjectTimelineSnapMovingAnchor { none, start, end }
+
+enum ProjectTimelineSnapTargetKind { none, timelineZero, clipStart, clipEnd }
+
 class ProjectTimelineTrack {
   const ProjectTimelineTrack({
     required this.trackId,
@@ -216,6 +222,34 @@ class ProjectTimelineClipPage {
   final int offset;
   final int limit;
   final int? nextOffset;
+}
+
+class ProjectTimelineSnapResult {
+  const ProjectTimelineSnapResult({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.rawTargetTime,
+    required this.resolvedTargetTime,
+    required this.snapped,
+    required this.movingAnchor,
+    required this.targetKind,
+    required this.targetTime,
+    this.targetTrackId,
+    this.targetClipId,
+  });
+
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final ProjectRationalTime rawTargetTime;
+  final ProjectRationalTime resolvedTargetTime;
+  final bool snapped;
+  final ProjectTimelineSnapMovingAnchor movingAnchor;
+  final ProjectTimelineSnapTargetKind targetKind;
+  final ProjectRationalTime targetTime;
+  final String? targetTrackId;
+  final String? targetClipId;
 }
 
 enum ProjectMediaArtifactKind { thumbnail, waveform }
@@ -387,6 +421,14 @@ abstract interface class ProjectGateway {
     required String trackId,
     required int offset,
     required int limit,
+  });
+  Future<ProjectTimelineSnapResult> resolveTimelineSnap(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectTimelineSnapOperation operation,
+    required String clipId,
+    String? targetTrackId,
+    required ProjectRationalTime targetTime,
   });
   Future<ProjectActionResult> addTimelineTrack(
     ProjectSessionHandle session,

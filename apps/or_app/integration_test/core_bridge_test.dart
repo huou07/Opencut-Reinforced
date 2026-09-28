@@ -320,6 +320,22 @@ void main() {
       );
       expect(page.items.single.clipId, clip.clipId);
 
+      final snap = await gateway.resolveTimelineSnap(
+        session,
+        current,
+        operation: ProjectTimelineSnapOperation.move,
+        clipId: clip.clipId,
+        targetTrackId: track.trackId,
+        targetTime: ProjectRationalTime(BigInt.one, 16),
+      );
+      expect(snap.projectId, originalProjectId);
+      expect(snap.projectInstanceId, originalInstanceId);
+      expect(snap.projectRevision, current.revision);
+      expect(snap.rawTargetTime.canonical, '1/16');
+      expect(snap.resolvedTargetTime.canonical, '0/1');
+      expect(snap.snapped, isTrue);
+      expect(snap.targetKind, ProjectTimelineSnapTargetKind.timelineZero);
+
       final moved = await gateway.moveTimelineClip(
         session,
         current,
@@ -828,6 +844,23 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     trackId: trackId,
     offset: offset,
     limit: limit,
+  );
+
+  @override
+  Future<ProjectTimelineSnapResult> resolveTimelineSnap(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectTimelineSnapOperation operation,
+    required String clipId,
+    String? targetTrackId,
+    required ProjectRationalTime targetTime,
+  }) => _gateway.resolveTimelineSnap(
+    session,
+    current,
+    operation: operation,
+    clipId: clipId,
+    targetTrackId: targetTrackId,
+    targetTime: targetTime,
   );
 
   @override

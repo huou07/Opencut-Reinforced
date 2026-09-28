@@ -268,6 +268,7 @@ class _AppShellState extends State<AppShell> {
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
               onMoveTimelineClip: _moveTimelineClip,
+              onResolveTimelineSnap: _resolveTimelineSnap,
               onDeleteTimelineClip: _deleteTimelineClip,
               onTrimTimelineClip: _trimTimelineClip,
               onSplitTimelineClip: _splitTimelineClip,
@@ -897,7 +898,8 @@ class _AppShellState extends State<AppShell> {
     String trackId,
     ProjectRationalTime timelineStart,
   ) async {
-    await _runProjectActionAtSnapshot(
+    final session = _activeSession;
+    final result = await _runProjectActionAtSnapshot(
       expected,
       (session, current) => widget.projectGateway.moveTimelineClip(
         session,
@@ -907,6 +909,60 @@ class _AppShellState extends State<AppShell> {
         timelineStart: timelineStart,
       ),
     );
+    if (result == null &&
+        mounted &&
+        session != null &&
+        identical(session, _activeSession)) {
+      await _refreshProjectState(session);
+    }
+  }
+
+  Future<ProjectTimelineSnapResult> _resolveTimelineSnap(
+    ProjectReadModel expected,
+    ProjectTimelineSnapOperation operation,
+    String clipId,
+    String? targetTrackId,
+    ProjectRationalTime targetTime,
+  ) async {
+    final session = _activeSession;
+    final current = _activeProject;
+    if (session == null ||
+        current == null ||
+        _busy ||
+        !_sameProjectIdentity(expected, current) ||
+        expected.revision != current.revision) {
+      if (session != null && mounted && identical(session, _activeSession)) {
+        await _refreshProjectState(session);
+      }
+      throw ProjectGatewayException(
+        'REVISION_CONFLICT',
+        'The project changed while the timeline gesture was active.',
+      );
+    }
+    final result = await widget.projectGateway.resolveTimelineSnap(
+      session,
+      expected,
+      operation: operation,
+      clipId: clipId,
+      targetTrackId: targetTrackId,
+      targetTime: targetTime,
+    );
+    final latest = _activeProject;
+    if (!mounted ||
+        !identical(session, _activeSession) ||
+        latest == null ||
+        !_sameProjectIdentity(expected, latest) ||
+        expected.revision != latest.revision ||
+        result.projectId != expected.projectId ||
+        result.projectInstanceId != expected.projectInstanceId ||
+        result.projectRevision != expected.revision ||
+        result.rawTargetTime.canonical != targetTime.canonical) {
+      throw ProjectGatewayException(
+        'REVISION_CONFLICT',
+        'The timeline snap result is stale.',
+      );
+    }
+    return result;
   }
 
   Future<void> _deleteTimelineClip(
@@ -929,7 +985,8 @@ class _AppShellState extends State<AppShell> {
     ProjectTimelineTrimEdge edge,
     ProjectRationalTime timelineTime,
   ) async {
-    await _runProjectActionAtSnapshot(
+    final session = _activeSession;
+    final result = await _runProjectActionAtSnapshot(
       expected,
       (session, current) => widget.projectGateway.trimTimelineClip(
         session,
@@ -939,6 +996,12 @@ class _AppShellState extends State<AppShell> {
         timelineTime: timelineTime,
       ),
     );
+    if (result == null &&
+        mounted &&
+        session != null &&
+        identical(session, _activeSession)) {
+      await _refreshProjectState(session);
+    }
   }
 
   Future<void> _splitTimelineClip(

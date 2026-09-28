@@ -8,6 +8,7 @@ use or_core::{
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
     ProjectRevision, QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
+    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
     TimelineTrackSummary, TimelineTrimEdge, TrackId, TrackKind, apply_project_recovery,
     discard_project_recovery, ffmpeg_executable_from_environment, inspect_project_recovery,
     prepare_media_import,
@@ -69,6 +70,28 @@ pub enum TimelineTrimEdgeView {
     End,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineSnapOperationView {
+    Move,
+    TrimStart,
+    TrimEnd,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineSnapMovingAnchorView {
+    None,
+    Start,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineSnapTargetKindView {
+    None,
+    TimelineZero,
+    ClipStart,
+    ClipEnd,
+}
+
 #[derive(Clone, Debug)]
 pub struct ProjectTimelineTrackView {
     pub track_id: String,
@@ -104,6 +127,21 @@ pub struct ProjectTimelineClipPageView {
     pub offset: u64,
     pub limit: u64,
     pub next_offset: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineSnapView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub raw_target_time: RationalTimeView,
+    pub resolved_target_time: RationalTimeView,
+    pub snapped: bool,
+    pub moving_anchor: TimelineSnapMovingAnchorView,
+    pub target_kind: TimelineSnapTargetKindView,
+    pub target_time: RationalTimeView,
+    pub target_track_id: Option<String>,
+    pub target_clip_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -499,6 +537,54 @@ impl ProjectHostHandle {
             .as_ref()
             .ok_or_else(unexpected_response_error)?;
         Ok(timeline_clip_page_view(&result, page))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn resolve_timeline_snap(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        operation: TimelineSnapOperationView,
+        clip_id: String,
+        target_track_id: Option<String>,
+        target_time_numerator: i64,
+        target_time_denominator: u32,
+    ) -> Result<ProjectTimelineSnapView, ProjectBridgeError> {
+        let (project_id, project_instance_id, _) =
+            parse_session_identity(&project_id, &project_instance_id, expected_revision)?;
+        let clip_id = ClipId::from_str(&clip_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_CLIP_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let target_track_id = target_track_id
+            .map(|track_id| {
+                TrackId::from_str(&track_id).map_err(|error| ProjectBridgeError {
+                    code: "INVALID_TRACK_ID".to_owned(),
+                    message: error.to_string(),
+                })
+            })
+            .transpose()?;
+        let target_time = RationalTime::new(target_time_numerator, target_time_denominator)
+            .map_err(|_| timeline_arguments_error())?;
+        let operation = match operation {
+            TimelineSnapOperationView::Move => TimelineSnapOperation::Move,
+            TimelineSnapOperationView::TrimStart => TimelineSnapOperation::TrimStart,
+            TimelineSnapOperationView::TrimEnd => TimelineSnapOperation::TrimEnd,
+        };
+        let result = self.query(QueryEnvelope::timeline_snap(
+            project_id,
+            project_instance_id,
+            operation,
+            clip_id,
+            target_track_id,
+            target_time,
+        ))?;
+        let snap = result
+            .timeline_snap
+            .as_deref()
+            .ok_or_else(unexpected_response_error)?;
+        Ok(timeline_snap_view(&result, snap))
     }
 
     pub fn add_timeline_track(
@@ -1353,6 +1439,31 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     }
 }
 
+fn timeline_snap_view(result: &QueryResult, snap: &TimelineSnapResult) -> ProjectTimelineSnapView {
+    ProjectTimelineSnapView {
+        project_id: result.summary.project_id.to_string(),
+        project_instance_id: result.summary.project_instance_id.to_string(),
+        project_revision: result.summary.project_revision.value(),
+        raw_target_time: rational_time_view(snap.raw_target_time),
+        resolved_target_time: rational_time_view(snap.resolved_target_time),
+        snapped: snap.snapped,
+        moving_anchor: match snap.moving_anchor {
+            TimelineSnapMovingAnchor::None => TimelineSnapMovingAnchorView::None,
+            TimelineSnapMovingAnchor::Start => TimelineSnapMovingAnchorView::Start,
+            TimelineSnapMovingAnchor::End => TimelineSnapMovingAnchorView::End,
+        },
+        target_kind: match snap.target_kind {
+            TimelineSnapTargetKind::None => TimelineSnapTargetKindView::None,
+            TimelineSnapTargetKind::TimelineZero => TimelineSnapTargetKindView::TimelineZero,
+            TimelineSnapTargetKind::ClipStart => TimelineSnapTargetKindView::ClipStart,
+            TimelineSnapTargetKind::ClipEnd => TimelineSnapTargetKindView::ClipEnd,
+        },
+        target_time: rational_time_view(snap.target_time),
+        target_track_id: snap.target_track_id.map(|id| id.to_string()),
+        target_clip_id: snap.target_clip_id.map(|id| id.to_string()),
+    }
+}
+
 fn invalid_timeline_id(code: &str, message: String) -> ProjectActionResult {
     action_error(ProjectBridgeError {
         code: code.to_owned(),
@@ -1674,6 +1785,7 @@ mod tests {
             media_item: None,
             timeline_tracks: None,
             timeline_clip_page: None,
+            timeline_snap: None,
         };
         let clip_id = ClipId::generate();
         let media_id = MediaId::generate();

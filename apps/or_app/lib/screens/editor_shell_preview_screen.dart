@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -36,6 +37,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onRefreshTimeline,
     this.onAddMediaToTimeline,
     this.onMoveTimelineClip,
+    this.onResolveTimelineSnap,
     this.onDeleteTimelineClip,
     this.onTrimTimelineClip,
     this.onSplitTimelineClip,
@@ -88,6 +90,14 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineStart,
   )?
   onMoveTimelineClip;
+  final Future<ProjectTimelineSnapResult> Function(
+    ProjectReadModel project,
+    ProjectTimelineSnapOperation operation,
+    String clipId,
+    String? targetTrackId,
+    ProjectRationalTime targetTime,
+  )?
+  onResolveTimelineSnap;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectTimelineClip clip,
@@ -146,6 +156,17 @@ const _editorTools = [
 
 class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String _selectedTool = 'Media';
+  bool _snapEnabled = true;
+
+  @override
+  void didUpdateWidget(covariant EditorShellPreviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.project?.projectId != widget.project?.projectId ||
+        oldWidget.project?.projectInstanceId !=
+            widget.project?.projectInstanceId) {
+      _snapEnabled = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +260,10 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          snapEnabled: _snapEnabled,
+          onSnapChanged: widget.isProjectWorkspace
+              ? (value) => setState(() => _snapEnabled = value)
+              : null,
         ),
         Expanded(
           flex: 2,
@@ -258,10 +283,13 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onLoadMore: widget.onLoadMoreTimelineClips,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
+            onResolveSnap: widget.onResolveTimelineSnap,
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            snapEnabled: _snapEnabled,
+            onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
           ),
         ),
@@ -280,6 +308,10 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          snapEnabled: _snapEnabled,
+          onSnapChanged: widget.isProjectWorkspace
+              ? (value) => setState(() => _snapEnabled = value)
+              : null,
         ),
         Expanded(
           flex: 2,
@@ -299,10 +331,13 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onLoadMore: widget.onLoadMoreTimelineClips,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
+            onResolveSnap: widget.onResolveTimelineSnap,
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            snapEnabled: _snapEnabled,
+            onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
           ),
         ),
@@ -322,6 +357,13 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _UnavailableToolSheet(tool: tool),
     );
+  }
+
+  void _showTimelineEditError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -1160,6 +1202,8 @@ class _TimelineToolbar extends StatelessWidget {
     required this.onUndo,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
+    required this.snapEnabled,
+    required this.onSnapChanged,
   });
 
   final bool compact;
@@ -1168,6 +1212,8 @@ class _TimelineToolbar extends StatelessWidget {
   final VoidCallback? onUndo;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
+  final bool snapEnabled;
+  final ValueChanged<bool>? onSnapChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,6 +1266,33 @@ class _TimelineToolbar extends StatelessWidget {
                 icon: const Icon(Icons.undo_outlined, size: 17),
                 visualDensity: VisualDensity.compact,
               ),
+              Semantics(
+                label: 'Snap to clip boundaries',
+                toggled: snapEnabled,
+                child: FilterChip(
+                  key: const ValueKey('timeline-snap-toggle'),
+                  label: const Text('Snap'),
+                  selected: snapEnabled,
+                  onSelected: busy || onSnapChanged == null
+                      ? null
+                      : onSnapChanged,
+                  showCheckmark: false,
+                  visualDensity: VisualDensity.compact,
+                  selectedColor: OrColors.selection,
+                  labelStyle: TextStyle(
+                    color: snapEnabled
+                        ? OrColors.primaryText
+                        : OrColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  side: BorderSide(
+                    color: snapEnabled
+                        ? OrColors.selection
+                        : OrColors.borderStrong,
+                  ),
+                ),
+              ),
             ] else ...[
               _UnavailableTimelineAction(
                 tooltip: 'Undo is unavailable in this Developer Preview',
@@ -1256,7 +1329,7 @@ class _UnavailableTimelineAction extends StatelessWidget {
   }
 }
 
-class _TimelinePanel extends StatelessWidget {
+class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     required this.compact,
     required this.isProjectWorkspace,
@@ -1273,10 +1346,13 @@ class _TimelinePanel extends StatelessWidget {
     required this.onLoadMore,
     required this.onRefresh,
     required this.onMoveClip,
+    required this.onResolveSnap,
     required this.onDeleteClip,
     required this.onTrimClip,
     required this.onSplitClip,
     required this.onRippleDeleteClip,
+    required this.snapEnabled,
+    required this.onTimelineEditError,
     required this.mediaItems,
   });
 
@@ -1302,6 +1378,14 @@ class _TimelinePanel extends StatelessWidget {
     ProjectRationalTime,
   )?
   onMoveClip;
+  final Future<ProjectTimelineSnapResult> Function(
+    ProjectReadModel project,
+    ProjectTimelineSnapOperation operation,
+    String clipId,
+    String? targetTrackId,
+    ProjectRationalTime targetTime,
+  )?
+  onResolveSnap;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onDeleteClip;
   final Future<void> Function(
@@ -1319,7 +1403,37 @@ class _TimelinePanel extends StatelessWidget {
   onSplitClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
+  final bool snapEnabled;
+  final ValueChanged<String>? onTimelineEditError;
   final List<ProjectMediaItem> mediaItems;
+
+  @override
+  State<_TimelinePanel> createState() => _TimelinePanelState();
+}
+
+class _TimelinePanelState extends State<_TimelinePanel> {
+  final Map<String, GlobalKey> _laneKeys = {};
+  _TimelinePointerGesture? _gesture;
+  _TimelineSnapGuide? _snapGuide;
+  int _gestureToken = 0;
+
+  @override
+  void didUpdateWidget(covariant _TimelinePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previousProject = oldWidget.project;
+    final nextProject = widget.project;
+    if (previousProject?.projectId != nextProject?.projectId ||
+        previousProject?.projectInstanceId != nextProject?.projectInstanceId ||
+        previousProject?.revision != nextProject?.revision) {
+      _cancelGesture();
+    }
+  }
+
+  @override
+  void dispose() {
+    _gestureToken++;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1334,16 +1448,16 @@ class _TimelinePanel extends StatelessWidget {
         children: [
           _PanelHeader(
             title: 'Timeline',
-            height: compact ? 34 : 38,
-            trailing: isProjectWorkspace
+            height: widget.compact ? 34 : 38,
+            trailing: widget.isProjectWorkspace
                 ? const OrBadge('Project timeline')
                 : const OrBadge('Developer Preview'),
           ),
-          if (!isProjectWorkspace)
+          if (!widget.isProjectWorkspace)
             Expanded(
               child: Column(
                 children: [
-                  _TimelineRuler(compact: compact),
+                  _TimelineRuler(compact: widget.compact),
                   const Expanded(
                     child: Column(
                       children: [
@@ -1361,7 +1475,7 @@ class _TimelinePanel extends StatelessWidget {
                       'Timeline engine not implemented',
                       style: TextStyle(
                         color: OrColors.textMuted,
-                        fontSize: compact ? 10 : 11,
+                        fontSize: widget.compact ? 10 : 11,
                       ),
                     ),
                   ),
@@ -1376,8 +1490,8 @@ class _TimelinePanel extends StatelessWidget {
   }
 
   Widget _buildProjectTimeline(BuildContext context) {
-    final snapshot = tracks;
-    if (loading && snapshot == null) {
+    final snapshot = widget.tracks;
+    if (widget.loading && snapshot == null) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (snapshot == null) {
@@ -1386,12 +1500,12 @@ class _TimelinePanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              error ?? 'The timeline is unavailable.',
+              widget.error ?? 'The timeline is unavailable.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: OrColors.textSecondary),
             ),
             TextButton.icon(
-              onPressed: onRefresh,
+              onPressed: widget.onRefresh,
               icon: const Icon(Icons.refresh, size: 16),
               label: const Text('Refresh timeline'),
             ),
@@ -1420,13 +1534,13 @@ class _TimelinePanel extends StatelessWidget {
               children: [
                 OutlinedButton.icon(
                   key: const ValueKey('timeline-empty-add-video'),
-                  onPressed: busy ? null : onAddVideoTrack,
+                  onPressed: widget.busy ? null : widget.onAddVideoTrack,
                   icon: const Icon(Icons.movie_outlined, size: 16),
                   label: const Text('Add Video Track'),
                 ),
                 OutlinedButton.icon(
                   key: const ValueKey('timeline-empty-add-audio'),
-                  onPressed: busy ? null : onAddAudioTrack,
+                  onPressed: widget.busy ? null : widget.onAddAudioTrack,
                   icon: const Icon(Icons.graphic_eq_outlined, size: 16),
                   label: const Text('Add Audio Track'),
                 ),
@@ -1441,7 +1555,7 @@ class _TimelinePanel extends StatelessWidget {
       builder: (context, constraints) {
         final labels = _timelineTrackLabels(snapshot.items);
         var endSeconds = 0.0;
-        for (final page in clipPages.values) {
+        for (final page in widget.clipPages.values) {
           for (final clip in page.items) {
             final start = clip.timelineStart.secondsForDisplay;
             final duration = clip.sourceDuration.secondsForDisplay;
@@ -1462,7 +1576,7 @@ class _TimelinePanel extends StatelessWidget {
         final tickSeconds = _timelineTickSeconds(displayDuration, canvasWidth);
         final trackRows = <Widget>[];
         for (final track in snapshot.items) {
-          final page = clipPages[track.trackId];
+          final page = widget.clipPages[track.trackId];
           final loadedCount = page?.items.length ?? 0;
           final countLabel = loadedCount < track.clipCount
               ? '$loadedCount / ${track.clipCount}'
@@ -1472,18 +1586,18 @@ class _TimelinePanel extends StatelessWidget {
               track: track,
               label: labels[track.trackId]!,
               countLabel: countLabel,
-              busy: busy,
-              project: project,
-              onRemove: onRemoveTrack,
+              busy: widget.busy,
+              project: widget.project,
+              onRemove: widget.onRemoveTrack,
             ),
           );
           if (page?.nextOffset != null) {
             trackRows.add(
               _TimelineLoadMoreHeader(
                 trackId: track.trackId,
-                loading: loadingMoreTracks.contains(track.trackId),
-                busy: busy,
-                onLoadMore: onLoadMore,
+                loading: widget.loadingMoreTracks.contains(track.trackId),
+                busy: widget.busy,
+                onLoadMore: widget.onLoadMore,
               ),
             );
           }
@@ -1522,30 +1636,62 @@ class _TimelinePanel extends StatelessWidget {
                           ),
                           for (final track in snapshot.items) ...[
                             _TimelineTrackLane(
+                              key: _laneKeys.putIfAbsent(
+                                track.trackId,
+                                GlobalKey.new,
+                              ),
                               track: track,
                               clips:
-                                  clipPages[track.trackId]?.items ?? const [],
-                              mediaItems: mediaItems,
+                                  widget.clipPages[track.trackId]?.items ??
+                                  const [],
+                              mediaItems: widget.mediaItems,
                               width: canvasWidth,
                               pixelsPerSecond: scale,
                               tickSeconds: tickSeconds,
+                              gesture: _gesture,
+                              snapGuide: _snapGuide,
                               onOpenClip: (clip) => unawaited(
                                 _showTimelineClipActions(
                                   context: context,
-                                  project: project,
+                                  project: widget.project,
                                   tracks: snapshot.items,
                                   track: track,
                                   clip: clip,
-                                  onMove: onMoveClip,
-                                  onDelete: onDeleteClip,
-                                  onTrim: onTrimClip,
-                                  onSplit: onSplitClip,
-                                  onRippleDelete: onRippleDeleteClip,
-                                  busy: busy,
+                                  onMove: widget.onMoveClip,
+                                  onDelete: widget.onDeleteClip,
+                                  onTrim: widget.onTrimClip,
+                                  onSplit: widget.onSplitClip,
+                                  onRippleDelete: widget.onRippleDeleteClip,
+                                  busy: widget.busy,
                                 ),
                               ),
+                              onMoveStart: (clip, details) =>
+                                  _beginMoveGesture(track, clip, details),
+                              onMoveUpdate: (clip, details) =>
+                                  _updateMoveGesture(clip, details),
+                              onMoveEnd: (clip, details) =>
+                                  _endMoveGesture(clip, details),
+                              onMoveCancel: _cancelPointerGesture,
+                              onTrimStart: (clip, details) => _beginTrimGesture(
+                                track,
+                                clip,
+                                ProjectTimelineTrimEdge.start,
+                                details,
+                              ),
+                              onTrimEnd: (clip, details) => _beginTrimGesture(
+                                track,
+                                clip,
+                                ProjectTimelineTrimEdge.end,
+                                details,
+                              ),
+                              onTrimUpdate: (clip, details) =>
+                                  _updateTrimGesture(clip, details),
+                              onTrimFinish: (clip, details) =>
+                                  _endTrimGesture(clip, details),
+                              onTrimCancel: _cancelPointerGesture,
                             ),
-                            if (clipPages[track.trackId]?.nextOffset != null)
+                            if (widget.clipPages[track.trackId]?.nextOffset !=
+                                null)
                               _TimelineLoadMoreLane(width: canvasWidth),
                           ],
                         ],
@@ -1559,6 +1705,243 @@ class _TimelinePanel extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _beginMoveGesture(
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+    DragStartDetails details,
+  ) {
+    final project = widget.project;
+    if (project == null || widget.busy || widget.onMoveClip == null) return;
+    final token = ++_gestureToken;
+    setState(() {
+      _gesture = _TimelinePointerGesture.move(
+        token: token,
+        project: project,
+        sourceTrack: track,
+        clip: clip,
+        startGlobalPosition: details.globalPosition,
+        pixelsPerSecond: _pixelsPerSecondForGesture(),
+      );
+    });
+  }
+
+  void _updateMoveGesture(ProjectTimelineClip clip, DragUpdateDetails details) {
+    final gesture = _gesture;
+    if (gesture == null ||
+        gesture.kind != _TimelinePointerEditKind.move ||
+        gesture.clip.clipId != clip.clipId) {
+      return;
+    }
+    gesture.deltaPixels =
+        details.globalPosition.dx - gesture.startGlobalPosition.dx;
+    final target = _trackAt(details.globalPosition);
+    if (target == null) {
+      gesture.targetTrackId = gesture.sourceTrack.trackId;
+      gesture.invalidLane = false;
+    } else if (target.kind == gesture.sourceTrack.kind) {
+      gesture.targetTrackId = target.trackId;
+      gesture.invalidLane = false;
+    } else {
+      gesture.targetTrackId = gesture.sourceTrack.trackId;
+      gesture.invalidLane = true;
+    }
+    setState(() {});
+  }
+
+  void _endMoveGesture(ProjectTimelineClip clip, DragEndDetails details) {
+    final gesture = _gesture;
+    if (gesture == null ||
+        gesture.kind != _TimelinePointerEditKind.move ||
+        gesture.clip.clipId != clip.clipId) {
+      return;
+    }
+    _gesture = null;
+    setState(() {});
+    if (gesture.invalidLane) return;
+    unawaited(_commitPointerGesture(gesture));
+  }
+
+  void _beginTrimGesture(
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+    ProjectTimelineTrimEdge edge,
+    DragStartDetails details,
+  ) {
+    final project = widget.project;
+    if (project == null || widget.busy || widget.onTrimClip == null) return;
+    final token = ++_gestureToken;
+    setState(() {
+      _gesture = _TimelinePointerGesture.trim(
+        token: token,
+        project: project,
+        sourceTrack: track,
+        clip: clip,
+        edge: edge,
+        startGlobalPosition: details.globalPosition,
+        pixelsPerSecond: _pixelsPerSecondForGesture(),
+      );
+    });
+  }
+
+  void _updateTrimGesture(ProjectTimelineClip clip, DragUpdateDetails details) {
+    final gesture = _gesture;
+    if (gesture == null ||
+        gesture.kind == _TimelinePointerEditKind.move ||
+        gesture.clip.clipId != clip.clipId) {
+      return;
+    }
+    gesture.deltaPixels =
+        details.globalPosition.dx - gesture.startGlobalPosition.dx;
+    setState(() {});
+  }
+
+  void _endTrimGesture(ProjectTimelineClip clip, DragEndDetails details) {
+    final gesture = _gesture;
+    if (gesture == null ||
+        gesture.kind == _TimelinePointerEditKind.move ||
+        gesture.clip.clipId != clip.clipId) {
+      return;
+    }
+    _gesture = null;
+    setState(() {});
+    unawaited(_commitPointerGesture(gesture));
+  }
+
+  void _cancelPointerGesture(ProjectTimelineClip clip) {
+    if (_gesture?.clip.clipId != clip.clipId) return;
+    setState(_cancelGesture);
+  }
+
+  Future<void> _commitPointerGesture(_TimelinePointerGesture gesture) async {
+    final rawTargetTime = gesture.rawTargetTime;
+    var resolvedTargetTime = rawTargetTime;
+    try {
+      final operation = gesture.snapOperation;
+      if (widget.snapEnabled && widget.onResolveSnap != null) {
+        final snap = await widget.onResolveSnap!(
+          gesture.project,
+          operation,
+          gesture.clip.clipId,
+          gesture.kind == _TimelinePointerEditKind.move
+              ? gesture.targetTrackId
+              : null,
+          rawTargetTime,
+        );
+        if (!_snapResultIsCurrent(gesture, snap)) {
+          if (mounted) widget.onRefresh?.call();
+          return;
+        }
+        if (snap.snapped) {
+          resolvedTargetTime = snap.resolvedTargetTime;
+          _showSnapGuide(gesture, snap.targetTime);
+        }
+      }
+      if (!_gestureCommitIsCurrent(gesture)) {
+        if (mounted) widget.onRefresh?.call();
+        return;
+      }
+      if (gesture.kind == _TimelinePointerEditKind.move) {
+        final onMove = widget.onMoveClip;
+        if (onMove == null) return;
+        await onMove(
+          gesture.project,
+          gesture.clip,
+          gesture.targetTrackId,
+          resolvedTargetTime,
+        );
+      } else {
+        final onTrim = widget.onTrimClip;
+        if (onTrim == null) return;
+        await onTrim(
+          gesture.project,
+          gesture.clip,
+          gesture.edge,
+          resolvedTargetTime,
+        );
+      }
+    } on ProjectGatewayException catch (error) {
+      if (!mounted) return;
+      widget.onTimelineEditError?.call(
+        error.message.isEmpty ? 'The timeline edit failed.' : error.message,
+      );
+      widget.onRefresh?.call();
+    } catch (_) {
+      if (!mounted) return;
+      widget.onTimelineEditError?.call('The timeline edit failed.');
+      widget.onRefresh?.call();
+    }
+  }
+
+  bool _snapResultIsCurrent(
+    _TimelinePointerGesture gesture,
+    ProjectTimelineSnapResult result,
+  ) =>
+      _gestureCommitIsCurrent(gesture) &&
+      result.projectId == gesture.project.projectId &&
+      result.projectInstanceId == gesture.project.projectInstanceId &&
+      result.projectRevision == gesture.project.revision &&
+      result.rawTargetTime.canonical == gesture.rawTargetTime.canonical;
+
+  bool _gestureCommitIsCurrent(_TimelinePointerGesture gesture) =>
+      mounted &&
+      _gestureToken == gesture.token &&
+      widget.project?.projectId == gesture.project.projectId &&
+      widget.project?.projectInstanceId == gesture.project.projectInstanceId &&
+      widget.project?.revision == gesture.project.revision;
+
+  void _showSnapGuide(
+    _TimelinePointerGesture gesture,
+    ProjectRationalTime targetTime,
+  ) {
+    if (!mounted || !_gestureCommitIsCurrent(gesture)) return;
+    setState(() {
+      _snapGuide = _TimelineSnapGuide(
+        trackId: gesture.targetTrackId,
+        time: targetTime,
+      );
+    });
+    final token = gesture.token;
+    Future<void>.delayed(const Duration(milliseconds: 650), () {
+      if (!mounted || _gestureToken != token) return;
+      setState(() => _snapGuide = null);
+    });
+  }
+
+  void _cancelGesture() {
+    _gestureToken++;
+    _gesture = null;
+    _snapGuide = null;
+  }
+
+  ProjectTimelineTrack? _trackAt(Offset globalPosition) {
+    final tracks = widget.tracks?.items ?? const <ProjectTimelineTrack>[];
+    for (final track in tracks) {
+      final context = _laneKeys[track.trackId]?.currentContext;
+      final renderObject = context?.findRenderObject();
+      if (renderObject is! RenderBox) continue;
+      final origin = renderObject.localToGlobal(Offset.zero);
+      final rect = origin & renderObject.size;
+      if (rect.contains(globalPosition)) return track;
+    }
+    return null;
+  }
+
+  double _pixelsPerSecondForGesture() {
+    final tracks = widget.clipPages.values;
+    var endSeconds = 0.0;
+    for (final page in tracks) {
+      for (final clip in page.items) {
+        final start = clip.timelineStart.secondsForDisplay;
+        final end = clip.timelineEnd.secondsForDisplay;
+        if (start.isFinite && end.isFinite) {
+          endSeconds = math.max(endSeconds, end);
+        }
+      }
+    }
+    final duration = math.max(20.0, endSeconds);
+    return math.min(64.0, 100000.0 / duration);
   }
 }
 
@@ -1582,6 +1965,94 @@ double _timelineTickSeconds(double duration, double width) {
   final marks = (width / 100).ceil().clamp(1, 1000);
   final needed = duration / marks;
   return math.max(5, (needed / 5).ceil() * 5).toDouble();
+}
+
+enum _TimelinePointerEditKind { move, trim }
+
+class _TimelinePointerGesture {
+  _TimelinePointerGesture.move({
+    required this.token,
+    required this.project,
+    required this.sourceTrack,
+    required this.clip,
+    required this.startGlobalPosition,
+    required this.pixelsPerSecond,
+  }) : kind = _TimelinePointerEditKind.move,
+       edge = ProjectTimelineTrimEdge.start,
+       targetTrackId = sourceTrack.trackId;
+
+  _TimelinePointerGesture.trim({
+    required this.token,
+    required this.project,
+    required this.sourceTrack,
+    required this.clip,
+    required this.edge,
+    required this.startGlobalPosition,
+    required this.pixelsPerSecond,
+  }) : kind = _TimelinePointerEditKind.trim,
+       targetTrackId = sourceTrack.trackId;
+
+  final int token;
+  final ProjectReadModel project;
+  final ProjectTimelineTrack sourceTrack;
+  final ProjectTimelineClip clip;
+  final _TimelinePointerEditKind kind;
+  final ProjectTimelineTrimEdge edge;
+  final Offset startGlobalPosition;
+  final double pixelsPerSecond;
+  String targetTrackId;
+  double deltaPixels = 0;
+  bool invalidLane = false;
+
+  double get deltaSeconds => deltaPixels / pixelsPerSecond;
+
+  ProjectRationalTime get pointerDelta {
+    final milliseconds = (deltaSeconds * 1000).round();
+    return ProjectRationalTime(BigInt.from(milliseconds), 1000);
+  }
+
+  ProjectRationalTime get rawTargetTime {
+    final delta = pointerDelta;
+    return switch (kind) {
+      _TimelinePointerEditKind.move => clip.timelineStart.add(delta),
+      _TimelinePointerEditKind.trim =>
+        edge == ProjectTimelineTrimEdge.start
+            ? clip.timelineStart.add(delta)
+            : clip.timelineEnd.add(delta),
+    };
+  }
+
+  ProjectTimelineSnapOperation get snapOperation => switch (kind) {
+    _TimelinePointerEditKind.move => ProjectTimelineSnapOperation.move,
+    _TimelinePointerEditKind.trim =>
+      edge == ProjectTimelineTrimEdge.start
+          ? ProjectTimelineSnapOperation.trimStart
+          : ProjectTimelineSnapOperation.trimEnd,
+  };
+
+  double get visualStartSeconds => switch (kind) {
+    _TimelinePointerEditKind.move =>
+      clip.timelineStart.secondsForDisplay + deltaSeconds,
+    _TimelinePointerEditKind.trim =>
+      clip.timelineStart.secondsForDisplay +
+          (edge == ProjectTimelineTrimEdge.start ? deltaSeconds : 0),
+  };
+
+  double get visualDurationSeconds => switch (kind) {
+    _TimelinePointerEditKind.move => clip.sourceDuration.secondsForDisplay,
+    _TimelinePointerEditKind.trim =>
+      clip.sourceDuration.secondsForDisplay +
+          (edge == ProjectTimelineTrimEdge.start
+              ? -deltaSeconds
+              : deltaSeconds),
+  };
+}
+
+class _TimelineSnapGuide {
+  const _TimelineSnapGuide({required this.trackId, required this.time});
+
+  final String trackId;
+  final ProjectRationalTime time;
 }
 
 String _timelineTimeLabel(double seconds) {
@@ -1832,15 +2303,109 @@ class _TimelineLoadMoreLane extends StatelessWidget {
   );
 }
 
+class _TimelinePointerSurface extends StatefulWidget {
+  const _TimelinePointerSurface({
+    super.key,
+    required this.child,
+    required this.behavior,
+    this.onTap,
+    this.onPanStart,
+    this.onPanUpdate,
+    this.onPanEnd,
+    this.onPanCancel,
+  });
+
+  final Widget child;
+  final HitTestBehavior behavior;
+  final VoidCallback? onTap;
+  final ValueChanged<DragStartDetails>? onPanStart;
+  final ValueChanged<DragUpdateDetails>? onPanUpdate;
+  final ValueChanged<DragEndDetails>? onPanEnd;
+  final VoidCallback? onPanCancel;
+
+  @override
+  State<_TimelinePointerSurface> createState() =>
+      _TimelinePointerSurfaceState();
+}
+
+class _TimelinePointerSurfaceState extends State<_TimelinePointerSurface> {
+  int? _pointer;
+  Offset? _start;
+  bool _dragging = false;
+
+  void _handleDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _start = event.position;
+    _dragging = false;
+  }
+
+  void _handleMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer || _start == null) return;
+    if (!_dragging) {
+      if ((event.position - _start!).distance <= kTouchSlop) return;
+      _dragging = true;
+      widget.onPanStart?.call(DragStartDetails(globalPosition: _start!));
+    }
+    widget.onPanUpdate?.call(
+      DragUpdateDetails(globalPosition: event.position, delta: event.delta),
+    );
+  }
+
+  void _handleUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    if (_dragging) {
+      widget.onPanEnd?.call(DragEndDetails(primaryVelocity: 0));
+    } else {
+      widget.onTap?.call();
+    }
+    _reset();
+  }
+
+  void _handleCancel(PointerCancelEvent event) {
+    if (event.pointer != _pointer) return;
+    if (_dragging) widget.onPanCancel?.call();
+    _reset();
+  }
+
+  void _reset() {
+    _pointer = null;
+    _start = null;
+    _dragging = false;
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: widget.behavior,
+    onPointerDown: _handleDown,
+    onPointerMove: _handleMove,
+    onPointerUp: _handleUp,
+    onPointerCancel: _handleCancel,
+    child: widget.child,
+  );
+}
+
 class _TimelineTrackLane extends StatelessWidget {
   const _TimelineTrackLane({
+    super.key,
     required this.track,
     required this.clips,
     required this.mediaItems,
     required this.width,
     required this.pixelsPerSecond,
     required this.tickSeconds,
+    required this.gesture,
+    required this.snapGuide,
     required this.onOpenClip,
+    required this.onMoveStart,
+    required this.onMoveUpdate,
+    required this.onMoveEnd,
+    required this.onMoveCancel,
+    required this.onTrimStart,
+    required this.onTrimEnd,
+    required this.onTrimUpdate,
+    required this.onTrimFinish,
+    required this.onTrimCancel,
   });
 
   final ProjectTimelineTrack track;
@@ -1849,7 +2414,18 @@ class _TimelineTrackLane extends StatelessWidget {
   final double width;
   final double pixelsPerSecond;
   final double tickSeconds;
+  final _TimelinePointerGesture? gesture;
+  final _TimelineSnapGuide? snapGuide;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
+  final void Function(ProjectTimelineClip, DragStartDetails)? onMoveStart;
+  final void Function(ProjectTimelineClip, DragUpdateDetails)? onMoveUpdate;
+  final void Function(ProjectTimelineClip, DragEndDetails)? onMoveEnd;
+  final ValueChanged<ProjectTimelineClip>? onMoveCancel;
+  final void Function(ProjectTimelineClip, DragStartDetails)? onTrimStart;
+  final void Function(ProjectTimelineClip, DragStartDetails)? onTrimEnd;
+  final void Function(ProjectTimelineClip, DragUpdateDetails)? onTrimUpdate;
+  final void Function(ProjectTimelineClip, DragEndDetails)? onTrimFinish;
+  final ValueChanged<ProjectTimelineClip>? onTrimCancel;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1870,7 +2446,20 @@ class _TimelineTrackLane extends StatelessWidget {
             ),
           ),
         ),
-        for (final clip in clips) _positionedClip(context, clip),
+        if (snapGuide?.trackId == track.trackId)
+          Positioned(
+            key: ValueKey('timeline-snap-guide-${track.trackId}'),
+            left: snapGuide!.time.secondsForDisplay * pixelsPerSecond,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            child: Container(color: OrColors.selection),
+          ),
+        for (final clip in clips)
+          if (gesture?.clip.clipId != clip.clipId)
+            _positionedClip(context, clip),
+        if (gesture != null && gesture!.targetTrackId == track.trackId)
+          _positionedGhost(gesture!),
       ],
     ),
   );
@@ -1897,6 +2486,40 @@ class _TimelineTrackLane extends StatelessWidget {
     final background = trackKind == ProjectTimelineTrackKind.video
         ? OrColors.surface
         : OrColors.backgroundRaised;
+    final body = _TimelinePointerSurface(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onOpenClip(clip),
+      onPanStart: onMoveStart == null
+          ? null
+          : (details) => onMoveStart!(clip, details),
+      onPanUpdate: onMoveUpdate == null
+          ? null
+          : (details) => onMoveUpdate!(clip, details),
+      onPanEnd: onMoveEnd == null
+          ? null
+          : (details) => onMoveEnd!(clip, details),
+      onPanCancel: onMoveCancel == null ? null : () => onMoveCancel!(clip),
+      child: const SizedBox.expand(),
+    );
+    final visual = Container(
+      padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
+      decoration: BoxDecoration(
+        border: Border.all(color: OrColors.borderStrong),
+        borderRadius: BorderRadius.circular(OrRadii.small),
+      ),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: OrColors.text,
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+    final bodyInset = math.min(6.0, clipWidth / 2);
     return Positioned(
       left: left,
       top: 5,
@@ -1906,6 +2529,7 @@ class _TimelineTrackLane extends StatelessWidget {
         button: true,
         label:
             '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
+        hint: 'Drag to move. Activate for clip actions.',
         child: Tooltip(
           key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
           message:
@@ -1913,30 +2537,99 @@ class _TimelineTrackLane extends StatelessWidget {
           child: Material(
             color: background,
             borderRadius: BorderRadius.circular(OrRadii.small),
-            child: InkWell(
-              key: ValueKey('timeline-clip-${clip.clipId}'),
-              onTap: () => onOpenClip(clip),
-              borderRadius: BorderRadius.circular(OrRadii.small),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
-                decoration: BoxDecoration(
-                  border: Border.all(color: OrColors.borderStrong),
-                  borderRadius: BorderRadius.circular(OrRadii.small),
-                ),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: OrColors.text,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: visual),
+                Positioned(
+                  left: bodyInset,
+                  right: bodyInset,
+                  top: 0,
+                  bottom: 0,
+                  child: KeyedSubtree(
+                    key: ValueKey('timeline-clip-${clip.clipId}'),
+                    child: body,
                   ),
                 ),
+                _trimHandle(clip, start: true, label: 'Trim start of $title'),
+                _trimHandle(clip, start: false, label: 'Trim end of $title'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _trimHandle(
+    ProjectTimelineClip clip, {
+    required bool start,
+    required String label,
+  }) {
+    final onStart = start ? onTrimStart : onTrimEnd;
+    return Positioned(
+      left: start ? -5 : null,
+      right: start ? null : -5,
+      top: -1,
+      bottom: -1,
+      width: 11,
+      child: Semantics(
+        button: true,
+        label: label,
+        hint: 'Drag to adjust the timeline edge.',
+        child: _TimelinePointerSurface(
+          key: ValueKey(
+            'timeline-trim-handle-${start ? 'start' : 'end'}-${clip.clipId}',
+          ),
+          behavior: HitTestBehavior.translucent,
+          onPanStart: onStart == null
+              ? null
+              : (details) => onStart(clip, details),
+          onPanUpdate: onTrimUpdate == null
+              ? null
+              : (details) => onTrimUpdate!(clip, details),
+          onPanEnd: onTrimFinish == null
+              ? null
+              : (details) => onTrimFinish!(clip, details),
+          onPanCancel: onTrimCancel == null ? null : () => onTrimCancel!(clip),
+          child: Align(
+            alignment: start ? Alignment.centerLeft : Alignment.centerRight,
+            child: Container(
+              width: 3,
+              decoration: BoxDecoration(
+                color: OrColors.selection,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _positionedGhost(_TimelinePointerGesture gesture) {
+    final left = gesture.visualStartSeconds * pixelsPerSecond;
+    final rawWidth = gesture.visualDurationSeconds * pixelsPerSecond;
+    if (!left.isFinite || !rawWidth.isFinite) return const SizedBox.shrink();
+    final invalid = gesture.invalidLane || rawWidth <= 0;
+    return Positioned(
+      left: left,
+      top: 5,
+      width: math.max(2, rawWidth.abs()),
+      height: _timelineLaneHeight - 10,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: (invalid ? OrColors.danger : OrColors.selection).withValues(
+              alpha: 0.16,
+            ),
+            border: Border.all(
+              color: invalid ? OrColors.danger : OrColors.selection,
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(OrRadii.small),
+          ),
+          child: const SizedBox.expand(),
         ),
       ),
     );

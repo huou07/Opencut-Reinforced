@@ -914,6 +914,344 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('pointer move resolves once on drop and snap can be disabled', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'pointer-video';
+    final clip = ProjectTimelineClip(
+      clipId: 'pointer-clip',
+      mediaId: 'pointer-media',
+      timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/pointer-move.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Pointer move');
+
+    final initial = gateway.lastSession!.view;
+    gateway.nextTimelineSnapResult = ProjectTimelineSnapResult(
+      projectId: initial.projectId,
+      projectInstanceId: initial.projectInstanceId,
+      projectRevision: initial.revision,
+      rawTargetTime: ProjectRationalTime(BigInt.from(5), 2),
+      resolvedTargetTime: ProjectRationalTime(BigInt.from(3), 1),
+      snapped: true,
+      movingAnchor: ProjectTimelineSnapMovingAnchor.start,
+      targetKind: ProjectTimelineSnapTargetKind.clipStart,
+      targetTime: ProjectRationalTime(BigInt.from(3), 1),
+      targetTrackId: trackId,
+      targetClipId: 'other-clip',
+    );
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.byKey(const ValueKey('timeline-snap-toggle')),
+          )
+          .selected,
+      isTrue,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-clip-pointer-clip')),
+      const Offset(32, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.resolveTimelineSnapCalls, 1);
+    expect(gateway.lastSnapOperation, ProjectTimelineSnapOperation.move);
+    expect(gateway.lastSnapTrackId, trackId);
+    expect(
+      _sameRational(
+        gateway.lastSnapTargetTime!,
+        ProjectRationalTime(BigInt.from(5), 2),
+      ),
+      isTrue,
+    );
+    expect(gateway.moveTimelineClipCalls, 1);
+    expect(gateway.lastMoveTimelineStart!.canonical, '3/1');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-snap-toggle')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.byKey(const ValueKey('timeline-snap-toggle')),
+          )
+          .selected,
+      isFalse,
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-clip-pointer-clip')),
+      const Offset(32, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.resolveTimelineSnapCalls, 1);
+    expect(gateway.moveTimelineClipCalls, 2);
+    expect(gateway.lastMoveTimelineStart!.canonical, '7/2');
+  });
+
+  testWidgets('pointer deltas round once from the original exact position', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'quantized-video';
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'quantized-clip',
+            mediaId: 'quantized-media',
+            timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/quantized.orproj',
+    );
+    await _createProject(tester, 'Quantized pointer');
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('timeline-clip-quantized-clip')),
+      ),
+    );
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(1, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(gateway.resolveTimelineSnapCalls, 1);
+    expect(
+      _sameRational(
+        gateway.lastSnapTargetTime!,
+        ProjectRationalTime(BigInt.from(2328), 1000),
+      ),
+      isTrue,
+    );
+    expect(
+      _sameRational(
+        gateway.lastMoveTimelineStart!,
+        ProjectRationalTime(BigInt.from(2328), 1000),
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('trim handles have priority and send exact edge operations', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'trim-video';
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'trim-pointer-clip',
+            mediaId: 'trim-pointer-media',
+            timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceDuration: ProjectRationalTime(BigInt.from(6), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/trim-pointer.orproj',
+    );
+    await _createProject(tester, 'Pointer trim');
+
+    await tester.drag(
+      find.byKey(
+        const ValueKey('timeline-trim-handle-start-trim-pointer-clip'),
+      ),
+      const Offset(32, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastSnapOperation, ProjectTimelineSnapOperation.trimStart);
+    expect(gateway.lastTrimEdge, ProjectTimelineTrimEdge.start);
+    expect(
+      _sameRational(
+        gateway.lastTrimTimelineTime!,
+        ProjectRationalTime(BigInt.from(5), 2),
+      ),
+      isTrue,
+    );
+    expect(gateway.moveTimelineClipCalls, 0);
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-trim-handle-end-trim-pointer-clip')),
+      const Offset(32, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastSnapOperation, ProjectTimelineSnapOperation.trimEnd);
+    expect(gateway.lastTrimEdge, ProjectTimelineTrimEdge.end);
+    expect(
+      _sameRational(
+        gateway.lastTrimTimelineTime!,
+        ProjectRationalTime(BigInt.from(17), 2),
+      ),
+      isTrue,
+    );
+    expect(gateway.trimTimelineClipCalls, 2);
+  });
+
+  testWidgets('move stays on same-kind lanes and rejects opposite-kind drops', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'video-one',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+        ProjectTimelineTrack(
+          trackId: 'video-two',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 0,
+        ),
+        ProjectTimelineTrack(
+          trackId: 'audio-one',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 0,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'video-one': [
+          ProjectTimelineClip(
+            clipId: 'lane-clip',
+            mediaId: 'lane-media',
+            timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+        'video-two': [],
+        'audio-one': [],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/lane-pointer.orproj',
+    );
+    await _createProject(tester, 'Pointer lanes');
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-clip-lane-clip')),
+      const Offset(0, 58),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.moveTimelineClipCalls, 1);
+    expect(gateway.lastMoveTrackId, 'video-two');
+
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-clip-lane-clip')),
+      const Offset(0, 58),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.moveTimelineClipCalls, 1);
+    expect(gateway.resolveTimelineSnapCalls, 1);
+  });
+
+  testWidgets('attached project changes invalidate an in-flight pointer snap', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'stale-pointer-video';
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'stale-pointer-clip',
+            mediaId: 'stale-pointer-media',
+            timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/stale-pointer.orproj',
+    );
+    await _createProject(tester, 'Stale pointer');
+
+    final snapCompleter = Completer<ProjectTimelineSnapResult>();
+    gateway.nextTimelineSnapCompleter = snapCompleter;
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-clip-stale-pointer-clip')),
+      const Offset(32, 0),
+    );
+    await tester.pump();
+    expect(gateway.resolveTimelineSnapCalls, 1);
+
+    gateway.externalRename('Changed externally');
+    await tester.pumpAndSettle();
+    final raw = gateway.lastSnapTargetTime!;
+    final session = gateway.lastSession!.view;
+    snapCompleter.complete(
+      ProjectTimelineSnapResult(
+        projectId: session.projectId,
+        projectInstanceId: session.projectInstanceId,
+        projectRevision: BigInt.zero,
+        rawTargetTime: raw,
+        resolvedTargetTime: raw,
+        snapped: false,
+        movingAnchor: ProjectTimelineSnapMovingAnchor.start,
+        targetKind: ProjectTimelineSnapTargetKind.none,
+        targetTime: raw,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.moveTimelineClipCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'project timeline inserts exact clip and shows proportional block',
     (tester) async {
@@ -1826,12 +2164,26 @@ class _FakeProjectGateway implements ProjectGateway {
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
+  int resolveTimelineSnapCalls = 0;
+  bool revisionChangeOnNextTimelineSnap = false;
+  ProjectTimelineSnapResult? nextTimelineSnapResult;
+  Completer<ProjectTimelineSnapResult>? nextTimelineSnapCompleter;
+  ProjectRationalTime? lastSnapTargetTime;
+  ProjectTimelineSnapOperation? lastSnapOperation;
+  String? lastSnapClipId;
+  String? lastSnapTrackId;
   int addTimelineTrackCalls = 0;
   int removeTimelineTrackCalls = 0;
   int insertTimelineClipCalls = 0;
   int moveTimelineClipCalls = 0;
+  String? lastMoveClipId;
+  String? lastMoveTrackId;
+  ProjectRationalTime? lastMoveTimelineStart;
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
+  String? lastTrimClipId;
+  ProjectTimelineTrimEdge? lastTrimEdge;
+  ProjectRationalTime? lastTrimTimelineTime;
   int splitTimelineClipCalls = 0;
   int rippleDeleteTimelineClipCalls = 0;
   String? nextTimelineFailure;
@@ -2093,6 +2445,47 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectTimelineSnapResult> resolveTimelineSnap(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required ProjectTimelineSnapOperation operation,
+    required String clipId,
+    String? targetTrackId,
+    required ProjectRationalTime targetTime,
+  }) async {
+    resolveTimelineSnapCalls++;
+    lastSnapOperation = operation;
+    lastSnapClipId = clipId;
+    lastSnapTrackId = targetTrackId;
+    lastSnapTargetTime = targetTime;
+    final session = _session(handle);
+    if (revisionChangeOnNextTimelineSnap) {
+      revisionChangeOnNextTimelineSnap = false;
+      _timelineChanged(session);
+    }
+    if (current.revision != session.view.revision) {
+      throw ProjectGatewayException('REVISION_CONFLICT', 'revision changed');
+    }
+    final completer = nextTimelineSnapCompleter;
+    nextTimelineSnapCompleter = null;
+    if (completer != null) return completer.future;
+    final result = nextTimelineSnapResult;
+    nextTimelineSnapResult = null;
+    return result ??
+        ProjectTimelineSnapResult(
+          projectId: current.projectId,
+          projectInstanceId: current.projectInstanceId,
+          projectRevision: current.revision,
+          rawTargetTime: targetTime,
+          resolvedTargetTime: targetTime,
+          snapped: false,
+          movingAnchor: ProjectTimelineSnapMovingAnchor.none,
+          targetKind: ProjectTimelineSnapTargetKind.none,
+          targetTime: targetTime,
+        );
+  }
+
+  @override
   Future<ProjectActionResult> addTimelineTrack(
     ProjectSessionHandle handle,
     ProjectReadModel current,
@@ -2180,6 +2573,9 @@ class _FakeProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
   }) async {
     moveTimelineClipCalls++;
+    lastMoveClipId = clipId;
+    lastMoveTrackId = trackId;
+    lastMoveTimelineStart = timelineStart;
     final session = _session(handle);
     final failure = _timelineFailure();
     if (failure != null) return failure;
@@ -2261,6 +2657,9 @@ class _FakeProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineTime,
   }) async {
     trimTimelineClipCalls++;
+    lastTrimClipId = clipId;
+    lastTrimEdge = edge;
+    lastTrimTimelineTime = timelineTime;
     final session = _session(handle);
     final failure = _timelineFailure();
     if (failure != null) return failure;

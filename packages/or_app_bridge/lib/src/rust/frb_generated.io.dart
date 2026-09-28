@@ -183,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw);
 
   @protected
+  ProjectTimelineSnapView dco_decode_project_timeline_snap_view(dynamic raw);
+
+  @protected
   ProjectTimelineTrackView dco_decode_project_timeline_track_view(dynamic raw);
 
   @protected
@@ -201,6 +204,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw);
+
+  @protected
+  TimelineSnapMovingAnchorView dco_decode_timeline_snap_moving_anchor_view(
+    dynamic raw,
+  );
+
+  @protected
+  TimelineSnapOperationView dco_decode_timeline_snap_operation_view(
+    dynamic raw,
+  );
+
+  @protected
+  TimelineSnapTargetKindView dco_decode_timeline_snap_target_kind_view(
+    dynamic raw,
+  );
 
   @protected
   TimelineTrackKindView dco_decode_timeline_track_kind_view(dynamic raw);
@@ -410,6 +428,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineSnapView sse_decode_project_timeline_snap_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineTrackView sse_decode_project_timeline_track_view(
     SseDeserializer deserializer,
   );
@@ -432,6 +455,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TimelineSnapMovingAnchorView sse_decode_timeline_snap_moving_anchor_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TimelineSnapOperationView sse_decode_timeline_snap_operation_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TimelineSnapTargetKindView sse_decode_timeline_snap_target_kind_view(
     SseDeserializer deserializer,
   );
 
@@ -684,6 +722,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_timeline_snap_view(
+    ProjectTimelineSnapView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_timeline_track_view(
     ProjectTimelineTrackView self,
     SseSerializer serializer,
@@ -713,6 +757,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_recovery_inspection_view(
     RecoveryInspectionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_snap_moving_anchor_view(
+    TimelineSnapMovingAnchorView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_snap_operation_view(
+    TimelineSnapOperationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_snap_target_kind_view(
+    TimelineSnapTargetKindView self,
     SseSerializer serializer,
   );
 

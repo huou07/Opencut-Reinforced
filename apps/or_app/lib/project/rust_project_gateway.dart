@@ -182,6 +182,67 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectTimelineSnapResult> resolveTimelineSnap(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectTimelineSnapOperation operation,
+    required String clipId,
+    String? targetTrackId,
+    required ProjectRationalTime targetTime,
+  }) async {
+    try {
+      final result = await _host(session).resolveTimelineSnap(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        expectedRevision: current.revision,
+        operation: switch (operation) {
+          ProjectTimelineSnapOperation.move =>
+            rust.TimelineSnapOperationView.move,
+          ProjectTimelineSnapOperation.trimStart =>
+            rust.TimelineSnapOperationView.trimStart,
+          ProjectTimelineSnapOperation.trimEnd =>
+            rust.TimelineSnapOperationView.trimEnd,
+        },
+        clipId: clipId,
+        targetTrackId: targetTrackId,
+        targetTimeNumerator: targetTime.numerator.toInt(),
+        targetTimeDenominator: targetTime.denominator,
+      );
+      return ProjectTimelineSnapResult(
+        projectId: result.projectId,
+        projectInstanceId: result.projectInstanceId,
+        projectRevision: result.projectRevision,
+        rawTargetTime: _projectRationalTime(result.rawTargetTime),
+        resolvedTargetTime: _projectRationalTime(result.resolvedTargetTime),
+        snapped: result.snapped,
+        movingAnchor: switch (result.movingAnchor) {
+          rust.TimelineSnapMovingAnchorView.none =>
+            ProjectTimelineSnapMovingAnchor.none,
+          rust.TimelineSnapMovingAnchorView.start =>
+            ProjectTimelineSnapMovingAnchor.start,
+          rust.TimelineSnapMovingAnchorView.end =>
+            ProjectTimelineSnapMovingAnchor.end,
+        },
+        targetKind: switch (result.targetKind) {
+          rust.TimelineSnapTargetKindView.none =>
+            ProjectTimelineSnapTargetKind.none,
+          rust.TimelineSnapTargetKindView.timelineZero =>
+            ProjectTimelineSnapTargetKind.timelineZero,
+          rust.TimelineSnapTargetKindView.clipStart =>
+            ProjectTimelineSnapTargetKind.clipStart,
+          rust.TimelineSnapTargetKindView.clipEnd =>
+            ProjectTimelineSnapTargetKind.clipEnd,
+        },
+        targetTime: _projectRationalTime(result.targetTime),
+        targetTrackId: result.targetTrackId,
+        targetClipId: result.targetClipId,
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
   Future<ProjectActionResult> addTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current,

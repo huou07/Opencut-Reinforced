@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1611710582;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -593990472;
 
 // Section: executor
 
@@ -990,6 +990,75 @@ fn wire__crate__api__project__ProjectHostHandle_request_media_waveform_impl(
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_resolve_timeline_snap",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_project_instance_id = <String>::sse_decode(&mut deserializer);
+            let api_expected_revision = <u64>::sse_decode(&mut deserializer);
+            let api_operation =
+                <crate::api::project::TimelineSnapOperationView>::sse_decode(&mut deserializer);
+            let api_clip_id = <String>::sse_decode(&mut deserializer);
+            let api_target_track_id = <Option<String>>::sse_decode(&mut deserializer);
+            let api_target_time_numerator = <i64>::sse_decode(&mut deserializer);
+            let api_target_time_denominator = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::project::ProjectHostHandle::resolve_timeline_snap(
+                        &*api_that_guard,
+                        api_project_id,
+                        api_project_instance_id,
+                        api_expected_revision,
+                        api_operation,
+                        api_clip_id,
+                        api_target_track_id,
+                        api_target_time_numerator,
+                        api_target_time_denominator,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
             }
         },
     )
@@ -2237,6 +2306,40 @@ impl SseDecode for crate::api::project::ProjectTimelineClipView {
     }
 }
 
+impl SseDecode for crate::api::project::ProjectTimelineSnapView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_projectId = <String>::sse_decode(deserializer);
+        let mut var_projectInstanceId = <String>::sse_decode(deserializer);
+        let mut var_projectRevision = <u64>::sse_decode(deserializer);
+        let mut var_rawTargetTime =
+            <crate::api::project::RationalTimeView>::sse_decode(deserializer);
+        let mut var_resolvedTargetTime =
+            <crate::api::project::RationalTimeView>::sse_decode(deserializer);
+        let mut var_snapped = <bool>::sse_decode(deserializer);
+        let mut var_movingAnchor =
+            <crate::api::project::TimelineSnapMovingAnchorView>::sse_decode(deserializer);
+        let mut var_targetKind =
+            <crate::api::project::TimelineSnapTargetKindView>::sse_decode(deserializer);
+        let mut var_targetTime = <crate::api::project::RationalTimeView>::sse_decode(deserializer);
+        let mut var_targetTrackId = <Option<String>>::sse_decode(deserializer);
+        let mut var_targetClipId = <Option<String>>::sse_decode(deserializer);
+        return crate::api::project::ProjectTimelineSnapView {
+            project_id: var_projectId,
+            project_instance_id: var_projectInstanceId,
+            project_revision: var_projectRevision,
+            raw_target_time: var_rawTargetTime,
+            resolved_target_time: var_resolvedTargetTime,
+            snapped: var_snapped,
+            moving_anchor: var_movingAnchor,
+            target_kind: var_targetKind,
+            target_time: var_targetTime,
+            target_track_id: var_targetTrackId,
+            target_clip_id: var_targetClipId,
+        };
+    }
+}
+
 impl SseDecode for crate::api::project::ProjectTimelineTrackView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2332,6 +2435,49 @@ impl SseDecode for crate::api::project::RecoveryInspectionView {
             recovery_name: var_recoveryName,
             conflict_reason: var_conflictReason,
             message: var_message,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::TimelineSnapMovingAnchorView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::project::TimelineSnapMovingAnchorView::None,
+            1 => crate::api::project::TimelineSnapMovingAnchorView::Start,
+            2 => crate::api::project::TimelineSnapMovingAnchorView::End,
+            _ => unreachable!(
+                "Invalid variant for TimelineSnapMovingAnchorView: {}",
+                inner
+            ),
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::TimelineSnapOperationView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::project::TimelineSnapOperationView::Move,
+            1 => crate::api::project::TimelineSnapOperationView::TrimStart,
+            2 => crate::api::project::TimelineSnapOperationView::TrimEnd,
+            _ => unreachable!("Invalid variant for TimelineSnapOperationView: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::TimelineSnapTargetKindView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::project::TimelineSnapTargetKindView::None,
+            1 => crate::api::project::TimelineSnapTargetKindView::TimelineZero,
+            2 => crate::api::project::TimelineSnapTargetKindView::ClipStart,
+            3 => crate::api::project::TimelineSnapTargetKindView::ClipEnd,
+            _ => unreachable!("Invalid variant for TimelineSnapTargetKindView: {}", inner),
         };
     }
 }
@@ -2498,62 +2644,68 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
+        17 => wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__project__ProjectHostHandle_save_impl(
+        18 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
+        19 => wire__crate__api__project__ProjectHostHandle_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
+        20 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
+        21 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__project__ProjectHostHandle_summary_impl(
+        22 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
+        23 => wire__crate__api__project__ProjectHostHandle_summary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+        24 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        26 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2949,6 +3101,36 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTimelineClipV
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTimelineSnapView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.project_id.into_into_dart().into_dart(),
+            self.project_instance_id.into_into_dart().into_dart(),
+            self.project_revision.into_into_dart().into_dart(),
+            self.raw_target_time.into_into_dart().into_dart(),
+            self.resolved_target_time.into_into_dart().into_dart(),
+            self.snapped.into_into_dart().into_dart(),
+            self.moving_anchor.into_into_dart().into_dart(),
+            self.target_kind.into_into_dart().into_dart(),
+            self.target_time.into_into_dart().into_dart(),
+            self.target_track_id.into_into_dart().into_dart(),
+            self.target_clip_id.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTimelineSnapView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTimelineSnapView>
+    for crate::api::project::ProjectTimelineSnapView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTimelineSnapView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTimelineTrackView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3084,6 +3266,73 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::RecoveryInspectionVi
     for crate::api::project::RecoveryInspectionView
 {
     fn into_into_dart(self) -> crate::api::project::RecoveryInspectionView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::TimelineSnapMovingAnchorView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::None => 0.into_dart(),
+            Self::Start => 1.into_dart(),
+            Self::End => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::TimelineSnapMovingAnchorView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TimelineSnapMovingAnchorView>
+    for crate::api::project::TimelineSnapMovingAnchorView
+{
+    fn into_into_dart(self) -> crate::api::project::TimelineSnapMovingAnchorView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::TimelineSnapOperationView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Move => 0.into_dart(),
+            Self::TrimStart => 1.into_dart(),
+            Self::TrimEnd => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::TimelineSnapOperationView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TimelineSnapOperationView>
+    for crate::api::project::TimelineSnapOperationView
+{
+    fn into_into_dart(self) -> crate::api::project::TimelineSnapOperationView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::TimelineSnapTargetKindView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::None => 0.into_dart(),
+            Self::TimelineZero => 1.into_dart(),
+            Self::ClipStart => 2.into_dart(),
+            Self::ClipEnd => 3.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::TimelineSnapTargetKindView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TimelineSnapTargetKindView>
+    for crate::api::project::TimelineSnapTargetKindView
+{
+    fn into_into_dart(self) -> crate::api::project::TimelineSnapTargetKindView {
         self
     }
 }
@@ -3521,6 +3770,26 @@ impl SseEncode for crate::api::project::ProjectTimelineClipView {
     }
 }
 
+impl SseEncode for crate::api::project::ProjectTimelineSnapView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.project_id, serializer);
+        <String>::sse_encode(self.project_instance_id, serializer);
+        <u64>::sse_encode(self.project_revision, serializer);
+        <crate::api::project::RationalTimeView>::sse_encode(self.raw_target_time, serializer);
+        <crate::api::project::RationalTimeView>::sse_encode(self.resolved_target_time, serializer);
+        <bool>::sse_encode(self.snapped, serializer);
+        <crate::api::project::TimelineSnapMovingAnchorView>::sse_encode(
+            self.moving_anchor,
+            serializer,
+        );
+        <crate::api::project::TimelineSnapTargetKindView>::sse_encode(self.target_kind, serializer);
+        <crate::api::project::RationalTimeView>::sse_encode(self.target_time, serializer);
+        <Option<String>>::sse_encode(self.target_track_id, serializer);
+        <Option<String>>::sse_encode(self.target_clip_id, serializer);
+    }
+}
+
 impl SseEncode for crate::api::project::ProjectTimelineTrackView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3579,6 +3848,58 @@ impl SseEncode for crate::api::project::RecoveryInspectionView {
         <String>::sse_encode(self.recovery_name, serializer);
         <String>::sse_encode(self.conflict_reason, serializer);
         <String>::sse_encode(self.message, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::TimelineSnapMovingAnchorView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::project::TimelineSnapMovingAnchorView::None => 0,
+                crate::api::project::TimelineSnapMovingAnchorView::Start => 1,
+                crate::api::project::TimelineSnapMovingAnchorView::End => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::project::TimelineSnapOperationView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::project::TimelineSnapOperationView::Move => 0,
+                crate::api::project::TimelineSnapOperationView::TrimStart => 1,
+                crate::api::project::TimelineSnapOperationView::TrimEnd => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::project::TimelineSnapTargetKindView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::project::TimelineSnapTargetKindView::None => 0,
+                crate::api::project::TimelineSnapTargetKindView::TimelineZero => 1,
+                crate::api::project::TimelineSnapTargetKindView::ClipStart => 2,
+                crate::api::project::TimelineSnapTargetKindView::ClipEnd => 3,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
