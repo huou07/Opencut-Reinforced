@@ -2,7 +2,24 @@
 
 ## Status
 
-This is the canonical high-level architecture. Phase 3's executable bootstrap skeleton, Phase 4A–4F project/application foundations, Phase 4UI-1's Flutter visual foundation, Phase 4UI-2's desktop project lifecycle, Phase 5A–5F media foundations, and Phase 6A–6E2A timeline foundations are implemented. The Flutter application creates and opens real projects, owns one Rust live host shared with local IPC, presents explicit recovery and dirty-state workflows, and provides desktop media-library import/list/remove plus read-only generated thumbnail and waveform previews. `.orproj` schema v4 persists validated media references, metadata, canonical ordered timeline state, and global point markers while still loading v1, v2, and v3. Phase 5D adds bounded source-fingerprint v1 and a Rust `MediaArtifactService` for system-`ffmpeg` previews; Phase 5E adds a persistent disposable cache index and automatic LRU eviction under cache pressure; Phase 5F adds core-only, file-backed Proxy V1 generation to the same cache. Cache artifacts and index metadata remain outside the project and do not affect `ProjectRevision`. Phase 6A adds canonical `ProjectTimeline` state and `.orproj` v3 persistence: UUIDv4 tracks/clips, Video/Audio tracks, ordered tracks and clips, and validation against media metadata. Phase 6B adds five schema-v1 track/clip mutation commands, two read-only timeline queries, compact session-local history, and semantic headless/attached CLI operations through the shared application path; `media.remove` continues to reject referenced media with `MEDIA_IN_USE`. Phase 6C exposes bounded Rust timeline read models to Flutter and presents real tracks and clips; insert/move/delete and track operations use existing commands, exact rational values, and event-driven refresh. Phase 6D adds three schema-v1 commands for exact trim, split, and track-local ripple delete, semantic undo/redo recipes, typed bridge methods, CLI parity, and explicit Flutter action dialogs without a second editable UI state. Phase 6E1 adds one schema-v1 read-only `timeline.snap` query, canonical drop-time clip-boundary snapping, pointer move and trim handles, same-kind lane targeting, exact 1 ms pointer quantization, and stale-result protection while continuing to use the existing move/trim commands. Phase 6E2A adds the persistent marker domain, strict schema-v4 codec/migrations, four marker commands, bounded marker queries, marker-aware Snap V2, and CLI parity; Flutter and its bridge remain on the existing Snap V1 surface until 6E2B. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6 is IN PROGRESS: 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Playback, decoding, rendering, marker UI, and Snap V2 Flutter integration are not implemented. Proxy generation is not exposed through the UI, CLI, or IPC and is not a playback source. Planned and future components below do not imply implemented code. See [ROADMAP.md](ROADMAP.md) for phases and [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for subsystem detail.
+This is the canonical high-level architecture. The executable bootstrap,
+project/application, Flutter shell, media, and timeline foundations described
+below are implemented through the completed Phase 6 timeline foundation. The
+Flutter application creates and opens real projects, owns one Rust live host
+shared with local IPC, presents explicit recovery and dirty-state workflows,
+and provides desktop media-library import/list/remove plus read-only generated
+thumbnail and waveform previews. `.orproj` schema v4 persists validated media
+references, metadata, canonical ordered timeline state, and global point
+markers while still loading v1, v2, and v3. Phase 5D–5F provide bounded
+fingerprints, disposable indexed cache, and core-only file-backed proxies.
+Phase 6 provides canonical tracks, clips, exact editing, persistent markers,
+marker-aware snapping, CLI parity, and the corresponding Flutter UI without a
+second editable UI state. Playback, decoding, rendering, and export remain
+future Phase 7/8 work. For authoritative current checkpoint and phase status,
+see [docs/execution/STATE.json](execution/STATE.json); this document does not
+copy mutable `NEXT` state. Planned and future components below do not imply
+implemented code. See [ROADMAP.md](ROADMAP.md) and
+[TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for human-readable design detail.
 
 ## Implemented today
 
@@ -95,6 +112,16 @@ Phase 5A implements metadata inspection. `or_core::probe_media_file(&Path)` acce
 
 The render core evaluates a versioned timeline view into sources, transforms, effects, compositing, color, and output. Preview and export use the same edit semantics, while scheduling and quality may differ; cross-GPU pixels are not required to be bit-identical. wgpu is the preferred GPU abstraction candidate; backend support and performance must be checked on every target platform.
 
+The future canonical simple-motion path is a versioned, non-executable
+`MotionScene` source. It uses exact `RationalTime`, typed bounded primitives,
+random-access evaluation, and stable asset/font provenance. Evaluation lowers to
+the same `RenderSnapshot` and wgpu render spine used by the rest of OR; preview
+and materialization share the evaluator. MotionScene validation, inspection,
+rendering, materialization, and CLI use do not require an AI provider. The
+Phase 11 path is materialization-first: render persistent generated media,
+register it through normal media commands, and use ordinary timeline clips.
+See [ADR 0007](adr/0007-declarative-motion-scenes-and-procedural-isolation.md).
+
 OR's intended media policy is zero-copy where platform/backend interoperability safely permits it, and otherwise to minimize copies across hot media paths. This is not a universal zero-copy promise: software and CPU-frame fallbacks remain first-class. Future frame boundaries must be able to represent CPU frames, GPU textures, hardware-decoder surfaces, and external/shared platform surfaces without forcing hardware-decoded frames through CPU memory. Avoid a design that copies every decoded frame through Rust byte buffers, Dart objects, and a Flutter GPU upload.
 
 The decoder boundary must support software decode and hardware-surface decode, with automatic capability-based selection and a correctness fallback. Export should prefer a GPU/native-compatible surface into a hardware encoder where supported, and otherwise use a CPU frame with a supported software or platform encoder. Hardware paths are not assumed to be faster or available for every device, codec, or format. Platform-specific interop belongs behind narrow media/render boundaries; project and timeline semantics stay platform-independent.
@@ -127,7 +154,14 @@ OS secure storage is the intended home for provider credentials. The application
 
 ## Future directions
 
-Local and optional cloud AI providers, declarative templates and themes, a GitHub-first static community registry, and sandboxed plugins are future extensions. Early community distribution does not require an OR-hosted backend. A WASM/WASI-style plugin sandbox is only a candidate until plugin work starts and security research is refreshed. Native and OpenFX compatibility is later and higher trust.
+Local and optional cloud AI providers, declarative templates, themes, and
+MotionScenes, a GitHub-first static community registry, and sandboxed plugins
+are future extensions. Early community distribution does not require an
+OR-hosted backend. A WASM/WASI-style plugin sandbox is only a candidate until
+plugin work starts and security research is refreshed. Native and OpenFX
+compatibility is later and higher trust. Arbitrary HTML/CSS/JS/Canvas/WebGL/
+WebGPU motion belongs only to the future explicit, isolated, bounded WebMotion
+sidecar gate; it is not canonical project data or the default renderer.
 
 ## Architecture execution lock
 
@@ -184,8 +218,14 @@ hardware-buffer paths where proven, Vulkan/wgpu for rendering, and a software
 fallback; mobile AI runtime selection is likewise provider/capability based.
 
 AI tasks are provider-independent (`Transcribe`, `Translate`, `TextToSpeech`,
-`Segment`, `DetectScene`, `PlanEdit`, `GenerateImage`, `GenerateVideo`, and
-`GenerateAudio`). Providers return structured proposals, analyses, or assets
+`Segment`, `DetectScene`, `PlanEdit`, `GenerateImage`, `GenerateVideo`,
+`GenerateMotionScene`, and `GenerateAudio`). `GenerateVideo` returns an opaque
+video asset; future `GenerateMotionScene` returns an editable declarative
+proposal. Providers return structured proposals, analyses, or assets
 with model manifests and provenance. Normal validated application commands,
 revision preconditions, and explicit permissions are required to apply a
 result. Stored credentials remain outside project, agent, and CLI data.
+
+MotionScene rendering makes zero provider/LLM calls, including no per-frame AI.
+Metal, CUDA, MLX, Core ML, NVIDIA, Android acceleration, and cloud AI may
+accelerate future implementations but cannot change MotionScene semantics.

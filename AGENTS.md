@@ -50,6 +50,11 @@ Long-term preferred direction:
 
 Keep domain logic out of presentation code whenever practical.
 
+Canonical future motion content is declarative and non-executable. Arbitrary
+HTML/CSS/JS/Canvas/WebGL/WebGPU motion belongs only behind the future explicit
+sandboxed procedural boundary; it is not normal project state or the canonical
+renderer.
+
 ## Design
 
 DESIGN.md is the design source of truth.

@@ -47,6 +47,23 @@ Keep the Phase 5A `media probe` operation read-only: it accepts a local filesyst
 
 For project mutations, keep Flutter, headless, and attached CLI operations on the shared `ApplicationRequest` path. `LiveProjectHost` must own exactly one `ProjectFileSession`; its opaque Rust bridge handle and IPC server share the same state. Do not add a Dart-editable document or a second IPC-owned project session. Headless mutations execute shared commands through `ProjectFileSession` and save changed state with exact-base checks; attached commands use the existing `LiveProjectHost` and leave its live state dirty until explicit save. The Phase 6C/6D/6E1/6E2B Flutter timeline keeps only bounded disposable query pages and uses those same commands; project invalidation events refresh the open view so attached CLI edits appear there. Phase 6E2A marker commands and queries use the same Rust-owned path, and 6E2B exposes them through typed bridge/gateway methods without creating a second document. Timeline edits use exact `RationalTime`, append tracks, remove only empty tracks, sort inserted/moved clips by timeline start, reject same-track overlap, permit adjacency and cross-track overlap, and permit moves only between tracks of the same kind. Trim uses absolute start/end edges, split requires an exact interior point, and ripple delete shifts only later clips on the selected track without moving global markers. Pointer edits retain the original canonical exact time, quantize only the total delta to the nearest 1 ms, show a presentation-only ghost, resolve the appropriate canonical Snap query once at drop, and dispatch the existing move/trim command; the fixed snap threshold is `1/8` second over timeline zero, clip boundaries, and persistent markers. Rust validates final state; successful edits refresh from Rust and never optimistically change geometry. Timeline and marker commands remain disallowed inside grouped transactions. The running Flutter application and developer/headless `or session serve` can each host a live project. Preserve recovery inspection and exact-disk-base conflict checks on every open/save path. Android project file access stays unavailable until SAF is implemented; never send content URIs to Rust path APIs.
 
+### Future MotionScene authoring
+
+MotionScene is future non-executable declarative source, not a product feature
+of the current execution checkpoint. Keep exact `RationalTime`, random-access
+evaluation, typed/bounded primitives, stable asset/font provenance, and the
+shared RenderSnapshot/wgpu path. Preview and materialization must share the
+evaluator, and materialization must register persistent output through normal
+media/timeline commands. Rendering makes no required AI/provider call.
+
+External agents and templates may produce the same scene contract. Do not add
+JavaScript, shell, network, arbitrary expressions, or provider calls to
+canonical scene data; do not add a live MotionClip without a new architecture
+gate. A future WebMotionBundle is allowed only in the explicit Phase 16G
+least-privilege sidecar boundary with network off, no credentials, bounded
+inputs/outputs, cancellation, and crash containment. It never runs in
+`or_core`, Flutter, normal project open, or canonical evaluation.
+
 ## Feature path
 
 1. **Define product behavior.** State the user problem and intended result. Classify the work as domain, media, render, audio, AI, UI-only, or infrastructure. Check [PRODUCT.md](PRODUCT.md).
@@ -112,5 +129,6 @@ Create an Architecture Decision Record for a significant, difficult-to-reverse c
 - a major new runtime dependency
 - a breaking public command schema
 - a new permanent UI shell region
+- the canonical MotionScene contract or an isolated procedural execution boundary
 
 An ADR should record context, decision, alternatives, tradeoffs, and consequences. Do not create ADRs for routine implementation details.

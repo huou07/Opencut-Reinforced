@@ -4,6 +4,9 @@
 
 Phase 14 is planned. Generation builds on the Phase 10 provider/task contract
 and returns reviewable assets or proposals before any timeline mutation.
+Checkpoint 14G adds optional AI production of declarative MotionScene
+proposals; MotionScene rendering remains provider-independent and requires no
+AI call.
 
 ## 14A — Generated image
 
@@ -62,14 +65,38 @@ Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-RT-001`, `INV-RT-002`, `INV-AI-002`, `INV-AI-003`, `INV-PERSIST-001`,
 `INV-SEC-001`.
 
+## 14G — AI MotionScene generation and review
+
+Add `GenerateMotionScene` through the existing provider and capability
+boundary. Local or cloud providers may return a structured MotionScene
+proposal with model, source-asset, and rights provenance. OR performs local
+deterministic validation, preview, explicit human review, materialization, and
+normal media/timeline application through the existing command path.
+
+Provider selection may later choose MLX/Core ML on Apple, a CUDA-capable local
+provider on NVIDIA, other local runtimes, or cloud providers, but none is a
+direct `or_core` dependency and MotionScene semantics never depend on the
+provider. Rendering a valid scene makes no provider or per-frame model call.
+
+Future tests cover provider-independent task contracts, valid and invalid scene
+proposals, local/cloud selection, model and provider provenance, stale revision
+rejection on apply, no model call during render, explicit review,
+materialization, and normal project mutation.
+
+Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
+`INV-MOTION-001`, `INV-MOTION-002`, `INV-MOTION-004`, `INV-JOB-001`,
+`INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-SEC-001`, `INV-DEP-001`.
+
 ## Stop conditions
 
 Stop for hidden generation, absent model/license provenance, direct provider
-mutation, plaintext credentials, no cancellation/budget, or unapproved voice
-identity behavior.
+mutation, plaintext credentials, no cancellation/budget, unapproved voice
+identity behavior, or a design that makes MotionScene validation/rendering
+depend on AI.
 
 ## Handoff
 
 Report generated asset/task contracts, sidecar decision, provider/model
-manifests, rights/provenance, review/apply tests, docs, commit, and hosted
-runtime evidence.
+manifests, rights/provenance, MotionScene proposal/validation/review/
+materialization evidence when applicable, review/apply tests, docs, commit, and
+hosted runtime evidence.

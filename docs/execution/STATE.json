@@ -57,6 +57,8 @@
     "11B": "PLANNED",
     "11C": "PLANNED",
     "11D": "PLANNED",
+    "11E": "PLANNED",
+    "11F": "PLANNED",
     "12A": "PLANNED",
     "12B": "PLANNED",
     "12C": "PLANNED",
@@ -77,6 +79,7 @@
     "14D": "PLANNED",
     "14E": "PLANNED",
     "14F": "PLANNED",
+    "14G": "PLANNED",
     "15A": "PLANNED",
     "15B": "PLANNED",
     "15C": "PLANNED",
@@ -86,6 +89,7 @@
     "16C": "PLANNED",
     "16D": "PLANNED",
     "16E": "PLANNED",
-    "16F": "PLANNED"
+    "16F": "PLANNED",
+    "16G": "PLANNED"
   }
 }

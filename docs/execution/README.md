@@ -58,6 +58,11 @@ for the record contract.
 the immutable checkpoint graph; documentation must not copy the current
 checkpoint or phase status.
 
-This architecture checkpoint does not advance product state, implement marker
-UI, start Phase 7, publish a Developer Preview, or create future runtime
-crates.
+An architecture/plan amendment does not advance product state, start a product
+checkpoint, publish a Developer Preview, or create future runtime crates.
+
+The approved future motion direction is recorded in ADR 0007 and the Phase 11,
+14, and 16 contracts: canonical MotionScene is declarative, exact-time,
+seekable, AI-optional, and materialization-first; arbitrary web motion is only
+the later isolated WebMotion sidecar gate. These documents do not imply that
+MotionScene, rendering, a browser runtime, or a live MotionClip exists.

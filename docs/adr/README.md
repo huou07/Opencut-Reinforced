@@ -12,6 +12,7 @@ the machine execution plan; they do not replace `docs/execution/PLAN.json`,
 - [0004 — Runtime capabilities and provider selection](0004-runtime-capabilities-and-provider-selection.md)
 - [0005 — AI provider boundary](0005-ai-provider-boundary.md)
 - [0006 — Autonomous agent execution contract](0006-autonomous-agent-execution-contract.md)
+- [0007 — Declarative MotionScene and procedural isolation](0007-declarative-motion-scenes-and-procedural-isolation.md)
 
 All records are architecture intent. A later implementation checkpoint must
 provide its own dependency, platform, licensing, test, and migration evidence.

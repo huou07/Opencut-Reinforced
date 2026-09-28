@@ -270,6 +270,28 @@ Property and invariant tests should cover:
 - decode, encode, and packaged FFmpeg configuration checks; metadata-probe coverage is recorded under Phase 5A
 - platform-specific GPU and texture fallback coverage
 
+Future MotionScene and procedural-motion coverage is checkpoint-scoped:
+
+- **11E:** strict schema and unknown-field rejection, resource bounds, stable
+  node/asset/animation identity, exact `RationalTime`, negative and
+  out-of-range timing, random-access and seek equivalence, deterministic
+  same-time evaluation without wall-clock dependence, no network lookup,
+  missing-asset/font diagnostics, semantic hash/version identity,
+  RenderSnapshot lowering, and preview/materialization semantic parity.
+- **11F:** CLI validate/inspect/render, machine-readable diagnostics,
+  external-agent fixtures, persistent generated media, cache-independent
+  project references, new content identity on re-render, normal `media.add`
+  and timeline insertion, save/reopen, recovery, offline sources, and
+  cancellation/failure behavior.
+- **14G:** provider-independent task contracts, valid/invalid scene proposals,
+  local/cloud capability selection, provider/model/source provenance, stale
+  revision rejection on apply, explicit review/materialization, normal project
+  mutation, and proof that rendering makes no model call.
+- **16G:** network and credential denial, bounded approved inputs and outputs,
+  timeout, cancellation, crash containment, filesystem/project-write denial,
+  process isolation, no execution on project open, materialization-only output,
+  unsafe browser configuration rejection, and normal media validation.
+
 ### Data, platform, and security
 
 - Android storage and media integration

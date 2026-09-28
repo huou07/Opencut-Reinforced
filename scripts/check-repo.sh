@@ -59,6 +59,7 @@ required_files=(
   docs/adr/0004-runtime-capabilities-and-provider-selection.md
   docs/adr/0005-ai-provider-boundary.md
   docs/adr/0006-autonomous-agent-execution-contract.md
+  docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md
   scripts/execution_plan.py
   scripts/check_execution_plan.py
   scripts/check_architecture_policy.py

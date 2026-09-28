@@ -330,14 +330,18 @@ Locked contract: [PHASE_10.md](execution/phases/PHASE_10.md). Checkpoints are
 
 Add transcription, caption editing and export, translation, dubbing foundations, and selected assist workflows after the command and job foundations.
 
-### Phase 11 — Templates, assets, and themes
+### Phase 11 — Templates, assets, themes, and motion scenes
 **Status: PLANNED**
 
 Locked contract: [PHASE_11.md](execution/phases/PHASE_11.md): 11A declarative
-templates, 11B asset manifests/rights, 11C themes, and 11D static community
-packaging.
+templates, 11B asset manifests/rights, 11C themes, 11D static community
+packaging, 11E MotionScene V1/deterministic evaluation, and 11F motion
+materialization plus agent/CLI workflow.
 
-Add declarative project templates, asset metadata and rights, and safe token-based themes.
+Add declarative project templates, asset metadata and rights, safe token-based
+themes, and an OR-native non-executable MotionScene path. MotionScene is
+materialization-first and does not require built-in AI; the shared validator,
+evaluator, and normal OR encoder remain the canonical path.
 
 ### Phase 12 — Dubbing and voice
 **Status: PLANNED**
@@ -362,8 +366,8 @@ Evaluate and add advanced keyframe, speed, color, effects, transition, audio, an
 **Status: PLANNED**
 
 Locked contract: [PHASE_14.md](execution/phases/PHASE_14.md): 14A generated
-image, 14B video, 14C music/SFX, 14D voice, 14E provider/model/jobs, and 14F
-provenance/review-before-timeline.
+image, 14B video, 14C music/SFX, 14D voice, 14E provider/model/jobs, 14F
+provenance/review-before-timeline, and 14G AI MotionScene generation/review.
 
 Evaluate image, video, music, sound-effect, and voice generation only after runtime, model license, hardware, and provider boundaries are understood.
 
@@ -376,16 +380,21 @@ validation, and 15D reviewable publishing.
 
 Start with a validated static registry and reviewable publishing. An OR-hosted backend is not a prerequisite.
 
-### Phase 16 — Plugins, advanced interchange, and OpenFX evaluation
+### Phase 16 — Plugins, advanced interchange, OpenFX, and procedural motion
 **Status: PLANNED**
 
 Locked contract: [PHASE_16.md](execution/phases/PHASE_16.md): 16A plugin
 security/capabilities, 16B sandbox/declarative-first, 16C permissions/resources/
-network, 16D versioned APIs, 16E OTIO/EDL/XML evaluation, and 16F optional
-high-trust OpenFX/native evaluation. Arbitrary native loading remains prohibited
-by default.
+network, 16D versioned APIs, 16E OTIO/EDL/XML plus Lottie/dotLottie bounded
+interchange evaluation, 16F optional high-trust OpenFX/native evaluation, and
+16G optional sandboxed procedural WebMotion. Arbitrary native loading and
+untrusted procedural execution remain prohibited by default.
 
-Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advanced EDL or XML interchange with current security and platform research.
+Revisit sandboxed plugin capabilities, native or OpenFX compatibility, advanced
+EDL/XML and Lottie/dotLottie interchange, and an explicit least-privilege
+WebMotion sidecar only with current security, platform, and licensing
+research. Full-roadmap completion is at 16G; the desktop MVP remains complete
+through 8F in the machine plan.
 
 ## Dependencies
 

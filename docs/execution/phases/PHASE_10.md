@@ -9,11 +9,20 @@ commands mutate the Rust-owned project.
 ## AI task boundary
 
 The supported task vocabulary is `Transcribe`, `Translate`, `TextToSpeech`,
-`Segment`, `DetectScene`, `PlanEdit`, `GenerateImage`, `GenerateVideo`, and
-`GenerateAudio`. Task requests carry explicit project/revision/input identity,
+`Segment`, `DetectScene`, `PlanEdit`, `GenerateImage`, `GenerateVideo`,
+`GenerateMotionScene`, and `GenerateAudio`. `GenerateVideo` returns an opaque
+raster/video asset; the future `GenerateMotionScene` task returns an editable,
+declarative MotionScene proposal. Neither task is implemented by Phase 10.
+Task requests carry explicit project/revision/input identity,
 permissions, cancellation, and resource budgets. Providers are selected by a
 central capability/policy layer and are never called directly from `or_core`,
 Flutter widgets, or arbitrary agent code.
+
+MotionScene generation is optional. Validation, inspection, preview,
+rendering, and materialization of a MotionScene must not make a provider call,
+and a renderer must never invoke an LLM per frame or require a planner/critic
+loop. See [ADR 0007](../../adr/0007-declarative-motion-scenes-and-procedural-isolation.md)
+for the future declarative contract.
 
 Model manifests describe model identity, version/checksum, license, runtime,
 hardware requirements, language/capability coverage, and provenance. Stored
@@ -106,7 +115,8 @@ Affected invariants: `INV-JOB-001`, `INV-CACHE-001`, `INV-AI-001`, `INV-AI-002`,
 
 Stop for direct provider calls from core/UI, model/license ambiguity, hidden
 project mutation, missing revision checks, plaintext credentials, unbounded AI
-jobs, or a request for autonomous application without review/permission.
+jobs, a request for autonomous application without review/permission, or a
+proposal to make MotionScene rendering provider-dependent.
 
 ## Handoff
 

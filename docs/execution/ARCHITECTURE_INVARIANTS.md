@@ -73,6 +73,32 @@ adapters. Platform handles never enter domain state.
 Native GPU and resource handles are never serialized into project, IPC, or
 cache identity.
 
+### INV-MOTION-001 — Canonical motion is declarative
+
+Canonical MotionScene, template, and project data contains no executable
+JavaScript, shell commands, provider calls, arbitrary executable expressions,
+network requests, or arbitrary shader programs.
+
+### INV-MOTION-002 — Motion evaluation is exact-time and seekable
+
+Canonical motion timing uses `RationalTime`. Evaluation at exact time `T` is
+derivable from the scene, assets, evaluator version, and `T` without replaying
+from time zero. It does not depend on wall-clock time or unseeded randomness,
+and preview and materialization use the same semantic evaluator.
+
+### INV-MOTION-003 — Procedural code is isolated and materialized
+
+Arbitrary HTML/CSS/JS/Canvas/WebGL/WebGPU may exist only behind a future
+explicit sandboxed procedural adapter. It does not execute inside `or_core`,
+Flutter, normal canonical project evaluation, or normal project open. Its
+output enters OR only through bounded derived output/media paths.
+
+### INV-MOTION-004 — Motion generation is AI-optional
+
+MotionScene validation, inspection, preview, rendering, materialization, and
+CLI usage work without an AI provider. External agents and built-in AI are
+alternative producers only.
+
 ### INV-HW-001 — Capability selection is centralized
 
 Runtime hardware capability discovery and provider selection are centralized.

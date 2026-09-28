@@ -2,7 +2,15 @@
 
 ## Execution lock and implementation order
 
-The machine-readable architecture and execution authority is [docs/execution/README.md](execution/README.md), with the immutable graph in [PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json), and locked phase contracts in [execution/phases](execution/phases). The current state is Phase 5 complete, Phase 6 through 6E2A complete, and 6E2B next. This document describes design direction; it does not authorize skipping the current checkpoint or creating future runtime crates early.
+The machine-readable architecture and execution authority is
+[docs/execution/README.md](execution/README.md), with the immutable graph in
+[PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json),
+and locked phase contracts in [execution/phases](execution/phases). The
+implementation summary in this document describes completed capabilities
+through the Phase 6 timeline foundation. For authoritative current checkpoint
+and phase status, see `docs/execution/STATE.json`; this document does not copy
+mutable `NEXT` state or authorize skipping it. Future runtime crates are not
+created early.
 
 The implementation order preserves the control-plane/runtime-plane boundary:
 Rust `or_core` owns canonical project/application state; a future `or_runtime`
@@ -24,7 +32,7 @@ for checkpoint-specific tests, dependency gates, and stop conditions.
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load, atomic save, and race-safe no-clobber creation. Phase 4E2 adds a separate snapshot recovery checkpoint sidecar, exact saved-base validation, bounded strict inspection, and explicit apply/discard. Phase 4F adds shared application dispatch, exact-base file sessions, local IPC v1, and headless/attached semantic CLI operations. Phase 4UI-2 connects the Flutter desktop project lifecycle to one Rust-owned `LiveProjectHost` shared by its typed bridge handle and authenticated local IPC. It adds explicit recovery, dirty-state and exit guards, and event-driven read-model refresh. Phase 5A adds typed media/job identities, structured metadata, a bounded external `ffprobe` metadata adapter, and read-only CLI inspection. Phase 5B adds `.orproj` v2 with v1 migration, persistent local-file media references, prepared import, `media.add`/`media.remove`, `media.list`, undo/redo, headless and attached CLI operations, and desktop Flutter library integration. Phase 5C adds a bounded background Job Manager and a disposable thumbnail/waveform cache store (deterministic cache keys, bounded atomic storage, explicit clear paths). Phase 5D adds production source fingerprints, thumbnail/waveform generation, and Job Manager/CacheStore integration; Phase 5E adds a persistent disposable SQLite cache index and automatic LRU eviction; Phase 5F adds core-only file-backed Proxy V1 generation. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Phase 6B provides application-owned basic track/clip editing, bounded timeline queries, existing session history integration, and headless/attached CLI parity. Phase 6C connects exact Rust timeline read models and existing commands to a real Flutter track/clip view. Phase 6D adds exact trim, split, and track-local ripple-delete semantics across core, CLI, bridge, and Flutter dialogs without changing project schema or IPC version. Phase 6E1 adds pointer move and trim editing, a fixed-threshold canonical snap query, same-kind lane targeting, exact 1 ms pointer quantization, and attached-session stale-result protection without changing schema, recovery, history ownership, or IPC. Phase 6E2A adds persistent global markers, project schema v4 with v1/v2/v3 migrations, marker commands/history/query, marker-aware Snap V2, and CLI parity while Flutter remains on Snap V1. Android SAF, media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, decode, playback, and rendering remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ROADMAP.md](ROADMAP.md) for current status.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. These implementation summaries describe completed capabilities through the Phase 6 timeline foundation; playback, decode, rendering, and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
 
 ## Contents
 
@@ -44,7 +52,7 @@ Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semant
 14. [AI providers and local inference](#14-ai-providers-and-local-inference)
 15. [Model management and secrets](#15-model-management-and-secrets)
 16. [EditPlan and automation recipes](#16-editplan-and-automation-recipes)
-17. [Templates, themes, and community](#17-templates-themes-and-community)
+17. [Templates, themes, MotionScene, and community](#17-templates-themes-motionscene-and-community)
 18. [Plugins](#18-plugins)
 19. [Export and interchange](#19-export-and-interchange)
 20. [UI feature registration and mobile](#20-ui-feature-registration-and-mobile)
@@ -422,7 +430,7 @@ Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, 
 
 ## 14. AI providers and local inference
 
-Define capability-oriented adapters for transcription, translation, text-to-speech, LLM planning, segmentation, image generation, video generation, and audio generation. Local and optional cloud implementations plug into the same task-oriented contracts. Do not hard-code an editor workflow to one provider.
+Define capability-oriented adapters for transcription, translation, text-to-speech, LLM planning, segmentation, image generation, video generation, declarative MotionScene generation, and audio generation. Local and optional cloud implementations plug into the same task-oriented contracts. `GenerateVideo` returns an opaque raster/video asset; future `GenerateMotionScene` returns an editable declarative scene proposal. Do not hard-code an editor workflow to one provider.
 
 Candidate runtime categories for evaluation:
 
@@ -459,13 +467,80 @@ Treat all model output as untrusted input. Refuse unknown commands, target IDs, 
 
 Automation recipes are declarative OR command sequences with schema and permission validation. They do not execute arbitrary shell commands.
 
-## 17. Templates, themes, and community
+## 17. Templates, themes, MotionScene, and community
 
 Templates are declarative packages with stable editable slot IDs, dependency manifests, checksums, and license metadata. They contain project structure and values, not arbitrary executable code.
 
 Themes are declarative semantic token sets. They cannot include JavaScript or arbitrary CSS, execute code, redefine application behavior, or replace the layout architecture.
 
 Initial community distribution can use a GitHub-first static registry: manifest repository, versioned entries, release or download assets, automated validation, and pull-request-based publishing. Do not build a community backend now; early phases do not require one.
+
+### Declarative MotionScene
+
+The future `.ormotion.json` source is a versioned, non-executable data format
+for simple motion graphics. Its conceptual V1 envelope contains `format`,
+`schema_version`, UUIDv4 `scene_id`, `name`, exact `duration`, `canvas`, typed
+`assets`, `nodes`, and `animations`. Phase 11E freezes exact names and bounds
+after the Phase 7/8 renderer exists; this planning document does not add codec
+types or a project schema.
+
+MotionScene uses nonnegative finite `RationalTime`, a half-open `[0, duration)`
+local timeline, exact-time random-access evaluation, typed local asset
+references, stable identities, checksums/provenance, and reproducible font
+references or a documented bundled fallback. It has no HTTP, environment,
+glob, shell, provider, script, arbitrary shader, or hidden font lookup. The
+initial primitive set is `Group`, `Text`, `Rectangle`, `Ellipse`, `Line`/
+`Arrow`, renderer-gated `Polyline`, and `Image`; animation is limited to typed
+translation, scale, rotation, opacity, bounded geometry, and supported
+fill/stroke values with a small locked easing set. Charts and diagrams start as
+typed templates over primitives. Any later randomness is explicit and seeded
+from scene/source identity; V1 should otherwise be deterministic.
+
+The canonical path is:
+
+```text
+MotionScene -> validate -> evaluate exact time
+            -> typed instructions / RenderSnapshot -> existing or_render/wgpu
+            -> preview or normal OR materialization/export
+```
+
+Preview and materialization share the evaluator. Phase 11F is
+materialization-first: render persistent generated media, preserve source and
+asset provenance, register it via normal media commands, and use ordinary
+timeline clips. A re-render never silently replaces an existing canonical
+`MediaId`. Cache identity may include source/asset hashes, evaluator/render
+version, dimensions, frame rate, and color settings, but a timeline-referenced
+materialized asset is not cache-only. There is no live `MotionClip` without a
+separate architecture/schema gate.
+
+External agents and templates are first-class producers. Future semantic
+commands may be `or motion validate`, `inspect`, and `render`; validation,
+inspection, and render are read-only unless an explicit materialization/project
+command is requested. Rendering requires zero LLM/provider calls. TTS, music,
+and SFX remain normal OR audio/media/timeline concerns, coordinated by an
+agent or `EditPlan` rather than embedded in MotionScene.
+
+Remotion and Motion Canvas are useful conceptual references, not canonical
+runtimes or dependencies. Lottie/dotLottie are future bounded interchange,
+not the canonical format. Chromium/headless browser use is reserved for the
+optional Phase 16G WebMotion adapter, never the normal renderer. WebCodecs is
+not the encoding authority; the normal OR encoder remains the path for
+materialization.
+
+### Optional procedural WebMotion boundary
+
+Future `WebMotionBundle` content may support custom HTML/CSS, Canvas, SVG,
+WebGL/WebGPU, Three.js-style scenes, or simulations only after an explicit
+request. It runs in an isolated sidecar/browser with an OR-owned
+least-privilege outer boundary, network off, read-only bounded approved inputs,
+bounded scratch/output, no credentials or arbitrary project writes, resource
+and output limits, cancellation, crash containment, and structured diagnostics.
+It never runs in `or_core`, Flutter, normal project open, or canonical motion
+evaluation, and it returns only bounded output for materialization. CSP and a
+browser sandbox are defense in depth; production must not disable the browser
+sandbox as a GPU workaround. A pinned browser, if later selected, is
+capability-managed and recorded in provenance but is not sufficient isolation
+by itself.
 
 ## 18. Plugins
 
@@ -477,7 +552,7 @@ Native and OpenFX compatibility is later and has a higher trust cost. Do not tre
 
 Export uses the same timeline and render evaluation as preview. The intended flow is offscreen render frames to a media encoder and muxer, managed as a background job with progress and cancellation. Where supported, prefer a GPU/native-compatible render surface into a hardware encoder; otherwise use CPU frames with a supported software or platform encoder. Do not require a GPU readback/upload cycle when a stable shared-surface path is available. Codec and hardware options depend on platform support and licensing review, and correctness fallback remains first-class.
 
-The native OR format is not OpenTimelineIO. OTIO is an import/export interchange format and API for editorial cut information, not the native project database and not a media container. Select adapters and supported OTIO fields when an interchange implementation is scoped.
+The native OR format is not OpenTimelineIO. OTIO is an import/export interchange format and API for editorial cut information, not the native project database and not a media container. Lottie and dotLottie may be evaluated as bounded motion interchange in Phase 16, but neither is the canonical MotionScene format. Select adapters and supported fields when an interchange implementation is scoped.
 
 ## 20. UI feature registration and mobile
 

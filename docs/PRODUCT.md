@@ -141,7 +141,23 @@ Each asset records source, author, version, license, compatibility, dependencies
 
 **PLANNED:** browse, community, downloaded, and personal templates; categories; preview and details; use a template; and a creator workflow for info, editable slots, dependencies, preview, validation, save, export, and publish.
 
-Slot types are replaceable media, editable text, optional audio, editable color, locked, and optional. Templates are declarative project data with stable slot IDs and dependency metadata. They contain no arbitrary executable code.
+Slot types are replaceable media, editable text, optional audio, editable color, locked, and optional. Templates are declarative project data with stable slot IDs and dependency metadata. They contain no arbitrary executable code. Future templates may instantiate concrete, validated MotionScene structures with typed and bounded parameters; they do not execute code at render time.
+
+**FUTURE:** simple declarative MotionScene source assets for explainers,
+diagrams, charts, kinetic text, and other bounded motion graphics. A
+MotionScene uses exact timing, typed primitives, deterministic seekable
+evaluation, asset/font provenance, and the shared OR render/export path. The
+first timeline workflow is materialization-first: validate and preview the
+source, render persistent generated media, register it through normal media
+commands, and add the resulting ordinary media to the timeline. Re-rendering
+does not silently replace an existing canonical media identity.
+
+MotionScene authoring may come from a human, template, external agent, or
+optional AI provider. Validation, inspection, rendering, and materialization do
+not require an AI provider. The initial UX is a source item with validation
+state, duration, canvas, missing-asset diagnostics, Preview, Render/Rerender,
+and Add rendered media; a full node graph, curve editor, browser IDE, and code
+editor are not 11F requirements.
 
 ## Themes
 
@@ -151,11 +167,13 @@ A theme may set approved semantic tokens. It cannot execute code or redefine app
 
 ## AI assist
 
-**PLANNED:** automatic captions, translation, dubbing, silence and filler removal, scene detection, auto reframe, subject detection and tracking, background removal, highlight extraction, and transcript editing.
+**PLANNED:** automatic captions, translation, dubbing, silence and filler removal, scene detection, auto reframe, subject detection and tracking, background removal, highlight extraction, transcript editing, and optional declarative MotionScene generation.
 
 Phase 10 defines the provider-independent task boundary: `Transcribe`,
 `Translate`, `TextToSpeech`, `Segment`, `DetectScene`, `PlanEdit`,
-`GenerateImage`, `GenerateVideo`, and `GenerateAudio`. Providers return
+`GenerateImage`, `GenerateVideo`, `GenerateMotionScene`, and `GenerateAudio`.
+`GenerateVideo` returns an opaque raster/video asset; `GenerateMotionScene`
+returns an editable declarative scene proposal. Providers return
 reviewable proposals, analyses, or assets with model manifests and provenance;
 only normal validated commands apply accepted results. Stored credentials never
 enter project, CLI, or agent output.
@@ -166,7 +184,11 @@ AI output is untrusted data. The user can inspect and edit it, and any proposed 
 
 ## AI generation
 
-**FUTURE:** image, video, music, sound-effect, and voice generation with prompt, reference media, model, provider, seed, quality, and output parameters; queue and history; review results and add them to the timeline.
+**FUTURE:** image, video, music, sound-effect, voice, and declarative
+MotionScene generation with prompt, reference media, model, provider, seed,
+quality, and output parameters; queue and history; review results and add them
+to the timeline. MotionScene rendering itself makes no LLM/provider calls and
+does not require a cloud service.
 
 Generation is not required for MVP. Local and cloud provider use stays optional and must respect user-selected settings and content rights.
 
@@ -210,7 +232,12 @@ The initial architecture can use a GitHub-first static registry with versioned m
 
 ## Plugins
 
-**FUTURE:** effect, transition, importer, exporter, AI-provider, and automation extensions. Begin with a sandbox and explicit capability permissions where feasible. Native and OpenFX compatibility is a later, higher-trust evaluation, not an unrestricted default.
+**FUTURE:** effect, transition, importer, exporter, AI-provider, automation,
+and optional procedural WebMotion extensions. Begin with a sandbox and explicit
+capability permissions where feasible. Native and OpenFX compatibility is a
+later, higher-trust evaluation, not an unrestricted default. WebMotion is not
+canonical MotionScene and may run only in an explicit isolated, bounded
+sidecar; it is never the normal renderer or project-open path.
 
 ## Export
 
