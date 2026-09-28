@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, and 6D are DONE, and 6E is PLANNED. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, and 6E1 are DONE; 6E2 is NEXT. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -192,7 +192,7 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, 6C, and 6D are DONE, and 6E is PLANNED. Decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, 6C, 6D, and 6E1 are DONE; 6E2 is NEXT. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
 **Status: IN PROGRESS**
@@ -228,13 +228,23 @@ Phase 6D — Trim, split, and ripple editing — DONE:
 - headless/attached CLI forms with changed-only headless saves and explicit attached saves, plus typed Rust bridge/gateway methods
 - Focused Monochrome action menu and exact dialogs for Move, Trim, Split, Delete, and Ripple Delete; no optimistic geometry, drag/drop, snapping, markers, playback, decode, rendering, or timeline thumbnails
 
-Phase 6E — Snap, markers, and Timeline MVP hardening — PLANNED:
+Phase 6E1 — Pointer timeline editing and clip-edge snapping — DONE:
 
-- snap behavior
-- persistent markers
-- CLI/Flutter parity
-- save/reopen/recovery
-- Phase 6 completion
+- one schema-v1 read-only `timeline.snap` query; the command catalog, IPC v1, `.orproj` schema v3, and recovery v1 remain unchanged
+- fixed exact `1/8`-second threshold over timeline zero plus every other canonical clip start/end on all tracks; active clip boundaries are excluded
+- deterministic move start/end-anchor and trim-edge resolution with O(total clips) scanning and an O(1) result; no markers or pagination-dependent candidate set
+- exact nearest-1-ms pointer deltas from the original canonical time, same-kind lane targeting, pointer-priority start/end handles, presentation-only ghosts, and drop-time-only snap queries
+- existing Rust move/trim commands remain the only mutations; revision/session checks reject stale query results and attached CLI invalidation cancels active gestures without retry
+- default-on non-persisted Snap toggle, temporary cyan snap guide, typed bridge/gateway access, and headless/attached `or timeline snap` inspection
+- exact Move/Trim dialogs remain arbitrary `NUM/DEN`; no live continuous snap loop
+
+Phase 6E2 — Persistent markers — NEXT:
+
+- marker model and schema decision
+- marker commands, queries, and persistence
+- marker UI and CLI parity
+
+Phase 6 completion remains after 6E2. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain outside this checkpoint.
 
 ### Phase 7 — Preview and playback
 **Status: PLANNED**
@@ -308,4 +318,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A, 6B, 6C, and 6D DONE, and 6E PLANNED. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path. Playback, snapping, and markers remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A, 6B, 6C, 6D, and 6E1 DONE and 6E2 NEXT. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping without changing project schema, recovery, history ownership, or IPC. Persistent markers remain Phase 6E2. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain future work. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries.

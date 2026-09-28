@@ -49,6 +49,30 @@ re-run affected checks.
 - Timeline edit dialogs refresh from the Rust project state after the action;
   they do not optimistically resize or shift clip geometry.
 
+### Phase 6E1 pointer editing invariants
+
+- The project timeline exposes a visible default-on Snap toggle with an
+  accessible label and active state; changing it does not persist a project
+  setting or change `ProjectRevision`.
+- Dragging a clip body creates only a temporary presentation ghost, targets
+  same-kind lanes, retains the source lane outside valid lanes, and rejects an
+  opposite-kind lane without dispatching a mutation.
+- Small left and right clip-edge handles have pointer priority and expose
+  accessible start/end trim labels. Pointer deltas are quantized once to the
+  nearest 1 ms from the original exact time; repeated updates do not
+  accumulate rounded values.
+- Release performs at most one drop-time snap query and then uses the existing
+  Rust move or trim command. A successful snap may show a temporary cyan guide
+  before that command completes; there is no continuous snap-query loop.
+- Snap resolution uses the fixed `1/8`-second threshold and canonical timeline
+  zero plus all other clip boundaries, including clips outside loaded Flutter
+  pages. Revision, project-instance, project-switch, disposal, and attached
+  CLI invalidation guards reject stale results without retry.
+- Exact Move and Trim dialogs remain available for arbitrary exact `NUM/DEN`
+  values. Pointer editing does not add media-to-timeline insertion, track
+  reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback,
+  markers, decode, rendering, or export.
+
 ## Mobile Editor
 
 - Preview is visible.
