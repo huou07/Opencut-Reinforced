@@ -57,6 +57,28 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `Android APK build`: debug APK build; no emulator runtime test is currently configured.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit and includes four app packages, three desktop CLI packages, checksums, and build information.
 
+The execution supervisor treats these workflows as evidence gates, not merely
+status badges. It uses the GitHub REST API with Python's standard library to
+match exact `head_sha`, `main` branch, push event, completed status, successful
+conclusion, workflow file/name, and every policy-required job. `GH_TOKEN` is
+preferred over `GITHUB_TOKEN`; public unauthenticated reads remain supported.
+Authenticated polling is 15 seconds, unauthenticated polling is 90 seconds,
+and the default hosted wait is 7200 seconds. Rate-limit exhaustion stops the
+supervisor. Tokens never enter logs, subprocess arguments, or evidence.
+
+For checkpoints that require a preview, the supervisor verifies the existing
+Developer Preview workflow, exact `dev-<first-12-of-SHA>` tag target,
+prerelease flag, successful publish job, all seven current packages,
+`SHA256SUMS.txt`, and `BUILD-INFO.txt`. It may dispatch that existing workflow
+only with an appropriate authenticated token; it never publishes a release
+directly.
+
+Pushes changing only `docs/execution/STATE.json` and/or
+`docs/execution/evidence/**` skip Platform verification because the
+implementation SHA has already passed it. Repository hygiene still runs for
+that state/evidence commit. Any product, source, configuration, or workflow
+change continues to trigger Platform verification.
+
 Full Xcode, CocoaPods, Android SDK/JDK, Windows SDK, and Linux platform packages are optional for general OR development. Install or configure them only when explicitly choosing local platform development; GitHub-hosted jobs provide canonical coverage for the configured targets.
 
 ## CodeGraph

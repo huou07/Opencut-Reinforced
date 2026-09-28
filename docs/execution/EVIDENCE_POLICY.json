@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "enforced_from_checkpoint": "7A",
+  "repository": {
+    "owner": "huou07",
+    "name": "Opencut-Reinforced",
+    "branch": "main"
+  },
+  "github_api": {
+    "api_version": "2022-11-28",
+    "authenticated_poll_seconds": 15,
+    "unauthenticated_poll_seconds": 90,
+    "timeout_seconds": 7200,
+    "token_environment_variables": [
+      "GH_TOKEN",
+      "GITHUB_TOKEN"
+    ]
+  },
+  "required_gates": {
+    "repository_hygiene": {
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene",
+      "required_jobs": [
+        "Repository hygiene"
+      ]
+    },
+    "platform_verification": {
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification",
+      "required_jobs": [
+        "Rust checks",
+        "Flutter static and widget checks",
+        "macOS native build and bridge smoke",
+        "Linux native build",
+        "Windows native build",
+        "Android APK build"
+      ]
+    }
+  },
+  "developer_preview": {
+    "workflow_file": ".github/workflows/developer-preview.yml",
+    "workflow_name": "Developer Preview",
+    "allowed_events": [
+      "workflow_dispatch",
+      "schedule"
+    ],
+    "publish_job": "Verify and publish prerelease",
+    "tag_template": "dev-{sha12}",
+    "required_asset_count": 9,
+    "required_assets": [
+      "opencut-reinforced-macos-debug.zip",
+      "opencut-reinforced-windows-x64-debug.zip",
+      "opencut-reinforced-linux-x64-debug.tar.gz",
+      "opencut-reinforced-android-debug.apk",
+      "opencut-reinforced-cli-macos.zip",
+      "opencut-reinforced-cli-windows-x64.zip",
+      "opencut-reinforced-cli-linux-x64.tar.gz",
+      "SHA256SUMS.txt",
+      "BUILD-INFO.txt"
+    ],
+    "checksums_asset": "SHA256SUMS.txt",
+    "build_info_asset": "BUILD-INFO.txt"
+  },
+  "state_transition": {
+    "runner_may_write_state": false,
+    "completion_status": "DONE",
+    "successor_status": "NEXT",
+    "allowed_commit_paths": [
+      "docs/execution/STATE.json",
+      "docs/execution/evidence/{checkpoint_id}.json"
+    ],
+    "commit_subject_template": "chore(execution): complete {checkpoint_id} after verified CI"
+  }
+}

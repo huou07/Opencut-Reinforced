@@ -35,6 +35,8 @@ required_files=(
   docs/execution/README.md
   docs/execution/PLAN.json
   docs/execution/STATE.json
+  docs/execution/EVIDENCE_POLICY.json
+  docs/execution/evidence/README.md
   docs/execution/architecture-policy.json
   docs/execution/ARCHITECTURE_INVARIANTS.md
   docs/execution/AGENT_EXECUTION.md
@@ -61,6 +63,7 @@ required_files=(
   scripts/check_execution_plan.py
   scripts/check_architecture_policy.py
   scripts/agent_supervisor.py
+  scripts/execution_evidence.py
   scripts/test_execution_infra.py
 )
 

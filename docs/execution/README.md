@@ -26,21 +26,37 @@ checkpoints that are absent from the plan.
 ```sh
 python3 scripts/execution_plan.py status
 python3 scripts/execution_plan.py next
-python3 scripts/execution_plan.py context 6E2B
+python3 scripts/execution_plan.py context <checkpoint-id>
 python3 scripts/execution_plan.py goal milestone:desktop-mvp
 python3 scripts/execution_plan.py check
 python3 scripts/check_execution_plan.py
 python3 scripts/check_architecture_policy.py
+python3 scripts/test_execution_infra.py
 ```
 
 The optional `scripts/agent_supervisor.py` runs one fresh external runner
 process per valid checkpoint and refuses dirty or diverged direct-main state.
-It does not know or assume a vendor agent CLI.
+It does not know or assume a vendor agent CLI. A runner may push only its
+implementation commit. It cannot edit the plan, state, evidence policy,
+phase contracts, validators, supervisor, workflows, or completion evidence.
+
+The supervisor is the only authority that can turn `NEXT` into `DONE`. After a
+runner pushes, it independently verifies exact-SHA push-triggered GitHub
+Actions runs and every required job, verifies a Developer Preview when the
+selected checkpoint requires one, writes the supervisor-owned evidence record,
+and then creates the state/evidence completion commit. A successful model
+message is never repository-authoritative completion evidence.
+
+Evidence enforcement begins at the checkpoint named by
+`EVIDENCE_POLICY.json`. Historical checkpoints before that boundary remain
+valid without fabricated evidence. See [evidence/README.md](evidence/README.md)
+for the record contract.
 
 ## Current state
 
-Phase 5 is complete. Phase 6 is in progress through completed 6E2A, with 6E2B
-as the only `NEXT` product checkpoint. All later checkpoints are planned.
+`STATE.json` is the only mutable execution-status source. `PLAN.json` supplies
+the immutable checkpoint graph; documentation must not copy the current
+checkpoint or phase status.
 
 This architecture checkpoint does not advance product state, implement marker
 UI, start Phase 7, publish a Developer Preview, or create future runtime

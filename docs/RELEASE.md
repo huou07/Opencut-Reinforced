@@ -10,9 +10,24 @@ The current architecture/execution lock is documentation and repository
 infrastructure only. This checkpoint does not build, publish, or update a
 Developer Preview.
 
+Checkpoint completion is separate from release publication. From the evidence
+policy boundary onward, a checkpoint is not repository-authoritative `DONE`
+until the supervisor records exact-SHA hosted CI evidence, verifies all
+required jobs, verifies a required preview when `PLAN.json` demands it, and
+performs the protected state transition. A runner cannot create release or
+completion evidence. This hardening task does not publish a Developer Preview.
+
 ## Developer Preview
 
 Developer Previews are automated nightly or manually dispatched from `main` only. A preview is published only after the exact source commit has a successful Platform verification run. Its `dev-<12-character-commit-sha>` tag traces it to that source commit, and duplicate releases for the same commit are skipped.
+
+The supervisor verifies the existing workflow and release rather than
+publishing directly: the tag must resolve to the exact source commit, the
+release must be a prerelease, the publish workflow must succeed, and all
+current application/CLI packages plus `SHA256SUMS.txt` and `BUILD-INFO.txt`
+must be non-empty. If a required preview is absent and no suitable token can
+dispatch the existing workflow, verification stops with execution state
+unchanged.
 
 These artifacts are debug developer builds for testing only. Desktop builds are unsigned and not notarized; the Android APK uses the standard debug build signing and no production key. No package has production signing. They are not production releases or performance benchmarks. Each release includes four application packages (macOS, Windows x64, Linux x64, and Android), three desktop CLI packages (universal macOS, Windows x64, and Linux x64), `SHA256SUMS.txt`, and `BUILD-INFO.txt`—nine non-empty assets total. Build outputs are not committed to Git.
 

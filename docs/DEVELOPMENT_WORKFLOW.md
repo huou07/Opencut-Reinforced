@@ -23,6 +23,24 @@ may not edit locked phase specifications or permanent invariants. A conflict
 requires a separate plan amendment/architecture decision rather than a silent
 scope expansion.
 
+### Execution evidence lock
+
+The feature runner implements one checkpoint and pushes implementation commits
+only. It must leave `PLAN.json`, `STATE.json`, `EVIDENCE_POLICY.json`, phase
+specifications, architecture policy/invariants, execution validators and
+supervisor, protected workflows, and completion evidence unchanged. Its final
+handoff begins `IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE` and leaves the
+checkpoint `NEXT`; a model claim of `DONE` is not authoritative.
+
+The supervisor captures those protected surfaces before invoking the runner,
+then independently binds successful push-triggered Repository hygiene and
+Platform verification runs—and every required job—to the exact implementation
+SHA. It writes evidence and performs the single state transition only after
+those checks. The resulting commit may contain only `STATE.json` and the one
+checkpoint evidence file. Repository hygiene must pass for that state commit
+before the next fresh runner starts. Use `--resume-sha` to continue hosted
+verification after an interruption without rerunning implementation.
+
 Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
 
 Keep the Phase 5A `media probe` operation read-only: it accepts a local filesystem `Path`, returns validated metadata, and never creates a `MediaId`, opens or mutates a project, or increments `ProjectRevision`. Phase 5B import prepares one selected file with the existing probe, canonicalizes its path, builds a validated local `file:` URI and fresh `MediaId`, then submits `media.add` through the application path. Project loading validates stored URIs but never opens or probes referenced sources. The CLI and desktop import require a system-provided `ffprobe`.

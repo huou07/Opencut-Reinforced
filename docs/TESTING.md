@@ -308,10 +308,25 @@ A check that did not run must never be reported as passing. Report its exact sta
 
 The standard-library-only execution infrastructure has focused tests for valid
 plan/state validation, duplicate IDs, missing dependencies, cycles, multiple
-`NEXT` states, unfinished prerequisites, unknown state IDs, dirty-worktree
-refusal, non-zero runner exit, and exactly-one-checkpoint transitions. The
-repository hygiene check runs both the execution-plan and architecture-policy
-checkers. These checks do not mutate plan or state.
+`NEXT` states, unfinished prerequisites, unknown state IDs, grandfathered
+pre-boundary completion, required evidence after the 7A boundary,
+dirty-worktree refusal, non-zero runner exit, protected runner-state mutation,
+exact-SHA workflow and required-job matching, wrong branch/event/conclusion,
+rate/token behavior, timeout behavior without real sleeps, preview release
+contracts, exact resume guards, metadata-only platform filtering, and
+exactly-one-checkpoint transitions. The repository hygiene check runs both the
+execution-plan and architecture-policy checkers and requires the evidence
+policy, evidence directory documentation, and evidence module. These checks
+use fake API data and do not mutate the real plan or state.
+
+Hosted evidence is not inferred from workflow-level success alone. The
+supervisor requires push-triggered `Repository hygiene` and `Platform
+verification` runs whose `head_sha` is the implementation SHA, then checks the
+policy-required job names and completed-success conclusions. Product CI
+failures leave the checkpoint `NEXT` and create no completion evidence. The
+state/evidence completion commit intentionally skips Platform verification via
+the metadata-only push filter, but still runs Repository hygiene; the
+hardening commit itself must pass both workflows.
 
 ## Future verification layers
 

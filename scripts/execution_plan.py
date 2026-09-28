@@ -161,6 +161,50 @@ def _derive_phase_status(
     return "PLANNED"
 
 
+def _validate_completion_evidence(
+    plan: dict[str, Any],
+    statuses: dict[str, str],
+    checkpoints: dict[str, dict[str, Any]],
+    repo_root: Path,
+) -> None:
+    """Validate supervisor attestations for checkpoints at the policy boundary."""
+
+    policy_path = repo_root / "docs" / "execution" / "EVIDENCE_POLICY.json"
+    checkpoint_ids = [checkpoint["id"] for checkpoint in plan["checkpoints"]]
+    if "7A" not in checkpoint_ids and not policy_path.exists():
+        return
+    if not policy_path.is_file():
+        raise PlanError(f"evidence policy is missing: {policy_path}")
+    try:
+        from execution_evidence import EvidenceError, load_policy, validate_evidence_record
+
+        policy = load_policy(policy_path)
+        boundary = policy["enforced_from_checkpoint"]
+        if boundary not in checkpoint_ids:
+            raise PlanError(f"evidence boundary is not in PLAN.json: {boundary}")
+        boundary_index = checkpoint_ids.index(boundary)
+        for checkpoint_id, status in statuses.items():
+            if status != "DONE" or checkpoint_ids.index(checkpoint_id) < boundary_index:
+                continue
+            evidence_path = repo_root / "docs" / "execution" / "evidence" / f"{checkpoint_id}.json"
+            if not evidence_path.is_file():
+                raise PlanError(f"completion evidence is missing: {evidence_path}")
+            evidence = load_json(evidence_path)
+            try:
+                validate_evidence_record(
+                    evidence,
+                    checkpoint_id=checkpoint_id,
+                    checkpoint=checkpoints[checkpoint_id],
+                    policy=policy,
+                )
+            except EvidenceError as exc:
+                raise PlanError(f"invalid completion evidence for {checkpoint_id}: {exc}") from exc
+    except ImportError as exc:
+        raise PlanError("execution evidence module is unavailable") from exc
+    except EvidenceError as exc:
+        raise PlanError(f"invalid evidence policy: {exc}") from exc
+
+
 def validate_plan(
     plan: dict[str, Any], state: dict[str, Any], repo_root: Path = REPO_ROOT
 ) -> dict[str, Any]:
@@ -302,6 +346,8 @@ def validate_plan(
         raise PlanError(
             f"state.current_next is {state.get('current_next')!r}, expected {next_id!r}"
         )
+
+    _validate_completion_evidence(plan, statuses, checkpoints, repo_root)
 
     return {
         "checkpoint_count": len(checkpoints),

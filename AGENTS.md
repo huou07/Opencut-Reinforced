@@ -115,6 +115,22 @@ architecture invariants. If repository reality conflicts with either, stop and
 report the exact conflict. Plan amendments require a separate architecture
 plan task.
 
+### Execution evidence lock
+
+Normal checkpoint runners implement exactly one resolved `NEXT` checkpoint and
+may push implementation commits only. They must not edit `PLAN.json`,
+`STATE.json`, `EVIDENCE_POLICY.json`, phase specifications, architecture
+invariants or policy, execution validators/supervisor, protected workflows, or
+completion evidence. A runner handoff must say `IMPLEMENTED — AWAITING
+SUPERVISOR EVIDENCE`; it must never claim repository-authoritative `DONE`.
+
+The supervisor independently verifies the implementation SHA against the
+required hosted workflow runs and jobs, verifies a Developer Preview when the
+plan requires one, writes the evidence record, advances `STATE.json`, and
+pushes the state/evidence-only completion commit. A model statement is not
+completion evidence. Use `scripts/agent_supervisor.py --resume-sha` only for
+an already-pushed exact SHA that still matches the current `NEXT` state.
+
 ## Minimal implementation rule
 
 Prefer the smallest correct implementation.
