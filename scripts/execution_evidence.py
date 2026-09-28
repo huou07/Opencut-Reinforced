@@ -42,6 +42,10 @@ class WorkflowPending(EvidenceError):
     """Raised while an exact workflow run has not completed successfully."""
 
 
+class NoWorkflowRun(WorkflowPending):
+    """Raised when no exact workflow run exists yet."""
+
+
 class WorkflowFailed(EvidenceError):
     """Raised when the newest exact workflow run completed unsuccessfully."""
 
@@ -501,7 +505,7 @@ def select_exact_workflow_run(
 
     sha_runs = [run for run in runs if run.get("head_sha") == implementation_sha]
     if not sha_runs:
-        raise WorkflowPending("no workflow run exists for the exact implementation SHA")
+        raise NoWorkflowRun("no workflow run exists for the exact implementation SHA")
     identity_runs = [
         run
         for run in sha_runs
@@ -771,6 +775,23 @@ def wait_for_developer_preview(
     interval = polling_interval(policy, api.authenticated)
     deadline = clock() + timeout
     dispatched = False
+
+    def dispatch_if_needed() -> None:
+        nonlocal dispatched
+        if not api.authenticated:
+            raise PreviewRequiredError(
+                "Developer Preview required but cannot be dispatched automatically"
+            )
+        if dispatch_if_missing and not dispatched:
+            api.post(
+                _repo_path(
+                    policy,
+                    f"/actions/workflows/{urllib.parse.quote(_workflow_id(preview['workflow_file']), safe='')}/dispatches",
+                ),
+                {"ref": branch},
+            )
+            dispatched = True
+
     while True:
         try:
             run_payload = api.get(_workflow_runs_path(policy, preview["workflow_file"], implementation_sha))
@@ -812,22 +833,16 @@ def wait_for_developer_preview(
                 "build_info": preview["build_info_asset"],
             }
         except NotFoundError:
-            if not api.authenticated and not dispatched:
-                raise PreviewRequiredError(
-                    "Developer Preview required but cannot be dispatched automatically"
-                )
-            if api.authenticated and dispatch_if_missing and not dispatched:
-                api.post(
-                    _repo_path(
-                        policy,
-                        f"/actions/workflows/{urllib.parse.quote(_workflow_id(preview['workflow_file']), safe='')}/dispatches",
-                    ),
-                    {"ref": branch},
-                )
-                dispatched = True
+            dispatch_if_needed()
             remaining = deadline - clock()
             if remaining <= 0:
                 raise EvidenceTimeout("timed out waiting for Developer Preview")
+            sleep(min(interval, remaining))
+        except NoWorkflowRun:
+            dispatch_if_needed()
+            remaining = deadline - clock()
+            if remaining <= 0:
+                raise EvidenceTimeout("timed out waiting for Developer Preview workflow")
             sleep(min(interval, remaining))
         except WorkflowPending:
             remaining = deadline - clock()

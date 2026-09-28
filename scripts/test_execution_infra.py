@@ -617,9 +617,7 @@ class EvidenceTests(unittest.TestCase):
 
     def test_required_preview_without_token_stops_before_dispatch(self) -> None:
         policy = evidence_policy()
-        api = SequenceApi(
-            [execution_evidence.NotFoundError("missing")], authenticated=False
-        )
+        api = SequenceApi([{"workflow_runs": []}], authenticated=False)
         with self.assertRaises(execution_evidence.PreviewRequiredError):
             execution_evidence.wait_for_developer_preview(
                 api, policy, "a" * 40, sleep=lambda _seconds: None
@@ -656,7 +654,7 @@ class EvidenceTests(unittest.TestCase):
         }
         api = SequenceApi(
             [
-                execution_evidence.NotFoundError("missing"),
+                {"workflow_runs": []},
                 {"workflow_runs": [run]},
                 jobs,
                 release,
