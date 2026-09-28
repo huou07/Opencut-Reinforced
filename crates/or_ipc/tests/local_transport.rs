@@ -142,6 +142,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "media.get",
             "timeline.tracks",
             "timeline.clips",
+            "timeline.snap",
         ]
     );
     let describe_json = serde_json::to_string(&describe).unwrap();

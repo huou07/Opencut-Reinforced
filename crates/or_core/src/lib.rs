@@ -20,7 +20,8 @@ pub use application::{
     CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, MAX_MEDIA_PAGE_SIZE,
     MAX_TIMELINE_CLIP_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode, ProjectChange,
     ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage,
-    TimelineClipState, TimelineTrackSummary, TimelineTrimEdge, TransactionEnvelope,
+    TimelineClipState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
+    TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TransactionEnvelope,
     TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{

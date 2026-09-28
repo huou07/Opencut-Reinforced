@@ -4,7 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{error::Error, fmt};
+use std::{cmp::Ordering, error::Error, fmt};
 
 const PROJECT_RENAME_ID: &str = "project.rename";
 const PROJECT_SUMMARY_ID: &str = "project.summary";
@@ -24,6 +24,7 @@ const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
 const TIMELINE_CLIP_RIPPLE_DELETE_ID: &str = "timeline.clip.ripple_delete";
 const TIMELINE_TRACKS_ID: &str = "timeline.tracks";
 const TIMELINE_CLIPS_ID: &str = "timeline.clips";
+const TIMELINE_SNAP_ID: &str = "timeline.snap";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
 pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
 pub const MAX_TIMELINE_CLIP_PAGE_SIZE: usize = 100;
@@ -126,7 +127,7 @@ const COMMANDS: [CommandDescriptor; 13] = [
     },
 ];
 
-const QUERIES: [QueryDescriptor; 5] = [
+const QUERIES: [QueryDescriptor; 6] = [
     QueryDescriptor {
         id: PROJECT_SUMMARY_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -145,6 +146,10 @@ const QUERIES: [QueryDescriptor; 5] = [
     },
     QueryDescriptor {
         id: TIMELINE_CLIPS_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+    },
+    QueryDescriptor {
+        id: TIMELINE_SNAP_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
     },
 ];
@@ -508,6 +513,28 @@ impl QueryEnvelope {
                 "track_id": track_id,
                 "offset": offset,
                 "limit": limit,
+            }),
+        }
+    }
+
+    pub fn timeline_snap(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        operation: TimelineSnapOperation,
+        clip_id: ClipId,
+        target_track_id: Option<TrackId>,
+        target_time: RationalTime,
+    ) -> Self {
+        Self {
+            query_id: TIMELINE_SNAP_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({
+                "operation": operation,
+                "clip_id": clip_id,
+                "target_track_id": target_track_id,
+                "target_time": target_time,
             }),
         }
     }
@@ -933,6 +960,8 @@ pub struct QueryResult {
     pub timeline_tracks: Option<Vec<TimelineTrackSummary>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeline_clip_page: Option<Box<TimelineClipPage>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeline_snap: Option<Box<TimelineSnapResult>>,
 }
 
 /// One bounded, insertion-ordered page from the persistent media library.
@@ -967,6 +996,46 @@ pub struct TimelineClipPage {
     pub limit: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineSnapOperation {
+    Move,
+    TrimStart,
+    TrimEnd,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineSnapMovingAnchor {
+    None,
+    Start,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineSnapTargetKind {
+    None,
+    TimelineZero,
+    ClipStart,
+    ClipEnd,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineSnapResult {
+    pub raw_target_time: RationalTime,
+    pub resolved_target_time: RationalTime,
+    pub snapped: bool,
+    pub moving_anchor: TimelineSnapMovingAnchor,
+    pub target_kind: TimelineSnapTargetKind,
+    pub target_time: RationalTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_track_id: Option<TrackId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_clip_id: Option<ClipId>,
 }
 
 /// Stable machine-readable operation failure categories.
@@ -1320,18 +1389,25 @@ impl ProjectSession {
             ));
         }
 
-        let (media_page, media_item, timeline_tracks, timeline_clip_page) =
+        let (media_page, media_item, timeline_tracks, timeline_clip_page, timeline_snap) =
             if envelope.query_id == PROJECT_SUMMARY_ID {
                 if !is_empty_object(&envelope.arguments) {
                     return Err(OperationError::new(OperationErrorCode::InvalidArguments));
                 }
-                (None, None, None, None)
+                (None, None, None, None, None)
             } else if envelope.query_id == MEDIA_LIST_ID {
-                (Some(self.media_list(envelope.arguments)?), None, None, None)
+                (
+                    Some(self.media_list(envelope.arguments)?),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
             } else if envelope.query_id == MEDIA_GET_ID {
                 (
                     None,
                     Some(Box::new(self.media_get(envelope.arguments)?)),
+                    None,
                     None,
                     None,
                 )
@@ -1341,6 +1417,7 @@ impl ProjectSession {
                     None,
                     Some(self.timeline_tracks(envelope.arguments)?),
                     None,
+                    None,
                 )
             } else if envelope.query_id == TIMELINE_CLIPS_ID {
                 (
@@ -1348,6 +1425,15 @@ impl ProjectSession {
                     None,
                     None,
                     Some(Box::new(self.timeline_clips(envelope.arguments)?)),
+                    None,
+                )
+            } else if envelope.query_id == TIMELINE_SNAP_ID {
+                (
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(Box::new(self.timeline_snap(envelope.arguments)?)),
                 )
             } else {
                 return Err(OperationError::new(OperationErrorCode::UnknownQuery));
@@ -1366,6 +1452,7 @@ impl ProjectSession {
             media_item,
             timeline_tracks,
             timeline_clip_page,
+            timeline_snap,
         })
     }
 
@@ -1984,6 +2071,59 @@ impl ProjectSession {
         })
     }
 
+    fn timeline_snap(&self, arguments: Value) -> Result<TimelineSnapResult, OperationError> {
+        let arguments: TimelineSnapQueryArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let target_time = arguments.target_time.into_time()?;
+        let Some((source_track_index, source_clip_index)) =
+            find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+
+        match arguments.operation {
+            TimelineSnapOperation::Move => {
+                let target_track_id = arguments
+                    .target_track_id
+                    .ok_or_else(|| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                let target_track_index = find_timeline_track_index(&self.project, target_track_id)
+                    .ok_or_else(|| {
+                        OperationError::new(OperationErrorCode::TimelineTrackNotFound)
+                    })?;
+                let tracks = self.project.timeline().tracks();
+                if tracks[source_track_index].kind() != tracks[target_track_index].kind() {
+                    return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+                }
+                let clip = &tracks[source_track_index].clips()[source_clip_index];
+                let duration = clip.source_range().duration();
+                resolve_timeline_snap(
+                    &self.project,
+                    arguments.clip_id,
+                    TimelineSnapMode::Move { duration },
+                    target_time,
+                )
+            }
+            TimelineSnapOperation::TrimStart | TimelineSnapOperation::TrimEnd => {
+                if arguments.target_track_id.is_some() {
+                    return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+                }
+                let edge = match arguments.operation {
+                    TimelineSnapOperation::TrimStart => TimelineTrimEdge::Start,
+                    TimelineSnapOperation::TrimEnd => TimelineTrimEdge::End,
+                    TimelineSnapOperation::Move => unreachable!(),
+                };
+                resolve_timeline_snap(
+                    &self.project,
+                    arguments.clip_id,
+                    TimelineSnapMode::Trim { edge },
+                    target_time,
+                )
+            }
+        }
+    }
+
     fn media_list(&self, arguments: Value) -> Result<MediaListPage, OperationError> {
         let arguments: MediaListArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -2330,6 +2470,256 @@ struct TimelineClipsQueryArguments {
     track_id: TrackId,
     offset: u64,
     limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineSnapQueryArguments {
+    operation: TimelineSnapOperation,
+    clip_id: ClipId,
+    #[serde(default)]
+    target_track_id: Option<TrackId>,
+    target_time: RationalTimeArguments,
+}
+
+#[derive(Clone, Copy)]
+enum TimelineSnapMode {
+    Move { duration: RationalTime },
+    Trim { edge: TimelineTrimEdge },
+}
+
+#[derive(Clone, Copy)]
+struct TimelineSnapCandidate {
+    time: RationalTime,
+    target_kind: TimelineSnapTargetKind,
+    track_index: usize,
+    clip_index: usize,
+    target_track_id: Option<TrackId>,
+    target_clip_id: Option<ClipId>,
+}
+
+#[derive(Clone, Copy)]
+struct TimelineSnapChoice {
+    candidate: TimelineSnapCandidate,
+    distance: RationalTime,
+    moving_anchor: TimelineSnapMovingAnchor,
+    resolved_target_time: RationalTime,
+}
+
+fn resolve_timeline_snap(
+    project: &ProjectDocument,
+    active_clip_id: ClipId,
+    mode: TimelineSnapMode,
+    raw_target_time: RationalTime,
+) -> Result<TimelineSnapResult, OperationError> {
+    let threshold = RationalTime::new(1, 8)
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+    let (active_track_index, active_clip_index) = find_timeline_clip(project, active_clip_id)
+        .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineClipNotFound))?;
+    let moving_anchors = match mode {
+        TimelineSnapMode::Move { duration } => [
+            (TimelineSnapMovingAnchor::Start, raw_target_time),
+            (
+                TimelineSnapMovingAnchor::End,
+                raw_target_time
+                    .checked_add(duration)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+            ),
+        ],
+        TimelineSnapMode::Trim { edge } => {
+            [(
+                match edge {
+                    TimelineTrimEdge::Start => TimelineSnapMovingAnchor::Start,
+                    TimelineTrimEdge::End => TimelineSnapMovingAnchor::End,
+                },
+                raw_target_time,
+            ); 2]
+        }
+    };
+    let anchor_count = match mode {
+        TimelineSnapMode::Move { .. } => 2,
+        TimelineSnapMode::Trim { .. } => 1,
+    };
+
+    let mut best = None;
+    let timeline_zero = TimelineSnapCandidate {
+        time: RationalTime::ZERO,
+        target_kind: TimelineSnapTargetKind::TimelineZero,
+        track_index: 0,
+        clip_index: 0,
+        target_track_id: None,
+        target_clip_id: None,
+    };
+    for &(moving_anchor, anchor_time) in moving_anchors.iter().take(anchor_count) {
+        consider_timeline_snap_candidate(
+            &mut best,
+            timeline_zero,
+            moving_anchor,
+            anchor_time,
+            raw_target_time,
+            threshold,
+        )?;
+    }
+
+    for (track_index, track) in project.timeline().tracks().iter().enumerate() {
+        for (clip_index, clip) in track.clips().iter().enumerate() {
+            if track_index == active_track_index
+                && clip_index == active_clip_index
+                && clip.id() == active_clip_id
+            {
+                continue;
+            }
+            let boundaries = [
+                (TimelineSnapTargetKind::ClipStart, clip.timeline_start()),
+                (
+                    TimelineSnapTargetKind::ClipEnd,
+                    clip.timeline_start()
+                        .checked_add(clip.source_range().duration())
+                        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+                ),
+            ];
+            for (target_kind, time) in boundaries {
+                let candidate = TimelineSnapCandidate {
+                    time,
+                    target_kind,
+                    track_index,
+                    clip_index,
+                    target_track_id: Some(track.id()),
+                    target_clip_id: Some(clip.id()),
+                };
+                for &(moving_anchor, anchor_time) in moving_anchors.iter().take(anchor_count) {
+                    consider_timeline_snap_candidate(
+                        &mut best,
+                        candidate,
+                        moving_anchor,
+                        anchor_time,
+                        raw_target_time,
+                        threshold,
+                    )?;
+                }
+            }
+        }
+    }
+
+    let Some(choice) = best else {
+        return Ok(TimelineSnapResult {
+            raw_target_time,
+            resolved_target_time: raw_target_time,
+            snapped: false,
+            moving_anchor: TimelineSnapMovingAnchor::None,
+            target_kind: TimelineSnapTargetKind::None,
+            target_time: raw_target_time,
+            target_track_id: None,
+            target_clip_id: None,
+        });
+    };
+
+    let resolved_target_time = match mode {
+        TimelineSnapMode::Move { .. } => choice.resolved_target_time,
+        TimelineSnapMode::Trim { .. } => choice.candidate.time,
+    };
+    Ok(TimelineSnapResult {
+        raw_target_time,
+        resolved_target_time,
+        snapped: true,
+        moving_anchor: choice.moving_anchor,
+        target_kind: choice.candidate.target_kind,
+        target_time: choice.candidate.time,
+        target_track_id: choice.candidate.target_track_id,
+        target_clip_id: choice.candidate.target_clip_id,
+    })
+}
+
+fn consider_timeline_snap_candidate(
+    best: &mut Option<TimelineSnapChoice>,
+    candidate: TimelineSnapCandidate,
+    moving_anchor: TimelineSnapMovingAnchor,
+    anchor_time: RationalTime,
+    raw_target_time: RationalTime,
+    threshold: RationalTime,
+) -> Result<(), OperationError> {
+    let distance = timeline_snap_distance(anchor_time, candidate.time)?;
+    if distance > threshold {
+        return Ok(());
+    }
+    let adjustment = candidate
+        .time
+        .checked_sub(anchor_time)
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+    let resolved_target_time = raw_target_time
+        .checked_add(adjustment)
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+    let choice = TimelineSnapChoice {
+        candidate,
+        distance,
+        moving_anchor,
+        resolved_target_time,
+    };
+    if best.is_none_or(|current| timeline_snap_choice_order(choice, current) == Ordering::Less) {
+        *best = Some(choice);
+    }
+    Ok(())
+}
+
+fn timeline_snap_distance(
+    left: RationalTime,
+    right: RationalTime,
+) -> Result<RationalTime, OperationError> {
+    let delta = left
+        .checked_sub(right)
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+    if delta.is_negative() {
+        RationalTime::ZERO
+            .checked_sub(delta)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))
+    } else {
+        Ok(delta)
+    }
+}
+
+fn timeline_snap_choice_order(left: TimelineSnapChoice, right: TimelineSnapChoice) -> Ordering {
+    (
+        left.distance,
+        left.candidate.time,
+        timeline_snap_anchor_priority(left.moving_anchor),
+        timeline_snap_source_priority(left.candidate.target_kind),
+        left.candidate.track_index,
+        left.candidate.clip_index,
+        timeline_snap_boundary_priority(left.candidate.target_kind),
+    )
+        .cmp(&(
+            right.distance,
+            right.candidate.time,
+            timeline_snap_anchor_priority(right.moving_anchor),
+            timeline_snap_source_priority(right.candidate.target_kind),
+            right.candidate.track_index,
+            right.candidate.clip_index,
+            timeline_snap_boundary_priority(right.candidate.target_kind),
+        ))
+}
+
+fn timeline_snap_anchor_priority(anchor: TimelineSnapMovingAnchor) -> u8 {
+    match anchor {
+        TimelineSnapMovingAnchor::Start => 0,
+        TimelineSnapMovingAnchor::End => 1,
+        TimelineSnapMovingAnchor::None => 2,
+    }
+}
+
+fn timeline_snap_source_priority(target_kind: TimelineSnapTargetKind) -> u8 {
+    match target_kind {
+        TimelineSnapTargetKind::TimelineZero => 0,
+        TimelineSnapTargetKind::ClipStart | TimelineSnapTargetKind::ClipEnd => 1,
+        TimelineSnapTargetKind::None => 2,
+    }
+}
+
+fn timeline_snap_boundary_priority(target_kind: TimelineSnapTargetKind) -> u8 {
+    match target_kind {
+        TimelineSnapTargetKind::ClipStart => 0,
+        TimelineSnapTargetKind::ClipEnd => 1,
+        TimelineSnapTargetKind::TimelineZero | TimelineSnapTargetKind::None => 0,
+    }
 }
 
 fn deserialize_canonical_media_id<'de, D>(deserializer: D) -> Result<MediaId, D::Error>
@@ -3026,7 +3416,8 @@ mod tests {
         ApplicationRequest, ApplicationResponse, COMMANDS, CURRENT_TRANSACTION_SCHEMA_VERSION,
         ChangeSet, CommandCall, CommandDescriptor, CommandEnvelope, OperationErrorCode,
         ProjectChange, ProjectSession, QUERIES, QueryDescriptor, QueryEnvelope, TimelineClipState,
-        TimelineTrackSummary, TransactionEnvelope, command_catalog, query_catalog,
+        TimelineSnapMovingAnchor, TimelineSnapTargetKind, TimelineTrackSummary,
+        TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
         AudioStreamMetadata, ClipId, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
@@ -3045,10 +3436,12 @@ mod tests {
     const TRACK_A: &str = "22222222-2222-4222-8222-222222222222";
     const TRACK_B: &str = "88888888-8888-4888-8888-888888888888";
     const TRACK_C: &str = "99999999-9999-4999-8999-999999999999";
+    const TRACK_D: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
     const CLIP_A: &str = "33333333-3333-4333-8333-333333333333";
     const CLIP_B: &str = "55555555-5555-4555-8555-555555555555";
     const CLIP_C: &str = "66666666-6666-4666-8666-666666666666";
     const CLIP_D: &str = "99999999-9999-4999-8999-999999999998";
+    const CLIP_E: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeef";
     const MEDIA_A: &str = "44444444-4444-4444-8444-444444444444";
     const MEDIA_B: &str = "77777777-7777-4777-8777-777777777777";
     const MEDIA_C: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
@@ -3269,6 +3662,23 @@ mod tests {
 
     fn rational_json(numerator: i64, denominator: u32) -> Value {
         json!({"numerator": numerator, "denominator": denominator})
+    }
+
+    fn snap_query(
+        session: &ProjectSession,
+        operation: super::TimelineSnapOperation,
+        clip_id: &str,
+        target_track_id: Option<&str>,
+        target_time: (i64, u32),
+    ) -> QueryEnvelope {
+        QueryEnvelope::timeline_snap(
+            session.project_id(),
+            session.project_instance_id(),
+            operation,
+            clip_id.parse().unwrap(),
+            target_track_id.map(|id| id.parse().unwrap()),
+            RationalTime::new(target_time.0, target_time.1).unwrap(),
+        )
     }
 
     fn insert_clip(
@@ -3501,11 +3911,15 @@ mod tests {
                     id: "timeline.clips",
                     schema_version: 1,
                 },
+                QueryDescriptor {
+                    id: "timeline.snap",
+                    schema_version: 1,
+                },
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
         assert_eq!(COMMANDS.len(), 13);
-        assert_eq!(QUERIES.len(), 5);
+        assert_eq!(QUERIES.len(), 6);
     }
 
     #[test]
@@ -5196,6 +5610,431 @@ mod tests {
         );
         assert_eq!(session.project(), &before);
         assert_eq!(session.history.undo, undo);
+    }
+
+    fn snap_fixture() -> ProjectSession {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/snap.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        add_track(&mut session, TRACK_B, "video").unwrap();
+        add_track(&mut session, TRACK_C, "audio").unwrap();
+        add_track(&mut session, TRACK_D, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (0, 1),
+            (2, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_B,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_C,
+            TRACK_B,
+            MEDIA_A,
+            (4, 1),
+            (1, 1),
+            (1, 2),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_D,
+            TRACK_B,
+            MEDIA_A,
+            (49, 10),
+            (2, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_E,
+            TRACK_B,
+            MEDIA_A,
+            (61, 10),
+            (3, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac",
+            TRACK_B,
+            MEDIA_A,
+            (8, 1),
+            (4, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaad",
+            TRACK_B,
+            MEDIA_A,
+            (9, 1),
+            (5, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc",
+            TRACK_D,
+            MEDIA_A,
+            (9, 1),
+            (6, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccd",
+            TRACK_D,
+            MEDIA_A,
+            (43, 5),
+            (7, 1),
+            (1, 5),
+        )
+        .unwrap();
+        session
+    }
+
+    #[test]
+    fn timeline_snap_resolves_zero_clip_boundaries_and_move_end_anchor_exactly() {
+        let session = snap_fixture();
+        let before_revision = session.project_revision();
+
+        let zero = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (1, 20),
+            ))
+            .unwrap();
+        let zero = zero.timeline_snap.unwrap();
+        assert_eq!(zero.resolved_target_time, RationalTime::ZERO);
+        assert!(zero.snapped);
+        assert_eq!(zero.moving_anchor, TimelineSnapMovingAnchor::Start);
+        assert_eq!(zero.target_kind, TimelineSnapTargetKind::TimelineZero);
+        assert_eq!(zero.target_time, RationalTime::ZERO);
+        assert_eq!(zero.target_track_id, None);
+        assert_eq!(zero.target_clip_id, None);
+
+        let clip_start = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (161, 20),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(
+            clip_start.resolved_target_time,
+            RationalTime::new(8, 1).unwrap()
+        );
+        assert_eq!(clip_start.target_kind, TimelineSnapTargetKind::ClipStart);
+        assert_eq!(clip_start.target_track_id.unwrap().to_string(), TRACK_B);
+        assert_eq!(
+            clip_start.target_clip_id.unwrap().to_string(),
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac"
+        );
+
+        let outside = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (51, 5),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert!(!outside.snapped);
+        assert_eq!(
+            outside.resolved_target_time,
+            RationalTime::new(51, 5).unwrap()
+        );
+        assert_eq!(outside.moving_anchor, TimelineSnapMovingAnchor::None);
+        assert_eq!(outside.target_kind, TimelineSnapTargetKind::None);
+
+        let end_anchor = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (13, 2),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert!(end_anchor.snapped);
+        assert_eq!(end_anchor.moving_anchor, TimelineSnapMovingAnchor::End);
+        assert_eq!(end_anchor.target_time, RationalTime::new(43, 5).unwrap());
+        assert_eq!(
+            end_anchor.resolved_target_time,
+            RationalTime::new(33, 5).unwrap()
+        );
+
+        let trim_start = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::TrimStart,
+                CLIP_A,
+                None,
+                (1, 20),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(trim_start.moving_anchor, TimelineSnapMovingAnchor::Start);
+        assert_eq!(trim_start.target_kind, TimelineSnapTargetKind::TimelineZero);
+        assert_eq!(trim_start.resolved_target_time, RationalTime::ZERO);
+
+        let trim_end = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::TrimEnd,
+                CLIP_A,
+                None,
+                (4, 1),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(trim_end.moving_anchor, TimelineSnapMovingAnchor::End);
+        assert_eq!(trim_end.target_kind, TimelineSnapTargetKind::ClipStart);
+        assert_eq!(trim_end.target_time, RationalTime::new(4, 1).unwrap());
+        assert_eq!(session.project_revision(), before_revision);
+    }
+
+    #[test]
+    fn timeline_snap_tie_breaks_are_deterministic_and_exclude_the_active_clip() {
+        let session = snap_fixture();
+        let candidate_tie = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (9, 1),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(candidate_tie.target_kind, TimelineSnapTargetKind::ClipEnd);
+        assert_eq!(
+            candidate_tie.target_clip_id.unwrap().to_string(),
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac"
+        );
+        assert_eq!(candidate_tie.target_track_id.unwrap().to_string(), TRACK_B);
+
+        let self_excluded = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::TrimStart,
+                CLIP_A,
+                None,
+                (2, 1),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert!(!self_excluded.snapped);
+
+        let mut short = fixed_session();
+        short
+            .execute_command(media_add(media_item(MEDIA_A, "file:///missing/tie.mov"), 0))
+            .unwrap();
+        add_track(&mut short, TRACK_A, "video").unwrap();
+        add_track(&mut short, TRACK_B, "video").unwrap();
+        insert_clip(&mut short, CLIP_A, TRACK_A, MEDIA_A, (5, 1), (0, 1), (1, 5)).unwrap();
+        insert_clip(
+            &mut short,
+            CLIP_B,
+            TRACK_B,
+            MEDIA_A,
+            (51, 10),
+            (1, 1),
+            (1, 1),
+        )
+        .unwrap();
+        let anchor_tie = short
+            .execute_query(snap_query(
+                &short,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (5, 1),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(anchor_tie.moving_anchor, TimelineSnapMovingAnchor::Start);
+    }
+
+    #[test]
+    fn timeline_snap_scans_unpaged_canonical_clips_and_keeps_query_read_only() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/unloaded.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        add_track(&mut session, TRACK_B, "video").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (1, 1),
+        )
+        .unwrap();
+        for index in 0..101 {
+            let clip_id = ClipId::generate().to_string();
+            insert_clip(
+                &mut session,
+                &clip_id,
+                TRACK_B,
+                MEDIA_A,
+                ((20 + index * 2) as i64, 1),
+                (0, 1),
+                (1, 1),
+            )
+            .unwrap();
+        }
+        let before_revision = session.project_revision();
+        let before_history = session.history.undo.clone();
+        let result = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_B),
+                (220, 1),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert!(result.snapped);
+        assert_eq!(result.target_kind, TimelineSnapTargetKind::ClipStart);
+        assert_eq!(result.target_time, RationalTime::new(220, 1).unwrap());
+        assert_eq!(
+            result.resolved_target_time,
+            RationalTime::new(220, 1).unwrap()
+        );
+        assert_eq!(session.project_revision(), before_revision);
+        assert_eq!(session.history.undo, before_history);
+    }
+
+    #[test]
+    fn timeline_snap_preconditions_and_arguments_are_strict() {
+        let session = snap_fixture();
+        let before_revision = session.project_revision();
+        let base = json!({
+            "operation": "move",
+            "clip_id": CLIP_A,
+            "target_track_id": TRACK_B,
+            "target_time": rational_json(0, 1),
+        });
+        let mut unknown = QueryEnvelope::timeline_snap(
+            session.project_id(),
+            session.project_instance_id(),
+            super::TimelineSnapOperation::Move,
+            ClipId::from_str(CLIP_A).unwrap(),
+            Some(TrackId::from_str(TRACK_B).unwrap()),
+            RationalTime::ZERO,
+        );
+        unknown.arguments = json!({
+            "operation": "move",
+            "clip_id": CLIP_A,
+            "target_track_id": TRACK_B,
+            "target_time": rational_json(0, 1),
+            "threshold": rational_json(1, 8),
+        });
+        assert_eq!(
+            code(&session.execute_query(unknown)),
+            OperationErrorCode::InvalidArguments
+        );
+
+        let mut missing_track = QueryEnvelope::timeline_snap(
+            session.project_id(),
+            session.project_instance_id(),
+            super::TimelineSnapOperation::Move,
+            ClipId::from_str(CLIP_A).unwrap(),
+            None,
+            RationalTime::ZERO,
+        );
+        missing_track.arguments = base.clone();
+        missing_track.arguments["target_track_id"] = Value::Null;
+        assert_eq!(
+            code(&session.execute_query(missing_track)),
+            OperationErrorCode::InvalidArguments
+        );
+
+        let trim_track = QueryEnvelope::timeline_snap(
+            session.project_id(),
+            session.project_instance_id(),
+            super::TimelineSnapOperation::TrimStart,
+            ClipId::from_str(CLIP_A).unwrap(),
+            Some(TrackId::from_str(TRACK_B).unwrap()),
+            RationalTime::ZERO,
+        );
+        assert_eq!(
+            code(&session.execute_query(trim_track)),
+            OperationErrorCode::InvalidArguments
+        );
+
+        let wrong_kind = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                CLIP_A,
+                Some(TRACK_C),
+                (0, 1),
+            ))
+            .unwrap_err();
+        assert_eq!(wrong_kind.code, OperationErrorCode::InvalidArguments);
+
+        let missing_clip = session
+            .execute_query(snap_query(
+                &session,
+                super::TimelineSnapOperation::Move,
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbd",
+                Some(TRACK_B),
+                (0, 1),
+            ))
+            .unwrap_err();
+        assert_eq!(missing_clip.code, OperationErrorCode::TimelineClipNotFound);
+        assert_eq!(session.project_revision(), before_revision);
     }
 
     #[test]
