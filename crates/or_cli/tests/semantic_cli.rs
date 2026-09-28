@@ -1191,6 +1191,35 @@ fn headless_timeline_cli_uses_commands_saves_v3_and_keeps_exact_times() {
     assert_eq!(inserted["command"]["command_id"], "timeline.clip.insert");
     assert_eq!(inserted["command"]["after_revision"], 4);
 
+    let snap = json_success(path_args(
+        &["timeline", "snap"],
+        "--project",
+        &project_path,
+        &[
+            "--clip",
+            supplied_clip_id,
+            "--operation",
+            "move",
+            "--track",
+            track_id,
+            "--at",
+            "1/16",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(snap["query_id"], "timeline.snap");
+    assert_eq!(
+        snap["timeline_snap"]["raw_target_time"],
+        serde_json::json!({"numerator": 1, "denominator": 16})
+    );
+    assert_eq!(
+        snap["timeline_snap"]["resolved_target_time"],
+        serde_json::json!({"numerator": 0, "denominator": 1})
+    );
+    assert_eq!(snap["timeline_snap"]["snapped"], true);
+    assert_eq!(snap["timeline_snap"]["target_kind"], "timeline_zero");
+
     let generated_clip = json_success(path_args(
         &["timeline", "insert-clip"],
         "--project",
@@ -1636,6 +1665,26 @@ fn attached_advanced_timeline_cli_dispatches_shared_commands_until_explicit_save
             "--json",
         ],
     ));
+    let snap = json_success(attach_args(
+        &["timeline", "snap"],
+        &descriptor,
+        &[
+            "--clip",
+            clip_id,
+            "--operation",
+            "trim-start",
+            "--at",
+            "0/1",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(snap["query_id"], "timeline.snap");
+    assert_eq!(snap["timeline_snap"]["snapped"], true);
+    assert_eq!(
+        host.describe().unwrap().summary.project_revision,
+        ProjectRevision::new(3)
+    );
     json_success(attach_args(
         &["timeline", "trim-clip"],
         &descriptor,

@@ -429,6 +429,69 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             render_timeline_clips(&result, json)
         }
+        "snap" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--operation",
+                    "--at",
+                    "--track",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let operation = required_name(&options, "--operation", json)?;
+            if !matches!(operation.as_str(), "move" | "trim-start" | "trim-end") {
+                return Err(CliError::usage(
+                    json,
+                    "--operation must be move, trim-start, or trim-end",
+                ));
+            }
+            let target_time =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let target_track_id = match options.value("--track") {
+                Some(value) => Some(parse_track_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--track must be valid UTF-8"))?,
+                    json,
+                )?),
+                None => None,
+            };
+            if operation == "move" && target_track_id.is_none() {
+                return Err(CliError::usage(json, "move snapping requires --track"));
+            }
+            if operation != "move" && target_track_id.is_some() {
+                return Err(CliError::usage(
+                    json,
+                    "trim snapping does not accept --track",
+                ));
+            }
+            let operation_value = match operation.as_str() {
+                "move" => "move",
+                "trim-start" => "trim_start",
+                "trim-end" => "trim_end",
+                _ => unreachable!(),
+            };
+            let result = timeline_query(
+                &path,
+                attached,
+                "timeline.snap",
+                json!({
+                    "operation": operation_value,
+                    "clip_id": clip_id,
+                    "target_track_id": target_track_id,
+                    "target_time": rational_value(target_time),
+                }),
+                json,
+            )?;
+            render_timeline_snap(&result, json)
+        }
         "add-track" => {
             let options = Options::parse(
                 action_args,
@@ -670,7 +733,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, snap, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -850,6 +913,34 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
         lines.push(format!("Next offset: {next_offset}"));
     }
     Ok(lines.join("\n"))
+}
+
+fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let snap = result
+        .timeline_snap
+        .as_ref()
+        .ok_or_else(|| CliError::operation_message(json, "timeline.snap returned no result"))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("timeline snap result is serializable"),
+        ));
+    }
+    let target = match snap.target_kind {
+        or_core::TimelineSnapTargetKind::None => "none".to_owned(),
+        or_core::TimelineSnapTargetKind::TimelineZero => "timeline_zero".to_owned(),
+        or_core::TimelineSnapTargetKind::ClipStart => "clip_start".to_owned(),
+        or_core::TimelineSnapTargetKind::ClipEnd => "clip_end".to_owned(),
+    };
+    Ok([
+        format!("Raw target: {}", format_cli_rational(snap.raw_target_time)),
+        format!(
+            "Resolved target: {}",
+            format_cli_rational(snap.resolved_target_time)
+        ),
+        format!("Snapped: {}", snap.snapped),
+        format!("Target kind: {target}"),
+    ]
+    .join("\n"))
 }
 
 fn render_timeline_command(
