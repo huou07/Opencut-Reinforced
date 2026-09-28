@@ -2,13 +2,16 @@
 
 ## Purpose
 
-Any behavior listed here has previously been verified and must remain working
-unless the product requirement is intentionally changed.
+This checklist separates the frozen HTML prototype reference from behavior
+verified in the production-direction Flutter application and behavior required
+by future execution checkpoints. Do not move an item into **PRODUCTION
+IMPLEMENTED** without an automated or hosted acceptance check. Before changing
+a related area, inspect the applicable section and re-run affected checks.
 
-Before modifying a related area, inspect this checklist. Before handing off,
-re-run affected checks.
+## PROTOTYPE REFERENCE
 
-## Editor entry
+The frozen prototype is a UX/product reference only. Its simulated state is
+not production architecture or implementation evidence.
 
 - Home recent project can open Editor.
 - Projects screen can open Editor.
@@ -16,40 +19,71 @@ re-run affected checks.
 - Template → Use Template enters Editor.
 - Import Media can enter the intended project/editor context.
 - Exiting Editor returns to the intended destination.
+- The prototype shows the Viewer as the dominant upper workspace region.
+- Prototype left panel and Inspector are collapsible/resizable.
+- Prototype timeline is vertically resizable.
+- Prototype Play/Pause occupies a stable fixed position.
+- Rapid prototype Play/Pause clicks do not move the hit target.
+- Prototype timeline ruler seeking works.
+- Prototype timeline playhead dragging works.
+- Prototype Previous/Next Frame uses the displayed project FPS.
+- Prototype common editing toolbar commands show consistent icons.
+- Prototype More opens a visible advanced-command menu.
+- Prototype More menu commands remain reachable and clickable.
+- Prototype menus are not visually clipped by their toolbar/container.
+- Prototype mobile flow shows a preview, transport, timeline, horizontal scroll,
+  touch scrubbing, and tool sheets.
+- Prototype theme switching does not alter navigation or editor structure.
+- Prototype custom theme import rejects unsafe/arbitrary CSS or script input.
+- Prototype self-test passes.
+- Prototype browser console has no unexpected errors or warnings caused by the
+  prototype.
 
-## Project state
+These items are retained as reference guards and are not claims that playback,
+frame stepping, mobile playback-like behavior, or marker UI is implemented in
+production.
 
-- Switching between projects preserves each project's independent in-memory
-  demo timeline.
-- Opening a new empty project must not inherit another project's timeline.
+## PRODUCTION IMPLEMENTED
 
-## Desktop Editor
+The following behavior is implemented and covered by the current Rust/Flutter
+headless or widget-level checks:
 
-- Viewer remains the dominant upper workspace region.
-- Left panel and Inspector remain collapsible/resizable.
-- Timeline remains vertically resizable.
-- Play/Pause occupies a stable fixed position.
-- Rapid Play/Pause clicks do not move the hit target.
-- Timeline ruler seeking works.
-- Timeline playhead dragging works.
-- Previous/Next Frame works using project FPS.
-- Common editing toolbar commands show consistent icons.
-- More opens a visible advanced-command menu.
-- More menu commands remain reachable and clickable.
-- No menu may be visually clipped by its toolbar/container.
-- A project timeline clip action menu exposes exactly Move, Trim, Split, Delete,
-  and Ripple Delete.
-- Trim shows the current timeline start/end, an Edge selector, and an exact
-  Timeline edge field; changing Edge does not overwrite an intentionally edited
-  value.
-- Split shows the current timeline start/end and an empty exact Split at field;
-  it does not ask the UI to generate the right clip ID.
-- Ripple Delete clearly confirms that only later clips on the selected track
-  shift left and that other tracks do not move.
-- Timeline edit dialogs refresh from the Rust project state after the action;
-  they do not optimistically resize or shift clip geometry.
+### Project and shell
 
-### Phase 6E1 pointer editing invariants
+- New/open project workflows create or open a real Rust-owned project.
+- Home, Projects, Templates, Asset Library, Settings, and Editor shell routes
+  remain reachable through the Focused Monochrome shell.
+- Create/open/close/switch/exit flows preserve dirty-state guards, explicit
+  save, recovery inspection/apply/discard, and exact-base conflict behavior.
+- A new empty project does not inherit another project's canonical timeline.
+- Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
+  slots follow the Focused Monochrome workspace layout; no marketing banners,
+  scenic backgrounds, glow-heavy decoration, or fake metrics are accepted.
+- Registered product screens and registered Editor panels remain reachable;
+  developer features remain discoverable under Settings → Advanced / Developer.
+
+### Timeline and project state
+
+- The workspace displays canonical Video/Audio track order and bounded clip
+  read models with derived V#/A# labels.
+- Video/Audio tracks can be added and empty tracks removed; clips can be
+  inserted at exact times, moved between same-kind tracks, explicitly deleted,
+  trimmed, split, and ripple-deleted through Rust commands.
+- Timeline action menus expose exactly Move, Trim, Split, Delete, and Ripple
+  Delete. Dialogs show current timing, exact fields, and Rust-generated split
+  IDs where applicable.
+- Ripple Delete confirms that only later clips on the selected track shift left;
+  other tracks and global markers do not move.
+- Timeline dialogs refresh from Rust after a command and never apply optimistic
+  clip geometry.
+- Flutter stores only disposable bounded read pages, gesture-local ghosts,
+  dialog state, and presentation state; canonical state remains in Rust.
+- Attached CLI edits refresh the open Flutter workspace through ordered
+  `project_changed` events.
+- Clip pages are bounded and loaded on demand; exact rational values remain
+  exact across the bridge and are converted to doubles only for layout.
+
+### Phase 6E1 pointer editing
 
 - The project timeline exposes a visible default-on Snap toggle with an
   accessible label and active state; changing it does not persist a project
@@ -59,52 +93,73 @@ re-run affected checks.
   opposite-kind lane without dispatching a mutation.
 - Small left and right clip-edge handles have pointer priority and expose
   accessible start/end trim labels. Pointer deltas are quantized once to the
-  nearest 1 ms from the original exact time; repeated updates do not
-  accumulate rounded values.
-- Release performs at most one drop-time snap query and then uses the existing
-  Rust move or trim command. A successful snap may show a temporary cyan guide
-  before that command completes; there is no continuous snap-query loop.
+  nearest 1 ms from the original exact time; repeated updates do not accumulate
+  rounded values.
+- Release performs at most one drop-time Snap V1 query and then uses the
+  existing Rust move or trim command. A successful snap may show temporary cyan
+  feedback before the command completes.
 - Snap resolution uses the fixed `1/8`-second threshold and canonical timeline
   zero plus all other clip boundaries, including clips outside loaded Flutter
   pages. Revision, project-instance, project-switch, disposal, and attached
   CLI invalidation guards reject stale results without retry.
 - Exact Move and Trim dialogs remain available for arbitrary exact `NUM/DEN`
-  values. Pointer editing does not add media-to-timeline insertion, track
-  reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback,
-  markers, decode, rendering, or export.
+  values.
 
-## Mobile Editor
+### Preservation and accessibility
 
-- Preview is visible.
-- Transport is visible.
-- Timeline is visible.
-- Timeline clips are visible.
-- Timeline can scroll horizontally.
-- Timeline ruler/playhead can be scrubbed by touch/pointer.
-- Editor tool dock is visible.
-- Opening a tool uses the mobile panel/sheet pattern without removing the
-  timeline permanently.
-- Closing a tool sheet returns to the same editor/timeline state.
+- Keyboard navigation, visible focus, usable touch targets, and status that is
+  not communicated by color alone remain required for implemented UI.
+- Simple Mode, when present, is only a visibility setting over the same state
+  and command model and does not remove core workflows.
 
-## Feature preservation
+## PRODUCTION REQUIRED FUTURE
 
-- All registered product screens remain reachable.
-- All registered Editor panels remain reachable.
-- Developer features remain discoverable through Settings → Advanced /
-  Developer.
-- Simple Mode must not remove major core workflows.
+These items are required by the execution plan but are not production claims
+today.
 
-## Themes
+### Phase 6E2B marker UI
 
-- Theme switching does not alter navigation or editor structure.
-- Custom theme import accepts valid declarative theme JSON.
-- Unsafe/arbitrary CSS/script input is rejected.
+- Typed marker read models and bounded marker paging cross the existing bridge.
+- Marker ruler and Add, Move, Rename, and Delete actions use the existing Rust
+  marker commands and refresh from Rust after save/reopen/recovery.
+- Flutter pointer editing switches from Snap V1 to canonical marker-aware Snap
+  V2 with stale-result guards and visible marker-aware feedback.
 
-## Runtime
+### Phase 7 playback and preview
 
-- Prototype self-test passes.
-- Browser console contains no unexpected errors.
-- Browser console contains no unexpected warnings caused by the prototype.
+- A real viewer consumes an approved native/external texture or equivalent
+  zero-copy surface contract; full-rate frames do not travel as copied Dart
+  byte arrays.
+- Play/Pause, transport, seek, scrubbing, playhead, ruler, and Previous/Next
+  Frame use runtime work and do not mutate `ProjectRevision`.
+- Frame stepping uses the exact project frame/time policy, and stale frames may
+  be dropped without corrupting canonical state.
+- Preview behavior remains consistent with export semantics.
 
-Add future regression guards to this file whenever a real UI/UX regression is
-fixed. Keep this a practical invariant checklist, not a changelog or test report.
+### Phase 8 Desktop MVP
+
+- Selection, duplicate, track enabled/locked/solo, timeline zoom, direct
+  media-to-timeline insertion, transform/crop/opacity, basic text/manual
+  captions, basic gain/pan/fades, basic transitions/effects, export, autosave,
+  recovery, save/reopen, and preview/playback are accepted at their locked
+  checkpoints.
+- Automatic captions are not a Desktop MVP acceptance item; they belong to
+  Phase 10.
+- Complex linked clips, grouping, nested timelines, and multicamera are
+  advanced Phase 13 behavior unless re-promoted by a plan amendment.
+
+### Mobile and later product behavior
+
+- Android SAF project/media access, MediaCodec/native-buffer/Vulkan/wgpu paths,
+  resource-aware fallback, and mobile-native editing UX are accepted only in
+  Phase 9 hosted/device checks.
+- Production mobile preview, transport, timeline visibility, horizontal scroll,
+  touch scrubbing, and tool sheets are future requirements; prototype behavior
+  is not evidence.
+- Phase 10–16 requirements follow their locked phase documents for captions,
+  AI, templates, dubbing, advanced editing, generation, community packaging,
+  plugins, and interchange.
+
+Future regression guards must name their checkpoint and remain aligned with
+`docs/execution/PLAN.json`; do not weaken an implemented guard to make a new
+feature pass.

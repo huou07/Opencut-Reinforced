@@ -11,6 +11,8 @@ This is the complete planned product scope, not a list of implemented features. 
 
 Where a product area spans stages, each group of capabilities is labeled separately.
 
+The machine-readable implementation order is [docs/execution/README.md](execution/README.md). Product labels describe scope; `PLAN.json` and `STATE.json` decide which checkpoint may execute next.
+
 ## Product principles
 
 - **Human, CLI, and agent parity:** editing operations converge on the same domain commands.
@@ -33,7 +35,12 @@ Where a product area spans stages, each group of capabilities is labeled separat
 
 ## Editor core
 
-**MVP FOUNDATION:** multitrack video, audio, text, and caption tracks; selection; insert and move; trim; split; ripple delete; delete; duplicate; link and unlink; snap; markers; track lock, visibility, mute, and solo; timeline zoom and horizontal scroll; playhead, scrubbing, frame stepping, and follow playhead; undo and redo; save and reopen.
+**MVP FOUNDATION:** multitrack video, audio, text, and caption tracks; selection; insert and move; trim; split; ripple delete; delete; duplicate; snap; markers; track lock, visibility, mute, and solo; timeline zoom and horizontal scroll; playhead, scrubbing, frame stepping, and follow playhead; undo and redo; save and reopen.
+
+Complex linked-clip and group semantics are **ADVANCED** editing scope (Phase
+13), not a Desktop MVP requirement. Basic track enabled/locked/solo behavior is
+MVP; linked/unlinked relationships are intentionally deferred until their typed
+semantics and migration rules are approved.
 
 **PLANNED:** grouping and ungrouping; compound clips; nested timelines; adjustment layers; keyframes; graph editor.
 
@@ -46,6 +53,33 @@ Where a product area spans stages, each group of capabilities is labeled separat
 **MVP FOUNDATION:** fit-to-view, 25%, 50%, 100%, and 200% zoom; playback; frame stepping; loop.
 
 **PLANNED:** fullscreen preview; cinema or viewer-focus mode; safe areas, grid, guides, rulers, bounding boxes, and transform handles.
+
+## Desktop MVP implementation map
+
+The optimized Desktop MVP milestone is represented by the execution graph from
+6E2B through 8F:
+
+- **Timeline foundation (6E2B):** persistent marker read models, marker ruler,
+  Add/Move/Rename/Delete UI, marker-aware pointer snap, and save/reopen/recovery
+  UI hardening.
+- **Runtime foundation (7A–7H):** capability policy, `RenderSnapshot`,
+  `FrameDescriptor`/`FrameLease`, wgpu/render, software and hardware media
+  paths, audio clock, viewer transport, playback, scrubbing, frame step, and
+  performance/hardening gates.
+- **Project/timeline gate (8A):** typed sequence settings and the remaining
+  migration/command/query contracts.
+- **Timeline usability (8B):** selection, duplicate, track enabled/locked/solo,
+  timeline zoom, direct media-to-timeline insertion, and bounded viewport input.
+- **Video (8C):** typed transform, crop, and opacity.
+- **Text (8D):** basic text and manual captions. Automatic captions are Phase
+  10, not Desktop MVP.
+- **Audio/effects (8E):** basic gain, pan, fades, transitions, and effects.
+- **Release behavior (8F):** export, autosave, recovery, save/reopen, and
+  preview/export hardening.
+
+Linked clips, grouping, nested timelines, multicamera, and other complex
+relationship semantics remain advanced Phase 13 scope unless re-promoted by a
+separate plan amendment.
 
 ## Video tools
 
@@ -118,6 +152,13 @@ A theme may set approved semantic tokens. It cannot execute code or redefine app
 ## AI assist
 
 **PLANNED:** automatic captions, translation, dubbing, silence and filler removal, scene detection, auto reframe, subject detection and tracking, background removal, highlight extraction, and transcript editing.
+
+Phase 10 defines the provider-independent task boundary: `Transcribe`,
+`Translate`, `TextToSpeech`, `Segment`, `DetectScene`, `PlanEdit`,
+`GenerateImage`, `GenerateVideo`, and `GenerateAudio`. Providers return
+reviewable proposals, analyses, or assets with model manifests and provenance;
+only normal validated commands apply accepted results. Stored credentials never
+enter project, CLI, or agent output.
 
 **FUTURE:** semantic media search.
 

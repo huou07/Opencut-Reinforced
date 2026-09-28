@@ -26,6 +26,8 @@ This map points to the current source of truth. Read the documents relevant to y
 | [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |
 | [TOOLING.md](TOOLING.md) | Local development baseline, hosted platform verification, optional tools, and repository safeguards |
 | [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) | Preserved prototype behavior and future UI regression guards |
+| [execution/README.md](execution/README.md) | Machine-readable architecture lock, checkpoint graph, and execution contract |
+| [adr/README.md](adr/README.md) | Architecture decision records |
 
 ## Suggested task routing
 

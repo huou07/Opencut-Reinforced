@@ -303,3 +303,36 @@ GitHub-hosted CI is authoritative for build correctness, automated tests, platfo
 Use tiny, self-created or legally safe media fixtures. Keep fixture provenance and rights clear. Avoid shipping downloaded models or copyrighted media as test data.
 
 A check that did not run must never be reported as passing. Report its exact status and reason. Keep a failing or unavailable check visible rather than silently omitting it. Prototype simulation tests are not production application tests.
+
+## Execution-plan infrastructure
+
+The standard-library-only execution infrastructure has focused tests for valid
+plan/state validation, duplicate IDs, missing dependencies, cycles, multiple
+`NEXT` states, unfinished prerequisites, unknown state IDs, dirty-worktree
+refusal, non-zero runner exit, and exactly-one-checkpoint transitions. The
+repository hygiene check runs both the execution-plan and architecture-policy
+checkers. These checks do not mutate plan or state.
+
+## Future verification layers
+
+### CONFORMANCE
+
+Normal CI should verify control-plane and runtime contracts with deterministic,
+small fixtures: exact `RationalTime`, snapshot revision behavior, semantic
+commands/queries, frame lease ownership, software fallback, bounded queues,
+cancellation, preview/export semantic parity, provider/task schemas, model
+manifests, permissions, and migration/recovery. Platform jobs remain the
+authority for native bridge and device/runtime behavior.
+
+### PERFORMANCE / HARDWARE LAB
+
+Dedicated known hardware or self-hosted runners should measure Phase 7 before
+hardware paths are treated as improvements. Record decode throughput, seek
+latency, A/V drift, audio underrun, dropped frames, copy count, RAM, GPU memory
+and resources, queue depths, and software/hardware fallback rate, together with
+device, driver, backend, codec, fixture, and configuration. Ordinary hosted CI
+timings are not a hardware-performance authority.
+
+Phase 7's performance gate must keep those measurements separate from product
+correctness and must not justify a dependency, native path, or removed fallback
+without repeatable evidence.

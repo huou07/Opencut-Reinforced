@@ -5,7 +5,9 @@
 
 Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
 
-Phase 4's project/application foundation is complete. Phase 5 Media Foundation is in progress/planned; implement only the explicitly scoped checkpoint.
+The repository execution state is maintained in `docs/execution/STATE.json` and
+selected by `docs/execution/PLAN.json`. Do not maintain current-phase status in
+this file.
 
 Do not assume unfinished features already exist.
 
@@ -83,6 +85,35 @@ Before making changes:
 6. Confirm the requested scope.
 
 Do not guess when the repository already contains the answer.
+
+Before choosing work, run:
+
+    python3 scripts/execution_plan.py status
+    python3 scripts/execution_plan.py context <checkpoint-id>
+
+When the user says “continue”, execute only the checkpoint currently marked
+`NEXT`. When the user names a phase, follow the machine plan and its locked
+phase specification. When the user says “finish desktop MVP”, follow the
+`desktop-mvp` milestone graph. If no external fresh-process supervisor is
+active, execute one checkpoint and stop rather than chaining checkpoints in a
+single model context.
+
+The execution source-of-truth order is:
+
+1. This file for permanent repository behavior, safety, and execution rules.
+2. `docs/execution/PLAN.json` for the immutable checkpoint graph.
+3. `docs/execution/STATE.json` for mutable `DONE`, `NEXT`, and `PLANNED` state.
+4. `docs/execution/phases/*.md` for locked checkpoint contracts.
+5. `docs/ARCHITECTURE.md` for human-readable architecture.
+6. `docs/TECHNICAL_PLAN.md` for detailed subsystem design.
+7. `docs/PRODUCT.md` for product capability scope.
+8. `docs/ROADMAP.md` for human-readable roadmap status.
+9. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
+
+Feature agents may not edit the locked checkpoint specification or permanent
+architecture invariants. If repository reality conflicts with either, stop and
+report the exact conflict. Plan amendments require a separate architecture
+plan task.
 
 ## Minimal implementation rule
 

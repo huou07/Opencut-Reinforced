@@ -32,6 +32,36 @@ required_files=(
   docs/RELEASE.md
   docs/TOOLING.md
   docs/UX_ACCEPTANCE.md
+  docs/execution/README.md
+  docs/execution/PLAN.json
+  docs/execution/STATE.json
+  docs/execution/architecture-policy.json
+  docs/execution/ARCHITECTURE_INVARIANTS.md
+  docs/execution/AGENT_EXECUTION.md
+  docs/execution/PHASE_SPEC_TEMPLATE.md
+  docs/execution/phases/PHASE_6.md
+  docs/execution/phases/PHASE_7.md
+  docs/execution/phases/PHASE_8.md
+  docs/execution/phases/PHASE_9.md
+  docs/execution/phases/PHASE_10.md
+  docs/execution/phases/PHASE_11.md
+  docs/execution/phases/PHASE_12.md
+  docs/execution/phases/PHASE_13.md
+  docs/execution/phases/PHASE_14.md
+  docs/execution/phases/PHASE_15.md
+  docs/execution/phases/PHASE_16.md
+  docs/adr/README.md
+  docs/adr/0001-control-and-realtime-planes.md
+  docs/adr/0002-wgpu-render-spine-and-native-interop.md
+  docs/adr/0003-frame-memory-domain-and-ownership.md
+  docs/adr/0004-runtime-capabilities-and-provider-selection.md
+  docs/adr/0005-ai-provider-boundary.md
+  docs/adr/0006-autonomous-agent-execution-contract.md
+  scripts/execution_plan.py
+  scripts/check_execution_plan.py
+  scripts/check_architecture_policy.py
+  scripts/agent_supervisor.py
+  scripts/test_execution_infra.py
 )
 
 for path in "${required_files[@]}"; do
@@ -121,6 +151,14 @@ while IFS= read -r -d '' path; do
     fail "could not determine tracked file size: $path"
   fi
 done < <(git ls-files -z)
+
+if ! python3 scripts/check_execution_plan.py; then
+  failed=1
+fi
+
+if ! python3 scripts/check_architecture_policy.py; then
+  failed=1
+fi
 
 if (( failed != 0 )); then
   printf 'Repository hygiene checks failed.\n' >&2

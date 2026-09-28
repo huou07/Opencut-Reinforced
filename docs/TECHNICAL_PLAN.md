@@ -1,5 +1,27 @@
 # Technical Plan
 
+## Execution lock and implementation order
+
+The machine-readable architecture and execution authority is [docs/execution/README.md](execution/README.md), with the immutable graph in [PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json), and locked phase contracts in [execution/phases](execution/phases). The current state is Phase 5 complete, Phase 6 through 6E2A complete, and 6E2B next. This document describes design direction; it does not authorize skipping the current checkpoint or creating future runtime crates early.
+
+The implementation order preserves the control-plane/runtime-plane boundary:
+Rust `or_core` owns canonical project/application state; a future `or_runtime`
+coordinates capabilities, snapshots, queues, budgets, and fallback; `or_media`
+handles demux/decode/seek; `or_render` uses the wgpu spine; `or_audio` owns
+clocked realtime audio; and `or_ai` owns task/provider/model boundaries. These
+are future boundaries, not current workspace crates.
+
+Runtime work consumes immutable `RenderSnapshot` values and uses
+`FrameDescriptor`/`FrameLease` ownership. Full-rate frames do not travel as
+copied Dart byte arrays. Native Metal, DX12, Vulkan, CUDA, VideoToolbox,
+MediaCodec, hardware-buffer, and DMABUF paths stay behind adapters with a
+software correctness fallback. Apple MLX/MPS/Core ML, NVIDIA CUDA/NVDEC/NVENC,
+Windows ML/providers, and Android AI runtimes are capability/provider choices,
+not direct `or_core` dependencies.
+
+See the [ADR set](adr/README.md) for durable decisions and the phase documents
+for checkpoint-specific tests, dependency gates, and stop conditions.
+
 ## Status
 
 Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A adds foundational `or_core` values for exact time, project identity, runtime instance identity, and project revision. Phase 4B adds a minimal `ProjectDocument` and strict `.orproj` v1 JSON codec. Phase 4C adds `ProjectSession`, static command/query catalogs and versioned envelopes, `project.rename` v1, and `project.summary` v1. Phase 4D adds rename-only atomic transaction groups, normalized `ChangeSet` results, and in-memory session-local undo/redo. Phase 4E1 adds bounded filesystem load, atomic save, and race-safe no-clobber creation. Phase 4E2 adds a separate snapshot recovery checkpoint sidecar, exact saved-base validation, bounded strict inspection, and explicit apply/discard. Phase 4F adds shared application dispatch, exact-base file sessions, local IPC v1, and headless/attached semantic CLI operations. Phase 4UI-2 connects the Flutter desktop project lifecycle to one Rust-owned `LiveProjectHost` shared by its typed bridge handle and authenticated local IPC. It adds explicit recovery, dirty-state and exit guards, and event-driven read-model refresh. Phase 5A adds typed media/job identities, structured metadata, a bounded external `ffprobe` metadata adapter, and read-only CLI inspection. Phase 5B adds `.orproj` v2 with v1 migration, persistent local-file media references, prepared import, `media.add`/`media.remove`, `media.list`, undo/redo, headless and attached CLI operations, and desktop Flutter library integration. Phase 5C adds a bounded background Job Manager and a disposable thumbnail/waveform cache store (deterministic cache keys, bounded atomic storage, explicit clear paths). Phase 5D adds production source fingerprints, thumbnail/waveform generation, and Job Manager/CacheStore integration; Phase 5E adds a persistent disposable SQLite cache index and automatic LRU eviction; Phase 5F adds core-only file-backed Proxy V1 generation. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Phase 6B provides application-owned basic track/clip editing, bounded timeline queries, existing session history integration, and headless/attached CLI parity. Phase 6C connects exact Rust timeline read models and existing commands to a real Flutter track/clip view. Phase 6D adds exact trim, split, and track-local ripple-delete semantics across core, CLI, bridge, and Flutter dialogs without changing project schema or IPC version. Phase 6E1 adds pointer move and trim editing, a fixed-threshold canonical snap query, same-kind lane targeting, exact 1 ms pointer quantization, and attached-session stale-result protection without changing schema, recovery, history ownership, or IPC. Phase 6E2A adds persistent global markers, project schema v4 with v1/v2/v3 migrations, marker commands/history/query, marker-aware Snap V2, and CLI parity while Flutter remains on Snap V1. Android SAF, media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, decode, playback, and rendering remain unimplemented. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ROADMAP.md](ROADMAP.md) for current status.

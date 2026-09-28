@@ -6,6 +6,10 @@ Stable releases: **none**.
 
 Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are for contributors and testers to inspect the native shell and architecture progress. OR remains a pre-MVP project, not a usable video editor.
 
+The current architecture/execution lock is documentation and repository
+infrastructure only. This checkpoint does not build, publish, or update a
+Developer Preview.
+
 ## Developer Preview
 
 Developer Previews are automated nightly or manually dispatched from `main` only. A preview is published only after the exact source commit has a successful Platform verification run. Its `dev-<12-character-commit-sha>` tag traces it to that source commit, and duplicate releases for the same commit are skipped.

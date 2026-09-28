@@ -4,6 +4,18 @@
 
 This is product guidance, not legal advice. OR is pre-MVP; review exact dependency versions, build options, assets, and model artifacts again before distribution.
 
+The architecture execution lock is [docs/execution/README.md](execution/README.md).
+Its policy checker keeps `or_core` free of runtime/platform dependencies and
+requires an explicit gate before adding wgpu, FFmpeg bindings, native interop,
+AI runtimes, model artifacts, or provider integrations. Runtime capability
+selection, software fallback, model manifests, and secret boundaries are
+architecture requirements, not optional cleanup.
+
+The future AI boundary is task-oriented and provider-independent. Tasks return
+proposals, analyses, or assets; normal validated commands apply accepted
+results. Provider credentials remain in secure storage and are never returned to
+agents or CLI callers as plaintext.
+
 ## OR license
 
 The Opencut Reinforced repository is licensed under the MIT License. Third-party dependencies, media, fonts, templates, plugins, and model artifacts retain their own terms and require individual review.

@@ -128,3 +128,64 @@ OS secure storage is the intended home for provider credentials. The application
 ## Future directions
 
 Local and optional cloud AI providers, declarative templates and themes, a GitHub-first static community registry, and sandboxed plugins are future extensions. Early community distribution does not require an OR-hosted backend. A WASM/WASI-style plugin sandbox is only a candidate until plugin work starts and security research is refreshed. Native and OpenFX compatibility is later and higher trust.
+
+## Architecture execution lock
+
+The machine-readable authority is [docs/execution/README.md](execution/README.md),
+with permanent invariants in [ARCHITECTURE_INVARIANTS.md](execution/ARCHITECTURE_INVARIANTS.md),
+the immutable checkpoint graph in [PLAN.json](execution/PLAN.json), and mutable
+progress in [STATE.json](execution/STATE.json). The lock separates a semantic
+control plane from a realtime runtime plane and does not claim that future
+runtime crates or platform bindings already exist.
+
+The control plane is:
+
+    Flutter / CLI / Agent
+              |
+       typed commands and queries
+              v
+          or_core
+              |
+       ProjectDocument + history + persistence
+
+The runtime plane is:
+
+    ProjectDocument -> evaluated RenderSnapshot
+                    -> media decode / audio / render workers
+                    -> preview viewer or export
+
+`ProjectDocument` and `ProjectRevision` remain canonical. A `RenderSnapshot` is
+an immutable, versioned evaluated view for a requested exact time/range and
+revision. Per-frame playback, decode, audio, render, and export work consumes
+that snapshot and never runs a project command or increments `ProjectRevision`.
+
+`FrameDescriptor` describes a software frame, GPU texture, decoder surface, or
+external/shared surface: format, dimensions, exact timestamp, and access mode.
+`FrameLease` owns its lifetime and explicit release path. The bridge must not
+copy full-rate decoded frames into Dart byte arrays. Native handles remain
+runtime-only and are never serialized into projects, IPC, or cache identity.
+
+The future crate boundaries are conceptual and are created only by their plan
+checkpoints: `or_core` owns domain/project/application contracts; `or_runtime`
+owns capability, scheduling, budgets, and runtime coordination; `or_media` owns
+demux/decode/seek and software or hardware frame sources; `or_render` owns the
+wgpu render spine and graph; `or_audio` owns clocks, buffers, and realtime
+audio; and `or_ai` owns task/provider/model boundaries. No future crate is
+created by this architecture-only checkpoint.
+
+wgpu is the shared render spine. Metal, DX12, Vulkan, CUDA, VideoToolbox,
+MediaCodec, DMABUF, hardware buffers, and other native interop belong behind
+runtime adapters. Apple direction is Metal/wgpu interop, VideoToolbox decode,
+optional MPS compute, and Core ML/MLX through capability/provider boundaries.
+NVIDIA CUDA, NVDEC, and NVENC are optional measured runtime paths; Vulkan and
+DX12 remain explicit graphics/interoperability choices. Windows ML/provider
+selection is capability-gated. Android uses SAF for storage, MediaCodec and
+hardware-buffer paths where proven, Vulkan/wgpu for rendering, and a software
+fallback; mobile AI runtime selection is likewise provider/capability based.
+
+AI tasks are provider-independent (`Transcribe`, `Translate`, `TextToSpeech`,
+`Segment`, `DetectScene`, `PlanEdit`, `GenerateImage`, `GenerateVideo`, and
+`GenerateAudio`). Providers return structured proposals, analyses, or assets
+with model manifests and provenance. Normal validated application commands,
+revision preconditions, and explicit permissions are required to apply a
+result. Stored credentials remain outside project, agent, and CLI data.

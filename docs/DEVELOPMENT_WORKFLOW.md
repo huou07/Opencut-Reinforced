@@ -4,6 +4,25 @@
 
 This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` storage, recovery, local IPC, and semantic CLI operations. Phase 4UI-1 provides the Flutter visual shell; Phase 4UI-2 connects desktop create/open/save, explicit recovery, dirty-state guards, and Flutter-hosted IPC to one Rust live project host. Phase 5A adds typed media/job identities, structured metadata, a bounded read-only local probe, and CLI inspection. Phase 5B adds the persistent media library, v1-to-v2 migration, prepared import, shared media commands/query, headless and attached CLI operations, and desktop Flutter integration. Phase 5C adds a bounded background Job Manager and a disposable thumbnail/waveform CacheStore. Phase 5D adds bounded source-fingerprint v1, system-`ffmpeg` thumbnail/waveform PNG generation through the Job Manager and CacheStore, typed bridge requests and artifact events, and read-only desktop Media-panel preview consumption. Phase 5E adds a persistent disposable SQLite index and sequence-based LRU eviction under cache pressure. Cache/jobs/index metadata do not mutate canonical project state or increment `ProjectRevision`. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6A adds the timeline domain and `.orproj` v3 persistence, including v1/v2 migrations and the `MEDIA_IN_USE` removal guard. Phase 6B adds shared track/clip commands, bounded queries, session-local undo/redo, and headless/attached CLI parity. Phase 6C connects those commands and bounded read models to real project track/clip visualization and exact-time dialogs. Phase 6D adds exact trim, split, and track-local ripple-delete commands, compact history recipes, CLI parity, typed bridge methods, and Flutter action dialogs. Phase 6E1 adds pointer move/trim editing, a fixed-threshold canonical snap query, same-kind lane targeting, nearest-ms gesture quantization, stale-result guards, and read-only headless/attached snap inspection. Phase 6E2A adds persistent global markers, schema-v4 migration, marker commands/history/query, marker-aware Snap V2, and headless/attached CLI parity while deliberately leaving Flutter on Snap V1. Phase 6 is IN PROGRESS, with 6A–6E2A DONE and 6E2B NEXT. Marker UI, media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, and rendering remain future work. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
 
+## Execution-plan-first workflow
+
+Before any feature, architecture, or automation work, read the current machine
+state:
+
+```sh
+python3 scripts/execution_plan.py status
+python3 scripts/execution_plan.py context <checkpoint-id>
+```
+
+The immutable graph in `docs/execution/PLAN.json` selects the only valid next
+checkpoint; `docs/execution/STATE.json` records `DONE`, `NEXT`, and `PLANNED`.
+“Continue” means the current `NEXT`. A named phase or milestone is resolved by
+the plan, not by prose or model judgment. Without an external fresh-process
+supervisor, one model context executes one checkpoint and stops. Feature agents
+may not edit locked phase specifications or permanent invariants. A conflict
+requires a separate plan amendment/architecture decision rather than a silent
+scope expansion.
+
 Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
 
 Keep the Phase 5A `media probe` operation read-only: it accepts a local filesystem `Path`, returns validated metadata, and never creates a `MediaId`, opens or mutates a project, or increments `ProjectRevision`. Phase 5B import prepares one selected file with the existing probe, canonicalizes its path, builds a validated local `file:` URI and fresh `MediaId`, then submits `media.add` through the application path. Project loading validates stored URIs but never opens or probes referenced sources. The CLI and desktop import require a system-provided `ffprobe`.

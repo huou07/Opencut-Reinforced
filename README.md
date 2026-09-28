@@ -10,6 +10,8 @@ The repository contains a Rust core and CLI, project identity and revision, exac
 
 Stable application releases: none. Debug Developer Preview prereleases are available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for native shell, project lifecycle, CLI, and architecture evaluation. The interactive HTML prototype remains a frozen product and UX reference, not the final application or its production architecture.
 
+The machine-readable architecture and execution authority is [docs/execution/README.md](docs/execution/README.md), with the immutable checkpoint graph in [PLAN.json](docs/execution/PLAN.json) and mutable progress in [STATE.json](docs/execution/STATE.json). The current architecture lock is repository infrastructure only; it does not implement 6E2B, start Phase 7, or publish a Developer Preview.
+
 ## Vision
 
 OR aims to be a powerful but approachable editor that is desktop-first, Android-capable, local-first where practical, agent-native, and open to community-created content. Editing state should stay structured and inspectable, and editing behavior should be deterministic across the GUI, CLI, and agents.
@@ -47,7 +49,7 @@ iOS and web are not current release targets.
 
 ## Design and documentation
 
-The application design source of truth is [DESIGN.md](DESIGN.md). The full documentation map is [docs/INDEX.md](docs/INDEX.md), including the [product vision](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [roadmap](docs/ROADMAP.md).
+The application design source of truth is [DESIGN.md](DESIGN.md). The full documentation map is [docs/INDEX.md](docs/INDEX.md), including the [product vision](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), and [execution control plane](docs/execution/README.md).
 
 ## Contributing
 
