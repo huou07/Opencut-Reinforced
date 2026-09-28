@@ -128,6 +128,10 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.clip.trim",
             "timeline.clip.split",
             "timeline.clip.ripple_delete",
+            "timeline.marker.add",
+            "timeline.marker.move",
+            "timeline.marker.rename",
+            "timeline.marker.delete",
         ]
     );
     assert_eq!(
@@ -143,6 +147,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.tracks",
             "timeline.clips",
             "timeline.snap",
+            "timeline.markers",
         ]
     );
     let describe_json = serde_json::to_string(&describe).unwrap();
@@ -297,6 +302,85 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     assert!(!PathBuf::from(endpoint).exists());
     assert_eq!(load_project_file(project_path).unwrap().name(), "D");
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn local_transport_round_trips_marker_commands_and_bounded_query() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    new_project(&project_path);
+    let server = LocalIpcServer::start(
+        ProjectFileSession::open(&project_path).unwrap(),
+        Some(&descriptor_path),
+    )
+    .unwrap();
+    let client = LocalIpcClient::open(&descriptor_path).unwrap();
+    let describe = client.describe().unwrap();
+    let marker_id = "11111111-1111-4111-8111-111111111111";
+    let marker_label = "x".repeat(256);
+    let added = client
+        .application(ApplicationRequest::Command(command(
+            "timeline.marker.add",
+            describe.project_id,
+            describe.project_instance_id,
+            0,
+            json!({
+                "marker_id": marker_id,
+                "timeline_time": {"numerator": 4, "denominator": 1},
+                "label": marker_label
+            }),
+        )))
+        .unwrap();
+    assert!(
+        matches!(added, ApplicationSuccess::Command(result) if result.after_revision == ProjectRevision::new(1))
+    );
+    for index in 1..100 {
+        let marker_id = format!("00000000-0000-4000-8000-{index:012x}");
+        let added = client
+            .application(ApplicationRequest::Command(command(
+                "timeline.marker.add",
+                describe.project_id,
+                describe.project_instance_id,
+                index,
+                json!({
+                    "marker_id": marker_id,
+                    "timeline_time": {"numerator": 4 + index, "denominator": 1},
+                    "label": "x".repeat(256)
+                }),
+            )))
+            .unwrap();
+        assert!(matches!(
+            added,
+            ApplicationSuccess::Command(result) if result.after_revision == ProjectRevision::new(index + 1)
+        ));
+    }
+
+    let page = client
+        .application(ApplicationRequest::Query(QueryEnvelope {
+            query_id: "timeline.markers".to_owned(),
+            schema_version: 1,
+            project_id: describe.project_id,
+            project_instance_id: describe.project_instance_id,
+            arguments: json!({"offset": 0, "limit": 100}),
+        }))
+        .unwrap();
+    match page {
+        ApplicationSuccess::Query(result) => {
+            let page = result.timeline_marker_page.as_ref().unwrap();
+            assert_eq!(page.total_count, 100);
+            assert_eq!(page.items[0].marker_id.to_string(), marker_id);
+            assert_eq!(page.items[0].label.len(), 256);
+            assert!(serde_json::to_vec(&result).unwrap().len() < 1_000_000);
+        }
+        other => panic!("expected marker query result, received {other:?}"),
+    }
+    client.save().unwrap();
+    let saved = load_project_file(&project_path).unwrap();
+    assert_eq!(saved.timeline().markers()[0].label().len(), 256);
+    client.shutdown(false).unwrap();
+    server.wait().unwrap();
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]

@@ -18,9 +18,10 @@ mod timeline;
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
     CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, MAX_MEDIA_PAGE_SIZE,
-    MAX_TIMELINE_CLIP_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode, ProjectChange,
-    ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage,
-    TimelineClipState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError,
+    OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor,
+    QueryEnvelope, QueryResult, TimelineClipPage, TimelineClipState, TimelineMarkerPage,
+    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
     TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TransactionEnvelope,
     TransactionResult, command_catalog, query_catalog,
 };
@@ -73,8 +74,9 @@ pub use project_storage::{
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{
-    ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_TRACKS, ProjectTimeline,
-    TimelineClip, TimelineIdParseError, TimelineTrack, TrackId, TrackKind,
+    ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
+    MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, TimelineClip,
+    TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind,
 };
 
 const APP_NAME: &str = "Opencut Reinforced";

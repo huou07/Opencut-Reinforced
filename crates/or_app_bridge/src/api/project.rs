@@ -1457,6 +1457,9 @@ fn timeline_snap_view(result: &QueryResult, snap: &TimelineSnapResult) -> Projec
             TimelineSnapTargetKind::TimelineZero => TimelineSnapTargetKindView::TimelineZero,
             TimelineSnapTargetKind::ClipStart => TimelineSnapTargetKindView::ClipStart,
             TimelineSnapTargetKind::ClipEnd => TimelineSnapTargetKindView::ClipEnd,
+            TimelineSnapTargetKind::Marker => {
+                unreachable!("marker-aware snapping is not exposed through the bridge")
+            }
         },
         target_time: rational_time_view(snap.target_time),
         target_track_id: snap.target_track_id.map(|id| id.to_string()),
@@ -1668,6 +1671,8 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
         OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
         OperationErrorCode::TimelineLimitExceeded => "TIMELINE_LIMIT_EXCEEDED",
+        OperationErrorCode::TimelineMarkerIdAlreadyExists => "TIMELINE_MARKER_ID_ALREADY_EXISTS",
+        OperationErrorCode::TimelineMarkerNotFound => "TIMELINE_MARKER_NOT_FOUND",
     }
 }
 
@@ -1786,6 +1791,7 @@ mod tests {
             timeline_tracks: None,
             timeline_clip_page: None,
             timeline_snap: None,
+            timeline_marker_page: None,
         };
         let clip_id = ClipId::generate();
         let media_id = MediaId::generate();

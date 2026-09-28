@@ -1,8 +1,9 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_PROJECT_FILE_BYTES,
-    MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectFileSessionErrorCode,
-    ProjectRevision, ProjectSession, ProjectStorageError, RationalTime, TimeRange, TrackId,
-    TrackKind, decode_project, encode_project, load_project_file, save_project_file_atomic,
+    MarkerId, MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession,
+    ProjectFileSessionErrorCode, ProjectRevision, ProjectSession, ProjectStorageError,
+    RationalTime, TimeRange, TrackId, TrackKind, decode_project, encode_project, load_project_file,
+    save_project_file_atomic,
 };
 use serde_json::json;
 use std::{
@@ -307,7 +308,7 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
-fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v3() {
+fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v4() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let seeded = project_with_timeline_media();
@@ -370,20 +371,32 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v3() {
         "timeline.clip.ripple_delete",
         serde_json::json!({"clip_id": split_right}),
     );
+    let marker_id = MarkerId::from_str("11111111-1111-4111-8111-111111111111").unwrap();
+    timeline_command(
+        &mut session,
+        "timeline.marker.add",
+        serde_json::json!({
+            "marker_id": marker_id,
+            "timeline_time": rational(12, 1),
+            "label": "persisted marker"
+        }),
+    );
     assert_eq!(
         session.session().project_revision(),
-        ProjectRevision::new(6)
+        ProjectRevision::new(7)
     );
 
     session.save().unwrap();
     let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 3);
+    assert_eq!(encoded["schema_version"], 4);
     for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
         assert!(!encoded.to_string().contains(runtime_state));
     }
     let saved = load_project_file(&path).unwrap();
     assert_eq!(saved.id(), project_id);
-    assert_eq!(saved.revision(), ProjectRevision::new(6));
+    assert_eq!(saved.revision(), ProjectRevision::new(7));
+    assert_eq!(saved.timeline().markers()[0].id(), marker_id);
+    assert_eq!(saved.timeline().markers()[0].label(), "persisted marker");
     let clips = saved.timeline().tracks()[0].clips();
     assert_eq!(clips.len(), 2);
     assert_eq!(clips[0].id(), clip_a);
@@ -403,7 +416,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v3() {
     assert_eq!(reopened.session().project_id(), project_id);
     assert_eq!(
         reopened.session().project_revision(),
-        ProjectRevision::new(6)
+        ProjectRevision::new(7)
     );
     assert_eq!(reopened.session().project().timeline(), saved.timeline());
     let mut reopened = reopened;
@@ -413,7 +426,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v3() {
             schema_version: 1,
             project_id,
             project_instance_id: reopened.session().project_instance_id(),
-            expected_project_revision: ProjectRevision::new(6),
+            expected_project_revision: ProjectRevision::new(7),
             arguments: serde_json::json!({}),
         }));
     assert!(
@@ -554,7 +567,7 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 3")
+            .contains("\"schema_version\": 4")
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {

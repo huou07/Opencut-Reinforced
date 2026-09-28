@@ -1,16 +1,17 @@
 use crate::{
     AudioStreamMetadata, ClipId, MAX_MEDIA_FORMAT_NAME_BYTES, MAX_MEDIA_FORMAT_NAMES,
     MAX_MEDIA_SOURCE_URI_BYTES, MAX_MEDIA_STREAMS, MAX_TIMELINE_CLIPS_PER_TRACK,
-    MAX_TIMELINE_TRACKS, MediaId, MediaItem, MediaMetadata, MediaSourceRef, MediaStreamMetadata,
-    OtherStreamMetadata, ProjectId, ProjectRevision, ProjectTimeline, RationalRate, RationalTime,
-    TimeRange, TimelineClip, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata,
+    MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, MediaId,
+    MediaItem, MediaMetadata, MediaSourceRef, MediaStreamMetadata, OtherStreamMetadata, ProjectId,
+    ProjectRevision, ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip,
+    TimelineMarker, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::{collections::HashSet, error::Error, fmt, num::NonZeroU32};
 
 const PROJECT_FORMAT_MARKER: &str = "opencut-reinforced-project";
-pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 3;
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 4;
 
 /// Canonical persistent state for a project.
 ///
@@ -112,6 +113,13 @@ impl ProjectDocument {
             .try_reserve_track_clips(track_index, additional)
     }
 
+    pub(crate) fn try_reserve_timeline_markers(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.timeline.try_reserve_markers(additional)
+    }
+
     pub(crate) fn insert_timeline_track_for_command(
         &mut self,
         index: usize,
@@ -196,6 +204,51 @@ impl ProjectDocument {
         self.revision = revision;
     }
 
+    pub(crate) fn insert_timeline_marker_for_command(
+        &mut self,
+        index: usize,
+        marker: TimelineMarker,
+        revision: ProjectRevision,
+    ) {
+        self.timeline.insert_marker_for_command(index, marker);
+        self.revision = revision;
+    }
+
+    pub(crate) fn remove_timeline_marker_for_command(
+        &mut self,
+        index: usize,
+        revision: ProjectRevision,
+    ) -> TimelineMarker {
+        let marker = self.timeline.remove_marker_for_command(index);
+        self.revision = revision;
+        marker
+    }
+
+    pub(crate) fn replace_timeline_marker_for_command(
+        &mut self,
+        index: usize,
+        marker: TimelineMarker,
+        revision: ProjectRevision,
+    ) {
+        self.timeline.replace_marker_for_command(index, marker);
+        self.revision = revision;
+    }
+
+    pub(crate) fn move_timeline_marker_for_command(
+        &mut self,
+        from_index: usize,
+        to_index: usize,
+        timeline_time: RationalTime,
+        revision: ProjectRevision,
+    ) {
+        let marker = self
+            .timeline
+            .remove_marker_for_command(from_index)
+            .with_timeline_time_for_command(timeline_time);
+        self.timeline.insert_marker_for_command(to_index, marker);
+        self.revision = revision;
+    }
+
     fn from_v1(project: ProjectStateV1) -> Self {
         Self {
             id: project.id,
@@ -223,6 +276,21 @@ impl ProjectDocument {
             .timeline
             .into_domain(&media)
             .map_err(|_| ProjectCodecError::InvalidV3Data)?;
+        Ok(Self {
+            id: project.id,
+            revision: project.revision,
+            name: project.name,
+            media,
+            timeline,
+        })
+    }
+
+    fn from_v4(project: ProjectStateV4) -> Result<Self, ProjectCodecError> {
+        let media = decode_media_library(project.media, ProjectCodecError::InvalidV4Data)?;
+        let timeline = project
+            .timeline
+            .into_domain(&media)
+            .map_err(|_| ProjectCodecError::InvalidV4Data)?;
         Ok(Self {
             id: project.id,
             revision: project.revision,
@@ -321,6 +389,42 @@ struct ProjectTimelineV3 {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ProjectFileV4 {
+    format: String,
+    schema_version: u32,
+    project: ProjectStateV4,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectStateV4 {
+    id: ProjectId,
+    revision: ProjectRevision,
+    name: String,
+    media: Vec<MediaItemV2>,
+    timeline: ProjectTimelineV4,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectTimelineV4 {
+    #[serde(deserialize_with = "deserialize_v3_tracks")]
+    tracks: Vec<TimelineTrackV3>,
+    #[serde(deserialize_with = "deserialize_v4_markers")]
+    markers: Vec<TimelineMarkerV4>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkerV4 {
+    id: MarkerId,
+    timeline_time: RationalTimeV3,
+    #[serde(deserialize_with = "deserialize_marker_label")]
+    label: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineTrackV3 {
     id: TrackId,
     kind: TrackKindV3,
@@ -393,37 +497,68 @@ impl ProjectTimelineV3 {
         self,
         media: &[MediaItem],
     ) -> Result<ProjectTimeline, crate::timeline::TimelineValidationError> {
-        let tracks = self
-            .tracks
-            .into_iter()
-            .map(|track| {
-                let clips = track
-                    .clips
-                    .into_iter()
-                    .map(|clip| {
-                        Ok(TimelineClip::from_parts_for_codec(
-                            clip.id,
-                            clip.media_id,
-                            clip.timeline_start
-                                .into_domain()
-                                .map_err(|_| crate::timeline::TimelineValidationError)?,
-                            clip.source_range
-                                .into_domain()
-                                .map_err(|_| crate::timeline::TimelineValidationError)?,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
-                Ok(TimelineTrack::from_parts_for_codec(
-                    track.id,
-                    track.kind.into(),
-                    clips,
-                ))
-            })
-            .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+        let tracks = decode_timeline_tracks(self.tracks)?;
         let timeline = ProjectTimeline::from_tracks_for_codec(tracks);
         timeline.validate(media)?;
         Ok(timeline)
     }
+}
+
+impl ProjectTimelineV4 {
+    fn into_domain(
+        self,
+        media: &[MediaItem],
+    ) -> Result<ProjectTimeline, crate::timeline::TimelineValidationError> {
+        let tracks = decode_timeline_tracks(self.tracks)?;
+        let markers = self
+            .markers
+            .into_iter()
+            .map(|marker| {
+                Ok(TimelineMarker::from_parts_for_codec(
+                    marker.id,
+                    marker
+                        .timeline_time
+                        .into_domain()
+                        .map_err(|_| crate::timeline::TimelineValidationError)?,
+                    marker.label,
+                ))
+            })
+            .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+        let timeline = ProjectTimeline::from_parts_for_codec(tracks, markers);
+        timeline.validate(media)?;
+        Ok(timeline)
+    }
+}
+
+fn decode_timeline_tracks(
+    tracks: Vec<TimelineTrackV3>,
+) -> Result<Vec<TimelineTrack>, crate::timeline::TimelineValidationError> {
+    tracks
+        .into_iter()
+        .map(|track| {
+            let clips = track
+                .clips
+                .into_iter()
+                .map(|clip| {
+                    Ok(TimelineClip::from_parts_for_codec(
+                        clip.id,
+                        clip.media_id,
+                        clip.timeline_start
+                            .into_domain()
+                            .map_err(|_| crate::timeline::TimelineValidationError)?,
+                        clip.source_range
+                            .into_domain()
+                            .map_err(|_| crate::timeline::TimelineValidationError)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+            Ok(TimelineTrack::from_parts_for_codec(
+                track.id,
+                track.kind.into(),
+                clips,
+            ))
+        })
+        .collect()
 }
 
 fn deserialize_v3_tracks<'de, D>(deserializer: D) -> Result<Vec<TimelineTrackV3>, D::Error>
@@ -542,6 +677,60 @@ where
     }
 
     deserializer.deserialize_seq(ClipsVisitor { max_clips })
+}
+
+fn deserialize_v4_markers<'de, D>(deserializer: D) -> Result<Vec<TimelineMarkerV4>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct MarkersVisitor {
+        max_markers: usize,
+    }
+
+    impl<'de> serde::de::Visitor<'de> for MarkersVisitor {
+        type Value = Vec<TimelineMarkerV4>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "at most {} timeline markers", self.max_markers)
+        }
+
+        fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let capacity = sequence.size_hint().unwrap_or(0).min(self.max_markers);
+            let mut markers = Vec::with_capacity(capacity);
+            while markers.len() < self.max_markers {
+                let Some(marker) = sequence.next_element::<TimelineMarkerV4>()? else {
+                    return Ok(markers);
+                };
+                markers.push(marker);
+            }
+            if sequence.next_element::<serde::de::IgnoredAny>()?.is_some() {
+                return Err(serde::de::Error::custom(
+                    "timeline markers exceed configured limit",
+                ));
+            }
+            Ok(markers)
+        }
+    }
+
+    deserializer.deserialize_seq(MarkersVisitor {
+        max_markers: MAX_TIMELINE_MARKERS,
+    })
+}
+
+fn deserialize_marker_label<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let label = String::deserialize(deserializer)?;
+    if label.trim().is_empty() || label.len() > MAX_TIMELINE_MARKER_LABEL_BYTES {
+        return Err(serde::de::Error::custom(
+            "timeline marker label is blank or exceeds configured limit",
+        ));
+    }
+    Ok(label)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -750,12 +939,12 @@ impl From<&MediaMetadata> for MediaMetadataV2 {
     }
 }
 
-impl From<&ProjectDocument> for ProjectFileV3 {
+impl From<&ProjectDocument> for ProjectFileV4 {
     fn from(document: &ProjectDocument) -> Self {
         Self {
             format: PROJECT_FORMAT_MARKER.to_owned(),
             schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
-            project: ProjectStateV3 {
+            project: ProjectStateV4 {
                 id: document.id,
                 revision: document.revision,
                 name: document.name.clone(),
@@ -772,7 +961,7 @@ impl From<&ProjectDocument> for ProjectFileV3 {
                         metadata: MediaMetadataV2::from(item.metadata()),
                     })
                     .collect(),
-                timeline: ProjectTimelineV3::from(&document.timeline),
+                timeline: ProjectTimelineV4::from(&document.timeline),
             },
         }
     }
@@ -800,6 +989,46 @@ impl From<&ProjectTimeline> for ProjectTimelineV3 {
                 })
                 .collect(),
         }
+    }
+}
+
+impl From<&ProjectTimeline> for ProjectTimelineV4 {
+    fn from(timeline: &ProjectTimeline) -> Self {
+        Self {
+            tracks: TimelineTrackV3::from_tracks(timeline),
+            markers: timeline
+                .markers()
+                .iter()
+                .map(|marker| TimelineMarkerV4 {
+                    id: marker.id(),
+                    timeline_time: RationalTimeV3::from(marker.timeline_time()),
+                    label: marker.label().to_owned(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl TimelineTrackV3 {
+    fn from_tracks(timeline: &ProjectTimeline) -> Vec<Self> {
+        timeline
+            .tracks()
+            .iter()
+            .map(|track| Self {
+                id: track.id(),
+                kind: track.kind().into(),
+                clips: track
+                    .clips()
+                    .iter()
+                    .map(|clip| TimelineClipV3 {
+                        id: clip.id(),
+                        media_id: clip.media_id(),
+                        timeline_start: RationalTimeV3::from(clip.timeline_start()),
+                        source_range: TimeRangeV3::from(clip.source_range()),
+                    })
+                    .collect(),
+            })
+            .collect()
     }
 }
 
@@ -832,6 +1061,7 @@ pub enum ProjectCodecError {
     InvalidV1Data,
     InvalidV2Data,
     InvalidV3Data,
+    InvalidV4Data,
     SerializationFailure,
 }
 
@@ -857,6 +1087,7 @@ impl fmt::Display for ProjectCodecError {
             Self::InvalidV1Data => formatter.write_str("project schema version 1 data is invalid"),
             Self::InvalidV2Data => formatter.write_str("project schema version 2 data is invalid"),
             Self::InvalidV3Data => formatter.write_str("project schema version 3 data is invalid"),
+            Self::InvalidV4Data => formatter.write_str("project schema version 4 data is invalid"),
             Self::SerializationFailure => {
                 formatter.write_str("project document could not be serialized")
             }
@@ -868,12 +1099,12 @@ impl Error for ProjectCodecError {}
 
 /// Encodes canonical project state as readable UTF-8 JSON with a trailing newline.
 pub fn encode_project(document: &ProjectDocument) -> Result<String, ProjectCodecError> {
-    validate_media_library(&document.media, ProjectCodecError::InvalidV3Data)?;
+    validate_media_library(&document.media, ProjectCodecError::InvalidV4Data)?;
     document
         .timeline
         .validate(&document.media)
-        .map_err(|_| ProjectCodecError::InvalidV3Data)?;
-    let mut encoded = serde_json::to_string_pretty(&ProjectFileV3::from(document))
+        .map_err(|_| ProjectCodecError::InvalidV4Data)?;
+    let mut encoded = serde_json::to_string_pretty(&ProjectFileV4::from(document))
         .map_err(|_| ProjectCodecError::SerializationFailure)?;
     encoded.push('\n');
     Ok(encoded)
@@ -928,6 +1159,14 @@ pub fn decode_project(encoded: &str) -> Result<ProjectDocument, ProjectCodecErro
             }
             ProjectDocument::from_v3(file.project)
         }
+        4 => {
+            let file: ProjectFileV4 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV4Data)?;
+            if file.format != PROJECT_FORMAT_MARKER || file.schema_version != 4 {
+                return Err(ProjectCodecError::InvalidV4Data);
+            }
+            ProjectDocument::from_v4(file.project)
+        }
         _ => Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version)),
     }
 }
@@ -956,16 +1195,18 @@ mod tests {
         deserialize_v3_clips_with_limit, deserialize_v3_tracks_with_limits, encode_project,
     };
     use crate::{
-        AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
-        MediaStreamMetadata, ProjectId, ProjectInstanceId, ProjectRevision, ProjectTimeline,
-        RationalRate, RationalTime, TimeRange, TimelineClip, TimelineTrack, TrackId, TrackKind,
-        VideoStreamMetadata,
+        AudioStreamMetadata, MAX_TIMELINE_MARKER_LABEL_BYTES, MarkerId, MediaId, MediaItem,
+        MediaMetadata, MediaSourceRef, MediaStreamMetadata, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip,
+        TimelineMarker, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata,
     };
     use serde_json::{Value, json};
     use std::{num::NonZeroU32, str::FromStr};
 
     const PROJECT_ID: &str = "01234567-89ab-4def-8123-456789abcdef";
     const INSTANCE_ID: &str = "fedcba98-7654-4cba-8fed-cba987654321";
+    const MARKER_A: &str = "11111111-1111-4111-8111-111111111111";
+    const MARKER_B: &str = "33333333-3333-4333-8333-333333333333";
 
     fn fixed_project() -> ProjectDocument {
         ProjectDocument {
@@ -1052,7 +1293,7 @@ mod tests {
     }
 
     #[test]
-    fn project_round_trips_through_v3_json_without_changing_revision() {
+    fn project_round_trips_through_v4_json_without_changing_revision() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let decoded = decode_project(&encoded).unwrap();
@@ -1063,7 +1304,7 @@ mod tests {
     }
 
     #[test]
-    fn encoding_uses_the_v3_envelope_and_a_trailing_newline() {
+    fn encoding_uses_the_v4_envelope_and_a_trailing_newline() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
@@ -1072,18 +1313,18 @@ mod tests {
             value,
             json!({
                 "format": "opencut-reinforced-project",
-                "schema_version": 3,
+                "schema_version": 4,
                 "project": {
                     "id": project.id().to_string(),
                     "revision": 0,
                     "name": "Example",
                     "media": [],
-                    "timeline": { "tracks": [] }
+                    "timeline": { "tracks": [], "markers": [] }
                 }
             })
         );
         assert!(encoded.ends_with('\n'));
-        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 3);
+        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 4);
     }
 
     #[test]
@@ -1119,31 +1360,32 @@ mod tests {
     #[test]
     fn unsupported_schema_version_is_rejected() {
         let input = encoded_project_with_revision("0")
-            .replace("\"schema_version\":1", "\"schema_version\":4");
+            .replace("\"schema_version\":1", "\"schema_version\":5");
 
         assert_eq!(
             decode_project(&input),
-            Err(ProjectCodecError::UnsupportedSchemaVersion(4))
+            Err(ProjectCodecError::UnsupportedSchemaVersion(5))
         );
     }
 
     #[test]
-    fn v1_migration_preserves_identity_revision_and_name_then_encodes_v3() {
+    fn v1_migration_preserves_identity_revision_and_name_then_encodes_v4() {
         let migrated = decode_project(&encoded_project_with_revision("7")).unwrap();
         assert_eq!(migrated.id().to_string(), PROJECT_ID);
         assert_eq!(migrated.revision(), ProjectRevision::new(7));
         assert_eq!(migrated.name(), "Example");
         assert!(migrated.media_items().is_empty());
         assert!(migrated.timeline().tracks().is_empty());
+        assert!(migrated.timeline().markers().is_empty());
 
         let encoded = encode_project(&migrated).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 3);
+        assert_eq!(value["schema_version"], 4);
         assert_eq!(value["project"]["revision"], 7);
     }
 
     #[test]
-    fn v2_migration_preserves_project_and_media_then_encodes_v3() {
+    fn v2_migration_preserves_project_and_media_then_encodes_v4() {
         let media_json = v2_item_json(
             "22222222-2222-4222-8222-222222222222",
             "file:///offline/legacy.mov",
@@ -1161,13 +1403,14 @@ mod tests {
         assert_eq!(migrated.name(), "Example");
         assert_eq!(migrated.media_items(), &[expected_media]);
         assert!(migrated.timeline().tracks().is_empty());
+        assert!(migrated.timeline().markers().is_empty());
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["schema_version"], 4);
         assert_eq!(encoded["project"]["revision"], 7);
     }
 
     #[test]
-    fn v3_round_trip_preserves_video_timeline_order_ids_ranges_and_media_reuse() {
+    fn v3_migration_round_trip_preserves_video_timeline_order_ids_ranges_and_media_reuse() {
         let mut project = fixed_project();
         let media = video_media_item(
             "22222222-2222-4222-8222-222222222222",
@@ -1235,7 +1478,8 @@ mod tests {
         let value: Value = serde_json::from_str(&encoded).unwrap();
         let decoded = decode_project(&encoded).unwrap();
 
-        assert_eq!(value["schema_version"], 3);
+        assert_eq!(value["schema_version"], 4);
+        assert_eq!(value["project"]["timeline"]["markers"], json!([]));
         assert_eq!(value["project"]["timeline"]["tracks"][0]["kind"], "video");
         assert_eq!(value["project"]["timeline"]["tracks"][1]["kind"], "audio");
         assert_eq!(decoded, project);
@@ -1435,6 +1679,106 @@ mod tests {
         let decoded = decode_project(&encode_project(&project).unwrap()).unwrap();
         assert_eq!(decoded, project);
         assert_eq!(decoded.media_items(), &[first, second]);
+    }
+
+    #[test]
+    fn v4_round_trip_persists_marker_identity_time_label_and_order_exactly() {
+        let mut project = fixed_project();
+        project.timeline = ProjectTimeline::from_parts_for_codec(
+            vec![],
+            vec![
+                TimelineMarker::from_parts_for_codec(
+                    MarkerId::from_str(MARKER_A).unwrap(),
+                    RationalTime::new(2, 1).unwrap(),
+                    "same label 🎬".to_owned(),
+                ),
+                TimelineMarker::from_parts_for_codec(
+                    MarkerId::from_str(MARKER_B).unwrap(),
+                    RationalTime::new(2, 1).unwrap(),
+                    "same label 🎬".to_owned(),
+                ),
+            ],
+        );
+        let encoded = encode_project(&project).unwrap();
+        let value: Value = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(value["schema_version"], 4);
+        assert_eq!(value["project"]["timeline"]["markers"][0]["id"], MARKER_A);
+        assert_eq!(
+            value["project"]["timeline"]["markers"][1]["label"],
+            "same label 🎬"
+        );
+        assert_eq!(decode_project(&encoded).unwrap(), project);
+    }
+
+    #[test]
+    fn v4_marker_codec_is_strict_and_rejects_invalid_order_and_bounds() {
+        let mut project = fixed_project();
+        project.timeline = ProjectTimeline::from_parts_for_codec(
+            vec![],
+            vec![TimelineMarker::from_parts_for_codec(
+                MarkerId::from_str(MARKER_A).unwrap(),
+                RationalTime::new(2, 1).unwrap(),
+                "label".to_owned(),
+            )],
+        );
+        let encoded = encode_project(&project).unwrap();
+        let base: Value = serde_json::from_str(&encoded).unwrap();
+        let mut cases = Vec::new();
+        let mut root_extra = base.clone();
+        root_extra["unexpected"] = json!(true);
+        cases.push(root_extra);
+        let mut project_extra = base.clone();
+        project_extra["project"]["unexpected"] = json!(true);
+        cases.push(project_extra);
+        let mut timeline_extra = base.clone();
+        timeline_extra["project"]["timeline"]["unexpected"] = json!(true);
+        cases.push(timeline_extra);
+        let mut marker_extra = base.clone();
+        marker_extra["project"]["timeline"]["markers"][0]["unexpected"] = json!(true);
+        cases.push(marker_extra);
+        let mut negative_time = base.clone();
+        negative_time["project"]["timeline"]["markers"][0]["timeline_time"]["numerator"] =
+            json!(-1);
+        cases.push(negative_time);
+        let mut blank_label = base.clone();
+        blank_label["project"]["timeline"]["markers"][0]["label"] = json!("  ");
+        cases.push(blank_label);
+        let mut oversized_label = base.clone();
+        oversized_label["project"]["timeline"]["markers"][0]["label"] =
+            json!("x".repeat(MAX_TIMELINE_MARKER_LABEL_BYTES + 1));
+        cases.push(oversized_label);
+        for case in cases {
+            assert_eq!(
+                decode_project(&case.to_string()),
+                Err(ProjectCodecError::InvalidV4Data)
+            );
+        }
+
+        let mut out_of_order = base.clone();
+        out_of_order["project"]["timeline"]["markers"] = json!([
+            {"id": MARKER_B, "timeline_time": {"numerator": 2, "denominator": 1}, "label": "label"},
+            {"id": MARKER_A, "timeline_time": {"numerator": 2, "denominator": 1}, "label": "label"}
+        ]);
+        assert_eq!(
+            decode_project(&out_of_order.to_string()),
+            Err(ProjectCodecError::InvalidV4Data)
+        );
+
+        let too_many = (0..=crate::MAX_TIMELINE_MARKERS)
+            .map(|index| {
+                json!({
+                    "id": MarkerId::generate(),
+                    "timeline_time": {"numerator": index, "denominator": 1},
+                    "label": "bounded"
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut too_many_value = base;
+        too_many_value["project"]["timeline"]["markers"] = json!(too_many);
+        assert_eq!(
+            decode_project(&too_many_value.to_string()),
+            Err(ProjectCodecError::InvalidV4Data)
+        );
     }
 
     #[test]

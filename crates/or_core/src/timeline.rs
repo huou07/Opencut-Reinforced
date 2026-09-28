@@ -11,6 +11,8 @@ use uuid::{Uuid, Version};
 pub const MAX_TIMELINE_TRACKS: usize = 256;
 pub const MAX_TIMELINE_CLIPS: usize = 100_000;
 pub const MAX_TIMELINE_CLIPS_PER_TRACK: usize = 100_000;
+pub const MAX_TIMELINE_MARKERS: usize = 10_000;
+pub const MAX_TIMELINE_MARKER_LABEL_BYTES: usize = 256;
 
 macro_rules! timeline_id {
     ($name:ident) => {
@@ -59,6 +61,19 @@ macro_rules! timeline_id {
 
 timeline_id!(TrackId);
 timeline_id!(ClipId);
+timeline_id!(MarkerId);
+
+impl Ord for MarkerId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.as_bytes().cmp(other.0.as_bytes())
+    }
+}
+
+impl PartialOrd for MarkerId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[derive(Debug)]
 pub enum TimelineIdParseError {
@@ -158,6 +173,62 @@ impl TimelineClip {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelineMarker {
+    id: MarkerId,
+    timeline_time: RationalTime,
+    label: String,
+}
+
+impl TimelineMarker {
+    pub const fn id(&self) -> MarkerId {
+        self.id
+    }
+
+    pub const fn timeline_time(&self) -> RationalTime {
+        self.timeline_time
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub(crate) fn from_parts_for_codec(
+        id: MarkerId,
+        timeline_time: RationalTime,
+        label: String,
+    ) -> Self {
+        Self {
+            id,
+            timeline_time,
+            label,
+        }
+    }
+
+    pub(crate) fn from_parts_for_command(
+        id: MarkerId,
+        timeline_time: RationalTime,
+        label: String,
+    ) -> Self {
+        Self {
+            id,
+            timeline_time,
+            label,
+        }
+    }
+
+    pub(crate) fn with_timeline_time_for_command(self, timeline_time: RationalTime) -> Self {
+        Self {
+            timeline_time,
+            ..self
+        }
+    }
+
+    pub(crate) fn with_label_for_command(self, label: String) -> Self {
+        Self { label, ..self }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelineTrack {
     id: TrackId,
     kind: TrackKind,
@@ -197,6 +268,7 @@ impl TimelineTrack {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProjectTimeline {
     tracks: Vec<TimelineTrack>,
+    markers: Vec<TimelineMarker>,
 }
 
 impl ProjectTimeline {
@@ -204,8 +276,22 @@ impl ProjectTimeline {
         &self.tracks
     }
 
+    pub fn markers(&self) -> &[TimelineMarker] {
+        &self.markers
+    }
+
     pub(crate) fn from_tracks_for_codec(tracks: Vec<TimelineTrack>) -> Self {
-        Self { tracks }
+        Self {
+            tracks,
+            markers: Vec::new(),
+        }
+    }
+
+    pub(crate) fn from_parts_for_codec(
+        tracks: Vec<TimelineTrack>,
+        markers: Vec<TimelineMarker>,
+    ) -> Self {
+        Self { tracks, markers }
     }
 
     pub(crate) fn validate(&self, media: &[MediaItem]) -> Result<(), TimelineValidationError> {
@@ -214,6 +300,7 @@ impl ProjectTimeline {
             MAX_TIMELINE_TRACKS,
             MAX_TIMELINE_CLIPS,
             MAX_TIMELINE_CLIPS_PER_TRACK,
+            MAX_TIMELINE_MARKERS,
         )
     }
 
@@ -223,8 +310,13 @@ impl ProjectTimeline {
         max_tracks: usize,
         max_clips: usize,
         max_clips_per_track: usize,
+        max_markers: usize,
     ) -> Result<(), TimelineValidationError> {
         if self.tracks.len() > max_tracks {
+            return Err(TimelineValidationError);
+        }
+
+        if self.markers.len() > max_markers {
             return Err(TimelineValidationError);
         }
 
@@ -288,6 +380,23 @@ impl ProjectTimeline {
                 previous_end = Some(timeline_end);
             }
         }
+
+        let mut marker_ids = HashSet::with_capacity(self.markers.len());
+        let mut previous_marker: Option<(RationalTime, MarkerId)> = None;
+        for marker in &self.markers {
+            if !marker_ids.insert(marker.id)
+                || marker.timeline_time.is_negative()
+                || marker.label.trim().is_empty()
+                || marker.label.len() > MAX_TIMELINE_MARKER_LABEL_BYTES
+            {
+                return Err(TimelineValidationError);
+            }
+            if previous_marker.is_some_and(|previous| (marker.timeline_time, marker.id) <= previous)
+            {
+                return Err(TimelineValidationError);
+            }
+            previous_marker = Some((marker.timeline_time, marker.id));
+        }
         Ok(())
     }
 
@@ -311,6 +420,13 @@ impl ProjectTimeline {
         additional: usize,
     ) -> Result<(), std::collections::TryReserveError> {
         self.tracks[track_index].clips.try_reserve(additional)
+    }
+
+    pub(crate) fn try_reserve_markers(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        self.markers.try_reserve(additional)
     }
 
     pub(crate) fn insert_track_for_command(&mut self, index: usize, track: TimelineTrack) {
@@ -354,6 +470,18 @@ impl ProjectTimeline {
     ) {
         self.tracks[track_index].clips = clips;
     }
+
+    pub(crate) fn insert_marker_for_command(&mut self, index: usize, marker: TimelineMarker) {
+        self.markers.insert(index, marker);
+    }
+
+    pub(crate) fn remove_marker_for_command(&mut self, index: usize) -> TimelineMarker {
+        self.markers.remove(index)
+    }
+
+    pub(crate) fn replace_marker_for_command(&mut self, index: usize, marker: TimelineMarker) {
+        self.markers[index] = marker;
+    }
 }
 
 pub(crate) fn matching_stream(kind: TrackKind, item: &MediaItem) -> (bool, Option<RationalTime>) {
@@ -386,8 +514,9 @@ impl Error for TimelineValidationError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_TRACKS,
-        ProjectTimeline, TimelineClip, TimelineTrack, TrackId, TrackKind,
+        ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
+        MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, TimelineClip,
+        TimelineMarker, TimelineTrack, TrackId, TrackKind,
     };
     use crate::{
         AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
@@ -399,9 +528,19 @@ mod tests {
     const TRACK_ID: &str = "22222222-2222-4222-8222-222222222222";
     const CLIP_ID: &str = "33333333-3333-4333-8333-333333333333";
     const MEDIA_ID: &str = "44444444-4444-4444-8444-444444444444";
+    const MARKER_A: &str = "11111111-1111-4111-8111-111111111111";
+    const MARKER_B: &str = "33333333-3333-4333-8333-333333333333";
 
     fn time(numerator: i64, denominator: u32) -> RationalTime {
         RationalTime::new(numerator, denominator).unwrap()
+    }
+
+    fn marker(id: &str, timeline_time: RationalTime, label: &str) -> TimelineMarker {
+        TimelineMarker::from_parts_for_codec(
+            MarkerId::from_str(id).unwrap(),
+            timeline_time,
+            label.to_owned(),
+        )
     }
 
     fn media(duration: Option<RationalTime>, streams: Vec<MediaStreamMetadata>) -> MediaItem {
@@ -739,12 +878,12 @@ mod tests {
         ]);
         assert!(
             three_tracks
-                .validate_with_limits(std::slice::from_ref(&media), 3, 4, 4)
+                .validate_with_limits(std::slice::from_ref(&media), 3, 4, 4, MAX_TIMELINE_MARKERS)
                 .is_ok()
         );
         assert!(
             three_tracks
-                .validate_with_limits(std::slice::from_ref(&media), 2, 4, 4)
+                .validate_with_limits(std::slice::from_ref(&media), 2, 4, 4, MAX_TIMELINE_MARKERS)
                 .is_err()
         );
 
@@ -769,18 +908,111 @@ mod tests {
         )]);
         assert!(
             clips
-                .validate_with_limits(std::slice::from_ref(&media), 3, 3, 3)
+                .validate_with_limits(std::slice::from_ref(&media), 3, 3, 3, MAX_TIMELINE_MARKERS)
                 .is_ok()
         );
         assert!(
             clips
-                .validate_with_limits(std::slice::from_ref(&media), 3, 2, 3)
+                .validate_with_limits(std::slice::from_ref(&media), 3, 2, 3, MAX_TIMELINE_MARKERS)
                 .is_err()
         );
         assert!(
             clips
-                .validate_with_limits(std::slice::from_ref(&media), 3, 3, 2)
+                .validate_with_limits(std::slice::from_ref(&media), 3, 3, 2, MAX_TIMELINE_MARKERS)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn marker_ids_and_marker_validation_preserve_global_canonical_invariants() {
+        let generated = MarkerId::generate();
+        assert_eq!(
+            generated.to_string().parse::<MarkerId>().unwrap(),
+            generated
+        );
+        let marker_id = MarkerId::from_str(MARKER_A).unwrap();
+        assert_eq!(marker_id.to_string(), MARKER_A);
+        assert!(MarkerId::from_str("11111111-1111-4111-8111-111111111112").is_ok());
+        assert!(MarkerId::from_str("11111111-1111-4111-8111-11111111111A").is_err());
+        assert!(MarkerId::from_str("11111111-1111-3111-8111-111111111111").is_err());
+
+        let valid = ProjectTimeline::from_parts_for_codec(
+            vec![],
+            vec![
+                marker(MARKER_A, time(2, 1), "same"),
+                marker(MARKER_B, time(2, 1), "same"),
+            ],
+        );
+        assert!(valid.validate(&[]).is_ok());
+        assert!(
+            ProjectTimeline::from_parts_for_codec(
+                vec![],
+                vec![marker(MARKER_A, time(3, 1), "  exact surrounding text  ")],
+            )
+            .validate(&[])
+            .is_ok()
+        );
+        assert!(
+            ProjectTimeline::from_parts_for_codec(
+                vec![],
+                vec![marker(MARKER_A, time(3, 1), &"é".repeat(128))],
+            )
+            .validate(&[])
+            .is_ok()
+        );
+        assert!(
+            ProjectTimeline::from_parts_for_codec(
+                vec![],
+                vec![
+                    marker(MARKER_B, time(2, 1), "same"),
+                    marker(MARKER_A, time(2, 1), "same")
+                ],
+            )
+            .validate(&[])
+            .is_err()
+        );
+        assert!(
+            ProjectTimeline::from_parts_for_codec(
+                vec![],
+                vec![
+                    marker(MARKER_A, time(2, 1), "same"),
+                    marker(MARKER_A, time(3, 1), "again")
+                ],
+            )
+            .validate(&[])
+            .is_err()
+        );
+        for invalid in [
+            marker(MARKER_A, time(-1, 1), "negative"),
+            marker(MARKER_A, time(1, 1), "   "),
+            marker(
+                MARKER_A,
+                time(1, 1),
+                &"x".repeat(MAX_TIMELINE_MARKER_LABEL_BYTES + 1),
+            ),
+            marker(MARKER_A, time(1, 1), &"é".repeat(129)),
+        ] {
+            assert!(
+                ProjectTimeline::from_parts_for_codec(vec![], vec![invalid])
+                    .validate(&[])
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn marker_count_validation_rejects_the_next_marker_without_truncation() {
+        let markers = (0..=MAX_TIMELINE_MARKERS)
+            .map(|index| {
+                marker(
+                    &MarkerId::generate().to_string(),
+                    time(index as i64, 1),
+                    "bounded",
+                )
+            })
+            .collect();
+        let timeline = ProjectTimeline::from_parts_for_codec(vec![], markers);
+        assert_eq!(timeline.markers().len(), MAX_TIMELINE_MARKERS + 1);
+        assert!(timeline.validate(&[]).is_err());
     }
 }

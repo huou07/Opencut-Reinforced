@@ -1,10 +1,11 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_RECOVERY_FILE_BYTES,
-    MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession, ProjectRecoveryError,
-    ProjectRevision, ProjectSession, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, TimeRange, TrackId, TrackKind, apply_project_recovery, decode_project,
-    discard_project_recovery, encode_project, inspect_project_recovery, load_project_file,
-    save_project_file_atomic, write_recovery_checkpoint,
+    MarkerId, MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession,
+    ProjectRecoveryError, ProjectRevision, ProjectSession, RationalTime, RecoveryApplyOutcome,
+    RecoveryConflictReason, RecoveryInspection, TimeRange, TrackId, TrackKind,
+    apply_project_recovery, decode_project, discard_project_recovery, encode_project,
+    inspect_project_recovery, load_project_file, save_project_file_atomic,
+    write_recovery_checkpoint,
 };
 use serde_json::{Value, json};
 use std::{
@@ -241,15 +242,25 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
             }
         }),
     );
+    let marker_id = MarkerId::from_str("11111111-1111-4111-8111-111111111111").unwrap();
+    recovery_timeline_command(
+        &mut session,
+        "timeline.marker.add",
+        json!({
+            "marker_id": marker_id,
+            "timeline_time": {"numerator": 12, "denominator": 1},
+            "label": "recovery marker"
+        }),
+    );
     let recovery = session.session().project().clone();
-    assert_eq!(recovery.revision(), ProjectRevision::new(2));
+    assert_eq!(recovery.revision(), ProjectRevision::new(3));
     assert!(session.is_dirty());
     assert_eq!(load_project_file(&path).unwrap(), base);
 
     write_recovery_checkpoint(&path, &base, &recovery).unwrap();
     let sidecar: Value = serde_json::from_slice(&fs::read(recovery_path(&path)).unwrap()).unwrap();
     assert_eq!(sidecar["schema_version"], 1);
-    assert_eq!(sidecar["recovery_project"]["schema_version"], 3);
+    assert_eq!(sidecar["recovery_project"]["schema_version"], 4);
     let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
         panic!("expected a timeline recovery candidate");
     };
@@ -257,7 +268,7 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
     assert_eq!(candidate.metadata().base_revision, ProjectRevision::INITIAL);
     assert_eq!(
         candidate.metadata().recovery_revision,
-        ProjectRevision::new(2)
+        ProjectRevision::new(3)
     );
     assert_eq!(candidate.recovery_project(), &recovery);
 
@@ -267,7 +278,9 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
     ));
     let applied = load_project_file(&path).unwrap();
     assert_eq!(applied.id(), project_id);
-    assert_eq!(applied.revision(), ProjectRevision::new(2));
+    assert_eq!(applied.revision(), ProjectRevision::new(3));
+    assert_eq!(applied.timeline().markers()[0].id(), marker_id);
+    assert_eq!(applied.timeline().markers()[0].label(), "recovery marker");
     assert_eq!(applied.timeline().tracks().len(), 1);
     assert_eq!(applied.timeline().tracks()[0].id(), track_id);
     assert_eq!(applied.timeline().tracks()[0].kind(), TrackKind::Video);
@@ -296,7 +309,7 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
             schema_version: 1,
             project_id,
             project_instance_id: reopened.session().project_instance_id(),
-            expected_project_revision: ProjectRevision::new(2),
+            expected_project_revision: ProjectRevision::new(3),
             arguments: json!({}),
         }));
     assert!(
@@ -305,7 +318,7 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
 }
 
 #[test]
-fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v3() {
+fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v4() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Legacy base");
@@ -336,11 +349,11 @@ fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v3() {
     assert_eq!(applied.revision(), ProjectRevision::new(1));
     assert_eq!(applied.name(), "Recovered legacy");
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 3);
+    assert_eq!(encoded["schema_version"], 4);
 }
 
 #[test]
-fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v3() {
+fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v4() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Legacy v2 base");
@@ -370,11 +383,11 @@ fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v3() {
     ));
     assert_eq!(load_project_file(&path).unwrap(), recovery);
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 3);
+    assert_eq!(encoded["schema_version"], 4);
 }
 
 #[test]
-fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_without_revision_change() {
+fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_as_v4_without_revision_change() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Saved base");
@@ -416,6 +429,7 @@ fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_without_revision_c
             }
         }]
     }]});
+    recovery_value["schema_version"] = json!(3);
     let recovery = decode_project(&recovery_value.to_string()).unwrap();
     write_raw_recovery(
         &path,
@@ -443,6 +457,8 @@ fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_without_revision_c
     assert_eq!(applied, recovery);
     assert_eq!(applied.revision(), ProjectRevision::new(1));
     assert_eq!(applied.timeline(), recovery.timeline());
+    let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(encoded["schema_version"], 4);
 }
 
 #[test]

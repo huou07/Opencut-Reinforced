@@ -1,6 +1,7 @@
 use crate::{
-    ClipId, MediaId, MediaItem, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision,
-    RationalTime, TimeRange, TimelineClip, TimelineTrack, TrackId, TrackKind,
+    ClipId, MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MarkerId, MediaId, MediaItem,
+    ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, RationalTime, TimeRange,
+    TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -22,12 +23,18 @@ const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
 const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
 const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
 const TIMELINE_CLIP_RIPPLE_DELETE_ID: &str = "timeline.clip.ripple_delete";
+const TIMELINE_MARKER_ADD_ID: &str = "timeline.marker.add";
+const TIMELINE_MARKER_MOVE_ID: &str = "timeline.marker.move";
+const TIMELINE_MARKER_RENAME_ID: &str = "timeline.marker.rename";
+const TIMELINE_MARKER_DELETE_ID: &str = "timeline.marker.delete";
 const TIMELINE_TRACKS_ID: &str = "timeline.tracks";
 const TIMELINE_CLIPS_ID: &str = "timeline.clips";
 const TIMELINE_SNAP_ID: &str = "timeline.snap";
+const TIMELINE_MARKERS_ID: &str = "timeline.markers";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
 pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
 pub const MAX_TIMELINE_CLIP_PAGE_SIZE: usize = 100;
+pub const MAX_TIMELINE_MARKER_PAGE_SIZE: usize = 100;
 pub const CURRENT_TRANSACTION_SCHEMA_VERSION: u64 = 1;
 
 /// Static discovery information for a command implemented by the core.
@@ -46,7 +53,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 13] = [
+const COMMANDS: [CommandDescriptor; 17] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -125,9 +132,33 @@ const COMMANDS: [CommandDescriptor; 13] = [
         mutates_project: true,
         allowed_in_transaction: false,
     },
+    CommandDescriptor {
+        id: TIMELINE_MARKER_ADD_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_MARKER_MOVE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_MARKER_RENAME_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_MARKER_DELETE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
 ];
 
-const QUERIES: [QueryDescriptor; 6] = [
+const QUERIES: [QueryDescriptor; 7] = [
     QueryDescriptor {
         id: PROJECT_SUMMARY_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -150,6 +181,10 @@ const QUERIES: [QueryDescriptor; 6] = [
     },
     QueryDescriptor {
         id: TIMELINE_SNAP_ID,
+        schema_version: 2,
+    },
+    QueryDescriptor {
+        id: TIMELINE_MARKERS_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
     },
 ];
@@ -383,6 +418,84 @@ impl CommandEnvelope {
         }
     }
 
+    pub fn add_timeline_marker(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        marker_id: MarkerId,
+        timeline_time: RationalTime,
+        label: impl Into<String>,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_MARKER_ADD_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "marker_id": marker_id,
+                "timeline_time": timeline_time,
+                "label": label.into(),
+            }),
+        }
+    }
+
+    pub fn move_timeline_marker(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        marker_id: MarkerId,
+        timeline_time: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_MARKER_MOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "marker_id": marker_id,
+                "timeline_time": timeline_time,
+            }),
+        }
+    }
+
+    pub fn rename_timeline_marker(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        marker_id: MarkerId,
+        label: impl Into<String>,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_MARKER_RENAME_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "marker_id": marker_id,
+                "label": label.into(),
+            }),
+        }
+    }
+
+    pub fn delete_timeline_marker(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        marker_id: MarkerId,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_MARKER_DELETE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "marker_id": marker_id }),
+        }
+    }
+
     pub fn undo(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,
@@ -538,6 +651,43 @@ impl QueryEnvelope {
             }),
         }
     }
+
+    pub fn timeline_snap_v2(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        operation: TimelineSnapOperation,
+        clip_id: ClipId,
+        target_track_id: Option<TrackId>,
+        target_time: RationalTime,
+    ) -> Self {
+        Self {
+            query_id: TIMELINE_SNAP_ID.to_owned(),
+            schema_version: 2,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({
+                "operation": operation,
+                "clip_id": clip_id,
+                "target_track_id": target_track_id,
+                "target_time": target_time,
+            }),
+        }
+    }
+
+    pub fn timeline_markers(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        offset: usize,
+        limit: usize,
+    ) -> Self {
+        Self {
+            query_id: TIMELINE_MARKERS_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({ "offset": offset, "limit": limit }),
+        }
+    }
 }
 
 /// Serializable application representation of one canonical timeline clip.
@@ -571,6 +721,30 @@ impl TimelineClipState {
             self.timeline_start,
             self.source_range,
         )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineMarkerState {
+    pub marker_id: MarkerId,
+    pub timeline_time: RationalTime,
+    pub label: String,
+}
+
+impl From<&TimelineMarker> for TimelineMarkerState {
+    fn from(marker: &TimelineMarker) -> Self {
+        Self {
+            marker_id: marker.id(),
+            timeline_time: marker.timeline_time(),
+            label: marker.label().to_owned(),
+        }
+    }
+}
+
+impl TimelineMarkerState {
+    fn into_domain(self) -> TimelineMarker {
+        TimelineMarker::from_parts_for_command(self.marker_id, self.timeline_time, self.label)
     }
 }
 
@@ -648,6 +822,28 @@ pub enum ProjectChange {
         deleted_clip: TimelineClipState,
         shifted_count: usize,
         shift_duration: RationalTime,
+    },
+    TimelineMarkerAdded {
+        marker: TimelineMarkerState,
+        index: usize,
+    },
+    TimelineMarkerDeleted {
+        marker: TimelineMarkerState,
+        index: usize,
+    },
+    TimelineMarkerMoved {
+        marker_id: MarkerId,
+        label: String,
+        from_time: RationalTime,
+        from_index: usize,
+        to_time: RationalTime,
+        to_index: usize,
+    },
+    TimelineMarkerRenamed {
+        marker_id: MarkerId,
+        time: RationalTime,
+        before_label: String,
+        after_label: String,
     },
 }
 
@@ -832,6 +1028,40 @@ impl ChangeSet {
                 reverse,
                 self.ripple_history_guard,
             ),
+            ProjectChange::TimelineMarkerAdded { marker, index } => {
+                stage_marker_history_change(project, marker, *index, reverse, true)
+            }
+            ProjectChange::TimelineMarkerDeleted { marker, index } => {
+                stage_marker_history_change(project, marker, *index, reverse, false)
+            }
+            ProjectChange::TimelineMarkerMoved {
+                marker_id,
+                label,
+                from_time,
+                from_index,
+                to_time,
+                to_index,
+            } => stage_marker_move_history_change(
+                project,
+                *marker_id,
+                label,
+                (*from_time, *from_index),
+                (*to_time, *to_index),
+                reverse,
+            ),
+            ProjectChange::TimelineMarkerRenamed {
+                marker_id,
+                time,
+                before_label,
+                after_label,
+            } => stage_marker_rename_history_change(
+                project,
+                *marker_id,
+                *time,
+                before_label,
+                after_label,
+                reverse,
+            ),
         }
     }
 
@@ -904,6 +1134,22 @@ enum StagedHistoryChange {
         track_index: usize,
         clips: Vec<TimelineClip>,
     },
+    InsertTimelineMarker {
+        index: usize,
+        marker: TimelineMarkerState,
+    },
+    RemoveTimelineMarker {
+        index: usize,
+    },
+    MoveTimelineMarker {
+        from_index: usize,
+        to_index: usize,
+        to_time: RationalTime,
+    },
+    RenameTimelineMarker {
+        index: usize,
+        label: String,
+    },
 }
 
 /// Result of applying one command to a project session.
@@ -962,6 +1208,8 @@ pub struct QueryResult {
     pub timeline_clip_page: Option<Box<TimelineClipPage>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeline_snap: Option<Box<TimelineSnapResult>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeline_marker_page: Option<Box<TimelineMarkerPage>>,
 }
 
 /// One bounded, insertion-ordered page from the persistent media library.
@@ -998,6 +1246,17 @@ pub struct TimelineClipPage {
     pub next_offset: Option<usize>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineMarkerPage {
+    pub items: Vec<TimelineMarkerState>,
+    pub total_count: usize,
+    pub offset: usize,
+    pub limit: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_offset: Option<usize>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimelineSnapOperation {
@@ -1021,6 +1280,7 @@ pub enum TimelineSnapTargetKind {
     TimelineZero,
     ClipStart,
     ClipEnd,
+    Marker,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1036,6 +1296,8 @@ pub struct TimelineSnapResult {
     pub target_track_id: Option<TrackId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_clip_id: Option<ClipId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_marker_id: Option<MarkerId>,
 }
 
 /// Stable machine-readable operation failure categories.
@@ -1070,6 +1332,8 @@ pub enum OperationErrorCode {
     TimelineMediaIncompatible,
     TimelineOverlap,
     TimelineLimitExceeded,
+    TimelineMarkerIdAlreadyExists,
+    TimelineMarkerNotFound,
 }
 
 /// A safe structured operation error with a stable code and optional context.
@@ -1152,6 +1416,10 @@ impl fmt::Display for OperationError {
             OperationErrorCode::TimelineLimitExceeded => {
                 "timeline operation exceeds a configured limit"
             }
+            OperationErrorCode::TimelineMarkerIdAlreadyExists => {
+                "timeline marker ID already exists in the project"
+            }
+            OperationErrorCode::TimelineMarkerNotFound => "timeline marker was not found",
         };
 
         formatter.write_str(message)?;
@@ -1319,6 +1587,10 @@ impl ProjectSession {
             TIMELINE_CLIP_RIPPLE_DELETE_ID => {
                 self.apply_timeline_clip_ripple_delete(envelope.arguments)?
             }
+            TIMELINE_MARKER_ADD_ID => self.apply_timeline_marker_add(envelope.arguments)?,
+            TIMELINE_MARKER_MOVE_ID => self.apply_timeline_marker_move(envelope.arguments)?,
+            TIMELINE_MARKER_RENAME_ID => self.apply_timeline_marker_rename(envelope.arguments)?,
+            TIMELINE_MARKER_DELETE_ID => self.apply_timeline_marker_delete(envelope.arguments)?,
             _ => return Err(OperationError::new(OperationErrorCode::UnknownCommand)),
         };
 
@@ -1375,7 +1647,12 @@ impl ProjectSession {
             .iter()
             .find(|descriptor| descriptor.id == envelope.query_id)
             .ok_or_else(|| OperationError::new(OperationErrorCode::UnknownQuery))?;
-        if envelope.schema_version != descriptor.schema_version {
+        let schema_supported = if envelope.query_id == TIMELINE_SNAP_ID {
+            matches!(envelope.schema_version, 1 | 2)
+        } else {
+            envelope.schema_version == descriptor.schema_version
+        };
+        if !schema_supported {
             return Err(OperationError::new(
                 OperationErrorCode::UnsupportedQuerySchema,
             ));
@@ -1389,59 +1666,82 @@ impl ProjectSession {
             ));
         }
 
-        let (media_page, media_item, timeline_tracks, timeline_clip_page, timeline_snap) =
-            if envelope.query_id == PROJECT_SUMMARY_ID {
-                if !is_empty_object(&envelope.arguments) {
-                    return Err(OperationError::new(OperationErrorCode::InvalidArguments));
-                }
-                (None, None, None, None, None)
-            } else if envelope.query_id == MEDIA_LIST_ID {
-                (
-                    Some(self.media_list(envelope.arguments)?),
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            } else if envelope.query_id == MEDIA_GET_ID {
-                (
-                    None,
-                    Some(Box::new(self.media_get(envelope.arguments)?)),
-                    None,
-                    None,
-                    None,
-                )
-            } else if envelope.query_id == TIMELINE_TRACKS_ID {
-                (
-                    None,
-                    None,
-                    Some(self.timeline_tracks(envelope.arguments)?),
-                    None,
-                    None,
-                )
-            } else if envelope.query_id == TIMELINE_CLIPS_ID {
-                (
-                    None,
-                    None,
-                    None,
-                    Some(Box::new(self.timeline_clips(envelope.arguments)?)),
-                    None,
-                )
-            } else if envelope.query_id == TIMELINE_SNAP_ID {
-                (
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(Box::new(self.timeline_snap(envelope.arguments)?)),
-                )
-            } else {
-                return Err(OperationError::new(OperationErrorCode::UnknownQuery));
-            };
+        let (
+            media_page,
+            media_item,
+            timeline_tracks,
+            timeline_clip_page,
+            timeline_snap,
+            timeline_marker_page,
+        ) = if envelope.query_id == PROJECT_SUMMARY_ID {
+            if !is_empty_object(&envelope.arguments) {
+                return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+            }
+            (None, None, None, None, None, None)
+        } else if envelope.query_id == MEDIA_LIST_ID {
+            (
+                Some(self.media_list(envelope.arguments)?),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+        } else if envelope.query_id == MEDIA_GET_ID {
+            (
+                None,
+                Some(Box::new(self.media_get(envelope.arguments)?)),
+                None,
+                None,
+                None,
+                None,
+            )
+        } else if envelope.query_id == TIMELINE_TRACKS_ID {
+            (
+                None,
+                None,
+                Some(self.timeline_tracks(envelope.arguments)?),
+                None,
+                None,
+                None,
+            )
+        } else if envelope.query_id == TIMELINE_CLIPS_ID {
+            (
+                None,
+                None,
+                None,
+                Some(Box::new(self.timeline_clips(envelope.arguments)?)),
+                None,
+                None,
+            )
+        } else if envelope.query_id == TIMELINE_SNAP_ID {
+            (
+                None,
+                None,
+                None,
+                None,
+                Some(Box::new(self.timeline_snap(
+                    envelope.arguments,
+                    envelope.schema_version == 2,
+                )?)),
+                None,
+            )
+        } else if envelope.query_id == TIMELINE_MARKERS_ID {
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Box::new(self.timeline_markers(envelope.arguments)?)),
+            )
+        } else {
+            return Err(OperationError::new(OperationErrorCode::UnknownQuery));
+        };
 
         Ok(QueryResult {
             query_id: envelope.query_id,
-            schema_version: descriptor.schema_version,
+            schema_version: envelope.schema_version,
             summary: ProjectSummary {
                 project_id: self.project_id(),
                 project_instance_id: self.project_instance_id,
@@ -1453,6 +1753,7 @@ impl ProjectSession {
             timeline_tracks,
             timeline_clip_page,
             timeline_snap,
+            timeline_marker_page,
         })
     }
 
@@ -2019,6 +2320,180 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    fn apply_timeline_marker_add(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineMarkerAddArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let timeline_time = arguments.timeline_time.into_time()?;
+        validate_marker_time(timeline_time)?;
+        validate_marker_label(&arguments.label)?;
+        if find_timeline_marker(&self.project, arguments.marker_id).is_some() {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineMarkerIdAlreadyExists,
+            ));
+        }
+        if self.project.timeline().markers().len() >= MAX_TIMELINE_MARKERS {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineLimitExceeded,
+            ));
+        }
+        let marker = TimelineMarkerState {
+            marker_id: arguments.marker_id,
+            timeline_time,
+            label: arguments.label,
+        };
+        let index =
+            marker_insertion_index(&self.project, marker.marker_id, marker.timeline_time, None);
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineMarkerAdded {
+                marker: marker.clone(),
+                index,
+            })?;
+        self.project
+            .try_reserve_timeline_markers(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project.insert_timeline_marker_for_command(
+            index,
+            marker.into_domain(),
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_marker_move(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineMarkerMoveArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some(index) = find_timeline_marker(&self.project, arguments.marker_id) else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineMarkerNotFound,
+            ));
+        };
+        let timeline_time = arguments.timeline_time.into_time()?;
+        validate_marker_time(timeline_time)?;
+        let current = &self.project.timeline().markers()[index];
+        if current.timeline_time() == timeline_time {
+            return Ok(ChangeSet::default());
+        }
+        let to_index = marker_insertion_index(
+            &self.project,
+            arguments.marker_id,
+            timeline_time,
+            Some(arguments.marker_id),
+        );
+        let change = ProjectChange::TimelineMarkerMoved {
+            marker_id: current.id(),
+            label: current.label().to_owned(),
+            from_time: current.timeline_time(),
+            from_index: index,
+            to_time: timeline_time,
+            to_index,
+        };
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) = timeline_change_sets(change)?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project.move_timeline_marker_for_command(
+            index,
+            to_index,
+            timeline_time,
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_marker_rename(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineMarkerRenameArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some(index) = find_timeline_marker(&self.project, arguments.marker_id) else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineMarkerNotFound,
+            ));
+        };
+        let current = &self.project.timeline().markers()[index];
+        if current.label() == arguments.label {
+            return Ok(ChangeSet::default());
+        }
+        validate_marker_label(&arguments.label)?;
+        let change = ProjectChange::TimelineMarkerRenamed {
+            marker_id: current.id(),
+            time: current.timeline_time(),
+            before_label: current.label().to_owned(),
+            after_label: arguments.label.clone(),
+        };
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) = timeline_change_sets(change)?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project.replace_timeline_marker_for_command(
+            index,
+            current.clone().with_label_for_command(arguments.label),
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_marker_delete(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineMarkerDeleteArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some(index) = find_timeline_marker(&self.project, arguments.marker_id) else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineMarkerNotFound,
+            ));
+        };
+        let marker = TimelineMarkerState::from(&self.project.timeline().markers()[index]);
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineMarkerDeleted { marker, index })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project
+            .remove_timeline_marker_for_command(index, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     fn timeline_tracks(
         &self,
         arguments: Value,
@@ -2071,7 +2546,38 @@ impl ProjectSession {
         })
     }
 
-    fn timeline_snap(&self, arguments: Value) -> Result<TimelineSnapResult, OperationError> {
+    fn timeline_markers(&self, arguments: Value) -> Result<TimelineMarkerPage, OperationError> {
+        let arguments: TimelineMarkersQueryArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let offset = usize::try_from(arguments.offset)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let limit = usize::try_from(arguments.limit)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if limit == 0 || limit > MAX_TIMELINE_MARKER_PAGE_SIZE {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let markers = self.project.timeline().markers();
+        let total_count = markers.len();
+        let start = offset.min(total_count);
+        let end = offset.saturating_add(limit).min(total_count);
+        let items = markers[start..end]
+            .iter()
+            .map(TimelineMarkerState::from)
+            .collect();
+        Ok(TimelineMarkerPage {
+            items,
+            total_count,
+            offset,
+            limit,
+            next_offset: (end < total_count).then_some(end),
+        })
+    }
+
+    fn timeline_snap(
+        &self,
+        arguments: Value,
+        marker_aware: bool,
+    ) -> Result<TimelineSnapResult, OperationError> {
         let arguments: TimelineSnapQueryArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
         let target_time = arguments.target_time.into_time()?;
@@ -2098,11 +2604,12 @@ impl ProjectSession {
                 }
                 let clip = &tracks[source_track_index].clips()[source_clip_index];
                 let duration = clip.source_range().duration();
-                resolve_timeline_snap(
+                resolve_timeline_snap_with_markers(
                     &self.project,
                     arguments.clip_id,
                     TimelineSnapMode::Move { duration },
                     target_time,
+                    marker_aware,
                 )
             }
             TimelineSnapOperation::TrimStart | TimelineSnapOperation::TrimEnd => {
@@ -2114,11 +2621,12 @@ impl ProjectSession {
                     TimelineSnapOperation::TrimEnd => TimelineTrimEdge::End,
                     TimelineSnapOperation::Move => unreachable!(),
                 };
-                resolve_timeline_snap(
+                resolve_timeline_snap_with_markers(
                     &self.project,
                     arguments.clip_id,
                     TimelineSnapMode::Trim { edge },
                     target_time,
+                    marker_aware,
                 )
             }
         }
@@ -2249,6 +2757,9 @@ impl ProjectSession {
             StagedHistoryChange::InsertTimelineClip { track_index, .. } => self
                 .project
                 .try_reserve_timeline_track_clips(*track_index, 1),
+            StagedHistoryChange::InsertTimelineMarker { .. } => {
+                self.project.try_reserve_timeline_markers(1)
+            }
             StagedHistoryChange::MoveTimelineClip {
                 from_track_index,
                 to_track_index,
@@ -2340,6 +2851,30 @@ impl ProjectSession {
             StagedHistoryChange::ReplaceTimelineTrack { track_index, clips } => self
                 .project
                 .replace_timeline_track_clips_for_command(track_index, clips, after_revision),
+            StagedHistoryChange::InsertTimelineMarker { index, marker } => self
+                .project
+                .insert_timeline_marker_for_command(index, marker.into_domain(), after_revision),
+            StagedHistoryChange::RemoveTimelineMarker { index } => {
+                self.project
+                    .remove_timeline_marker_for_command(index, after_revision);
+            }
+            StagedHistoryChange::MoveTimelineMarker {
+                from_index,
+                to_index,
+                to_time,
+            } => self.project.move_timeline_marker_for_command(
+                from_index,
+                to_index,
+                to_time,
+                after_revision,
+            ),
+            StagedHistoryChange::RenameTimelineMarker { index, label } => {
+                let marker = self.project.timeline().markers()[index]
+                    .clone()
+                    .with_label_for_command(label);
+                self.project
+                    .replace_timeline_marker_for_command(index, marker, after_revision);
+            }
         }
         match direction {
             HistoryDirection::Undo => self.history.redo.push(moved_entry),
@@ -2466,8 +3001,43 @@ struct TimelineClipSplitArguments {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct TimelineMarkerAddArguments {
+    marker_id: MarkerId,
+    timeline_time: RationalTimeArguments,
+    label: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkerMoveArguments {
+    marker_id: MarkerId,
+    timeline_time: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkerRenameArguments {
+    marker_id: MarkerId,
+    label: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkerDeleteArguments {
+    marker_id: MarkerId,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineClipsQueryArguments {
     track_id: TrackId,
+    offset: u64,
+    limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkersQueryArguments {
     offset: u64,
     limit: u64,
 }
@@ -2494,8 +3064,10 @@ struct TimelineSnapCandidate {
     target_kind: TimelineSnapTargetKind,
     track_index: usize,
     clip_index: usize,
+    marker_index: usize,
     target_track_id: Option<TrackId>,
     target_clip_id: Option<ClipId>,
+    target_marker_id: Option<MarkerId>,
 }
 
 #[derive(Clone, Copy)]
@@ -2506,11 +3078,12 @@ struct TimelineSnapChoice {
     resolved_target_time: RationalTime,
 }
 
-fn resolve_timeline_snap(
+fn resolve_timeline_snap_with_markers(
     project: &ProjectDocument,
     active_clip_id: ClipId,
     mode: TimelineSnapMode,
     raw_target_time: RationalTime,
+    marker_aware: bool,
 ) -> Result<TimelineSnapResult, OperationError> {
     let threshold = RationalTime::new(1, 8)
         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -2547,8 +3120,10 @@ fn resolve_timeline_snap(
         target_kind: TimelineSnapTargetKind::TimelineZero,
         track_index: 0,
         clip_index: 0,
+        marker_index: 0,
         target_track_id: None,
         target_clip_id: None,
+        target_marker_id: None,
     };
     for &(moving_anchor, anchor_time) in moving_anchors.iter().take(anchor_count) {
         consider_timeline_snap_candidate(
@@ -2584,8 +3159,10 @@ fn resolve_timeline_snap(
                     target_kind,
                     track_index,
                     clip_index,
+                    marker_index: 0,
                     target_track_id: Some(track.id()),
                     target_clip_id: Some(clip.id()),
+                    target_marker_id: None,
                 };
                 for &(moving_anchor, anchor_time) in moving_anchors.iter().take(anchor_count) {
                     consider_timeline_snap_candidate(
@@ -2601,6 +3178,31 @@ fn resolve_timeline_snap(
         }
     }
 
+    if marker_aware {
+        for (marker_index, marker) in project.timeline().markers().iter().enumerate() {
+            let candidate = TimelineSnapCandidate {
+                time: marker.timeline_time(),
+                target_kind: TimelineSnapTargetKind::Marker,
+                track_index: 0,
+                clip_index: 0,
+                marker_index,
+                target_track_id: None,
+                target_clip_id: None,
+                target_marker_id: Some(marker.id()),
+            };
+            for &(moving_anchor, anchor_time) in moving_anchors.iter().take(anchor_count) {
+                consider_timeline_snap_candidate(
+                    &mut best,
+                    candidate,
+                    moving_anchor,
+                    anchor_time,
+                    raw_target_time,
+                    threshold,
+                )?;
+            }
+        }
+    }
+
     let Some(choice) = best else {
         return Ok(TimelineSnapResult {
             raw_target_time,
@@ -2611,6 +3213,7 @@ fn resolve_timeline_snap(
             target_time: raw_target_time,
             target_track_id: None,
             target_clip_id: None,
+            target_marker_id: None,
         });
     };
 
@@ -2627,6 +3230,7 @@ fn resolve_timeline_snap(
         target_time: choice.candidate.time,
         target_track_id: choice.candidate.target_track_id,
         target_clip_id: choice.candidate.target_clip_id,
+        target_marker_id: choice.candidate.target_marker_id,
     })
 }
 
@@ -2686,6 +3290,7 @@ fn timeline_snap_choice_order(left: TimelineSnapChoice, right: TimelineSnapChoic
         left.candidate.track_index,
         left.candidate.clip_index,
         timeline_snap_boundary_priority(left.candidate.target_kind),
+        left.candidate.marker_index,
     )
         .cmp(&(
             right.distance,
@@ -2695,6 +3300,7 @@ fn timeline_snap_choice_order(left: TimelineSnapChoice, right: TimelineSnapChoic
             right.candidate.track_index,
             right.candidate.clip_index,
             timeline_snap_boundary_priority(right.candidate.target_kind),
+            right.candidate.marker_index,
         ))
 }
 
@@ -2710,7 +3316,8 @@ fn timeline_snap_source_priority(target_kind: TimelineSnapTargetKind) -> u8 {
     match target_kind {
         TimelineSnapTargetKind::TimelineZero => 0,
         TimelineSnapTargetKind::ClipStart | TimelineSnapTargetKind::ClipEnd => 1,
-        TimelineSnapTargetKind::None => 2,
+        TimelineSnapTargetKind::Marker => 2,
+        TimelineSnapTargetKind::None => 3,
     }
 }
 
@@ -2718,7 +3325,9 @@ fn timeline_snap_boundary_priority(target_kind: TimelineSnapTargetKind) -> u8 {
     match target_kind {
         TimelineSnapTargetKind::ClipStart => 0,
         TimelineSnapTargetKind::ClipEnd => 1,
-        TimelineSnapTargetKind::TimelineZero | TimelineSnapTargetKind::None => 0,
+        TimelineSnapTargetKind::TimelineZero
+        | TimelineSnapTargetKind::Marker
+        | TimelineSnapTargetKind::None => 0,
     }
 }
 
@@ -3122,6 +3731,146 @@ fn ensure_clip_insertable_at(
     }
 }
 
+fn stage_marker_history_change(
+    project: &ProjectDocument,
+    marker: &TimelineMarkerState,
+    index: usize,
+    reverse: bool,
+    was_added: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let remove = reverse == was_added;
+    if remove {
+        ensure_marker_matches_at(project, index, marker)?;
+        Ok((
+            StagedHistoryChange::RemoveTimelineMarker { index },
+            ChangeSet::try_single(ProjectChange::TimelineMarkerDeleted {
+                marker: marker.clone(),
+                index,
+            })?,
+        ))
+    } else {
+        ensure_marker_insertable_at(project, index, marker)?;
+        Ok((
+            StagedHistoryChange::InsertTimelineMarker {
+                index,
+                marker: marker.clone(),
+            },
+            ChangeSet::try_single(ProjectChange::TimelineMarkerAdded {
+                marker: marker.clone(),
+                index,
+            })?,
+        ))
+    }
+}
+
+fn ensure_marker_matches_at(
+    project: &ProjectDocument,
+    index: usize,
+    expected: &TimelineMarkerState,
+) -> Result<(), OperationError> {
+    if project
+        .timeline()
+        .markers()
+        .get(index)
+        .is_some_and(|marker| TimelineMarkerState::from(marker) == *expected)
+    {
+        Ok(())
+    } else {
+        Err(history_conflict())
+    }
+}
+
+fn ensure_marker_insertable_at(
+    project: &ProjectDocument,
+    index: usize,
+    marker: &TimelineMarkerState,
+) -> Result<(), OperationError> {
+    if index > project.timeline().markers().len()
+        || project.timeline().markers().len() >= MAX_TIMELINE_MARKERS
+        || find_timeline_marker(project, marker.marker_id).is_some()
+        || marker_insertion_index(project, marker.marker_id, marker.timeline_time, None) != index
+    {
+        Err(history_conflict())
+    } else {
+        Ok(())
+    }
+}
+
+fn stage_marker_move_history_change(
+    project: &ProjectDocument,
+    marker_id: MarkerId,
+    label: &str,
+    from: (RationalTime, usize),
+    to: (RationalTime, usize),
+    reverse: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let (current, target) = if reverse { (to, from) } else { (from, to) };
+    let Some(marker) = project.timeline().markers().get(current.1) else {
+        return Err(history_conflict());
+    };
+    if marker.id() != marker_id
+        || marker.timeline_time() != current.0
+        || marker.label() != label
+        || marker_insertion_index(project, marker_id, target.0, Some(marker_id)) != target.1
+    {
+        return Err(history_conflict());
+    }
+    Ok((
+        StagedHistoryChange::MoveTimelineMarker {
+            from_index: current.1,
+            to_index: target.1,
+            to_time: target.0,
+        },
+        ChangeSet::try_single(ProjectChange::TimelineMarkerMoved {
+            marker_id,
+            label: label.to_owned(),
+            from_time: current.0,
+            from_index: current.1,
+            to_time: target.0,
+            to_index: target.1,
+        })?,
+    ))
+}
+
+fn stage_marker_rename_history_change(
+    project: &ProjectDocument,
+    marker_id: MarkerId,
+    time: RationalTime,
+    before_label: &str,
+    after_label: &str,
+    reverse: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let (expected, target) = if reverse {
+        (after_label, before_label)
+    } else {
+        (before_label, after_label)
+    };
+    let Some((index, marker)) = project
+        .timeline()
+        .markers()
+        .iter()
+        .enumerate()
+        .find(|(_, marker)| marker.id() == marker_id)
+    else {
+        return Err(history_conflict());
+    };
+    if marker.timeline_time() != time || marker.label() != expected {
+        return Err(history_conflict());
+    }
+    Ok((
+        StagedHistoryChange::RenameTimelineMarker {
+            index,
+            label: target.to_owned(),
+        },
+        ChangeSet::try_single(ProjectChange::TimelineMarkerRenamed {
+            marker_id,
+            time,
+            before_label: expected.to_owned(),
+            after_label: target.to_owned(),
+        })?,
+    ))
+}
+
 fn stage_clip_move_history_change(
     project: &ProjectDocument,
     clip_id: ClipId,
@@ -3202,6 +3951,52 @@ fn find_timeline_clip(project: &ProjectDocument, clip_id: ClipId) -> Option<(usi
                 .position(|clip| clip.id() == clip_id)
                 .map(|clip_index| (track_index, clip_index))
         })
+}
+
+fn find_timeline_marker(project: &ProjectDocument, marker_id: MarkerId) -> Option<usize> {
+    project
+        .timeline()
+        .markers()
+        .iter()
+        .position(|marker| marker.id() == marker_id)
+}
+
+fn marker_insertion_index(
+    project: &ProjectDocument,
+    marker_id: MarkerId,
+    timeline_time: RationalTime,
+    excluded_marker_id: Option<MarkerId>,
+) -> usize {
+    let mut index = 0;
+    for marker in project.timeline().markers() {
+        if Some(marker.id()) == excluded_marker_id {
+            continue;
+        }
+        if marker.timeline_time() < timeline_time
+            || (marker.timeline_time() == timeline_time && marker.id() < marker_id)
+        {
+            index += 1;
+        } else {
+            break;
+        }
+    }
+    index
+}
+
+fn validate_marker_time(time: RationalTime) -> Result<(), OperationError> {
+    if time.is_negative() {
+        Err(OperationError::new(OperationErrorCode::InvalidArguments))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_marker_label(label: &str) -> Result<(), OperationError> {
+    if label.trim().is_empty() || label.len() > MAX_TIMELINE_MARKER_LABEL_BYTES {
+        Err(OperationError::new(OperationErrorCode::InvalidArguments))
+    } else {
+        Ok(())
+    }
 }
 
 fn timeline_clip_count(project: &ProjectDocument) -> Option<usize> {
@@ -3421,10 +4216,12 @@ mod tests {
     };
     use crate::{
         AudioStreamMetadata, ClipId, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
-        MAX_TIMELINE_CLIPS, MAX_TIMELINE_TRACKS, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
-        MediaStreamMetadata, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision,
-        ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip, TimelineTrack,
-        TrackId, TrackKind, VideoStreamMetadata, decode_project, encode_project,
+        MAX_TIMELINE_CLIPS, MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKER_PAGE_SIZE,
+        MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, MediaId, MediaItem, MediaMetadata,
+        MediaSourceRef, MediaStreamMetadata, ProjectDocument, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip,
+        TimelineMarker, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata, decode_project,
+        encode_project,
     };
     use serde_json::{Value, json};
     use std::{num::NonZeroU32, str::FromStr};
@@ -3446,6 +4243,9 @@ mod tests {
     const MEDIA_B: &str = "77777777-7777-4777-8777-777777777777";
     const MEDIA_C: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
     const MEDIA_D: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const MARKER_A: &str = "11111111-1111-4111-8111-111111111111";
+    const MARKER_B: &str = "33333333-3333-4333-8333-333333333333";
+    const MARKER_C: &str = "55555555-5555-4555-8555-555555555555";
 
     fn project() -> ProjectDocument {
         decode_project(&format!(
@@ -3662,6 +4462,27 @@ mod tests {
 
     fn rational_json(numerator: i64, denominator: u32) -> Value {
         json!({"numerator": numerator, "denominator": denominator})
+    }
+
+    fn marker_id(value: &str) -> MarkerId {
+        value.parse().unwrap()
+    }
+
+    fn marker_add(
+        session: &mut ProjectSession,
+        marker_id: &str,
+        timeline_time: (i64, u32),
+        label: &str,
+    ) -> Result<super::CommandResult, super::OperationError> {
+        execute(
+            session,
+            "timeline.marker.add",
+            json!({
+                "marker_id": marker_id,
+                "timeline_time": rational_json(timeline_time.0, timeline_time.1),
+                "label": label,
+            }),
+        )
     }
 
     fn snap_query(
@@ -3886,6 +4707,30 @@ mod tests {
                     mutates_project: true,
                     allowed_in_transaction: false,
                 },
+                CommandDescriptor {
+                    id: "timeline.marker.add",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.marker.move",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.marker.rename",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.marker.delete",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
             ]
         );
         assert_eq!(
@@ -3913,13 +4758,17 @@ mod tests {
                 },
                 QueryDescriptor {
                     id: "timeline.snap",
+                    schema_version: 2,
+                },
+                QueryDescriptor {
+                    id: "timeline.markers",
                     schema_version: 1,
                 },
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 13);
-        assert_eq!(QUERIES.len(), 6);
+        assert_eq!(COMMANDS.len(), 17);
+        assert_eq!(QUERIES.len(), 7);
     }
 
     #[test]
@@ -7783,6 +8632,658 @@ mod tests {
         assert_eq!(
             code(&reopened.execute_command(redo)),
             OperationErrorCode::NothingToRedo
+        );
+    }
+
+    #[test]
+    fn timeline_marker_commands_keep_canonical_order_and_semantic_history() {
+        let mut session = fixed_session();
+        marker_add(&mut session, MARKER_B, (2, 1), "same").unwrap();
+        marker_add(&mut session, MARKER_A, (2, 1), "same").unwrap();
+        marker_add(&mut session, MARKER_C, (1, 1), "same").unwrap();
+        assert_eq!(session.project_revision(), ProjectRevision::new(3));
+        assert_eq!(
+            session
+                .project()
+                .timeline()
+                .markers()
+                .iter()
+                .map(|marker| marker.id().to_string())
+                .collect::<Vec<_>>(),
+            [MARKER_C, MARKER_A, MARKER_B]
+        );
+
+        session.execute_command(undo(3)).unwrap();
+        assert_eq!(session.project_revision(), ProjectRevision::new(4));
+        assert_eq!(session.project().timeline().markers().len(), 2);
+        let redo_depth = session.history.redo.len();
+        let no_op_move = execute(
+            &mut session,
+            "timeline.marker.move",
+            json!({
+                "marker_id": MARKER_A,
+                "timeline_time": rational_json(2, 1),
+            }),
+        )
+        .unwrap();
+        assert!(!no_op_move.changed);
+        assert_eq!(session.project_revision(), ProjectRevision::new(4));
+        assert_eq!(session.history.redo.len(), redo_depth);
+        let no_op_rename = execute(
+            &mut session,
+            "timeline.marker.rename",
+            json!({"marker_id": MARKER_A, "label": "same"}),
+        )
+        .unwrap();
+        assert!(!no_op_rename.changed);
+        assert_eq!(session.history.redo.len(), redo_depth);
+
+        session.execute_command(redo(4)).unwrap();
+        let moved = execute(
+            &mut session,
+            "timeline.marker.move",
+            json!({
+                "marker_id": MARKER_B,
+                "timeline_time": rational_json(0, 1),
+            }),
+        )
+        .unwrap();
+        assert!(moved.changed);
+        assert_eq!(session.project_revision(), ProjectRevision::new(6));
+        assert_eq!(
+            session
+                .project()
+                .timeline()
+                .markers()
+                .iter()
+                .map(|marker| marker.id().to_string())
+                .collect::<Vec<_>>(),
+            [MARKER_B, MARKER_C, MARKER_A]
+        );
+        session.execute_command(undo(6)).unwrap();
+        assert_eq!(
+            session
+                .project()
+                .timeline()
+                .markers()
+                .iter()
+                .map(|marker| marker.id().to_string())
+                .collect::<Vec<_>>(),
+            [MARKER_C, MARKER_A, MARKER_B]
+        );
+        session.execute_command(redo(7)).unwrap();
+        assert_eq!(
+            session.project().timeline().markers()[0].id(),
+            marker_id(MARKER_B)
+        );
+    }
+
+    #[test]
+    fn timeline_marker_rename_delete_and_history_restore_exact_semantic_state() {
+        let mut session = fixed_session();
+        let added = marker_add(&mut session, MARKER_A, (1, 1), "before").unwrap();
+        assert!(matches!(
+            added.change_set.changes(),
+            [ProjectChange::TimelineMarkerAdded { marker, index: 0 }]
+                if marker.marker_id == marker_id(MARKER_A)
+                    && marker.timeline_time == RationalTime::new(1, 1).unwrap()
+                    && marker.label == "before"
+        ));
+
+        let renamed = execute(
+            &mut session,
+            "timeline.marker.rename",
+            json!({"marker_id": MARKER_A, "label": "after"}),
+        )
+        .unwrap();
+        assert!(matches!(
+            renamed.change_set.changes(),
+            [ProjectChange::TimelineMarkerRenamed {
+                marker_id: id,
+                time,
+                before_label,
+                after_label,
+            }]
+                if *id == marker_id(MARKER_A)
+                    && *time == RationalTime::new(1, 1).unwrap()
+                    && before_label == "before"
+                    && after_label == "after"
+        ));
+        session.execute_command(undo(2)).unwrap();
+        assert_eq!(session.project().timeline().markers()[0].label(), "before");
+        session.execute_command(redo(3)).unwrap();
+        assert_eq!(session.project().timeline().markers()[0].label(), "after");
+
+        execute(
+            &mut session,
+            "timeline.marker.move",
+            json!({
+                "marker_id": MARKER_A,
+                "timeline_time": rational_json(2, 1),
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            session.project().timeline().markers()[0].timeline_time(),
+            RationalTime::new(2, 1).unwrap()
+        );
+        session.execute_command(undo(5)).unwrap();
+        assert_eq!(
+            session.project().timeline().markers()[0].timeline_time(),
+            RationalTime::new(1, 1).unwrap()
+        );
+        session.execute_command(redo(6)).unwrap();
+        assert_eq!(
+            session.project().timeline().markers()[0].timeline_time(),
+            RationalTime::new(2, 1).unwrap()
+        );
+
+        marker_add(&mut session, MARKER_B, (3, 1), "delete me").unwrap();
+        execute(
+            &mut session,
+            "timeline.marker.delete",
+            json!({"marker_id": MARKER_B}),
+        )
+        .unwrap();
+        assert_eq!(session.project().timeline().markers().len(), 1);
+        session.execute_command(undo(9)).unwrap();
+        assert_eq!(session.project().timeline().markers().len(), 2);
+        assert_eq!(
+            session.project().timeline().markers()[1].id(),
+            marker_id(MARKER_B)
+        );
+        session.execute_command(redo(10)).unwrap();
+        assert_eq!(session.project().timeline().markers().len(), 1);
+        assert_eq!(
+            session.project().timeline().markers()[0].id(),
+            marker_id(MARKER_A)
+        );
+    }
+
+    #[test]
+    fn timeline_marker_commands_validate_bounds_duplicates_and_transactions() {
+        let mut session = fixed_session();
+        marker_add(&mut session, MARKER_A, (1, 1), "label").unwrap();
+        let before = session.project().clone();
+        for arguments in [
+            json!({
+                "marker_id": MARKER_A,
+                "timeline_time": rational_json(2, 1),
+                "label": "duplicate",
+            }),
+            json!({
+                "marker_id": MARKER_B,
+                "timeline_time": rational_json(-1, 1),
+                "label": "negative",
+            }),
+            json!({
+                "marker_id": MARKER_B,
+                "timeline_time": rational_json(2, 1),
+                "label": "   ",
+            }),
+            json!({
+                "marker_id": MARKER_B,
+                "timeline_time": rational_json(2, 1),
+                "label": "ok",
+                "extra": true,
+            }),
+        ] {
+            let result = execute(&mut session, "timeline.marker.add", arguments);
+            assert!(matches!(
+                result,
+                Err(error) if error.code == OperationErrorCode::InvalidArguments
+                    || error.code == OperationErrorCode::TimelineMarkerIdAlreadyExists
+            ));
+            assert_eq!(session.project(), &before);
+        }
+        let oversized = "x".repeat(MAX_TIMELINE_MARKER_LABEL_BYTES + 1);
+        assert_eq!(
+            code(&execute(
+                &mut session,
+                "timeline.marker.add",
+                json!({
+                    "marker_id": MARKER_B,
+                    "timeline_time": rational_json(2, 1),
+                    "label": oversized,
+                }),
+            )),
+            OperationErrorCode::InvalidArguments
+        );
+        let transaction = transaction(
+            vec![call(
+                "timeline.marker.add",
+                1,
+                json!({
+                    "marker_id": MARKER_B,
+                    "timeline_time": rational_json(2, 1),
+                    "label": "blocked",
+                }),
+            )],
+            1,
+        );
+        assert_eq!(
+            code(&session.execute_transaction(transaction)),
+            OperationErrorCode::CommandNotAllowedInTransaction
+        );
+        assert_eq!(session.project_revision(), ProjectRevision::new(1));
+    }
+
+    #[test]
+    fn timeline_marker_missing_and_revision_overflow_fail_atomically() {
+        let mut missing = fixed_session();
+        let before = missing.project().clone();
+        for (command_id, arguments) in [
+            (
+                "timeline.marker.move",
+                json!({
+                    "marker_id": MARKER_A,
+                    "timeline_time": rational_json(1, 1),
+                }),
+            ),
+            (
+                "timeline.marker.rename",
+                json!({"marker_id": MARKER_A, "label": "missing"}),
+            ),
+            ("timeline.marker.delete", json!({"marker_id": MARKER_A})),
+        ] {
+            assert_eq!(
+                code(&execute(&mut missing, command_id, arguments)),
+                OperationErrorCode::TimelineMarkerNotFound
+            );
+            assert_eq!(missing.project(), &before);
+            assert!(missing.history.undo.is_empty());
+            assert!(missing.history.redo.is_empty());
+        }
+
+        for (command_id, arguments, has_marker) in [
+            (
+                "timeline.marker.add",
+                json!({
+                    "marker_id": MARKER_A,
+                    "timeline_time": rational_json(1, 1),
+                    "label": "overflow",
+                }),
+                false,
+            ),
+            (
+                "timeline.marker.move",
+                json!({
+                    "marker_id": MARKER_A,
+                    "timeline_time": rational_json(2, 1),
+                }),
+                true,
+            ),
+            (
+                "timeline.marker.rename",
+                json!({"marker_id": MARKER_A, "label": "overflow"}),
+                true,
+            ),
+            (
+                "timeline.marker.delete",
+                json!({"marker_id": MARKER_A}),
+                true,
+            ),
+        ] {
+            let mut session = session_with_state("A", u64::MAX);
+            if has_marker {
+                session
+                    .project
+                    .set_timeline_for_test(ProjectTimeline::from_parts_for_codec(
+                        vec![],
+                        vec![TimelineMarker::from_parts_for_codec(
+                            marker_id(MARKER_A),
+                            RationalTime::new(1, 1).unwrap(),
+                            "existing".to_owned(),
+                        )],
+                    ));
+            }
+            let before = session.project().clone();
+            assert_eq!(
+                code(&execute(&mut session, command_id, arguments)),
+                OperationErrorCode::RevisionOverflow
+            );
+            assert_eq!(session.project(), &before);
+            assert!(session.history.undo.is_empty());
+            assert!(session.history.redo.is_empty());
+        }
+    }
+
+    #[test]
+    fn timeline_marker_limit_and_history_conflict_are_bounded_and_atomic() {
+        let mut markers = Vec::with_capacity(MAX_TIMELINE_MARKERS);
+        for index in 0..MAX_TIMELINE_MARKERS {
+            markers.push(TimelineMarker::from_parts_for_codec(
+                MarkerId::generate(),
+                RationalTime::new(index as i64, 1).unwrap(),
+                "bounded".to_owned(),
+            ));
+        }
+        let mut project = ProjectDocument::new("A");
+        project.set_timeline_for_test(ProjectTimeline::from_parts_for_codec(vec![], markers));
+        let mut session = ProjectSession {
+            project,
+            project_instance_id: ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
+            history: super::SessionHistory::default(),
+        };
+        let before = session.project().clone();
+        assert_eq!(
+            code(
+                &session.execute_command(CommandEnvelope::add_timeline_marker(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    session.project_revision(),
+                    marker_id(MARKER_A),
+                    RationalTime::new(10001, 1).unwrap(),
+                    "overflow",
+                ))
+            ),
+            OperationErrorCode::TimelineLimitExceeded
+        );
+        assert_eq!(session.project(), &before);
+
+        let mut session = fixed_session();
+        marker_add(&mut session, MARKER_A, (1, 1), "conflict").unwrap();
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::default());
+        let before = session.project().clone();
+        let undo_stack = session.history.undo.clone();
+        assert_eq!(
+            code(&session.execute_command(undo(1))),
+            OperationErrorCode::HistoryConflict
+        );
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history.undo, undo_stack);
+        assert!(session.history.redo.is_empty());
+    }
+
+    #[test]
+    fn timeline_marker_query_is_bounded_canonical_read_only_and_wire_compatible() {
+        let mut session = fixed_session();
+        marker_add(&mut session, MARKER_B, (2, 1), "same").unwrap();
+        marker_add(&mut session, MARKER_A, (2, 1), "same").unwrap();
+        marker_add(&mut session, MARKER_C, (1, 1), "same").unwrap();
+        let before = session.project().clone();
+        let undo = session.history.undo.clone();
+
+        let page = session
+            .execute_query(QueryEnvelope::timeline_markers(
+                session.project_id(),
+                session.project_instance_id(),
+                1,
+                2,
+            ))
+            .unwrap();
+        let page_value = page.timeline_marker_page.unwrap();
+        assert_eq!(page_value.total_count, 3);
+        assert_eq!(page_value.offset, 1);
+        assert_eq!(page_value.limit, 2);
+        assert_eq!(page_value.next_offset, None);
+        assert_eq!(page_value.items[0].marker_id, marker_id(MARKER_A));
+        assert_eq!(page_value.items[1].marker_id, marker_id(MARKER_B));
+
+        let empty = session
+            .execute_query(QueryEnvelope::timeline_markers(
+                session.project_id(),
+                session.project_instance_id(),
+                99,
+                MAX_TIMELINE_MARKER_PAGE_SIZE,
+            ))
+            .unwrap();
+        assert!(empty.timeline_marker_page.unwrap().items.is_empty());
+        assert_eq!(
+            code(&session.execute_query(QueryEnvelope::timeline_markers(
+                session.project_id(),
+                session.project_instance_id(),
+                0,
+                MAX_TIMELINE_MARKER_PAGE_SIZE + 1,
+            ))),
+            OperationErrorCode::InvalidArguments
+        );
+        for arguments in [
+            json!({"offset": 0, "limit": 1, "unexpected": true}),
+            json!({"offset": -1, "limit": 1}),
+            json!({"offset": 0.5, "limit": 1}),
+            json!({"offset": 0, "limit": "1"}),
+        ] {
+            let invalid = QueryEnvelope {
+                query_id: "timeline.markers".to_owned(),
+                schema_version: 1,
+                project_id: session.project_id(),
+                project_instance_id: session.project_instance_id(),
+                arguments,
+            };
+            assert_eq!(
+                code(&session.execute_query(invalid)),
+                OperationErrorCode::InvalidArguments
+            );
+        }
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.history.undo, undo);
+
+        let summary = session
+            .execute_query(summary_query())
+            .expect("summary query should still use its original wire shape");
+        assert!(
+            !serde_json::to_value(summary)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .contains_key("timeline_marker_page")
+        );
+
+        let mut bounded = fixed_session();
+        let label = "x".repeat(MAX_TIMELINE_MARKER_LABEL_BYTES);
+        for index in 0..MAX_TIMELINE_MARKER_PAGE_SIZE {
+            let marker_id = format!("00000000-0000-4000-8000-{index:012x}");
+            marker_add(&mut bounded, &marker_id, (index as i64, 1), &label).unwrap();
+        }
+        let encoded = serde_json::to_vec(
+            &bounded
+                .execute_query(QueryEnvelope::timeline_markers(
+                    bounded.project_id(),
+                    bounded.project_instance_id(),
+                    0,
+                    MAX_TIMELINE_MARKER_PAGE_SIZE,
+                ))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(encoded.len() < 1_000_000);
+    }
+
+    #[test]
+    fn timeline_markers_do_not_change_when_clip_edits_run() {
+        let mut session = fixed_session();
+        seed_video_track_and_clip(&mut session, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (4, 1));
+        marker_add(&mut session, MARKER_A, (10, 1), "persistent").unwrap();
+        let expected = session.project().timeline().markers().to_vec();
+        execute(
+            &mut session,
+            "timeline.clip.move",
+            json!({"clip_id": CLIP_A, "track_id": TRACK_A, "timeline_start": rational_json(4, 1)}),
+        )
+        .unwrap();
+        execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({"clip_id": CLIP_A, "edge": "end", "timeline_time": rational_json(6, 1)}),
+        )
+        .unwrap();
+        execute(
+            &mut session,
+            "timeline.clip.split",
+            json!({
+                "clip_id": CLIP_A,
+                "new_clip_id": CLIP_B,
+                "timeline_time": rational_json(5, 1),
+            }),
+        )
+        .unwrap();
+        execute(
+            &mut session,
+            "timeline.clip.ripple_delete",
+            json!({"clip_id": CLIP_B}),
+        )
+        .unwrap();
+        assert_eq!(session.project().timeline().markers(), expected.as_slice());
+    }
+
+    #[test]
+    fn timeline_snap_v1_ignores_markers_and_v2_reports_marker_winners_and_ties() {
+        let mut session = fixed_session();
+        seed_video_track_and_clip(&mut session, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (1, 1));
+        marker_add(&mut session, MARKER_A, (3, 1), "snap").unwrap();
+        let before_revision = session.project_revision();
+        let before_history = session.history.undo.clone();
+        let v1 = session
+            .execute_query(QueryEnvelope::timeline_snap(
+                session.project_id(),
+                session.project_instance_id(),
+                super::TimelineSnapOperation::TrimEnd,
+                CLIP_A.parse().unwrap(),
+                None,
+                RationalTime::new(31, 10).unwrap(),
+            ))
+            .unwrap();
+        assert_eq!(v1.schema_version, 1);
+        let v1_json = serde_json::to_value(&v1).unwrap();
+        assert!(
+            !v1_json["timeline_snap"]
+                .as_object()
+                .unwrap()
+                .contains_key("target_marker_id")
+        );
+        assert_eq!(
+            v1.timeline_snap.unwrap().target_kind,
+            TimelineSnapTargetKind::None
+        );
+
+        let v2 = session
+            .execute_query(QueryEnvelope::timeline_snap_v2(
+                session.project_id(),
+                session.project_instance_id(),
+                super::TimelineSnapOperation::TrimEnd,
+                CLIP_A.parse().unwrap(),
+                None,
+                RationalTime::new(31, 10).unwrap(),
+            ))
+            .unwrap();
+        assert_eq!(v2.schema_version, 2);
+        let snap = v2.timeline_snap.unwrap();
+        assert_eq!(snap.target_kind, TimelineSnapTargetKind::Marker);
+        assert_eq!(snap.target_marker_id, Some(marker_id(MARKER_A)));
+        assert_eq!(snap.target_time, RationalTime::new(3, 1).unwrap());
+        assert_eq!(session.project_revision(), before_revision);
+        assert_eq!(session.history.undo, before_history);
+
+        let mut unsupported = QueryEnvelope::timeline_snap_v2(
+            session.project_id(),
+            session.project_instance_id(),
+            super::TimelineSnapOperation::TrimEnd,
+            CLIP_A.parse().unwrap(),
+            None,
+            RationalTime::new(31, 10).unwrap(),
+        );
+        unsupported.schema_version = 3;
+        assert_eq!(
+            code(&session.execute_query(unsupported)),
+            OperationErrorCode::UnsupportedQuerySchema
+        );
+        let mut other_query = summary_query();
+        other_query.schema_version = 2;
+        assert_eq!(
+            code(&session.execute_query(other_query)),
+            OperationErrorCode::UnsupportedQuerySchema
+        );
+
+        let mut tie_session = fixed_session();
+        seed_video_track_and_clip(&mut tie_session, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (1, 1));
+        add_track(&mut tie_session, TRACK_B, "video").unwrap();
+        insert_clip(
+            &mut tie_session,
+            CLIP_B,
+            TRACK_B,
+            MEDIA_A,
+            (1, 1),
+            (1, 1),
+            (1, 1),
+        )
+        .unwrap();
+        marker_add(&mut tie_session, MARKER_A, (1, 1), "tie").unwrap();
+        let tie = tie_session
+            .execute_query(QueryEnvelope::timeline_snap_v2(
+                tie_session.project_id(),
+                tie_session.project_instance_id(),
+                super::TimelineSnapOperation::TrimEnd,
+                CLIP_A.parse().unwrap(),
+                None,
+                RationalTime::new(1, 1).unwrap(),
+            ))
+            .unwrap();
+        assert_eq!(
+            tie.timeline_snap.unwrap().target_kind,
+            TimelineSnapTargetKind::ClipStart
+        );
+
+        let mut zero_tie = fixed_session();
+        seed_video_track_and_clip(&mut zero_tie, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (1, 1));
+        marker_add(&mut zero_tie, MARKER_A, (0, 1), "zero").unwrap();
+        let zero_tie = zero_tie
+            .execute_query(QueryEnvelope::timeline_snap_v2(
+                zero_tie.project_id(),
+                zero_tie.project_instance_id(),
+                super::TimelineSnapOperation::TrimStart,
+                CLIP_A.parse().unwrap(),
+                None,
+                RationalTime::new(1, 20).unwrap(),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(zero_tie.target_kind, TimelineSnapTargetKind::TimelineZero);
+        assert_eq!(zero_tie.target_marker_id, None);
+
+        let mut marker_tie = fixed_session();
+        seed_video_track_and_clip(&mut marker_tie, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (1, 1));
+        marker_add(&mut marker_tie, MARKER_B, (3, 1), "later").unwrap();
+        marker_add(&mut marker_tie, MARKER_A, (3, 1), "earlier").unwrap();
+        let marker_tie = marker_tie
+            .execute_query(QueryEnvelope::timeline_snap_v2(
+                marker_tie.project_id(),
+                marker_tie.project_instance_id(),
+                super::TimelineSnapOperation::TrimEnd,
+                CLIP_A.parse().unwrap(),
+                None,
+                RationalTime::new(31, 10).unwrap(),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(marker_tie.target_kind, TimelineSnapTargetKind::Marker);
+        assert_eq!(marker_tie.target_marker_id, Some(marker_id(MARKER_A)));
+
+        let mut move_end = fixed_session();
+        seed_video_track_and_clip(&mut move_end, MEDIA_A, TRACK_A, CLIP_A, (0, 1), (1, 1));
+        marker_add(&mut move_end, MARKER_A, (3, 1), "move end").unwrap();
+        let move_end = move_end
+            .execute_query(QueryEnvelope::timeline_snap_v2(
+                move_end.project_id(),
+                move_end.project_instance_id(),
+                super::TimelineSnapOperation::Move,
+                CLIP_A.parse().unwrap(),
+                Some(TRACK_A.parse().unwrap()),
+                RationalTime::new(21, 10).unwrap(),
+            ))
+            .unwrap()
+            .timeline_snap
+            .unwrap();
+        assert_eq!(move_end.target_kind, TimelineSnapTargetKind::Marker);
+        assert_eq!(move_end.target_marker_id, Some(marker_id(MARKER_A)));
+        assert_eq!(move_end.moving_anchor, TimelineSnapMovingAnchor::End);
+        assert_eq!(
+            move_end.resolved_target_time,
+            RationalTime::new(2, 1).unwrap()
         );
     }
 }

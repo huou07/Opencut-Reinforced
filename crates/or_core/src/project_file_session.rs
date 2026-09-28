@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn create_new_writes_a_v3_project_with_fresh_identity_and_empty_history() {
+    fn create_new_writes_a_v4_project_with_fresh_identity_and_empty_history() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
 
@@ -320,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v3_without_revision_change() {
+    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v4_without_revision_change() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let legacy = format!(
@@ -340,13 +340,13 @@ mod tests {
         session.save().unwrap();
         let saved = std::fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["schema_version"], 4);
         assert_eq!(encoded["project"]["revision"], 7);
         assert!(!session.is_dirty());
     }
 
     #[test]
-    fn opening_v2_with_media_stays_clean_until_explicit_v3_save() {
+    fn opening_v2_with_media_stays_clean_until_explicit_v4_save() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let item = MediaItem::new(
@@ -382,8 +382,45 @@ mod tests {
 
         let saved = fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["schema_version"], 4);
         assert_eq!(encoded["project"]["revision"], 11);
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn opening_v3_with_timeline_stays_clean_until_explicit_v4_save() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let legacy = serde_json::to_string(&json!({
+            "format": "opencut-reinforced-project",
+            "schema_version": 3,
+            "project": {
+                "id": PROJECT_ID,
+                "revision": 17,
+                "name": "Legacy timeline",
+                "media": [],
+                "timeline": {"tracks": []}
+            }
+        }))
+        .unwrap();
+        fs::write(&path, &legacy).unwrap();
+
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        assert!(!session.is_dirty());
+        assert_eq!(fs::read_to_string(&path).unwrap(), legacy);
+        assert_eq!(
+            session.session().project_revision(),
+            ProjectRevision::new(17)
+        );
+        assert!(session.session().project().timeline().tracks().is_empty());
+        assert!(session.session().project().timeline().markers().is_empty());
+
+        session.save().unwrap();
+
+        let saved = fs::read_to_string(&path).unwrap();
+        let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(encoded["schema_version"], 4);
+        assert_eq!(encoded["project"]["revision"], 17);
         assert!(!session.is_dirty());
     }
 
