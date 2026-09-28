@@ -5,8 +5,8 @@
   "architecture_execution_lock": "DONE",
   "phase_status": {
     "5": "DONE",
-    "6": "IN_PROGRESS",
-    "7": "PLANNED",
+    "6": "DONE",
+    "7": "IN_PROGRESS",
     "8": "PLANNED",
     "9": "PLANNED",
     "10": "PLANNED",
@@ -17,7 +17,7 @@
     "15": "PLANNED",
     "16": "PLANNED"
   },
-  "current_next": "6E2B",
+  "current_next": "7A",
   "checkpoints": {
     "6A": "DONE",
     "6B": "DONE",
@@ -25,8 +25,8 @@
     "6D": "DONE",
     "6E1": "DONE",
     "6E2A": "DONE",
-    "6E2B": "NEXT",
-    "7A": "PLANNED",
+    "6E2B": "DONE",
+    "7A": "NEXT",
     "7B": "PLANNED",
     "7C": "PLANNED",
     "7D": "PLANNED",
