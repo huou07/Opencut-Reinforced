@@ -116,6 +116,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ProjectTimelineMarkerView> dco_decode_list_project_timeline_marker_view(
+    dynamic raw,
+  );
+
+  @protected
   List<ProjectTimelineTrackView> dco_decode_list_project_timeline_track_view(
     dynamic raw,
   );
@@ -181,6 +186,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw);
+
+  @protected
+  ProjectTimelineMarkerPageView dco_decode_project_timeline_marker_page_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTimelineMarkerView dco_decode_project_timeline_marker_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectTimelineSnapView dco_decode_project_timeline_snap_view(dynamic raw);
@@ -337,6 +352,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ProjectTimelineMarkerView> sse_decode_list_project_timeline_marker_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ProjectTimelineTrackView> sse_decode_list_project_timeline_track_view(
     SseDeserializer deserializer,
   );
@@ -424,6 +444,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectTimelineClipView sse_decode_project_timeline_clip_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineMarkerPageView sse_decode_project_timeline_marker_page_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineMarkerView sse_decode_project_timeline_marker_view(
     SseDeserializer deserializer,
   );
 
@@ -614,6 +644,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_timeline_marker_view(
+    List<ProjectTimelineMarkerView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_project_timeline_track_view(
     List<ProjectTimelineTrackView> self,
     SseSerializer serializer,
@@ -718,6 +754,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_timeline_clip_view(
     ProjectTimelineClipView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_marker_page_view(
+    ProjectTimelineMarkerPageView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_marker_view(
+    ProjectTimelineMarkerView self,
     SseSerializer serializer,
   );
 

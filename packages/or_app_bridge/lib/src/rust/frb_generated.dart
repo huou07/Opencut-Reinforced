@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -593990472;
+  int get rustContentHash => -285737263;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -80,6 +80,17 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleAddTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+    required String label,
+  });
+
   Future<ProjectActionResult> crateApiProjectProjectHostHandleAddTimelineTrack({
     required ProjectHostHandle that,
     required String projectId,
@@ -100,6 +111,15 @@ abstract class RustLibApi extends BaseApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String clipId,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleDeleteTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
   });
 
   Future<ProjectActionResult> crateApiProjectProjectHostHandleImportMedia({
@@ -140,6 +160,13 @@ abstract class RustLibApi extends BaseApi {
     required BigInt limit,
   });
 
+  Future<ProjectTimelineMarkerPageView>
+  crateApiProjectProjectHostHandleListTimelineMarkers({
+    required ProjectHostHandle that,
+    required BigInt offset,
+    required BigInt limit,
+  });
+
   Future<ProjectTimelineTracksView>
   crateApiProjectProjectHostHandleListTimelineTracks({
     required ProjectHostHandle that,
@@ -154,6 +181,17 @@ abstract class RustLibApi extends BaseApi {
     required String trackId,
     required PlatformInt64 timelineStartNumerator,
     required int timelineStartDenominator,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleMoveTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
   });
 
   Future<MediaArtifactBytesView?>
@@ -193,6 +231,16 @@ abstract class RustLibApi extends BaseApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String name,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleRenameTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required String label,
   });
 
   Future<MediaArtifactRequestView>
@@ -319,6 +367,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleAddTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+    required String label,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_i_64(timelineTimeNumerator, serializer);
+          sse_encode_u_32(timelineTimeDenominator, serializer);
+          sse_encode_String(label, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleAddTimelineMarkerConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          timelineTimeNumerator,
+          timelineTimeDenominator,
+          label,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleAddTimelineMarkerConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_add_timeline_marker",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "timelineTimeNumerator",
+          "timelineTimeDenominator",
+          "label",
+        ],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleAddTimelineTrack({
     required ProjectHostHandle that,
     required String projectId,
@@ -341,7 +455,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 2,
             port: port_,
           );
         },
@@ -386,7 +500,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -431,7 +545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -466,6 +580,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleDeleteTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(markerId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleDeleteTimelineMarkerConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          markerId,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleDeleteTimelineMarkerConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_delete_timeline_marker",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "markerId",
+        ],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleImportMedia({
     required ProjectHostHandle that,
     required String projectId,
@@ -488,7 +661,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 6,
             port: port_,
           );
         },
@@ -553,7 +726,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 7,
             port: port_,
           );
         },
@@ -620,7 +793,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 8,
             port: port_,
           );
         },
@@ -663,7 +836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 9,
             port: port_,
           );
         },
@@ -686,6 +859,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectTimelineMarkerPageView>
+  crateApiProjectProjectHostHandleListTimelineMarkers({
+    required ProjectHostHandle that,
+    required BigInt offset,
+    required BigInt limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(offset, serializer);
+          sse_encode_u_64(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_timeline_marker_page_view,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleListTimelineMarkersConstMeta,
+        argValues: [that, offset, limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleListTimelineMarkersConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_list_timeline_markers",
+        argNames: ["that", "offset", "limit"],
+      );
+
+  @override
   Future<ProjectTimelineTracksView>
   crateApiProjectProjectHostHandleListTimelineTracks({
     required ProjectHostHandle that,
@@ -701,7 +917,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 11,
             port: port_,
           );
         },
@@ -752,7 +968,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 12,
             port: port_,
           );
         },
@@ -793,6 +1009,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleMoveTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(markerId, serializer);
+          sse_encode_i_64(timelineTimeNumerator, serializer);
+          sse_encode_u_32(timelineTimeDenominator, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleMoveTimelineMarkerConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          markerId,
+          timelineTimeNumerator,
+          timelineTimeDenominator,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleMoveTimelineMarkerConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_move_timeline_marker",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "markerId",
+          "timelineTimeNumerator",
+          "timelineTimeDenominator",
+        ],
+      );
+
+  @override
   Future<MediaArtifactBytesView?>
   crateApiProjectProjectHostHandleReadMediaArtifact({
     required ProjectHostHandle that,
@@ -812,7 +1094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 14,
             port: port_,
           );
         },
@@ -856,7 +1138,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 15,
             port: port_,
           );
         },
@@ -905,7 +1187,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 16,
             port: port_,
           );
         },
@@ -962,7 +1244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 17,
             port: port_,
           );
         },
@@ -1020,7 +1302,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1048,6 +1330,69 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleRenameTimelineMarker({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required String label,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(markerId, serializer);
+          sse_encode_String(label, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleRenameTimelineMarkerConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          markerId,
+          label,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleRenameTimelineMarkerConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_rename_timeline_marker",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "markerId",
+          "label",
+        ],
+      );
+
+  @override
   Future<MediaArtifactRequestView>
   crateApiProjectProjectHostHandleRequestMediaThumbnail({
     required ProjectHostHandle that,
@@ -1065,7 +1410,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1106,7 +1451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1161,7 +1506,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1228,7 +1573,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1278,7 +1623,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1327,7 +1672,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1383,7 +1728,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 21,
+              funcId: 26,
               port: port_,
             );
           },
@@ -1428,7 +1773,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 22,
+              funcId: 27,
               port: port_,
             );
           },
@@ -1468,7 +1813,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1518,7 +1863,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1579,7 +1924,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1614,7 +1959,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1644,7 +1989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1671,7 +2016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1703,7 +2048,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1737,7 +2082,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1764,7 +2109,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1794,7 +2139,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1822,7 +2167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 38,
             port: port_,
           );
         },
@@ -2024,6 +2369,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_project_timeline_clip_view)
+        .toList();
+  }
+
+  @protected
+  List<ProjectTimelineMarkerView> dco_decode_list_project_timeline_marker_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_project_timeline_marker_view)
         .toList();
   }
 
@@ -2255,11 +2610,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTimelineMarkerPageView dco_decode_project_timeline_marker_page_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return ProjectTimelineMarkerPageView(
+      projectId: dco_decode_String(arr[0]),
+      projectInstanceId: dco_decode_String(arr[1]),
+      projectRevision: dco_decode_u_64(arr[2]),
+      items: dco_decode_list_project_timeline_marker_view(arr[3]),
+      totalCount: dco_decode_u_64(arr[4]),
+      offset: dco_decode_u_64(arr[5]),
+      limit: dco_decode_u_64(arr[6]),
+      nextOffset: dco_decode_opt_box_autoadd_u_64(arr[7]),
+    );
+  }
+
+  @protected
+  ProjectTimelineMarkerView dco_decode_project_timeline_marker_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ProjectTimelineMarkerView(
+      markerId: dco_decode_String(arr[0]),
+      timelineTime: dco_decode_rational_time_view(arr[1]),
+      label: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
   ProjectTimelineSnapView dco_decode_project_timeline_snap_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return ProjectTimelineSnapView(
       projectId: dco_decode_String(arr[0]),
       projectInstanceId: dco_decode_String(arr[1]),
@@ -2272,6 +2662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       targetTime: dco_decode_rational_time_view(arr[8]),
       targetTrackId: dco_decode_opt_String(arr[9]),
       targetClipId: dco_decode_opt_String(arr[10]),
+      targetMarkerId: dco_decode_opt_String(arr[11]),
     );
   }
 
@@ -2644,6 +3035,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ProjectTimelineMarkerView> sse_decode_list_project_timeline_marker_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ProjectTimelineMarkerView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_project_timeline_marker_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<ProjectTimelineTrackView> sse_decode_list_project_timeline_track_view(
     SseDeserializer deserializer,
   ) {
@@ -2954,6 +3359,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTimelineMarkerPageView sse_decode_project_timeline_marker_page_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_projectId = sse_decode_String(deserializer);
+    var var_projectInstanceId = sse_decode_String(deserializer);
+    var var_projectRevision = sse_decode_u_64(deserializer);
+    var var_items = sse_decode_list_project_timeline_marker_view(deserializer);
+    var var_totalCount = sse_decode_u_64(deserializer);
+    var var_offset = sse_decode_u_64(deserializer);
+    var var_limit = sse_decode_u_64(deserializer);
+    var var_nextOffset = sse_decode_opt_box_autoadd_u_64(deserializer);
+    return ProjectTimelineMarkerPageView(
+      projectId: var_projectId,
+      projectInstanceId: var_projectInstanceId,
+      projectRevision: var_projectRevision,
+      items: var_items,
+      totalCount: var_totalCount,
+      offset: var_offset,
+      limit: var_limit,
+      nextOffset: var_nextOffset,
+    );
+  }
+
+  @protected
+  ProjectTimelineMarkerView sse_decode_project_timeline_marker_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_markerId = sse_decode_String(deserializer);
+    var var_timelineTime = sse_decode_rational_time_view(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    return ProjectTimelineMarkerView(
+      markerId: var_markerId,
+      timelineTime: var_timelineTime,
+      label: var_label,
+    );
+  }
+
+  @protected
   ProjectTimelineSnapView sse_decode_project_timeline_snap_view(
     SseDeserializer deserializer,
   ) {
@@ -2973,6 +3418,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_targetTime = sse_decode_rational_time_view(deserializer);
     var var_targetTrackId = sse_decode_opt_String(deserializer);
     var var_targetClipId = sse_decode_opt_String(deserializer);
+    var var_targetMarkerId = sse_decode_opt_String(deserializer);
     return ProjectTimelineSnapView(
       projectId: var_projectId,
       projectInstanceId: var_projectInstanceId,
@@ -2985,6 +3431,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       targetTime: var_targetTime,
       targetTrackId: var_targetTrackId,
       targetClipId: var_targetClipId,
+      targetMarkerId: var_targetMarkerId,
     );
   }
 
@@ -3391,6 +3838,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_project_timeline_marker_view(
+    List<ProjectTimelineMarkerView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_project_timeline_marker_view(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_project_timeline_track_view(
     List<ProjectTimelineTrackView> self,
     SseSerializer serializer,
@@ -3637,6 +4096,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_project_timeline_marker_page_view(
+    ProjectTimelineMarkerPageView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.projectId, serializer);
+    sse_encode_String(self.projectInstanceId, serializer);
+    sse_encode_u_64(self.projectRevision, serializer);
+    sse_encode_list_project_timeline_marker_view(self.items, serializer);
+    sse_encode_u_64(self.totalCount, serializer);
+    sse_encode_u_64(self.offset, serializer);
+    sse_encode_u_64(self.limit, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.nextOffset, serializer);
+  }
+
+  @protected
+  void sse_encode_project_timeline_marker_view(
+    ProjectTimelineMarkerView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.markerId, serializer);
+    sse_encode_rational_time_view(self.timelineTime, serializer);
+    sse_encode_String(self.label, serializer);
+  }
+
+  @protected
   void sse_encode_project_timeline_snap_view(
     ProjectTimelineSnapView self,
     SseSerializer serializer,
@@ -3653,6 +4139,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_rational_time_view(self.targetTime, serializer);
     sse_encode_opt_String(self.targetTrackId, serializer);
     sse_encode_opt_String(self.targetClipId, serializer);
+    sse_encode_opt_String(self.targetMarkerId, serializer);
   }
 
   @protected
@@ -3823,6 +4310,23 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         .rust_arc_decrement_strong_count_ProjectHostHandlePtr,
   );
 
+  Future<ProjectActionResult> addTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+    required String label,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleAddTimelineMarker(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    timelineTimeNumerator: timelineTimeNumerator,
+    timelineTimeDenominator: timelineTimeDenominator,
+    label: label,
+  );
+
   Future<ProjectActionResult> addTimelineTrack({
     required String projectId,
     required String projectInstanceId,
@@ -3854,6 +4358,20 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     expectedRevision: expectedRevision,
     clipId: clipId,
   );
+
+  Future<ProjectActionResult> deleteTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+  }) =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleDeleteTimelineMarker(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        markerId: markerId,
+      );
 
   /// Prepares media without holding the live-host lock, then dispatches with the
   /// identity and revision captured by the caller before probing started.
@@ -3917,6 +4435,16 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     limit: limit,
   );
 
+  Future<ProjectTimelineMarkerPageView> listTimelineMarkers({
+    required BigInt offset,
+    required BigInt limit,
+  }) =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleListTimelineMarkers(
+        that: this,
+        offset: offset,
+        limit: limit,
+      );
+
   Future<ProjectTimelineTracksView> listTimelineTracks() => RustLib.instance.api
       .crateApiProjectProjectHostHandleListTimelineTracks(that: this);
 
@@ -3937,6 +4465,23 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     trackId: trackId,
     timelineStartNumerator: timelineStartNumerator,
     timelineStartDenominator: timelineStartDenominator,
+  );
+
+  Future<ProjectActionResult> moveTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleMoveTimelineMarker(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    markerId: markerId,
+    timelineTimeNumerator: timelineTimeNumerator,
+    timelineTimeDenominator: timelineTimeDenominator,
   );
 
   Future<MediaArtifactBytesView?> readMediaArtifact({
@@ -3998,6 +4543,22 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     expectedRevision: expectedRevision,
     name: name,
   );
+
+  Future<ProjectActionResult> renameTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required String label,
+  }) =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleRenameTimelineMarker(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        markerId: markerId,
+        label: label,
+      );
 
   Future<MediaArtifactRequestView> requestMediaThumbnail({
     required String mediaId,

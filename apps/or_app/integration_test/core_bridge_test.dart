@@ -847,6 +847,13 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) => _gateway.listTimelineMarkers(session, offset: offset, limit: limit);
+
+  @override
   Future<ProjectTimelineSnapResult> resolveTimelineSnap(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -952,6 +959,52 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String clipId,
   ) => _gateway.rippleDeleteTimelineClip(session, current, clipId);
+
+  @override
+  Future<ProjectActionResult> addTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectRationalTime timelineTime,
+    required String label,
+  }) => _gateway.addTimelineMarker(
+    session,
+    current,
+    timelineTime: timelineTime,
+    label: label,
+  );
+
+  @override
+  Future<ProjectActionResult> moveTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required ProjectRationalTime timelineTime,
+  }) => _gateway.moveTimelineMarker(
+    session,
+    current,
+    markerId: markerId,
+    timelineTime: timelineTime,
+  );
+
+  @override
+  Future<ProjectActionResult> renameTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required String label,
+  }) => _gateway.renameTimelineMarker(
+    session,
+    current,
+    markerId: markerId,
+    label: label,
+  );
+
+  @override
+  Future<ProjectActionResult> deleteTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String markerId,
+  ) => _gateway.deleteTimelineMarker(session, current, markerId);
 
   @override
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(

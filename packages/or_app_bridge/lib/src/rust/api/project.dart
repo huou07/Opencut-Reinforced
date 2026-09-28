@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `query`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `query`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -30,6 +30,15 @@ Future<RecoveryActionResult> discardRecovery({required String path}) =>
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>>
 abstract class ProjectHostHandle implements RustOpaqueInterface {
+  Future<ProjectActionResult> addTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
+    required String label,
+  });
+
   Future<ProjectActionResult> addTimelineTrack({
     required String projectId,
     required String projectInstanceId,
@@ -44,6 +53,13 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String clipId,
+  });
+
+  Future<ProjectActionResult> deleteTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
   });
 
   /// Prepares media without holding the live-host lock, then dispatches with the
@@ -80,6 +96,11 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required BigInt limit,
   });
 
+  Future<ProjectTimelineMarkerPageView> listTimelineMarkers({
+    required BigInt offset,
+    required BigInt limit,
+  });
+
   Future<ProjectTimelineTracksView> listTimelineTracks();
 
   Future<ProjectActionResult> moveTimelineClip({
@@ -90,6 +111,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String trackId,
     required PlatformInt64 timelineStartNumerator,
     required int timelineStartDenominator,
+  });
+
+  Future<ProjectActionResult> moveTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required PlatformInt64 timelineTimeNumerator,
+    required int timelineTimeDenominator,
   });
 
   Future<MediaArtifactBytesView?> readMediaArtifact({
@@ -122,6 +152,14 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String name,
+  });
+
+  Future<ProjectActionResult> renameTimelineMarker({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String markerId,
+    required String label,
   });
 
   Future<MediaArtifactRequestView> requestMediaThumbnail({
@@ -572,6 +610,78 @@ class ProjectTimelineClipView {
           sourceDuration == other.sourceDuration;
 }
 
+class ProjectTimelineMarkerPageView {
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectTimelineMarkerView> items;
+  final BigInt totalCount;
+  final BigInt offset;
+  final BigInt limit;
+  final BigInt? nextOffset;
+
+  const ProjectTimelineMarkerPageView({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required this.items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    this.nextOffset,
+  });
+
+  @override
+  int get hashCode =>
+      projectId.hashCode ^
+      projectInstanceId.hashCode ^
+      projectRevision.hashCode ^
+      items.hashCode ^
+      totalCount.hashCode ^
+      offset.hashCode ^
+      limit.hashCode ^
+      nextOffset.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineMarkerPageView &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          projectInstanceId == other.projectInstanceId &&
+          projectRevision == other.projectRevision &&
+          items == other.items &&
+          totalCount == other.totalCount &&
+          offset == other.offset &&
+          limit == other.limit &&
+          nextOffset == other.nextOffset;
+}
+
+class ProjectTimelineMarkerView {
+  final String markerId;
+  final RationalTimeView timelineTime;
+  final String label;
+
+  const ProjectTimelineMarkerView({
+    required this.markerId,
+    required this.timelineTime,
+    required this.label,
+  });
+
+  @override
+  int get hashCode =>
+      markerId.hashCode ^ timelineTime.hashCode ^ label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineMarkerView &&
+          runtimeType == other.runtimeType &&
+          markerId == other.markerId &&
+          timelineTime == other.timelineTime &&
+          label == other.label;
+}
+
 class ProjectTimelineSnapView {
   final String projectId;
   final String projectInstanceId;
@@ -584,6 +694,7 @@ class ProjectTimelineSnapView {
   final RationalTimeView targetTime;
   final String? targetTrackId;
   final String? targetClipId;
+  final String? targetMarkerId;
 
   const ProjectTimelineSnapView({
     required this.projectId,
@@ -597,6 +708,7 @@ class ProjectTimelineSnapView {
     required this.targetTime,
     this.targetTrackId,
     this.targetClipId,
+    this.targetMarkerId,
   });
 
   @override
@@ -611,7 +723,8 @@ class ProjectTimelineSnapView {
       targetKind.hashCode ^
       targetTime.hashCode ^
       targetTrackId.hashCode ^
-      targetClipId.hashCode;
+      targetClipId.hashCode ^
+      targetMarkerId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -628,7 +741,8 @@ class ProjectTimelineSnapView {
           targetKind == other.targetKind &&
           targetTime == other.targetTime &&
           targetTrackId == other.targetTrackId &&
-          targetClipId == other.targetClipId;
+          targetClipId == other.targetClipId &&
+          targetMarkerId == other.targetMarkerId;
 }
 
 class ProjectTimelineTrackView {
@@ -814,7 +928,13 @@ enum TimelineSnapMovingAnchorView { none, start, end }
 
 enum TimelineSnapOperationView { move, trimStart, trimEnd }
 
-enum TimelineSnapTargetKindView { none, timelineZero, clipStart, clipEnd }
+enum TimelineSnapTargetKindView {
+  none,
+  timelineZero,
+  clipStart,
+  clipEnd,
+  marker,
+}
 
 enum TimelineTrackKindView { video, audio }
 

@@ -517,6 +517,128 @@ void main() {
     expect(loadMore, findsNothing);
   });
 
+  testWidgets('timeline marker pages load in bounded, revision-safe batches', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final markers = [
+      for (var index = 0; index < 101; index++)
+        ProjectTimelineMarker(
+          markerId: 'marker-$index',
+          timelineTime: ProjectRationalTime(BigInt.from(index), 1),
+          label: 'Marker $index',
+        ),
+    ];
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'marker-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 0,
+        ),
+      ]
+      ..initialTimelineMarkers = markers;
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/paged-markers.orproj',
+    );
+    await _createProject(tester, 'Paged markers');
+
+    expect(gateway.timelineMarkerOffsets, [0]);
+    expect(find.text('Marker 0'), findsOneWidget);
+    final loadMore = find.byKey(const ValueKey('timeline-marker-load-more'));
+    await tester.ensureVisible(loadMore);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    expect(gateway.timelineMarkerOffsets, [0, 100]);
+    expect(find.text('Marker 100'), findsOneWidget);
+    expect(loadMore, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('marker ruler uses canonical marker commands for all actions', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'marker-actions-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 0,
+        ),
+      ];
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/marker-actions.orproj',
+    );
+    await _createProject(tester, 'Marker actions');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-add-marker')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('timeline-marker-label')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-marker-time')),
+      '3/2',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-marker-label')),
+      'First cut',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('timeline-confirm-add-marker')));
+    await tester.pumpAndSettle();
+    expect(gateway.addTimelineMarkerCalls, 1);
+    expect(gateway.lastMarkerTime?.canonical, '3/2');
+    expect(find.text('First cut'), findsOneWidget);
+
+    const markerId = 'marker-1';
+    await tester.tap(find.byKey(const ValueKey('timeline-marker-marker-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('timeline-marker-rename-$markerId')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(ValueKey('timeline-marker-rename-label-$markerId')),
+      'Opening cut',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(ValueKey('timeline-confirm-rename-$markerId')));
+    await tester.pumpAndSettle();
+    expect(gateway.renameTimelineMarkerCalls, 1);
+    expect(gateway.lastMarkerLabel, 'Opening cut');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-marker-marker-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('timeline-marker-move-$markerId')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-marker-move-time')),
+      '5/2',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(ValueKey('timeline-confirm-move-$markerId')));
+    await tester.pumpAndSettle();
+    expect(gateway.moveTimelineMarkerCalls, 1);
+    expect(gateway.lastMarkerTime?.canonical, '5/2');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-marker-marker-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('timeline-marker-delete-$markerId')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('timeline-confirm-delete-marker-$markerId')),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.deleteTimelineMarkerCalls, 1);
+    expect(
+      find.byKey(const ValueKey('timeline-marker-marker-1')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('stale timeline page is discarded and refreshed coherently', (
     tester,
   ) async {
@@ -2148,6 +2270,7 @@ class _FakeProjectGateway implements ProjectGateway {
   List<ProjectMediaItem> initialMedia = [];
   List<ProjectTimelineTrack> initialTimelineTracks = [];
   Map<String, List<ProjectTimelineClip>> initialTimelineClips = {};
+  List<ProjectTimelineMarker> initialTimelineMarkers = [];
   final Map<String, ProjectMediaArtifactRequest> artifactRequestResponses = {};
   final Map<String, ProjectMediaArtifact> artifactResponses = {};
   String? nextSaveFailure;
@@ -2163,6 +2286,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int mediaListCalls = 0;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
+  int timelineMarkersCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
   int resolveTimelineSnapCalls = 0;
   bool revisionChangeOnNextTimelineSnap = false;
@@ -2186,12 +2310,20 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastTrimTimelineTime;
   int splitTimelineClipCalls = 0;
   int rippleDeleteTimelineClipCalls = 0;
+  int addTimelineMarkerCalls = 0;
+  int moveTimelineMarkerCalls = 0;
+  int renameTimelineMarkerCalls = 0;
+  int deleteTimelineMarkerCalls = 0;
+  ProjectRationalTime? lastMarkerTime;
+  String? lastMarkerLabel;
+  String? lastMarkerId;
   String? nextTimelineFailure;
   int thumbnailRequests = 0;
   int waveformRequests = 0;
   int mediaPreviewReads = 0;
   final List<int> mediaListOffsets = [];
   final List<int> timelineClipOffsets = [];
+  final List<int> timelineMarkerOffsets = [];
   int importMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportPath;
@@ -2219,6 +2351,7 @@ class _FakeProjectGateway implements ProjectGateway {
     final session = _FakeSession(path, view)
       ..media.addAll(initialMedia)
       ..tracks = List.of(initialTimelineTracks)
+      ..markers.addAll(initialTimelineMarkers)
       ..clips.addAll({
         for (final entry in initialTimelineClips.entries)
           entry.key: List.of(entry.value),
@@ -2257,6 +2390,7 @@ class _FakeProjectGateway implements ProjectGateway {
           )
           ..media.addAll(initialMedia)
           ..tracks = List.of(initialTimelineTracks)
+          ..markers.addAll(initialTimelineMarkers)
           ..clips.addAll({
             for (final entry in initialTimelineClips.entries)
               entry.key: List.of(entry.value),
@@ -2441,6 +2575,30 @@ class _FakeProjectGateway implements ProjectGateway {
       offset: offset,
       limit: limit,
       nextOffset: end < clips.length ? end : null,
+    );
+  }
+
+  @override
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle handle, {
+    required int offset,
+    required int limit,
+  }) async {
+    timelineMarkersCalls++;
+    timelineMarkerOffsets.add(offset);
+    final session = _session(handle);
+    final markers = session.markers;
+    final start = offset.clamp(0, markers.length).toInt();
+    final end = (start + limit).clamp(start, markers.length).toInt();
+    return ProjectTimelineMarkerPage(
+      projectId: session.view.projectId,
+      projectInstanceId: session.view.projectInstanceId,
+      projectRevision: session.view.revision,
+      items: markers.sublist(start, end),
+      totalCount: markers.length,
+      offset: offset,
+      limit: limit,
+      nextOffset: end < markers.length ? end : null,
     );
   }
 
@@ -2784,6 +2942,120 @@ class _FakeProjectGateway implements ProjectGateway {
     return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
   }
 
+  @override
+  Future<ProjectActionResult> addTimelineMarker(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required ProjectRationalTime timelineTime,
+    required String label,
+  }) async {
+    addTimelineMarkerCalls++;
+    lastMarkerTime = timelineTime;
+    lastMarkerLabel = label;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    session.markers.add(
+      ProjectTimelineMarker(
+        markerId: 'marker-${session.nextMarkerId++}',
+        timelineTime: timelineTime,
+        label: label,
+      ),
+    );
+    session.markers.sort(
+      (left, right) => _compareRational(left.timelineTime, right.timelineTime),
+    );
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> moveTimelineMarker(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String markerId,
+    required ProjectRationalTime timelineTime,
+  }) async {
+    moveTimelineMarkerCalls++;
+    lastMarkerId = markerId;
+    lastMarkerTime = timelineTime;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.markers.indexWhere(
+      (marker) => marker.markerId == markerId,
+    );
+    if (index < 0) {
+      return _timelineOperationFailure('TIMELINE_MARKER_NOT_FOUND');
+    }
+    final marker = session.markers[index];
+    session.markers[index] = ProjectTimelineMarker(
+      markerId: marker.markerId,
+      timelineTime: timelineTime,
+      label: marker.label,
+    );
+    session.markers.sort(
+      (left, right) => _compareRational(left.timelineTime, right.timelineTime),
+    );
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> renameTimelineMarker(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String markerId,
+    required String label,
+  }) async {
+    renameTimelineMarkerCalls++;
+    lastMarkerId = markerId;
+    lastMarkerLabel = label;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.markers.indexWhere(
+      (marker) => marker.markerId == markerId,
+    );
+    if (index < 0) {
+      return _timelineOperationFailure('TIMELINE_MARKER_NOT_FOUND');
+    }
+    final marker = session.markers[index];
+    session.markers[index] = ProjectTimelineMarker(
+      markerId: marker.markerId,
+      timelineTime: marker.timelineTime,
+      label: label,
+    );
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> deleteTimelineMarker(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String markerId,
+  ) async {
+    deleteTimelineMarkerCalls++;
+    lastMarkerId = markerId;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.markers.indexWhere(
+      (marker) => marker.markerId == markerId,
+    );
+    if (index < 0) {
+      return _timelineOperationFailure('TIMELINE_MARKER_NOT_FOUND');
+    }
+    session.markers.removeAt(index);
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
   ProjectActionResult? _timelineFailure() {
     final code = nextTimelineFailure;
     nextTimelineFailure = null;
@@ -3053,9 +3325,11 @@ class _FakeSession implements ProjectSessionHandle {
   ProjectReadModel view;
   final List<ProjectMediaItem> media = [];
   List<ProjectTimelineTrack> tracks = [];
+  final List<ProjectTimelineMarker> markers = [];
   final Map<String, List<ProjectTimelineClip>> clips = {};
   int nextTrackId = 1;
   int nextClipId = 1;
+  int nextMarkerId = 1;
   final List<String> undo = [];
   final List<String> redo = [];
   final StreamController<ProjectHostEvent> events =

@@ -2,16 +2,16 @@ use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
-    CommandEnvelope, JobManagerConfig, MediaArtifactEvent, MediaArtifactEventState,
+    CommandEnvelope, JobManagerConfig, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
     MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
     MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
     ProjectRevision, QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
-    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
-    TimelineTrackSummary, TimelineTrimEdge, TrackId, TrackKind, apply_project_recovery,
-    discard_project_recovery, ffmpeg_executable_from_environment, inspect_project_recovery,
-    prepare_media_import,
+    TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation,
+    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TrackId,
+    TrackKind, apply_project_recovery, discard_project_recovery,
+    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{
@@ -90,6 +90,7 @@ pub enum TimelineSnapTargetKindView {
     TimelineZero,
     ClipStart,
     ClipEnd,
+    Marker,
 }
 
 #[derive(Clone, Debug)]
@@ -130,6 +131,25 @@ pub struct ProjectTimelineClipPageView {
 }
 
 #[derive(Clone, Debug)]
+pub struct ProjectTimelineMarkerView {
+    pub marker_id: String,
+    pub timeline_time: RationalTimeView,
+    pub label: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineMarkerPageView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub items: Vec<ProjectTimelineMarkerView>,
+    pub total_count: u64,
+    pub offset: u64,
+    pub limit: u64,
+    pub next_offset: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
 pub struct ProjectTimelineSnapView {
     pub project_id: String,
     pub project_instance_id: String,
@@ -142,6 +162,7 @@ pub struct ProjectTimelineSnapView {
     pub target_time: RationalTimeView,
     pub target_track_id: Option<String>,
     pub target_clip_id: Option<String>,
+    pub target_marker_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -539,6 +560,28 @@ impl ProjectHostHandle {
         Ok(timeline_clip_page_view(&result, page))
     }
 
+    pub fn list_timeline_markers(
+        &self,
+        offset: u64,
+        limit: u64,
+    ) -> Result<ProjectTimelineMarkerPageView, ProjectBridgeError> {
+        let offset =
+            usize::try_from(offset).map_err(|_| timeline_marker_query_arguments_error())?;
+        let limit = usize::try_from(limit).map_err(|_| timeline_marker_query_arguments_error())?;
+        let described = self.host.describe().map_err(host_error)?;
+        let result = self.query(QueryEnvelope::timeline_markers(
+            described.summary.project_id,
+            described.summary.project_instance_id,
+            offset,
+            limit,
+        ))?;
+        let page = result
+            .timeline_marker_page
+            .as_ref()
+            .ok_or_else(unexpected_response_error)?;
+        Ok(timeline_marker_page_view(&result, page))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn resolve_timeline_snap(
         &self,
@@ -572,7 +615,7 @@ impl ProjectHostHandle {
             TimelineSnapOperationView::TrimStart => TimelineSnapOperation::TrimStart,
             TimelineSnapOperationView::TrimEnd => TimelineSnapOperation::TrimEnd,
         };
-        let result = self.query(QueryEnvelope::timeline_snap(
+        let result = self.query(QueryEnvelope::timeline_snap_v2(
             project_id,
             project_instance_id,
             operation,
@@ -865,6 +908,127 @@ impl ProjectHostHandle {
                     project_instance_id,
                     revision,
                     clip_id,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_timeline_marker(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        timeline_time_numerator: i64,
+        timeline_time_denominator: u32,
+        label: String,
+    ) -> ProjectActionResult {
+        let timeline_time =
+            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::add_timeline_marker(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    MarkerId::generate(),
+                    timeline_time,
+                    label,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn move_timeline_marker(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        marker_id: String,
+        timeline_time_numerator: i64,
+        timeline_time_denominator: u32,
+    ) -> ProjectActionResult {
+        let marker_id = match MarkerId::from_str(&marker_id) {
+            Ok(marker_id) => marker_id,
+            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
+        };
+        let timeline_time =
+            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::move_timeline_marker(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    marker_id,
+                    timeline_time,
+                )
+            },
+        )
+    }
+
+    pub fn rename_timeline_marker(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        marker_id: String,
+        label: String,
+    ) -> ProjectActionResult {
+        let marker_id = match MarkerId::from_str(&marker_id) {
+            Ok(marker_id) => marker_id,
+            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::rename_timeline_marker(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    marker_id,
+                    label,
+                )
+            },
+        )
+    }
+
+    pub fn delete_timeline_marker(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        marker_id: String,
+    ) -> ProjectActionResult {
+        let marker_id = match MarkerId::from_str(&marker_id) {
+            Ok(marker_id) => marker_id,
+            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::delete_timeline_marker(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    marker_id,
                 )
             },
         )
@@ -1439,6 +1603,32 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     }
 }
 
+fn timeline_marker_page_view(
+    result: &QueryResult,
+    page: &TimelineMarkerPage,
+) -> ProjectTimelineMarkerPageView {
+    ProjectTimelineMarkerPageView {
+        project_id: result.summary.project_id.to_string(),
+        project_instance_id: result.summary.project_instance_id.to_string(),
+        project_revision: result.summary.project_revision.value(),
+        items: page.items.iter().map(timeline_marker_view).collect(),
+        total_count: u64::try_from(page.total_count).expect("bounded count fits in u64"),
+        offset: u64::try_from(page.offset).expect("bounded offset fits in u64"),
+        limit: u64::try_from(page.limit).expect("bounded limit fits in u64"),
+        next_offset: page
+            .next_offset
+            .map(|value| u64::try_from(value).expect("bounded offset fits in u64")),
+    }
+}
+
+fn timeline_marker_view(marker: &TimelineMarkerState) -> ProjectTimelineMarkerView {
+    ProjectTimelineMarkerView {
+        marker_id: marker.marker_id.to_string(),
+        timeline_time: rational_time_view(marker.timeline_time),
+        label: marker.label.clone(),
+    }
+}
+
 fn timeline_snap_view(result: &QueryResult, snap: &TimelineSnapResult) -> ProjectTimelineSnapView {
     ProjectTimelineSnapView {
         project_id: result.summary.project_id.to_string(),
@@ -1457,13 +1647,12 @@ fn timeline_snap_view(result: &QueryResult, snap: &TimelineSnapResult) -> Projec
             TimelineSnapTargetKind::TimelineZero => TimelineSnapTargetKindView::TimelineZero,
             TimelineSnapTargetKind::ClipStart => TimelineSnapTargetKindView::ClipStart,
             TimelineSnapTargetKind::ClipEnd => TimelineSnapTargetKindView::ClipEnd,
-            TimelineSnapTargetKind::Marker => {
-                unreachable!("marker-aware snapping is not exposed through the bridge")
-            }
+            TimelineSnapTargetKind::Marker => TimelineSnapTargetKindView::Marker,
         },
         target_time: rational_time_view(snap.target_time),
         target_track_id: snap.target_track_id.map(|id| id.to_string()),
         target_clip_id: snap.target_clip_id.map(|id| id.to_string()),
+        target_marker_id: snap.target_marker_id.map(|id| id.to_string()),
     }
 }
 
@@ -1499,6 +1688,13 @@ fn timeline_query_arguments_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "INVALID_ARGUMENTS".to_owned(),
         message: "timeline clip page bounds are invalid".to_owned(),
+    }
+}
+
+fn timeline_marker_query_arguments_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "INVALID_ARGUMENTS".to_owned(),
+        message: "timeline marker page bounds are invalid".to_owned(),
     }
 }
 
@@ -1697,13 +1893,16 @@ mod tests {
     use super::{
         CachePlatform, MediaArtifactKindView, configured_media_artifact_cache_root,
         media_artifact_event_view, operation_error_code, rational_time_view,
-        timeline_clip_page_view, timeline_track_view,
+        timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
+        timeline_track_view,
     };
     use or_core::{
-        CacheArtifactKind, CacheKey, ClipId, JobId, MediaArtifactEvent, MediaArtifactEventState,
-        MediaId, OperationErrorCode, ParametersFingerprint, ProjectId, ProjectInstanceId,
-        ProjectRevision, ProjectSummary, QueryResult, RationalTime, SourceFingerprint, TimeRange,
-        TimelineClipPage, TimelineClipState, TimelineTrackSummary, TrackId, TrackKind,
+        CacheArtifactKind, CacheKey, ClipId, JobId, MarkerId, MediaArtifactEvent,
+        MediaArtifactEventState, MediaId, OperationErrorCode, ParametersFingerprint, ProjectId,
+        ProjectInstanceId, ProjectRevision, ProjectSummary, QueryResult, RationalTime,
+        SourceFingerprint, TimeRange, TimelineClipPage, TimelineClipState, TimelineMarkerPage,
+        TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapResult, TimelineSnapTargetKind,
+        TimelineTrackSummary, TrackId, TrackKind,
     };
     use std::path::PathBuf;
 
@@ -1836,6 +2035,97 @@ mod tests {
             clip.source_duration,
             rational_time_view(RationalTime::new(5, 2).unwrap())
         );
+    }
+
+    #[test]
+    fn timeline_marker_bridge_views_keep_labels_and_exact_rational_values() {
+        let project_id = ProjectId::generate();
+        let project_instance_id = ProjectInstanceId::generate();
+        let result = QueryResult {
+            query_id: "timeline.markers".to_owned(),
+            schema_version: 1,
+            summary: ProjectSummary {
+                project_id,
+                project_instance_id,
+                project_revision: ProjectRevision::new(23),
+                name: "Bridge marker fixture".to_owned(),
+            },
+            media_page: None,
+            media_item: None,
+            timeline_tracks: None,
+            timeline_clip_page: None,
+            timeline_snap: None,
+            timeline_marker_page: None,
+        };
+        let marker_id = MarkerId::generate();
+        let marker_page = TimelineMarkerPage {
+            items: vec![TimelineMarkerState {
+                marker_id,
+                timeline_time: RationalTime::new(3003, 1001).unwrap(),
+                label: "Act two".to_owned(),
+            }],
+            total_count: 4,
+            offset: 2,
+            limit: 1,
+            next_offset: Some(3),
+        };
+
+        let view = timeline_marker_page_view(&result, &marker_page);
+
+        assert_eq!(view.project_id, project_id.to_string());
+        assert_eq!(view.project_instance_id, project_instance_id.to_string());
+        assert_eq!(view.project_revision, 23);
+        assert_eq!(view.total_count, 4);
+        assert_eq!(view.offset, 2);
+        assert_eq!(view.limit, 1);
+        assert_eq!(view.next_offset, Some(3));
+        let marker = &view.items[0];
+        assert_eq!(marker.marker_id, marker_id.to_string());
+        assert_eq!(marker.label, "Act two");
+        assert_eq!(
+            marker.timeline_time,
+            rational_time_view(RationalTime::new(3003, 1001).unwrap())
+        );
+    }
+
+    #[test]
+    fn timeline_snap_bridge_views_preserve_marker_targets() {
+        let project_id = ProjectId::generate();
+        let project_instance_id = ProjectInstanceId::generate();
+        let marker_id = MarkerId::generate();
+        let result = QueryResult {
+            query_id: "timeline.snap".to_owned(),
+            schema_version: 2,
+            summary: ProjectSummary {
+                project_id,
+                project_instance_id,
+                project_revision: ProjectRevision::new(31),
+                name: "Bridge snap fixture".to_owned(),
+            },
+            media_page: None,
+            media_item: None,
+            timeline_tracks: None,
+            timeline_clip_page: None,
+            timeline_snap: None,
+            timeline_marker_page: None,
+        };
+        let snap = TimelineSnapResult {
+            raw_target_time: RationalTime::new(5, 2).unwrap(),
+            resolved_target_time: RationalTime::new(3, 1).unwrap(),
+            snapped: true,
+            moving_anchor: TimelineSnapMovingAnchor::Start,
+            target_kind: TimelineSnapTargetKind::Marker,
+            target_time: RationalTime::new(3, 1).unwrap(),
+            target_track_id: None,
+            target_clip_id: None,
+            target_marker_id: Some(marker_id),
+        };
+
+        let view = timeline_snap_view(&result, &snap);
+
+        assert_eq!(view.target_kind, super::TimelineSnapTargetKindView::Marker);
+        assert_eq!(view.target_marker_id, Some(marker_id.to_string()));
+        assert_eq!(view.project_revision, 31);
     }
 
     #[test]

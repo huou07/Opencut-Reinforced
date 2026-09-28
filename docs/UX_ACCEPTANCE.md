@@ -40,8 +40,7 @@ not production architecture or implementation evidence.
   prototype.
 
 These items are retained as reference guards and are not claims that playback,
-frame stepping, mobile playback-like behavior, or marker UI is implemented in
-production.
+frame stepping, or mobile playback-like behavior is implemented in production.
 
 ## PRODUCTION IMPLEMENTED
 
@@ -76,6 +75,12 @@ headless or widget-level checks:
   other tracks and global markers do not move.
 - Timeline dialogs refresh from Rust after a command and never apply optimistic
   clip geometry.
+- The ruler displays bounded persistent marker read models; Add, Move, Rename,
+  and Delete dispatch the existing Rust marker commands and refresh the view
+  from the canonical project state.
+- Marker-bearing workspaces refresh after attached `project_changed` events,
+  save/reopen, and recovery handling without weakening exact-base conflict
+  guards.
 - Flutter stores only disposable bounded read pages, gesture-local ghosts,
   dialog state, and presentation state; canonical state remains in Rust.
 - Attached CLI edits refresh the open Flutter workspace through ordered
@@ -105,6 +110,20 @@ headless or widget-level checks:
 - Exact Move and Trim dialogs remain available for arbitrary exact `NUM/DEN`
   values.
 
+### Phase 6E2B marker UI and Snap V2
+
+- Typed marker read models and bounded marker paging cross the existing bridge;
+  Flutter does not maintain a second marker document.
+- The marker ruler exposes accessible marker handles and focused monochrome
+  Add, Move, Rename, and Delete actions using the existing Rust commands.
+- Flutter pointer editing uses the canonical marker-aware Snap V2 query with
+  revision, project-instance, project-switch, disposal, and attached CLI stale
+  guards; marker snaps show visible ruler feedback before the existing move or
+  trim command is dispatched.
+- Widget and bridge mapping checks cover bounded pages, exact rational values,
+  marker commands, and marker-aware snap presentation without launching the
+  native application locally.
+
 ### Preservation and accessibility
 
 - Keyboard navigation, visible focus, usable touch targets, and status that is
@@ -116,14 +135,6 @@ headless or widget-level checks:
 
 These items are required by the execution plan but are not production claims
 today.
-
-### Phase 6E2B marker UI
-
-- Typed marker read models and bounded marker paging cross the existing bridge.
-- Marker ruler and Add, Move, Rename, and Delete actions use the existing Rust
-  marker commands and refresh from Rust after save/reopen/recovery.
-- Flutter pointer editing switches from Snap V1 to canonical marker-aware Snap
-  V2 with stale-result guards and visible marker-aware feedback.
 
 ### Phase 7 playback and preview
 

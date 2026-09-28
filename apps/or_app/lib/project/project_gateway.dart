@@ -154,7 +154,13 @@ enum ProjectTimelineSnapOperation { move, trimStart, trimEnd }
 
 enum ProjectTimelineSnapMovingAnchor { none, start, end }
 
-enum ProjectTimelineSnapTargetKind { none, timelineZero, clipStart, clipEnd }
+enum ProjectTimelineSnapTargetKind {
+  none,
+  timelineZero,
+  clipStart,
+  clipEnd,
+  marker,
+}
 
 class ProjectTimelineTrack {
   const ProjectTimelineTrack({
@@ -224,6 +230,40 @@ class ProjectTimelineClipPage {
   final int? nextOffset;
 }
 
+class ProjectTimelineMarker {
+  const ProjectTimelineMarker({
+    required this.markerId,
+    required this.timelineTime,
+    required this.label,
+  });
+
+  final String markerId;
+  final ProjectRationalTime timelineTime;
+  final String label;
+}
+
+class ProjectTimelineMarkerPage {
+  ProjectTimelineMarkerPage({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    required List<ProjectTimelineMarker> items,
+    required this.totalCount,
+    required this.offset,
+    required this.limit,
+    required this.nextOffset,
+  }) : items = List.unmodifiable(items);
+
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final List<ProjectTimelineMarker> items;
+  final int totalCount;
+  final int offset;
+  final int limit;
+  final int? nextOffset;
+}
+
 class ProjectTimelineSnapResult {
   const ProjectTimelineSnapResult({
     required this.projectId,
@@ -237,6 +277,7 @@ class ProjectTimelineSnapResult {
     required this.targetTime,
     this.targetTrackId,
     this.targetClipId,
+    this.targetMarkerId,
   });
 
   final String projectId;
@@ -250,6 +291,7 @@ class ProjectTimelineSnapResult {
   final ProjectRationalTime targetTime;
   final String? targetTrackId;
   final String? targetClipId;
+  final String? targetMarkerId;
 }
 
 enum ProjectMediaArtifactKind { thumbnail, waveform }
@@ -422,6 +464,11 @@ abstract interface class ProjectGateway {
     required int offset,
     required int limit,
   });
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  });
   Future<ProjectTimelineSnapResult> resolveTimelineSnap(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -478,6 +525,29 @@ abstract interface class ProjectGateway {
     ProjectSessionHandle session,
     ProjectReadModel current,
     String clipId,
+  );
+  Future<ProjectActionResult> addTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectRationalTime timelineTime,
+    required String label,
+  });
+  Future<ProjectActionResult> moveTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required ProjectRationalTime timelineTime,
+  });
+  Future<ProjectActionResult> renameTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required String label,
+  });
+  Future<ProjectActionResult> deleteTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String markerId,
   );
   Future<ProjectMediaArtifactRequest> requestMediaThumbnail(
     ProjectSessionHandle session,

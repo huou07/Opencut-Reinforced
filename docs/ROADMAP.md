@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is IN PROGRESS: 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is the next planned phase; later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -192,10 +192,10 @@ Phase 5F — DONE:
 - core-only foundation with cancellation, duration-aware timeout, staged-output size monitoring, atomic cache installation, and hosted real FFmpeg/ffprobe verification
 - no project, revision, recovery, UI, Flutter API, CLI, IPC, playback, or Android proxy-generation changes
 
-Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is IN PROGRESS. Phase 6A, 6B, 6C, 6D, 6E1, and 6E2A are DONE; 6E2B is NEXT. Decode and playback remain Phase 7.
+Phase 5 — DONE / FOUNDATION COMPLETE. Phase 6 — Timeline MVP is DONE. Phase 6A through 6E2B are complete, including the persistent marker UI and marker-aware Snap V2 GUI integration. Decode and playback remain Phase 7.
 
 ### Phase 6 — Timeline MVP
-**Status: IN PROGRESS**
+**Status: DONE**
 
 Phase 6A — Timeline domain and persistence foundation — DONE. This adds canonical timeline state and `.orproj` v3 persistence. It does not add user-visible timeline behavior.
 
@@ -244,17 +244,18 @@ Phase 6E2A — Persistent marker foundation — DONE:
 - strict `.orproj` schema v4 encoder with v1/v2/v3 decoders, explicit-save migration, no conversion revision increment, and bounded marker deserialization
 - four schema-v1 marker commands with semantic undo/redo, no-op/redo preservation, transaction rejection, and clip-edit marker stability
 - bounded read-only `timeline.markers` pages and unchanged existing query wire shapes
-- Snap V1 preservation plus marker-aware Snap V2; the catalog advertises V2 while Flutter remains on V1
+- Snap V1 preservation plus marker-aware Snap V2; the catalog advertises both compatibility scopes and the GUI now uses V2
 - headless and attached CLI marker list/add/move/rename/delete parity, exact rational parsing, generated IDs, and existing save/dirty semantics
-- storage, recovery, local IPC, frame-bound, migration, and CLI regression coverage; no marker Flutter surface
+- storage, recovery, local IPC, frame-bound, migration, and CLI regression coverage; marker presentation remains the separate 6E2B scope
 
-Phase 6E2B — Persistent marker UI and Snap V2 GUI integration — NEXT:
+Phase 6E2B — Persistent marker UI and Snap V2 GUI integration — DONE:
 
-- marker read models and bridge/gateway methods
-- marker ruler, dialogs, and pointer interactions
-- Flutter Snap V2 integration after marker presentation exists
+- typed marker read models, bounded marker paging, and generated bridge/gateway methods
+- Focused Monochrome marker ruler with accessible Add, Move, Rename, and Delete actions backed by the existing Rust commands
+- Flutter pointer editing switched from Snap V1 to canonical marker-aware Snap V2 with revision/session stale guards and marker feedback
+- attached project-change refresh, save/reopen/recovery UI guards, exact rational presentation, widget checks, and bridge mapping coverage
 
-Phase 6 completion remains after 6E2B. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain outside this checkpoint.
+Phase 6 completion is recorded after 6E2B. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain outside this phase.
 
 ### Phase 7 — Preview and playback
 **Status: PLANNED**
@@ -388,4 +389,4 @@ Revisit sandboxed plugin capabilities, native or OpenFX compatibility, and advan
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is IN PROGRESS, with 6A, 6B, 6C, 6D, 6E1, and 6E2A DONE and 6E2B NEXT. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B is the marker UI/Snap V2 GUI checkpoint. Media-to-timeline drag insertion, track reorder, multi-select, zoom, playhead/scrubbing, playback, decode, rendering, and export remain future work until the linked Phase 7/8 checkpoints. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](execution/README.md).
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is DONE through 6E2B. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B adds the marker UI, bridge/gateway integration, and GUI Snap V2. Media-to-timeline drag insertion, track reorder, multi-select, zoom, playhead/scrubbing, playback, decode, rendering, and export remain future work until the linked Phase 7/8 checkpoints. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](execution/README.md).

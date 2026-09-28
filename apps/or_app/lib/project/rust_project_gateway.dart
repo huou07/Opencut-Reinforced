@@ -182,6 +182,40 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    try {
+      final page = await _host(session).listTimelineMarkers(
+        offset: BigInt.from(offset),
+        limit: BigInt.from(limit),
+      );
+      return ProjectTimelineMarkerPage(
+        projectId: page.projectId,
+        projectInstanceId: page.projectInstanceId,
+        projectRevision: page.projectRevision,
+        items: page.items
+            .map(
+              (marker) => ProjectTimelineMarker(
+                markerId: marker.markerId,
+                timelineTime: _projectRationalTime(marker.timelineTime),
+                label: marker.label,
+              ),
+            )
+            .toList(growable: false),
+        totalCount: page.totalCount.toInt(),
+        offset: page.offset.toInt(),
+        limit: page.limit.toInt(),
+        nextOffset: page.nextOffset?.toInt(),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
   Future<ProjectTimelineSnapResult> resolveTimelineSnap(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -232,10 +266,13 @@ class RustProjectGateway implements ProjectGateway {
             ProjectTimelineSnapTargetKind.clipStart,
           rust.TimelineSnapTargetKindView.clipEnd =>
             ProjectTimelineSnapTargetKind.clipEnd,
+          rust.TimelineSnapTargetKindView.marker =>
+            ProjectTimelineSnapTargetKind.marker,
         },
         targetTime: _projectRationalTime(result.targetTime),
         targetTrackId: result.targetTrackId,
         targetClipId: result.targetClipId,
+        targetMarkerId: result.targetMarkerId,
       );
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
@@ -378,6 +415,70 @@ class RustProjectGateway implements ProjectGateway {
       projectInstanceId: current.projectInstanceId,
       expectedRevision: current.revision,
       clipId: clipId,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> addTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required ProjectRationalTime timelineTime,
+    required String label,
+  }) async => _action(
+    await _host(session).addTimelineMarker(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      timelineTimeNumerator: timelineTime.numerator.toInt(),
+      timelineTimeDenominator: timelineTime.denominator,
+      label: label,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> moveTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required ProjectRationalTime timelineTime,
+  }) async => _action(
+    await _host(session).moveTimelineMarker(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      markerId: markerId,
+      timelineTimeNumerator: timelineTime.numerator.toInt(),
+      timelineTimeDenominator: timelineTime.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> renameTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String markerId,
+    required String label,
+  }) async => _action(
+    await _host(session).renameTimelineMarker(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      markerId: markerId,
+      label: label,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> deleteTimelineMarker(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String markerId,
+  ) async => _action(
+    await _host(session).deleteTimelineMarker(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      markerId: markerId,
     ),
   );
 

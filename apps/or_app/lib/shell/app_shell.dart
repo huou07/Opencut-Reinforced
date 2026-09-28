@@ -24,6 +24,7 @@ const _androidProjectAccessMessage =
     'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
+const _timelineMarkerPageSize = 100;
 const _maxActiveMediaPreviewRequests = 8;
 
 class AppShell extends StatefulWidget {
@@ -68,7 +69,9 @@ class _AppShellState extends State<AppShell> {
   int _mediaRefreshGeneration = 0;
   ProjectTimelineTracks? _timelineTracks;
   final Map<String, ProjectTimelineClipPage> _timelineClipPages = {};
+  ProjectTimelineMarkerPage? _timelineMarkerPage;
   final Set<String> _timelineLoadingMoreTracks = {};
+  bool _timelineLoadingMoreMarkers = false;
   bool _timelineLoading = false;
   String? _timelineLoadError;
   int _timelineRefreshGeneration = 0;
@@ -250,9 +253,11 @@ class _AppShellState extends State<AppShell> {
               mediaLoadError: _mediaLoadError,
               timelineTracks: _timelineTracks,
               timelineClipPages: Map.unmodifiable(_timelineClipPages),
+              timelineMarkerPage: _timelineMarkerPage,
               timelineLoadingMoreTracks: Set.unmodifiable(
                 _timelineLoadingMoreTracks,
               ),
+              timelineLoadingMoreMarkers: _timelineLoadingMoreMarkers,
               timelineLoading: _timelineLoading,
               timelineLoadError: _timelineLoadError,
               onImportMedia: _importMedia,
@@ -265,6 +270,7 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.audio),
               onRemoveTimelineTrack: _removeTimelineTrack,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
+              onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
               onMoveTimelineClip: _moveTimelineClip,
@@ -273,6 +279,10 @@ class _AppShellState extends State<AppShell> {
               onTrimTimelineClip: _trimTimelineClip,
               onSplitTimelineClip: _splitTimelineClip,
               onRippleDeleteTimelineClip: _rippleDeleteTimelineClip,
+              onAddTimelineMarker: _addTimelineMarker,
+              onMoveTimelineMarker: _moveTimelineMarker,
+              onRenameTimelineMarker: _renameTimelineMarker,
+              onDeleteTimelineMarker: _deleteTimelineMarker,
               onSave: _saveProject,
               onRename: _renameProject,
               onUndo: _undoProject,
@@ -708,7 +718,9 @@ class _AppShellState extends State<AppShell> {
       _mediaLoadError = null;
       _timelineTracks = null;
       _timelineClipPages.clear();
+      _timelineMarkerPage = null;
       _timelineLoadingMoreTracks.clear();
+      _timelineLoadingMoreMarkers = false;
       _timelineLoading = true;
       _timelineLoadError = null;
       _activeProjectPath = path;
@@ -815,6 +827,7 @@ class _AppShellState extends State<AppShell> {
           if (changed) {
             _mediaLoading = true;
             _timelineLoading = true;
+            _timelineLoadingMoreMarkers = false;
           }
         });
         if (changed) await _refreshProjectState(session);
@@ -1034,6 +1047,68 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Future<void> _addTimelineMarker(
+    ProjectReadModel expected,
+    ProjectRationalTime timelineTime,
+    String label,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.addTimelineMarker(
+        session,
+        current,
+        timelineTime: timelineTime,
+        label: label,
+      ),
+    );
+  }
+
+  Future<void> _moveTimelineMarker(
+    ProjectReadModel expected,
+    ProjectTimelineMarker marker,
+    ProjectRationalTime timelineTime,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineMarker(
+        session,
+        current,
+        markerId: marker.markerId,
+        timelineTime: timelineTime,
+      ),
+    );
+  }
+
+  Future<void> _renameTimelineMarker(
+    ProjectReadModel expected,
+    ProjectTimelineMarker marker,
+    String label,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.renameTimelineMarker(
+        session,
+        current,
+        markerId: marker.markerId,
+        label: label,
+      ),
+    );
+  }
+
+  Future<void> _deleteTimelineMarker(
+    ProjectReadModel expected,
+    ProjectTimelineMarker marker,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.deleteTimelineMarker(
+        session,
+        current,
+        marker.markerId,
+      ),
+    );
+  }
+
   Future<void> _renameProject() async {
     final current = _activeProject;
     if (current == null) return;
@@ -1185,7 +1260,9 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _timelineTracks = null;
       _timelineClipPages.clear();
+      _timelineMarkerPage = null;
       _timelineLoadingMoreTracks.clear();
+      _timelineLoadingMoreMarkers = false;
       _timelineLoading = true;
       _timelineLoadError = null;
     });
@@ -1232,13 +1309,27 @@ class _AppShellState extends State<AppShell> {
             pages[track.trackId] = page;
           }
 
+          ProjectTimelineMarkerPage? markers;
           if (!inconsistent) {
+            markers = await widget.projectGateway.listTimelineMarkers(
+              session,
+              offset: 0,
+              limit: _timelineMarkerPageSize,
+            );
+            if (!_timelineRequestIsCurrent(session, generation)) return;
+            if (!_matchesTimelineMarkerPage(markers, current, offset: 0)) {
+              inconsistent = true;
+            }
+          }
+
+          if (!inconsistent && markers != null) {
             setState(() {
               _activeProject = current;
               _timelineTracks = tracks;
               _timelineClipPages
                 ..clear()
                 ..addAll(pages);
+              _timelineMarkerPage = markers;
               _timelineLoading = false;
               _timelineLoadError = null;
             });
@@ -1292,6 +1383,7 @@ class _AppShellState extends State<AppShell> {
       _activeProject = current;
       _timelineTracks = null;
       _timelineClipPages.clear();
+      _timelineMarkerPage = null;
       _timelineLoading = false;
       _timelineLoadError = 'The timeline changed while it was refreshing.';
     });
@@ -1387,6 +1479,64 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _loadMoreTimelineMarkers() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    final page = _timelineMarkerPage;
+    final offset = page?.nextOffset;
+    final generation = _timelineRefreshGeneration;
+    if (session == null ||
+        project == null ||
+        page == null ||
+        offset == null ||
+        _timelineLoading ||
+        _timelineLoadingMoreMarkers) {
+      return;
+    }
+
+    setState(() => _timelineLoadingMoreMarkers = true);
+    try {
+      final next = await widget.projectGateway.listTimelineMarkers(
+        session,
+        offset: offset,
+        limit: _timelineMarkerPageSize,
+      );
+      if (!_timelineRequestIsCurrent(session, generation)) return;
+      if (!_matchesTimelineMarkerPage(next, project, offset: offset) ||
+          page.projectId != project.projectId ||
+          page.projectInstanceId != project.projectInstanceId ||
+          page.projectRevision != project.revision) {
+        await _refreshProjectState(session);
+        return;
+      }
+      setState(() {
+        _timelineMarkerPage = ProjectTimelineMarkerPage(
+          projectId: page.projectId,
+          projectInstanceId: page.projectInstanceId,
+          projectRevision: page.projectRevision,
+          items: [...page.items, ...next.items],
+          totalCount: next.totalCount,
+          offset: 0,
+          limit: page.limit,
+          nextOffset: next.nextOffset,
+        );
+        _timelineLoadError = null;
+      });
+    } on ProjectGatewayException catch (error) {
+      if (_timelineRequestIsCurrent(session, generation)) {
+        setState(() => _timelineLoadError = error.message);
+      }
+    } catch (_) {
+      if (_timelineRequestIsCurrent(session, generation)) {
+        setState(() => _timelineLoadError = 'The timeline could not load.');
+      }
+    } finally {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() => _timelineLoadingMoreMarkers = false);
+      }
+    }
+  }
+
   Future<void> _refreshProjectState(ProjectSessionHandle session) async {
     if (!mounted || !identical(session, _activeSession)) return;
     final refreshGeneration = ++_mediaRefreshGeneration;
@@ -1403,7 +1553,9 @@ class _AppShellState extends State<AppShell> {
         _mediaLoadError = null;
         _timelineTracks = null;
         _timelineClipPages.clear();
+        _timelineMarkerPage = null;
         _timelineLoadingMoreTracks.clear();
+        _timelineLoadingMoreMarkers = false;
         _timelineLoading = true;
         _timelineLoadError = null;
       });
@@ -1919,7 +2071,9 @@ class _AppShellState extends State<AppShell> {
       _mediaLoadError = null;
       _timelineTracks = null;
       _timelineClipPages.clear();
+      _timelineMarkerPage = null;
       _timelineLoadingMoreTracks.clear();
+      _timelineLoadingMoreMarkers = false;
       _timelineLoading = false;
       _timelineLoadError = null;
       _timelineRefreshGeneration++;
@@ -2141,4 +2295,25 @@ bool _matchesTimelineClipPage(
   }
   final end = offset + page.items.length;
   return page.nextOffset == (end < clipCount ? end : null);
+}
+
+bool _matchesTimelineMarkerPage(
+  ProjectTimelineMarkerPage page,
+  ProjectReadModel project, {
+  required int offset,
+}) {
+  final expectedItemCount = (page.totalCount - offset)
+      .clamp(0, _timelineMarkerPageSize)
+      .toInt();
+  if (page.projectId != project.projectId ||
+      page.projectInstanceId != project.projectInstanceId ||
+      page.projectRevision != project.revision ||
+      page.offset != offset ||
+      page.limit != _timelineMarkerPageSize ||
+      page.totalCount < offset ||
+      page.items.length != expectedItemCount) {
+    return false;
+  }
+  final end = offset + page.items.length;
+  return page.nextOffset == (end < page.totalCount ? end : null);
 }

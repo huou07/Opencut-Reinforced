@@ -23,7 +23,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.mediaLoadError,
     this.timelineTracks,
     this.timelineClipPages = const {},
+    this.timelineMarkerPage,
     this.timelineLoadingMoreTracks = const {},
+    this.timelineLoadingMoreMarkers = false,
     this.timelineLoading = false,
     this.timelineLoadError,
     this.onImportMedia,
@@ -34,6 +36,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddAudioTrack,
     this.onRemoveTimelineTrack,
     this.onLoadMoreTimelineClips,
+    this.onLoadMoreTimelineMarkers,
     this.onRefreshTimeline,
     this.onAddMediaToTimeline,
     this.onMoveTimelineClip,
@@ -42,6 +45,10 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onTrimTimelineClip,
     this.onSplitTimelineClip,
     this.onRippleDeleteTimelineClip,
+    this.onAddTimelineMarker,
+    this.onMoveTimelineMarker,
+    this.onRenameTimelineMarker,
+    this.onDeleteTimelineMarker,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -61,7 +68,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final String? mediaLoadError;
   final ProjectTimelineTracks? timelineTracks;
   final Map<String, ProjectTimelineClipPage> timelineClipPages;
+  final ProjectTimelineMarkerPage? timelineMarkerPage;
   final Set<String> timelineLoadingMoreTracks;
+  final bool timelineLoadingMoreMarkers;
   final bool timelineLoading;
   final String? timelineLoadError;
   final VoidCallback? onImportMedia;
@@ -73,6 +82,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTimelineTrack;
   final ValueChanged<String>? onLoadMoreTimelineClips;
+  final VoidCallback? onLoadMoreTimelineMarkers;
   final VoidCallback? onRefreshTimeline;
   final Future<void> Function(
     ProjectReadModel project,
@@ -121,6 +131,29 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineClip clip,
   )?
   onRippleDeleteTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectRationalTime timelineTime,
+    String label,
+  )?
+  onAddTimelineMarker;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineMarker marker,
+    ProjectRationalTime timelineTime,
+  )?
+  onMoveTimelineMarker;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineMarker marker,
+    String label,
+  )?
+  onRenameTimelineMarker;
+  final Future<void> Function(
+    ProjectReadModel project,
+    ProjectTimelineMarker marker,
+  )?
+  onDeleteTimelineMarker;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -260,6 +293,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          onAddMarker: widget.isProjectWorkspace
+              ? _showAddTimelineMarker
+              : null,
           snapEnabled: _snapEnabled,
           onSnapChanged: widget.isProjectWorkspace
               ? (value) => setState(() => _snapEnabled = value)
@@ -273,7 +309,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             project: widget.project,
             tracks: widget.timelineTracks,
             clipPages: widget.timelineClipPages,
+            markerPage: widget.timelineMarkerPage,
             loadingMoreTracks: widget.timelineLoadingMoreTracks,
+            loadingMoreMarkers: widget.timelineLoadingMoreMarkers,
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
@@ -281,6 +319,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddAudioTrack: widget.onAddAudioTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
+            onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
             onResolveSnap: widget.onResolveTimelineSnap,
@@ -288,6 +327,10 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            onAddMarker: widget.onAddTimelineMarker,
+            onMoveMarker: widget.onMoveTimelineMarker,
+            onRenameMarker: widget.onRenameTimelineMarker,
+            onDeleteMarker: widget.onDeleteTimelineMarker,
             snapEnabled: _snapEnabled,
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
@@ -308,6 +351,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          onAddMarker: widget.isProjectWorkspace
+              ? _showAddTimelineMarker
+              : null,
           snapEnabled: _snapEnabled,
           onSnapChanged: widget.isProjectWorkspace
               ? (value) => setState(() => _snapEnabled = value)
@@ -321,7 +367,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             project: widget.project,
             tracks: widget.timelineTracks,
             clipPages: widget.timelineClipPages,
+            markerPage: widget.timelineMarkerPage,
             loadingMoreTracks: widget.timelineLoadingMoreTracks,
+            loadingMoreMarkers: widget.timelineLoadingMoreMarkers,
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
@@ -329,6 +377,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddAudioTrack: widget.onAddAudioTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
+            onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
             onResolveSnap: widget.onResolveTimelineSnap,
@@ -336,6 +385,10 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            onAddMarker: widget.onAddTimelineMarker,
+            onMoveMarker: widget.onMoveTimelineMarker,
+            onRenameMarker: widget.onRenameTimelineMarker,
+            onDeleteMarker: widget.onDeleteTimelineMarker,
             snapEnabled: _snapEnabled,
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
@@ -364,6 +417,17 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showAddTimelineMarker() async {
+    final project = widget.project;
+    final onAdd = widget.onAddTimelineMarker;
+    if (!widget.isProjectWorkspace || project == null || onAdd == null) return;
+    await _showAddTimelineMarkerDialog(
+      context: context,
+      project: project,
+      onAdd: onAdd,
+    );
   }
 }
 
@@ -1202,6 +1266,7 @@ class _TimelineToolbar extends StatelessWidget {
     required this.onUndo,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
+    required this.onAddMarker,
     required this.snapEnabled,
     required this.onSnapChanged,
   });
@@ -1212,6 +1277,7 @@ class _TimelineToolbar extends StatelessWidget {
   final VoidCallback? onUndo;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
+  final VoidCallback? onAddMarker;
   final bool snapEnabled;
   final ValueChanged<bool>? onSnapChanged;
 
@@ -1258,6 +1324,12 @@ class _TimelineToolbar extends StatelessWidget {
                 onPressed: busy ? null : onAddAudioTrack,
                 icon: const Icon(Icons.graphic_eq_outlined, size: 16),
                 label: Text(compact ? 'Add Audio' : 'Add Audio Track'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-marker'),
+                onPressed: busy ? null : onAddMarker,
+                icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                label: const Text('Add Marker'),
               ),
               IconButton(
                 key: const ValueKey('timeline-undo'),
@@ -1336,7 +1408,9 @@ class _TimelinePanel extends StatefulWidget {
     required this.project,
     required this.tracks,
     required this.clipPages,
+    required this.markerPage,
     required this.loadingMoreTracks,
+    required this.loadingMoreMarkers,
     required this.loading,
     required this.error,
     required this.busy,
@@ -1344,6 +1418,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onAddAudioTrack,
     required this.onRemoveTrack,
     required this.onLoadMore,
+    required this.onLoadMoreMarkers,
     required this.onRefresh,
     required this.onMoveClip,
     required this.onResolveSnap,
@@ -1351,6 +1426,10 @@ class _TimelinePanel extends StatefulWidget {
     required this.onTrimClip,
     required this.onSplitClip,
     required this.onRippleDeleteClip,
+    required this.onAddMarker,
+    required this.onMoveMarker,
+    required this.onRenameMarker,
+    required this.onDeleteMarker,
     required this.snapEnabled,
     required this.onTimelineEditError,
     required this.mediaItems,
@@ -1361,7 +1440,9 @@ class _TimelinePanel extends StatefulWidget {
   final ProjectReadModel? project;
   final ProjectTimelineTracks? tracks;
   final Map<String, ProjectTimelineClipPage> clipPages;
+  final ProjectTimelineMarkerPage? markerPage;
   final Set<String> loadingMoreTracks;
+  final bool loadingMoreMarkers;
   final bool loading;
   final String? error;
   final bool busy;
@@ -1370,6 +1451,7 @@ class _TimelinePanel extends StatefulWidget {
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTrack;
   final ValueChanged<String>? onLoadMore;
+  final VoidCallback? onLoadMoreMarkers;
   final VoidCallback? onRefresh;
   final Future<void> Function(
     ProjectReadModel,
@@ -1403,6 +1485,18 @@ class _TimelinePanel extends StatefulWidget {
   onSplitClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
+  final Future<void> Function(ProjectReadModel, ProjectRationalTime, String)?
+  onAddMarker;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineMarker,
+    ProjectRationalTime,
+  )?
+  onMoveMarker;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineMarker, String)?
+  onRenameMarker;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineMarker)?
+  onDeleteMarker;
   final bool snapEnabled;
   final ValueChanged<String>? onTimelineEditError;
   final List<ProjectMediaItem> mediaItems;
@@ -1513,7 +1607,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         ),
       );
     }
-    if (snapshot.items.isEmpty) {
+    if (snapshot.items.isEmpty && (widget.markerPage?.items.isEmpty ?? true)) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1564,6 +1658,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               endSeconds = math.max(endSeconds, end);
             }
           }
+        }
+        for (final marker in widget.markerPage?.items ?? const []) {
+          final seconds = marker.timelineTime.secondsForDisplay;
+          if (seconds.isFinite) endSeconds = math.max(endSeconds, seconds);
         }
         final displayDuration = math.max(20.0, endSeconds);
         const maximumWidth = 100000.0;
@@ -1626,12 +1724,36 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                         children: [
                           SizedBox(
                             height: _timelineRulerHeight,
-                            child: CustomPaint(
-                              painter: _TimelineRulerPainter(
-                                pixelsPerSecond: scale,
-                                tickSeconds: tickSeconds,
+                            child: _TimelineMarkerRuler(
+                              markers: widget.markerPage?.items ?? const [],
+                              pixelsPerSecond: scale,
+                              tickSeconds: tickSeconds,
+                              width: canvasWidth,
+                              loadingMore: widget.loadingMoreMarkers,
+                              onLoadMore: widget.markerPage?.nextOffset == null
+                                  ? null
+                                  : widget.onLoadMoreMarkers,
+                              busy: widget.busy,
+                              snapGuide: _snapGuide,
+                              onOpenMarker: (marker) => unawaited(
+                                _showTimelineMarkerActions(
+                                  context: context,
+                                  project: widget.project,
+                                  marker: marker,
+                                  onMove: widget.onMoveMarker,
+                                  onRename: widget.onRenameMarker,
+                                  onDelete: widget.onDeleteMarker,
+                                  busy: widget.busy,
+                                ),
                               ),
-                              child: const SizedBox.expand(),
+                              onMoveMarker: widget.onMoveMarker == null
+                                  ? null
+                                  : (marker, timelineTime) =>
+                                        widget.onMoveMarker!(
+                                          widget.project!,
+                                          marker,
+                                          timelineTime,
+                                        ),
                             ),
                           ),
                           for (final track in snapshot.items) ...[
@@ -1835,7 +1957,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         }
         if (snap.snapped) {
           resolvedTargetTime = snap.resolvedTargetTime;
-          _showSnapGuide(gesture, snap.targetTime);
+          _showSnapGuide(gesture, snap);
         }
       }
       if (!_gestureCommitIsCurrent(gesture)) {
@@ -1893,13 +2015,15 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
   void _showSnapGuide(
     _TimelinePointerGesture gesture,
-    ProjectRationalTime targetTime,
+    ProjectTimelineSnapResult snap,
   ) {
     if (!mounted || !_gestureCommitIsCurrent(gesture)) return;
     setState(() {
       _snapGuide = _TimelineSnapGuide(
         trackId: gesture.targetTrackId,
-        time: targetTime,
+        time: snap.targetTime,
+        targetKind: snap.targetKind,
+        markerId: snap.targetMarkerId,
       );
     });
     final token = gesture.token;
@@ -1946,7 +2070,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 }
 
 const double _timelineTrackHeaderWidth = 132;
-const double _timelineRulerHeight = 27;
+const double _timelineRulerHeight = 38;
 const double _timelineLaneHeight = 58;
 
 Map<String, String> _timelineTrackLabels(List<ProjectTimelineTrack> tracks) {
@@ -2049,10 +2173,17 @@ class _TimelinePointerGesture {
 }
 
 class _TimelineSnapGuide {
-  const _TimelineSnapGuide({required this.trackId, required this.time});
+  const _TimelineSnapGuide({
+    required this.trackId,
+    required this.time,
+    required this.targetKind,
+    this.markerId,
+  });
 
   final String trackId;
   final ProjectRationalTime time;
+  final ProjectTimelineSnapTargetKind targetKind;
+  final String? markerId;
 }
 
 String _timelineTimeLabel(double seconds) {
@@ -2117,6 +2248,240 @@ class _TimelineRulerPainter extends CustomPainter {
   bool shouldRepaint(_TimelineRulerPainter oldDelegate) =>
       oldDelegate.pixelsPerSecond != pixelsPerSecond ||
       oldDelegate.tickSeconds != tickSeconds;
+}
+
+class _TimelineMarkerRuler extends StatefulWidget {
+  const _TimelineMarkerRuler({
+    required this.markers,
+    required this.pixelsPerSecond,
+    required this.tickSeconds,
+    required this.width,
+    required this.loadingMore,
+    required this.onLoadMore,
+    required this.busy,
+    required this.snapGuide,
+    required this.onOpenMarker,
+    required this.onMoveMarker,
+  });
+
+  final List<ProjectTimelineMarker> markers;
+  final double pixelsPerSecond;
+  final double tickSeconds;
+  final double width;
+  final bool loadingMore;
+  final VoidCallback? onLoadMore;
+  final bool busy;
+  final _TimelineSnapGuide? snapGuide;
+  final ValueChanged<ProjectTimelineMarker> onOpenMarker;
+  final Future<void> Function(ProjectTimelineMarker, ProjectRationalTime)?
+  onMoveMarker;
+
+  @override
+  State<_TimelineMarkerRuler> createState() => _TimelineMarkerRulerState();
+}
+
+class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
+  ProjectTimelineMarker? _draggingMarker;
+  Offset? _dragStart;
+  double _dragDeltaPixels = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final markerWidgets = <Widget>[
+      Positioned.fill(
+        child: CustomPaint(
+          painter: _TimelineRulerPainter(
+            pixelsPerSecond: widget.pixelsPerSecond,
+            tickSeconds: widget.tickSeconds,
+          ),
+        ),
+      ),
+      for (final marker in widget.markers) ..._markerWidgets(marker),
+      if (widget.snapGuide?.targetKind == ProjectTimelineSnapTargetKind.marker)
+        Positioned(
+          key: const ValueKey('timeline-snap-feedback'),
+          left: _xFor(widget.snapGuide!.time),
+          top: 0,
+          bottom: 0,
+          width: 2,
+          child: ColoredBox(color: OrColors.selection),
+        ),
+      if (widget.snapGuide?.targetKind == ProjectTimelineSnapTargetKind.marker)
+        Positioned(
+          top: 1,
+          right: widget.onLoadMore == null ? 4 : 92,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: OrColors.selection,
+              borderRadius: BorderRadius.circular(OrRadii.small),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              child: Text(
+                'Snap: marker',
+                style: const TextStyle(
+                  color: OrColors.primaryText,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (widget.onLoadMore != null)
+        Positioned(
+          top: 0,
+          right: 2,
+          child: TextButton.icon(
+            key: const ValueKey('timeline-marker-load-more'),
+            onPressed: widget.busy || widget.loadingMore
+                ? null
+                : widget.onLoadMore,
+            icon: widget.loadingMore
+                ? const SizedBox.square(
+                    dimension: 11,
+                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                  )
+                : const Icon(Icons.expand_more, size: 13),
+            label: const Text('Markers'),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 28),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              textStyle: const TextStyle(fontSize: 9),
+            ),
+          ),
+        ),
+    ];
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: OrColors.surface,
+        border: Border(bottom: BorderSide(color: OrColors.border)),
+      ),
+      child: Stack(clipBehavior: Clip.hardEdge, children: markerWidgets),
+    );
+  }
+
+  List<Widget> _markerWidgets(ProjectTimelineMarker marker) {
+    final moving = _draggingMarker?.markerId == marker.markerId;
+    final time = moving ? _dragTargetTime(marker) : marker.timelineTime;
+    final x = _xFor(time);
+    final labelWidth = math.min(110.0, math.max(54.0, widget.width - 8));
+    final labelLeft = (x - labelWidth / 2).clamp(
+      2.0,
+      math.max(2.0, widget.width - labelWidth - 2),
+    );
+    final label = marker.label.isEmpty ? 'Marker' : marker.label;
+    final handle = Semantics(
+      button: true,
+      label: 'Marker $label at ${time.canonical}',
+      hint: 'Drag to move. Activate for marker actions.',
+      child: GestureDetector(
+        key: ValueKey('timeline-marker-${marker.markerId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => widget.onOpenMarker(marker),
+        onPanStart: widget.busy || widget.onMoveMarker == null
+            ? null
+            : (details) {
+                setState(() {
+                  _draggingMarker = marker;
+                  _dragStart = details.globalPosition;
+                  _dragDeltaPixels = 0;
+                });
+              },
+        onPanUpdate: widget.busy || widget.onMoveMarker == null
+            ? null
+            : (details) {
+                if (_draggingMarker?.markerId != marker.markerId ||
+                    _dragStart == null) {
+                  return;
+                }
+                setState(() {
+                  _dragDeltaPixels = details.globalPosition.dx - _dragStart!.dx;
+                });
+              },
+        onPanEnd: widget.busy || widget.onMoveMarker == null
+            ? null
+            : (_) {
+                if (_draggingMarker?.markerId != marker.markerId) return;
+                final target = _dragTargetTime(marker);
+                setState(() {
+                  _draggingMarker = null;
+                  _dragStart = null;
+                  _dragDeltaPixels = 0;
+                });
+                unawaited(widget.onMoveMarker!(marker, target));
+              },
+        onPanCancel: widget.busy || widget.onMoveMarker == null
+            ? null
+            : () {
+                if (_draggingMarker?.markerId != marker.markerId) return;
+                setState(() {
+                  _draggingMarker = null;
+                  _dragStart = null;
+                  _dragDeltaPixels = 0;
+                });
+              },
+        child: Container(
+          width: labelWidth,
+          height: _timelineRulerHeight,
+          alignment: Alignment.topCenter,
+          padding: const EdgeInsets.only(top: 2),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: moving ? OrColors.selection : OrColors.backgroundRaised,
+              border: Border.all(
+                color: moving ? OrColors.selection : OrColors.borderStrong,
+              ),
+              borderRadius: BorderRadius.circular(OrRadii.small),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: moving ? OrColors.primaryText : OrColors.text,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return [
+      Positioned(
+        left: x - 1,
+        top: 0,
+        bottom: 0,
+        width: 2,
+        child: IgnorePointer(
+          child: ColoredBox(
+            color: moving ? OrColors.selection : OrColors.borderStrong,
+          ),
+        ),
+      ),
+      Positioned(left: labelLeft.toDouble(), top: 0, child: handle),
+    ];
+  }
+
+  double _xFor(ProjectRationalTime time) =>
+      (time.secondsForDisplay * widget.pixelsPerSecond)
+          .clamp(0.0, math.max(0.0, widget.width - 1))
+          .toDouble();
+
+  ProjectRationalTime _dragTargetTime(ProjectTimelineMarker marker) {
+    final milliseconds = (_dragDeltaPixels / widget.pixelsPerSecond * 1000)
+        .round();
+    final target = marker.timelineTime.add(
+      ProjectRationalTime(BigInt.from(milliseconds), 1000),
+    );
+    return target.numerator < BigInt.zero
+        ? ProjectRationalTime(BigInt.zero, 1)
+        : target;
+  }
 }
 
 class _TimelineGridPainter extends CustomPainter {
@@ -2876,6 +3241,339 @@ class _ExactRationalField extends StatelessWidget {
       ),
     ),
   );
+}
+
+Future<void> _showAddTimelineMarkerDialog({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required Future<void> Function(ProjectReadModel, ProjectRationalTime, String)
+  onAdd,
+}) async {
+  final timeController = TextEditingController(text: '0/1');
+  final labelController = TextEditingController();
+  bool fieldsAreValid() {
+    final time = ProjectRationalTime.tryParse(timeController.text);
+    final label = labelController.text.trim();
+    return time != null &&
+        time.numerator >= BigInt.zero &&
+        label.isNotEmpty &&
+        label.length <= 256;
+  }
+
+  final canAdd = ValueNotifier(fieldsAreValid());
+  void updateValidity() => canAdd.value = fieldsAreValid();
+  timeController.addListener(updateValidity);
+  labelController.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add Marker'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ExactRationalField(
+              fieldKey: const ValueKey('timeline-marker-time'),
+              label: 'Timeline Time',
+              controller: timeController,
+              onChanged: updateValidity,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: OrSpacing.x2),
+              child: TextField(
+                key: const ValueKey('timeline-marker-label'),
+                controller: labelController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Label',
+                  hintText: 'Marker label',
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: canAdd,
+            builder: (context, valid, child) => FilledButton(
+              key: const ValueKey('timeline-confirm-add-marker'),
+              onPressed: valid
+                  ? () {
+                      final time = ProjectRationalTime.tryParse(
+                        timeController.text,
+                      );
+                      final label = labelController.text.trim();
+                      if (time == null ||
+                          time.numerator < BigInt.zero ||
+                          label.isEmpty ||
+                          label.length > 256) {
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop();
+                      unawaited(onAdd(project, time, label));
+                    }
+                  : null,
+              child: const Text('Add'),
+            ),
+          ),
+        ],
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    timeController.removeListener(updateValidity);
+    labelController.removeListener(updateValidity);
+    timeController.dispose();
+    labelController.dispose();
+    canAdd.dispose();
+  }
+}
+
+Future<void> _showTimelineMarkerActions({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineMarker marker,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineMarker,
+    ProjectRationalTime,
+  )?
+  onMove,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineMarker,
+    String,
+  )?
+  onRename,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineMarker)?
+  onDelete,
+  required bool busy,
+}) async {
+  final current = project;
+  if (current == null) return;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(marker.label),
+      content: Text('Marker time: ${marker.timelineTime.canonical}'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-marker-move-${marker.markerId}'),
+          onPressed: busy || onMove == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showMoveTimelineMarkerDialog(
+                      context: context,
+                      project: current,
+                      marker: marker,
+                      onMove: onMove,
+                    ),
+                  );
+                },
+          child: const Text('Move'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-marker-rename-${marker.markerId}'),
+          onPressed: busy || onRename == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showRenameTimelineMarkerDialog(
+                      context: context,
+                      project: current,
+                      marker: marker,
+                      onRename: onRename,
+                    ),
+                  );
+                },
+          child: const Text('Rename'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-marker-delete-${marker.markerId}'),
+          onPressed: busy || onDelete == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _confirmDeleteTimelineMarker(
+                      context: context,
+                      project: current,
+                      marker: marker,
+                      onDelete: onDelete,
+                    ),
+                  );
+                },
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _showMoveTimelineMarkerDialog({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required ProjectTimelineMarker marker,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineMarker,
+    ProjectRationalTime,
+  )
+  onMove,
+}) async {
+  final controller = TextEditingController(text: marker.timelineTime.canonical);
+  bool isValid() {
+    final time = ProjectRationalTime.tryParse(controller.text);
+    return time != null && time.numerator >= BigInt.zero;
+  }
+
+  final valid = ValueNotifier(isValid());
+  void updateValidity() => valid.value = isValid();
+  controller.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Move ${marker.label}'),
+        content: _ExactRationalField(
+          fieldKey: const ValueKey('timeline-marker-move-time'),
+          label: 'Timeline Time',
+          controller: controller,
+          onChanged: updateValidity,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: valid,
+            builder: (context, enabled, child) => FilledButton(
+              key: ValueKey('timeline-confirm-move-${marker.markerId}'),
+              onPressed: enabled
+                  ? () {
+                      final time = ProjectRationalTime.tryParse(
+                        controller.text,
+                      );
+                      if (time == null || time.numerator < BigInt.zero) {
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop();
+                      unawaited(onMove(project, marker, time));
+                    }
+                  : null,
+              child: const Text('Move'),
+            ),
+          ),
+        ],
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    controller.removeListener(updateValidity);
+    controller.dispose();
+    valid.dispose();
+  }
+}
+
+Future<void> _showRenameTimelineMarkerDialog({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required ProjectTimelineMarker marker,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineMarker,
+    String,
+  )
+  onRename,
+}) async {
+  final controller = TextEditingController(text: marker.label);
+  bool isValid() =>
+      controller.text.trim().isNotEmpty && controller.text.trim().length <= 256;
+  final valid = ValueNotifier(isValid());
+  void updateValidity() => valid.value = isValid();
+  controller.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Rename ${marker.label}'),
+        content: TextField(
+          key: ValueKey('timeline-marker-rename-label-${marker.markerId}'),
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Label'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: valid,
+            builder: (context, enabled, child) => FilledButton(
+              key: ValueKey('timeline-confirm-rename-${marker.markerId}'),
+              onPressed: enabled
+                  ? () {
+                      final label = controller.text.trim();
+                      if (label.isEmpty || label.length > 256) return;
+                      Navigator.of(dialogContext).pop();
+                      unawaited(onRename(project, marker, label));
+                    }
+                  : null,
+              child: const Text('Rename'),
+            ),
+          ),
+        ],
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    controller.removeListener(updateValidity);
+    controller.dispose();
+    valid.dispose();
+  }
+}
+
+Future<void> _confirmDeleteTimelineMarker({
+  required BuildContext context,
+  required ProjectReadModel project,
+  required ProjectTimelineMarker marker,
+  required Future<void> Function(ProjectReadModel, ProjectTimelineMarker)
+  onDelete,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete marker?'),
+      content: Text('Delete marker "${marker.label}"?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: ValueKey('timeline-confirm-delete-marker-${marker.markerId}'),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await onDelete(project, marker);
 }
 
 Future<void> _showTimelineClipActions({

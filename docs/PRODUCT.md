@@ -59,9 +59,9 @@ semantics and migration rules are approved.
 The optimized Desktop MVP milestone is represented by the execution graph from
 6E2B through 8F:
 
-- **Timeline foundation (6E2B):** persistent marker read models, marker ruler,
-  Add/Move/Rename/Delete UI, marker-aware pointer snap, and save/reopen/recovery
-  UI hardening.
+- **Timeline foundation (6E2B):** complete persistent marker read models and
+  bounded bridge paging, the marker ruler, Add/Move/Rename/Delete UI, and
+  marker-aware pointer Snap V2 with save/reopen/recovery UI hardening.
 - **Runtime foundation (7A–7H):** capability policy, `RenderSnapshot`,
   `FrameDescriptor`/`FrameLease`, wgpu/render, software and hardware media
   paths, audio clock, viewer transport, playback, scrubbing, frame step, and

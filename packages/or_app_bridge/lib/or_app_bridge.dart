@@ -14,6 +14,8 @@ export 'src/rust/api/project.dart'
         ProjectHostHandle,
         ProjectTimelineClipPageView,
         ProjectTimelineClipView,
+        ProjectTimelineMarkerPageView,
+        ProjectTimelineMarkerView,
         ProjectTimelineTrackView,
         ProjectTimelineTracksView,
         ProjectView,
