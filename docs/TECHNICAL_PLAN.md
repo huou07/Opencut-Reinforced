@@ -7,17 +7,19 @@ The machine-readable architecture and execution authority is
 [PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json),
 and locked phase contracts in [execution/phases](execution/phases). The
 implementation summary in this document describes completed capabilities
-through the Phase 6 timeline foundation. For authoritative current checkpoint
+through the Phase 7A runtime foundation. For authoritative current checkpoint
 and phase status, see `docs/execution/STATE.json`; this document does not copy
 mutable `NEXT` state or authorize skipping it. Future runtime crates are not
 created early.
 
 The implementation order preserves the control-plane/runtime-plane boundary:
-Rust `or_core` owns canonical project/application state; a future `or_runtime`
-coordinates capabilities, snapshots, queues, budgets, and fallback; `or_media`
+Rust `or_core` owns canonical project/application state; `or_runtime` now
+coordinates the Phase 7A capability, snapshot, queue, budget, and fallback
+contracts; `or_media`
 handles demux/decode/seek; `or_render` uses the wgpu spine; `or_audio` owns
 clocked realtime audio; and `or_ai` owns task/provider/model boundaries. These
-are future boundaries, not current workspace crates.
+Only `or_runtime` exists at this checkpoint; later boundaries remain
+checkpoint-gated.
 
 Runtime work consumes immutable `RenderSnapshot` values and uses
 `FrameDescriptor`/`FrameLease` ownership. Full-rate frames do not travel as
@@ -32,7 +34,7 @@ for checkpoint-specific tests, dependency gates, and stop conditions.
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. These implementation summaries describe completed capabilities through the Phase 6 timeline foundation; playback, decode, rendering, and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Visible playback, decode, rendering, and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
 
 ## Contents
 
@@ -349,6 +351,39 @@ Timeline/render evaluation should publish a stable read view such as `RenderSnap
 Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The exact synchronization primitive, frame queue, buffering mode, and number of frames in flight are implementation choices. Double buffering, triple buffering, or other bounded depths may suit different playback, scrubbing, paused/frame-step, export, or low-latency preview modes; measure the tradeoff among latency, throughput, memory, and GPU occupancy.
 
 A frame should carry explicit dimensions, pixel or texture format, color information, and timing metadata. The exact representation remains implementation work.
+
+### Phase 7A runtime foundation
+
+The workspace `or_runtime` crate is the first runtime-plane implementation. It
+depends only on the existing `or_core` path dependency and the Rust standard
+library; it adds no wgpu, FFmpeg, audio, platform, native-interoperability, or
+provider dependency. It inherits workspace MSRV Rust 1.85 and MIT licensing.
+Its public contracts are runtime-only and are not serialized into `.orproj`,
+IPC, cache keys, or Dart frame messages.
+
+`RenderSnapshot` records the `ProjectId`, exact `ProjectRevision`, and exact
+requested `TimeRange` captured from a `ProjectDocument`. It contains no mutable
+project document and has no operation that can mutate canonical state. A
+`FrameDescriptor` records memory domain, dimensions, pixel format, color
+metadata, exact `RationalTime` timing, and access mode. `FrameLease` owns a
+software byte buffer or a runtime-only release callback and releases exactly
+once, including when dropped; platform handles remain outside this crate.
+
+`BoundedQueue` has a fixed positive capacity. Nonblocking producers receive an
+explicit `Backpressure` result, blocking push/pop operations are cancellable,
+and close drains existing items before reporting `Closed`. `RuntimeBudgets`
+keeps independent render, audio, and decode in-flight/byte reservations with
+RAII release. `CapabilityRegistry` registers typed operation/provider/path
+capabilities, starts with stable software providers for video decode, audio
+decode, and render, and selects only available stable hardware paths when
+preferred; otherwise it reports an observable software fallback. Hardware-only
+selection is opt-in and fails when no stable hardware path exists.
+
+7A stops at these contracts and deterministic unit coverage. It does not add
+visible playback, a worker scheduler, decode/render/audio backends, native
+surface interop, or platform capability discovery. Any later runtime or
+platform dependency must carry official upstream version, MSRV, license/build,
+and hosted platform evidence before it is pinned or used.
 
 ## 11. Media and render graph
 

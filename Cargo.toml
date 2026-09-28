@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/or_core", "crates/or_cli", "crates/or_app_bridge", "crates/or_ipc"]
+members = [
+    "crates/or_core",
+    "crates/or_cli",
+    "crates/or_app_bridge",
+    "crates/or_ipc",
+    "crates/or_runtime",
+]
 resolver = "3"
 
 [workspace.package]

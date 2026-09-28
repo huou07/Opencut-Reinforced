@@ -14,8 +14,11 @@ markers while still loading v1, v2, and v3. Phase 5D–5F provide bounded
 fingerprints, disposable indexed cache, and core-only file-backed proxies.
 Phase 6 provides canonical tracks, clips, exact editing, persistent markers,
 marker-aware snapping, CLI parity, and the corresponding Flutter UI without a
-second editable UI state. Playback, decoding, rendering, and export remain
-future Phase 7/8 work. For authoritative current checkpoint and phase status,
+second editable UI state. Phase 7A adds the dependency-free `or_runtime`
+contract for immutable render-snapshot identity, exact-time frame metadata and
+leases, bounded cancellation-aware queues, separate render/audio/decode
+budgets, and centralized capability selection with software fallback. Visible
+playback, decoding, rendering, and export remain future Phase 7/8 work. For authoritative current checkpoint and phase status,
 see [docs/execution/STATE.json](execution/STATE.json); this document does not
 copy mutable `NEXT` state. Planned and future components below do not imply
 implemented code. See [ROADMAP.md](ROADMAP.md) and
@@ -29,7 +32,7 @@ The semantic CLI uses that same dispatch. Headless commands open `ProjectFileSes
 
 Production Flutter implements the Focused Monochrome shell and real desktop project workflows. The native `file_selector` picker chooses project and one media file at import; Rust validates and reads or writes project data. The UI supports create/open, project summary, rename, undo/redo, explicit save, close, recovery inspection/apply/discard, dirty close/switch/exit guards, Advanced / Developer descriptor access, and a desktop Media panel with bounded listing, Load more, import, confirmed removal, generated video thumbnails, and audio-only waveform previews. Real project workspaces also present canonical track order and clip blocks from bounded Rust queries. Video/Audio tracks can be added, empty tracks removed, and clips inserted, moved, trimmed, split, explicitly deleted, or ripple-deleted through exact-rational action dialogs. Phase 6E1 adds pointer body moves, start/end trim handles, same-kind lane targeting, a default-on non-persisted Snap toggle, and a cyan drop-time guide. Pointer gestures retain canonical exact start/end values, quantize only the raw pointer delta to the nearest millisecond, and commit through the existing move/trim commands after Rust resolves a snap; the timeline remains canonical only after the command and refresh. Trim shows only the selected edge, current timeline timing, and timeline edge; split accepts an exact interior timeline point and leaves right-clip ID generation to Rust. Ripple delete confirms that only later clips on the selected track move. Flutter stores only disposable read pages, gesture-local ghosts, and dialog/selection state, never optimistic clip geometry. All canonical edits use existing command envelopes through the same Rust host; ordered project invalidation events refresh the current revision, including edits made by an attached CLI. Clip pages are limited to 100 and loaded on demand, while Flutter continues to request Snap V1 and `timeline.snap` itself scans the full canonical clip timeline. Artifact requests use a separate ordered event stream and affect only presentation state. Import requires system-provided `ffprobe`; preview generation requires system-provided `ffmpeg`. Android builds, but project create/open and the media-artifact service remain unavailable until platform storage support is implemented. The non-project Editor Shell Preview remains a layout preview. Phase 6E2A deliberately adds no marker read model, bridge method, marker ruler, marker dialog, marker pointer interaction, or visual marker; those are Phase 6E2B, and the viewer remains `No media loaded`.
 
-GitHub Actions checks Rust and Flutter code, runs project-storage, recovery, real local IPC, shared-host plus attached-CLI media parity tests on macOS and Windows, runs the complete Rust workspace and generated-media real-`ffprobe` plus real-`ffmpeg` artifact integrations on Linux, builds the macOS, Windows, Linux, and Android targets, and runs native Flutter bridge, project lifecycle, offline-media persistence, and timeline edit/history/save/reopen tests on macOS. Cache and file-backed proxy API tests run on Linux, macOS, and Windows; Linux also runs real Proxy V1 FFmpeg/ffprobe coverage. The current `.orproj` schema is v4 and accepts files up to 64 MiB; the strict decoder loads v1 with empty media/timeline/markers, v2 with existing media and empty timeline/markers, and v3 with existing media/tracks/clips and empty markers, preserving project ID, revision, and name. Clean opens do not rewrite older files. The next explicit save writes v4 without incrementing revision for schema conversion alone. New-project creation uses a race-safe no-clobber install. Recovery uses a separate bounded sidecar containing the exact saved base and a newer `ProjectDocument` snapshot; its v1 envelope accepts nested v1/v2/v3/v4 project snapshots, including markers in v4. Inspection is read-only, and load never applies a checkpoint automatically. `ProjectFileSession` checks recovery before opening/saving and compares the exact on-disk document with its saved base before replacement. Applying a recovery candidate revalidates the saved base and atomically saves the snapshot without incrementing its revision. A conflict does not select a winner. Session history remains in-memory; autosave and Android SAF remain unimplemented. There is no general command/query registry framework; the static catalogs contain only the implemented operations. The schema-v1 cache index covers disposable thumbnail, waveform, and proxy artifacts under one global budget; proxy artifacts are file-backed and are never read wholly into memory. The preview service does not alter the frozen HTML prototype, `.orproj` schema, IPC protocol version, or canonical project state. Prototype behavior is simulated in browser-side code and is not evidence of production architecture.
+GitHub Actions checks Rust and Flutter code, runs project-storage, recovery, real local IPC, shared-host plus attached-CLI media parity tests on macOS and Windows, runs the complete Rust workspace and generated-media real-`ffprobe` plus real-`ffmpeg` artifact integrations on Linux, builds the macOS, Windows, Linux, and Android targets, and runs native Flutter bridge, project lifecycle, offline-media persistence, and timeline edit/history/save/reopen tests on macOS. Cache and file-backed proxy API tests run on Linux, macOS, and Windows; Linux also runs real Proxy V1 FFmpeg/ffprobe coverage. The current `.orproj` schema is v4 and accepts files up to 64 MiB; the strict decoder loads v1 with empty media/timeline/markers, v2 with existing media and empty timeline/markers, and v3 with existing media/tracks/clips and empty markers, preserving project ID, revision, and name. Clean opens do not rewrite older files. The next explicit save writes v4 without incrementing revision for schema conversion alone. New-project creation uses a race-safe no-clobber install. Recovery uses a separate bounded sidecar containing the exact saved base and a newer `ProjectDocument` snapshot; its v1 envelope accepts nested v1/v2/v3/v4 project snapshots, including markers in v4. Inspection is read-only, and load never applies a checkpoint automatically. `ProjectFileSession` checks recovery before opening/saving and compares the exact on-disk document with its saved base before replacement. Applying a recovery candidate revalidates the saved base and atomically saves the snapshot without incrementing its revision. A conflict does not select a winner. Session history remains in-memory; autosave and Android SAF remain unimplemented. There is no general command/query registry framework; the static catalogs contain only the implemented operations. The schema-v1 cache index covers disposable thumbnail, waveform, and proxy artifacts under one global budget; proxy artifacts are file-backed and are never read wholly into memory. The preview service does not alter the frozen HTML prototype, `.orproj` schema, IPC protocol version, or canonical project state. Prototype behavior is simulated in browser-side code and is not evidence of production architecture. The Phase 7A `or_runtime` contract is Rust-only and is not connected to Flutter playback.
 
 ## Planned full target architecture
 
@@ -170,7 +173,9 @@ with permanent invariants in [ARCHITECTURE_INVARIANTS.md](execution/ARCHITECTURE
 the immutable checkpoint graph in [PLAN.json](execution/PLAN.json), and mutable
 progress in [STATE.json](execution/STATE.json). The lock separates a semantic
 control plane from a realtime runtime plane and does not claim that future
-runtime crates or platform bindings already exist.
+runtime crates or platform bindings already exist. The 7A `or_runtime`
+contract is implemented without platform bindings; later runtime crates remain
+checkpoint-gated.
 
 The control plane is:
 
@@ -199,13 +204,13 @@ external/shared surface: format, dimensions, exact timestamp, and access mode.
 copy full-rate decoded frames into Dart byte arrays. Native handles remain
 runtime-only and are never serialized into projects, IPC, or cache identity.
 
-The future crate boundaries are conceptual and are created only by their plan
-checkpoints: `or_core` owns domain/project/application contracts; `or_runtime`
-owns capability, scheduling, budgets, and runtime coordination; `or_media` owns
+The crate boundaries are checkpoint-gated: `or_core` owns domain/project/application
+contracts; `or_runtime` owns the 7A capability, queue, budget, and runtime
+coordination contracts; `or_media` owns
 demux/decode/seek and software or hardware frame sources; `or_render` owns the
 wgpu render spine and graph; `or_audio` owns clocks, buffers, and realtime
-audio; and `or_ai` owns task/provider/model boundaries. No future crate is
-created by this architecture-only checkpoint.
+audio; and `or_ai` owns task/provider/model boundaries. No later crate or
+platform dependency is created by 7A.
 
 wgpu is the shared render spine. Metal, DX12, Vulkan, CUDA, VideoToolbox,
 MediaCodec, DMABUF, hardware buffers, and other native interop belong behind
