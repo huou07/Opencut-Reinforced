@@ -17,6 +17,12 @@ milestone:full-roadmap
 `PLAN.json` and `STATE.json` resolve the goal to the only checkpoint currently
 marked `NEXT`. A runner never chooses an arbitrary checkpoint.
 
+Before a multi-checkpoint phase is eligible for unattended execution, every
+remaining checkpoint must receive its required architecture, model, and
+dependency contracts from an earlier checkpoint or explicitly own them itself.
+A checkpoint must not consume a contract whose first owner occurs later in the
+execution graph.
+
 ## Trust boundary
 
 The runner owns one locked checkpoint's source implementation, ordinary

@@ -174,14 +174,101 @@ hardware or performance claims.
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-JOB-001`,
 `INV-DEP-001`.
 
+## 7F0 — Playback timing and viewer transport contract gate
+
+Lock the one canonical sequence timing model and the smallest shared viewer
+presentation boundary needed by 7F. This is an architecture/model checkpoint;
+it does not implement a product viewer or playback UI. Do not infer decisions
+from active media, platform defaults, or undocumented implementation choices.
+
+The canonical `ProjectTimeline.sequence_frame_rate` is one optional exact
+`RationalRate` in frames per second. A project created without an explicit rate
+remains unconfigured; migrations from project schemas v1–v4 also produce an
+unset rate. There is no guessed or source-derived default. Authorize the
+required project schema evolution and strict migrations through the existing
+persistence path, and include the field in recovery snapshots. Add the typed
+`timeline.sequence.set_frame_rate`
+command and `timeline.sequence.settings` query through the existing validated
+application boundary and generic `ApplicationRequest` route. A real change is
+one validated project command, history entry, and revision increment; setting
+the existing value is a no-op. Migration preserves revision and does not dirty
+the project before explicit save. Keep the recovery envelope and IPC protocol
+versions unchanged.
+
+For sequence frame index `n`, the exact presentation time is `n / rate` from
+timeline zero. All multiplication, division, boundary selection, and conversion
+use checked exact integer/rational arithmetic; floating point is display-only.
+At nonnegative exact playhead time `t`, next frame selects
+`floor(t × rate) + 1`; previous selects `ceil(t × rate) - 1`, clamped to frame
+zero and the last valid sequence frame. A frame is valid only when its exact
+time is before the half-open content end. Previous at content end selects the
+last valid frame; next at or beyond content end is a no-op. Empty timelines
+have no playable frames. The content end is the greatest exact clip end across
+audio and video tracks; markers do not extend it and playback does not loop.
+
+Seek and scrub accept exact nonnegative `RationalTime` values and do not snap or
+round them to sequence frames. They remain available while the sequence rate is
+unset. Play and frame-step require an explicit sequence rate and otherwise
+return a typed unavailable/validation result. Seeking into a gap or beyond the
+content end retains the requested exact playhead and presents a blank/neutral
+frame; playback starting at or beyond the content end completes without
+advancing.
+
+The sequence rate defines one global output-frame lattice for all source rates.
+For an output time inside a clip, source time is exactly
+`source_range.start + (output_time - clip.timeline_start)`. Use the preceding
+source presentation timestamp, holding that source frame until the next one;
+do not interpolate. This applies to mixed and variable source frame rates. A
+still image holds for its clip's explicit duration. Audio-only clips
+contribute to content duration and the audio clock but do not synthesize video;
+the viewer remains blank where no video contributes. Frame-step always follows
+the global sequence lattice. While audio output is active, the 7E audio clock
+drives playback; otherwise use a monotonic runtime clock anchored to the exact
+seek/play origin. Scrub position maps to exact timeline time, not a source or
+sequence-frame index.
+
+Lock one shared semantic viewer contract: `or_render`/wgpu owns render output;
+`or_runtime` owns snapshot identity, `FrameLease`, cancellation, and release
+coordination; a native adapter owns platform texture registration, native
+resources, synchronization, and Flutter texture lifetime; Flutter displays the
+registered external texture and sends controls through the application/bridge
+path. Use platform-specific adapters behind this contract. The supported
+desktop fallback is a bounded pixel-buffer presentation path on each platform;
+use shared GPU/native surfaces only where that platform/backend interop is
+validated. Keep copies out of Dart and minimize copies on the presentation
+path; universal zero-copy is not a requirement.
+
+The bridge may carry an opaque registered Flutter texture identifier, frame
+dimensions/format, exact presentation time, transport state, errors, and user
+controls. It must never carry per-frame pixel buffers or frame-rate frame bytes
+through Dart. Raw OS/GPU handles never cross Dart and stay out of `or_core`, IPC,
+project files, and cache identity.
+Adapters retain each `FrameLease` until the platform's release callback or
+completion fence signals. Use a bounded latest-frame mailbox/in-flight set;
+reject stale generation/revision frames so old work cannot replace newer
+presentation. A bounded hosted proof may be added only when needed to establish
+that the selected transport builds on supported desktop targets.
+
+Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
+`INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-UI-001`, `INV-UI-002`,
+`INV-PERSIST-001`, `INV-RENDER-001`, `INV-RENDER-002`, `INV-IPC-001`,
+`INV-DEP-001`.
+
 ## 7F — Real viewer and preview transport
 
-Connect a viewer through the approved native/external texture or equivalent
-zero-copy surface contract. Add play, pause, seek, scrubbing, frame step,
-playhead, ruler, and transport feedback. Viewer controls request runtime work
-and read presentation state; they do not mutate the project. Stale frames may
-be dropped, while exact-time requests and errors remain observable. Ruler and
-playhead display conversions never replace canonical `RationalTime`.
+Consume the timing and viewer contracts locked by 7F0. Connect the product
+viewer and add play, pause, exact seek, scrubbing, frame step, playhead, ruler,
+and transport feedback. Provide the minimal explicit sequence-rate control
+needed to configure a new/unset project through the 7F0 command; never choose a
+rate implicitly. Viewer controls request runtime work and read presentation
+state; they do not mutate the project. Drop stale frames while keeping
+exact-time requests and errors observable. Ruler and playhead display
+conversions never replace canonical `RationalTime`.
+
+Do not invent or infer a frame rate, redesign project timing, silently switch
+the approved viewer transport, or add another canonical state engine. If
+concrete build or runtime evidence proves a 7F0-approved contract invalid, stop
+and report that evidence for a separate architecture-plan decision.
 
 7F may modify exactly `.github/workflows/platform-verification.yml` only as
 needed to provision viewer/native-surface build requirements or run bounded
@@ -215,9 +302,13 @@ Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-MEDIA-001`,
 Run cross-platform/runtime conformance, failure injection, seek cancellation,
 resource-lifetime, offline-media, recovery, and stale-snapshot tests. Verify
 software fallback on supported paths, document native capability matrices, and
-make the viewer safe for the future Developer Preview gate. A Developer Preview
-may be considered only when the checkpoint's hosted CI and release gates pass;
-this architecture lock does not publish one.
+make the Phase 7 viewer/playback path safe for the Developer Preview gate. The
+preview may include only capabilities delivered by Phase 7; it must not depend
+on Phase 8 transforms, captions, effects, export, or other later work. A
+Developer Preview may be considered only when the checkpoint's hosted CI and
+release gates pass; this architecture lock does not publish one. Missing
+dedicated-hardware performance evidence remains `UNVERIFIED` and is not a
+hardening blocker.
 
 Affected invariants: all Phase 7 invariants listed above, especially
 `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`, `INV-RT-001`, `INV-RT-002`,

@@ -19,14 +19,17 @@ Complex linked-clip semantics, grouping, nested timelines, multicamera, and
 other advanced editing semantics are later Phase 13 work unless a future
 architecture amendment explicitly re-promotes them.
 
-## 8A — Project sequence settings and typed timeline evolution
+## 8A — Typed project model and timeline contract gate
 
-Define the smallest explicit typed model for sequence settings, selection,
-zoom/view state boundaries, enabled/locked/solo track state, and any additional
-MVP timeline concepts. Audit migration, recovery, query, command, CLI, and IPC
-contracts before changing them. Keep display-only viewport state out of the
-canonical project unless a product decision makes it persistent. No arbitrary
-JSON effect or plugin state is accepted.
+Define the remaining smallest explicit typed models and contracts for timeline
+selection, zoom/view-state boundaries, enabled/locked/solo track state, and
+other MVP timeline concepts. Sequence frame rate and playback timing belong to
+7F0 and must not be redefined here. Approve the project models, command/query
+contracts, and migrations required by 8B–8E before those checkpoints implement
+them. Audit persistence, recovery, query, command, CLI, and IPC behavior before
+changing a contract. Keep display-only viewport state out of the canonical
+project unless a product decision makes it persistent. No arbitrary JSON
+effect or plugin state is accepted.
 
 Gate: schema and contract review, explicit migration tests, exact time
 preservation, revision/history behavior, and architecture-policy update if a
@@ -67,7 +70,13 @@ Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 Add a typed text/title and manual-caption model, editing commands, bounded
 layout/evaluation, and preview/export parity. Captions must remain ordinary
 validated project edits, with stable IDs and exact timing. Automatic
-transcription/caption generation is explicitly deferred to Phase 10.
+transcription/caption generation is explicitly deferred to Phase 10. Before
+first use, select and verify the minimum cross-platform font shaping and
+rendering implementation required by the typed model. Prefer an existing
+platform or approved dependency; record version, MSRV, license, and hosted
+platform build evidence for any new dependency. The checkpoint may update only
+the exact platform-verification workflow path authorized in `PLAN.json` when
+that proof requires it. Flutter widget text is not the render/export path.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-RENDER-001`, `INV-UI-001`,
@@ -79,7 +88,12 @@ Add the locked, typed MVP set for audio gain, pan, and fades plus basic
 transitions/effects whose semantics are explicitly documented. Route audio
 through the Phase 7 clock/runtime and render through the shared typed snapshot.
 Use a bounded, reviewable effect set; do not create a plugin framework or
-arbitrary effect payloads.
+arbitrary effect payloads. Before first device output use, select and verify a
+desktop audio-output backend. Prefer native platform APIs; otherwise record
+the dependency version, MSRV, license, platform coverage, and hosted build
+evidence. Do not depend on shared-runner physical audio devices. The checkpoint
+may update only the exact platform-verification workflow path authorized in
+`PLAN.json` when that proof requires it.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-RENDER-001`, `INV-UI-001`,
@@ -90,8 +104,15 @@ Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 Complete export through the same evaluated model and runtime boundaries as
 preview. Add autosave, explicit recovery inspection, save/reopen, offline-media
 behavior, and failure-safe progress/cancel. Verify preview/export timing,
-captions, transforms, audio, effects, and marker persistence. Record codec and
-packaging license choices before release.
+captions, transforms, audio, effects, and marker persistence. Before first
+export, select the output container/codec profile from the approved FFmpeg
+binding and document codec, build-configuration, and packaging licenses. Keep
+hardware encoding optional. Define the export request, job status/progress,
+and cancellation contract through the existing application/IPC path before
+implementing the exporter; export is runtime work and does not mutate the
+project. Required hosted platform verification and
+Developer Preview packaging may update only the exact workflow paths
+authorized in `PLAN.json`.
 
 This is the Desktop MVP completion gate. It may require a future Developer
 Preview release decision, but it does not authorize publishing by itself.

@@ -122,6 +122,13 @@ The original `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
 
 The current `.orproj` schema is v4. Its envelope keeps the format marker and project identity/revision/name, then stores ordered `media`, `timeline.tracks`, and global `timeline.markers` arrays. `ProjectDocument` owns a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, UTF-8 name, ordered media items, and canonical `ProjectTimeline`. Private versioned DTOs and explicit conversion keep domain changes from silently changing the file contract. The decoder retains strict v1, v2, and v3 support and adds strict v4 decoding; all versions validate required fields and reject unknown fields. The Rust encoder emits deterministic pretty v4 JSON with a trailing newline for the same document; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The version probe rejects unsupported versions before decoding. Bounded load remains 64 MiB. V1 migrates to empty media, tracks, clips, and markers; v2 retains its media and migrates to an empty timeline and marker list; v3 retains media, tracks, and clips and migrates to an empty marker list; conversion preserves project ID, revision, and name. A clean open never rewrites the file, and the next explicit save writes v4 without a conversion-only revision increment.
 
+The 7F0 contract authorizes the next project schema version, v5, to add one
+strict `timeline.sequence_frame_rate` field encoded as either `null` or an exact
+`RationalRate`. The currently implemented format remains v4 until 7F0 runs.
+Strict migrations from v1–v4 set the rate to `null`; new projects also begin
+unset. Recovery remains envelope v1 and accepts nested v5 snapshots after that
+migration is implemented.
+
 V1 contains only project ID, revision, and name. V2 adds ordered media entries containing a UUIDv4 `MediaId`, validated local `file:` URI, and bounded `MediaMetadata`; source bytes remain external. V3 adds an ordered timeline. Each track stores a UUIDv4 ID, `video` or `audio` kind, and ordered clips. Each clip stores exactly its UUIDv4 ID, `MediaId`, `timeline_start`, and `source_range`; playback speed is implicitly 1×. V3 media IDs, source URIs, track IDs, and clip IDs must be unique in their respective project-wide scopes. Media metadata bounds remain as documented in [SECURITY_LICENSING.md](SECURITY_LICENSING.md).
 
 Projects reference external media. Media paths and fingerprints support relink, replace, offline state, and project collection without embedding source media by default. Cache entries never become canonical project state.
@@ -336,17 +343,75 @@ Keep high-volume media transport separate from ordinary bridge messages. The bri
 
 ## 10. Preview rendering and frame model
 
-Rust and wgpu are intended to own the render graph and preview rendering. Flutter should consume a native or external texture handle when supported. Evaluate platform-specific fast paths and retain a correctness fallback. Do not copy full-resolution frames through Dart at playback frame rate.
+Rust and wgpu own render evaluation and output. Flutter presents a registered
+external texture through one shared semantic viewer contract. The runtime owns
+snapshot identity and `FrameLease`; a platform adapter owns texture registration,
+native-resource lifetime, and synchronization. Use a bounded pixel-buffer path
+as the supported desktop fallback and optional shared GPU surfaces only where
+the platform/backend interop is validated. Minimize copies on the hot path;
+universal zero-copy is not promised. The selected Flutter texture boundary is
+consistent with the platform APIs for [Windows](https://api.flutter.dev/windows-embedder/flutter__windows__texture__registrar_8h_source.html),
+[Linux](https://api.flutter.dev/linux-embedder/flutter__texture__registrar_8h_source.html),
+and [Apple platforms](https://api.flutter.dev/macos-embedder/_flutter_external_texture_8mm_source.html),
+while allowing separate native adapters.
 
-Prefer zero-copy where platform/backend interoperability safely permits it; otherwise minimize copies across hot media paths. This is not a universal zero-copy promise. Avoid a forced route of decoder to CPU RGBA copy to Rust bytes to Dart bytes to Flutter GPU upload. The intended fast direction is compressed media to decoder to a CPU or hardware frame to a GPU-compatible/shared surface where available, then through the render graph to a native/external display texture.
-
-The frame boundary must eventually represent distinct memory domains such as a CPU frame, GPU texture, hardware decoder surface, or external/shared platform surface. Do not force every hardware-decoded frame to round-trip through CPU memory. Exact frame structures are not selected here. Resource ownership, synchronization, color format, and lifecycle need platform prototypes before choosing the Flutter texture integration.
+The bridge may send an opaque registered Flutter texture identifier, dimensions,
+pixel format, exact presentation time, transport state/errors, and controls.
+It must never send per-frame pixels, full-rate frame bytes, or raw OS/GPU handles
+through Dart, IPC, project state, or cache identity. Retain each `FrameLease`
+until the native release callback or completion fence signals. The platform
+adapter uses a bounded latest-frame mailbox/in-flight set and rejects frames
+from stale generations or project revisions. Pixel-buffer fallback may require
+a native copy/readback; frame data never takes a copied-Dart route.
 
 Timeline/render evaluation should publish a stable read view such as `RenderSnapshot N` for canonical `ProjectRevision N`. A project mutation produces a view associated with the next revision, which workers can adopt safely. Render workers never mutate Project, and the architecture must not require them to lock mutable Project state continuously. The snapshot may be a full immutable evaluated structure, incremental graph, structurally shared data, versioned read model, or another measured strategy; snapshot granularity must be benchmarked rather than assumed to mean cloning the whole project for every edit.
 
-Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The exact synchronization primitive, frame queue, buffering mode, and number of frames in flight are implementation choices. Double buffering, triple buffering, or other bounded depths may suit different playback, scrubbing, paused/frame-step, export, or low-latency preview modes; measure the tradeoff among latency, throughput, memory, and GPU occupancy.
+Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The native adapter selects a platform-appropriate synchronization primitive and a small bounded in-flight depth; the latest-frame mailbox replaces obsolete preview work. Measure the latency, throughput, memory, and GPU-occupancy tradeoffs when tuning that bound.
 
 A frame should carry explicit dimensions, pixel or texture format, color information, and timing metadata. The exact representation remains implementation work.
+
+### Phase 7F0 playback timing contract
+
+The canonical `ProjectTimeline.sequence_frame_rate` is optional and explicit:
+one exact `RationalRate` in frames per second. No project or active source
+supplies an implicit default.
+The schema-v5 `timeline.sequence.set_frame_rate` command accepts an exact rate
+or `null`; the read-only `timeline.sequence.settings` query returns it. Both
+use the existing validated application boundary and generic
+`ApplicationRequest` IPC route, with operation schema v1 and no IPC protocol
+version change. A real mutation is one validated project command, history
+entry, and revision increment; an unchanged value is a no-op. Migration
+preserves revision and does not dirty the project before explicit save. The 7F
+viewer exposes a minimal explicit control to set or clear the rate, without
+selecting a default. The recovery envelope stays v1.
+
+For output index `n`, time is the exact rational `n / sequence_rate` from
+timeline zero. All frame-index conversion uses checked integer/rational
+arithmetic. At exact nonnegative playhead time `t`, next selects
+`floor(t × rate) + 1`; previous selects `ceil(t × rate) - 1`, clamped to zero
+and the last valid frame. Valid frame times are nonnegative and strictly before
+the maximum exact clip end across audio/video tracks. The interval is
+half-open; markers do not extend it. An empty timeline has no playable frames,
+and playback does not loop. Previous at the end selects the last valid frame;
+next at or beyond the end does not advance.
+
+Seek and scrub preserve any exact nonnegative `RationalTime`, including
+positions between sequence frames, in gaps, or beyond content end. Play and
+frame-step require an explicit rate and return a typed unavailable result if it
+is unset; seeking and scrubbing remain available. A gap or beyond-end seek
+presents blank/neutral output. Play started at or beyond content end completes
+without advancing. Scrub maps pointer position to exact timeline time, not a
+frame or source index.
+
+The output lattice is global across mixed source rates. At output time inside a
+clip, map to `source_range.start + offset`, where the exact offset is
+`output_time - clip.timeline_start`. Choose the preceding source presentation
+timestamp, and hold that frame until the next timestamp; do not interpolate.
+Apply the same rule to variable frame-rate sources. A still image holds across
+its explicit clip duration. Audio-only clips extend content time and
+participate in the 7E audio clock but do not create video frames. Active audio
+output drives playback time through the 7E clock; without active output, use a
+monotonic runtime clock anchored to the exact play/seek time.
 
 ### Phase 7A runtime foundation
 
@@ -613,6 +678,12 @@ Native and OpenFX compatibility is later and has a higher trust cost. Do not tre
 
 Export uses the same timeline and render evaluation as preview. The intended flow is offscreen render frames to a media encoder and muxer, managed as a background job with progress and cancellation. Where supported, prefer a GPU/native-compatible render surface into a hardware encoder; otherwise use CPU frames with a supported software or platform encoder. Do not require a GPU readback/upload cycle when a stable shared-surface path is available. Codec and hardware options depend on platform support and licensing review, and correctness fallback remains first-class.
 
+Checkpoint 8F owns and locks the export request, job status/progress, and
+cancellation contract through the existing application/IPC path before the
+exporter implementation begins. Export is runtime work and does not mutate the
+canonical project. The container/codec profile and packaging license decision
+are also selected by 8F before first use; hardware encoding remains optional.
+
 The native OR format is not OpenTimelineIO. OTIO is an import/export interchange format and API for editorial cut information, not the native project database and not a media container. Lottie and dotLottie may be evaluated as bounded motion interchange in Phase 16, but neither is the canonical MotionScene format. Select adapters and supported fields when an interchange implementation is scoped.
 
 ## 20. UI feature registration and mobile
@@ -645,11 +716,11 @@ Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is 
 
 The following are deliberately not permanently selected:
 
-- exact software codec/demuxer set within the approved FFmpeg 8.1.x dynamic-link strategy
-- exact Flutter/native texture implementation
+- exact software codec/demuxer set within the approved FFmpeg 8.1.x dynamic-link strategy; export codecs and packaging are selected by 8F before first use
+- native implementation details within the 7F0 external-texture contract; its bounded pixel-buffer fallback is required on supported desktop targets, with shared GPU surfaces optional behind platform adapters
 - exact Flutter state management framework and state-change event schema, event bus/library, and transport
-- exact text shaping library
-- exact audio output library
+- text-shaping dependency, selected and verified by 8D before first text render
+- audio-output backend, selected and verified by 8E before first device output
 - exact storage crate for any future persistence subsystem beyond the Phase 5E cache index
 - exact Flutter localization package and generated resource format
 - exact GPU image-comparison tolerance metric
@@ -657,10 +728,10 @@ The following are deliberately not permanently selected:
 - exact hardware decode API on each platform
 - exact hardware encode API on each platform
 - exact FFmpeg hardware-frame integration
-- exact CPU, GPU, decoder-surface, and external/shared frame representation
-- exact external texture/interoperability path on each platform
-- exact synchronization primitive between project evaluation, media workers, GPU, and presentation
-- exact frame queue depth, frames in flight, and buffering strategy for each mode
+- concrete per-platform CPU/GPU/decoder-surface resource wrappers and native handle types; semantic `FrameDescriptor`/`FrameLease` ownership is fixed
+- validated optional shared-surface interoperability fast paths; Flutter external-texture presentation and the pixel-buffer fallback are fixed by 7F0
+- platform-specific synchronization primitive selected by the adapter; 7F0 fixes synchronization ownership and lease lifetime
+- numeric queue depth and per-mode buffering tuning; 7F0 requires a bounded latest-frame mailbox/in-flight set and stale-frame rejection
 - exact worker scheduler/runtime, thread-pool implementation, and priority API
 - exact frame, texture, audio-buffer, decode-surface, and render-target pool implementation
 - exact RAM, GPU/resource, and cache budget values and adaptation policy
@@ -671,7 +742,7 @@ The following are deliberately not permanently selected:
 - alternate stream selection and clip speed changes
 - transitions, effects, transforms, crop, opacity, audio gain, and pan semantics
 - marker schema/details, snap algorithm, and timeline UI interactions
-- playback, decode, and render behavior
+- decode/render scheduling and quality details beyond 7F0's exact sequence timing, source-sampling, viewer lifetime, and stale-frame contract
 - exact hardware/software path selection thresholds by codec, format, device, driver, and operation
 - exact CPU/GPU operation partition, based on profiling and task characteristics
 - exact CPU SIMD/intrinsic implementations and feature dispatch

@@ -277,20 +277,62 @@ class ExecutionPlanTests(unittest.TestCase):
         with self.assertRaises(execution_plan.PlanError):
             execution_plan.validate_plan(plan, state, REPO_ROOT)
 
-    def test_repository_current_next_is_7d_and_policy_allows_software_only(self) -> None:
+    def test_repaired_playback_graph_is_next_and_valid(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         resolution = execution_plan.resolve_goal(
-            plan, state, "checkpoint:7D", REPO_ROOT
+            plan, state, "checkpoint:7F0", REPO_ROOT
         )
-        self.assertEqual(resolution["checkpoint_id"], "7D")
-        self.assertEqual(state["checkpoints"]["7D"], "NEXT")  # type: ignore[index]
-        self.assertEqual(state["checkpoints"]["7E"], "PLANNED")  # type: ignore[index]
+        self.assertEqual(resolution["checkpoint_id"], "7F0")
+        self.assertEqual(state["current_next"], "7F0")
+        statuses = state["checkpoints"]
+        for checkpoint_id in ("7A", "7B", "7C0", "7C", "7D", "7E"):
+            self.assertEqual(statuses[checkpoint_id], "DONE")  # type: ignore[index]
+        self.assertEqual(statuses["7F0"], "NEXT")  # type: ignore[index]
+        for checkpoint_id in ("7F", "7G", "7H"):
+            self.assertEqual(statuses[checkpoint_id], "PLANNED")  # type: ignore[index]
+        for checkpoint_id in ("8A", "8B", "8C", "8D", "8E", "8F"):
+            self.assertEqual(statuses[checkpoint_id], "PLANNED")  # type: ignore[index]
+
+        checkpoint_7f0 = execution_plan.checkpoint_for_id(plan, "7F0")
+        checkpoint_7f = execution_plan.checkpoint_for_id(plan, "7F")
+        self.assertEqual(checkpoint_7f0["prerequisite_checkpoint_ids"], ["7E"])
+        self.assertEqual(checkpoint_7f0["next_checkpoint_relation"], "7F")
+        self.assertEqual(
+            checkpoint_7f0["milestone_membership"], ["desktop-mvp", "full-roadmap"]
+        )
+        self.assertFalse(checkpoint_7f0["user_visible"])
+        self.assertFalse(checkpoint_7f0["developer_preview_required"])
+        self.assertTrue(checkpoint_7f0["architecture_gate"])
+        self.assertEqual(checkpoint_7f["prerequisite_checkpoint_ids"], ["7F0"])
+        self.assertEqual(
+            checkpoint_7f0["expected_project_schema_effect_category"],
+            "explicit-model-gate",
+        )
+        self.assertEqual(
+            checkpoint_7f0["expected_ipc_effect_category"],
+            "explicit-contract-gate",
+        )
+        self.assertEqual(checkpoint_7f["expected_project_schema_effect_category"], "none")
+        checkpoint_8f = execution_plan.checkpoint_for_id(plan, "8F")
+        self.assertEqual(
+            checkpoint_8f["expected_ipc_effect_category"],
+            "explicit-contract-gate",
+        )
+        for milestone_id in ("desktop-mvp", "full-roadmap"):
+            ordered_ids = plan["milestones"][milestone_id]["checkpoint_ids"]  # type: ignore[index]
+            self.assertEqual(ordered_ids.index("7F0") + 1, ordered_ids.index("7F"))
+
+        evidence_dir = REPO_ROOT / "docs/execution/evidence"
+        self.assertFalse((evidence_dir / "7F0.json").exists())
+        self.assertFalse((evidence_dir / "7F.json").exists())
+
         checkpoint_7d = execution_plan.checkpoint_for_id(plan, "7D")
         policy = checkpoint_7d["dependency_change_policy"]
         self.assertIn("optional", policy)
         self.assertIn("measured need", policy)
         self.assertIn("build/license evidence", policy)
         self.assertIn("retain software-only fallback and continue", policy)
+        self.assertEqual(state["phase_status"]["7"], "IN_PROGRESS")  # type: ignore[index]
         execution_plan.validate_plan(plan, state, REPO_ROOT)
 
     def test_duplicate_checkpoint_is_rejected(self) -> None:
@@ -854,10 +896,22 @@ class SupervisorBoundaryTests(unittest.TestCase):
         with self.assertRaises(agent_supervisor.SupervisorError):
             agent_supervisor.assert_protected_surfaces_unchanged(before, after)
 
-    def test_phase7_workflow_allowances_are_exact_and_reject_other_protected_paths(self) -> None:
+    def test_checkpoint_workflow_allowances_are_exact_and_reject_other_protected_paths(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         execution_plan.validate_plan(plan, state, REPO_ROOT)
-        allowed_path = ".github/workflows/platform-verification.yml"
+        platform_path = ".github/workflows/platform-verification.yml"
+        preview_path = ".github/workflows/developer-preview.yml"
+        expected_allowances = {
+            "7C0": [platform_path],
+            "7C": [platform_path],
+            "7E": [platform_path],
+            "7F0": [platform_path],
+            "7F": [platform_path],
+            "7H": [platform_path, preview_path],
+            "8D": [platform_path],
+            "8E": [platform_path],
+            "8F": [platform_path, preview_path],
+        }
         forbidden_paths = (
             ".github/workflows/release.yml",
             "docs/execution/STATE.json",
@@ -867,14 +921,17 @@ class SupervisorBoundaryTests(unittest.TestCase):
             "scripts/agent_supervisor.py",
             "docs/execution/evidence/7C0.json",
         )
-        before = {path: b"baseline" for path in (allowed_path, *forbidden_paths)}
-        after = dict(before)
-        after[allowed_path] = b"workflow changed"
-        for checkpoint_id in ("7C0", "7C", "7E", "7F"):
+        before = {
+            path: b"baseline"
+            for path in (platform_path, preview_path, *forbidden_paths)
+        }
+        for checkpoint_id, allowed_paths in expected_allowances.items():
             with self.subTest(checkpoint_id=checkpoint_id):
                 checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
-                allowed_paths = checkpoint["runner_allowed_protected_paths"]
-                self.assertEqual(allowed_paths, [allowed_path])
+                self.assertEqual(checkpoint["runner_allowed_protected_paths"], allowed_paths)
+                after = dict(before)
+                for path in allowed_paths:
+                    after[path] = b"workflow changed"
                 agent_supervisor.assert_protected_surfaces_unchanged(
                     before, after, allowed_paths
                 )
@@ -898,9 +955,15 @@ class SupervisorBoundaryTests(unittest.TestCase):
     def test_7c0_state_advancement_makes_only_7c_next(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         state["checkpoints"] = dict(state["checkpoints"])  # type: ignore[arg-type]
-        state["checkpoints"]["7C0"] = "NEXT"  # type: ignore[index]
-        state["checkpoints"]["7C"] = "PLANNED"  # type: ignore[index]
-        state["checkpoints"]["7D"] = "PLANNED"  # type: ignore[index]
+        checkpoints = state["checkpoints"]
+        after_7b = False
+        for planned_checkpoint in plan["checkpoints"]:  # type: ignore[union-attr]
+            checkpoint_id = planned_checkpoint["id"]
+            if after_7b:
+                checkpoints[checkpoint_id] = "PLANNED"  # type: ignore[index]
+            if checkpoint_id == "7B":
+                after_7b = True
+        checkpoints["7C0"] = "NEXT"  # type: ignore[index]
         state["current_next"] = "7C0"
         after = agent_supervisor.advance_state_once(
             state, plan, "7C0", today="2026-09-29"
@@ -1068,34 +1131,38 @@ class SupervisorBoundaryTests(unittest.TestCase):
     def test_prompt_names_only_checkpoint_workflow_allowance(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         expected_path = ".github/workflows/platform-verification.yml"
-        for checkpoint_id in ("7C0", "7C", "7E", "7F"):
+        for checkpoint_id in ("7C0", "7C", "7E", "7F0", "7F", "8D", "8E"):
             checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
             self.assertEqual(checkpoint["runner_allowed_protected_paths"], [expected_path])
 
-        resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7D", REPO_ROOT)
-        self.assertEqual(resolution["runner_allowed_protected_paths"], [])
+        checkpoint_7d = execution_plan.checkpoint_for_id(plan, "7D")
+        self.assertEqual(checkpoint_7d.get("runner_allowed_protected_paths", []), [])
+        resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7F0", REPO_ROOT)
+        self.assertEqual(resolution["runner_allowed_protected_paths"], [expected_path])
         prompt = agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution)
-        self.assertIn("protected workflow gates", prompt)
-        self.assertNotIn("authorizes changes to exactly", prompt)
+        self.assertIn("authorizes changes to exactly this protected workflow path", prompt)
 
-        checkpoint_7f = execution_plan.checkpoint_for_id(plan, "7F")
-        prompt_7f = agent_supervisor.checkpoint_prompt(
+        checkpoint_7h = execution_plan.checkpoint_for_id(plan, "7H")
+        prompt_7h = agent_supervisor.checkpoint_prompt(
             REPO_ROOT,
             {
-                "goal": "checkpoint:7F",
-                "checkpoint_id": "7F",
-                "title": checkpoint_7f["title"],
-                "phase": checkpoint_7f["phase"],
-                "spec_document": checkpoint_7f["spec_document"],
-                "next_checkpoint_relation": checkpoint_7f["next_checkpoint_relation"],
-                "runner_allowed_protected_paths": checkpoint_7f[
+                "goal": "checkpoint:7H",
+                "checkpoint_id": "7H",
+                "title": checkpoint_7h["title"],
+                "phase": checkpoint_7h["phase"],
+                "spec_document": checkpoint_7h["spec_document"],
+                "next_checkpoint_relation": checkpoint_7h["next_checkpoint_relation"],
+                "runner_allowed_protected_paths": checkpoint_7h[
                     "runner_allowed_protected_paths"
                 ],
             },
         )
-        self.assertIn("exactly this protected workflow path", prompt_7f)
-        self.assertEqual(prompt_7f.count(f"  - {expected_path}\n"), 1)
-        self.assertIn("No other protected execution-control surface may change", prompt_7f)
+        self.assertIn("authorizes changes to exactly this protected workflow path", prompt_7h)
+        self.assertEqual(prompt_7h.count(f"  - {expected_path}\n"), 1)
+        self.assertEqual(
+            prompt_7h.count("  - .github/workflows/developer-preview.yml\n"), 1
+        )
+        self.assertIn("No other protected execution-control surface may change", prompt_7h)
 
     def test_prepare_goal_returns_the_existing_authoritative_prompt(self) -> None:
         plan, state = fixture_plan_state(["7A", "7B"])
@@ -1132,7 +1199,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
             },
         }
         with mock.patch.object(agent_supervisor, "ensure_start_state"):
-            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7D")
+            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7F0")
         after = {
             plan_path: plan_path.read_bytes(),
             state_path: state_path.read_bytes(),
@@ -1142,8 +1209,8 @@ class SupervisorBoundaryTests(unittest.TestCase):
         }
 
         self.assertEqual(before, after)
-        self.assertIn("Checkpoint: 7D", prompt)
-        self.assertFalse((evidence_dir / "7D.json").exists())
+        self.assertIn("Checkpoint: 7F0", prompt)
+        self.assertFalse((evidence_dir / "7F0.json").exists())
 
     def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:
         output = StringIO()
@@ -1221,7 +1288,7 @@ class SupervisorTests(unittest.TestCase):
                 agent_supervisor.SupervisorError,
                 "runner produced no new implementation commit",
             ):
-                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7D", "/runner")
+                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F0", "/runner")
         invoke.assert_called_once()
         verify_hosted.assert_not_called()
 
@@ -1256,7 +1323,7 @@ class SupervisorTests(unittest.TestCase):
             ) as run_one,
             mock.patch.object(agent_supervisor, "_verified_report", return_value="verified A"),
         ):
-            reports = agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7D", "/runner")
+            reports = agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F0", "/runner")
 
         self.assertEqual(reports, ["verified A"])
         run_one.assert_called_once()
@@ -1272,7 +1339,7 @@ class SupervisorTests(unittest.TestCase):
             for checkpoint in plan["checkpoints"]
             if checkpoint["phase"] == 7
         ]
-        expected_checkpoints = phase_checkpoint_ids[phase_checkpoint_ids.index("7D") :]
+        expected_checkpoints = phase_checkpoint_ids[phase_checkpoint_ids.index("7F0") :]
         head = {"sha": "3da60ecb1ef2f234032a54da9cbaeae917004933"}
         commit_shas = iter("abcdefg"[: len(expected_checkpoints)])
         prompts: list[str] = []
