@@ -29,6 +29,42 @@ verification, optional preview verification, evidence record, `STATE.json`
 transition, state/evidence commit, and the decision to launch a fresh runner.
 An LLM saying `DONE` is never repository-authoritative completion.
 
+## Manual/Desktop checkpoint preparation
+
+Prepare the authoritative prompt for the current checkpoint:
+
+```sh
+python3 scripts/agent_supervisor.py \
+  --goal checkpoint:<ID> \
+  --prepare
+```
+
+On macOS, the output can be copied directly to the clipboard:
+
+```sh
+python3 scripts/agent_supervisor.py \
+  --goal checkpoint:<ID> \
+  --prepare | pbcopy
+```
+
+Paste the generated prompt into one fresh Codex Desktop conversation opened on
+the repository. Desktop performs exactly the generated checkpoint: source
+implementation, local headless verification, implementation commit, and normal
+push. It must not edit `STATE.json` or completion evidence.
+
+After obtaining the exact implementation SHA, resume deterministically:
+
+```sh
+python3 scripts/agent_supervisor.py \
+  --goal checkpoint:<ID> \
+  --resume-sha <40-character implementation SHA>
+```
+
+The supervisor owns hosted CI verification, evidence, the `STATE.json`
+transition, the completion commit, and state-commit hygiene. `--prepare` does
+not mean the checkpoint has started or completed. Desktop chat history is
+human-readable execution history only, not repository-authoritative evidence.
+
 ## Required sequence
 
 Before work, the supervisor requires `main`, a clean worktree, `HEAD ==

@@ -300,6 +300,14 @@ def checkpoint_prompt(repo_root: Path, resolution: dict[str, Any]) -> str:
     )
 
 
+def prepare_goal(repo_root: Path, goal: str) -> str:
+    ensure_start_state(repo_root)
+    plan, state = execution_plan.load_plan_state(repo_root)
+    execution_plan.validate_plan(plan, state, repo_root)
+    resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
+    return checkpoint_prompt(repo_root, resolution)
+
+
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -650,17 +658,22 @@ def run_goal(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--goal", required=True)
-    parser.add_argument("--runner", help="absolute executable runner path")
-    parser.add_argument(
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument("--runner", help="absolute executable runner path")
+    modes.add_argument(
         "--resume-sha",
         help="resume hosted verification for an already-pushed exact implementation SHA",
     )
+    modes.add_argument(
+        "--prepare",
+        action="store_true",
+        help="print the authoritative prompt for the current checkpoint",
+    )
     args = parser.parse_args(argv)
-    if args.runner and args.resume_sha:
-        parser.error("--runner and --resume-sha are mutually exclusive")
-    if not args.runner and not args.resume_sha:
-        parser.error("one of --runner or --resume-sha is required")
     try:
+        if args.prepare:
+            print(prepare_goal(REPO_ROOT, args.goal), end="")
+            return 0
         reports = run_goal(REPO_ROOT, args.goal, args.runner, args.resume_sha)
     except (
         SupervisorError,

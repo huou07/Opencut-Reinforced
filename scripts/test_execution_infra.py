@@ -11,7 +11,10 @@ import sys
 import tempfile
 import urllib.error
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
@@ -872,6 +875,79 @@ class SupervisorBoundaryTests(unittest.TestCase):
         self.assertIn("IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE", prompt)
         self.assertIn("Do not edit PLAN.json, STATE.json", prompt)
         self.assertIn("supervisor owns hosted verification", prompt)
+
+    def test_prepare_goal_returns_the_existing_authoritative_prompt(self) -> None:
+        plan, state = fixture_plan_state(["7A", "7B"])
+        with (
+            mock.patch.object(agent_supervisor, "ensure_start_state") as ensure_start_state,
+            mock.patch.object(execution_plan, "load_plan_state", return_value=(plan, state)),
+        ):
+            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7A")
+
+        resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7A", REPO_ROOT)
+        self.assertEqual(prompt, agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution))
+        ensure_start_state.assert_called_once_with(REPO_ROOT)
+
+    def test_prepare_goal_does_not_invoke_a_runner(self) -> None:
+        plan, state = fixture_plan_state(["7A", "7B"])
+        with (
+            mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(execution_plan, "load_plan_state", return_value=(plan, state)),
+            mock.patch.object(agent_supervisor, "invoke_runner") as invoke_runner,
+        ):
+            agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7A")
+
+        invoke_runner.assert_not_called()
+
+    def test_prepare_goal_does_not_mutate_plan_state_or_evidence(self) -> None:
+        plan_path = REPO_ROOT / "docs/execution/PLAN.json"
+        state_path = REPO_ROOT / "docs/execution/STATE.json"
+        evidence_dir = REPO_ROOT / "docs/execution/evidence"
+        before = {
+            plan_path: plan_path.read_bytes(),
+            state_path: state_path.read_bytes(),
+            evidence_dir: {
+                path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()
+            },
+        }
+        with mock.patch.object(agent_supervisor, "ensure_start_state"):
+            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7C")
+        after = {
+            plan_path: plan_path.read_bytes(),
+            state_path: state_path.read_bytes(),
+            evidence_dir: {
+                path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()
+            },
+        }
+
+        self.assertEqual(before, after)
+        self.assertIn("Checkpoint: 7C", prompt)
+        self.assertFalse((evidence_dir / "7C.json").exists())
+
+    def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:
+        output = StringIO()
+        with (
+            mock.patch.object(agent_supervisor, "prepare_goal", return_value="prompt\n"),
+            mock.patch.object(agent_supervisor, "invoke_runner") as invoke_runner,
+            redirect_stdout(output),
+        ):
+            result = agent_supervisor.main(["--goal", "checkpoint:7C", "--prepare"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(output.getvalue(), "prompt\n")
+        invoke_runner.assert_not_called()
+
+    def test_cli_requires_exactly_one_execution_mode(self) -> None:
+        invalid_modes = (
+            ("--prepare", "--runner", "/tmp/runner"),
+            ("--prepare", "--resume-sha", "a" * 40),
+            ("--runner", "/tmp/runner", "--resume-sha", "a" * 40),
+            (),
+        )
+        for mode in invalid_modes:
+            with self.subTest(mode=mode), self.assertRaises(SystemExit) as error:
+                agent_supervisor.main(["--goal", "checkpoint:7C", *mode])
+            self.assertEqual(error.exception.code, 2)
 
 
 class SupervisorTests(unittest.TestCase):
