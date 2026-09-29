@@ -5,6 +5,7 @@ members = [
     "crates/or_app_bridge",
     "crates/or_ipc",
     "crates/or_runtime",
+    "crates/or_render",
 ]
 resolver = "3"
 

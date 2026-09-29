@@ -7,7 +7,7 @@ The machine-readable architecture and execution authority is
 [PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json),
 and locked phase contracts in [execution/phases](execution/phases). The
 implementation summary in this document describes completed capabilities
-through the Phase 7A runtime foundation. For authoritative current checkpoint
+through the Phase 7B render foundation. For authoritative current checkpoint
 and phase status, see `docs/execution/STATE.json`; this document does not copy
 mutable `NEXT` state or authorize skipping it. Future runtime crates are not
 created early.
@@ -15,11 +15,10 @@ created early.
 The implementation order preserves the control-plane/runtime-plane boundary:
 Rust `or_core` owns canonical project/application state; `or_runtime` now
 coordinates the Phase 7A capability, snapshot, queue, budget, and fallback
-contracts; `or_media`
-handles demux/decode/seek; `or_render` uses the wgpu spine; `or_audio` owns
-clocked realtime audio; and `or_ai` owns task/provider/model boundaries. These
-Only `or_runtime` exists at this checkpoint; later boundaries remain
-checkpoint-gated.
+contracts; `or_render` now owns the Phase 7B wgpu spine; `or_media` handles
+demux/decode/seek; `or_audio` owns clocked realtime audio; and `or_ai` owns
+task/provider/model boundaries. These boundaries remain checkpoint-gated, and
+`or_media`, `or_audio`, and `or_ai` remain future crates.
 
 Runtime work consumes immutable `RenderSnapshot` values and uses
 `FrameDescriptor`/`FrameLease` ownership. Full-rate frames do not travel as
@@ -34,7 +33,7 @@ for checkpoint-specific tests, dependency gates, and stop conditions.
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Visible playback, decode, rendering, and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Phase 7B adds the headless `or_render` wgpu spine, deterministic synthetic offscreen rendering, readback normalization, and a handle-only viewer contract. Visible playback, decode, and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
 
 ## Contents
 
@@ -384,6 +383,30 @@ visible playback, a worker scheduler, decode/render/audio backends, native
 surface interop, or platform capability discovery. Any later runtime or
 platform dependency must carry official upstream version, MSRV, license/build,
 and hosted platform evidence before it is pinned or used.
+
+### Phase 7B render foundation
+
+`or_render` owns the shared wgpu render spine while keeping project state,
+media decode, and viewer integration outside this checkpoint. It exposes a
+validated `PreviewSurface` abstraction, an opaque `ViewerSurfaceContract`,
+immutable `RenderGraphInput` values tied to the 7A `RenderSnapshot`, and an
+owned `RenderedFrame` whose wgpu texture is released by Rust RAII. The first
+graph is a deterministic synthetic solid-color scene rendered to an offscreen
+`Rgba8Unorm` target. `OffscreenReadback` is an explicit diagnostic/test and
+future-encoder path; it is not the viewer transport and is never a Dart frame
+message.
+
+The dependency gate pins `wgpu = 25.0.2` exactly. The official package metadata
+records MSRV Rust 1.84 and `MIT OR Apache-2.0` licensing, so it fits the OR
+workspace MSRV Rust 1.85 and MIT distribution. The crate enables the native
+`vulkan`, `gles`, `metal`, `dx12`, and `wgsl` features: Vulkan covers Windows,
+Linux, and Android; GLES covers Windows, Linux, and Android; Metal covers
+Apple platforms; and DX12 covers Windows. These platform/backend claims follow
+the [official wgpu platform matrix](https://github.com/gfx-rs/wgpu#supported-platforms)
+and the [pinned upstream manifest](https://github.com/gfx-rs/wgpu/blob/v25.0.2/wgpu/Cargo.toml).
+The [published crate metadata](https://crates.io/crates/wgpu/25.0.2) is the
+version/MSRV/license source used for the pin. Metal, DX12, Vulkan portability,
+and other native interop remain runtime-adapter work for later checkpoints.
 
 ## 11. Media and render graph
 
