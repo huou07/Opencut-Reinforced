@@ -75,7 +75,9 @@ def git_status_paths(repo_root: Path) -> list[str]:
 
 
 def is_protected_execution_path(path: str) -> bool:
-    normalized = path.replace("\\", "/").lstrip("./")
+    normalized = path.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
     return normalized in EXPLICIT_PROTECTED_PATHS or any(
         normalized.startswith(prefix) for prefix in PROTECTED_DIRECTORY_PREFIXES
     )
@@ -105,19 +107,24 @@ def capture_protected_surfaces(repo_root: Path = REPO_ROOT) -> dict[str, bytes |
 
 
 def changed_protected_surfaces(
-    before: Mapping[str, bytes | None], after: Mapping[str, bytes | None]
+    before: Mapping[str, bytes | None],
+    after: Mapping[str, bytes | None],
+    allowed_paths: Sequence[str] = (),
 ) -> list[str]:
+    allowed = set(allowed_paths)
     return sorted(
         path
         for path in set(before) | set(after)
-        if before.get(path) != after.get(path)
+        if path not in allowed and before.get(path) != after.get(path)
     )
 
 
 def assert_protected_surfaces_unchanged(
-    before: Mapping[str, bytes | None], after: Mapping[str, bytes | None]
+    before: Mapping[str, bytes | None],
+    after: Mapping[str, bytes | None],
+    allowed_paths: Sequence[str] = (),
 ) -> None:
-    changed = changed_protected_surfaces(before, after)
+    changed = changed_protected_surfaces(before, after, allowed_paths)
     if changed:
         raise SupervisorError(
             "runner changed protected execution-control files: " + ", ".join(changed)
@@ -276,6 +283,22 @@ def validate_resume_preconditions(
 
 
 def checkpoint_prompt(repo_root: Path, resolution: dict[str, Any]) -> str:
+    allowed_paths = resolution.get("runner_allowed_protected_paths", [])
+    if allowed_paths:
+        protection = (
+            "Do not edit PLAN.json, STATE.json, EVIDENCE_POLICY.json, architecture invariants "
+            "or policy, phase specs, execution supervisor/validator/evidence files, or completion "
+            "evidence. This checkpoint authorizes changes to exactly this protected workflow path:\n"
+            + "".join(f"  - {path}\n" for path in allowed_paths)
+            + "No other protected execution-control surface may change; PLAN.json and STATE.json "
+            "remain immutable.\n"
+        )
+    else:
+        protection = (
+            "Do not edit PLAN.json, STATE.json, EVIDENCE_POLICY.json, architecture invariants "
+            "or policy, phase specs, execution supervisor/validator/evidence files, completion "
+            "evidence, or protected workflow gates.\n"
+        )
     return (
         "You are executing exactly one locked Opencut Reinforced checkpoint.\n"
         f"Repository root: {repo_root}\n"
@@ -284,10 +307,9 @@ def checkpoint_prompt(repo_root: Path, resolution: dict[str, Any]) -> str:
         f"Phase: {resolution['phase']}\n"
         f"Locked specification: {resolution['spec_document']}\n"
         f"Next relation: {resolution['next_checkpoint_relation'] or 'none'}\n\n"
-        "Implement exactly this checkpoint and no successor checkpoint. Do not edit PLAN.json, "
-        "STATE.json, EVIDENCE_POLICY.json, architecture invariants or policy, phase specs, "
-        "execution supervisor/validator/evidence files, completion evidence, or protected "
-        "workflow gates. Push implementation commits only; do not create a state/evidence "
+        "Implement exactly this checkpoint and no successor checkpoint.\n"
+        + protection
+        + "Push implementation commits only; do not create a state/evidence "
         "completion commit. Do not claim DONE. The supervisor owns hosted verification and "
         "state advancement.\n\n"
         "Your final handoff must begin with:\n"
@@ -462,8 +484,21 @@ def finalize_verified_checkpoint(
     }
 
 
-def _resume_baseline(repo_root: Path, resume_sha: str) -> str:
-    baseline = git_output(repo_root, "log", "-1", "--format=%H", "--", "docs/execution/STATE.json")
+def _resume_baseline(
+    repo_root: Path, resume_sha: str, allowed_paths: Sequence[str] = ()
+) -> str:
+    # Exclude the resume commit when locating the prior state baseline so a
+    # forbidden STATE.json edit in that implementation commit remains visible
+    # in the protected-path diff below.
+    baseline = git_output(
+        repo_root,
+        "log",
+        "-1",
+        "--format=%H",
+        f"{resume_sha}^",
+        "--",
+        "docs/execution/STATE.json",
+    )
     try:
         subprocess.run(
             ["git", "merge-base", "--is-ancestor", baseline, resume_sha],
@@ -475,7 +510,12 @@ def _resume_baseline(repo_root: Path, resume_sha: str) -> str:
     except subprocess.CalledProcessError as exc:
         raise SupervisorError("resume SHA is not a descendant of the prior state baseline") from exc
     changed = git_output(repo_root, "diff", "--name-only", f"{baseline}..{resume_sha}").splitlines()
-    protected = [path for path in changed if is_protected_execution_path(path)]
+    allowed = set(allowed_paths)
+    protected = [
+        path
+        for path in changed
+        if is_protected_execution_path(path) and path not in allowed
+    ]
     if protected:
         raise SupervisorError(
             "resume implementation changed protected execution-control files: "
@@ -607,7 +647,8 @@ def run_goal(
         if resume_pending:
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")
-            _resume_baseline(repo_root, resume_sha or "")
+            allowed_paths = resolution["runner_allowed_protected_paths"]
+            _resume_baseline(repo_root, resume_sha or "", allowed_paths)
             validate_resume_preconditions(
                 resume_sha=resume_sha or "",
                 head=head,
@@ -630,6 +671,7 @@ def run_goal(
                 raise SupervisorError("--runner is required unless --resume-sha is supplied")
             before_plan_bytes = (repo_root / "docs/execution/PLAN.json").read_bytes()
             before_state_bytes = (repo_root / "docs/execution/STATE.json").read_bytes()
+            allowed_paths = resolution["runner_allowed_protected_paths"]
             protected_before = capture_protected_surfaces(repo_root)
             invoke_runner(repo_root, runner, checkpoint_prompt(repo_root, resolution))
             git_output(repo_root, "fetch", "--prune", "origin")
@@ -637,7 +679,11 @@ def run_goal(
                 raise SupervisorError("runner changed immutable PLAN.json")
             if (repo_root / "docs/execution/STATE.json").read_bytes() != before_state_bytes:
                 raise SupervisorError("runner changed STATE.json; only the supervisor may advance state")
-            assert_protected_surfaces_unchanged(protected_before, capture_protected_surfaces(repo_root))
+            assert_protected_surfaces_unchanged(
+                protected_before,
+                capture_protected_surfaces(repo_root),
+                allowed_paths,
+            )
             refuse_dirty_worktree(repo_root)
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")

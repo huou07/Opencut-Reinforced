@@ -2,8 +2,8 @@
 
 ## Status
 
-Phase 7 is planned. Its checkpoints are architecture-gated and must execute in
-order after 6E2B. The phase creates the runtime plane around the existing
+Phase 7 is in progress. Its checkpoints are architecture-gated and must execute
+in order after 6E2B. The phase creates the runtime plane around the existing
 Rust-owned project/control plane; it does not move canonical editing state into
 workers or Flutter.
 
@@ -54,16 +54,43 @@ Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-UI-002`, `INV-RENDER-001`,
 `INV-RENDER-002`, `INV-RENDER-003`, `INV-HW-001`, `INV-HW-002`, `INV-JOB-001`,
 `INV-CACHE-001`, `INV-DEP-001`.
 
+## 7C0 — FFmpeg dependency, packaging, and CI gate
+
+Evaluate and document exactly one Rust integration strategy for FFmpeg:
+high-level binding, low-level binding, or direct FFI. Select it from evidence
+covering upstream provenance and maintenance, exact FFmpeg and Rust package
+versions, API/ABI compatibility and supported-version policy, MSRV, build and
+toolchain requirements (including bindgen, clang, pkg-config, and CMake where
+applicable), API suitability, and the binding license.
+
+Approve a dynamic or static linking and packaging strategy that records the
+development headers/libraries, runtime shared libraries, and macOS, Linux, and
+Windows implications. Assess Android separately and stage it for Phase 9 only
+when the documented evidence justifies that boundary. Document the FFmpeg build
+configuration, LGPL/GPL effects, redistribution obligations, and any
+prohibited or nonfree configuration. Record the decision in the existing
+technical or security/licensing documentation, or one small dedicated
+dependency decision document if that is clearer.
+
+Provision the selected development environment in hosted CI and prove actual
+compile/link capability with a bounded probe; merely installing or finding an
+`ffmpeg` executable is insufficient. Preserve software decode as 7C's first
+correctness path. This gate does not create `or_media` or implement demux,
+seek, decode, resampling, `FrameLease` production, playback, or hardware
+acceleration. Do not add a media crate or select the binding before this
+checkpoint executes.
+
+Affected invariants: `INV-MEDIA-001`, `INV-MEDIA-002`, `INV-HW-001`,
+`INV-HW-002`, `INV-DEP-001`.
+
 ## 7C — Linked media runtime and software decode
 
-Create the future `or_media` crate only after selecting a concrete Rust binding
-or direct FFI strategy and reviewing its upstream provenance and maintenance,
-supported FFmpeg versions and ABI compatibility, MSRV, build/toolchain
-requirements, API suitability, binding license, and FFmpeg build/distribution
-license. FFmpeg's official source and documentation govern FFmpeg itself; a
-selected binding's own upstream and package metadata govern the Rust layer. Pin
-and use it only after these checks. It owns demux, exact timestamp mapping,
-seek, software video decode, audio decode, resampling, bounded queues,
+Consume the dependency, linking, packaging, and build strategy approved by 7C0.
+Do not reconsider or silently switch the dependency from scratch. If concrete
+compatibility, build, or licensing evidence proves the approved strategy
+invalid, stop and report that evidence before making a change to the strategy.
+Then create the future `or_media` crate. It owns demux, exact timestamp
+mapping, seek, software video decode, audio decode, resampling, bounded queues,
 cancellation, and `FrameLease` production. Media sources remain outside
 canonical domain state; workers consume a stable `RenderSnapshot` and exact
 time requests.

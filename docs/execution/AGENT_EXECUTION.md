@@ -29,6 +29,11 @@ verification, optional preview verification, evidence record, `STATE.json`
 transition, state/evidence commit, and the decision to launch a fresh runner.
 An LLM saying `DONE` is never repository-authoritative completion.
 
+A checkpoint introducing a native/system dependency must not be asked to prove
+hosted compatibility with CI infrastructure it is forbidden to establish. If
+a protected CI/build change is required, use a preceding architecture-gate
+checkpoint with an explicit exact-path protected-workflow allowance.
+
 ## Manual/Desktop checkpoint preparation
 
 Prepare the authoritative prompt for the current checkpoint:
@@ -74,16 +79,18 @@ origin/main`, and a valid plan/state graph. It captures the bytes of `PLAN.json`
 The runner then receives one generated prompt and one checkpoint. It must:
 
 1. implement only that checkpoint;
-2. leave the plan, state, policy, phase specs, validators, supervisor,
-   protected workflows, and evidence unchanged;
+2. leave `PLAN.json`, `STATE.json`, policy, phase specs, validators, supervisor,
+   and evidence unchanged; leave protected workflows unchanged except for
+   exact paths authorized by the checkpoint's PLAN entry;
 3. run local headless checks allowed by repository policy;
 4. commit and push implementation changes only; and
 5. return `IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE` with the detailed
    handoff contract below.
 
 After the runner exits, the supervisor fetches `origin`, requires a clean
-worktree and `HEAD == origin/main`, and rejects any protected-surface or
-`STATE.json` mutation. The resulting `HEAD` is the implementation SHA. The
+worktree and `HEAD == origin/main`, and rejects any protected-surface change
+outside the checkpoint's exact-path allowance or any `STATE.json` mutation.
+The resulting `HEAD` is the implementation SHA. The
 supervisor then verifies, in order:
 
 1. Repository hygiene on that exact SHA;
@@ -130,8 +137,9 @@ resumes hosted verification without rerunning the implementation. The SHA must
 be a lowercase 40-character value equal to `HEAD` and `origin/main`; the
 current `NEXT` must still be the same checkpoint; the worktree must be clean;
 the SHA must descend from the prior state baseline; and its history must not
-modify protected execution-control surfaces. The supervisor never guesses a
-SHA from arbitrary history.
+modify protected execution-control surfaces outside the checkpoint's
+PLAN-listed exact-path allowance. The supervisor never guesses a SHA from
+arbitrary history.
 
 ## Runner handoff report
 

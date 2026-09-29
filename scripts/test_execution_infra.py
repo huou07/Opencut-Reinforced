@@ -240,6 +240,54 @@ class ExecutionPlanTests(unittest.TestCase):
         summary = execution_plan.validate_plan(plan, state, REPO_ROOT)
         self.assertEqual(summary["next_checkpoint"], state["current_next"])
 
+    def test_runner_allowed_workflow_path_is_valid_for_architecture_gate(self) -> None:
+        plan, state = fixture_plan_state(["7A", "7B"])
+        plan["checkpoints"][0]["architecture_gate"] = True  # type: ignore[index]
+        plan["checkpoints"][0]["runner_allowed_protected_paths"] = [  # type: ignore[index]
+            ".github/workflows/platform-verification.yml"
+        ]
+        execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_invalid_runner_allowed_workflow_paths_are_rejected(self) -> None:
+        invalid_allowlists = (
+            None,
+            [""],
+            ["docs/execution/STATE.json"],
+            ["scripts/agent_supervisor.py"],
+            [".github/workflows/"],
+            ["../something"],
+            ["/github/workflows/platform-verification.yml"],
+            [r".github\workflows\platform-verification.yml"],
+            [".github/workflows/*.yml"],
+            [".github/workflows/platform-verification.yml"] * 2,
+        )
+        for allowlist in invalid_allowlists:
+            with self.subTest(allowlist=allowlist):
+                plan, state = fixture_plan_state()
+                plan["checkpoints"][0]["architecture_gate"] = True  # type: ignore[index]
+                plan["checkpoints"][0]["runner_allowed_protected_paths"] = allowlist  # type: ignore[index]
+                with self.assertRaises(execution_plan.PlanError):
+                    execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_runner_allowed_workflow_path_requires_architecture_gate(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["runner_allowed_protected_paths"] = [  # type: ignore[index]
+            ".github/workflows/platform-verification.yml"
+        ]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_repository_current_next_resolves_to_7c0(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        resolution = execution_plan.resolve_goal(
+            plan, state, "checkpoint:7C0", REPO_ROOT
+        )
+        self.assertEqual(resolution["checkpoint_id"], "7C0")
+        self.assertEqual(
+            resolution["runner_allowed_protected_paths"],
+            [".github/workflows/platform-verification.yml"],
+        )
+
     def test_duplicate_checkpoint_is_rejected(self) -> None:
         plan, state = fixture_plan_state()
         plan["checkpoints"].append(plan["checkpoints"][0])  # type: ignore[index]
@@ -795,12 +843,133 @@ class SupervisorBoundaryTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(agent_supervisor.SupervisorError):
                 agent_supervisor.assert_protected_surfaces_unchanged(before, after)
 
+    def test_normal_checkpoint_rejects_protected_workflow_mutation(self) -> None:
+        before = {".github/workflows/platform-verification.yml": b"workflow"}
+        after = {".github/workflows/platform-verification.yml": b"changed"}
+        with self.assertRaises(agent_supervisor.SupervisorError):
+            agent_supervisor.assert_protected_surfaces_unchanged(before, after)
+
+    def test_7c0_allows_only_its_exact_workflow_path(self) -> None:
+        allowed_path = ".github/workflows/platform-verification.yml"
+        forbidden_paths = (
+            ".github/workflows/release.yml",
+            "docs/execution/STATE.json",
+            "docs/execution/PLAN.json",
+            "docs/execution/phases/PHASE_7.md",
+            "scripts/agent_supervisor.py",
+            "docs/execution/evidence/7C0.json",
+        )
+        before = {path: b"baseline" for path in (allowed_path, *forbidden_paths)}
+        after = dict(before)
+        after[allowed_path] = b"workflow changed"
+        agent_supervisor.assert_protected_surfaces_unchanged(
+            before, after, [allowed_path]
+        )
+
+        for path in forbidden_paths:
+            with self.subTest(path=path):
+                rejected = dict(after)
+                rejected[path] = b"also changed"
+                with self.assertRaises(agent_supervisor.SupervisorError):
+                    agent_supervisor.assert_protected_surfaces_unchanged(
+                        before, rejected, [allowed_path]
+                    )
+
     def test_verified_state_transition_is_exactly_one_checkpoint(self) -> None:
         plan, state = fixture_plan_state(["7A", "7B"])
         after = agent_supervisor.advance_state_once(state, plan, "7A", today="2026-09-28")
         self.assertEqual(after["checkpoints"]["7A"], "DONE")
         self.assertEqual(after["checkpoints"]["7B"], "NEXT")
         self.assertEqual(after["current_next"], "7B")
+
+    def test_7c0_state_advancement_makes_only_7c_next(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        after = agent_supervisor.advance_state_once(
+            state, plan, "7C0", today="2026-09-29"
+        )
+        self.assertEqual(after["checkpoints"]["7B"], "DONE")
+        self.assertEqual(after["checkpoints"]["7C0"], "DONE")
+        self.assertEqual(after["checkpoints"]["7C"], "NEXT")
+        self.assertEqual(after["checkpoints"]["7D"], "PLANNED")
+        self.assertEqual(after["current_next"], "7C")
+        self.assertEqual(
+            agent_supervisor.assert_state_advanced_once(state, after, plan), "7C0"
+        )
+
+    def test_resume_baseline_uses_exact_workflow_allowance(self) -> None:
+        allowed_path = ".github/workflows/platform-verification.yml"
+        additional_paths = (
+            ".github/workflows/release.yml",
+            "docs/execution/STATE.json",
+            "docs/execution/PLAN.json",
+            "docs/execution/phases/PHASE_7.md",
+            "scripts/agent_supervisor.py",
+            "docs/execution/evidence/7C0.json",
+        )
+        cases = [([allowed_path], True)]
+        cases.extend(([allowed_path, path], False) for path in additional_paths)
+        cases.append(([allowed_path], False))
+
+        for changed_paths, should_pass in cases:
+            allowed = [allowed_path] if should_pass or len(changed_paths) > 1 else []
+            with self.subTest(changed_paths=changed_paths, allowed=allowed):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.run(["git", "init", "-q", str(root)], check=True)
+                    subprocess.run(
+                        ["git", "config", "user.name", "Execution Test"],
+                        cwd=root,
+                        check=True,
+                    )
+                    subprocess.run(
+                        ["git", "config", "user.email", "execution-test@example.invalid"],
+                        cwd=root,
+                        check=True,
+                    )
+                    baseline_paths = {
+                        allowed_path,
+                        *additional_paths,
+                        "docs/execution/STATE.json",
+                    }
+                    for relative_path in baseline_paths:
+                        path = root / relative_path
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text("baseline\n", encoding="utf-8")
+                    subprocess.run(["git", "add", "."], cwd=root, check=True)
+                    subprocess.run(
+                        ["git", "commit", "-qm", "state baseline"], cwd=root, check=True
+                    )
+                    baseline = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    ).stdout.strip()
+                    for relative_path in changed_paths:
+                        (root / relative_path).write_text("implementation\n", encoding="utf-8")
+                    subprocess.run(["git", "add", "."], cwd=root, check=True)
+                    subprocess.run(
+                        ["git", "commit", "-qm", "implementation"], cwd=root, check=True
+                    )
+                    implementation_sha = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    ).stdout.strip()
+
+                    if should_pass:
+                        self.assertEqual(
+                            agent_supervisor._resume_baseline(root, implementation_sha, allowed),
+                            baseline,
+                        )
+                    else:
+                        with self.assertRaises(agent_supervisor.SupervisorError):
+                            agent_supervisor._resume_baseline(
+                                root, implementation_sha, allowed
+                            )
 
     def test_state_commit_path_rejects_any_third_file(self) -> None:
         agent_supervisor.validate_state_commit_paths(
@@ -875,6 +1044,34 @@ class SupervisorBoundaryTests(unittest.TestCase):
         self.assertIn("IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE", prompt)
         self.assertIn("Do not edit PLAN.json, STATE.json", prompt)
         self.assertIn("supervisor owns hosted verification", prompt)
+        self.assertIn("protected workflow gates", prompt)
+        self.assertNotIn("authorizes changes to exactly", prompt)
+
+    def test_prompt_names_only_7c0_workflow_exception(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        resolution_7c0 = execution_plan.resolve_goal(
+            plan, state, "checkpoint:7C0", REPO_ROOT
+        )
+        prompt_7c0 = agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution_7c0)
+        self.assertIn("exactly this protected workflow path", prompt_7c0)
+        self.assertIn(".github/workflows/platform-verification.yml", prompt_7c0)
+        self.assertIn("No other protected execution-control surface may change", prompt_7c0)
+
+        checkpoint_7c = execution_plan.checkpoint_for_id(plan, "7C")
+        prompt_7c = agent_supervisor.checkpoint_prompt(
+            REPO_ROOT,
+            {
+                "goal": "checkpoint:7C",
+                "checkpoint_id": "7C",
+                "title": checkpoint_7c["title"],
+                "phase": checkpoint_7c["phase"],
+                "spec_document": checkpoint_7c["spec_document"],
+                "next_checkpoint_relation": checkpoint_7c["next_checkpoint_relation"],
+                "runner_allowed_protected_paths": [],
+            },
+        )
+        self.assertIn("protected workflow gates", prompt_7c)
+        self.assertNotIn(".github/workflows/platform-verification.yml", prompt_7c)
 
     def test_prepare_goal_returns_the_existing_authoritative_prompt(self) -> None:
         plan, state = fixture_plan_state(["7A", "7B"])
@@ -911,7 +1108,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
             },
         }
         with mock.patch.object(agent_supervisor, "ensure_start_state"):
-            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7C")
+            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7C0")
         after = {
             plan_path: plan_path.read_bytes(),
             state_path: state_path.read_bytes(),
@@ -921,7 +1118,8 @@ class SupervisorBoundaryTests(unittest.TestCase):
         }
 
         self.assertEqual(before, after)
-        self.assertIn("Checkpoint: 7C", prompt)
+        self.assertIn("Checkpoint: 7C0", prompt)
+        self.assertFalse((evidence_dir / "7C0.json").exists())
         self.assertFalse((evidence_dir / "7C.json").exists())
 
     def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:

@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
 
 
@@ -54,7 +54,44 @@ def _require_string(value: Any, label: str) -> str:
     return value
 
 
-def _checkpoint_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _validate_runner_allowed_protected_paths(
+    checkpoint_id: str,
+    checkpoint: dict[str, Any],
+    value: Any,
+    repo_root: Path,
+) -> None:
+    label = f"checkpoint {checkpoint_id}.runner_allowed_protected_paths"
+    paths = _require_list(value, label)
+    if not checkpoint["architecture_gate"]:
+        raise PlanError(f"{label} requires architecture_gate = true")
+
+    seen: set[str] = set()
+    for index, raw_path in enumerate(paths):
+        path_label = f"{label}[{index}]"
+        path = _require_string(raw_path, path_label)
+        parsed = PurePosixPath(path)
+        if (
+            "\\" in path
+            or path != parsed.as_posix()
+            or parsed.is_absolute()
+            or PureWindowsPath(path).is_absolute()
+            or any(part in {"", ".", ".."} for part in path.split("/"))
+            or any(character in path for character in "*?[]")
+            or not path.startswith(".github/workflows/")
+        ):
+            raise PlanError(
+                f"{path_label} must be a normalized exact file path under .github/workflows/"
+            )
+        if path in seen:
+            raise PlanError(f"{label} contains duplicate path: {path}")
+        if (repo_root / Path(*parsed.parts)).is_dir():
+            raise PlanError(f"{path_label} must name a file, not a directory")
+        seen.add(path)
+
+
+def _checkpoint_map(
+    plan: dict[str, Any], repo_root: Path = REPO_ROOT
+) -> dict[str, dict[str, Any]]:
     raw_checkpoints = _require_list(plan.get("checkpoints"), "plan.checkpoints")
     result: dict[str, dict[str, Any]] = {}
     required = {
@@ -103,6 +140,13 @@ def _checkpoint_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for field in ("user_visible", "developer_preview_required", "architecture_gate"):
             if not isinstance(checkpoint[field], bool):
                 raise PlanError(f"checkpoint {checkpoint_id}.{field} must be boolean")
+        if "runner_allowed_protected_paths" in checkpoint:
+            _validate_runner_allowed_protected_paths(
+                checkpoint_id,
+                checkpoint,
+                checkpoint["runner_allowed_protected_paths"],
+                repo_root,
+            )
         _require_string(
             checkpoint["expected_project_schema_effect_category"],
             f"checkpoint {checkpoint_id}.expected_project_schema_effect_category",
@@ -219,7 +263,7 @@ def validate_plan(
     if state.get("schema_version") != 1:
         raise PlanError("STATE.json schema_version must be 1")
     _require_string(plan.get("plan_id"), "plan.plan_id")
-    checkpoints = _checkpoint_map(plan)
+    checkpoints = _checkpoint_map(plan, repo_root)
     if not checkpoints:
         raise PlanError("plan must contain at least one checkpoint")
 
@@ -409,6 +453,7 @@ def resolve_goal(
         "goal_checkpoint_ids": goal_members,
         "goal_complete_after_current": current_next == goal_members[-1],
         "next_checkpoint_relation": checkpoint["next_checkpoint_relation"],
+        "runner_allowed_protected_paths": checkpoint.get("runner_allowed_protected_paths", []),
     }
 
 

@@ -56,7 +56,8 @@
     "6E2B": "DONE",
     "7A": "DONE",
     "7B": "DONE",
-    "7C": "NEXT",
+    "7C0": "NEXT",
+    "7C": "PLANNED",
     "7D": "PLANNED",
     "7E": "PLANNED",
     "7F": "PLANNED",
@@ -74,7 +75,7 @@
     "9D": "PLANNED",
     "9E": "PLANNED"
   },
-  "current_next": "7C",
+  "current_next": "7C0",
   "last_updated": "2026-09-29",
   "phase_status": {
     "10": "PLANNED",
