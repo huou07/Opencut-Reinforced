@@ -1,0 +1,77 @@
+{
+  "checkpoint_id": "7C0",
+  "developer_preview": {
+    "required": false
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "6c7508970571249ace43124f31e60591269642ab",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36529128708",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36529128708,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "6c7508970571249ace43124f31e60591269642ab",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36529128879",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36529128879,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "6c7508970571249ace43124f31e60591269642ab",
+  "implementation_subject": "feat(media): gate FFmpeg linking and packaging",
+  "schema_version": 1,
+  "verified_at_utc": "2026-09-29T06:17:35Z"
+}
