@@ -673,6 +673,7 @@ def run_goal(
             before_state_bytes = (repo_root / "docs/execution/STATE.json").read_bytes()
             allowed_paths = resolution["runner_allowed_protected_paths"]
             protected_before = capture_protected_surfaces(repo_root)
+            baseline_head = git_output(repo_root, "rev-parse", "HEAD")
             invoke_runner(repo_root, runner, checkpoint_prompt(repo_root, resolution))
             git_output(repo_root, "fetch", "--prune", "origin")
             if (repo_root / "docs/execution/PLAN.json").read_bytes() != before_plan_bytes:
@@ -689,6 +690,8 @@ def run_goal(
             origin = git_output(repo_root, "rev-parse", "origin/main")
             if head != origin:
                 raise SupervisorError("runner did not leave HEAD == origin/main")
+            if head == baseline_head:
+                raise SupervisorError("runner produced no new implementation commit")
             result = _run_one_checkpoint(
                 repo_root,
                 plan=plan,

@@ -110,6 +110,14 @@ start. A phase or milestone therefore means a sequence of fresh runners,
 hosted verification, and state commits—not one model context implementing
 multiple checkpoints.
 
+A successful direct runner invocation must produce a new implementation
+commit. If `HEAD` is unchanged, stop immediately; it is not an implementation
+SHA and hosted polling must not begin. For a checkpoint whose locked contract
+makes an optimization optional, missing qualifying evidence should produce a
+repository-recorded "not enabled / software fallback retained" decision when
+that is an allowed outcome, rather than speculative implementation just to
+advance.
+
 ## Hosted evidence
 
 `docs/execution/EVIDENCE_POLICY.json` is deterministic policy. Product gates

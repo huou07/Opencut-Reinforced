@@ -120,15 +120,31 @@ must expose cancellation, backpressure, and stale-snapshot behavior.
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-MEDIA-001`,
 `INV-MEDIA-002`, `INV-JOB-001`, `INV-CACHE-001`, `INV-DEP-001`.
 
-## 7D — Hardware decode and native-frame interop
+## 7D — Hardware decode and native-frame interop evaluation and optional implementation
 
-Add measured, optional adapters behind `or_media`/`or_render` runtime
-interfaces: Apple VideoToolbox and native surfaces, Windows D3D paths, Linux
-Vulkan/DMABUF paths, and NVIDIA paths only when benchmark evidence shows a
-required benefit and the licensing/build gate is recorded. The shared render
-spine remains wgpu. Native handles never enter `or_core`, serialized project
-state, IPC, or cache keys. Every path retains software/CPU fallback and clear
-fallback telemetry.
+Evaluate currently eligible platform hardware paths using capability evidence,
+build and license evidence, and repeatable target-hardware measurements when a
+performance benefit is claimed. Hardware acceleration is optional and is not
+required to complete Phase 7. Implement only paths with sufficient evidence.
+
+If no hardware path has sufficient evidence, this is a valid checkpoint
+outcome: keep software decode as the authoritative correctness path, record
+that no hardware path is currently approved, preserve centralized
+capability/provider selection and deterministic software fallback, and add
+repository-visible tests or documentation for that decision. Commit the
+decision, make no hardware performance claim, and defer adapters until evidence
+exists. No hardware path approved is a decision, not a blocker; do not invent
+benchmark results or implement hardware speculatively merely to advance.
+
+A genuine blocker is a broken software fallback, an architecture invariant that
+cannot be preserved, build or license evidence contradicting an already-enabled
+path, or a required correctness path that cannot build or test. Native handles
+never enter `or_core`, serialized project state, IPC, or cache keys. Every
+enabled path retains software/CPU fallback and clear fallback telemetry.
+
+The shared render spine remains wgpu. Possible paths include Apple
+VideoToolbox/native surfaces, Windows D3D, Linux Vulkan/DMABUF, and NVIDIA
+adapters, but each remains unapproved until its evidence qualifies.
 
 Apple direction: Metal resources interoperate with wgpu through an adapter;
 VideoToolbox supplies decode surfaces; MPS is an optional future compute path;
@@ -149,6 +165,12 @@ not allocate, block on project locks, call provider/network code, or mutate
 canonical state. Audio and video workers coordinate through runtime snapshots
 and clock messages, not editing commands.
 
+7E may modify exactly `.github/workflows/platform-verification.yml` only as
+needed to provision the selected audio backend's hosted build requirements or
+run bounded deterministic audio and synchronization verification. Keep timing
+correctness tests deterministic and do not depend on shared-runner audio
+hardware or performance claims.
+
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-JOB-001`,
 `INV-DEP-001`.
 
@@ -161,18 +183,28 @@ and read presentation state; they do not mutate the project. Stale frames may
 be dropped, while exact-time requests and errors remain observable. Ruler and
 playhead display conversions never replace canonical `RationalTime`.
 
+7F may modify exactly `.github/workflows/platform-verification.yml` only as
+needed to provision viewer/native-surface build requirements or run bounded
+hosted viewer and transport verification on supported platforms. Preserve the
+existing hosted build and test gates.
+
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-UI-001`,
 `INV-UI-002`, `INV-MEDIA-001`, `INV-MEDIA-002`, `INV-RENDER-001`,
 `INV-RENDER-002`, `INV-JOB-001`, `INV-IPC-001`.
 
 ## 7G — Performance architecture gate
 
-Instrument and publish repeatable conformance/performance evidence for decode
-throughput, seek latency, A/V drift, audio underrun, dropped frames, copy count,
-RAM, GPU memory/resources, queue depths, and software/hardware fallback rate.
-Use synthetic media and legally safe fixtures. Define budgets and regression
-thresholds before optimization. No dependency or native path is justified by
-intuition alone.
+Implement deterministic instrumentation and publish repeatable correctness and
+conformance measurements where hosted CI is appropriate. Use synthetic media
+and legally safe fixtures. Define deterministic, platform-independent semantic
+or resource budgets where justified.
+
+When no known dedicated or self-hosted benchmark machine is available, record
+`DEDICATED_HARDWARE_PERFORMANCE = UNVERIFIED`. This status does not block Phase
+7 completion. Do not set hard FPS thresholds, claim GPU performance, or justify
+a hardware path from shared hosted-runner timings. Retain software fallback and
+instrumentation for future target-hardware measurements; do not fabricate
+benchmark evidence.
 
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-MEDIA-001`,
 `INV-MEDIA-002`, `INV-RENDER-001`, `INV-HW-001`, `INV-JOB-001`, `INV-CACHE-001`,
