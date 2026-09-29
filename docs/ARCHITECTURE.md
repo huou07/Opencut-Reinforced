@@ -207,12 +207,11 @@ runtime-only and are never serialized into projects, IPC, or cache identity.
 
 The crate boundaries are checkpoint-gated: `or_core` owns domain/project/application
 contracts; `or_runtime` owns the 7A capability, queue, budget, and runtime
-coordination contracts; `or_media` owns
-demux/decode/seek and software or hardware frame sources; `or_render` owns the
-wgpu render spine and graph; `or_audio` owns clocks, buffers, and realtime
-audio; and `or_ai` owns task/provider/model boundaries. Phase 7B creates only
-`or_render`; the media, audio, AI, and native interop boundaries remain
-checkpoint-gated.
+coordination contracts; `or_media` owns linked software demux/decode/seek and
+software frame/audio output; `or_render` owns the wgpu render spine and graph;
+`or_audio` owns clocks, buffers, and realtime audio; and `or_ai` owns
+task/provider/model boundaries. Hardware decode, the audio engine, AI, and
+native interop remain checkpoint-gated.
 
 wgpu is the shared render spine. Metal, DX12, Vulkan, CUDA, VideoToolbox,
 MediaCodec, DMABUF, hardware buffers, and other native interop belong behind

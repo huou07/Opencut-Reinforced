@@ -60,7 +60,10 @@ jobs:
             --disable-doc \
             --disable-autodetect \
             --disable-everything \
-            --disable-asm
+            --disable-asm \
+            --enable-protocol=file \
+            --enable-demuxer=matroska \
+            --enable-decoder=ffv1,pcm_s16le
           make -j2
           make install
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
@@ -68,6 +71,7 @@ jobs:
             pkg-config --modversion "lib$library"
             test "$(pkg-config --variable=prefix "lib$library")" = "$prefix"
           done
+          echo "PKG_CONFIG_PATH=$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: Compile, link, and load the FFmpeg Rust binding probe
         timeout-minutes: 10
@@ -76,6 +80,12 @@ jobs:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
         run: cargo run --locked --release --manifest-path tools/ffmpeg-link-probe/Cargo.toml
 
+      - name: Verify production software decode against linked FFmpeg
+        timeout-minutes: 10
+        env:
+          LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+        run: cargo test --locked -p or_media --test software_decode
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -83,6 +93,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run Rust tests
+        env:
+          LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
         run: cargo test --workspace
 
       - name: Verify the real ffprobe adapter with generated media

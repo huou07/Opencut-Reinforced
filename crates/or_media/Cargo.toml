@@ -1,0 +1,16 @@
+[package]
+name = "or_media"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ffmpeg-the-third = { version = "=6.0.0", default-features = false, features = [
+    "codec",
+    "format",
+    "software-resampling",
+    "software-scaling",
+] }
+or_core = { path = "../or_core" }
+or_runtime = { path = "../or_runtime" }

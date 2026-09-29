@@ -6,6 +6,7 @@ members = [
     "crates/or_ipc",
     "crates/or_runtime",
     "crates/or_render",
+    "crates/or_media",
 ]
 resolver = "3"
 
