@@ -86,9 +86,27 @@ Affected invariants: `INV-MEDIA-001`, `INV-MEDIA-002`, `INV-HW-001`,
 ## 7C — Linked media runtime and software decode
 
 Consume the dependency, linking, packaging, and build strategy approved by 7C0.
-Do not reconsider or silently switch the dependency from scratch. If concrete
+The approved strategy is ffmpeg-the-third 6.0.0 with FFmpeg 8.1.x, dynamically
+linked against shared libraries from an LGPL-only FFmpeg build. Do not
+reconsider or silently switch the dependency from scratch. If concrete
 compatibility, build, or licensing evidence proves the approved strategy
-invalid, stop and report that evidence before making a change to the strategy.
+invalid, stop and report that evidence instead of replacing it.
+
+7C may modify exactly `.github/workflows/platform-verification.yml`, only as
+needed to make the approved strategy available to production workspace build
+and test verification. When required, this may include exposing the approved
+FFmpeg development headers and libraries to workspace Cargo checks and tests,
+persisting the approved prefix environment to later relevant CI steps, enabling
+only the minimum FFmpeg components needed for deterministic software decode and
+resample fixtures, and adding bounded production-workspace compile, link, and
+decode verification.
+
+7C must not switch bindings or the approved FFmpeg major/minor strategy, enable
+GPL or nonfree components, change dynamic/shared packaging policy, weaken hosted
+verification, modify another workflow, or implement hardware decode. If
+concrete evidence proves the 7C0-approved strategy invalid, stop rather than
+silently replacing it.
+
 Then create the future `or_media` crate. It owns demux, exact timestamp
 mapping, seek, software video decode, audio decode, resampling, bounded queues,
 cancellation, and `FrameLease` production. Media sources remain outside

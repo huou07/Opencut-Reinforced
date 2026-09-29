@@ -32,7 +32,9 @@ An LLM saying `DONE` is never repository-authoritative completion.
 A checkpoint introducing a native/system dependency must not be asked to prove
 hosted compatibility with CI infrastructure it is forbidden to establish. If
 a protected CI/build change is required, use a preceding architecture-gate
-checkpoint with an explicit exact-path protected-workflow allowance.
+checkpoint with an explicit exact-path protected-workflow allowance. A
+downstream implementation checkpoint may also receive that allowance when it
+needs to operationalize a dependency strategy its predecessor already approved.
 
 ## Manual/Desktop checkpoint preparation
 
