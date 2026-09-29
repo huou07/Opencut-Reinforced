@@ -56,11 +56,17 @@ Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-UI-002`, `INV-RENDER-001`,
 
 ## 7C — Linked media runtime and software decode
 
-Create the future `or_media` crate only after an official FFmpeg binding and
-build/license/MSRV/API review. It owns demux, exact timestamp mapping, seek,
-software video decode, audio decode, resampling, bounded queues, cancellation,
-and `FrameLease` production. Media sources remain outside canonical domain
-state; workers consume a stable `RenderSnapshot` and exact time requests.
+Create the future `or_media` crate only after selecting a concrete Rust binding
+or direct FFI strategy and reviewing its upstream provenance and maintenance,
+supported FFmpeg versions and ABI compatibility, MSRV, build/toolchain
+requirements, API suitability, binding license, and FFmpeg build/distribution
+license. FFmpeg's official source and documentation govern FFmpeg itself; a
+selected binding's own upstream and package metadata govern the Rust layer. Pin
+and use it only after these checks. It owns demux, exact timestamp mapping,
+seek, software video decode, audio decode, resampling, bounded queues,
+cancellation, and `FrameLease` production. Media sources remain outside
+canonical domain state; workers consume a stable `RenderSnapshot` and exact
+time requests.
 
 The first complete path is software fallback: it must seek, decode, resample,
 and feed bounded runtime queues before any hardware optimization. All queues
