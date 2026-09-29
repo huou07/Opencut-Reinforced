@@ -1,0 +1,77 @@
+{
+  "checkpoint_id": "7C",
+  "developer_preview": {
+    "required": false
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "691b261d2d878645d20248bc8c2a211083916f61",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36554865103",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36554865103,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "691b261d2d878645d20248bc8c2a211083916f61",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36554865210",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36554865210,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "691b261d2d878645d20248bc8c2a211083916f61",
+  "implementation_subject": "feat(media): add linked software decode runtime",
+  "schema_version": 1,
+  "verified_at_utc": "2026-09-29T10:28:57Z"
+}
