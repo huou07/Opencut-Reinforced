@@ -421,6 +421,8 @@ The media boundary must support both software decode and hardware-surface decode
 
 Pipeline selection should choose the best supported and stable path for the actual codec, pixel format, resolution, backend, device, driver, platform, and operation. A hardware path is not presumed faster. Prefer hardware decode and minimal-copy GPU processing where they benefit the workload, and preserve software/CPU paths as correctness fallbacks when decode, GPU interop, or drivers are unavailable or unstable.
 
+Phase 7D evaluation: no hardware decode or native-frame interop path is approved. The current `or_media` decoder creates a software FFmpeg decoder from stream parameters and emits owned CPU RGBA frames. Its manifest enables codec/format plus software resampling and scaling; the bounded hosted FFmpeg fixture build enables only file input, Matroska, FFV1, and PCM S16LE. `or_render` has no native viewer-surface adapter, and the runtime capability/lease contracts have no platform adapter or native handle implementation. The repository contains no repeatable target-hardware comparison or platform-specific build, license, and packaging evidence for a candidate path. Keep software decode as the correctness path and make no hardware performance claim. Reconsider a candidate only with platform/device/driver/codec/backend coverage, build and license/package evidence, native resource lifetime and synchronization validation, software fallback coverage, and repeatable measurements on target hardware.
+
 The render evaluation order is:
 
     Timeline evaluation

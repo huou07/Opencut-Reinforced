@@ -269,6 +269,19 @@ audio seek, decoding, resampling, and exact range clipping. FFmpeg source builds
 and the binding probe are hosted checks; native application execution remains
 disallowed locally by policy.
 
+## Current Phase 7D evaluation coverage
+
+The 7D review found no enabled hardware decoder or native-frame interop adapter
+to verify. The software decode integration test checks an exact-time seek,
+owned RGBA pixels, and budget release. `or_runtime` tests cover centralized
+stable-hardware selection, software fallback when no hardware is available,
+metadata-only hardware-frame leases, and exactly-once release; these contracts
+do not represent a platform decoder or native surface. No target-hardware
+benchmark or hardware performance claim is recorded. Therefore no hardware
+path is approved, and software decode remains the correctness path until a
+candidate has platform build/license/package evidence, interop lifetime and
+fallback checks, and repeatable target-hardware measurements.
+
 ## Test pyramid
 
 ### Rust domain and application unit tests
