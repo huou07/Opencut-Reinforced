@@ -57,6 +57,23 @@ def git_output(repo_root: Path, *arguments: str) -> str:
     return result.stdout.strip()
 
 
+def parse_porcelain_status_paths(status: str) -> list[str]:
+    """Extract paths while preserving Git's two-character status columns."""
+
+    return [line[3:] for line in status.splitlines() if len(line) >= 4]
+
+
+def git_status_paths(repo_root: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return parse_porcelain_status_paths(result.stdout)
+
+
 def is_protected_execution_path(path: str) -> bool:
     normalized = path.replace("\\", "/").lstrip("./")
     return normalized in EXPLICIT_PROTECTED_PATHS or any(
@@ -401,8 +418,7 @@ def finalize_verified_checkpoint(
         git_output(repo_root, "fetch", "--prune", "origin")
         if git_output(repo_root, "rev-parse", "origin/main") != implementation_sha:
             raise SupervisorError("origin/main moved after implementation verification")
-        status_paths = git_output(repo_root, "status", "--porcelain", "--untracked-files=all")
-        changed_paths = [line[3:] for line in status_paths.splitlines() if len(line) >= 4]
+        changed_paths = git_status_paths(repo_root)
         validate_state_commit_paths(changed_paths, checkpoint_id)
         subprocess.run(["git", "add", str(state_path), str(evidence_path)], cwd=repo_root, check=True)
         staged = git_output(repo_root, "diff", "--cached", "--name-only").splitlines()

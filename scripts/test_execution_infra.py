@@ -766,6 +766,18 @@ class EvidenceTests(unittest.TestCase):
 
 
 class SupervisorBoundaryTests(unittest.TestCase):
+    def test_porcelain_status_paths_preserve_status_columns(self) -> None:
+        self.assertEqual(
+            agent_supervisor.parse_porcelain_status_paths(
+                " M docs/execution/STATE.json\n"
+                "?? docs/execution/evidence/7A.json\n"
+            ),
+            [
+                "docs/execution/STATE.json",
+                "docs/execution/evidence/7A.json",
+            ],
+        )
+
     def test_runner_state_and_control_surface_mutations_are_rejected(self) -> None:
         before = {
             "docs/execution/STATE.json": b"state",
