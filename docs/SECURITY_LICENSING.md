@@ -7,9 +7,11 @@ This is product guidance, not legal advice. OR is pre-MVP; review exact dependen
 The architecture execution lock is [docs/execution/README.md](execution/README.md).
 Its policy checker keeps `or_core` free of runtime/platform dependencies and
 requires an explicit gate before adding wgpu, FFmpeg bindings, native interop,
-AI runtimes, model artifacts, or provider integrations. Runtime capability
-selection, software fallback, model manifests, and secret boundaries are
-architecture requirements, not optional cleanup.
+AI runtimes, model artifacts, or provider integrations. Checkpoint 7C0 approves
+the FFmpeg binding and package strategy for the future media layer; it does not
+add the binding to the production workspace. Runtime capability selection,
+software fallback, model manifests, and secret boundaries are architecture
+requirements, not optional cleanup.
 
 The future AI boundary is task-oriented and provider-independent. Tasks return
 proposals, analyses, or assets; normal validated commands apply accepted
@@ -51,13 +53,64 @@ Phase 7A adds the internal `or_runtime` workspace crate with only the existing
 `or_core` path dependency and Rust standard-library synchronization primitives.
 It inherits MSRV Rust 1.85 and the repository MIT license, adds no third-party
 runtime or platform library, and carries no native handles, credentials, media
-paths, or provider secrets. Any later wgpu, FFmpeg binding, audio backend,
-native interop, or provider dependency requires a fresh upstream version,
-MSRV, build/license, platform, and hosted-evidence review before pinning.
+paths, or provider secrets. Checkpoint 7C0 separately selects the FFmpeg
+binding/version/configuration below; other future runtime dependencies still
+require an upstream version, MSRV, build/license, platform, and hosted-evidence
+review before pinning.
+
+### Checkpoint 7C0 FFmpeg binding and package decision
+
+The selected Rust integration is the high-level [`ffmpeg-the-third` 6.0.0
+release](https://crates.io/crates/ffmpeg-the-third/6.0.0), package version
+`6.0.0+ffmpeg-9.0`, with its paired `ffmpeg-sys-the-third` 6.0.0 layer. The
+maintained upstream fork declares support for FFmpeg 5.1–9.0 and its changelog
+confirms continued 5.1–8.1 support in 6.0.0. The selected FFmpeg line is 8.1.x
+with 8.1.3 as the pinned CI probe baseline. Both Rust packages declare WTFPL.
+The binding has suitable wrappers
+for demux, codec/decode, frames, software resampling, and software scaling.
+Its build uses bindgen 0.72 plus the runtime `clang` crate, `pkg-config`, and a
+C compiler; MSVC also uses the vcpkg path. The project MSRV remains Rust 1.85.
+Linux/macOS source builds use FFmpeg's `configure`/`make`; CMake is not a direct
+`ffmpeg-sys` link requirement. A Windows vcpkg port may have separate CMake
+requirements, which belong in that platform's later build gate.
+
+Dynamic shared-library linking is approved for macOS, Linux, and Windows.
+Development environments need the matching FFmpeg 8.1.x headers, shared
+libraries, and discovery metadata; runtime packages will carry the five core
+shared libraries (`avcodec`, `avformat`, `avutil`, `swresample`, `swscale`) and
+their transitive runtime libraries. Linux uses `.so` libraries and app-relative
+loader paths, macOS uses `.dylib` libraries and app-relative loader paths in
+the signed bundle, and Windows uses MSVC-compatible `.dll` libraries plus
+`.lib` import libraries at build time and app-side DLLs at runtime. Android is
+deferred to Phase 9 for a separate NDK/ABI and packaging decision. The hosted
+probe currently verifies Linux compile/link/load only; macOS and Windows
+package/link jobs remain future platform evidence.
+
+The baseline is built from the official [FFmpeg 8.1.3
+source](https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz) as shared libraries.
+The CI probe and release baseline disable autodetection and leave
+`--enable-gpl`, `--enable-nonfree`, and `--enable-version3` unset; do not enable
+the binding's corresponding `build-license-gpl`, `build-license-nonfree`, or
+`build-license-version3` features. Do not link GPL or nonfree external codec
+libraries such as libx264. FFmpeg's normal code is LGPL-2.1-or-later, but its
+optional GPL components change FFmpeg's license to GPL-2-or-later, and its
+nonfree configuration is not redistributable. The CI probe checks the linked
+`libavutil` license string is exactly `LGPL version 2.1 or later`.
+The probe alone uses `--disable-everything` to keep this gate limited to API,
+ABI, and shared-link verification; it does not select the product codec set.
+
+For each release, distribute the exact corresponding FFmpeg source and
+configuration, local patch diff, license notices, and a source download
+location; retain FFmpeg's library names and allow replacement of the dynamic
+libraries. Keep the FFmpeg shared libraries separate from the MIT application
+binary. Recheck the exact transitive native libraries and release configuration
+before distribution. The FFmpeg license does not resolve patents or codec
+royalties; review those when the shipped codec set is selected. This strategy
+does not add the binding to the production workspace or create `or_media`.
 
 FFmpeg's upstream states that most of the project is under LGPL version 2.1 or later, while optional GPL components can change the FFmpeg build's licensing posture. Enabled configure options and linked libraries matter. A packaged build must have a recorded configuration and source, dependency, codec, and redistribution review; do not infer the product's obligations from the name FFmpeg alone. [FFmpeg legal information](https://ffmpeg.org/legal.html)
 
-Phase 5A/5B use a system-provided `ffprobe`; Phase 5D uses a system-provided `ffmpeg` for desktop media-library previews, and Phase 5F uses that system executable for core-only disposable Proxy V1 generation. OR neither links FFmpeg libraries nor bundles either executable, so these operations require the user to provide the relevant executable at runtime. Proxy V1 uses FFmpeg's native `mpeg4` encoder; it adds no external codec library or dependency and has no codec fallback. This does not settle patent or codec licensing obligations. Phase 5B persists only validated control-plane metadata and local `file:` source URIs in `.orproj` schema v2; project loading validates URI syntax but never opens or probes referenced files, so a source can be offline or moved. The next explicit save of a loaded v1 project writes v2 without a revision increment solely for schema conversion. The unchanged `.orproj` file ceiling is 64 MiB. V2 bounds each URI to 8,192 bytes; format names to 32 entries of 256 bytes each; streams to 4,096; codec names to 256 bytes; codec types and pixel formats to 128 bytes; and channel layouts to 256 bytes. Oversized metadata is rejected without truncation. The `url` crate is used only for standards-based URI parsing and native file-path conversion. Prepared desktop/CLI import canonicalizes and probes only the selected file, then sends a validated media item through `media.add`; the `media probe` command itself remains read-only. The CLI and desktop import invoke a system-provided `ffprobe`; `OR_FFPROBE_PATH` is an optional local tooling override and is not stored in a project or accepted through IPC. Probe paths are passed as direct process arguments with no shell. Probe execution is limited to 15 seconds, stdout to 1 MiB, and stderr to 64 KiB; timeout, overflow, and read failures terminate and reap the child. External JSON is parsed as untrusted input, unknown fields are ignored, required OR values and persisted metadata bounds are validated, and arbitrary tags are omitted from `MediaMetadata`. CI installs FFmpeg only on its hosted Linux Rust runner to run generated-media probe and artifact tests; this CI tool is not included in application or CLI release packages. Future FFmpeg linking or packaging still requires the license review above.
+Phase 5A/5B use a system-provided `ffprobe`; Phase 5D uses a system-provided `ffmpeg` for desktop media-library previews, and Phase 5F uses that system executable for core-only disposable Proxy V1 generation. OR neither links FFmpeg libraries nor bundles either executable, so these operations require the user to provide the relevant executable at runtime. Proxy V1 uses FFmpeg's native `mpeg4` encoder; it adds no external codec library or dependency and has no codec fallback. This does not settle patent or codec licensing obligations. Phase 5B persists only validated control-plane metadata and local `file:` source URIs in `.orproj` schema v2; project loading validates URI syntax but never opens or probes referenced files, so a source can be offline or moved. The next explicit save of a loaded v1 project writes v2 without a revision increment solely for schema conversion. The unchanged `.orproj` file ceiling is 64 MiB. V2 bounds each URI to 8,192 bytes; format names to 32 entries of 256 bytes each; streams to 4,096; codec names to 256 bytes; codec types and pixel formats to 128 bytes; and channel layouts to 256 bytes. Oversized metadata is rejected without truncation. The `url` crate is used only for standards-based URI parsing and native file-path conversion. Prepared desktop/CLI import canonicalizes and probes only the selected file, then sends a validated media item through `media.add`; the `media probe` command itself remains read-only. The CLI and desktop import invoke a system-provided `ffprobe`; `OR_FFPROBE_PATH` is an optional local tooling override and is not stored in a project or accepted through IPC. Probe paths are passed as direct process arguments with no shell. Probe execution is limited to 15 seconds, stdout to 1 MiB, and stderr to 64 KiB; timeout, overflow, and read failures terminate and reap the child. External JSON is parsed as untrusted input, unknown fields are ignored, required OR values and persisted metadata bounds are validated, and arbitrary tags are omitted from `MediaMetadata`. CI installs FFmpeg only on its hosted Linux Rust runner to run generated-media probe and artifact tests; this CI tool is not included in application or CLI release packages. Checkpoint 7C0 records the approved future shared-library strategy above; production linking has not started, and release-specific FFmpeg configuration, native dependency, and codec licensing review remains required.
 
 This document does not determine patent or codec licensing obligations.
 
