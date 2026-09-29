@@ -1,0 +1,10 @@
+[package]
+name = "or_audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+or_core = { path = "../or_core" }
+or_runtime = { path = "../or_runtime" }

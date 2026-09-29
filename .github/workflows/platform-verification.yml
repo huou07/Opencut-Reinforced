@@ -86,6 +86,10 @@ jobs:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
         run: cargo test --locked -p or_media --test software_decode
 
+      - name: Verify deterministic audio clock and synchronization
+        timeout-minutes: 10
+        run: cargo test --locked -p or_audio
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 

@@ -1249,6 +1249,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "or_audio"
+version = "0.1.0"
+dependencies = [
+ "or_core",
+ "or_runtime",
+]
+
+[[package]]
 name = "or_cli"
 version = "0.1.0"
 dependencies = [

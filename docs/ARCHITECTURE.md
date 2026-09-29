@@ -132,7 +132,7 @@ The decoder boundary must support software decode and hardware-surface decode, w
 
 GPU work is a candidate for scaling, rotation, crop, color conversion where appropriate, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and unsuitable operations remain CPU/domain responsibilities. Profile the workload; not every operation belongs on the GPU. Preview can prioritize latency with lower resolution, proxies, reduced-quality effects, and bounded work, while export can prioritize quality and throughput. Both preserve the same timing, transform, effect, compositing, text, keyframe, and color intent.
 
-Audio decoding belongs in the media layer. A low-latency output abstraction and an audio playback clock are planned. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
+Audio decoding belongs in the media layer. `or_audio` owns the device-neutral bounded output buffer, exact audio master clock, and video pacing decisions. Clock messages carry a `RenderSnapshot`; synchronization rejects a different project or revision while allowing audio and video to request different time ranges. The callback consumes preallocated samples without waiting or locking; underruns emit silence and still advance device time. A concrete hardware output backend remains unselected until its platform, build, and license gate is completed. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
 
 ### Preview bridge
 

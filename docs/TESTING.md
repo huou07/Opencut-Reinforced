@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; and native macOS Flutter bridge, project lifecycle, and offline-media integration tests. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI builds the Rust bridge and APK but does not run IPC on an Android device.
 
 ## CI-first verification status
 
@@ -281,6 +281,17 @@ benchmark or hardware performance claim is recorded. Therefore no hardware
 path is approved, and software decode remains the correctness path until a
 candidate has platform build/license/package evidence, interop lifetime and
 fallback checks, and repeatable target-hardware measurements.
+
+## Current Phase 7E coverage
+
+`or_audio` tests exact rational timeline-to-device flooring relative to a
+`RenderSnapshot`, callback clock advancement through silence, bounded ring
+backpressure and wraparound, cancellation, and exact video wait/drop/present
+decisions. Synchronization rejects a clock message tied to another project or
+revision while allowing separate audio and video request ranges. A cross-thread producer/callback test checks
+ordered delivery, and a dedicated integration test asserts that rendering a
+device block performs no allocation. The Rust CI job runs `cargo test --locked
+-p or_audio`; no audio device or native output backend is selected or exercised.
 
 ## Test pyramid
 
