@@ -64,7 +64,8 @@ MSYS2's `/usr/bin/link.exe` when Cargo links the MSVC target. The Windows
 texture adapter also parenthesizes `numeric_limits::max()` to avoid the
 function-like `max` macro from Windows headers. Its callback follows Flutter
 3.47.5's C++ `(width, height)` signature rather than the C callback's extra
-`user_data` parameter.
+`user_data` parameter. Plugin registration creates its `unique_ptr` inside the
+class method so the private constructor remains encapsulated.
 
 The execution supervisor treats these workflows as evidence gates, not merely
 status badges. It uses the GitHub REST API with Python's standard library to

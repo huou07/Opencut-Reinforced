@@ -62,7 +62,8 @@ const FlutterDesktopPixelBuffer* copy_pixel_buffer(size_t, size_t) {
 
 void OrViewerTexturePlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows* registrar) {
-  registrar->AddPlugin(std::make_unique<OrViewerTexturePlugin>(registrar));
+  registrar->AddPlugin(std::unique_ptr<flutter::Plugin>(
+      new OrViewerTexturePlugin(registrar)));
 }
 
 OrViewerTexturePlugin::OrViewerTexturePlugin(
