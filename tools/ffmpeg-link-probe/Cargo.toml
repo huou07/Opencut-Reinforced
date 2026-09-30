@@ -9,3 +9,4 @@ publish = false
 
 [dependencies]
 ffmpeg-the-third = { version = "=6.0.0", default-features = false, features = ["format", "software-resampling", "software-scaling"] }
+or_media = { path = "../../crates/or_media" }

@@ -4,12 +4,6 @@ use std::{ffi::c_void, slice, sync::OnceLock};
 
 static VIEWER_TEXTURE_ADAPTER: OnceLock<ViewerTextureAdapter> = OnceLock::new();
 
-/// Loads the FFmpeg shared libraries from the packaged app search path.
-#[unsafe(no_mangle)]
-pub extern "C" fn or_ffmpeg_runtime_check() -> bool {
-    or_media::verify_ffmpeg_runtime()
-}
-
 fn adapter() -> &'static ViewerTextureAdapter {
     VIEWER_TEXTURE_ADAPTER.get_or_init(ViewerTextureAdapter::default)
 }

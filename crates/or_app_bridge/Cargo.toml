@@ -12,7 +12,6 @@ crate-type = ["cdylib", "staticlib"]
 flutter_rust_bridge = "=2.13.0"
 or_core = { path = "../or_core" }
 or_ipc = { path = "../or_ipc" }
-or_media = { path = "../or_media" }
 or_runtime = { path = "../or_runtime" }
 
 [lints.rust]

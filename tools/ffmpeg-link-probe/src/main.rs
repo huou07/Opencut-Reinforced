@@ -1,5 +1,8 @@
 fn main() {
-    ffmpeg_the_third::init().expect("FFmpeg initialization failed");
+    assert!(
+        or_media::verify_ffmpeg_runtime(),
+        "production or_media FFmpeg initialization or LGPL check failed"
+    );
 
     let versions = unsafe {
         [
