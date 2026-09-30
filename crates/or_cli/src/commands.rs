@@ -2,9 +2,10 @@ use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, CommandResult,
     MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
     OperationError, ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
-    QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, TrackId, TrackKind, apply_project_recovery, command_catalog,
-    discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
+    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
+    RecoveryConflictReason, RecoveryInspection, TrackId, TrackKind, apply_project_recovery,
+    command_catalog, discard_project_recovery, inspect_project_recovery, prepare_media_import,
+    query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -408,6 +409,44 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             let (path, attached) = media_project_path(&options, json)?;
             let result = timeline_query(&path, attached, "timeline.tracks", json!({}), json)?;
             render_timeline_tracks(&result, json)
+        }
+        "settings" => {
+            let options = Options::parse(action_args, &["--project", "--attach"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let result = timeline_query(
+                &path,
+                attached,
+                "timeline.sequence.settings",
+                json!({}),
+                json,
+            )?;
+            render_timeline_sequence_settings(&result, json)
+        }
+        "set-frame-rate" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--rate"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let rate = parse_cli_rate(&required_name(&options, "--rate", json)?, "--rate", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.sequence.set_frame_rate",
+                json!({"sequence_frame_rate": rational_rate_value(rate)}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "clear-frame-rate" => {
+            let options = Options::parse(action_args, &["--project", "--attach"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.sequence.set_frame_rate",
+                json!({"sequence_frame_rate": null}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
         }
         "clips" => {
             let options = Options::parse(
@@ -858,7 +897,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -1071,6 +1110,25 @@ fn render_timeline_markers(result: &QueryResult, json: bool) -> Result<String, C
     Ok(lines.join("\n"))
 }
 
+fn render_timeline_sequence_settings(result: &QueryResult, json: bool) -> Result<String, CliError> {
+    let settings = result.timeline_sequence_settings.as_ref().ok_or_else(|| {
+        CliError::operation_message(json, "timeline.sequence.settings returned no settings")
+    })?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(result).expect("timeline sequence settings are serializable"),
+        ));
+    }
+    let rate = settings
+        .sequence_frame_rate
+        .map(format_cli_rate)
+        .unwrap_or_else(|| "unset".to_owned());
+    Ok(format!(
+        "Sequence frame rate: {rate} (revision {})",
+        result.summary.project_revision
+    ))
+}
+
 fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliError> {
     let snap = result
         .timeline_snap
@@ -1182,8 +1240,34 @@ fn parse_cli_rational(value: &str, flag: &str, json: bool) -> Result<RationalTim
     RationalTime::new(numerator, denominator).map_err(|_| invalid())
 }
 
+fn parse_cli_rate(value: &str, flag: &str, json: bool) -> Result<RationalRate, CliError> {
+    let invalid = || {
+        CliError::usage(
+            json,
+            format!("{flag} must be an exact positive NUMERATOR/DENOMINATOR rate"),
+        )
+    };
+    let Some((numerator, denominator)) = value.split_once('/') else {
+        return Err(invalid());
+    };
+    if numerator.is_empty() || denominator.is_empty() || denominator.contains('/') {
+        return Err(invalid());
+    }
+    let numerator = numerator.parse::<u32>().map_err(|_| invalid())?;
+    let denominator = denominator.parse::<u32>().map_err(|_| invalid())?;
+    RationalRate::new(numerator, denominator).map_err(|_| invalid())
+}
+
 fn rational_value(value: RationalTime) -> Value {
     json!({"numerator": value.numerator(), "denominator": value.denominator()})
+}
+
+fn rational_rate_value(value: RationalRate) -> Value {
+    json!({"numerator": value.numerator(), "denominator": value.denominator()})
+}
+
+fn format_cli_rate(value: RationalRate) -> String {
+    format!("{}/{} fps", value.numerator(), value.denominator())
 }
 
 fn format_cli_rational(value: RationalTime) -> String {

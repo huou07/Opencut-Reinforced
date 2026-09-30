@@ -1,4 +1,6 @@
-use crate::{MediaId, MediaItem, MediaStreamMetadata, RationalTime, TimeRange};
+use crate::{
+    MediaId, MediaItem, MediaStreamMetadata, RationalRate, RationalTime, TimeError, TimeRange,
+};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -269,6 +271,7 @@ impl TimelineTrack {
 pub struct ProjectTimeline {
     tracks: Vec<TimelineTrack>,
     markers: Vec<TimelineMarker>,
+    sequence_frame_rate: Option<RationalRate>,
 }
 
 impl ProjectTimeline {
@@ -280,10 +283,91 @@ impl ProjectTimeline {
         &self.markers
     }
 
+    pub const fn sequence_frame_rate(&self) -> Option<RationalRate> {
+        self.sequence_frame_rate
+    }
+
+    /// Returns the greatest exact clip end across audio and video tracks.
+    pub fn content_end(&self) -> Result<Option<RationalTime>, TimeError> {
+        let mut end = None;
+        for clip in self.tracks.iter().flat_map(|track| &track.clips) {
+            let clip_end = clip
+                .timeline_start
+                .checked_add(clip.source_range.duration())?;
+            end = Some(end.map_or(clip_end, |current: RationalTime| current.max(clip_end)));
+        }
+        Ok(end)
+    }
+
+    /// Returns the exact global sequence-lattice time if it precedes the content end.
+    pub fn frame_time(
+        &self,
+        frame_index: u64,
+    ) -> Result<Option<RationalTime>, SequenceTimingError> {
+        let rate = self
+            .sequence_frame_rate
+            .ok_or(SequenceTimingError::FrameRateUnavailable)?;
+        let Some(content_end) = self.content_end()? else {
+            return Ok(None);
+        };
+        let time = rate.frame_time(frame_index)?;
+        Ok((time < content_end).then_some(time))
+    }
+
+    /// Selects `floor(playhead × rate) + 1`, or no frame at/beyond content end.
+    pub fn next_frame_time(
+        &self,
+        playhead: RationalTime,
+    ) -> Result<Option<RationalTime>, SequenceTimingError> {
+        let rate = self
+            .sequence_frame_rate
+            .ok_or(SequenceTimingError::FrameRateUnavailable)?;
+        if playhead.is_negative() {
+            return Err(TimeError::NegativeTime.into());
+        }
+        let Some(content_end) = self.content_end()? else {
+            return Ok(None);
+        };
+        if playhead >= content_end {
+            return Ok(None);
+        }
+        let next_index = rate
+            .frame_index_floor(playhead)?
+            .checked_add(1)
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        let time = rate.frame_time(next_index)?;
+        Ok((time < content_end).then_some(time))
+    }
+
+    /// Selects `ceil(playhead × rate) - 1`, clamped to the valid sequence frames.
+    pub fn previous_frame_time(
+        &self,
+        playhead: RationalTime,
+    ) -> Result<Option<RationalTime>, SequenceTimingError> {
+        let rate = self
+            .sequence_frame_rate
+            .ok_or(SequenceTimingError::FrameRateUnavailable)?;
+        if playhead.is_negative() {
+            return Err(TimeError::NegativeTime.into());
+        }
+        let Some(content_end) = self.content_end()? else {
+            return Ok(None);
+        };
+        let Some(last_index) = rate.frame_index_ceil(content_end)?.checked_sub(1) else {
+            return Ok(None);
+        };
+        let index = rate
+            .frame_index_ceil(playhead)?
+            .saturating_sub(1)
+            .min(last_index);
+        Ok(Some(rate.frame_time(index)?))
+    }
+
     pub(crate) fn from_tracks_for_codec(tracks: Vec<TimelineTrack>) -> Self {
         Self {
             tracks,
             markers: Vec::new(),
+            sequence_frame_rate: None,
         }
     }
 
@@ -291,7 +375,30 @@ impl ProjectTimeline {
         tracks: Vec<TimelineTrack>,
         markers: Vec<TimelineMarker>,
     ) -> Self {
-        Self { tracks, markers }
+        Self {
+            tracks,
+            markers,
+            sequence_frame_rate: None,
+        }
+    }
+
+    pub(crate) fn from_parts_with_sequence_rate_for_codec(
+        tracks: Vec<TimelineTrack>,
+        markers: Vec<TimelineMarker>,
+        sequence_frame_rate: Option<RationalRate>,
+    ) -> Self {
+        Self {
+            tracks,
+            markers,
+            sequence_frame_rate,
+        }
+    }
+
+    pub(crate) fn set_sequence_frame_rate_for_command(
+        &mut self,
+        sequence_frame_rate: Option<RationalRate>,
+    ) {
+        self.sequence_frame_rate = sequence_frame_rate;
     }
 
     pub(crate) fn validate(&self, media: &[MediaItem]) -> Result<(), TimelineValidationError> {
@@ -484,6 +591,38 @@ impl ProjectTimeline {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SequenceTimingError {
+    FrameRateUnavailable,
+    Time(TimeError),
+}
+
+impl From<TimeError> for SequenceTimingError {
+    fn from(error: TimeError) -> Self {
+        Self::Time(error)
+    }
+}
+
+impl fmt::Display for SequenceTimingError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FrameRateUnavailable => {
+                formatter.write_str("sequence frame rate is not configured")
+            }
+            Self::Time(error) => fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl Error for SequenceTimingError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::FrameRateUnavailable => None,
+            Self::Time(error) => Some(error),
+        }
+    }
+}
+
 pub(crate) fn matching_stream(kind: TrackKind, item: &MediaItem) -> (bool, Option<RationalTime>) {
     let stream = item.metadata().streams().iter().find(|stream| {
         matches!(
@@ -515,12 +654,12 @@ impl Error for TimelineValidationError {}
 mod tests {
     use super::{
         ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
-        MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, TimelineClip,
-        TimelineMarker, TimelineTrack, TrackId, TrackKind,
+        MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, SequenceTimingError,
+        TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
     };
     use crate::{
         AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
-        MediaStreamMetadata, OtherStreamMetadata, RationalRate, RationalTime, TimeRange,
+        MediaStreamMetadata, OtherStreamMetadata, RationalRate, RationalTime, TimeError, TimeRange,
         VideoStreamMetadata,
     };
     use std::{num::NonZeroU32, str::FromStr};
@@ -1014,5 +1153,84 @@ mod tests {
         let timeline = ProjectTimeline::from_parts_for_codec(vec![], markers);
         assert_eq!(timeline.markers().len(), MAX_TIMELINE_MARKERS + 1);
         assert!(timeline.validate(&[]).is_err());
+    }
+
+    #[test]
+    fn sequence_lattice_steps_exactly_with_audio_content_end_and_ignores_markers() {
+        let video_clip = TimelineClip::from_parts_for_codec(
+            ClipId::from_str(CLIP_ID).unwrap(),
+            MediaId::from_str(MEDIA_ID).unwrap(),
+            time(0, 1),
+            TimeRange::new(time(0, 1), time(1, 1)).unwrap(),
+        );
+        let audio_clip = TimelineClip::from_parts_for_codec(
+            ClipId::generate(),
+            MediaId::from_str(MEDIA_ID).unwrap(),
+            time(1, 1),
+            TimeRange::new(time(0, 1), time(1, 1)).unwrap(),
+        );
+        let mut timeline = ProjectTimeline::from_parts_for_codec(
+            vec![
+                TimelineTrack::from_parts_for_codec(
+                    TrackId::from_str(TRACK_ID).unwrap(),
+                    TrackKind::Video,
+                    vec![video_clip],
+                ),
+                TimelineTrack::from_parts_for_codec(
+                    TrackId::generate(),
+                    TrackKind::Audio,
+                    vec![audio_clip],
+                ),
+            ],
+            vec![marker(MARKER_A, time(10, 1), "outside content")],
+        );
+
+        assert_eq!(timeline.content_end(), Ok(Some(time(2, 1))));
+        assert_eq!(
+            timeline.frame_time(0),
+            Err(SequenceTimingError::FrameRateUnavailable)
+        );
+        assert_eq!(
+            timeline.next_frame_time(time(0, 1)),
+            Err(SequenceTimingError::FrameRateUnavailable)
+        );
+
+        timeline.set_sequence_frame_rate_for_command(Some(RationalRate::new(2, 1).unwrap()));
+        assert_eq!(timeline.frame_time(0), Ok(Some(time(0, 1))));
+        assert_eq!(timeline.frame_time(3), Ok(Some(time(3, 2))));
+        assert_eq!(timeline.frame_time(4), Ok(None));
+        assert_eq!(timeline.next_frame_time(time(0, 1)), Ok(Some(time(1, 2))));
+        assert_eq!(timeline.next_frame_time(time(1, 1)), Ok(Some(time(3, 2))));
+        assert_eq!(timeline.next_frame_time(time(2, 1)), Ok(None));
+        assert_eq!(
+            timeline.previous_frame_time(time(0, 1)),
+            Ok(Some(time(0, 1)))
+        );
+        assert_eq!(
+            timeline.previous_frame_time(time(1, 1)),
+            Ok(Some(time(1, 2)))
+        );
+        assert_eq!(
+            timeline.previous_frame_time(time(2, 1)),
+            Ok(Some(time(3, 2)))
+        );
+        assert_eq!(
+            timeline.previous_frame_time(time(10, 1)),
+            Ok(Some(time(3, 2)))
+        );
+        assert_eq!(
+            timeline.next_frame_time(time(-1, 1)),
+            Err(SequenceTimingError::Time(TimeError::NegativeTime))
+        );
+    }
+
+    #[test]
+    fn empty_sequence_has_no_frames_even_when_its_rate_is_configured() {
+        let mut timeline = ProjectTimeline::default();
+        timeline.set_sequence_frame_rate_for_command(Some(RationalRate::new(24, 1).unwrap()));
+        assert_eq!(timeline.content_end(), Ok(None));
+        assert_eq!(timeline.frame_time(0), Ok(None));
+        assert_eq!(timeline.next_frame_time(time(0, 1)), Ok(None));
+        assert_eq!(timeline.previous_frame_time(time(0, 1)), Ok(None));
     }
 }

@@ -546,7 +546,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 4);
+    assert_eq!(saved_bytes["schema_version"], 5);
 
     let mut first_page_args = path_args(
         &["media", "list"],
@@ -1290,7 +1290,7 @@ fn project_paths_remain_os_strings_and_names_require_utf8() {
 }
 
 #[test]
-fn headless_timeline_cli_uses_commands_saves_v4_and_keeps_exact_times() {
+fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Timeline CLI");
@@ -1488,7 +1488,7 @@ fn headless_timeline_cli_uses_commands_saves_v4_and_keeps_exact_times() {
     assert_eq!(page["timeline_clip_page"]["next_offset"], 1);
 
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 4);
+    assert_eq!(saved_bytes["schema_version"], 5);
     let saved = load_project_file(&project_path).unwrap();
     assert_eq!(saved.revision(), ProjectRevision::new(6));
     assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
@@ -1675,7 +1675,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v4_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v5_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -1813,7 +1813,121 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v4_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        4
+        5
+    );
+}
+
+#[test]
+fn sequence_settings_cli_uses_the_shared_command_and_query_paths() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Sequence settings CLI");
+
+    let initial = json_success(path_args(
+        &["timeline", "settings"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(initial["query_id"], "timeline.sequence.settings");
+    assert!(initial["timeline_sequence_settings"]["sequence_frame_rate"].is_null());
+
+    let set = json_success(path_args(
+        &["timeline", "set-frame-rate"],
+        "--project",
+        &project_path,
+        &["--rate", "30000/1001", "--json"],
+    ))
+    .0;
+    assert_eq!(
+        set["command"]["command_id"],
+        "timeline.sequence.set_frame_rate"
+    );
+    assert_eq!(set["command"]["after_revision"], 1);
+    let settings = json_success(path_args(
+        &["timeline", "settings"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(
+        settings["timeline_sequence_settings"]["sequence_frame_rate"],
+        serde_json::json!({"numerator": 30_000, "denominator": 1_001})
+    );
+    let no_op = json_success(path_args(
+        &["timeline", "set-frame-rate"],
+        "--project",
+        &project_path,
+        &["--rate", "30000/1001", "--json"],
+    ))
+    .0;
+    assert_eq!(no_op["command"]["changed"], false);
+    assert_eq!(no_op["command"]["after_revision"], 1);
+
+    for value in ["24", "0/1", "24/0", "not-a-rate", "24/1/2"] {
+        let invalid = cli(path_args(
+            &["timeline", "set-frame-rate"],
+            "--project",
+            &project_path,
+            &["--rate", value, "--json"],
+        ));
+        assert_eq!(invalid.status.code(), Some(2), "rate {value}");
+        assert_eq!(
+            load_project_file(&project_path).unwrap().revision(),
+            ProjectRevision::new(1),
+            "rate {value} must not mutate the project"
+        );
+    }
+
+    let cleared = json_success(path_args(
+        &["timeline", "clear-frame-rate"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(cleared["command"]["changed"], true);
+    assert_eq!(cleared["command"]["after_revision"], 2);
+    let cleared_again = json_success(path_args(
+        &["timeline", "clear-frame-rate"],
+        "--project",
+        &project_path,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(cleared_again["command"]["changed"], false);
+    assert_eq!(cleared_again["command"]["after_revision"], 2);
+
+    let mut host =
+        LiveProjectHost::start(ProjectFileSession::open(&project_path).unwrap(), None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let attached = json_success(attach_args(
+        &["timeline", "set-frame-rate"],
+        &descriptor,
+        &["--rate", "24/1", "--json"],
+    ))
+    .0;
+    assert_eq!(attached["command"]["after_revision"], 3);
+    assert!(host.is_dirty().unwrap());
+    let attached_settings = json_success(attach_args(
+        &["timeline", "settings"],
+        &descriptor,
+        &["--json"],
+    ))
+    .0;
+    assert_eq!(
+        attached_settings["timeline_sequence_settings"]["sequence_frame_rate"],
+        serde_json::json!({"numerator": 24, "denominator": 1})
+    );
+    json_success(attach_args(&["project", "save"], &descriptor, &["--json"]));
+    host.shutdown(false).unwrap();
+    let saved = load_project_file(&project_path).unwrap();
+    assert_eq!(saved.revision(), ProjectRevision::new(3));
+    assert_eq!(
+        saved.timeline().sequence_frame_rate(),
+        Some(or_core::RationalRate::new(24, 1).unwrap())
     );
 }
 

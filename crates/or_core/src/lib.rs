@@ -21,9 +21,9 @@ pub use application::{
     MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError,
     OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor,
     QueryEnvelope, QueryResult, TimelineClipPage, TimelineClipState, TimelineMarkerPage,
-    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
-    TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TransactionEnvelope,
-    TransactionResult, command_catalog, query_catalog,
+    TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
+    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge,
+    TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
@@ -75,8 +75,8 @@ pub use project_storage::{
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{
     ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
-    MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, TimelineClip,
-    TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind,
+    MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, SequenceTimingError,
+    TimelineClip, TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind,
 };
 
 const APP_NAME: &str = "Opencut Reinforced";

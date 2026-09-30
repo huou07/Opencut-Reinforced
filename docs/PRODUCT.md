@@ -65,9 +65,11 @@ The optimized Desktop MVP milestone is represented by the execution graph from
 - **Runtime foundation (7A–7H):** capability policy, `RenderSnapshot`,
   `FrameDescriptor`/`FrameLease`, wgpu/render, software and hardware media
   paths, audio clock, viewer transport, playback, scrubbing, frame step, and
-  performance/hardening gates.
-- **Project/timeline gate (8A):** typed sequence settings and the remaining
-  migration/command/query contracts.
+  performance/hardening gates. 7F0 locks the explicit sequence rate, exact
+  frame lattice, and shared viewer presentation contract without adding viewer
+  UI or playback controls.
+- **Project/timeline gate (8A):** remaining project and timeline foundation
+  work selected by the execution plan.
 - **Timeline usability (8B):** selection, duplicate, track enabled/locked/solo,
   timeline zoom, direct media-to-timeline insertion, and bounded viewport input.
 - **Video (8C):** typed transform, crop, and opacity.

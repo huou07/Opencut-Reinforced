@@ -1991,6 +1991,7 @@ mod tests {
             timeline_clip_page: None,
             timeline_snap: None,
             timeline_marker_page: None,
+            timeline_sequence_settings: None,
         };
         let clip_id = ClipId::generate();
         let media_id = MediaId::generate();
@@ -2056,6 +2057,7 @@ mod tests {
             timeline_clip_page: None,
             timeline_snap: None,
             timeline_marker_page: None,
+            timeline_sequence_settings: None,
         };
         let marker_id = MarkerId::generate();
         let marker_page = TimelineMarkerPage {
@@ -2108,6 +2110,7 @@ mod tests {
             timeline_clip_page: None,
             timeline_snap: None,
             timeline_marker_page: None,
+            timeline_sequence_settings: None,
         };
         let snap = TimelineSnapResult {
             raw_target_time: RationalTime::new(5, 2).unwrap(),

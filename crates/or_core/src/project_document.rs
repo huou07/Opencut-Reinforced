@@ -6,12 +6,12 @@ use crate::{
     ProjectRevision, ProjectTimeline, RationalRate, RationalTime, TimeRange, TimelineClip,
     TimelineMarker, TimelineTrack, TrackId, TrackKind, VideoStreamMetadata,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::value::RawValue;
 use std::{collections::HashSet, error::Error, fmt, num::NonZeroU32};
 
 const PROJECT_FORMAT_MARKER: &str = "opencut-reinforced-project";
-pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 4;
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 5;
 
 /// Canonical persistent state for a project.
 ///
@@ -65,6 +65,16 @@ impl ProjectDocument {
     /// Applies the fully validated rename mutation from the application command path.
     pub(crate) fn rename_for_command(&mut self, name: String, revision: ProjectRevision) {
         self.name = name;
+        self.revision = revision;
+    }
+
+    pub(crate) fn set_sequence_frame_rate_for_command(
+        &mut self,
+        sequence_frame_rate: Option<RationalRate>,
+        revision: ProjectRevision,
+    ) {
+        self.timeline
+            .set_sequence_frame_rate_for_command(sequence_frame_rate);
         self.revision = revision;
     }
 
@@ -299,6 +309,21 @@ impl ProjectDocument {
             timeline,
         })
     }
+
+    fn from_v5(project: ProjectStateV5) -> Result<Self, ProjectCodecError> {
+        let media = decode_media_library(project.media, ProjectCodecError::InvalidV5Data)?;
+        let timeline = project
+            .timeline
+            .into_domain(&media)
+            .map_err(|_| ProjectCodecError::InvalidV5Data)?;
+        Ok(Self {
+            id: project.id,
+            revision: project.revision,
+            name: project.name,
+            media,
+            timeline,
+        })
+    }
 }
 
 fn decode_media_library(
@@ -412,6 +437,75 @@ struct ProjectTimelineV4 {
     tracks: Vec<TimelineTrackV3>,
     #[serde(deserialize_with = "deserialize_v4_markers")]
     markers: Vec<TimelineMarkerV4>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectFileV5 {
+    format: String,
+    schema_version: u32,
+    project: ProjectStateV5,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectStateV5 {
+    id: ProjectId,
+    revision: ProjectRevision,
+    name: String,
+    media: Vec<MediaItemV2>,
+    timeline: ProjectTimelineV5,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectTimelineV5 {
+    #[serde(deserialize_with = "deserialize_v3_tracks")]
+    tracks: Vec<TimelineTrackV3>,
+    #[serde(deserialize_with = "deserialize_v4_markers")]
+    markers: Vec<TimelineMarkerV4>,
+    // The outer option records key presence; the inner option preserves JSON null.
+    #[serde(default, deserialize_with = "deserialize_nullable_field")]
+    sequence_frame_rate: Option<Option<RationalRate>>,
+}
+
+fn deserialize_nullable_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
+impl ProjectTimelineV5 {
+    fn into_domain(
+        self,
+        media: &[MediaItem],
+    ) -> Result<ProjectTimeline, crate::timeline::TimelineValidationError> {
+        let tracks = decode_timeline_tracks(self.tracks)?;
+        let markers = self
+            .markers
+            .into_iter()
+            .map(|marker| {
+                Ok(TimelineMarker::from_parts_for_codec(
+                    marker.id,
+                    marker
+                        .timeline_time
+                        .into_domain()
+                        .map_err(|_| crate::timeline::TimelineValidationError)?,
+                    marker.label,
+                ))
+            })
+            .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+        let timeline = ProjectTimeline::from_parts_with_sequence_rate_for_codec(
+            tracks,
+            markers,
+            self.sequence_frame_rate
+                .ok_or(crate::timeline::TimelineValidationError)?,
+        );
+        timeline.validate(media)?;
+        Ok(timeline)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -943,7 +1037,7 @@ impl From<&ProjectDocument> for ProjectFileV4 {
     fn from(document: &ProjectDocument) -> Self {
         Self {
             format: PROJECT_FORMAT_MARKER.to_owned(),
-            schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
+            schema_version: 4,
             project: ProjectStateV4 {
                 id: document.id,
                 revision: document.revision,
@@ -962,6 +1056,29 @@ impl From<&ProjectDocument> for ProjectFileV4 {
                     })
                     .collect(),
                 timeline: ProjectTimelineV4::from(&document.timeline),
+            },
+        }
+    }
+}
+
+impl From<&ProjectDocument> for ProjectFileV5 {
+    fn from(document: &ProjectDocument) -> Self {
+        let ProjectFileV4 {
+            format, project, ..
+        } = ProjectFileV4::from(document);
+        Self {
+            format,
+            schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
+            project: ProjectStateV5 {
+                id: project.id,
+                revision: project.revision,
+                name: project.name,
+                media: project.media,
+                timeline: ProjectTimelineV5 {
+                    tracks: project.timeline.tracks,
+                    markers: project.timeline.markers,
+                    sequence_frame_rate: Some(document.timeline.sequence_frame_rate()),
+                },
             },
         }
     }
@@ -1062,6 +1179,7 @@ pub enum ProjectCodecError {
     InvalidV2Data,
     InvalidV3Data,
     InvalidV4Data,
+    InvalidV5Data,
     SerializationFailure,
 }
 
@@ -1088,6 +1206,7 @@ impl fmt::Display for ProjectCodecError {
             Self::InvalidV2Data => formatter.write_str("project schema version 2 data is invalid"),
             Self::InvalidV3Data => formatter.write_str("project schema version 3 data is invalid"),
             Self::InvalidV4Data => formatter.write_str("project schema version 4 data is invalid"),
+            Self::InvalidV5Data => formatter.write_str("project schema version 5 data is invalid"),
             Self::SerializationFailure => {
                 formatter.write_str("project document could not be serialized")
             }
@@ -1099,12 +1218,12 @@ impl Error for ProjectCodecError {}
 
 /// Encodes canonical project state as readable UTF-8 JSON with a trailing newline.
 pub fn encode_project(document: &ProjectDocument) -> Result<String, ProjectCodecError> {
-    validate_media_library(&document.media, ProjectCodecError::InvalidV4Data)?;
+    validate_media_library(&document.media, ProjectCodecError::InvalidV5Data)?;
     document
         .timeline
         .validate(&document.media)
-        .map_err(|_| ProjectCodecError::InvalidV4Data)?;
-    let mut encoded = serde_json::to_string_pretty(&ProjectFileV4::from(document))
+        .map_err(|_| ProjectCodecError::InvalidV5Data)?;
+    let mut encoded = serde_json::to_string_pretty(&ProjectFileV5::from(document))
         .map_err(|_| ProjectCodecError::SerializationFailure)?;
     encoded.push('\n');
     Ok(encoded)
@@ -1166,6 +1285,14 @@ pub fn decode_project(encoded: &str) -> Result<ProjectDocument, ProjectCodecErro
                 return Err(ProjectCodecError::InvalidV4Data);
             }
             ProjectDocument::from_v4(file.project)
+        }
+        5 => {
+            let file: ProjectFileV5 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV5Data)?;
+            if file.format != PROJECT_FORMAT_MARKER || file.schema_version != 5 {
+                return Err(ProjectCodecError::InvalidV5Data);
+            }
+            ProjectDocument::from_v5(file.project)
         }
         _ => Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version)),
     }
@@ -1284,7 +1411,7 @@ mod tests {
     }
 
     #[test]
-    fn new_project_has_a_v4_id_initial_revision_and_exact_name() {
+    fn new_project_has_a_v5_id_initial_revision_and_exact_name() {
         let project = ProjectDocument::new("Example");
 
         assert!(ProjectId::from_str(&project.id().to_string()).is_ok());
@@ -1293,7 +1420,7 @@ mod tests {
     }
 
     #[test]
-    fn project_round_trips_through_v4_json_without_changing_revision() {
+    fn project_round_trips_through_v5_json_without_changing_revision() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let decoded = decode_project(&encoded).unwrap();
@@ -1304,7 +1431,7 @@ mod tests {
     }
 
     #[test]
-    fn encoding_uses_the_v4_envelope_and_a_trailing_newline() {
+    fn encoding_uses_the_v5_envelope_and_a_trailing_newline() {
         let project = ProjectDocument::new("Example");
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
@@ -1313,18 +1440,22 @@ mod tests {
             value,
             json!({
                 "format": "opencut-reinforced-project",
-                "schema_version": 4,
+                "schema_version": 5,
                 "project": {
                     "id": project.id().to_string(),
                     "revision": 0,
                     "name": "Example",
                     "media": [],
-                    "timeline": { "tracks": [], "markers": [] }
+                    "timeline": {
+                        "tracks": [],
+                        "markers": [],
+                        "sequence_frame_rate": null
+                    }
                 }
             })
         );
         assert!(encoded.ends_with('\n'));
-        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 4);
+        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 5);
     }
 
     #[test]
@@ -1360,16 +1491,16 @@ mod tests {
     #[test]
     fn unsupported_schema_version_is_rejected() {
         let input = encoded_project_with_revision("0")
-            .replace("\"schema_version\":1", "\"schema_version\":5");
+            .replace("\"schema_version\":1", "\"schema_version\":6");
 
         assert_eq!(
             decode_project(&input),
-            Err(ProjectCodecError::UnsupportedSchemaVersion(5))
+            Err(ProjectCodecError::UnsupportedSchemaVersion(6))
         );
     }
 
     #[test]
-    fn v1_migration_preserves_identity_revision_and_name_then_encodes_v4() {
+    fn v1_migration_preserves_identity_revision_and_name_then_encodes_v5() {
         let migrated = decode_project(&encoded_project_with_revision("7")).unwrap();
         assert_eq!(migrated.id().to_string(), PROJECT_ID);
         assert_eq!(migrated.revision(), ProjectRevision::new(7));
@@ -1380,12 +1511,16 @@ mod tests {
 
         let encoded = encode_project(&migrated).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 4);
+        assert_eq!(value["schema_version"], 5);
+        assert_eq!(
+            value["project"]["timeline"]["sequence_frame_rate"],
+            Value::Null
+        );
         assert_eq!(value["project"]["revision"], 7);
     }
 
     #[test]
-    fn v2_migration_preserves_project_and_media_then_encodes_v4() {
+    fn v2_migration_preserves_project_and_media_then_encodes_v5() {
         let media_json = v2_item_json(
             "22222222-2222-4222-8222-222222222222",
             "file:///offline/legacy.mov",
@@ -1405,8 +1540,73 @@ mod tests {
         assert!(migrated.timeline().tracks().is_empty());
         assert!(migrated.timeline().markers().is_empty());
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 4);
+        assert_eq!(encoded["schema_version"], 5);
+        assert_eq!(
+            encoded["project"]["timeline"]["sequence_frame_rate"],
+            Value::Null
+        );
         assert_eq!(encoded["project"]["revision"], 7);
+    }
+
+    #[test]
+    fn v4_migration_preserves_markers_revision_and_unset_sequence_rate() {
+        let legacy = json!({
+            "format": "opencut-reinforced-project",
+            "schema_version": 4,
+            "project": {
+                "id": PROJECT_ID,
+                "revision": 19,
+                "name": "Legacy v4",
+                "media": [],
+                "timeline": { "tracks": [], "markers": [] }
+            }
+        });
+        let migrated = decode_project(&legacy.to_string()).unwrap();
+        assert_eq!(migrated.revision(), ProjectRevision::new(19));
+        assert_eq!(migrated.timeline().sequence_frame_rate(), None);
+
+        let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
+        assert_eq!(encoded["schema_version"], 5);
+        assert_eq!(encoded["project"]["revision"], 19);
+        assert_eq!(
+            encoded["project"]["timeline"]["sequence_frame_rate"],
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn v5_sequence_rate_field_is_required_nullable_exact_and_strict() {
+        let encoded = encode_project(&fixed_project()).unwrap();
+        let mut base: Value = serde_json::from_str(&encoded).unwrap();
+        base["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_frame_rate");
+        assert_eq!(
+            decode_project(&base.to_string()),
+            Err(ProjectCodecError::InvalidV5Data)
+        );
+
+        let mut base: Value = serde_json::from_str(&encoded).unwrap();
+        for invalid in [
+            json!({"numerator": 0, "denominator": 1}),
+            json!({"numerator": 24, "denominator": 0}),
+            json!({"numerator": 24, "denominator": 1, "extra": true}),
+        ] {
+            base["project"]["timeline"]["sequence_frame_rate"] = invalid;
+            assert_eq!(
+                decode_project(&base.to_string()),
+                Err(ProjectCodecError::InvalidV5Data)
+            );
+        }
+        base["project"]["timeline"]["sequence_frame_rate"] = Value::Null;
+        assert_eq!(
+            decode_project(&base.to_string())
+                .unwrap()
+                .timeline()
+                .sequence_frame_rate(),
+            None
+        );
     }
 
     #[test]
@@ -1478,7 +1678,7 @@ mod tests {
         let value: Value = serde_json::from_str(&encoded).unwrap();
         let decoded = decode_project(&encoded).unwrap();
 
-        assert_eq!(value["schema_version"], 4);
+        assert_eq!(value["schema_version"], 5);
         assert_eq!(value["project"]["timeline"]["markers"], json!([]));
         assert_eq!(value["project"]["timeline"]["tracks"][0]["kind"], "video");
         assert_eq!(value["project"]["timeline"]["tracks"][1]["kind"], "audio");
@@ -1682,9 +1882,9 @@ mod tests {
     }
 
     #[test]
-    fn v4_round_trip_persists_marker_identity_time_label_and_order_exactly() {
+    fn v5_round_trip_persists_markers_and_explicit_sequence_rate_exactly() {
         let mut project = fixed_project();
-        project.timeline = ProjectTimeline::from_parts_for_codec(
+        project.timeline = ProjectTimeline::from_parts_with_sequence_rate_for_codec(
             vec![],
             vec![
                 TimelineMarker::from_parts_for_codec(
@@ -1698,10 +1898,15 @@ mod tests {
                     "same label 🎬".to_owned(),
                 ),
             ],
+            Some(RationalRate::new(30_000, 1_001).unwrap()),
         );
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 4);
+        assert_eq!(value["schema_version"], 5);
+        assert_eq!(
+            value["project"]["timeline"]["sequence_frame_rate"],
+            json!({"numerator": 30_000, "denominator": 1_001})
+        );
         assert_eq!(value["project"]["timeline"]["markers"][0]["id"], MARKER_A);
         assert_eq!(
             value["project"]["timeline"]["markers"][1]["label"],
@@ -1711,7 +1916,7 @@ mod tests {
     }
 
     #[test]
-    fn v4_marker_codec_is_strict_and_rejects_invalid_order_and_bounds() {
+    fn v5_marker_codec_is_strict_and_rejects_invalid_order_and_bounds() {
         let mut project = fixed_project();
         project.timeline = ProjectTimeline::from_parts_for_codec(
             vec![],
@@ -1750,7 +1955,7 @@ mod tests {
         for case in cases {
             assert_eq!(
                 decode_project(&case.to_string()),
-                Err(ProjectCodecError::InvalidV4Data)
+                Err(ProjectCodecError::InvalidV5Data)
             );
         }
 
@@ -1761,7 +1966,7 @@ mod tests {
         ]);
         assert_eq!(
             decode_project(&out_of_order.to_string()),
-            Err(ProjectCodecError::InvalidV4Data)
+            Err(ProjectCodecError::InvalidV5Data)
         );
 
         let too_many = (0..=crate::MAX_TIMELINE_MARKERS)
@@ -1777,7 +1982,7 @@ mod tests {
         too_many_value["project"]["timeline"]["markers"] = json!(too_many);
         assert_eq!(
             decode_project(&too_many_value.to_string()),
-            Err(ProjectCodecError::InvalidV4Data)
+            Err(ProjectCodecError::InvalidV5Data)
         );
     }
 

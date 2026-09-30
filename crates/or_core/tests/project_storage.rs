@@ -308,7 +308,7 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
-fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v4() {
+fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v5() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let seeded = project_with_timeline_media();
@@ -381,20 +381,31 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v4() {
             "label": "persisted marker"
         }),
     );
+    timeline_command(
+        &mut session,
+        "timeline.sequence.set_frame_rate",
+        serde_json::json!({
+            "sequence_frame_rate": {"numerator": 30_000, "denominator": 1_001}
+        }),
+    );
     assert_eq!(
         session.session().project_revision(),
-        ProjectRevision::new(7)
+        ProjectRevision::new(8)
     );
 
     session.save().unwrap();
     let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 4);
+    assert_eq!(encoded["schema_version"], 5);
     for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
         assert!(!encoded.to_string().contains(runtime_state));
     }
     let saved = load_project_file(&path).unwrap();
     assert_eq!(saved.id(), project_id);
-    assert_eq!(saved.revision(), ProjectRevision::new(7));
+    assert_eq!(saved.revision(), ProjectRevision::new(8));
+    assert_eq!(
+        saved.timeline().sequence_frame_rate(),
+        Some(or_core::RationalRate::new(30_000, 1_001).unwrap())
+    );
     assert_eq!(saved.timeline().markers()[0].id(), marker_id);
     assert_eq!(saved.timeline().markers()[0].label(), "persisted marker");
     let clips = saved.timeline().tracks()[0].clips();
@@ -416,7 +427,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v4() {
     assert_eq!(reopened.session().project_id(), project_id);
     assert_eq!(
         reopened.session().project_revision(),
-        ProjectRevision::new(7)
+        ProjectRevision::new(8)
     );
     assert_eq!(reopened.session().project().timeline(), saved.timeline());
     let mut reopened = reopened;
@@ -426,7 +437,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v4() {
             schema_version: 1,
             project_id,
             project_instance_id: reopened.session().project_instance_id(),
-            expected_project_revision: ProjectRevision::new(7),
+            expected_project_revision: ProjectRevision::new(8),
             arguments: serde_json::json!({}),
         }));
     assert!(
@@ -567,7 +578,7 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 4")
+            .contains("\"schema_version\": 5")
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {

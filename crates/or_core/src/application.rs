@@ -1,7 +1,7 @@
 use crate::{
     ClipId, MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MarkerId, MediaId, MediaItem,
-    ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, RationalTime, TimeRange,
-    TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
+    ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, RationalRate, RationalTime,
+    TimeRange, TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -31,6 +31,8 @@ const TIMELINE_TRACKS_ID: &str = "timeline.tracks";
 const TIMELINE_CLIPS_ID: &str = "timeline.clips";
 const TIMELINE_SNAP_ID: &str = "timeline.snap";
 const TIMELINE_MARKERS_ID: &str = "timeline.markers";
+const TIMELINE_SEQUENCE_SET_FRAME_RATE_ID: &str = "timeline.sequence.set_frame_rate";
+const TIMELINE_SEQUENCE_SETTINGS_ID: &str = "timeline.sequence.settings";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
 pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
 pub const MAX_TIMELINE_CLIP_PAGE_SIZE: usize = 100;
@@ -53,7 +55,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 17] = [
+const COMMANDS: [CommandDescriptor; 18] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -156,9 +158,15 @@ const COMMANDS: [CommandDescriptor; 17] = [
         mutates_project: true,
         allowed_in_transaction: false,
     },
+    CommandDescriptor {
+        id: TIMELINE_SEQUENCE_SET_FRAME_RATE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
 ];
 
-const QUERIES: [QueryDescriptor; 7] = [
+const QUERIES: [QueryDescriptor; 8] = [
     QueryDescriptor {
         id: PROJECT_SUMMARY_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -185,6 +193,10 @@ const QUERIES: [QueryDescriptor; 7] = [
     },
     QueryDescriptor {
         id: TIMELINE_MARKERS_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+    },
+    QueryDescriptor {
+        id: TIMELINE_SEQUENCE_SETTINGS_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
     },
 ];
@@ -496,6 +508,22 @@ impl CommandEnvelope {
         }
     }
 
+    pub fn set_timeline_sequence_frame_rate(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        sequence_frame_rate: Option<RationalRate>,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_SEQUENCE_SET_FRAME_RATE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "sequence_frame_rate": sequence_frame_rate }),
+        }
+    }
+
     pub fn undo(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,
@@ -688,6 +716,19 @@ impl QueryEnvelope {
             arguments: serde_json::json!({ "offset": offset, "limit": limit }),
         }
     }
+
+    pub fn timeline_sequence_settings(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+    ) -> Self {
+        Self {
+            query_id: TIMELINE_SEQUENCE_SETTINGS_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            arguments: serde_json::json!({}),
+        }
+    }
 }
 
 /// Serializable application representation of one canonical timeline clip.
@@ -763,6 +804,10 @@ pub enum ProjectChange {
     ProjectName {
         before: String,
         after: String,
+    },
+    TimelineSequenceFrameRateChanged {
+        before: Option<RationalRate>,
+        after: Option<RationalRate>,
     },
     MediaAdded {
         item: MediaItem,
@@ -888,6 +933,16 @@ impl ChangeSet {
         }
     }
 
+    fn timeline_sequence_frame_rate_changed(
+        before: Option<RationalRate>,
+        after: Option<RationalRate>,
+    ) -> Result<Self, OperationError> {
+        if before == after {
+            return Ok(Self::default());
+        }
+        Self::try_single(ProjectChange::TimelineSequenceFrameRateChanged { before, after })
+    }
+
     fn stage_history_change(
         &self,
         project: &ProjectDocument,
@@ -910,6 +965,21 @@ impl ChangeSet {
                 Ok((
                     StagedHistoryChange::Rename(target.clone()),
                     Self::project_name(project.name(), target),
+                ))
+            }
+            ProjectChange::TimelineSequenceFrameRateChanged { before, after } => {
+                let (expected, target) = if reverse {
+                    (*after, *before)
+                } else {
+                    (*before, *after)
+                };
+                let current = project.timeline().sequence_frame_rate();
+                if current != expected {
+                    return Err(OperationError::new(OperationErrorCode::HistoryConflict));
+                }
+                Ok((
+                    StagedHistoryChange::SetSequenceFrameRate(target),
+                    Self::timeline_sequence_frame_rate_changed(current, target)?,
                 ))
             }
             ProjectChange::MediaAdded { item, index } => {
@@ -1094,6 +1164,7 @@ impl ChangeSet {
 
 enum StagedHistoryChange {
     Rename(String),
+    SetSequenceFrameRate(Option<RationalRate>),
     InsertMedia {
         item: MediaItem,
         index: usize,
@@ -1210,6 +1281,14 @@ pub struct QueryResult {
     pub timeline_snap: Option<Box<TimelineSnapResult>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeline_marker_page: Option<Box<TimelineMarkerPage>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeline_sequence_settings: Option<Box<TimelineSequenceSettings>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineSequenceSettings {
+    pub sequence_frame_rate: Option<RationalRate>,
 }
 
 /// One bounded, insertion-ordered page from the persistent media library.
@@ -1591,6 +1670,9 @@ impl ProjectSession {
             TIMELINE_MARKER_MOVE_ID => self.apply_timeline_marker_move(envelope.arguments)?,
             TIMELINE_MARKER_RENAME_ID => self.apply_timeline_marker_rename(envelope.arguments)?,
             TIMELINE_MARKER_DELETE_ID => self.apply_timeline_marker_delete(envelope.arguments)?,
+            TIMELINE_SEQUENCE_SET_FRAME_RATE_ID => {
+                self.apply_timeline_sequence_set_frame_rate(envelope.arguments)?
+            }
             _ => return Err(OperationError::new(OperationErrorCode::UnknownCommand)),
         };
 
@@ -1664,6 +1746,31 @@ impl ProjectSession {
             return Err(OperationError::new(
                 OperationErrorCode::ProjectInstanceMismatch,
             ));
+        }
+
+        if envelope.query_id == TIMELINE_SEQUENCE_SETTINGS_ID {
+            if !is_empty_object(&envelope.arguments) {
+                return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+            }
+            return Ok(QueryResult {
+                query_id: envelope.query_id,
+                schema_version: envelope.schema_version,
+                summary: ProjectSummary {
+                    project_id: self.project_id(),
+                    project_instance_id: self.project_instance_id,
+                    project_revision: self.project_revision(),
+                    name: self.project.name().to_owned(),
+                },
+                media_page: None,
+                media_item: None,
+                timeline_tracks: None,
+                timeline_clip_page: None,
+                timeline_snap: None,
+                timeline_marker_page: None,
+                timeline_sequence_settings: Some(Box::new(TimelineSequenceSettings {
+                    sequence_frame_rate: self.project.timeline().sequence_frame_rate(),
+                })),
+            });
         }
 
         let (
@@ -1754,6 +1861,7 @@ impl ProjectSession {
             timeline_clip_page,
             timeline_snap,
             timeline_marker_page,
+            timeline_sequence_settings: None,
         })
     }
 
@@ -2320,6 +2428,37 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    fn apply_timeline_sequence_set_frame_rate(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineSequenceSetFrameRateArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let before = self.project.timeline().sequence_frame_rate();
+        let after = arguments
+            .sequence_frame_rate
+            .ok_or_else(|| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if before == after {
+            return Ok(ChangeSet::default());
+        }
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let change_set = ChangeSet::timeline_sequence_frame_rate_changed(before, after)?;
+        let history_entry = change_set.clone();
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project
+            .set_sequence_frame_rate_for_command(after, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     fn apply_timeline_marker_add(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
         let arguments: TimelineMarkerAddArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -2790,6 +2929,10 @@ impl ProjectSession {
             StagedHistoryChange::Rename(name) => {
                 self.project.rename_for_command(name, after_revision);
             }
+            StagedHistoryChange::SetSequenceFrameRate(rate) => {
+                self.project
+                    .set_sequence_frame_rate_for_command(rate, after_revision);
+            }
             StagedHistoryChange::InsertMedia { item, index } => {
                 self.project
                     .insert_media_for_command(item, index, after_revision);
@@ -2907,6 +3050,23 @@ struct MediaListArguments {
 #[serde(deny_unknown_fields)]
 struct MediaGetArguments {
     media_id: MediaId,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineSequenceSetFrameRateArguments {
+    // The outer option records key presence; the inner option represents clearing.
+    #[serde(default, deserialize_with = "deserialize_nullable_field")]
+    sequence_frame_rate: Option<Option<RationalRate>>,
+}
+
+fn deserialize_nullable_field<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<RationalRate>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<RationalRate>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -4436,6 +4596,15 @@ mod tests {
         history_command("history.redo", revision, json!({}))
     }
 
+    fn sequence_rate(rate: Option<RationalRate>, revision: u64) -> CommandEnvelope {
+        CommandEnvelope::set_timeline_sequence_frame_rate(
+            ProjectId::from_str(PROJECT_ID).unwrap(),
+            ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
+            ProjectRevision::new(revision),
+            rate,
+        )
+    }
+
     fn execute(
         session: &mut ProjectSession,
         command_id: &str,
@@ -4731,6 +4900,12 @@ mod tests {
                     mutates_project: true,
                     allowed_in_transaction: false,
                 },
+                CommandDescriptor {
+                    id: "timeline.sequence.set_frame_rate",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
             ]
         );
         assert_eq!(
@@ -4764,11 +4939,15 @@ mod tests {
                     id: "timeline.markers",
                     schema_version: 1,
                 },
+                QueryDescriptor {
+                    id: "timeline.sequence.settings",
+                    schema_version: 1,
+                },
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 17);
-        assert_eq!(QUERIES.len(), 7);
+        assert_eq!(COMMANDS.len(), 18);
+        assert_eq!(QUERIES.len(), 8);
     }
 
     #[test]
@@ -8632,6 +8811,118 @@ mod tests {
         assert_eq!(
             code(&reopened.execute_command(redo)),
             OperationErrorCode::NothingToRedo
+        );
+    }
+
+    #[test]
+    fn sequence_rate_command_query_noop_and_history_use_the_generic_application_path() {
+        let mut session = fixed_session();
+        let initial = session.handle_application_request(ApplicationRequest::Query(
+            QueryEnvelope::timeline_sequence_settings(
+                session.project_id(),
+                session.project_instance_id(),
+            ),
+        ));
+        assert!(matches!(
+            initial,
+            ApplicationResponse::Query(result)
+                if result.timeline_sequence_settings.as_ref().is_some_and(|settings| settings.sequence_frame_rate.is_none())
+                    && result.summary.project_revision == ProjectRevision::new(0)
+        ));
+
+        let rate = RationalRate::new(24_000, 1_001).unwrap();
+        let changed = session
+            .handle_application_request(ApplicationRequest::Command(sequence_rate(Some(rate), 0)));
+        assert!(matches!(
+            changed,
+            ApplicationResponse::Command(result)
+                if result.changed
+                    && result.before_revision == ProjectRevision::new(0)
+                    && result.after_revision == ProjectRevision::new(1)
+                    && matches!(result.change_set.changes(), [ProjectChange::TimelineSequenceFrameRateChanged { before: None, after: Some(value) }] if *value == rate)
+        ));
+        assert_eq!(
+            session.project().timeline().sequence_frame_rate(),
+            Some(rate)
+        );
+
+        let query = session.handle_application_request(ApplicationRequest::Query(
+            QueryEnvelope::timeline_sequence_settings(
+                session.project_id(),
+                session.project_instance_id(),
+            ),
+        ));
+        assert!(matches!(
+            query,
+            ApplicationResponse::Query(result)
+                if result.timeline_sequence_settings.as_ref().is_some_and(|settings| settings.sequence_frame_rate == Some(rate))
+        ));
+
+        let no_op = session
+            .execute_command(sequence_rate(Some(rate), 1))
+            .unwrap();
+        assert!(!no_op.changed);
+        assert_eq!(session.project_revision(), ProjectRevision::new(1));
+        assert_eq!(session.history.undo.len(), 1);
+
+        let cleared = session.execute_command(sequence_rate(None, 1)).unwrap();
+        assert!(cleared.changed);
+        assert_eq!(session.project_revision(), ProjectRevision::new(2));
+        assert_eq!(session.project().timeline().sequence_frame_rate(), None);
+        let undo_depth = session.history.undo.len();
+        let redo_depth = session.history.redo.len();
+        let clear_no_op = session.execute_command(sequence_rate(None, 2)).unwrap();
+        assert!(!clear_no_op.changed);
+        assert_eq!(session.history.undo.len(), undo_depth);
+        assert_eq!(session.history.redo.len(), redo_depth);
+
+        session.execute_command(undo(2)).unwrap();
+        assert_eq!(session.project_revision(), ProjectRevision::new(3));
+        assert_eq!(
+            session.project().timeline().sequence_frame_rate(),
+            Some(rate)
+        );
+        session.execute_command(redo(3)).unwrap();
+        assert_eq!(session.project_revision(), ProjectRevision::new(4));
+        assert_eq!(session.project().timeline().sequence_frame_rate(), None);
+
+        for invalid in [
+            json!({}),
+            json!({"sequence_frame_rate": {"numerator": 0, "denominator": 1}}),
+            json!({"sequence_frame_rate": {"numerator": 24, "denominator": 1, "extra": true}}),
+        ] {
+            assert_eq!(
+                code(&session.execute_command(history_command(
+                    "timeline.sequence.set_frame_rate",
+                    session.project_revision().value(),
+                    invalid,
+                ))),
+                OperationErrorCode::InvalidArguments
+            );
+        }
+
+        let query = QueryEnvelope {
+            query_id: "timeline.sequence.settings".to_owned(),
+            schema_version: 1,
+            project_id: session.project_id(),
+            project_instance_id: session.project_instance_id(),
+            arguments: json!({"unexpected": true}),
+        };
+        assert_eq!(
+            code(&session.execute_query(query)),
+            OperationErrorCode::InvalidArguments
+        );
+        let transaction = transaction(
+            vec![call(
+                "timeline.sequence.set_frame_rate",
+                1,
+                json!({"sequence_frame_rate": {"numerator": 24, "denominator": 1}}),
+            )],
+            4,
+        );
+        assert_eq!(
+            code(&session.execute_transaction(transaction)),
+            OperationErrorCode::CommandNotAllowedInTransaction
         );
     }
 

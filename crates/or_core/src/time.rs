@@ -160,6 +160,43 @@ impl RationalRate {
     pub const fn denominator(self) -> u32 {
         self.denominator
     }
+
+    /// Returns the greatest frame index whose presentation time is at or before `time`.
+    pub fn frame_index_floor(self, time: RationalTime) -> Result<u64, TimeError> {
+        let (quotient, _) = self.frame_index_quotient(time)?;
+        u64::try_from(quotient).map_err(|_| TimeError::ArithmeticOverflow)
+    }
+
+    /// Returns the least frame index whose presentation time is at or after `time`.
+    pub fn frame_index_ceil(self, time: RationalTime) -> Result<u64, TimeError> {
+        let (quotient, remainder) = self.frame_index_quotient(time)?;
+        let rounded = quotient
+            .checked_add(if remainder == 0 { 0 } else { 1 })
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        u64::try_from(rounded).map_err(|_| TimeError::ArithmeticOverflow)
+    }
+
+    /// Converts an output frame index to its exact presentation time.
+    pub fn frame_time(self, frame_index: u64) -> Result<RationalTime, TimeError> {
+        let numerator = i128::from(frame_index)
+            .checked_mul(i128::from(self.denominator))
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        RationalTime::from_wide(numerator, u128::from(self.numerator))
+    }
+
+    fn frame_index_quotient(self, time: RationalTime) -> Result<(u128, u128), TimeError> {
+        if time.is_negative() {
+            return Err(TimeError::NegativeTime);
+        }
+        let numerator = u128::try_from(time.numerator)
+            .map_err(|_| TimeError::ArithmeticOverflow)?
+            .checked_mul(u128::from(self.numerator))
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        let denominator = u128::from(time.denominator)
+            .checked_mul(u128::from(self.denominator))
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        Ok((numerator / denominator, numerator % denominator))
+    }
 }
 
 impl<'de> Deserialize<'de> for RationalRate {
@@ -168,6 +205,7 @@ impl<'de> Deserialize<'de> for RationalRate {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
         struct Repr {
             numerator: u32,
             denominator: u32,
@@ -233,6 +271,7 @@ pub enum TimeError {
     ZeroRateDenominator,
     ArithmeticOverflow,
     NegativeDuration,
+    NegativeTime,
 }
 
 impl fmt::Display for TimeError {
@@ -243,6 +282,7 @@ impl fmt::Display for TimeError {
             Self::ZeroRateDenominator => "rate denominator must be positive",
             Self::ArithmeticOverflow => "rational time result is outside the supported range",
             Self::NegativeDuration => "time range duration must be nonnegative",
+            Self::NegativeTime => "frame timing requires a nonnegative timeline time",
         })
     }
 }
@@ -292,6 +332,44 @@ mod tests {
         assert_eq!(
             RationalTime::from_units(30_000, rate(30_000, 1_001)).unwrap(),
             time(1_001, 1)
+        );
+    }
+
+    #[test]
+    fn sequence_frame_indices_use_checked_exact_rational_arithmetic() {
+        let rate = rate(24_000, 1_001);
+        assert_eq!(rate.frame_index_floor(time(1, 1)), Ok(23));
+        assert_eq!(rate.frame_index_ceil(time(1, 1)), Ok(24));
+        assert_eq!(rate.frame_time(24_000), Ok(time(1_001, 1)));
+        assert_eq!(rate.frame_index_floor(time(1_001, 24_000)), Ok(1));
+        assert_eq!(rate.frame_index_ceil(time(1_001, 24_000)), Ok(1));
+        assert_eq!(rate.frame_index_floor(time(1, 30)), Ok(0));
+        assert_eq!(rate.frame_index_ceil(time(1, 30)), Ok(1));
+        assert_eq!(
+            rate.frame_index_floor(time(-1, 24)),
+            Err(TimeError::NegativeTime)
+        );
+        let wide_rate = RationalRate::new(2, 1).unwrap();
+        let high_index = u64::MAX - 1;
+        let high_index_time = wide_rate.frame_time(high_index).unwrap();
+        assert_eq!(high_index_time, time(i64::MAX, 1));
+        assert_eq!(wide_rate.frame_index_floor(high_index_time), Ok(high_index));
+        assert_eq!(wide_rate.frame_index_ceil(high_index_time), Ok(high_index));
+        assert_eq!(
+            RationalRate::new(1, 1).unwrap().frame_time(u64::MAX),
+            Err(TimeError::ArithmeticOverflow)
+        );
+        assert_eq!(
+            RationalRate::new(u32::MAX, 1)
+                .unwrap()
+                .frame_index_floor(time(i64::MAX, 1)),
+            Err(TimeError::ArithmeticOverflow)
+        );
+        assert!(
+            serde_json::from_str::<RationalRate>(
+                r#"{"numerator":24,"denominator":1,"approximate":true}"#
+            )
+            .is_err()
         );
     }
 

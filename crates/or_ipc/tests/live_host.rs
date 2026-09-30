@@ -1,9 +1,10 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, CommandEnvelope, OperationErrorCode,
-    ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult,
+    ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult, RationalRate,
 };
 use or_ipc::{
-    ApplicationSuccess, IpcProtocolError, LiveProjectHost, LocalIpcClient, ProjectHostEventKind,
+    ApplicationSuccess, IpcProtocolError, LiveProjectHost, LocalIpcClient,
+    OR_LOCAL_IPC_PROTOCOL_VERSION, ProjectHostEventKind,
 };
 use serde_json::json;
 use std::{fs, path::PathBuf, time::Duration};
@@ -62,6 +63,77 @@ fn summary(client: &LocalIpcClient) -> QueryResult {
         ApplicationSuccess::Query(summary) => summary,
         _ => panic!("expected project.summary query"),
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn sequence_settings_use_generic_application_requests_over_ipc_v1() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    let session = ProjectFileSession::create_new(&project_path, "Sequence").unwrap();
+    let mut host = LiveProjectHost::start(session, Some(&descriptor_path)).unwrap();
+    let events = host.subscribe_events().unwrap();
+    let client = LocalIpcClient::open(&descriptor_path).unwrap();
+    let initial = summary(&client);
+
+    assert_eq!(
+        client.describe().unwrap().protocol_version,
+        OR_LOCAL_IPC_PROTOCOL_VERSION
+    );
+    let settings_query = QueryEnvelope::timeline_sequence_settings(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+    );
+    assert!(matches!(
+        client
+            .application(ApplicationRequest::Query(settings_query))
+            .unwrap(),
+        ApplicationSuccess::Query(result)
+            if result.timeline_sequence_settings.as_ref().is_some_and(|settings| settings.sequence_frame_rate.is_none())
+    ));
+
+    let rate = RationalRate::new(30_000, 1_001).unwrap();
+    let set_rate = CommandEnvelope::set_timeline_sequence_frame_rate(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+        initial.summary.project_revision,
+        Some(rate),
+    );
+    assert!(matches!(
+        client
+            .application(ApplicationRequest::Command(set_rate))
+            .unwrap(),
+        ApplicationSuccess::Command(result)
+            if result.changed && result.after_revision == ProjectRevision::new(1)
+    ));
+    let event = events.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(event.kind, ProjectHostEventKind::ProjectChanged);
+    assert_eq!(event.project_revision, 1);
+    assert!(event.dirty);
+
+    let updated = summary(&client);
+    assert!(matches!(
+        client
+            .application(ApplicationRequest::Query(QueryEnvelope::timeline_sequence_settings(
+                updated.summary.project_id,
+                updated.summary.project_instance_id,
+            )))
+            .unwrap(),
+        ApplicationSuccess::Query(result)
+            if result.timeline_sequence_settings.as_ref().is_some_and(|settings| settings.sequence_frame_rate == Some(rate))
+    ));
+    client.save().unwrap();
+    host.shutdown(false).unwrap();
+    let reloaded = ProjectFileSession::open(&project_path).unwrap();
+    assert_eq!(
+        reloaded
+            .session()
+            .project()
+            .timeline()
+            .sequence_frame_rate(),
+        Some(rate)
+    );
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]
