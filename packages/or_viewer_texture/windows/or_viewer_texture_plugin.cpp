@@ -33,7 +33,7 @@ void release_pixel_buffer(void* opaque) {
   owner->release(owner->frame.release_context);
 }
 
-const FlutterDesktopPixelBuffer* copy_pixel_buffer(size_t, size_t, void*) {
+const FlutterDesktopPixelBuffer* copy_pixel_buffer(size_t, size_t) {
   OrViewerFfiApi api{};
   if (!load_ffi(&api)) return nullptr;
   auto* owner = new ReleaseContext();
