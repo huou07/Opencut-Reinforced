@@ -44,7 +44,8 @@ const FlutterDesktopPixelBuffer* copy_pixel_buffer(size_t, size_t, void*) {
   owner->release = api.release_frame;
   if (owner->frame.pixels == nullptr || owner->frame.width == 0 ||
       owner->frame.height == 0 ||
-      owner->frame.width > std::numeric_limits<size_t>::max() / owner->frame.height / 4 ||
+      owner->frame.width >
+          (std::numeric_limits<size_t>::max)() / owner->frame.height / 4 ||
       owner->frame.width * owner->frame.height * 4 > kMaxFrameBytes) {
     api.release_frame(owner->frame.release_context);
     delete owner;
