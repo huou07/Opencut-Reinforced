@@ -1,10 +1,25 @@
 {
   "schema_version": 1,
   "frozen_prototype_sha256": "82b36a378cb91cbcb08fd04d33a8b8f8efc4164ce6dceba87ffaeb669d04660b",
-  "current_versions": {
-    "project_schema": 4,
-    "recovery_schema": 1,
-    "ipc_protocol": 1
+  "contract_transition_rules": {
+    "project_schema": {
+      "owner_categories": ["explicit-model-gate", "typed-model-gate"],
+      "owner_actions": ["retain", "increment_by_one"],
+      "maximum_increment": 1,
+      "non_owner_transition": "retain_verified"
+    },
+    "recovery_schema": {
+      "owner_categories": [],
+      "owner_actions": [],
+      "maximum_increment": 0,
+      "non_owner_transition": "retain_verified"
+    },
+    "ipc_protocol": {
+      "owner_categories": ["explicit-contract-gate"],
+      "owner_actions": ["retain", "increment_by_one"],
+      "maximum_increment": 1,
+      "non_owner_transition": "retain_verified"
+    }
   },
   "or_core_forbidden_direct_dependency_name_patterns": [
     "wgpu",

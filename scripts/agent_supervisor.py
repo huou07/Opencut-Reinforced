@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import datetime as _datetime
+import hashlib
 import json
 import subprocess
 import sys
@@ -44,6 +45,19 @@ PROTECTED_DIRECTORY_PREFIXES = (
     "docs/execution/evidence/",
     ".github/workflows/",
 )
+REPAIR_ALLOWED_CONTROL_PATHS = {
+    "docs/execution/PLAN.json",
+    "docs/execution/STATE.json",
+    "docs/execution/architecture-policy.json",
+    "docs/execution/AGENT_EXECUTION.md",
+    "scripts/agent_supervisor.py",
+    "scripts/execution_plan.py",
+    "scripts/check_execution_plan.py",
+    "scripts/check_architecture_policy.py",
+    "scripts/execution_evidence.py",
+    "scripts/test_execution_infra.py",
+}
+REPAIR_ALLOWED_PREFIXES = ("docs/execution/phases/",)
 
 
 def git_output(repo_root: Path, *arguments: str) -> str:
@@ -166,9 +180,28 @@ def invoke_runner(repo_root: Path, runner: str | Path, prompt: str) -> int:
 
 
 def assert_state_advanced_once(
-    before: dict[str, Any], after: dict[str, Any], plan: dict[str, Any]
+    before: dict[str, Any],
+    after: dict[str, Any],
+    plan: dict[str, Any],
+    *,
+    candidate_contract_versions: Mapping[str, Any] | None = None,
+    policy: Mapping[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
 ) -> str:
-    """Validate exactly one NEXT -> DONE transition and its planned successor."""
+    """Validate the exact checkpoint, phase, and contract-version state transition."""
+
+    if set(before) != set(after):
+        raise SupervisorError("state transition changed the set of root fields")
+    allowed_root_changes = {
+        "checkpoints",
+        "current_next",
+        "phase_status",
+        "last_updated",
+        "verified_contract_versions",
+    }
+    for key in before:
+        if key not in allowed_root_changes and before[key] != after[key]:
+            raise SupervisorError(f"state transition changed unrelated root field {key}")
 
     before_checkpoints = before.get("checkpoints")
     after_checkpoints = after.get("checkpoints")
@@ -214,11 +247,51 @@ def assert_state_advanced_once(
         raise SupervisorError(
             f"state current_next is {after.get('current_next')!r}, expected {expected_next!r}"
         )
+    expected_phases = execution_plan.derive_phase_statuses(
+        plan, after_checkpoints, repo_root
+    )
+    if after.get("phase_status") != expected_phases:
+        raise SupervisorError("state phase_status does not match derived checkpoint status")
+    try:
+        _datetime.date.fromisoformat(after.get("last_updated", ""))
+    except (TypeError, ValueError) as exc:
+        raise SupervisorError("state last_updated must be an ISO date") from exc
+
+    candidate = (
+        execution_plan.read_contract_versions(repo_root)
+        if candidate_contract_versions is None
+        else candidate_contract_versions
+    )
+    transition_policy = (
+        execution_plan.load_architecture_policy(repo_root) if policy is None else policy
+    )
+    try:
+        candidate = execution_plan.validate_contract_transition(
+            plan,
+            before,
+            transition_policy,
+            candidate,
+            checkpoint_id=checkpoint_id,
+        )
+        after_versions = execution_plan.validate_contract_versions(
+            after.get("verified_contract_versions"), "STATE.verified_contract_versions"
+        )
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
+    if after_versions != candidate:
+        raise SupervisorError("verified contract versions do not match the exact candidate source")
     return checkpoint_id
 
 
 def advance_state_once(
-    before: dict[str, Any], plan: dict[str, Any], checkpoint_id: str, *, today: str | None = None
+    before: dict[str, Any],
+    plan: dict[str, Any],
+    checkpoint_id: str,
+    *,
+    candidate_contract_versions: Mapping[str, Any] | None = None,
+    policy: Mapping[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+    today: str | None = None,
 ) -> dict[str, Any]:
     """Create the only state transition the supervisor is allowed to write."""
 
@@ -228,6 +301,20 @@ def advance_state_once(
             f"state current_next is {before.get('current_next')!r}, expected {checkpoint_id!r}"
         )
     checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    candidate = (
+        execution_plan.read_contract_versions(repo_root)
+        if candidate_contract_versions is None
+        else candidate_contract_versions
+    )
+    transition_policy = (
+        execution_plan.load_architecture_policy(repo_root) if policy is None else policy
+    )
+    try:
+        candidate = execution_plan.validate_contract_transition(
+            plan, before, transition_policy, candidate, checkpoint_id=checkpoint_id
+        )
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
     checkpoints = after.get("checkpoints")
     if not isinstance(checkpoints, dict):
         raise SupervisorError("state checkpoints are not an object")
@@ -241,7 +328,18 @@ def advance_state_once(
         checkpoints[successor] = "NEXT"
         after["current_next"] = successor
     after["last_updated"] = today or _datetime.date.today().isoformat()
-    assert_state_advanced_once(before, after, plan)
+    after["phase_status"] = execution_plan.derive_phase_statuses(
+        plan, checkpoints, repo_root
+    )
+    after["verified_contract_versions"] = dict(candidate)
+    assert_state_advanced_once(
+        before,
+        after,
+        plan,
+        candidate_contract_versions=candidate,
+        policy=transition_policy,
+        repo_root=repo_root,
+    )
     return after
 
 
@@ -322,6 +420,96 @@ def checkpoint_prompt(repo_root: Path, resolution: dict[str, Any]) -> str:
     )
 
 
+def _preflight_goal_data(repo_root: Path, goal: str) -> dict[str, Any]:
+    status = git_output(repo_root, "status", "--porcelain", "--untracked-files=all")
+    if status:
+        raise SupervisorError("preflight requires a clean worktree")
+    branch = git_output(repo_root, "branch", "--show-current")
+    if branch != "main":
+        raise SupervisorError(f"preflight requires branch main, found {branch or 'detached'}")
+    head = git_output(repo_root, "rev-parse", "HEAD")
+    origin = git_output(repo_root, "rev-parse", "origin/main")
+    if head != origin:
+        raise SupervisorError("preflight requires HEAD == origin/main")
+    counts = git_output(repo_root, "rev-list", "--left-right", "--count", "HEAD...origin/main")
+    if counts.replace("\t", " ").split() != ["0", "0"]:
+        raise SupervisorError(f"preflight requires ahead/behind 0/0, found {counts}")
+
+    plan, state = execution_plan.load_plan_state(repo_root)
+    summary = execution_plan.validate_plan(plan, state, repo_root)
+    policy = execution_plan.load_architecture_policy(repo_root)
+    candidate = execution_plan.read_contract_versions(repo_root)
+    execution_plan.validate_contract_transition(plan, state, policy, candidate)
+    resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
+    remaining = [
+        checkpoint_id
+        for checkpoint_id in resolution["goal_checkpoint_ids"]
+        if state["checkpoints"][checkpoint_id] != "DONE"
+    ]
+    for checkpoint_id in remaining:
+        checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+        if not checkpoint["expected_project_schema_effect_category"]:
+            raise execution_plan.PlanError(
+                f"checkpoint {checkpoint_id} has no project-schema effect category"
+            )
+        if not checkpoint["expected_ipc_effect_category"]:
+            raise execution_plan.PlanError(
+                f"checkpoint {checkpoint_id} has no IPC effect category"
+            )
+    verified = execution_plan.validate_contract_versions(
+        state["verified_contract_versions"], "STATE.verified_contract_versions"
+    )
+    report = "\n".join(
+        (
+            "PRECHECK PASS",
+            f"goal: {goal}",
+            f"current NEXT: {summary['next_checkpoint']}",
+            "verified versions: "
+            f"project={verified['project_schema']} recovery={verified['recovery_schema']} "
+            f"ipc={verified['ipc_protocol']}",
+            "candidate versions: "
+            f"project={candidate['project_schema']} recovery={candidate['recovery_schema']} "
+            f"ipc={candidate['ipc_protocol']}",
+            "current transition: allowed",
+            f"remaining checkpoints checked: {len(remaining)}",
+            "model calls: 0",
+        )
+    )
+    return {
+        "plan": plan,
+        "state": state,
+        "policy": policy,
+        "candidate_versions": candidate,
+        "resolution": resolution,
+        "remaining_checkpoint_ids": remaining,
+        "report": report,
+        "head": head,
+    }
+
+
+def preflight_goal(repo_root: Path, goal: str) -> str:
+    """Read-only preflight; it does not fetch, poll GitHub, write, or invoke a runner."""
+
+    try:
+        return _preflight_goal_data(repo_root, goal)["report"]
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
+
+
+def _validate_candidate_transition(
+    plan: dict[str, Any],
+    state: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    repo_root: Path,
+    revision: str | None = None,
+) -> execution_plan.ContractVersions:
+    try:
+        candidate = execution_plan.read_contract_versions(repo_root, revision)
+        return execution_plan.validate_contract_transition(plan, state, policy, candidate)
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
+
+
 def prepare_goal(repo_root: Path, goal: str) -> str:
     ensure_start_state(repo_root)
     plan, state = execution_plan.load_plan_state(repo_root)
@@ -367,6 +555,7 @@ def verify_hosted_checkpoint(
     implementation_sha: str,
     implementation_subject: str,
     *,
+    implementation_origin_sha: str | None = None,
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
@@ -396,6 +585,10 @@ def verify_hosted_checkpoint(
         implementation_subject=implementation_subject,
         gates=gates,
         developer_preview=preview,
+        contract_versions=execution_plan.read_contract_versions(
+            repo_root, implementation_sha
+        ),
+        implementation_origin_sha=implementation_origin_sha,
     )
     execution_evidence.validate_evidence_record(
         record,
@@ -427,6 +620,23 @@ def finalize_verified_checkpoint(
     record = evidence_result["record"]
     if record.get("implementation_sha") != implementation_sha:
         raise SupervisorError("evidence implementation SHA does not match the verified implementation SHA")
+    if git_output(repo_root, "rev-parse", "HEAD") != implementation_sha:
+        raise SupervisorError("verified implementation SHA is not current HEAD")
+    if "contract_versions" not in record:
+        raise SupervisorError("new evidence record is missing contract_versions")
+    try:
+        candidate_versions = execution_plan.validate_contract_versions(
+            record["contract_versions"], "evidence contract_versions"
+        )
+        exact_versions = execution_plan.read_contract_versions(repo_root, implementation_sha)
+        if candidate_versions != exact_versions:
+            raise SupervisorError("evidence contract versions do not match the verified tree")
+        architecture_policy = execution_plan.load_architecture_policy(repo_root)
+        execution_plan.validate_contract_transition(
+            plan, state, architecture_policy, exact_versions, checkpoint_id=checkpoint_id
+        )
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
     execution_evidence.validate_evidence_record(
         record,
         checkpoint_id=checkpoint_id,
@@ -438,7 +648,14 @@ def finalize_verified_checkpoint(
     original_state = state_path.read_bytes()
     if evidence_path.exists():
         raise SupervisorError(f"completion evidence already exists: {evidence_path}")
-    after_state = advance_state_once(state, plan, checkpoint_id)
+    after_state = advance_state_once(
+        state,
+        plan,
+        checkpoint_id,
+        candidate_contract_versions=exact_versions,
+        policy=architecture_policy,
+        repo_root=repo_root,
+    )
     _write_json(evidence_path, record)
     _write_json(state_path, after_state)
     commit_created = False
@@ -524,6 +741,351 @@ def _resume_baseline(
     return baseline
 
 
+def _git_file_bytes(repo_root: Path, revision: str, relative_path: str) -> bytes:
+    result = subprocess.run(
+        ["git", "show", f"{revision}:{relative_path}"],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def _json_at_revision(repo_root: Path, revision: str, relative_path: str) -> dict[str, Any]:
+    try:
+        value = json.loads(_git_file_bytes(repo_root, revision, relative_path))
+    except (json.JSONDecodeError, subprocess.CalledProcessError) as exc:
+        raise SupervisorError(f"cannot read {relative_path} at {revision}") from exc
+    if not isinstance(value, dict):
+        raise SupervisorError(f"{relative_path} at {revision} must be a JSON object")
+    return value
+
+
+def _state_baseline_for_checkpoint(
+    repo_root: Path, failed_sha: str, checkpoint_id: str
+) -> str:
+    try:
+        history = git_output(
+            repo_root,
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            f"{failed_sha}^",
+        ).splitlines()
+    except subprocess.CalledProcessError as exc:
+        raise SupervisorError("FAILED_SHA has no state baseline history") from exc
+    previous: dict[str, Any] | None = None
+    for revision in history:
+        state = _json_at_revision(repo_root, revision, "docs/execution/STATE.json")
+        statuses = state.get("checkpoints")
+        if not isinstance(statuses, dict):
+            previous = state
+            continue
+        if (
+            state.get("current_next") == checkpoint_id
+            and statuses.get(checkpoint_id) == "NEXT"
+            and (
+                previous is None
+                or previous.get("current_next") != checkpoint_id
+                or not isinstance(previous.get("checkpoints"), dict)
+                or previous["checkpoints"].get(checkpoint_id) != "NEXT"
+            )
+        ):
+            return revision
+        previous = state
+    raise SupervisorError(
+        f"could not find the state baseline that introduced NEXT checkpoint {checkpoint_id}"
+    )
+
+
+def _active_checkpoint_fingerprint(
+    repo_root: Path, revision: str, checkpoint_id: str
+) -> dict[str, Any]:
+    plan = _json_at_revision(repo_root, revision, "docs/execution/PLAN.json")
+    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    policy_bytes = _git_file_bytes(
+        repo_root, revision, "docs/execution/EVIDENCE_POLICY.json"
+    )
+    try:
+        evidence_policy = json.loads(policy_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise SupervisorError(f"invalid EVIDENCE_POLICY.json at {revision}") from exc
+    if not isinstance(evidence_policy, dict):
+        raise SupervisorError(f"EVIDENCE_POLICY.json at {revision} must be an object")
+    gates = evidence_policy.get("required_gates", {})
+    preview = evidence_policy.get("developer_preview", {})
+    if (
+        not isinstance(gates, dict)
+        or any(not isinstance(gate, dict) for gate in gates.values())
+        or not isinstance(preview, dict)
+    ):
+        raise SupervisorError(f"EVIDENCE_POLICY.json at {revision} has invalid workflow identities")
+    identities = {
+        "required_gates": {
+            gate_id: {
+                "workflow_file": gate.get("workflow_file"),
+                "workflow_name": gate.get("workflow_name"),
+                "required_jobs": gate.get("required_jobs"),
+            }
+            for gate_id, gate in sorted(gates.items())
+        },
+        "developer_preview": {
+            key: preview.get(key)
+            for key in ("workflow_file", "workflow_name", "publish_job")
+        },
+    }
+    spec_path = str(checkpoint["spec_document"])
+    return {
+        "checkpoint": checkpoint,
+        "phase_spec_sha256": hashlib.sha256(
+            _git_file_bytes(repo_root, revision, spec_path)
+        ).hexdigest(),
+        "architecture_invariants_sha256": hashlib.sha256(
+            _git_file_bytes(
+                repo_root, revision, "docs/execution/ARCHITECTURE_INVARIANTS.md"
+            )
+        ).hexdigest(),
+        "evidence_policy_sha256": hashlib.sha256(policy_bytes).hexdigest(),
+        "workflow_identities": identities,
+    }
+
+
+def _repair_history_paths(repo_root: Path, failed_sha: str, head: str) -> set[str]:
+    commits = git_output(
+        repo_root,
+        "rev-list",
+        "--first-parent",
+        "--reverse",
+        f"{failed_sha}..{head}",
+    ).splitlines()
+    changed: set[str] = set()
+    for revision in commits:
+        paths = git_output(
+            repo_root,
+            "diff-tree",
+            "-m",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            "--no-renames",
+            revision,
+        )
+        changed.update(path for path in paths.splitlines() if path)
+    return changed
+
+
+def _repair_path_allowed(path: str) -> bool:
+    return path in REPAIR_ALLOWED_CONTROL_PATHS or any(
+        path.startswith(prefix) for prefix in REPAIR_ALLOWED_PREFIXES
+    )
+
+
+def _state_at_repair_revision(
+    repo_root: Path,
+    revision: str,
+    failed_state: Mapping[str, Any],
+    baseline_versions: Mapping[str, int],
+) -> None:
+    current = _json_at_revision(repo_root, revision, "docs/execution/STATE.json")
+    current_without_versions = {
+        key: value for key, value in current.items() if key != "verified_contract_versions"
+    }
+    failed_without_versions = {
+        key: value for key, value in failed_state.items() if key != "verified_contract_versions"
+    }
+    if current_without_versions != failed_without_versions:
+        raise SupervisorError("repair history changed checkpoint or unrelated STATE data")
+    if "verified_contract_versions" in current:
+        try:
+            versions = execution_plan.validate_contract_versions(
+                current["verified_contract_versions"],
+                "repair STATE.verified_contract_versions",
+            )
+        except execution_plan.PlanError as exc:
+            raise SupervisorError(str(exc)) from exc
+        if versions != baseline_versions:
+            raise SupervisorError("repair history changed verified versions before completion")
+    evidence_path = f"docs/execution/evidence/{failed_state['current_next']}.json"
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}:{evidence_path}"],
+        cwd=repo_root,
+        capture_output=True,
+    ).returncode == 0
+    if exists:
+        raise SupervisorError("repair history contains completion evidence for the active checkpoint")
+
+
+def validate_repair_resume_history(
+    repo_root: Path, failed_sha: str, checkpoint_id: str
+) -> dict[str, Any]:
+    """Prove original checkpoint integrity and trusted control-plane-only repair history."""
+
+    if execution_evidence.SHA_PATTERN.fullmatch(failed_sha) is None:
+        raise SupervisorError("--repair-resume-from must be a lowercase 40-character SHA")
+    head = git_output(repo_root, "rev-parse", "HEAD")
+    try:
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", failed_sha, head],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise SupervisorError("FAILED_SHA is not an ancestor of current HEAD") from exc
+
+    baseline = _state_baseline_for_checkpoint(repo_root, failed_sha, checkpoint_id)
+    baseline_state = _json_at_revision(repo_root, baseline, "docs/execution/STATE.json")
+    baseline_plan = _json_at_revision(repo_root, baseline, "docs/execution/PLAN.json")
+    active = execution_plan.checkpoint_for_id(baseline_plan, checkpoint_id)
+    if (
+        baseline_state.get("current_next") != checkpoint_id
+        or baseline_state.get("checkpoints", {}).get(checkpoint_id) != "NEXT"
+    ):
+        raise SupervisorError("state baseline did not introduce the active checkpoint as NEXT")
+    allowed_paths = active.get("runner_allowed_protected_paths", [])
+    if not isinstance(allowed_paths, list) or any(not isinstance(path, str) for path in allowed_paths):
+        raise SupervisorError("state baseline has an invalid workflow allowance")
+    changed_by_implementation = git_output(
+        repo_root, "diff", "--name-only", f"{baseline}..{failed_sha}"
+    ).splitlines()
+    protected = [
+        path
+        for path in changed_by_implementation
+        if is_protected_execution_path(path) and path not in set(allowed_paths)
+    ]
+    if protected:
+        raise SupervisorError(
+            "original implementation changed protected execution-control files: "
+            + ", ".join(sorted(protected))
+        )
+
+    failed_state = _json_at_revision(repo_root, failed_sha, "docs/execution/STATE.json")
+    if failed_state != baseline_state:
+        raise SupervisorError("original implementation changed STATE.json")
+    if (
+        failed_state.get("current_next") != checkpoint_id
+        or failed_state.get("checkpoints", {}).get(checkpoint_id) != "NEXT"
+    ):
+        raise SupervisorError("FAILED_SHA does not leave the active checkpoint NEXT")
+
+    baseline_versions = execution_plan.read_contract_versions(repo_root, baseline)
+    if "verified_contract_versions" in baseline_state:
+        try:
+            recorded = execution_plan.validate_contract_versions(
+                baseline_state["verified_contract_versions"],
+                "baseline STATE.verified_contract_versions",
+            )
+        except execution_plan.PlanError as exc:
+            raise SupervisorError(str(exc)) from exc
+        if recorded != baseline_versions:
+            raise SupervisorError("state baseline verified versions do not match its source tree")
+    else:
+        baseline_state["verified_contract_versions"] = dict(baseline_versions)
+
+    current_plan = _json_at_revision(repo_root, head, "docs/execution/PLAN.json")
+    current_state = _json_at_revision(repo_root, head, "docs/execution/STATE.json")
+    current_policy = _json_at_revision(
+        repo_root, head, "docs/execution/architecture-policy.json"
+    )
+    failed_plan = _json_at_revision(repo_root, failed_sha, "docs/execution/PLAN.json")
+    if _active_checkpoint_fingerprint(repo_root, failed_sha, checkpoint_id) != (
+        _active_checkpoint_fingerprint(repo_root, head, checkpoint_id)
+    ):
+        raise SupervisorError("maintenance changed the active checkpoint contract fingerprint")
+    if (
+        current_state.get("current_next") != checkpoint_id
+        or current_state.get("checkpoints", {}).get(checkpoint_id) != "NEXT"
+    ):
+        raise SupervisorError("current state no longer leaves the active checkpoint NEXT")
+    if (repo_root / "docs" / "execution" / "evidence" / f"{checkpoint_id}.json").exists():
+        raise SupervisorError("completion evidence already exists for the active checkpoint")
+    changed_by_maintenance = _repair_history_paths(repo_root, failed_sha, head)
+    rejected = sorted(path for path in changed_by_maintenance if not _repair_path_allowed(path))
+    if rejected:
+        raise SupervisorError(
+            "repair maintenance changed non-control-plane files: " + ", ".join(rejected)
+        )
+    try:
+        failed_candidate = execution_plan.read_contract_versions(repo_root, failed_sha)
+        execution_plan.validate_contract_transition(
+            failed_plan,
+            baseline_state,
+            current_policy,
+            failed_candidate,
+            checkpoint_id=checkpoint_id,
+        )
+        current_candidate = execution_plan.read_contract_versions(repo_root, head)
+        execution_plan.validate_contract_transition(
+            current_plan, current_state, current_policy, current_candidate
+        )
+    except execution_plan.PlanError as exc:
+        raise SupervisorError(str(exc)) from exc
+    commits = git_output(
+        repo_root,
+        "rev-list",
+        "--first-parent",
+        "--reverse",
+        f"{failed_sha}..{head}",
+    ).splitlines()
+    for revision in commits:
+        _state_at_repair_revision(repo_root, revision, failed_state, baseline_versions)
+    return {
+        "baseline_sha": baseline,
+        "failed_sha": failed_sha,
+        "head": head,
+        "verified_versions": baseline_versions,
+        "candidate_versions": current_candidate,
+        "fingerprint": _active_checkpoint_fingerprint(repo_root, head, checkpoint_id),
+    }
+
+
+def repair_resume_goal(
+    repo_root: Path,
+    goal: str,
+    failed_sha: str,
+    *,
+    api: execution_evidence.GitHubApi | None = None,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> list[str]:
+    """Verify a trusted repaired HEAD without ever invoking a model runner."""
+
+    ensure_start_state(repo_root)
+    preflight = _preflight_goal_data(repo_root, goal)
+    checkpoint_id = str(preflight["state"]["current_next"])
+    if goal != f"checkpoint:{checkpoint_id}":
+        raise SupervisorError("repair-resume requires the exact current checkpoint goal")
+    proof = validate_repair_resume_history(repo_root, failed_sha, checkpoint_id)
+    if proof["head"] != preflight["head"]:
+        raise SupervisorError("current HEAD changed during repair-resume validation")
+    plan = preflight["plan"]
+    state = preflight["state"]
+    resolution = preflight["resolution"]
+    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    subject = git_output(repo_root, "show", "-s", "--format=%s", proof["head"])
+    evidence_result = verify_hosted_checkpoint(
+        repo_root,
+        plan,
+        checkpoint,
+        proof["head"],
+        subject,
+        implementation_origin_sha=failed_sha,
+        api=api,
+        clock=clock,
+        sleep=sleep,
+    )
+    result = finalize_verified_checkpoint(
+        repo_root,
+        plan=plan,
+        state=state,
+        checkpoint=checkpoint,
+        evidence_result=evidence_result,
+        implementation_sha=proof["head"],
+        api=evidence_result["api"],
+    )
+    return [_verified_report(result, plan)]
+
+
 def _verified_report(result: Mapping[str, Any], plan: Mapping[str, Any]) -> str:
     checkpoint = result["checkpoint"]
     record = result["record"]
@@ -541,6 +1103,8 @@ def _verified_report(result: Mapping[str, Any], plan: Mapping[str, Any]) -> str:
         "",
         "## HOSTED CI EVIDENCE",
     ]
+    if record.get("implementation_origin_sha"):
+        lines.insert(7, f"implementation origin SHA: {record['implementation_origin_sha']}")
     for gate_id in ("repository_hygiene", "platform_verification"):
         gate = gates[gate_id]
         required_jobs = ", ".join(job["name"] for job in gate["jobs"])
@@ -607,6 +1171,7 @@ def _run_one_checkpoint(
     state: dict[str, Any],
     resolution: dict[str, Any],
     implementation_sha: str,
+    implementation_origin_sha: str | None = None,
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
@@ -619,6 +1184,7 @@ def _run_one_checkpoint(
         checkpoint,
         implementation_sha,
         subject,
+        implementation_origin_sha=implementation_origin_sha,
         api=api,
         clock=clock,
         sleep=sleep,
@@ -641,9 +1207,10 @@ def run_goal(
     reports: list[str] = []
     resume_pending = resume_sha is not None
     while True:
-        plan, state = execution_plan.load_plan_state(repo_root)
-        execution_plan.validate_plan(plan, state, repo_root)
-        resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
+        preflight = _preflight_goal_data(repo_root, goal)
+        plan = preflight["plan"]
+        state = preflight["state"]
+        resolution = preflight["resolution"]
         if resume_pending:
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")
@@ -657,6 +1224,9 @@ def run_goal(
                 expected_checkpoint=resolution["checkpoint_id"],
                 worktree_clean=not bool(git_output(repo_root, "status", "--porcelain")),
                 baseline_is_ancestor=True,
+            )
+            _validate_candidate_transition(
+                plan, state, preflight["policy"], repo_root
             )
             result = _run_one_checkpoint(
                 repo_root,
@@ -692,6 +1262,9 @@ def run_goal(
                 raise SupervisorError("runner did not leave HEAD == origin/main")
             if head == baseline_head:
                 raise SupervisorError("runner produced no new implementation commit")
+            _validate_candidate_transition(
+                plan, state, preflight["policy"], repo_root
+            )
             result = _run_one_checkpoint(
                 repo_root,
                 plan=plan,
@@ -718,12 +1291,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="print the authoritative prompt for the current checkpoint",
     )
+    modes.add_argument(
+        "--preflight",
+        action="store_true",
+        help="run deterministic read-only goal checks without invoking a runner",
+    )
+    modes.add_argument(
+        "--repair-resume-from",
+        metavar="FAILED_SHA",
+        help="verify a trusted repaired HEAD for an already-landed implementation",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.preflight:
+            print(preflight_goal(REPO_ROOT, args.goal))
+            return 0
         if args.prepare:
             print(prepare_goal(REPO_ROOT, args.goal), end="")
             return 0
-        reports = run_goal(REPO_ROOT, args.goal, args.runner, args.resume_sha)
+        if args.repair_resume_from:
+            reports = repair_resume_goal(REPO_ROOT, args.goal, args.repair_resume_from)
+        else:
+            reports = run_goal(REPO_ROOT, args.goal, args.runner, args.resume_sha)
     except (
         SupervisorError,
         execution_evidence.EvidenceError,

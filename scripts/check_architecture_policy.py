@@ -25,16 +25,6 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _constant(path: Path, name: str) -> int:
-    pattern = re.compile(
-        rf"\b{re.escape(name)}\b\s*(?::\s*[A-Za-z0-9_<>]+)?\s*=\s*(\d+)"
-    )
-    match = pattern.search(_read(path))
-    if match is None:
-        raise ValueError(f"could not find {name} in {path}")
-    return int(match.group(1))
-
-
 def _direct_dependency_names(manifest: str) -> set[str]:
     """Read dependency keys from normal and target dependency tables.
 
@@ -102,32 +92,14 @@ def main() -> int:
                 if not isinstance(relative_path, str) or not (REPO_ROOT / relative_path).is_file():
                     failures.append(f"required execution file is missing: {relative_path}")
 
-        expected_versions = policy.get("current_versions", {})
-        if not isinstance(expected_versions, dict):
-            failures.append("policy current_versions is invalid")
-        else:
-            constants = {
-                "project_schema": (REPO_ROOT / "crates" / "or_core" / "src" / "project_document.rs", "CURRENT_PROJECT_SCHEMA_VERSION"),
-                "recovery_schema": (REPO_ROOT / "crates" / "or_core" / "src" / "project_recovery.rs", "CURRENT_RECOVERY_SCHEMA_VERSION"),
-                "ipc_protocol": (REPO_ROOT / "crates" / "or_ipc" / "src" / "protocol.rs", "OR_LOCAL_IPC_PROTOCOL_VERSION"),
-            }
-            for key, (path, constant_name) in constants.items():
-                try:
-                    actual = _constant(path, constant_name)
-                except ValueError as exc:
-                    failures.append(str(exc))
-                    continue
-                if actual != expected_versions.get(key):
-                    failures.append(
-                        f"{constant_name} is {actual}, expected policy value {expected_versions.get(key)}"
-                    )
-
         agents = _read(AGENTS_PATH)
         if _has_stale_phase_status(agents):
             failures.append("AGENTS.md contains a manually maintained phase status")
 
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         execution_plan.validate_plan(plan, state, REPO_ROOT)
+        versions = execution_plan.read_contract_versions(REPO_ROOT)
+        execution_plan.validate_contract_transition(plan, state, policy, versions)
     except (execution_plan.PlanError, OSError, ValueError) as exc:
         failures.append(str(exc))
 
@@ -137,7 +109,7 @@ def main() -> int:
         return 1
     print(
         "Architecture policy check passed "
-        "(prototype hash, versions, or_core dependency boundary, required files, "
+        "(prototype hash, contract transitions, or_core dependency boundary, required files, "
         "AGENTS status rule, and plan/state validation)."
     )
     return 0

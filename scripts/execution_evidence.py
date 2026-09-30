@@ -858,13 +858,16 @@ def build_evidence_record(
     implementation_subject: str,
     gates: Sequence[Mapping[str, Any]],
     developer_preview: Mapping[str, Any],
+    contract_versions: Mapping[str, Any],
+    implementation_origin_sha: str | None = None,
     verified_at_utc: str | None = None,
 ) -> dict[str, Any]:
     _require_sha(implementation_sha, "implementation_sha")
     _require_string(checkpoint_id, "checkpoint_id")
     _require_string(implementation_subject, "implementation_subject")
     timestamp = verified_at_utc or _datetime.datetime.now(_datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    return {
+    versions = _validate_contract_versions(contract_versions, "contract_versions")
+    record = {
         "schema_version": 1,
         "checkpoint_id": checkpoint_id,
         "implementation_sha": implementation_sha,
@@ -872,7 +875,24 @@ def build_evidence_record(
         "verified_at_utc": timestamp,
         "gates": [dict(gate) for gate in gates],
         "developer_preview": dict(developer_preview),
+        "contract_versions": versions,
     }
+    if implementation_origin_sha is not None:
+        record["implementation_origin_sha"] = _require_sha(
+            implementation_origin_sha, "implementation_origin_sha"
+        )
+    return record
+
+
+def _validate_contract_versions(value: Any, label: str) -> dict[str, int]:
+    versions = _require_object(value, label)
+    expected = {"project_schema", "recovery_schema", "ipc_protocol"}
+    if set(versions) != expected:
+        raise EvidenceError(f"{label} must contain exactly: {', '.join(sorted(expected))}")
+    for key, version in versions.items():
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise EvidenceError(f"{label}.{key} must be a positive integer")
+    return {key: versions[key] for key in sorted(versions)}
 
 
 def _validate_timestamp(value: Any) -> None:
@@ -901,6 +921,10 @@ def validate_evidence_record(
     if record.get("checkpoint_id") != checkpoint_id:
         raise EvidenceError("evidence record checkpoint_id does not match")
     implementation_sha = _require_sha(record.get("implementation_sha"), "implementation_sha")
+    if "implementation_origin_sha" in record:
+        _require_sha(record["implementation_origin_sha"], "implementation_origin_sha")
+    if "contract_versions" in record:
+        _validate_contract_versions(record["contract_versions"], "contract_versions")
     _require_string(record.get("implementation_subject"), "implementation_subject")
     _validate_timestamp(record.get("verified_at_utc"))
 

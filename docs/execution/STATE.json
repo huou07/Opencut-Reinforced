@@ -93,5 +93,10 @@
     "9": "PLANNED"
   },
   "repository": "Opencut Reinforced",
-  "schema_version": 1
+  "schema_version": 1,
+  "verified_contract_versions": {
+    "project_schema": 4,
+    "recovery_schema": 1,
+    "ipc_protocol": 1
+  }
 }

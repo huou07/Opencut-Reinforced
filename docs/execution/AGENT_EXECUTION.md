@@ -26,6 +26,22 @@ execution graph.
 PLAN project-schema and IPC effect categories are distinct namespaces. A
 checkpoint must not use one field's category family in the other field.
 
+## Contract versions and recovery
+
+`STATE.json` records `verified_contract_versions`, the versions proven by the
+latest completed checkpoint. `architecture-policy.json` defines transition
+rules, not mutable current versions. Before each token-using runner, the
+supervisor runs a read-only preflight; explicit model and contract gates may
+retain their version or increment it by one, while downstream `*-only`
+checkpoints must retain the verified version. Recovery schema remains fixed
+until an explicit recovery owner is planned. Completion derives `phase_status`
+from checkpoint statuses and snapshots the exact verified source versions.
+
+`--repair-resume-from` is a strict control-plane recovery path, not a runner
+bypass. It checks the original implementation and active checkpoint contract,
+accepts only trusted maintenance changes, and records the repaired HEAD as the
+verified implementation SHA with the failed implementation SHA as provenance.
+
 ## Trust boundary
 
 The runner owns one locked checkpoint's source implementation, ordinary

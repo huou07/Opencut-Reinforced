@@ -6,16 +6,40 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, TypedDict
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLAN_PATH = REPO_ROOT / "docs" / "execution" / "PLAN.json"
 STATE_PATH = REPO_ROOT / "docs" / "execution" / "STATE.json"
+ARCHITECTURE_POLICY_PATH = REPO_ROOT / "docs" / "execution" / "architecture-policy.json"
 VALID_CHECKPOINT_STATUSES = {"DONE", "NEXT", "PLANNED"}
 VALID_PHASE_STATUSES = {"DONE", "IN_PROGRESS", "PLANNED"}
+CONTRACT_VERSION_SOURCES = {
+    "project_schema": (
+        "crates/or_core/src/project_document.rs",
+        "CURRENT_PROJECT_SCHEMA_VERSION",
+    ),
+    "recovery_schema": (
+        "crates/or_core/src/project_recovery.rs",
+        "CURRENT_RECOVERY_SCHEMA_VERSION",
+    ),
+    "ipc_protocol": ("crates/or_ipc/src/protocol.rs", "OR_LOCAL_IPC_PROTOCOL_VERSION"),
+}
+EXPECTED_CONTRACT_TRANSITIONS = {
+    "project_schema": ("explicit-model-gate", "typed-model-gate"),
+    "recovery_schema": (),
+    "ipc_protocol": ("explicit-contract-gate",),
+}
+
+
+class ContractVersions(TypedDict):
+    project_schema: int
+    recovery_schema: int
+    ipc_protocol: int
 
 
 class PlanError(ValueError):
@@ -35,6 +59,143 @@ def load_json(path: Path) -> dict[str, Any]:
 def load_plan_state(repo_root: Path = REPO_ROOT) -> tuple[dict[str, Any], dict[str, Any]]:
     execution_dir = repo_root / "docs" / "execution"
     return load_json(execution_dir / "PLAN.json"), load_json(execution_dir / "STATE.json")
+
+
+def read_contract_versions(
+    repo_root: Path = REPO_ROOT, revision: str | None = None
+) -> ContractVersions:
+    """Read the three public version constants from the source tree or a Git revision."""
+
+    versions: dict[str, int] = {}
+    for key, (relative_path, constant_name) in CONTRACT_VERSION_SOURCES.items():
+        try:
+            if revision is None:
+                source = (repo_root / relative_path).read_text(encoding="utf-8")
+            else:
+                result = subprocess.run(
+                    ["git", "show", f"{revision}:{relative_path}"],
+                    cwd=repo_root,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                source = result.stdout
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise PlanError(f"cannot read {constant_name} from {relative_path}: {exc}") from exc
+        match = re.search(
+            rf"\bpub\s+const\s+{re.escape(constant_name)}\s*:\s*u\d+\s*=\s*(\d+)\s*;",
+            source,
+        )
+        if match is None:
+            raise PlanError(f"could not find {constant_name} in {relative_path}")
+        versions[key] = int(match.group(1))
+    return ContractVersions(**versions)
+
+
+def validate_contract_versions(value: Any, label: str) -> ContractVersions:
+    versions = _require_object(value, label)
+    expected = set(CONTRACT_VERSION_SOURCES)
+    if set(versions) != expected:
+        raise PlanError(f"{label} must contain exactly: {', '.join(sorted(expected))}")
+    for key, version in versions.items():
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise PlanError(f"{label}.{key} must be a positive integer")
+    return ContractVersions(**versions)
+
+
+def load_architecture_policy(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    return load_json(repo_root / "docs" / "execution" / "architecture-policy.json")
+
+
+def validate_contract_transition_policy(policy: Mapping[str, Any]) -> dict[str, Any]:
+    if "current_versions" in policy:
+        raise PlanError("architecture policy must not store mutable current_versions")
+    raw_rules = _require_object(
+        policy.get("contract_transition_rules"), "architecture policy.contract_transition_rules"
+    )
+    if set(raw_rules) != set(EXPECTED_CONTRACT_TRANSITIONS):
+        raise PlanError("architecture policy contract_transition_rules has the wrong version keys")
+    normalized: dict[str, Any] = {}
+    for version_key, expected_owners in EXPECTED_CONTRACT_TRANSITIONS.items():
+        rule = _require_object(raw_rules[version_key], f"contract_transition_rules.{version_key}")
+        owner_categories = _require_list(
+            rule.get("owner_categories"), f"contract_transition_rules.{version_key}.owner_categories"
+        )
+        if tuple(owner_categories) != expected_owners:
+            raise PlanError(f"{version_key} owner categories do not match the locked taxonomy")
+        owner_actions = _require_list(
+            rule.get("owner_actions"), f"contract_transition_rules.{version_key}.owner_actions"
+        )
+        expected_actions = ["retain", "increment_by_one"] if expected_owners else []
+        if owner_actions != expected_actions:
+            raise PlanError(f"{version_key} owner actions do not match the locked transition policy")
+        maximum_increment = rule.get("maximum_increment")
+        expected_increment = 1 if expected_owners else 0
+        if maximum_increment != expected_increment or isinstance(maximum_increment, bool):
+            raise PlanError(f"{version_key} maximum_increment must be {expected_increment}")
+        if rule.get("non_owner_transition") != "retain_verified":
+            raise PlanError(f"{version_key} non-owner transition must retain the verified version")
+        normalized[version_key] = {
+            "owner_categories": list(expected_owners),
+            "owner_actions": expected_actions,
+            "maximum_increment": expected_increment,
+            "non_owner_transition": "retain_verified",
+        }
+    return normalized
+
+
+def validate_contract_transition(
+    plan: dict[str, Any],
+    state: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    candidate_versions: Mapping[str, Any],
+    *,
+    checkpoint_id: str | None = None,
+) -> ContractVersions:
+    """Require candidate source versions to follow the current checkpoint's gates."""
+
+    rules = validate_contract_transition_policy(policy)
+    verified = validate_contract_versions(
+        state.get("verified_contract_versions"), "STATE.verified_contract_versions"
+    )
+    candidate = validate_contract_versions(candidate_versions, "candidate contract versions")
+    current_id = checkpoint_id if checkpoint_id is not None else state.get("current_next")
+    if current_id is None and checkpoint_id is None:
+        if candidate != verified:
+            raise PlanError("terminal state must retain its verified contract versions")
+        return candidate
+    if not isinstance(current_id, str) or not current_id:
+        raise PlanError("contract transition requires a current NEXT checkpoint")
+    checkpoint = checkpoint_for_id(plan, current_id)
+    if checkpoint_id is None and state.get("current_next") != current_id:
+        raise PlanError("contract transition checkpoint is not current_next")
+
+    categories = {
+        "project_schema": checkpoint["expected_project_schema_effect_category"],
+        "ipc_protocol": checkpoint["expected_ipc_effect_category"],
+    }
+    for version_key in ("project_schema", "ipc_protocol", "recovery_schema"):
+        rule = rules[version_key]
+        if version_key == "recovery_schema":
+            category = None
+        else:
+            category = categories[version_key]
+        is_owner = category in rule["owner_categories"] if category is not None else False
+        delta = candidate[version_key] - verified[version_key]
+        if is_owner:
+            allowed = delta == 0 or (
+                "increment_by_one" in rule["owner_actions"]
+                and delta == 1
+                and rule["maximum_increment"] == 1
+            )
+        else:
+            allowed = delta == 0 and rule["non_owner_transition"] == "retain_verified"
+        if not allowed:
+            raise PlanError(
+                f"{version_key} transition {verified[version_key]} -> {candidate[version_key]} "
+                f"is not allowed for checkpoint {current_id} category {category or 'no owner'}"
+            )
+    return candidate
 
 
 def _require_object(value: Any, label: str) -> dict[str, Any]:
@@ -289,6 +450,29 @@ def _derive_phase_status(
     return "PLANNED"
 
 
+def _derive_phase_statuses(
+    phases: Mapping[str, Any],
+    checkpoints: dict[str, dict[str, Any]],
+    statuses: dict[str, str],
+) -> dict[str, str]:
+    result = {
+        phase_id: _derive_phase_status(phase_id, checkpoints, statuses)
+        for phase_id in phases
+    }
+    result["5"] = _derive_phase_status("5", checkpoints, statuses)
+    return result
+
+
+def derive_phase_statuses(
+    plan: dict[str, Any], statuses: Mapping[str, str], repo_root: Path = REPO_ROOT
+) -> dict[str, str]:
+    """Derive each phase status from checkpoint statuses, including legacy phase 5."""
+
+    checkpoints = _checkpoint_map(plan, repo_root)
+    phases = _require_object(plan.get("phases"), "plan.phases")
+    return _derive_phase_statuses(phases, checkpoints, dict(statuses))
+
+
 def _validate_completion_evidence(
     plan: dict[str, Any],
     statuses: dict[str, str],
@@ -410,6 +594,9 @@ def validate_plan(
         statuses[checkpoint_id] = raw_status
 
     _validate_effect_categories(checkpoints, statuses)
+    validate_contract_versions(
+        state.get("verified_contract_versions"), "STATE.verified_contract_versions"
+    )
 
     next_ids = [checkpoint_id for checkpoint_id, status in statuses.items() if status == "NEXT"]
     if len(next_ids) > 1:
@@ -464,10 +651,11 @@ def validate_plan(
     expected_phase_ids = set(phases) | {"5"}
     if set(phase_status) != expected_phase_ids:
         raise PlanError("state.phase_status must contain plan phases and legacy phase 5")
+    derived_phase_statuses = _derive_phase_statuses(phases, checkpoints, statuses)
     for phase_id, raw_status in phase_status.items():
         if raw_status not in VALID_PHASE_STATUSES:
             raise PlanError(f"invalid phase status for {phase_id}: {raw_status}")
-        expected = _derive_phase_status(phase_id, checkpoints, statuses)
+        expected = derived_phase_statuses[phase_id]
         if raw_status != expected:
             raise PlanError(
                 f"phase {phase_id} status is {raw_status}, expected derived status {expected}"
