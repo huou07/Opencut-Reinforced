@@ -279,8 +279,10 @@ the pixel buffer. Linux retains its pixel-buffer leases until texture
 unregistration, as required by the Flutter Linux API.
 
 Hosted macOS, Linux, and Windows jobs build the official FFmpeg 8.1.3 source
-archive with the configure-help-verified shared profile from the successful
-7C0 build. The configure defaults keep GPL, version3, and nonfree disabled.
+archive with a configure-help-verified LGPL shared profile. It disables
+`libavdevice` and `libavfilter`, leaving the five shared runtime libraries
+`libavcodec`, `libavformat`, `libavutil`, `libswresample`, and `libswscale`.
+The configure defaults keep GPL, version3, and nonfree disabled.
 They verify the source archive SHA-512, build the Flutter bridge and texture
 adapter with `PKG_CONFIG_PATH` empty, then place the production `or_media`
 probe and shared libraries beside the bridge in the app bundle. The probe

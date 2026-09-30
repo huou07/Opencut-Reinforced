@@ -26,6 +26,8 @@ env:
     --disable-autodetect
     --disable-everything
     --disable-asm
+    --disable-avdevice
+    --disable-avfilter
     --enable-protocol=file
     --enable-demuxer=matroska
     --enable-decoder=ffv1,pcm_s16le
@@ -222,6 +224,10 @@ jobs:
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
           echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
           for library in avcodec avformat avutil swresample swscale; do
             pkg-config --modversion "lib$library"
@@ -397,6 +403,10 @@ jobs:
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
           echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
           echo 'RUSTFLAGS=-C link-arg=-Wl,-rpath,$ORIGIN' >> "$GITHUB_ENV"
           for library in avcodec avformat avutil swresample swscale; do
@@ -564,6 +574,10 @@ jobs:
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
           for library in avcodec avformat avutil swresample swscale; do
             if [ -f "$prefix/lib/$library.lib" ]; then continue; fi
             import_library="$(find "$prefix/lib" "$prefix/bin" -maxdepth 1 -type f -name "$library*.lib" -print -quit)"
