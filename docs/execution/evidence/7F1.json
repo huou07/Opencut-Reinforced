@@ -1,0 +1,82 @@
+{
+  "checkpoint_id": "7F1",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 5,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "required": false
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "9c54d69fe94ff5ea339bd3d84acce76148fac59a",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36770610266",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36770610266,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "9c54d69fe94ff5ea339bd3d84acce76148fac59a",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36770610510",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36770610510,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "9c54d69fe94ff5ea339bd3d84acce76148fac59a",
+  "implementation_subject": "fix(viewer): construct private Windows texture plugin",
+  "schema_version": 1,
+  "verified_at_utc": "2026-09-30T21:02:56Z"
+}
