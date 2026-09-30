@@ -6,7 +6,9 @@ Phase 14 is planned. Generation builds on the Phase 10 provider/task contract
 and returns reviewable assets or proposals before any timeline mutation.
 Checkpoint 14G adds optional AI production of declarative MotionScene
 proposals; MotionScene rendering remains provider-independent and requires no
-AI call.
+AI call. No diffusion, image, video, audio, voice, or other model/provider is
+mandatory for roadmap completion. Missing providers/models return typed
+`Unavailable`, not architecture failure.
 
 ## 14A — Generated image
 
@@ -15,7 +17,7 @@ resources, cancellation, checksums, and reviewable asset results. Generated
 images are not inserted into a project without an explicit validated command.
 
 Affected invariants: `INV-JOB-001`, `INV-CACHE-001`, `INV-AI-001`,
-`INV-AI-002`, `INV-AI-003`, `INV-SEC-001`, `INV-DEP-001`.
+`INV-AI-002`, `INV-AI-003`, `INV-AI-004`, `INV-SEC-001`, `INV-DEP-001`.
 
 ## 14B — Generated video
 
@@ -26,7 +28,7 @@ Heavy runtimes may run in a sidecar process/service boundary; they do not enter
 
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-MEDIA-001`,
 `INV-MEDIA-002`, `INV-JOB-001`, `INV-CACHE-001`, `INV-AI-001`, `INV-AI-002`,
-`INV-AI-003`, `INV-DEP-001`.
+`INV-AI-003`, `INV-AI-004`, `INV-DEP-001`.
 
 ## 14C — Generated music and SFX
 
@@ -34,8 +36,9 @@ Add `GenerateAudio` results for music and sound effects with duration, stems or
 mix metadata, rights, provenance, checksum, and review. Generated audio follows
 the existing `or_audio` clock and fallback rules.
 
-Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-JOB-001`, `INV-CACHE-001`,
-`INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-SEC-001`.
+Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-JOB-001`,
+`INV-CACHE-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`,
+`INV-SEC-001`.
 
 ## 14D — Generated voice
 
@@ -44,7 +47,7 @@ voice cloning is implied by a provider capability; consent and rights remain
 explicit and reviewable.
 
 Affected invariants: `INV-JOB-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`,
-`INV-SEC-001`, `INV-DEP-001`.
+`INV-SEC-001`, `INV-AI-004`, `INV-DEP-001`.
 
 ## 14E — Provider/model selection and jobs
 
@@ -52,8 +55,9 @@ Complete provider/model selection, capability discovery, progress, cancel,
 retry, failure, cost/resource budgets, sidecar isolation, manifests, and
 secret boundaries. Keep heavy runtimes optional and disposable.
 
-Affected invariants: `INV-HW-001`, `INV-HW-002`, `INV-JOB-001`, `INV-CACHE-001`,
-`INV-AI-001`, `INV-AI-002`, `INV-SEC-001`, `INV-DEP-001`.
+Affected invariants: `INV-HW-001`, `INV-HW-002`, `INV-JOB-001`,
+`INV-CACHE-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-004`, `INV-SEC-001`,
+`INV-DEP-001`.
 
 ## 14F — Provenance and review-before-timeline
 
@@ -62,8 +66,8 @@ diff/metadata inspection, and explicit apply. The application path validates
 the current project revision before placing an asset on the timeline.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
-`INV-RT-001`, `INV-RT-002`, `INV-AI-002`, `INV-AI-003`, `INV-PERSIST-001`,
-`INV-SEC-001`.
+`INV-RT-001`, `INV-RT-002`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`,
+`INV-PERSIST-001`, `INV-SEC-001`.
 
 ## 14G — AI MotionScene generation and review
 
@@ -85,7 +89,8 @@ materialization, and normal project mutation.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-MOTION-001`, `INV-MOTION-002`, `INV-MOTION-004`, `INV-JOB-001`,
-`INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-SEC-001`, `INV-DEP-001`.
+`INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`, `INV-SEC-001`,
+`INV-DEP-001`.
 
 ## Stop conditions
 

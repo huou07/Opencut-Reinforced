@@ -65,8 +65,8 @@ The selected Rust integration is the high-level [`ffmpeg-the-third` 6.0.0
 release](https://crates.io/crates/ffmpeg-the-third/6.0.0), package version
 `6.0.0+ffmpeg-9.0`, with its paired `ffmpeg-sys-the-third` 6.0.0 layer. The
 maintained upstream fork declares support for FFmpeg 5.1–9.0 and its changelog
-confirms continued 5.1–8.1 support in 6.0.0. The selected FFmpeg line is 8.1.x
-with 8.1.3 as the pinned CI probe baseline. Both Rust packages declare WTFPL.
+confirms continued 5.1–8.1 support in 6.0.0. The selected FFmpeg version is
+8.1.3. Both Rust packages declare WTFPL.
 The binding has suitable wrappers
 for demux, codec/decode, frames, software resampling, and software scaling.
 Its build uses bindgen 0.72 plus the runtime `clang` crate, `pkg-config`, and a
@@ -76,23 +76,24 @@ Linux/macOS source builds use FFmpeg's `configure`/`make`; CMake is not a direct
 requirements, which belong in that platform's later build gate.
 
 Dynamic shared-library linking is approved for macOS, Linux, and Windows.
-Development environments need the matching FFmpeg 8.1.x headers, shared
+Development environments need matching FFmpeg 8.1.3 headers, shared
 libraries, and discovery metadata; runtime packages will carry the five core
 shared libraries (`avcodec`, `avformat`, `avutil`, `swresample`, `swscale`) and
 their transitive runtime libraries. Linux uses `.so` libraries and app-relative
 loader paths, macOS uses `.dylib` libraries and app-relative loader paths in
 the signed bundle, and Windows uses MSVC-compatible `.dll` libraries plus
-`.lib` import libraries at build time and app-side DLLs at runtime. Android is
-deferred to Phase 9 for a separate NDK/ABI and packaging decision. The hosted
-probe currently verifies Linux compile/link/load only; macOS and Windows
-package/link jobs remain future platform evidence.
+`.lib` import libraries at build time and app-side DLLs at runtime. Android
+uses the separate Phase 9 NDK/ABI gate. Checkpoint 7F1 must prove reproducible
+build/provision, `or_media` link/load, app-relative runtime discovery, and
+native Flutter texture-adapter build on macOS, Linux, and Windows.
 
 The baseline is built from the official [FFmpeg 8.1.3
 source](https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz) as shared libraries.
 The CI probe and release baseline disable autodetection and leave
 `--enable-gpl`, `--enable-nonfree`, and `--enable-version3` unset; do not enable
 the binding's corresponding `build-license-gpl`, `build-license-nonfree`, or
-`build-license-version3` features. Do not link GPL or nonfree external codec
+`build-license-version3` features. The approved build also does not enable any
+version3-only feature. Do not link GPL or nonfree external codec
 libraries such as libx264. FFmpeg's normal code is LGPL-2.1-or-later, but its
 optional GPL components change FFmpeg's license to GPL-2-or-later, and its
 nonfree configuration is not redistributable. The CI probe checks the linked
@@ -105,21 +106,30 @@ generated fixture; this does not select the product codec set.
 For each release, distribute the exact corresponding FFmpeg source and
 configuration, local patch diff, license notices, and a source download
 location; retain FFmpeg's library names and allow replacement of the dynamic
-libraries. Keep the FFmpeg shared libraries separate from the MIT application
-binary. Recheck the exact transitive native libraries and release configuration
+libraries. The future Developer Preview asset contract contains
+`FFMPEG-BUILD-INFO.txt` and `ffmpeg-8.1.3-source.tar.xz`; `SHA256SUMS.txt`
+covers every release asset. Build info records FFmpeg version, source identity,
+exact configure arguments, enabled libraries, enabled decoders/encoders/
+muxers/demuxers/protocols, compiler/toolchain identity, patch status, license
+posture, source URL, and runtime library names for each packaged target.
+Desktop application archives include their FFmpeg runtime libraries and
+required compliance notices, with source/configuration available in release
+assets. Keep the FFmpeg shared libraries separate from the MIT application
+binary. Recheck exact transitive native libraries and release configuration
 before distribution. The FFmpeg license does not resolve patents or codec
-royalties; review those when the shipped codec set is selected. The 7C0 checkpoint recorded this dependency strategy before production integration.
+royalties; review those when the shipped codec set is selected. The 7C0
+checkpoint recorded this dependency strategy before production integration.
 
 ### Checkpoint 7C linked software runtime
 
 `or_media` consumes the approved `ffmpeg-the-third` 6.0.0 binding with dynamic
-FFmpeg 8.1.x shared libraries and no GPL, GPLv3, nonfree, or version3 features.
+FFmpeg 8.1.3 shared libraries and no GPL, GPLv3, nonfree, or version3-only
+features.
 The Linux hosted build exposes the same prefix to production workspace checks
 and uses only the file protocol, Matroska demuxer, and LGPL FFV1/PCM S16LE
 decoders for a generated test fixture. This crate does not bundle FFmpeg or
-select the shipped product codec set. macOS/Windows production link packaging
-and Android NDK packaging remain separate platform evidence; Android stays
-deferred to Phase 9.
+select the shipped product codec set. The 7F1 platform gate owns desktop
+package/link/load proof; 9A0 owns Android NDK packaging evidence.
 
 FFmpeg's upstream states that most of the project is under LGPL version 2.1 or later, while optional GPL components can change the FFmpeg build's licensing posture. Enabled configure options and linked libraries matter. A packaged build must have a recorded configuration and source, dependency, codec, and redistribution review; do not infer the product's obligations from the name FFmpeg alone. [FFmpeg legal information](https://ffmpeg.org/legal.html)
 
@@ -145,7 +155,13 @@ These references do not pre-approve any model weights.
 
 ## Fonts, music, effects, and other assets
 
-Fonts, music, sound effects, ambience, templates, stickers, shapes, LUTs, and other shipped or community content need rights that cover the intended inclusion and redistribution. Track source, author, version, license, compatibility, dependencies, and checksum. Do not present example or unknown metadata as a verified license.
+Fonts, music, sound effects, ambience, templates, stickers, shapes, LUTs, and
+other shipped or community content need rights that cover the intended
+inclusion and redistribution. Track source, author, version, license,
+compatibility, dependencies, and checksum. Phase 8D's deterministic bundled
+font baseline is Inter 4.1 under SIL Open Font License 1.1; that checkpoint
+must pin the exact release/file and record hash, license file, attribution, and
+provenance. Do not present example or unknown metadata as a verified license.
 
 ## Secrets
 

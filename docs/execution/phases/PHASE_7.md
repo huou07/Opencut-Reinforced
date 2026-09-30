@@ -86,7 +86,7 @@ Affected invariants: `INV-MEDIA-001`, `INV-MEDIA-002`, `INV-HW-001`,
 ## 7C — Linked media runtime and software decode
 
 Consume the dependency, linking, packaging, and build strategy approved by 7C0.
-The approved strategy is ffmpeg-the-third 6.0.0 with FFmpeg 8.1.x, dynamically
+The approved strategy is ffmpeg-the-third 6.0.0 with FFmpeg 8.1.3, dynamically
 linked against shared libraries from an LGPL-only FFmpeg build. Do not
 reconsider or silently switch the dependency from scratch. If concrete
 compatibility, build, or licensing evidence proves the approved strategy
@@ -254,6 +254,45 @@ Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-PERSIST-001`, `INV-RENDER-001`, `INV-RENDER-002`, `INV-IPC-001`,
 `INV-DEP-001`.
 
+## 7F1 — Desktop media and viewer packaging gate
+
+Prove the already-approved Phase 7 software media and Flutter texture
+foundations on macOS, Linux, and Windows before 7F builds the product viewer.
+This is a native dependency and packaging gate only: it does not build a product
+viewer, add playback controls, or publish a Developer Preview.
+
+Use FFmpeg 8.1.3 with `ffmpeg-the-third` 6.0.0, dynamic/shared linking, and the
+approved LGPL-only configuration. Do not enable GPL, nonfree, or version3-only
+features; do not download unofficial prebuilt binaries. Software decode stays
+the authoritative correctness path. The 7D decision remains in force: hardware
+decode and VideoToolbox, NVDEC, D3D shared textures, Vulkan/DMABUF, or other
+zero-copy paths are optional future optimizations and are not approved by 7F1.
+
+On each supported desktop target, hosted verification must prove that the
+approved FFmpeg 8.1.3 shared libraries can be reproducibly built or provisioned,
+`or_media` links against and loads them, packaged applications locate their
+runtime libraries, and the native Flutter `ViewerTextureAdapter` builds.
+Record per-target FFmpeg source identity, configure arguments, enabled
+libraries and components, compiler/toolchain, patch status, license posture,
+source URL, and runtime library names. Preserve source and library provenance;
+do not claim runtime packaging from a link-only probe.
+
+The mandatory CPU presentation fallback is a bounded native pixel-buffer
+external texture using BGRA8888 with premultiplied alpha, unless concrete
+platform API evidence requires RGBA8888 for one adapter. The native callback
+acquires the latest valid leased frame, exposes it through Flutter's platform
+pixel-buffer interface, and retains/releases the `FrameLease` only through the
+platform release or unregistration lifecycle. Use a bounded latest-frame
+mailbox/in-flight set and reject stale generations. A small C ABI/native shim
+between Rust runtime code and the macOS, Windows, and Linux host adapters is
+acceptable and preferred. Do not assume Flutter's common desktop texture
+wrapper provides a production GPU-surface implementation on every platform.
+Shared GPU/native surfaces remain optional and may remain unverified.
+
+Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-UI-002`,
+`INV-MEDIA-001`, `INV-MEDIA-002`, `INV-RENDER-001`, `INV-RENDER-002`,
+`INV-RENDER-003`, `INV-JOB-001`, `INV-DEP-001`.
+
 ## 7F — Real viewer and preview transport
 
 Consume the timing and viewer contracts locked by 7F0. Connect the product
@@ -303,12 +342,19 @@ Run cross-platform/runtime conformance, failure injection, seek cancellation,
 resource-lifetime, offline-media, recovery, and stale-snapshot tests. Verify
 software fallback on supported paths, document native capability matrices, and
 make the Phase 7 viewer/playback path safe for the Developer Preview gate. The
-preview may include only capabilities delivered by Phase 7; it must not depend
+7H gate is the first Phase 7 Developer Preview gate. The preview may include
+only capabilities delivered by Phase 7; it must not depend
 on Phase 8 transforms, captions, effects, export, or other later work. A
-Developer Preview may be considered only when the checkpoint's hosted CI and
-release gates pass; this architecture lock does not publish one. Missing
-dedicated-hardware performance evidence remains `UNVERIFIED` and is not a
-hardening blocker.
+Because the product viewer depends on linked FFmpeg, the preview's desktop
+application archives include their matching FFmpeg runtime libraries and
+compliance notices. The preview satisfies the eleven-asset policy, including
+`FFMPEG-BUILD-INFO.txt` and `ffmpeg-8.1.3-source.tar.xz`; build-info fields and
+checksum coverage are locked in the release/security documentation and
+`EVIDENCE_POLICY.json`. If packaging requires it, 7H may update only the
+authorized Developer Preview workflow path in `PLAN.json`. A Developer Preview
+may be considered only when the checkpoint's hosted CI and release gates pass;
+this architecture lock does not publish one. Missing dedicated-hardware
+performance evidence remains `UNVERIFIED` and is not a hardening blocker.
 
 Affected invariants: all Phase 7 invariants listed above, especially
 `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`, `INV-RT-001`, `INV-RT-002`,

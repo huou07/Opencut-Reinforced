@@ -68,8 +68,9 @@ supervisor. Tokens never enter logs, subprocess arguments, or evidence.
 
 For checkpoints that require a preview, the supervisor verifies the existing
 Developer Preview workflow, exact `dev-<first-12-of-SHA>` tag target,
-prerelease flag, successful publish job, all seven current packages,
-`SHA256SUMS.txt`, and `BUILD-INFO.txt`. It may dispatch that existing workflow
+prerelease flag, successful publish job, all seven package archives,
+`SHA256SUMS.txt`, `BUILD-INFO.txt`, `FFMPEG-BUILD-INFO.txt`, and
+`ffmpeg-8.1.3-source.tar.xz` under the future eleven-asset contract. It may dispatch that existing workflow
 only with an appropriate authenticated token; it never publishes a release
 directly.
 

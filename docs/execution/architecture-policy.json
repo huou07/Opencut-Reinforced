@@ -34,6 +34,8 @@
     "flutter",
     "dart",
     "cpal",
+    "cosmic-text",
+    "cosmic_text",
     "rodio",
     "alsa",
     "coreaudio",
@@ -42,7 +44,9 @@
     "browser",
     "node",
     "remotion",
-    "motion-canvas"
+    "motion-canvas",
+    "wasmi",
+    "whisper"
   ],
   "required_execution_docs": [
     "docs/execution/README.md",

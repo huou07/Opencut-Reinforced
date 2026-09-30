@@ -27,7 +27,7 @@ The machine-readable implementation order is [docs/execution/README.md](executio
 
 ## Project and workflow
 
-**MVP FOUNDATION:** create and open projects with initial project options; recent project access; basic autosave, crash-safe atomic save, and crash recovery; clear saved or unsaved state; reliable save and reopen.
+**MVP FOUNDATION:** create and open projects with initial project options; recent project access; periodic recovery checkpoints; explicit crash-safe atomic Save and recovery; clear saved or unsaved state; reliable save and reopen. Autosave updates a recovery checkpoint and never silently overwrites the canonical project file.
 
 **PLANNED:** pinned and archived project organization; full project settings; manual snapshots; before-agent and before-template snapshots; version history; backup; project migrations; collect project and consolidate media; relink and replace media; offline-media state; proxy and optimized media; disposable cache; workspace presets; Simple and Advanced workspace modes.
 
@@ -50,7 +50,7 @@ semantics and migration rules are approved.
 
 ## Viewer
 
-**MVP FOUNDATION:** fit-to-view, 25%, 50%, 100%, and 200% zoom; playback; frame stepping; loop.
+**MVP FOUNDATION:** fit-to-view, 25%, 50%, 100%, and 200% zoom; playback and frame stepping on the explicit sequence frame lattice. Playback does not loop.
 
 **PLANNED:** fullscreen preview; cinema or viewer-focus mode; safe areas, grid, guides, rulers, bounding boxes, and transform handles.
 
@@ -67,17 +67,23 @@ The optimized Desktop MVP milestone is represented by the execution graph from
   paths, audio clock, viewer transport, playback, scrubbing, frame step, and
   performance/hardening gates. 7F0 locks the explicit sequence rate, exact
   frame lattice, and shared viewer presentation contract without adding viewer
-  UI or playback controls.
-- **Project/timeline gate (8A):** remaining project and timeline foundation
-  work selected by the execution plan.
+  UI or playback controls. 7F1 proves desktop FFmpeg runtime packaging and the
+  native Flutter pixel-buffer texture adapter on macOS, Linux, and Windows
+  before 7F builds the product viewer.
+- **Project/timeline gate (8A):** one schema-v6 typed timeline model gate for
+  Video, Audio, Text, and Caption content, typed track state, and the project
+  settings consumed by 8B–8E.
 - **Timeline usability (8B):** selection, duplicate, track enabled/locked/solo,
   timeline zoom, direct media-to-timeline insertion, and bounded viewport input.
 - **Video (8C):** typed transform, crop, and opacity.
-- **Text (8D):** basic text and manual captions. Automatic captions are Phase
-  10, not Desktop MVP.
-- **Audio/effects (8E):** basic gain, pan, fades, transitions, and effects.
-- **Release behavior (8F):** export, autosave, recovery, save/reopen, and
-  preview/export hardening.
+- **Text (8D):** basic text and manual captions through cosmic-text 0.19.0
+  using the bundled deterministic Inter 4.1 font identity. Automatic captions
+  are Phase 10, not Desktop MVP.
+- **Audio/effects (8E):** basic gain, pan, fades, transitions, and closed typed
+  effects; desktop output uses cpal 0.18.1 inside `or_audio`.
+- **Release behavior (8F):** Matroska + FFV1 + PCM S16LE software export,
+  recovery-checkpoint autosave, explicit Save/reopen, and preview/export
+  hardening.
 
 Linked clips, grouping, nested timelines, multicamera, and other complex
 relationship semantics remain advanced Phase 13 scope unless re-promoted by a
@@ -93,7 +99,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Text
 
-**MVP FOUNDATION:** add and edit basic text and title clips on the timeline with a minimal set of formatting controls.
+**MVP FOUNDATION:** add and edit basic text and title clips on the timeline with a minimal set of formatting controls. Export geometry uses the bundled Inter 4.1 baseline through the shared cosmic-text 0.19.0 shaping/render path, independent of host-installed fonts.
 
 **PLANNED:** body text, lower thirds, credits, callouts; font, weight, size, alignment, letter spacing, line height, fill, stroke, shadow, and background controls; text templates, saved styles, font library, and in/out/loop animation.
 
@@ -113,7 +119,7 @@ The transcript and caption workflow includes searching, replacing, jumping from 
 
 ## Audio
 
-**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, mute, solo, and fades.
+**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, mute, solo, and fades. Desktop device output uses cpal 0.18.1 through `or_audio`; its callback consumes bounded prepared buffers and does not mutate projects or take project locks.
 
 **PLANNED:** mixer; normalization and loudness controls; EQ; compressor; limiter; noise reduction; voice enhancement and isolation; automatic ducking; beat detection; music, sound-effect, and ambience libraries; audio stems.
 
@@ -180,6 +186,12 @@ reviewable proposals, analyses, or assets with model manifests and provenance;
 only normal validated commands apply accepted results. Stored credentials never
 enter project, CLI, or agent output.
 
+Phase 10A owns one typed provider manager and a bounded local sidecar protocol
+for later AI work. Its model manifest foundation is separate from
+`ProjectDocument`; provider or model absence is a normal `Unavailable`
+capability, and no roadmap checkpoint requires cloud credentials or bundled
+model weights.
+
 **FUTURE:** semantic media search.
 
 AI output is untrusted data. The user can inspect and edit it, and any proposed project mutation goes through domain validation and permission checks.
@@ -218,7 +230,10 @@ CLI parity means semantic/domain operation parity: if an operation changes or me
 
 **PLANNED:** installed and available models, updates, and storage use; model metadata for ID, version, task, source, hash, size, runtime, hardware needs, language, license, and install state; download, pause, resume, verify, update, and remove.
 
-Weights are stored outside the Git repository and are not bundled by default.
+10A defines the checksum-verified artifact manifest and managed storage
+boundary; 10H owns the user-facing manager. Weights are stored outside the Git
+repository and are not bundled by default. A missing model is reported as
+typed `Unavailable`.
 
 ## Local and cloud providers
 
@@ -239,19 +254,22 @@ and optional procedural WebMotion extensions. Begin with a sandbox and explicit
 capability permissions where feasible. Native and OpenFX compatibility is a
 later, higher-trust evaluation, not an unrestricted default. WebMotion is not
 canonical MotionScene and may run only in an explicit isolated, bounded
-sidecar; it is never the normal renderer or project-open path.
+sidecar; it is never the normal renderer or project-open path. Phase 16B uses
+wasmi 1.1.0 in the extension runtime boundary without default WASI; its fuel,
+store, and outer host resource limits are explicit. Native extensions remain
+separately gated.
 
 ## Export
 
-**MVP FOUNDATION:** usable video export through a background job with presets, queue, progress, and cancellation; resolution, frame rate, bitrate, audio, and subtitle settings.
+**MVP FOUNDATION:** usable software video export through a background job with progress and cancellation. The mandatory correctness profile is Matroska + FFV1 video + PCM S16LE audio through linked software FFmpeg. Other delivery and hardware profiles are optional and require separate evidence.
 
-**PLANNED:** MP4, MOV, and WebM containers; candidate codecs H.264, H.265, AV1, and VP9 only after legal, platform, and build-configuration review; hardware encoding where supported.
+**PLANNED (optional delivery profiles):** MP4, MOV, and WebM containers; codecs H.264, H.265, AV1, and VP9 only after legal, platform, and build-configuration review; hardware encoding where supported. Desktop MVP correctness uses the required software Matroska + FFV1 + PCM S16LE profile.
 
 ## Interchange
 
 **PLANNED:** SRT, VTT, ASS, audio stems, and OpenTimelineIO import or export as appropriate.
 
-OpenTimelineIO is an interchange format and API for editorial cut information, not the native OR project format or a media container.
+OpenTimelineIO is a bounded Rust/serde JSON interchange adapter over a documented subset, not the native OR project format or a media container. Unsupported content receives explicit diagnostics.
 
 **FUTURE:** EDL and XML workflows.
 
@@ -269,7 +287,7 @@ OpenTimelineIO is an interchange format and API for editorial cut information, n
 
 **MVP FOUNDATION:** desktop release targets are macOS, Windows, and Linux.
 
-**PLANNED:** Android with the same project and Rust core, touch-native Flutter presentation, Android storage integration, and resource-aware proxy policy. Keep preview, transport, and timeline accessible while editor tools use mobile sheets or panels.
+**PLANNED:** Android with the same project and Rust core, touch-native Flutter presentation, and resource-aware editing. 9A0 proves FFmpeg native packaging and bridge loading for `arm64-v8a`, `armeabi-v7a`, and `x86_64`; 9A uses typed SAF source references and an app-private canonical working copy. Keep preview, transport, and timeline accessible while editor tools use mobile sheets or panels.
 
 iOS and web are not current release targets.
 

@@ -73,6 +73,12 @@ adapters. Platform handles never enter domain state.
 Native GPU and resource handles are never serialized into project, IPC, or
 cache identity.
 
+### INV-TEXT-001 — Deterministic text has an explicit font identity
+
+Text render and export geometry must not implicitly depend on whichever system
+font happens to be installed. Persistent text references a stable, explicit
+font identity; the rendering path resolves that identity deterministically.
+
 ### INV-MOTION-001 — Canonical motion is declarative
 
 Canonical MotionScene, template, and project data contains no executable
@@ -98,6 +104,12 @@ output enters OR only through bounded derived output/media paths.
 MotionScene validation, inspection, preview, rendering, materialization, and
 CLI usage work without an AI provider. External agents and built-in AI are
 alternative producers only.
+
+### INV-EXT-001 — Sandboxed extensions have explicit bounded authority
+
+Extension execution receives only explicit capabilities and bounded resources.
+Default authority includes no filesystem, environment, credential, or network
+access; project changes use normal validated commands.
 
 ### INV-HW-001 — Capability selection is centralized
 
@@ -132,11 +144,24 @@ never directly mutate `ProjectDocument`.
 
 Applying AI output uses normal application validation and revision preconditions.
 
+### INV-AI-004 — Provider and model absence is valid
+
+Provider/model absence is a valid capability state. No provider-independent
+architecture checkpoint requires cloud credentials or an unlicensed model to
+complete.
+
 ## Persistence, IPC, security, and dependencies
 
 ### INV-PERSIST-001 — Migrations are explicit and tested
 
 Project schema migrations are explicit, ordered, strict, and regression-tested.
+
+### INV-PERSIST-002 — External storage capabilities are not filesystem paths
+
+External storage identities such as Android SAF URIs are represented by strict
+typed references, not fake filesystem paths. Persistable permission grants,
+file descriptors, and platform/native handles remain runtime/application
+metadata and are never serialized into `ProjectDocument`.
 
 ### INV-IPC-001 — IPC is semantic control transport
 

@@ -269,10 +269,16 @@ Locked contract: [PHASE_7.md](execution/phases/PHASE_7.md).
   bounded queues.
 - **7D:** measured hardware decode and native-frame interop with fallback.
 - **7E:** `or_audio`, master clock, bounded buffers, and A/V synchronization.
+- **7F0:** explicit sequence-rate persistence, exact frame lattice, and shared
+  viewer transport/lease contract.
+- **7F1:** prove the approved FFmpeg shared-library package/load path and the
+  native Flutter pixel-buffer texture adapter across macOS, Linux, and Windows;
+  no product viewer or hardware decode.
 - **7F:** viewer/external texture, play/pause, seek, scrubbing, playhead, ruler,
   and frame step.
 - **7G:** performance metrics and budgets.
-- **7H:** conformance, failure injection, and runtime hardening.
+- **7H:** conformance, failure injection, runtime hardening, and the first
+  Phase 7 Developer Preview gate.
 
 - wgpu and render graph foundation
 - viewer
@@ -290,13 +296,17 @@ Before the hardware/media pipeline architecture is considered settled, complete 
 
 Locked contract: [PHASE_8.md](execution/phases/PHASE_8.md).
 
-- **8A:** typed sequence settings and model/contract gate.
+- **8A:** one schema-v6 project-model gate for typed Video/Audio/Text/Caption
+  timeline content, track state, and the settings required by 8B–8E.
 - **8B:** selection, duplicate, enabled/locked/solo tracks, zoom, direct media
   insertion, and bounded timeline usability.
 - **8C:** transform, crop, and opacity.
-- **8D:** basic text and manual captions.
-- **8E:** gain, pan, fades, basic transitions, and effects.
-- **8F:** export, autosave, recovery, save/reopen, and MVP hardening.
+- **8D:** basic text and manual captions with cosmic-text 0.19.0 and the
+  bundled Inter 4.1 deterministic font identity; workspace MSRV becomes 1.89.
+- **8E:** gain, pan, fades, basic transitions, and effects; cpal 0.18.1 belongs
+  in `or_audio` for device output.
+- **8F:** Matroska + FFV1 + PCM S16LE software export, recovery-checkpoint
+  autosave, explicit Save/reopen, and MVP hardening.
 
 - basic text
 - basic audio
@@ -314,9 +324,11 @@ AI generation and community features are not MVP requirements. AI features may b
 ### Phase 9 — Android
 **Status: PLANNED**
 
-Locked contract: [PHASE_9.md](execution/phases/PHASE_9.md). Checkpoints are 9A
-(SAF and I/O), 9B (MediaCodec/native buffer/Vulkan/wgpu surface), 9C (mobile
-UX), 9D (export), and 9E (resource/device hardening).
+Locked contract: [PHASE_9.md](execution/phases/PHASE_9.md). Checkpoints are
+9A0 (Android FFmpeg/shared-library, Rust cross-link, APK, bridge, and hosted
+x86_64 emulator gate), 9A (typed SAF source and app-private durability/I/O),
+9B (optional hardware/media surfaces with software fallback), 9C (mobile UX),
+9D (software correctness export), and 9E (resource/device hardening).
 
 Use the same project and core model with mobile-native UI, Android storage integration, and resource-aware editing, playback, and export.
 
@@ -324,7 +336,7 @@ Use the same project and core model with mobile-native UI, Android storage integ
 **Status: PLANNED**
 
 Locked contract: [PHASE_10.md](execution/phases/PHASE_10.md). Checkpoints are
-10A (AI/provider foundation), 10B (transcription), 10C (caption proposal/apply),
+10A (complete provider, local sidecar V1, and model-manifest foundation), 10B (transcription), 10C (caption proposal/apply),
 10D (transcript editing), 10E (translation), 10F (scene/silence/filler), 10G
 (EditPlan/dry-run/diff), and 10H (permissions/model manager).
 
@@ -356,9 +368,12 @@ Add voiceover, subtitle-to-speech, translated dubbing, speaker mapping, pronunci
 ### Phase 13 — Advanced editing, color, and audio
 **Status: PLANNED**
 
-Locked contract: [PHASE_13.md](execution/phases/PHASE_13.md): 13A keyframes,
-13B speed, 13C transforms/color, 13D LUTs, 13E audio/mixer, 13F effects, 13G
-linked/group semantics, and 13H nested timelines/multicamera.
+Locked contract: [PHASE_13.md](execution/phases/PHASE_13.md): 13A typed
+keyframes, 13B speed/rate mapping, 13C advanced transforms/color pipeline,
+13D LUTs, 13E audio/mixer, 13F effects, 13G linked/group semantics, and 13H
+nested timelines/multicamera. The normal color path is SDR Rec.709/sRGB with
+linear-light working space and premultiplied-alpha compositing; HDR and
+wide-gamut authoring remain deferred.
 
 Evaluate and add advanced keyframe, speed, color, effects, transition, audio, and multicamera capabilities as scoped.
 
@@ -384,11 +399,13 @@ Start with a validated static registry and reviewable publishing. An OR-hosted b
 **Status: PLANNED**
 
 Locked contract: [PHASE_16.md](execution/phases/PHASE_16.md): 16A plugin
-security/capabilities, 16B sandbox/declarative-first, 16C permissions/resources/
-network, 16D versioned APIs, 16E OTIO/EDL/XML plus Lottie/dotLottie bounded
-interchange evaluation, 16F optional high-trust OpenFX/native evaluation, and
-16G optional sandboxed procedural WebMotion. Arbitrary native loading and
-untrusted procedural execution remain prohibited by default.
+security/capabilities, 16B wasmi 1.1.0 sandbox/declarative-first, 16C
+permissions/resources/network, 16D versioned APIs, 16E direct bounded Rust/serde
+OTIO plus EDL/XML and Lottie 1.0/dotLottie 2.0 interchange, 16F optional
+high-trust OpenFX/native evaluation, and 16G optional sandboxed procedural
+WebMotion. `OPENFX_NATIVE_TIER = NOT_APPROVED` and `WEBMOTION = UNAVAILABLE`
+are valid evidence-backed outcomes. Arbitrary native loading and untrusted
+procedural execution remain prohibited by default.
 
 Revisit sandboxed plugin capabilities, native or OpenFX compatibility, advanced
 EDL/XML and Lottie/dotLottie interchange, and an explicit least-privilege

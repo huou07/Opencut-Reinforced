@@ -135,32 +135,44 @@ The decoder boundary must support software decode and hardware-surface decode, w
 
 GPU work is a candidate for scaling, rotation, crop, color conversion where appropriate, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and unsuitable operations remain CPU/domain responsibilities. Profile the workload; not every operation belongs on the GPU. Preview can prioritize latency with lower resolution, proxies, reduced-quality effects, and bounded work, while export can prioritize quality and throughput. Both preserve the same timing, transform, effect, compositing, text, keyframe, and color intent.
 
-Audio decoding belongs in the media layer. `or_audio` owns the device-neutral bounded output buffer, exact audio master clock, and video pacing decisions. Clock messages carry a `RenderSnapshot`; synchronization rejects a different project or revision while allowing audio and video to request different time ranges. The callback consumes preallocated samples without waiting or locking; underruns emit silence and still advance device time. A concrete hardware output backend remains unselected until its platform, build, and license gate is completed. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
+Audio decoding belongs in the media layer. `or_audio` owns the device-neutral bounded output buffer, exact audio master clock, and video pacing decisions. Clock messages carry a `RenderSnapshot`; synchronization rejects a different project or revision while allowing audio and video to request different time ranges. The callback consumes preallocated samples without waiting or locking; underruns emit silence and still advance device time. Phase 8E uses `cpal` 0.18.1 inside `or_audio`, never as a direct `or_core` dependency. Core gain, pan, fades, and later DSP belong in the audio engine rather than Flutter widgets.
 
 ### Preview bridge
 
-Phase 7F0 locks a shared viewer boundary for all platforms. `or_render`/wgpu
+Phase 7F0 locks a shared viewer boundary for all platforms; 7F1 proves its
+desktop native adapter and FFmpeg package/link/load path on macOS, Linux, and
+Windows. `or_render`/wgpu
 produces rendered output; `or_runtime` supplies immutable snapshot identity,
 frame metadata, a bounded latest-frame mailbox, and `FrameLease` lifetime,
 cancellation, and release behavior. A narrow native platform adapter owns
 Flutter external-texture registration, GPU resources, synchronization, and
 texture lifetime. Flutter sends playback, seek, scrub, and frame-step controls
 through the app/bridge path and receives structured transport state plus an
-opaque registered texture identifier. A bounded pixel-buffer presentation
-fallback is required on supported desktop targets; shared GPU surfaces remain
-an optional adapter fast path.
+opaque registered texture identifier. A bounded BGRA8888 pixel-buffer
+presentation path with premultiplied alpha is required on supported desktop
+targets unless platform API evidence requires RGBA8888 for an adapter. Shared
+GPU surfaces remain an optional fast path.
 
 The Flutter/Dart and IPC paths must never carry per-frame pixels, full-rate
 frame bytes, or raw OS/GPU handles. Retain each `FrameLease` until the native
 release callback or completion fence signals. The platform adapter uses a
 bounded latest-frame mailbox/in-flight set and rejects frames from stale
-generations or project revisions. This contract does not implement the product
-viewer, playback controls, or native texture adapters; those remain future 7F
-work.
+generations or project revisions. 7F1 proves the adapter builds and is
+packaged; the product viewer and playback behavior remain future 7F work.
 
 ### Project, cache, and jobs
 
 The native project is a versioned, structured `.orproj` document with stable IDs, external media references, and migrations. Current schema v5 persists the ordered library of `MediaItem` values, an ordered `ProjectTimeline` of tracks, clips, and bounded global markers, and a required nullable exact sequence frame rate. Migrations from v1–v4 leave the rate unset; clean open preserves disk bytes and explicit save converts to v5 without a conversion-only revision increment. V2 media entries retain UUIDv4 `MediaId`, validated local `file:` URIs (maximum 8,192 bytes), and bounded `MediaMetadata`. Media bytes do not enter the project. Project data is canonical; thumbnails, waveforms, proxies, render intermediates, and indexes are disposable cache data. Phase 5C provides the thumbnail and waveform namespaces; Phase 5D adds bounded source-fingerprint v1, fixed generation profiles, and cached PNG previews for the Media panel. Phase 5E adds a separate disposable SQLite index v1, reconciles recognized Phase 5D files and repairs stale or drifted rows, and applies persistent sequence-based LRU eviction only when needed to satisfy the global artifact budget. The index stores only kind, opaque cache key, byte size, and access sequence; it stores no source path or project identity and does not count against the artifact budget. SQLite metadata and filesystem changes are not one atomic transaction; startup reconciliation and targeted cache repair rebuild or correct mismatches. V1 loading preserves identity, revision, and name and supplies empty media and timeline state; v2 and v3 loading preserve the existing project state and supply empty marker state. V2 rejects duplicate media IDs and duplicate source URIs and preserves insertion order. Cache data can be regenerated and is never required for project correctness.
+
+Phase 8A owns the next model transition from the verified schema-v5 baseline
+and may increment once. It keeps one Rust-owned timeline with closed Video,
+Audio, Text, and Caption track kinds and closed Media, Text, and Caption clip
+content. Stable clip IDs, exact start/duration, and lossless media source ranges
+remain canonical; text and caption clips have no fake media IDs or ranges.
+Typed track flags, transforms, crop, opacity, text formatting, audio controls,
+and basic transition/effect references are part of that model. UI selection and
+viewport state remain presentation-only. Playback speed remains 1x through
+Desktop MVP; Phase 13B owns speed mapping.
 
 Phase 5A defines `JobId`, `JobKind::MediaProbe`, and the `Queued`, `Running`, `Succeeded`, `Failed`, and `Cancelled` states as a small shared job boundary. Public media probing still runs synchronously. Phase 5C adds a bounded `JobManager` over Rust standard-library threads: callers pass an explicit non-zero worker, queue, and record configuration; the manager creates exactly that many worker threads and never one per job; submission is non-blocking and returns a structured backpressure error when the bounded pending queue is full; tracked records are bounded and only terminal records are reclaimed oldest-first by a manager-local sequence; cancellation is cooperative for queued and running jobs; a panicking task is contained and cannot kill the pool; and shutdown stops submissions, skips queued work, signals running work, and joins workers. Phase 5D adds concrete thumbnail and waveform job kinds. A `MediaArtifactService` uses `JobManagerConfig(2, 32, 128)` and `CacheStoreConfig(8 MiB, 256 MiB)` in the desktop bridge. It returns `Ready`, `Queued`, `Running`, `NotApplicable`, or `Failed` request states; queue/record pressure is surfaced, identical in-flight cache keys share work, terminal artifact events carry an independent monotonic sequence, and cancellation/close kills and reaps the child process before workers join. The service does not mutate project state. It is not a realtime media scheduler and targets no playback or per-frame work. There is still no job progress API, job persistence, or priority system. Playback-critical decode, audio, and render work must eventually take priority over opportunistic work such as thumbnail and waveform generation, proxy creation, and AI analysis. Workers do not mutate canonical project state; results that affect a project must return through validated application commands.
 
@@ -168,7 +180,7 @@ Phase 5A defines `JobId`, `JobKind::MediaProbe`, and the `Queued`, `Running`, `S
 
 Phase 4F implements protocol v1 over Unix-domain sockets on macOS/Linux and Windows named pipes. Requests use a four-byte big-endian length prefix with a 1 MiB limit, strict versioned JSON envelopes, a request ID, and a random per-server authentication token in an explicit endpoint descriptor. Each connection carries one request. Unix runtime directories, sockets, and descriptors have owner-only permissions. The Windows runtime directory, descriptor file, and named pipe use protected owner-only DACLs, and the pipe rejects remote clients. There is no TCP, HTTP, WebSocket, or network fallback. The server exposes describe, shared application requests, explicit save, and guarded shutdown; it does not accept arbitrary paths or shell commands. This transport is intended for local same-user automation and does not establish a boundary against malicious code running as that same OS user.
 
-Both the Flutter application and developer/headless `or session serve` can host a session. The app's opaque bridge handle and IPC worker share exactly one `ProjectFileSession`; protocol v1 is unchanged. On macOS the app places its private runtime directory in the sandbox-provided temporary directory and the packaged app has the local server entitlement; the application code still binds only a Unix-domain socket. Android project files remain unavailable until a platform storage abstraction uses the Storage Access Framework; content URIs are never passed to Rust path APIs.
+Both the Flutter application and developer/headless `or session serve` can host a session. The app's opaque bridge handle and IPC worker share exactly one `ProjectFileSession`; protocol v1 is unchanged. On macOS the app places its private runtime directory in the sandbox-provided temporary directory and the packaged app has the local server entitlement; the application code still binds only a Unix-domain socket. Android project New/Open is currently unavailable. Phase 9A owns typed `FileUri` and `AndroidSafDocumentUri` sources, an app-private canonical working copy, explicit SAF synchronization, and runtime-only seekable media capabilities; a SAF URI is never converted into a filesystem path. Phase 9A0 proves software FFmpeg 8.1.3 package/link/load support for `arm64-v8a`, `armeabi-v7a`, and `x86_64`, including the hosted x86_64 emulator path.
 
 The domain model should avoid platform lock-in while matching current product targets: macOS, Windows, Linux, and Android. iOS and web are not current release targets.
 
@@ -181,11 +193,17 @@ OS secure storage is the intended home for provider credentials. The application
 Local and optional cloud AI providers, declarative templates, themes, and
 MotionScenes, a GitHub-first static community registry, and sandboxed plugins
 are future extensions. Early community distribution does not require an
-OR-hosted backend. A WASM/WASI-style plugin sandbox is only a candidate until
-plugin work starts and security research is refreshed. Native and OpenFX
-compatibility is later and higher trust. Arbitrary HTML/CSS/JS/Canvas/WebGL/
-WebGPU motion belongs only to the future explicit, isolated, bounded WebMotion
-sidecar gate; it is not canonical project data or the default renderer.
+OR-hosted backend. Phase 10A freezes the provider manager, bounded local
+sidecar protocol, model-manifest contract, and typed Unavailable outcome; no
+model weights or cloud credentials are required for roadmap completion. Phase
+13C freezes SDR Rec.709/sRGB delivery assumptions, linear-light working space,
+and premultiplied-alpha compositing; HDR remains deferred. Phase 16B uses
+`wasmi` 1.1.0 in a dedicated capability-limited runtime without default WASI;
+Phase 16E uses bounded Rust/serde OTIO JSON plus Lottie 1.0 and dotLottie 2.0
+interchange. Native and OpenFX compatibility is later and higher trust.
+Arbitrary HTML/CSS/JS/Canvas/WebGL/WebGPU motion belongs only to the future
+explicit, isolated, bounded WebMotion sidecar gate; it is not canonical project
+data or the default renderer.
 
 ## Architecture execution lock
 

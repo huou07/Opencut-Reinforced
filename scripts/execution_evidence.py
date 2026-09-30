@@ -187,7 +187,7 @@ def validate_policy(policy: Mapping[str, Any]) -> None:
         "allowed_events": ["workflow_dispatch", "schedule"],
         "publish_job": "Verify and publish prerelease",
         "tag_template": "dev-{sha12}",
-        "required_asset_count": 9,
+        "required_asset_count": 11,
         "required_assets": [
             "opencut-reinforced-macos-debug.zip",
             "opencut-reinforced-windows-x64-debug.zip",
@@ -198,6 +198,8 @@ def validate_policy(policy: Mapping[str, Any]) -> None:
             "opencut-reinforced-cli-linux-x64.tar.gz",
             "SHA256SUMS.txt",
             "BUILD-INFO.txt",
+            "FFMPEG-BUILD-INFO.txt",
+            "ffmpeg-8.1.3-source.tar.xz",
         ],
         "checksums_asset": "SHA256SUMS.txt",
         "build_info_asset": "BUILD-INFO.txt",

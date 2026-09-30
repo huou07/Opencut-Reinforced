@@ -64,8 +64,9 @@ producers all target the same validator and evaluator.
   Charts and diagrams start as templates composed from primitives rather than
   an open-ended chart-node language.
 - Font references are typed and reproducible through an asset checksum and
-  provenance, or through a documented bundled fallback. Missing fonts produce
-  diagnostics; rendering never silently downloads fonts.
+  provenance. The deterministic baseline is the Phase 8 Inter 4.1 font identity
+  rendered through cosmic-text 0.19.0; missing fonts produce diagnostics and
+  rendering never silently downloads fonts or depends on host font discovery.
 - V1 should avoid randomness. Any later randomness must use an explicit seed
   derived deterministically from scene/source identity and never wall-clock or
   system-random state.
@@ -102,8 +103,9 @@ MotionScene
 Preview and materialization share the same semantic evaluator. The design does
 not create a second compositor, browser-based default renderer, or WebCodecs
 default encoder. Materialized video uses the normal OR media/export encoding
-boundary that exists when Phase 11 is implemented, including FFmpeg or another
-approved OR encoder after its ordinary licensing and platform gates.
+boundary. Its mandatory software correctness profile, owned by Phase 8F, is
+Matroska + FFV1 + PCM S16LE through linked FFmpeg; other delivery or hardware
+profiles are optional and require their own evidence.
 
 Phase 11 is materialization-first. A scene is reviewed and rendered into a
 persistent generated media asset, registered through normal media commands, and
@@ -178,13 +180,13 @@ authority.
   canonical runtime or an OR dependency.
 - Motion Canvas is a useful permissive code-animation reference, not the
   canonical runtime or an OR dependency.
-- Lottie and dotLottie are future bounded interchange candidates, not the
-  canonical MotionScene format.
+- Lottie JSON 1.0 and dotLottie 2.0 are future bounded interchange formats, not
+  the canonical MotionScene format.
 - Chromium/headless browsers are optional future procedural runtimes only, not
   the normal preview/export path.
 - WebCodecs is not OR's canonical encoding authority.
-- FFmpeg or another approved OR encoder remains the normal materialization and
-  export path after its ordinary gates.
+- The approved linked FFmpeg path remains the normal materialization and export
+  path after its Phase 7/8 platform and licensing gates.
 
 MotionScene semantics are independent of Metal, CUDA, MLX, Core ML, NVIDIA,
 Android acceleration, and cloud AI. Hardware may accelerate rendering,

@@ -21,6 +21,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import agent_supervisor  # noqa: E402
+import check_architecture_policy  # noqa: E402
 import execution_evidence  # noqa: E402
 import execution_plan  # noqa: E402
 
@@ -185,8 +186,6 @@ def make_repair_history(
         },
         "execution infrastructure adds state",
     )
-    baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
-    failed_source = "954fc0215f06bbf684111fb497b35d0d06b01989"
     tracked = (
         "docs/execution/PLAN.json",
         "docs/execution/STATE.json",
@@ -202,52 +201,46 @@ def make_repair_history(
         "crates/or_core/src/project_recovery.rs",
         "crates/or_ipc/src/protocol.rs",
     )
-    base_files = {path: git_blob_from_main(baseline, path) for path in tracked}
-    base_files["docs/execution/phases/PHASE_8.md"] = b"future phase 8\n"
+    base_files = {
+        path: (REPO_ROOT / path).read_bytes()
+        for path in tracked
+    }
+    base_files["docs/execution/phases/PHASE_8.md"] = (
+        REPO_ROOT / "docs/execution/phases/PHASE_8.md"
+    ).read_bytes()
     if original_changes:
         base_files.update(original_changes)
     if previous_contract_active:
         previous_files = dict(base_files)
         previous_plan = json.loads(previous_files["docs/execution/PLAN.json"])
-        execution_plan.checkpoint_for_id(previous_plan, "7F0")["title"] = "Earlier 7F0 contract"
+        execution_plan.checkpoint_for_id(previous_plan, "7F1")["title"] = "Earlier 7F1 contract"
         previous_files["docs/execution/PLAN.json"] = json.dumps(previous_plan, indent=2) + "\n"
         commit_test_files(root, previous_files, "trusted maintenance changes active contract")
-    commit_test_files(root, base_files, "final 7F0 state baseline")
+    commit_test_files(root, base_files, "final 7F1 state baseline")
 
-    failed_files = {
-        path: git_blob_from_main(failed_source, path)
-        for path in (
-            "crates/or_core/src/project_document.rs",
-            "crates/or_core/src/project_recovery.rs",
-            "crates/or_ipc/src/protocol.rs",
-        )
+    platform_workflow = ".github/workflows/platform-verification.yml"
+    failed_files: dict[str, bytes | str] = {
+        platform_workflow: (REPO_ROOT / platform_workflow).read_bytes()
+        + b"\n# failed gate fixture\n"
     }
     if failed_changes:
         failed_files.update(failed_changes)
-    failed_sha = commit_test_files(root, failed_files, "feat: original 7F0 implementation")
+    failed_sha = commit_test_files(root, failed_files, "ci: original 7F1 gate attempt")
 
-    plan = json.loads((REPO_ROOT / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
-    state = json.loads((root / "docs/execution/STATE.json").read_text(encoding="utf-8"))
-    state["verified_contract_versions"] = contract_versions(project=4)
+    plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
+    future_checkpoint = execution_plan.checkpoint_for_id(plan, "16G")
+    future_checkpoint["dependency_change_policy"] += " Future gate detail reviewed."
+    state_bytes = (root / "docs/execution/STATE.json").read_bytes()
     maintenance_files: dict[str, bytes | str] = {
         "docs/execution/PLAN.json": json.dumps(plan, indent=2) + "\n",
-        "docs/execution/STATE.json": json.dumps(state, indent=2) + "\n",
-        "docs/execution/architecture-policy.json": (
-            REPO_ROOT / "docs/execution/architecture-policy.json"
-        ).read_bytes(),
-        "docs/execution/AGENT_EXECUTION.md": (
-            REPO_ROOT / "docs/execution/AGENT_EXECUTION.md"
-        ).read_bytes(),
-        "docs/execution/phases/PHASE_16.md": (
-            REPO_ROOT / "docs/execution/phases/PHASE_16.md"
-        ).read_bytes(),
+        "docs/execution/STATE.json": state_bytes,
         "docs/execution/phases/PHASE_8.md": b"future phase 8 reviewed\n",
         "scripts/execution_plan.py": (REPO_ROOT / "scripts/execution_plan.py").read_bytes(),
         "scripts/test_execution_infra.py": (
             REPO_ROOT / "scripts/test_execution_infra.py"
         ).read_bytes(),
     }
-    head = commit_test_files(root, maintenance_files, "fix: trusted control-plane maintenance")
+    head = commit_test_files(root, maintenance_files, "fix: trusted future control-plane maintenance")
     return failed_sha, head
 
 
@@ -559,33 +552,46 @@ class ExecutionPlanTests(unittest.TestCase):
         with self.assertRaises(execution_plan.PlanError):
             execution_plan.validate_plan(plan, state, REPO_ROOT)
 
-    def test_repaired_playback_graph_is_next_and_valid(self) -> None:
+    def test_post_7f0_architecture_gate_graph_is_next_and_valid(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         resolution = execution_plan.resolve_goal(
-            plan, state, "checkpoint:7F0", REPO_ROOT
+            plan, state, "checkpoint:7F1", REPO_ROOT
         )
-        self.assertEqual(resolution["checkpoint_id"], "7F0")
-        self.assertEqual(state["current_next"], "7F0")
+        self.assertEqual(resolution["checkpoint_id"], "7F1")
+        self.assertEqual(state["current_next"], "7F1")
         statuses = state["checkpoints"]
         for checkpoint_id in ("7A", "7B", "7C0", "7C", "7D", "7E"):
             self.assertEqual(statuses[checkpoint_id], "DONE")  # type: ignore[index]
-        self.assertEqual(statuses["7F0"], "NEXT")  # type: ignore[index]
+        self.assertEqual(statuses["7F0"], "DONE")  # type: ignore[index]
+        self.assertEqual(statuses["7F1"], "NEXT")  # type: ignore[index]
         for checkpoint_id in ("7F", "7G", "7H"):
             self.assertEqual(statuses[checkpoint_id], "PLANNED")  # type: ignore[index]
         for checkpoint_id in ("8A", "8B", "8C", "8D", "8E", "8F"):
             self.assertEqual(statuses[checkpoint_id], "PLANNED")  # type: ignore[index]
 
         checkpoint_7f0 = execution_plan.checkpoint_for_id(plan, "7F0")
+        checkpoint_7f1 = execution_plan.checkpoint_for_id(plan, "7F1")
         checkpoint_7f = execution_plan.checkpoint_for_id(plan, "7F")
         self.assertEqual(checkpoint_7f0["prerequisite_checkpoint_ids"], ["7E"])
-        self.assertEqual(checkpoint_7f0["next_checkpoint_relation"], "7F")
+        self.assertEqual(checkpoint_7f0["next_checkpoint_relation"], "7F1")
         self.assertEqual(
             checkpoint_7f0["milestone_membership"], ["desktop-mvp", "full-roadmap"]
         )
         self.assertFalse(checkpoint_7f0["user_visible"])
         self.assertFalse(checkpoint_7f0["developer_preview_required"])
         self.assertTrue(checkpoint_7f0["architecture_gate"])
-        self.assertEqual(checkpoint_7f["prerequisite_checkpoint_ids"], ["7F0"])
+        self.assertEqual(checkpoint_7f1["prerequisite_checkpoint_ids"], ["7F0"])
+        self.assertEqual(checkpoint_7f1["next_checkpoint_relation"], "7F")
+        self.assertFalse(checkpoint_7f1["user_visible"])
+        self.assertFalse(checkpoint_7f1["developer_preview_required"])
+        self.assertTrue(checkpoint_7f1["architecture_gate"])
+        self.assertEqual(checkpoint_7f1["expected_project_schema_effect_category"], "none")
+        self.assertEqual(checkpoint_7f1["expected_ipc_effect_category"], "none")
+        self.assertEqual(
+            checkpoint_7f1["runner_allowed_protected_paths"],
+            [".github/workflows/platform-verification.yml"],
+        )
+        self.assertEqual(checkpoint_7f["prerequisite_checkpoint_ids"], ["7F1"])
         self.assertEqual(
             checkpoint_7f0["expected_project_schema_effect_category"],
             "explicit-model-gate",
@@ -602,10 +608,61 @@ class ExecutionPlanTests(unittest.TestCase):
         )
         for milestone_id in ("desktop-mvp", "full-roadmap"):
             ordered_ids = plan["milestones"][milestone_id]["checkpoint_ids"]  # type: ignore[index]
-            self.assertEqual(ordered_ids.index("7F0") + 1, ordered_ids.index("7F"))
+            self.assertEqual(ordered_ids.index("7F0") + 1, ordered_ids.index("7F1"))
+            self.assertEqual(ordered_ids.index("7F1") + 1, ordered_ids.index("7F"))
+
+        checkpoint_8f = execution_plan.checkpoint_for_id(plan, "8F")
+        checkpoint_9a0 = execution_plan.checkpoint_for_id(plan, "9A0")
+        checkpoint_9a = execution_plan.checkpoint_for_id(plan, "9A")
+        self.assertEqual(checkpoint_9a0["phase"], 9)
+        self.assertEqual(checkpoint_9a0["prerequisite_checkpoint_ids"], ["8F"])
+        self.assertEqual(checkpoint_8f["next_checkpoint_relation"], "9A0")
+        self.assertEqual(checkpoint_9a0["next_checkpoint_relation"], "9A")
+        self.assertEqual(checkpoint_9a["prerequisite_checkpoint_ids"], ["9A0"])
+        self.assertEqual(checkpoint_9a0["milestone_membership"], ["full-roadmap"])
+        self.assertFalse(checkpoint_9a0["user_visible"])
+        self.assertFalse(checkpoint_9a0["developer_preview_required"])
+        self.assertTrue(checkpoint_9a0["architecture_gate"])
+        self.assertEqual(checkpoint_9a0["expected_project_schema_effect_category"], "none")
+        self.assertEqual(checkpoint_9a0["expected_ipc_effect_category"], "none")
+        self.assertEqual(
+            checkpoint_9a0["runner_allowed_protected_paths"],
+            [".github/workflows/platform-verification.yml"],
+        )
+        self.assertEqual(statuses["9A0"], "PLANNED")  # type: ignore[index]
+        self.assertNotIn(
+            "9A0", plan["milestones"]["desktop-mvp"]["checkpoint_ids"]  # type: ignore[index]
+        )
+        full_roadmap_ids = plan["milestones"]["full-roadmap"]["checkpoint_ids"]  # type: ignore[index]
+        self.assertEqual(full_roadmap_ids.index("8F") + 1, full_roadmap_ids.index("9A0"))
+        self.assertEqual(full_roadmap_ids.index("9A0") + 1, full_roadmap_ids.index("9A"))
+
+        for checkpoint_id in ("9A", "9B", "9D", "9E", "10A", "16A", "16G"):
+            self.assertEqual(
+                execution_plan.checkpoint_for_id(plan, checkpoint_id)[
+                    "runner_allowed_protected_paths"
+                ],
+                [".github/workflows/platform-verification.yml"],
+            )
+        for checkpoint_id in ("8D", "8E"):
+            self.assertIn(
+                ".github/workflows/platform-verification.yml",
+                execution_plan.checkpoint_for_id(plan, checkpoint_id)[
+                    "runner_allowed_protected_paths"
+                ],
+            )
+        for checkpoint_id in ("7H", "8F"):
+            self.assertIn(
+                ".github/workflows/developer-preview.yml",
+                execution_plan.checkpoint_for_id(plan, checkpoint_id)[
+                    "runner_allowed_protected_paths"
+                ],
+            )
 
         evidence_dir = REPO_ROOT / "docs/execution/evidence"
-        self.assertFalse((evidence_dir / "7F0.json").exists())
+        self.assertTrue((evidence_dir / "7F0.json").is_file())
+        self.assertFalse((evidence_dir / "7F1.json").exists())
+        self.assertFalse((evidence_dir / "9A0.json").exists())
         self.assertFalse((evidence_dir / "7F.json").exists())
 
         checkpoint_7d = execution_plan.checkpoint_for_id(plan, "7D")
@@ -616,6 +673,26 @@ class ExecutionPlanTests(unittest.TestCase):
         self.assertIn("retain software-only fallback and continue", policy)
         self.assertEqual(state["phase_status"]["7"], "IN_PROGRESS")  # type: ignore[index]
         execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_or_core_dependency_policy_covers_frozen_runtime_engines(self) -> None:
+        policy = execution_plan.load_json(
+            REPO_ROOT / "docs/execution/architecture-policy.json"
+        )
+        patterns = policy["or_core_forbidden_direct_dependency_name_patterns"]
+        self.assertIsInstance(patterns, list)
+        for dependency in ("cosmic-text", "cosmic_text", "wasmi", "whisper_rs", "whisper_cpp"):
+            with self.subTest(dependency=dependency):
+                names = check_architecture_policy._direct_dependency_names(
+                    f"[dependencies]\n{dependency} = \"1.0\"\n"
+                )
+                self.assertTrue(
+                    any(
+                        pattern.lower() in name
+                        for pattern in patterns
+                        for name in names
+                    ),
+                    f"or_core dependency policy does not reject {dependency}",
+                )
 
     def test_duplicate_checkpoint_is_rejected(self) -> None:
         plan, state = fixture_plan_state()
@@ -784,9 +861,10 @@ class ContractVersionTests(unittest.TestCase):
                 plan, state, self.policy, contract_versions(recovery=2)
             )
 
-    def test_current_7f0_schema_five_candidate_is_allowed(self) -> None:
+    def test_current_7f1_retains_verified_schema_five(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
-        self.assertEqual(state["verified_contract_versions"], contract_versions(project=4))
+        self.assertEqual(state["current_next"], "7F1")
+        self.assertEqual(state["verified_contract_versions"], contract_versions(project=5))
         self.assertEqual(
             execution_plan.validate_contract_transition(
                 plan,
@@ -801,6 +879,7 @@ class ContractVersionTests(unittest.TestCase):
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         expected = {
             "7F0": ("explicit-model-gate", "explicit-contract-gate"),
+            "7F1": ("none", "none"),
             "7F": ("none", "none"),
             "7G": ("none", "none"),
             "7H": ("none", "none"),
@@ -810,6 +889,8 @@ class ContractVersionTests(unittest.TestCase):
             "8D": ("8A-model-only", "none"),
             "8E": ("8A-model-only", "none"),
             "8F": ("8A-model-only", "explicit-contract-gate"),
+            "9A0": ("none", "none"),
+            "9A": ("explicit-model-gate", "none"),
             "16D": ("none", "explicit-contract-gate"),
         }
         for checkpoint_id, categories in expected.items():
@@ -822,12 +903,12 @@ class ContractVersionTests(unittest.TestCase):
                 self.assertEqual(actual, categories)
         execution_plan.validate_plan(plan, state, REPO_ROOT)
 
-    def test_completion_snapshots_versions_for_the_following_non_owner(self) -> None:
+    def test_7f1_completion_snapshots_versions_for_the_following_non_owner(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         after = agent_supervisor.advance_state_once(
             state,
             plan,
-            "7F0",
+            "7F1",
             candidate_contract_versions=contract_versions(project=5),
             policy=self.policy,
             today="2026-09-30",
@@ -1127,7 +1208,12 @@ class EvidenceTests(unittest.TestCase):
         }
         self.assertEqual(
             len(execution_evidence.validate_preview_release(release, tag=tag, implementation_sha=sha, policy=policy)),
-            9,
+            11,
+        )
+        self.assertEqual(len(asset_names), 11)
+        self.assertEqual(
+            asset_names[-2:],
+            ["FFMPEG-BUILD-INFO.txt", "ffmpeg-8.1.3-source.tar.xz"],
         )
         for mutation in (
             {"tag_name": "wrong"},
@@ -1206,7 +1292,7 @@ class EvidenceTests(unittest.TestCase):
         )
         self.assertEqual(result["tag"], tag)
         self.assertEqual(result["source_sha"], sha)
-        self.assertEqual(len(result["assets"]), 9)
+        self.assertEqual(len(result["assets"]), 11)
 
     def test_required_preview_without_token_stops_before_dispatch(self) -> None:
         policy = evidence_policy()
@@ -1401,11 +1487,20 @@ class SupervisorBoundaryTests(unittest.TestCase):
             "7C": [platform_path],
             "7E": [platform_path],
             "7F0": [platform_path],
+            "7F1": [platform_path],
             "7F": [platform_path],
             "7H": [platform_path, preview_path],
             "8D": [platform_path],
             "8E": [platform_path],
             "8F": [platform_path, preview_path],
+            "9A0": [platform_path],
+            "9A": [platform_path],
+            "9B": [platform_path],
+            "9D": [platform_path],
+            "9E": [platform_path],
+            "10A": [platform_path],
+            "16A": [platform_path],
+            "16G": [platform_path],
         }
         forbidden_paths = (
             ".github/workflows/release.yml",
@@ -1450,6 +1545,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
     def test_7c0_state_advancement_makes_only_7c_next(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         state["checkpoints"] = dict(state["checkpoints"])  # type: ignore[arg-type]
+        state["verified_contract_versions"] = contract_versions(project=4)
         checkpoints = state["checkpoints"]
         after_7b = False
         for planned_checkpoint in plan["checkpoints"]:  # type: ignore[union-attr]
@@ -1482,19 +1578,19 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
     def test_same_phase_transition_keeps_phase_in_progress(self) -> None:
         plan, _ = execution_plan.load_plan_state(REPO_ROOT)
-        state = roadmap_state_before(plan, "7F", contract_versions(project=4))
+        state = roadmap_state_before(plan, "7F", contract_versions(project=5))
         after = agent_supervisor.advance_state_once(
             state,
             plan,
             "7F",
-            candidate_contract_versions=contract_versions(project=4),
+            candidate_contract_versions=contract_versions(project=5),
         )
         self.assertEqual(after["phase_status"]["7"], "IN_PROGRESS")  # type: ignore[index]
         self.assertEqual(after["current_next"], "7G")
 
     def test_7h_to_8a_completes_phase_7_and_starts_phase_8(self) -> None:
         plan, _ = execution_plan.load_plan_state(REPO_ROOT)
-        versions = contract_versions(project=4)
+        versions = contract_versions(project=5)
         state = roadmap_state_before(plan, "7H", versions)
         after = agent_supervisor.advance_state_once(
             state, plan, "7H", candidate_contract_versions=versions
@@ -1503,7 +1599,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
         self.assertEqual(after["phase_status"]["8"], "IN_PROGRESS")  # type: ignore[index]
         self.assertEqual(after["current_next"], "8A")
 
-    def test_8f_to_9a_completes_phase_8_and_starts_phase_9(self) -> None:
+    def test_8f_to_9a0_completes_phase_8_and_starts_phase_9(self) -> None:
         plan, _ = execution_plan.load_plan_state(REPO_ROOT)
         versions = contract_versions(project=5)
         state = roadmap_state_before(plan, "8F", versions)
@@ -1512,7 +1608,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(after["phase_status"]["8"], "DONE")  # type: ignore[index]
         self.assertEqual(after["phase_status"]["9"], "IN_PROGRESS")  # type: ignore[index]
-        self.assertEqual(after["current_next"], "9A")
+        self.assertEqual(after["current_next"], "9A0")
 
     def test_16g_completion_marks_phase_done_and_clears_next(self) -> None:
         plan, _ = execution_plan.load_plan_state(REPO_ROOT)
@@ -1687,13 +1783,13 @@ class SupervisorBoundaryTests(unittest.TestCase):
     def test_prompt_names_only_checkpoint_workflow_allowance(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         expected_path = ".github/workflows/platform-verification.yml"
-        for checkpoint_id in ("7C0", "7C", "7E", "7F0", "7F", "8D", "8E"):
+        for checkpoint_id in ("7C0", "7C", "7E", "7F0", "7F1", "7F", "8D", "8E"):
             checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
             self.assertEqual(checkpoint["runner_allowed_protected_paths"], [expected_path])
 
         checkpoint_7d = execution_plan.checkpoint_for_id(plan, "7D")
         self.assertEqual(checkpoint_7d.get("runner_allowed_protected_paths", []), [])
-        resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7F0", REPO_ROOT)
+        resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7F1", REPO_ROOT)
         self.assertEqual(resolution["runner_allowed_protected_paths"], [expected_path])
         prompt = agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution)
         self.assertIn("authorizes changes to exactly this protected workflow path", prompt)
@@ -1755,7 +1851,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
             },
         }
         with mock.patch.object(agent_supervisor, "ensure_start_state"):
-            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7F0")
+            prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7F1")
         after = {
             plan_path: plan_path.read_bytes(),
             state_path: state_path.read_bytes(),
@@ -1765,8 +1861,9 @@ class SupervisorBoundaryTests(unittest.TestCase):
         }
 
         self.assertEqual(before, after)
-        self.assertIn("Checkpoint: 7F0", prompt)
-        self.assertFalse((evidence_dir / "7F0.json").exists())
+        self.assertIn("Checkpoint: 7F1", prompt)
+        self.assertTrue((evidence_dir / "7F0.json").is_file())
+        self.assertFalse((evidence_dir / "7F1.json").exists())
 
     def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:
         output = StringIO()
@@ -1824,8 +1921,8 @@ class PreflightTests(unittest.TestCase):
             )
         self.assertEqual(result, 0)
         self.assertIn("PRECHECK PASS", stdout.getvalue())
-        self.assertIn("current NEXT: 7F0", stdout.getvalue())
-        self.assertIn("verified versions: project=4 recovery=1 ipc=1", stdout.getvalue())
+        self.assertIn("current NEXT: 7F1", stdout.getvalue())
+        self.assertIn("verified versions: project=5 recovery=1 ipc=1", stdout.getvalue())
         self.assertIn("candidate versions: project=5 recovery=1 ipc=1", stdout.getvalue())
         self.assertIn("remaining checkpoints checked: 10", stdout.getvalue())
         self.assertIn("model calls: 0", stdout.getvalue())
@@ -1846,12 +1943,12 @@ class PreflightTests(unittest.TestCase):
             mock.patch.object(agent_supervisor, "invoke_runner", runner),
         ):
             with self.assertRaises((agent_supervisor.SupervisorError, execution_plan.PlanError)):
-                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F0", "/runner")
+                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F1", "/runner")
         return runner
 
     def test_unknown_category_fails_before_runner(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
-        execution_plan.checkpoint_for_id(plan, "7F0")["expected_project_schema_effect_category"] = "unknown"
+        execution_plan.checkpoint_for_id(plan, "7F1")["expected_project_schema_effect_category"] = "unknown"
         runner = self._run_goal_with_plan(plan, state)
         runner.assert_not_called()
 
@@ -1873,7 +1970,7 @@ class PreflightTests(unittest.TestCase):
 
     def test_invalid_workflow_allowlist_fails_before_runner(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
-        checkpoint = execution_plan.checkpoint_for_id(plan, "7F0")
+        checkpoint = execution_plan.checkpoint_for_id(plan, "7F1")
         checkpoint["runner_allowed_protected_paths"] = [".github/workflows/*.yml"]
         runner = self._run_goal_with_plan(plan, state)
         runner.assert_not_called()
@@ -1887,13 +1984,13 @@ class RepairResumeTests(unittest.TestCase):
 
     def _reject(self, root: Path, failed_sha: str, message: str) -> None:
         with self.assertRaisesRegex(agent_supervisor.SupervisorError, message):
-            agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
+            agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F1")
 
     def test_baseline_walk_stops_before_bootstrap_without_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, _head = self._history(directory)
             baseline = agent_supervisor._state_baseline_for_checkpoint(
-                root, failed_sha, "7F0"
+                root, failed_sha, "7F1"
             )
             first_parent = subprocess.run(
                 ["git", "rev-parse", f"{baseline}^1"],
@@ -1931,7 +2028,7 @@ class RepairResumeTests(unittest.TestCase):
             root = Path(directory) / "repo"
             failed_sha, _head = make_repair_history(root, previous_contract_active=True)
             baseline = agent_supervisor._state_baseline_for_checkpoint(
-                root, failed_sha, "7F0"
+                root, failed_sha, "7F1"
             )
             previous = subprocess.run(
                 ["git", "rev-parse", f"{baseline}^1"],
@@ -1943,11 +2040,11 @@ class RepairResumeTests(unittest.TestCase):
             previous_state = agent_supervisor._json_at_revision(
                 root, previous, "docs/execution/STATE.json"
             )
-            self.assertEqual(previous_state["current_next"], "7F0")
-            self.assertEqual(previous_state["checkpoints"]["7F0"], "NEXT")
+            self.assertEqual(previous_state["current_next"], "7F1")
+            self.assertEqual(previous_state["checkpoints"]["7F1"], "NEXT")
             self.assertNotEqual(
-                agent_supervisor._active_checkpoint_fingerprint(root, previous, "7F0"),
-                agent_supervisor._active_checkpoint_fingerprint(root, failed_sha, "7F0"),
+                agent_supervisor._active_checkpoint_fingerprint(root, previous, "7F1"),
+                agent_supervisor._active_checkpoint_fingerprint(root, failed_sha, "7F1"),
             )
             expected = subprocess.run(
                 ["git", "rev-parse", f"{failed_sha}^1"],
@@ -1969,17 +2066,17 @@ class RepairResumeTests(unittest.TestCase):
                 agent_supervisor.SupervisorError,
                 "cannot read docs/execution/STATE.json",
             ):
-                agent_supervisor._state_baseline_for_checkpoint(root, failed_sha, "7F0")
+                agent_supervisor._state_baseline_for_checkpoint(root, failed_sha, "7F1")
 
     def test_trusted_future_plan_and_spec_maintenance_with_version_metadata_is_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, head = self._history(directory)
-            proof = agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
+            proof = agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F1")
         self.assertEqual(proof["head"], head)
         self.assertEqual(proof["failed_sha"], failed_sha)
-        self.assertEqual(proof["verified_versions"], contract_versions(project=4))
+        self.assertEqual(proof["verified_versions"], contract_versions(project=5))
         self.assertEqual(proof["candidate_versions"], contract_versions(project=5))
-        self.assertEqual(proof["fingerprint"]["checkpoint"]["id"], "7F0")
+        self.assertEqual(proof["fingerprint"]["checkpoint"]["id"], "7F1")
 
     def test_test_only_correction_is_allowed_and_keeps_active_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1989,12 +2086,12 @@ class RepairResumeTests(unittest.TestCase):
                 root, {test_path: b"corrected exact catalog expectations\n"}, "fix stale IPC test"
             )
             original_fingerprint = agent_supervisor._active_checkpoint_fingerprint(
-                root, failed_sha, "7F0"
+                root, failed_sha, "7F1"
             )
             corrected_fingerprint = agent_supervisor._active_checkpoint_fingerprint(
-                root, corrected_head, "7F0"
+                root, corrected_head, "7F1"
             )
-            proof = agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
+            proof = agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F1")
             changed_paths = agent_supervisor._repair_history_paths(
                 root, failed_sha, corrected_head
             )
@@ -2027,7 +2124,7 @@ class RepairResumeTests(unittest.TestCase):
                 with self.subTest(invalid=invalid), self.assertRaisesRegex(
                     agent_supervisor.SupervisorError, "lowercase 40-character SHA"
                 ):
-                    agent_supervisor.validate_repair_resume_history(root, invalid, "7F0")
+                    agent_supervisor.validate_repair_resume_history(root, invalid, "7F1")
 
     def test_failed_sha_must_be_an_ancestor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2060,7 +2157,7 @@ class RepairResumeTests(unittest.TestCase):
     def test_repair_rejects_existing_active_checkpoint_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, _head = self._history(directory)
-            evidence = root / "docs/execution/evidence/7F0.json"
+            evidence = root / "docs/execution/evidence/7F1.json"
             evidence.parent.mkdir(parents=True)
             evidence.write_text("{}\n", encoding="utf-8")
             self._reject(root, failed_sha, "completion evidence already exists")
@@ -2072,27 +2169,23 @@ class RepairResumeTests(unittest.TestCase):
             failed_sha, _head = make_repair_history(
                 root,
                 failed_changes={
-                    protected: git_blob_from_main(
-                        "a5a0d88d22b23ad5ddbedca604f3c01edc882f50", protected
-                    )
-                    + b"\n"
+                    protected: (REPO_ROOT / protected).read_bytes() + b"\n"
                 },
             )
             self._reject(root, failed_sha, "original implementation changed protected")
 
     def test_original_implementation_cannot_change_active_checkpoint_contract(self) -> None:
-        baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
         for label, path in (
             ("plan", "docs/execution/PLAN.json"),
             ("phase", "docs/execution/phases/PHASE_7.md"),
         ):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
                 if label == "plan":
-                    plan = json.loads(git_blob_from_main(baseline, path))
-                    execution_plan.checkpoint_for_id(plan, "7F0")["title"] = "redefined"
+                    plan = json.loads((REPO_ROOT / path).read_bytes())
+                    execution_plan.checkpoint_for_id(plan, "7F1")["title"] = "redefined"
                     value: bytes | str = json.dumps(plan, indent=2) + "\n"
                 else:
-                    value = git_blob_from_main(baseline, path) + b"\nchanged contract\n"
+                    value = (REPO_ROOT / path).read_bytes() + b"\nchanged contract\n"
                 root = Path(directory) / "repo"
                 failed_sha, _head = make_repair_history(
                     root, failed_changes={path: value}
@@ -2100,8 +2193,7 @@ class RepairResumeTests(unittest.TestCase):
                 self._reject(root, failed_sha, "fingerprint")
 
     def test_original_implementation_cannot_change_state(self) -> None:
-        baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
-        state = json.loads(git_blob_from_main(baseline, "docs/execution/STATE.json"))
+        state = json.loads((REPO_ROOT / "docs/execution/STATE.json").read_text(encoding="utf-8"))
         state["last_updated"] = "changed by implementation"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
@@ -2148,7 +2240,7 @@ class RepairResumeTests(unittest.TestCase):
                 "maintenance changed the active checkpoint contract fingerprint",
             ),
             "evidence": (
-                {"docs/execution/evidence/7F0.json": b"{}\n"},
+                {"docs/execution/evidence/7F1.json": b"{}\n"},
                 "completion evidence already exists",
             ),
         }
@@ -2171,7 +2263,7 @@ class RepairResumeTests(unittest.TestCase):
                 root, failed_sha, _head = self._history(directory)
                 if path == "plan":
                     plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
-                    execution_plan.checkpoint_for_id(plan, "7F0")["title"] = "redefined"
+                    execution_plan.checkpoint_for_id(plan, "7F1")["title"] = "redefined"
                     files = {"docs/execution/PLAN.json": json.dumps(plan, indent=2) + "\n"}
                 else:
                     files = {"docs/execution/phases/PHASE_7.md": b"redefined active phase\n"}
@@ -2197,7 +2289,7 @@ class RepairResumeTests(unittest.TestCase):
                     f"change state {mutation}",
                 )
                 with self.assertRaises(agent_supervisor.SupervisorError):
-                    agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
+                    agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F1")
 
     def test_repair_orchestration_verifies_current_head_and_never_runs_a_runner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2205,9 +2297,9 @@ class RepairResumeTests(unittest.TestCase):
             plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
             state = json.loads((root / "docs/execution/STATE.json").read_text(encoding="utf-8"))
             resolution = {
-                "checkpoint_id": "7F0",
+                "checkpoint_id": "7F1",
                 "goal_complete_after_current": True,
-                "goal_checkpoint_ids": ["7F0"],
+                "goal_checkpoint_ids": ["7F1"],
             }
             preflight = {
                 "plan": plan,
@@ -2217,7 +2309,7 @@ class RepairResumeTests(unittest.TestCase):
             }
             api = object()
             evidence_result = {"api": api}
-            final_result = {"checkpoint": {"id": "7F0"}}
+            final_result = {"checkpoint": {"id": "7F1"}}
             with (
                 mock.patch.object(agent_supervisor, "ensure_start_state"),
                 mock.patch.object(agent_supervisor, "_preflight_goal_data", return_value=preflight),
@@ -2230,7 +2322,7 @@ class RepairResumeTests(unittest.TestCase):
                 mock.patch.object(
                     agent_supervisor, "finalize_verified_checkpoint", return_value=final_result
                 ) as finalize,
-                mock.patch.object(agent_supervisor, "_verified_report", return_value="verified 7F0"),
+                mock.patch.object(agent_supervisor, "_verified_report", return_value="verified 7F1"),
                 mock.patch.object(
                     agent_supervisor,
                     "invoke_runner",
@@ -2238,9 +2330,9 @@ class RepairResumeTests(unittest.TestCase):
                 ) as invoke,
             ):
                 reports = agent_supervisor.repair_resume_goal(
-                    root, "checkpoint:7F0", failed_sha
+                    root, "checkpoint:7F1", failed_sha
                 )
-            self.assertEqual(reports, ["verified 7F0"])
+            self.assertEqual(reports, ["verified 7F1"])
             self.assertEqual(verify.call_args.args[3], head)
             self.assertEqual(
                 verify.call_args.kwargs["implementation_origin_sha"], failed_sha
@@ -2302,7 +2394,7 @@ class SupervisorTests(unittest.TestCase):
                 agent_supervisor.SupervisorError,
                 "runner produced no new implementation commit",
             ):
-                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F0", "/runner")
+                agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F1", "/runner")
         invoke.assert_called_once()
         verify_hosted.assert_not_called()
 
@@ -2345,7 +2437,7 @@ class SupervisorTests(unittest.TestCase):
             ) as run_one,
             mock.patch.object(agent_supervisor, "_verified_report", return_value="verified A"),
         ):
-            reports = agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F0", "/runner")
+            reports = agent_supervisor.run_goal(REPO_ROOT, "checkpoint:7F1", "/runner")
 
         self.assertEqual(reports, ["verified A"])
         run_one.assert_called_once()
@@ -2438,7 +2530,7 @@ class SupervisorTests(unittest.TestCase):
             for checkpoint in plan["checkpoints"]
             if checkpoint["phase"] == 7
         ]
-        expected_checkpoints = phase_checkpoint_ids[phase_checkpoint_ids.index("7F0") :]
+        expected_checkpoints = phase_checkpoint_ids[phase_checkpoint_ids.index("7F1") :]
         head = {"sha": "3da60ecb1ef2f234032a54da9cbaeae917004933"}
         commit_shas = iter("abcdefg"[: len(expected_checkpoints)])
         prompts: list[str] = []

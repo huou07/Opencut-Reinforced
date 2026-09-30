@@ -16,17 +16,30 @@ Plugins cannot read stored credentials or mutate canonical state outside typed
 commands.
 
 Affected invariants: `INV-STATE-002`, `INV-STATE-003`, `INV-JOB-001`,
-`INV-SEC-001`, `INV-DEP-001`.
+`INV-SEC-001`, `INV-DEP-001`, `INV-EXT-001`.
 
 ## 16B — Sandbox and declarative-first model
 
 Implement declarative effects/templates and a sandbox boundary before any native
-extension. Define IPC/resource limits, cancellation, versioning, failure
-containment, and cache disposal. No arbitrary native load is allowed by this
-checkpoint.
+extension. Use `wasmi` 1.1.0 as the first WASM sandbox runtime, added only when
+16B executes, in a dedicated extension/plugin runtime boundary. It must never
+be a direct `or_core` dependency. Do not enable general WASI by default; a
+plugin receives only explicitly defined OR host functions/capabilities, with
+no default filesystem, network, environment enumeration, stored credentials,
+process launch, wall-clock dependency, or arbitrary project mutation. All
+project changes become ordinary validated OR commands.
+
+Enable wasmi fuel metering and explicit `StoreLimits`. Also enforce outer host
+limits for module bytes, linear memory, instances/tables, input/output size,
+host-side allocations, execution time, and job cancellation; runtime memory
+limits do not account for every host allocation. Define IPC/resource limits,
+failure containment, and cache disposal. No arbitrary native load or native
+plugin ABI is allowed by this checkpoint; 16D owns the stable versioned
+extension ABI/API.
 
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-RENDER-002`,
-`INV-RENDER-003`, `INV-JOB-001`, `INV-CACHE-001`, `INV-SEC-001`, `INV-DEP-001`.
+`INV-RENDER-003`, `INV-JOB-001`, `INV-CACHE-001`, `INV-SEC-001`,
+`INV-DEP-001`, `INV-EXT-001`.
 
 ## 16C — Permissions, resources, and network
 
@@ -35,7 +48,7 @@ explicit. Enforce quotas, timeouts, cancellation, auditability, and offline
 behavior. Network access is opt-in and never implicit in rendering or editing.
 
 Affected invariants: `INV-JOB-001`, `INV-CACHE-001`, `INV-SEC-001`,
-`INV-DEP-001`.
+`INV-DEP-001`, `INV-EXT-001`.
 
 ## 16D — Versioned APIs
 
@@ -46,19 +59,28 @@ never serialized.
 
 These are runtime contract APIs; 16D does not migrate persistent
 `ProjectDocument` schema. Future persistent plugin or project metadata requires
-an explicit model gate.
+an explicit model gate. Do not create a native-plugin ABI by accident in 16B.
 
 Affected invariants: `INV-RT-002`, `INV-RENDER-001`, `INV-RENDER-002`,
-`INV-RENDER-003`, `INV-IPC-001`, `INV-DEP-001`.
+`INV-RENDER-003`, `INV-IPC-001`, `INV-DEP-001`, `INV-EXT-001`.
 
-## 16E — OTIO, EDL, XML, and bounded motion interchange evaluation
+## 16E — Bounded interchange adapters
 
-Evaluate OpenTimelineIO, EDL, XML, Lottie, and dotLottie import/export as
-bounded, explicit interchange adapters. Preserve exact-time conversion
-policies, unsupported-feature diagnostics, rights, and no-surprise project
-mutation. Imports are reviewable before apply; exports are deterministic where
-the format permits. Lottie and dotLottie are interchange candidates only, not
-the canonical MotionScene format or a required runtime dependency.
+Implement a bounded OTIO JSON adapter directly in Rust/serde against a
+documented supported subset and conformance fixtures. Do not add OpenTimelineIO
+C++ or Python runtime dependencies. Unsupported schemas/features produce
+explicit diagnostics; imports are reviewable before apply, with exact-time
+conversion and no-surprise mutation. Keep EDL and XML adapters bounded and
+explicit.
+
+Use Lottie JSON specification 1.0 as the V1 baseline. Unsupported/newer fields
+produce explicit compatibility diagnostics. Do not execute expressions or
+fetch network assets during import/render. Use dotLottie specification 2.0 as
+the initial container baseline and treat the archive as untrusted ZIP input:
+enforce entry-count, total uncompressed-byte, and per-entry limits; reject path
+traversal and duplicate/colliding paths; bound manifest/JSON parsing; and never
+fetch remote assets implicitly. Lottie and dotLottie are interchange formats,
+not canonical MotionScene and not a second renderer.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-TIME-001`, `INV-PERSIST-001`, `INV-IPC-001`, `INV-DEP-001`.
@@ -71,10 +93,13 @@ or reviewable manifests, isolation where possible, platform/license evidence,
 crash containment, fallback behavior, and clear incompatibility reporting.
 Arbitrary native loading remains prohibited by default; this checkpoint is an
 evaluation gate, not blanket permission to load untrusted code.
+`OPENFX_NATIVE_TIER = NOT_APPROVED` is a valid DONE outcome when isolation,
+crash containment, package/signing, platform, or security evidence is
+insufficient. Lack of OpenFX approval does not block 16G.
 
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-RENDER-001`,
-`INV-RENDER-002`, `INV-RENDER-003`, `INV-HW-001`, `INV-HW-002`, `INV-JOB-001`,
-`INV-SEC-001`, `INV-DEP-001`.
+`INV-RENDER-002`, `INV-RENDER-003`, `INV-HW-001`, `INV-HW-002`,
+`INV-JOB-001`, `INV-SEC-001`, `INV-DEP-001`, `INV-EXT-001`.
 
 ## 16G — Sandboxed procedural WebMotion adapter
 
@@ -98,8 +123,11 @@ structured diagnostics. Browser sandbox/CSP is defense in depth, not the sole
 trust boundary.
 
 Production must reject a configuration that disables the browser sandbox as a
-GPU workaround. If safe acceleration is unavailable, use a safer fallback or
-report the capability unavailable. A future pinned, capability-managed
+GPU workaround. Never launch Chromium/Chrome with `--no-sandbox`. If a
+trustworthy outer process isolation boundary cannot be demonstrated, record
+`WEBMOTION = UNAVAILABLE`; this is a valid checkpoint outcome. If safe
+acceleration is unavailable, use a safer fallback or report the capability
+unavailable. A future pinned, capability-managed
 Chromium/Chrome version enters provenance but is not sufficient isolation by
 itself. Prefer bounded frame/media streaming into the existing OR encoder over
 thousands of PNGs or a second encoder.
@@ -111,7 +139,7 @@ application, unsafe-browser rejection, and normal media validation.
 
 Affected invariants: `INV-STATE-002`, `INV-STATE-003`, `INV-RENDER-001`,
 `INV-RENDER-002`, `INV-MOTION-003`, `INV-JOB-001`, `INV-SEC-001`,
-`INV-DEP-001`.
+`INV-DEP-001`, `INV-EXT-001`.
 
 ## Stop conditions
 

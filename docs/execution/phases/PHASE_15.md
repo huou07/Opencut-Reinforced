@@ -13,7 +13,7 @@ and approved model metadata. Registry entries are content-addressed and
 reviewable; they do not control project state or claim popularity metrics.
 
 Affected invariants: `INV-CACHE-001`, `INV-PERSIST-001`, `INV-SEC-001`,
-`INV-DEP-001`.
+`INV-DEP-001`, `INV-AI-004`.
 
 ## 15B — Manifests and checksums
 
@@ -22,7 +22,7 @@ compatibility, resource limits, and safe failure behavior. Verify content before
 install/use; cache remains disposable.
 
 Affected invariants: `INV-CACHE-001`, `INV-PERSIST-001`, `INV-SEC-001`,
-`INV-DEP-001`.
+`INV-DEP-001`, `INV-AI-004`.
 
 ## 15C — License, compatibility, and dependency validation
 
@@ -31,7 +31,8 @@ runtime requirements, and transitive licenses before a package is accepted.
 Reject executable or distribution-restrictive content without an explicit
 architecture and licensing decision.
 
-Affected invariants: `INV-SEC-001`, `INV-DEP-001`, `INV-AI-001`, `INV-CACHE-001`.
+Affected invariants: `INV-SEC-001`, `INV-DEP-001`, `INV-AI-001`, `INV-AI-004`,
+`INV-CACHE-001`.
 
 ## 15D — Reviewable publishing
 

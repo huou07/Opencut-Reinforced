@@ -56,7 +56,7 @@ Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semant
 20. [UI feature registration and mobile](#20-ui-feature-registration-and-mobile)
 21. [Security](#21-security)
 22. [Implementation structure](#22-implementation-structure)
-23. [Technical non-decisions](#23-technical-non-decisions)
+23. [Frozen decisions and owned open details](#23-frozen-decisions-and-owned-open-details)
 24. [Upstream references](#24-upstream-references)
 
 ## 1. Architecture boundaries
@@ -127,6 +127,19 @@ encoded as either `null` or an exact `RationalRate`. Strict migrations from
 v1–v4 set the rate to `null`; new projects also begin unset. Recovery remains
 envelope v1 and accepts nested v5 snapshots. Opening a migrated project stays
 clean and leaves disk bytes unchanged until explicit save.
+
+Phase 8A owns the next project-schema gate from the verified v5 baseline and
+may increment it exactly once. It generalizes the one canonical Rust timeline
+to closed Video, Audio, Text, and Caption track kinds and closed Media, Text,
+and Caption clip content. Every clip retains stable `ClipId`, exact start, and
+positive exact duration; media clips preserve `MediaId` and exact source range,
+with migrated duration equal to the old source-range duration. Text and
+caption clips have no synthetic media reference or source range. Persistent
+typed state also includes lock, visibility, mute, solo, transforms, crop,
+opacity, basic text formatting, audio gain/pan/fades, and basic transition and
+effect references. Transient selection, hover, zoom, viewport, and drag state
+remain presentation-only. Desktop playback speed stays 1x through MVP; 13B
+owns later speed and rate mapping.
 
 V1 contains only project ID, revision, and name. V2 adds ordered media entries containing a UUIDv4 `MediaId`, validated local `file:` URI, and bounded `MediaMetadata`; source bytes remain external. V3 adds an ordered timeline. Each track stores a UUIDv4 ID, `video` or `audio` kind, and ordered clips. Each clip stores exactly its UUIDv4 ID, `MediaId`, `timeline_start`, and `source_range`; playback speed is implicitly 1×. V3 media IDs, source URIs, track IDs, and clip IDs must be unique in their respective project-wide scopes. Media metadata bounds remain as documented in [SECURITY_LICENSING.md](SECURITY_LICENSING.md).
 
@@ -356,6 +369,8 @@ while allowing separate native adapters.
 
 The bridge may send an opaque registered Flutter texture identifier, dimensions,
 pixel format, exact presentation time, transport state/errors, and controls.
+The required pixel-buffer fallback uses BGRA8888 with premultiplied alpha unless
+specific platform API evidence requires RGBA8888 for that adapter.
 It must never send per-frame pixels, full-rate frame bytes, or raw OS/GPU handles
 through Dart, IPC, project state, or cache identity. Retain each `FrameLease`
 until the native release callback or completion fence signals. The platform
@@ -365,7 +380,7 @@ a native copy/readback; frame data never takes a copied-Dart route.
 
 Timeline/render evaluation should publish a stable read view such as `RenderSnapshot N` for canonical `ProjectRevision N`. A project mutation produces a view associated with the next revision, which workers can adopt safely. Render workers never mutate Project, and the architecture must not require them to lock mutable Project state continuously. The snapshot may be a full immutable evaluated structure, incremental graph, structurally shared data, versioned read model, or another measured strategy; snapshot granularity must be benchmarked rather than assumed to mean cloning the whole project for every edit.
 
-Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The native adapter selects a platform-appropriate synchronization primitive and a small bounded in-flight depth; the latest-frame mailbox replaces obsolete preview work. Measure the latency, throughput, memory, and GPU-occupancy tradeoffs when tuning that bound.
+Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The native adapter selects a platform-appropriate synchronization primitive and a small bounded in-flight depth; the latest-frame mailbox replaces obsolete preview work. 7F1 proves platform adapter builds and 7G owns bounded queue tuning against repeatable target-hardware evidence.
 
 A frame should carry explicit dimensions, pixel or texture format, color information, and timing metadata. The exact representation remains implementation work.
 
@@ -473,7 +488,7 @@ and other native interop remain runtime-adapter work for later checkpoints.
 
 FFmpeg is the intended baseline for media probing, demux, decode, encode, mux, conversion, and resampling. Checkpoint 7C0 selects the current high-level `ffmpeg-the-third` Rust binding, package version `6.0.0+ffmpeg-9.0`, with its paired `ffmpeg-sys-the-third` 6.0.0 binding layer. The maintained upstream release adds FFmpeg 9 support while retaining FFmpeg 5.1 through 8.1 compatibility, and exposes Rust wrappers for format/demux, codec/decode, frame, software-resampling, and software-scaling APIs. Its declared Rust 1.80 MSRV is below the workspace's Rust 1.85 floor. Both Rust packages declare WTFPL. The system-link path needs FFmpeg headers and shared libraries, `pkg-config`, a C compiler, and `clang`/`libclang` for runtime bindgen; the binding uses vcpkg discovery for MSVC. The `ffmpeg-sys` link step does not directly require CMake; the Linux/macOS FFmpeg source build uses `configure`/`make`. CMake/tool versions for a Windows vcpkg port are port-specific and must be fixed with that platform's later build gate. See the [published 6.0.0 package](https://crates.io/crates/ffmpeg-the-third/6.0.0), [upstream release history](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/CHANGELOG.md), and [current build manifest](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/ffmpeg-sys-the-third/Cargo.toml).
 
-The approved baseline is FFmpeg 8.1.3 and the supported update line is 8.1.x, using matching headers and library ABI majors at build and runtime. Patch updates require the hosted binding link probe; changing FFmpeg minor/major lines or the Rust package requires a new compatibility, API, MSRV, and license review. FFmpeg 9 support exists in the binding, but the integration baseline follows the official stable 8.1 release line. Checkpoint 7C0 provisions a separate Linux CI prefix built from the official 8.1.3 source with shared libraries, `--disable-autodetect`, `--disable-everything`, and no `--enable-gpl`, `--enable-nonfree`, or `--enable-version3` options, then compiles, links, loads, and checks the native library ABI/license strings through an out-of-workspace probe. The CI-only build also uses `--disable-asm` to reduce build requirements. The 7C0 probe was tooling only. The production workspace now pins `ffmpeg-the-third` 6.0.0 with only codec, format, software-resampling, and software-scaling features. Its hosted prefix keeps the LGPL-only dynamic configuration and enables only the `file` protocol, Matroska demuxer, and FFV1/PCM S16LE decoders needed by the generated fixture; this small fixture codec set does not select the product codec set.
+The approved baseline is FFmpeg 8.1.3, using matching headers and library ABI majors at build and runtime. Any update requires a new compatibility, API, MSRV, license, and hosted-link review; the later gates use 8.1.3. Checkpoint 7C0 provisions a separate Linux CI prefix built from the official 8.1.3 source with shared libraries, `--disable-autodetect`, `--disable-everything`, and no `--enable-gpl`, `--enable-nonfree`, or `--enable-version3` options, then compiles, links, loads, and checks the native library ABI/license strings through an out-of-workspace probe. The CI-only build also uses `--disable-asm` to reduce build requirements. The 7C0 probe was tooling only. The production workspace now pins `ffmpeg-the-third` 6.0.0 with only codec, format, software-resampling, and software-scaling features. Its hosted prefix keeps the LGPL-only dynamic configuration and enables only the `file` protocol, Matroska demuxer, and FFV1/PCM S16LE decoders needed by the generated fixture; this small fixture codec set does not select the product codec set.
 
 Dynamic linking is the selected packaging strategy. Build from the pinned FFmpeg source/configuration for each target and bundle the matching `libavcodec`, `libavformat`, `libavutil`, `libswresample`, and `libswscale` shared libraries plus their runtime dependencies. Include the corresponding headers and import metadata only in development/build environments. Linux packages ship the `.so` libraries with app-relative runtime lookup; macOS packages ship the `.dylib` libraries with app-relative loader paths and sign/notarize the complete bundle; Windows packages ship matching MSVC `.dll` files beside the app and use their `.lib` import libraries at build time. Release packages must include the exact corresponding FFmpeg source, build configuration, changes, and LGPL notices/source location; keep the FFmpeg shared libraries replaceable and preserve their library names. Android is a separate Phase 9 decision requiring NDK builds for supported ABIs and per-ABI shared-library packaging evidence.
 
@@ -483,7 +498,7 @@ Phase 5D adds library-preview generation through an external system `ffmpeg` exe
 
 The media boundary must support both software decode and hardware-surface decode. A centralized capability/provider layer should report usable paths for automatic selection and safe fallback; generic timeline/domain code must not accumulate platform-specific conditionals. Possible platform directions are examples only, not selections: VideoToolbox/platform video surfaces on macOS; platform hardware decode and D3D-compatible surfaces on Windows; VAAPI, Vulkan, or DMABUF-style interop on Linux; and MediaCodec with hardware-buffer or native-surface paths on Android. Support varies by codec, device, pixel format, driver, and backend.
 
-Pipeline selection should choose the best supported and stable path for the actual codec, pixel format, resolution, backend, device, driver, platform, and operation. A hardware path is not presumed faster. Prefer hardware decode and minimal-copy GPU processing where they benefit the workload, and preserve software/CPU paths as correctness fallbacks when decode, GPU interop, or drivers are unavailable or unstable.
+Pipeline selection chooses only a supported, stable path for the actual codec, pixel format, resolution, backend, device, driver, platform, and operation. A hardware path is not presumed faster. Software/CPU paths remain correctness fallbacks; no hardware decode path is approved by the 7D evaluation. Any later hardware selection belongs to a measured hardware-capability checkpoint with build, license, interop, fallback, and target-device evidence.
 
 Phase 7D evaluation: no hardware decode or native-frame interop path is approved. The current `or_media` decoder creates a software FFmpeg decoder from stream parameters and emits owned CPU RGBA frames. Its manifest enables codec/format plus software resampling and scaling; the bounded hosted FFmpeg fixture build enables only file input, Matroska, FFV1, and PCM S16LE. `or_render` has no native viewer-surface adapter, and the runtime capability/lease contracts have no platform adapter or native handle implementation. The repository contains no repeatable target-hardware comparison or platform-specific build, license, and packaging evidence for a candidate path. Keep software decode as the correctness path and make no hardware performance claim. Reconsider a candidate only with platform/device/driver/codec/backend coverage, build and license/package evidence, native resource lifetime and synchronization validation, software fallback coverage, and repeatable measurements on target hardware.
 
@@ -499,7 +514,7 @@ The render evaluation order is:
 
 Preview and export share the same edit semantics: clip timing, transforms, effects, compositing, text, keyframe evaluation, and color intent. This does not require identical implementation scheduling or bit-identical pixels. Preview may use lower resolution, proxies, reduced quality, or different scheduling; export may use full-quality sources, offline evaluation, and a different encoder. Equivalent source and quality conditions must still represent the same edit.
 
-GPU candidates include scaling, rotation, crop, appropriate color-space conversion, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and work unsuited to a GPU remain CPU/domain responsibilities. Profile by operation; there is no requirement that every operation run on the GPU. Export should prefer render output in a GPU/native-compatible surface to a hardware encoder when supported, avoiding GPU readback followed by upload when interop allows. Otherwise use a CPU frame and a supported software or platform encoder. Exact hardware encoder APIs and FFmpeg hardware-frame integration remain undecided.
+GPU candidates include scaling, rotation, crop, appropriate color-space conversion, blending, masking, compositing, color operations, and suitable effects. Project state, command validation, serialization, metadata, scheduling/orchestration, and work unsuited to a GPU remain CPU/domain responsibilities. Profile by operation; there is no requirement that every operation run on the GPU. The mandatory export uses the software FFV1/PCM profile. Hardware encoder APIs and FFmpeg hardware-frame integration belong to a future optional delivery/hardware checkpoint and are not correctness prerequisites.
 
 Use optimized upstream implementations and compiler auto-vectorization before considering architecture-specific intrinsics or custom SIMD. ARM NEON or x86 SIMD paths may be evaluated behind tested abstractions only after profiling identifies a meaningful bottleneck.
 
@@ -507,9 +522,9 @@ Use optimized upstream implementations and compiler auto-vectorization before co
 
 Decode audio through `or_media`; `or_audio` defines the device-neutral output boundary. Its preallocated single-producer/single-consumer interleaved buffer is bounded and non-blocking: producers receive backpressure when full, while the callback fills missing frames with silence and reports the underrun. The callback advances the audio master clock by device frames, including silence, and returns an exact clock message bound to its `RenderSnapshot` for video pacing. Timeline-to-device conversion subtracts the snapshot seek origin, multiplies exact rational seconds by the integer device sample rate, then floors to the frame at or before that time. Video drops frames more than the configured drift tolerance behind audio and waits when they are ahead; frames within the tolerance may present. Synchronization rejects clock messages from another project or revision while allowing each worker to request its own exact time range.
 
-The callback does not allocate, lock, call Flutter or providers, or access canonical project state. Cancellation silences and drains queued data; a seek starts a fresh clock message at its exact timeline origin. No device library or platform output adapter is selected in 7E, so the crate adds no third-party audio dependency. A hardware backend requires a separate platform, build, MSRV, and license gate before selection. Core gain, pan, fades, and future DSP live in the audio engine, not in Flutter presentation code.
+The callback does not allocate, lock, call Flutter or providers, or access canonical project state. Cancellation silences and drains queued data; a seek starts a fresh clock message at its exact timeline origin. Phase 8E owns `cpal` 0.18.1 in `or_audio`; it must not become a direct `or_core` dependency. Hosted CI does not require a physical device, so device-neutral tests and hosted build verification are authoritative. Core gain, pan, fades, and future DSP live in the audio engine, not in Flutter presentation code.
 
-Final video text is rendered by the render core. Exported text must not depend on Flutter widget rendering. Select a font shaping and rendering dependency only after cross-platform behavior and licensing are evaluated.
+Final video text is rendered by the render core. Exported text must not depend on Flutter widget rendering or host-installed fonts. Phase 8D owns `cosmic-text` 0.19.0 in the rendering/text runtime, not `or_core`, and intentionally raises the workspace MSRV from Rust 1.85 to 1.89 before adding it. Inter 4.1 under SIL Open Font License 1.1 is the bundled deterministic baseline; 8D records the exact distributed file, SHA-256, license, attribution, and provenance. Phase 11 reuses this same shaping and font path.
 
 ## 13. Background jobs and cache
 
@@ -547,7 +562,7 @@ Scheduling must support bounded concurrency, cancellation, backpressure, and del
 
 Producers must not outrun consumers indefinitely. Frame/decode and export queues, thumbnail work, and AI/background work must stay bounded. When a consumer is slower, the system may pause production, reduce queue depth, drop obsolete preview work where safe, or block a background producer appropriately. The exact queue type and policy are workload decisions.
 
-Hot media paths should avoid repeated large allocations where practical. Bounded frame, texture, audio-buffer, decode-surface, and render-target reuse are candidates, not selected implementations; pools must remain bounded and must not turn into an unbounded cache. Establish system-level budgets for RAM, GPU memory or equivalent render resources, decoded-frame cache, thumbnail cache, waveform cache, and proxy/cache storage. Budgets may vary by device class, available memory, platform, and workload, with more conservative policy on Android; fixed percentages and values are deferred.
+Hot media paths should avoid repeated large allocations where practical. Frame, texture, audio-buffer, decode-surface, and render-target reuse must remain bounded and must not become an unbounded cache. 7G owns queue and pool tuning, memory budgets, and performance targets using repeatable target-hardware evidence; values may vary by device class, platform, and workload, with more conservative Android policy.
 
 Cache keys are deterministic over source fingerprint, operation, parameters, and cache schema version. Phase 5E selects `rusqlite` 0.40.1 with bundled SQLite for the disposable cache index only; this does not change `.orproj` project storage. Cache contents are disposable and never authoritative project state. Provide bounded storage, eviction and regeneration paths, and a clear-cache operation; cache presence must never be required for project correctness.
 
@@ -555,23 +570,52 @@ Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, 
 
 ## 14. AI providers and local inference
 
-Define capability-oriented adapters for transcription, translation, text-to-speech, LLM planning, segmentation, image generation, video generation, declarative MotionScene generation, and audio generation. Local and optional cloud implementations plug into the same task-oriented contracts. `GenerateVideo` returns an opaque raster/video asset; future `GenerateMotionScene` returns an editable declarative scene proposal. Do not hard-code an editor workflow to one provider.
+Checkpoint 10A owns the provider boundary for later AI features. Typed tasks go
+through the `or_ai` Provider Manager to managed local sidecars, optional
+permissioned cloud adapters, deterministic test providers, or a typed
+`Unavailable` capability. Results are reviewable proposals, analyses, or
+assets and reach project state only through the normal validated command path.
+No provider or inference runtime is a direct `or_core` dependency. No cloud
+credential or model is required to complete the roadmap.
 
-Candidate runtime categories for evaluation:
+The V1 local sidecar uses child-process stdin/stdout with one bounded UTF-8 JSON
+object per line. Stdout carries protocol only; bounded diagnostics use stderr.
+Messages carry a protocol version and stable request/job ID and support
+readiness/capabilities, task start, progress, result, typed error, cancel,
+cancel acknowledgement, and shutdown. Control messages are at most 1 MiB
+unless an existing repository bound is smaller. Large media and model artifacts
+use bounded managed-file references, not base64 payloads. Launch uses explicit
+argv without a shell, sanitized inherited environment, and managed per-job
+scratch. A local sidecar has no implied network authority; cloud access requires
+explicit application permission.
 
-- whisper.cpp for local automatic speech recognition
-- ONNX Runtime for suitable specialized models
-- a llama.cpp-compatible provider for local language-model inference
+The model artifact contract is owned by 10A: a versioned manifest records model
+ID/version, task capabilities, runtime/provider requirement, artifact source,
+expected SHA-256, size bound, license/provenance, hardware needs, and
+language/capability metadata. Managed files are checksum-verified outside
+`ProjectDocument`; weights are not bundled by default. A missing provider or
+model returns typed `Unavailable`. 10H owns the user-facing download,
+pause/resume, verify, update, remove, storage, license, and permission flows
+over that contract. The reference local ASR sidecar is whisper.cpp v1.9.4; its
+runtime and all model artifacts keep their separate dependency and licensing
+reviews. CI uses deterministic provider fakes and protocol fixtures.
 
-These are candidates, not required MVP components or final dependency decisions. Keep heavyweight Python-centric generation stacks behind a supervised sidecar or provider boundary rather than making them core Rust dependencies by default.
-
-Runtime code licenses do not establish the license or redistribution rights for a model's weights, tokenizer, or associated assets. Verify each exact model artifact independently.
-
-Network-capable providers/services declare whether a task is local-only or requires network access; those are conceptual capability categories, not frozen enum/API names. Provider calls go through an application-controlled permission boundary. Offline Mode is enforced below UI controls, so GUI, CLI, and agent clients cannot bypass it. Cloud tasks receive only the minimum project-derived context needed for that task; do not serialize the whole project into prompts by default.
+Runtime code licenses do not establish the license or redistribution rights for
+model weights, tokenizers, or associated assets. Verify each exact artifact.
+Network-capable providers declare their access needs and pass through the
+application permission boundary. Offline Mode applies to GUI, CLI, and agent
+requests; cloud tasks receive only the minimum context they need.
 
 ## 15. Model management and secrets
 
-A model manifest records ID, version, task, source, cryptographic hash, size, runtime, hardware needs, language coverage, license, and install state. Verify SHA-256 before activation. Store weights outside the repository and do not bundle them by default.
+Checkpoint 10A owns the versioned model manifest and bounded artifact contract:
+ID/version, task capabilities, runtime/provider requirement, source, expected
+SHA-256, size bound, license/provenance, hardware requirements, and
+language/capability metadata. Verify managed model files before activation and
+keep them outside the repository and `ProjectDocument`; weights are not
+bundled by default. Missing models/providers report typed `Unavailable`.
+Checkpoint 10H owns user-facing download, pause/resume, verify, update, remove,
+storage, license, and permission flows over the 10A contract.
 
 Store user provider secrets in operating-system secure storage. Internal provider calls may access a credential through a narrowly scoped application service. Agent and CLI interfaces expose only configured or not-configured state and never return plaintext stored credentials. Do not log request headers or secret-bearing configuration.
 
@@ -611,8 +655,8 @@ types or a project schema.
 
 MotionScene uses nonnegative finite `RationalTime`, a half-open `[0, duration)`
 local timeline, exact-time random-access evaluation, typed local asset
-references, stable identities, checksums/provenance, and reproducible font
-references or a documented bundled fallback. It has no HTTP, environment,
+references, stable identities, checksums/provenance, and the Phase 8 Inter 4.1
+font identity through the shared `cosmic-text` 0.19.0 path. It has no HTTP, environment,
 glob, shell, provider, script, arbitrary shader, or hidden font lookup. The
 initial primitive set is `Group`, `Text`, `Rectangle`, `Ellipse`, `Line`/
 `Arrow`, renderer-gated `Polyline`, and `Image`; animation is limited to typed
@@ -646,8 +690,8 @@ and SFX remain normal OR audio/media/timeline concerns, coordinated by an
 agent or `EditPlan` rather than embedded in MotionScene.
 
 Remotion and Motion Canvas are useful conceptual references, not canonical
-runtimes or dependencies. Lottie/dotLottie are future bounded interchange,
-not the canonical format. Chromium/headless browser use is reserved for the
+runtimes or dependencies. Lottie JSON 1.0 and dotLottie 2.0 are future bounded
+interchange, not the canonical format. Chromium/headless browser use is reserved for the
 optional Phase 16G WebMotion adapter, never the normal renderer. WebCodecs is
 not the encoding authority; the normal OR encoder remains the path for
 materialization.
@@ -669,21 +713,38 @@ by itself.
 
 ## 18. Plugins
 
-Prefer a sandbox and explicit capability permissions. A WASM/WASI-style runtime is a candidate for future plugin work, not a permanent selection. Refresh runtime support, escape analysis, permissions, and dependency research before plugin implementation.
+Phase 16B uses `wasmi` 1.1.0 inside a dedicated extension runtime, never as an
+`or_core` dependency. General WASI is not enabled by default. Plugins receive
+only explicit OR host capabilities; default authority excludes filesystems,
+network, environment enumeration, credentials, process launch, and arbitrary
+project mutation. Enable fuel metering and explicit `StoreLimits`, with outer
+host bounds for module bytes, memory, instances/tables, I/O, host allocations,
+time, and cancellation. All changes become ordinary validated OR commands.
+Phase 16D owns the stable extension ABI; 16B must not create a native-plugin
+ABI.
 
 Native and OpenFX compatibility is later and has a higher trust cost. Do not treat installed plugins as unrestricted trusted code by default.
 
 ## 19. Export and interchange
 
-Export uses the same timeline and render evaluation as preview. The intended flow is offscreen render frames to a media encoder and muxer, managed as a background job with progress and cancellation. Where supported, prefer a GPU/native-compatible render surface into a hardware encoder; otherwise use CPU frames with a supported software or platform encoder. Do not require a GPU readback/upload cycle when a stable shared-surface path is available. Codec and hardware options depend on platform support and licensing review, and correctness fallback remains first-class.
+Export uses the same timeline and render evaluation as preview and runs as a
+background job with progress and cancellation. Phase 8F's mandatory software
+correctness profile is Matroska with FFV1 video and PCM S16LE audio through
+linked FFmpeg. 8F enables only the extra mux/encode components this profile
+needs. H.264, H.265/HEVC, AV1, VP9, NVENC, VideoToolbox, MediaCodec, and other
+delivery or hardware paths are optional and do not gate Desktop MVP. Export
+does not mutate canonical project state. Periodic autosave writes the approved
+recovery checkpoint; explicit Save remains the canonical project-file action,
+and autosave never silently overwrites that file.
 
-Checkpoint 8F owns and locks the export request, job status/progress, and
-cancellation contract through the existing application/IPC path before the
-exporter implementation begins. Export is runtime work and does not mutate the
-canonical project. The container/codec profile and packaging license decision
-are also selected by 8F before first use; hardware encoding remains optional.
-
-The native OR format is not OpenTimelineIO. OTIO is an import/export interchange format and API for editorial cut information, not the native project database and not a media container. Lottie and dotLottie may be evaluated as bounded motion interchange in Phase 16, but neither is the canonical MotionScene format. Select adapters and supported fields when an interchange implementation is scoped.
+The native OR format is not OpenTimelineIO. Phase 16E uses a bounded OTIO JSON
+adapter implemented directly in Rust/serde against a documented subset; it
+does not add OTIO's C++ or Python runtime. Unsupported content receives
+explicit diagnostics, and EDL/XML remain bounded explicit adapters. Lottie
+JSON 1.0 and dotLottie 2.0 are bounded interchange baselines, not canonical
+MotionScene formats. Imports do not execute expressions or fetch remote assets;
+dotLottie input is treated as untrusted ZIP data with entry, expansion, path,
+collision, and parsing limits.
 
 ## 20. UI feature registration and mobile
 
@@ -693,7 +754,25 @@ Stable shell slots include App Bar, Editor Tool Rail, Left Tool Panel, Viewer, I
 
 Simple and Advanced modes are visibility settings over one state and command model.
 
-Android uses the same Rust core and project model with touch-native Flutter presentation, Android Storage Access Framework or platform storage abstraction, and mobile-appropriate resource and proxy policies.
+Android uses the same Rust core and project model with touch-native Flutter
+presentation and mobile-appropriate resource policies. Checkpoint 9A0 proves
+software FFmpeg 8.1.3 shared-library build, cross-link, APK packaging, runtime
+loading, Flutter/Rust bridge loading, and hosted x86_64 emulator coverage for
+`arm64-v8a`, `armeabi-v7a`, and `x86_64`; hardware media is not required.
+
+Checkpoint 9A owns typed `MediaSourceRef` values for existing `FileUri` and
+`AndroidSafDocumentUri` sources. A SAF URI is never converted to a fake path;
+the OS permission grant and live descriptors/handles are runtime metadata, not
+project data. On non-Android platforms the typed SAF reference remains valid
+but resolves offline until relinked. Android opens an external project through
+a bounded SAF read into an app-private canonical working copy and the normal
+Rust `ProjectFileSession`. Save/recovery is atomic to that copy first, then an
+explicit SAF synchronization/export with readback where supported. Provider
+write failure cannot invalidate the working copy. Media access uses a transient
+opaque seekable capability, such as a duplicated descriptor or bounded custom
+FFmpeg I/O; copy only to a bounded, cancellable, disposable materialization
+when a provider is non-seekable or a component requires a local file. 9D uses
+the same storage boundary and the mandatory software FFV1/PCM S16LE profile.
 
 Visible Flutter strings and accessibility labels use a localization-capable resource boundary when production UI work begins. Do not scatter user-facing English strings through domain/business logic. Human-readable errors may be localized at the presentation boundary; command IDs, JSON field names, and machine-readable error codes remain stable technical identifiers. Do not select a localization package or generate localization files in this planning phase.
 
@@ -711,56 +790,74 @@ Provider network capability and permission are enforced centrally by the applica
 
 Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is explicitly started. Planned domains are conceptual boundaries, not a mandate to create one crate per domain. Split a module into a crate only when a concrete build, reuse, ownership, or dependency boundary justifies it. Never create empty future crates or modules.
 
-## 23. Technical non-decisions
+## 23. Frozen decisions and owned open details
 
-The following are deliberately not permanently selected:
+The following architecture decisions are frozen for the remaining roadmap and
+are implemented only by their owning checkpoint:
 
-- exact software codec/demuxer set within the approved FFmpeg 8.1.x dynamic-link strategy; export codecs and packaging are selected by 8F before first use
-- native implementation details within the 7F0 external-texture contract; its bounded pixel-buffer fallback is required on supported desktop targets, with shared GPU surfaces optional behind platform adapters
-- exact Flutter state management framework and state-change event schema, event bus/library, and transport
-- text-shaping dependency, selected and verified by 8D before first text render
-- audio-output backend, selected and verified by 8E before first device output
-- exact storage crate for any future persistence subsystem beyond the Phase 5E cache index
-- exact Flutter localization package and generated resource format
-- exact GPU image-comparison tolerance metric
-- exact immutable render snapshot representation, granularity, and update strategy
-- exact hardware decode API on each platform
-- exact hardware encode API on each platform
-- exact FFmpeg hardware-frame integration
-- concrete per-platform CPU/GPU/decoder-surface resource wrappers and native handle types; semantic `FrameDescriptor`/`FrameLease` ownership is fixed
-- validated optional shared-surface interoperability fast paths; Flutter external-texture presentation and the pixel-buffer fallback are fixed by 7F0
-- platform-specific synchronization primitive selected by the adapter; 7F0 fixes synchronization ownership and lease lifetime
-- numeric queue depth and per-mode buffering tuning; 7F0 requires a bounded latest-frame mailbox/in-flight set and stale-frame rejection
-- exact worker scheduler/runtime, thread-pool implementation, and priority API
-- exact frame, texture, audio-buffer, decode-surface, and render-target pool implementation
-- exact RAM, GPU/resource, and cache budget values and adaptation policy
-- exact performance thresholds and benchmark hardware
-- exact centralized runtime hardware capability schema/provider
-- timeline track naming and track mute/solo/lock behavior
-- video compositing precedence and clip linking/grouping
-- alternate stream selection and clip speed changes
-- transitions, effects, transforms, crop, opacity, audio gain, and pan semantics
-- marker schema/details, snap algorithm, and timeline UI interactions
-- decode/render scheduling and quality details beyond 7F0's exact sequence timing, source-sampling, viewer lifetime, and stale-frame contract
-- exact hardware/software path selection thresholds by codec, format, device, driver, and operation
-- exact CPU/GPU operation partition, based on profiling and task characteristics
-- exact CPU SIMD/intrinsic implementations and feature dispatch
-- exact performance instrumentation implementation
-- exact audio callback buffer/ring design and buffering policy
-- future proxy-cache weighting, pinning, and namespace-quota policy
-- exact translation model
-- exact segmentation model
-- exact text-to-speech model or runtime
-- exact diffusion or video-generation runtimes
-- exact WASM plugin runtime
-- exact cloud provider/vendor
-- exact release package formats
+- Desktop viewer semantics belong to 7F0/7F1. A bounded native pixel-buffer
+  external texture is the correctness fallback; BGRA8888 with premultiplied
+  alpha is the common format. Shared GPU surfaces remain optional.
+- FFmpeg 8.1.3 with `ffmpeg-the-third` 6.0.0 uses reproducible dynamic/shared
+  linking and an LGPL-only configuration. 7F1 proves desktop link/load/package
+  provenance; 9A0 proves Android package/load support.
+- 8A owns the single v5-to-v6 project-model transition and typed media/text/
+  caption timeline contract. Phase 6 owns persistent markers and snapping.
+- 8D uses `cosmic-text` 0.19.0 and bundled Inter 4.1 (SIL OFL 1.1), and
+  deliberately raises workspace MSRV to Rust 1.89. Phase 11 reuses that path.
+- 8E uses `cpal` 0.18.1 inside `or_audio`, outside `or_core`.
+- 8F requires software Matroska + FFV1 + PCM S16LE export. Autosave writes the
+  recovery checkpoint; explicit Save writes the canonical project.
+- 9A0 owns Android native package evidence; 9A owns typed `FileUri` and
+  `AndroidSafDocumentUri`, the app-private canonical working copy, and
+  transient seekable media access.
+- 10A owns the provider manager, bounded local sidecar protocol, model manifest,
+  and typed `Unavailable` outcome. whisper.cpp v1.9.4 is the reference ASR
+  sidecar; Phase 10 and later require no cloud key or model weights.
+- 13C owns SDR Rec.709/sRGB delivery assumptions, linear-light working space,
+  and premultiplied-alpha compositing. HDR correctness remains deferred.
+- 16B uses `wasmi` 1.1.0 in an isolated extension runtime without default WASI;
+  16D owns the stable extension ABI.
+- 16E uses bounded direct Rust/serde OTIO JSON interchange, Lottie 1.0, and
+  dotLottie 2.0. These remain interchange formats, not canonical project or
+  MotionScene formats.
 
-Choose these when the relevant phase begins, using implementation prototypes, target-platform benchmarks, security review, and license analysis. Do not pin versions here without an implementation need.
+Remaining open implementation details have explicit owners:
+
+- Flutter state management and presentation event wiring: 7F/8B, within the
+  shared command/state model.
+- Render snapshot representation, comparison tolerance, decode/render queue
+  tuning, worker scheduling, resource pools, budgets, and performance targets:
+  7G and repeatable target-hardware evidence.
+- Hardware decode APIs and thresholds: a future measured hardware-capability
+  checkpoint; no hardware path is valid.
+- Hardware encode APIs and FFmpeg hardware-frame integration: an optional
+  delivery/hardware checkpoint; neither is a correctness prerequisite.
+- Shared GPU-surface fast paths and per-platform synchronization details: a
+  measured platform optimization; the pixel-buffer fallback remains
+  authoritative.
+- Exact CPU/GPU operation partition, SIMD dispatch, and performance
+  instrumentation: profiling in 7G or the owning render/effect checkpoint.
+- Audio callback buffer/ring tuning: 8E, with bounded prepared buffers and
+  device-neutral correctness tests.
+- Translation, TTS, segmentation, and generation models: optional provider/model
+  manifests under 10A/10H; missing models remain `Unavailable`.
+- Cloud provider/vendor: an optional provider adapter; no vendor is mandatory.
+- Stable installer formats and signing: a future stable-release gate, not a
+  full-roadmap completion prerequisite.
+- Localization package/resource generation and any future persistence crate:
+  the feature checkpoint that first requires that dependency, after its own
+  build, platform, and license review.
+
+No marker architecture remains open, and no already-frozen dependency or
+behavior is deferred for a later architecture choice. Optional capabilities
+remain optional; this plan does not claim they are implemented.
 
 ## 24. Upstream references
 
-These official upstream references support the current candidate descriptions. Re-check them when selecting versions or packaging dependencies.
+These upstream references support frozen dependencies and current interface
+claims. Re-check version-specific facts when an owning checkpoint implements
+or updates the dependency.
 
 - [Flutter supported platforms](https://docs.flutter.dev/reference/supported-platforms) documents Flutter's platform matrix; OR currently selects macOS, Windows, Linux, and Android from that broader support.
 - [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge) documents generated bindings, structured values, asynchronous functions, streams, errors, and platform support. Version 2.13.0 is used by the Phase 3 bootstrap bridge; this does not settle the future command, event, or media-transport architecture.

@@ -3,7 +3,10 @@
 ## Status
 
 Phase 12 is planned. Voice features use the Phase 10 task/provider boundary and
-must remain reviewable, permissioned, cancellable, and provenance-rich.
+must remain reviewable, permissioned, cancellable, and provenance-rich. A
+missing TTS provider or model is a valid typed `Unavailable` capability; Phase
+12 does not introduce a second TTS runtime, require cloud credentials, or
+require a licensed model artifact for provider-independent completion.
 
 ## 12A — Voiceover
 
@@ -13,16 +16,20 @@ settings explicit. Generated audio is an asset/proposal until accepted.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-TIME-001`, `INV-JOB-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`,
-`INV-SEC-001`.
+`INV-AI-004`, `INV-SEC-001`.
 
 ## 12B — Subtitle-to-speech
 
-Convert approved typed subtitles into bounded speech jobs with pronunciation,
-timing, language, and speaker controls. Return audio assets and alignment
-proposals; never silently replace project audio or captions.
+Convert approved typed subtitles into bounded speech jobs through the Phase 10
+provider manager and sidecar protocol, with pronunciation, timing, language,
+and speaker controls. Do not create a second TTS runtime architecture. Return
+audio assets and alignment proposals; never silently replace project audio or
+captions. If a TTS provider or approved model is absent, return typed
+`Unavailable`; deterministic fake providers support CI without a physical
+audio device, cloud credential, or model weights.
 
-Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`, `INV-JOB-001`,
-`INV-AI-001`, `INV-AI-002`, `INV-AI-003`.
+Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`,
+`INV-JOB-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`.
 
 ## 12C — Translation and dubbing
 
@@ -31,7 +38,8 @@ boundaries. Preserve source/target lineage, timing policy, model/provider
 provenance, rights, and revision checks. Cloud providers remain optional.
 
 Affected invariants: `INV-STATE-002`, `INV-STATE-003`, `INV-TIME-001`,
-`INV-JOB-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-SEC-001`.
+`INV-JOB-001`, `INV-AI-001`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`,
+`INV-SEC-001`.
 
 ## 12D — Speaker mapping and pronunciation
 
@@ -40,7 +48,7 @@ reviewable overrides. Keep identities project-local and do not infer consent or
 rights from a provider response.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-AI-002`,
-`INV-AI-003`, `INV-PERSIST-001`, `INV-SEC-001`.
+`INV-AI-003`, `INV-AI-004`, `INV-PERSIST-001`, `INV-SEC-001`.
 
 ## 12E — Timing controls
 
@@ -49,7 +57,7 @@ stretching or re-generation. Preview and export use the same evaluated audio
 model and retain a correctness fallback when a provider cannot meet a budget.
 
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-TIME-001`,
-`INV-MEDIA-002`, `INV-JOB-001`, `INV-AI-003`.
+`INV-MEDIA-002`, `INV-JOB-001`, `INV-AI-003`, `INV-AI-004`.
 
 ## 12F — Regeneration and ducking
 
@@ -60,7 +68,7 @@ implicit voice cloning is included here.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-RT-001`, `INV-RT-002`, `INV-JOB-001`, `INV-AI-001`, `INV-AI-002`,
-`INV-AI-003`, `INV-SEC-001`, `INV-DEP-001`.
+`INV-AI-003`, `INV-AI-004`, `INV-SEC-001`, `INV-DEP-001`.
 
 ## Stop conditions
 

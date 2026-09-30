@@ -430,6 +430,15 @@ execution-plan and architecture-policy checkers and requires the evidence
 policy, evidence directory documentation, and evidence module. These checks
 use fake API data and do not mutate the real plan or state.
 
+The maintenance guard also locks the current post-7F0 transition
+`7F0 -> 7F1 -> 7F` and the later `8F -> 9A0 -> 9A` Android gate, verifies the
+milestone membership/order and PLANNED/NEXT state, asserts exact protected
+workflow paths for platform gates, and ensures no 7F1 or 9A0 evidence is
+fabricated. Architecture-policy tests ensure `or_core` remains barred from
+`cosmic-text`, `wasmi`, and Whisper wrapper dependencies. Preview release
+fixtures require eleven non-empty assets, including
+`FFMPEG-BUILD-INFO.txt` and `ffmpeg-8.1.3-source.tar.xz`.
+
 Hosted evidence is not inferred from workflow-level success alone. The
 supervisor requires push-triggered `Repository hygiene` and `Platform
 verification` runs whose `head_sha` is the implementation SHA, then checks the

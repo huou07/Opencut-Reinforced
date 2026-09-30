@@ -60,9 +60,12 @@ typed keyframes and a small locked easing set. It has no expression language,
 script, shell, provider call, network lookup, environment lookup, filesystem
 glob, arbitrary shader, or hidden font download.
 
-11E freezes resource bounds, missing-asset/font diagnostics, reproducible font
-references, deterministic seeded-randomness rules, semantic content/hash/version
-identity, and a random-access evaluator. The evaluator lowers into the actual
+11E freezes resource bounds, missing-asset/font diagnostics, deterministic font
+identity, deterministic seeded-randomness rules, semantic content/hash/version
+identity, and a random-access evaluator. Text reuses the Phase 8
+`cosmic-text` 0.19.0 shaping and rendering path and the bundled Inter 4.1
+baseline font identity; it does not add a second text runtime or use host font
+discovery to determine export geometry. The evaluator lowers into the actual
 Phase 7/8 `RenderSnapshot` and `or_render` primitives available when this
 checkpoint is implemented; it does not create a speculative second renderer.
 Preview and materialization use the same evaluator. Charts and diagrams begin
@@ -82,7 +85,8 @@ lowering, and preview/materialization semantic parity.
 
 Affected invariants: `INV-STATE-003`, `INV-TIME-001`, `INV-RENDER-001`,
 `INV-RENDER-002`, `INV-RENDER-003`, `INV-MOTION-001`, `INV-MOTION-002`,
-`INV-MOTION-004`, `INV-PERSIST-001`, `INV-SEC-001`, `INV-DEP-001`.
+`INV-MOTION-004`, `INV-PERSIST-001`, `INV-SEC-001`, `INV-DEP-001`,
+`INV-TEXT-001`.
 
 ## 11F — Motion materialization and agent/CLI workflow
 
@@ -105,8 +109,9 @@ This checkpoint does not require a full node graph, keyframe curve editor,
 After Effects clone, browser IDE, or code editor. It does not add arbitrary
 code, a live `MotionClip`, or an AI provider requirement. TTS, music, and SFX
 remain ordinary OR audio/media/timeline concerns, coordinated by an agent or
-`EditPlan` when needed. Normal OR encoding is used; browser WebCodecs is not a
-canonical encoder.
+`EditPlan` when needed. MotionScene text uses the exact Phase 8 text shaping,
+bundled-font identity, and render pipeline. Normal OR encoding is used; browser
+WebCodecs is not a canonical encoder.
 
 Future tests cover CLI validation/inspection/render, JSON diagnostics,
 external-agent fixtures, persistent generated media, cache-independent project
@@ -115,7 +120,8 @@ save/reopen, recovery, offline sources, and cancellation/failure handling.
 
 Affected invariants: `INV-STATE-001`, `INV-STATE-002`, `INV-STATE-003`,
 `INV-MEDIA-001`, `INV-MEDIA-002`, `INV-MOTION-001`, `INV-MOTION-002`,
-`INV-MOTION-004`, `INV-AI-002`, `INV-AI-003`, `INV-PERSIST-001`, `INV-SEC-001`.
+`INV-MOTION-004`, `INV-AI-002`, `INV-AI-003`, `INV-AI-004`, `INV-PERSIST-001`,
+`INV-SEC-001`, `INV-TEXT-001`.
 
 ## Stop conditions
 
