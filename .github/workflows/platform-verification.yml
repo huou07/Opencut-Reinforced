@@ -622,6 +622,10 @@ jobs:
         shell: msys2 {0}
         run: |
           prefix="$(cygpath -u "$FFMPEG_INSTALL_PREFIX")"
+          msvc_linker_dir="$(cygpath -u "$VCToolsInstallDir")"
+          msvc_linker_dir="${msvc_linker_dir%/}/bin/Hostx64/x64"
+          export PATH="$msvc_linker_dir:$PATH"
+          test "$(command -v link.exe)" = "$msvc_linker_dir/link.exe"
           export FFMPEG_DIR="$FFMPEG_INSTALL_PREFIX"
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
           cargo build --locked --release --manifest-path tools/ffmpeg-link-probe/Cargo.toml

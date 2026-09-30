@@ -57,6 +57,11 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `Android APK build`: debug APK build; no emulator runtime test is currently configured.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit and includes four app packages, three desktop CLI packages, checksums, and build information.
 
+The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify
+runtime packaging and loading. The Windows probe uses MSYS2 for `pkg-config`
+path handling, so Visual Studio's `link.exe` must take precedence over
+MSYS2's `/usr/bin/link.exe` when Cargo links the MSVC target.
+
 The execution supervisor treats these workflows as evidence gates, not merely
 status badges. It uses the GitHub REST API with Python's standard library to
 match exact `head_sha`, `main` branch, push event, completed status, successful
