@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
@@ -185,6 +186,89 @@ def _assert_acyclic(checkpoints: dict[str, dict[str, Any]]) -> None:
         visit(checkpoint_id)
 
 
+def _validate_owner_category(
+    checkpoint_id: str,
+    category: str,
+    suffix: str,
+    field: str,
+    owner_field: str,
+    valid_owner_categories: set[str],
+    checkpoints: dict[str, dict[str, Any]],
+) -> None:
+    owner_id = category.removesuffix(suffix)
+    owner = checkpoints.get(owner_id)
+    if owner is None:
+        raise PlanError(f"checkpoint {checkpoint_id}.{field} has missing owner {owner_id!r}")
+
+    ancestors: set[str] = set()
+    pending = list(checkpoints[checkpoint_id]["prerequisite_checkpoint_ids"])
+    while pending:
+        prerequisite = pending.pop()
+        if prerequisite in ancestors:
+            continue
+        ancestors.add(prerequisite)
+        pending.extend(checkpoints[prerequisite]["prerequisite_checkpoint_ids"])
+    if owner_id not in ancestors:
+        raise PlanError(
+            f"checkpoint {checkpoint_id}.{field} owner {owner_id} is not an earlier prerequisite"
+        )
+    if owner[owner_field] not in valid_owner_categories:
+        raise PlanError(
+            f"checkpoint {checkpoint_id}.{field} owner {owner_id} does not own "
+            f"a {field} gate"
+        )
+
+
+def _validate_effect_categories(
+    checkpoints: dict[str, dict[str, Any]], statuses: dict[str, str]
+) -> None:
+    for checkpoint_id, checkpoint in checkpoints.items():
+        project_field = "expected_project_schema_effect_category"
+        project_category = checkpoint[project_field]
+        if project_category in {"none", "explicit-model-gate", "typed-model-gate"}:
+            pass
+        elif re.fullmatch(r"schema-v[1-9][0-9]*", project_category):
+            if statuses[checkpoint_id] != "DONE":
+                raise PlanError(
+                    f"checkpoint {checkpoint_id}.{project_field} legacy category "
+                    f"{project_category} requires status DONE"
+                )
+        elif project_category.endswith("-model-only"):
+            _validate_owner_category(
+                checkpoint_id,
+                project_category,
+                "-model-only",
+                project_field,
+                project_field,
+                {"explicit-model-gate", "typed-model-gate"},
+                checkpoints,
+            )
+        else:
+            raise PlanError(
+                f"checkpoint {checkpoint_id}.{project_field} has unsupported "
+                f"category: {project_category}"
+            )
+
+        ipc_field = "expected_ipc_effect_category"
+        ipc_category = checkpoint[ipc_field]
+        if ipc_category in {"none", "explicit-contract-gate"}:
+            continue
+        if ipc_category.endswith("-contract-only"):
+            _validate_owner_category(
+                checkpoint_id,
+                ipc_category,
+                "-contract-only",
+                ipc_field,
+                ipc_field,
+                {"explicit-contract-gate"},
+                checkpoints,
+            )
+            continue
+        raise PlanError(
+            f"checkpoint {checkpoint_id}.{ipc_field} has unsupported category: {ipc_category}"
+        )
+
+
 def _derive_phase_status(
     phase_id: str, checkpoints: dict[str, dict[str, Any]], statuses: dict[str, str]
 ) -> str:
@@ -324,6 +408,8 @@ def validate_plan(
         if raw_status not in VALID_CHECKPOINT_STATUSES:
             raise PlanError(f"invalid status for {checkpoint_id}: {raw_status}")
         statuses[checkpoint_id] = raw_status
+
+    _validate_effect_categories(checkpoints, statuses)
 
     next_ids = [checkpoint_id for checkpoint_id, status in statuses.items() if status == "NEXT"]
     if len(next_ids) > 1:

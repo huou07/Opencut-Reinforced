@@ -23,6 +23,9 @@ dependency contracts from an earlier checkpoint or explicitly own them itself.
 A checkpoint must not consume a contract whose first owner occurs later in the
 execution graph.
 
+PLAN project-schema and IPC effect categories are distinct namespaces. A
+checkpoint must not use one field's category family in the other field.
+
 ## Trust boundary
 
 The runner owns one locked checkpoint's source implementation, ordinary

@@ -44,6 +44,10 @@ versioning, migration/deprecation policy, and conformance fixtures. Native
 handles are exchanged only through runtime-owned opaque interfaces and are
 never serialized.
 
+These are runtime contract APIs; 16D does not migrate persistent
+`ProjectDocument` schema. Future persistent plugin or project metadata requires
+an explicit model gate.
+
 Affected invariants: `INV-RT-002`, `INV-RENDER-001`, `INV-RENDER-002`,
 `INV-RENDER-003`, `INV-IPC-001`, `INV-DEP-001`.
 

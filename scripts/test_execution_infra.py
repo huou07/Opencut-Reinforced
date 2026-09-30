@@ -240,6 +240,118 @@ class ExecutionPlanTests(unittest.TestCase):
         summary = execution_plan.validate_plan(plan, state, REPO_ROOT)
         self.assertEqual(summary["next_checkpoint"], state["current_next"])
 
+    def test_16d_project_schema_effect_is_none_and_ipc_contract_is_retained(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        checkpoint_16d = execution_plan.checkpoint_for_id(plan, "16D")
+        self.assertEqual(checkpoint_16d["expected_project_schema_effect_category"], "none")
+        self.assertEqual(
+            checkpoint_16d["expected_ipc_effect_category"], "explicit-contract-gate"
+        )
+        execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_project_schema_rejects_ipc_category(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["expected_project_schema_effect_category"] = "explicit-contract-gate"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_ipc_rejects_explicit_model_category(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["expected_ipc_effect_category"] = "explicit-model-gate"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_ipc_rejects_typed_model_category(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["expected_ipc_effect_category"] = "typed-model-gate"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_valid_project_model_gates(self) -> None:
+        for category in ("explicit-model-gate", "typed-model-gate"):
+            with self.subTest(category=category):
+                plan, state = fixture_plan_state(["7A", "7B"])
+                plan["checkpoints"][0]["expected_project_schema_effect_category"] = category  # type: ignore[index]
+                execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_valid_ipc_contract_gate(self) -> None:
+        plan, state = fixture_plan_state(["7A", "7B"])
+        plan["checkpoints"][0]["expected_ipc_effect_category"] = "explicit-contract-gate"  # type: ignore[index]
+        execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_8a_derived_model_and_contract_categories_remain_valid(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        checkpoint_8b = execution_plan.checkpoint_for_id(plan, "8B")
+        self.assertEqual(
+            checkpoint_8b["expected_project_schema_effect_category"], "8A-model-only"
+        )
+        self.assertEqual(
+            checkpoint_8b["expected_ipc_effect_category"], "8A-contract-only"
+        )
+        execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_model_only_requires_existing_owner(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][1]["expected_project_schema_effect_category"] = "MISSING-model-only"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_contract_only_requires_existing_owner(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][1]["expected_ipc_effect_category"] = "MISSING-contract-only"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_model_only_requires_an_earlier_model_gate_owner(self) -> None:
+        for owner_category, related in (("none", True), ("explicit-model-gate", False)):
+            with self.subTest(owner_category=owner_category, related=related):
+                plan, state = fixture_plan_state()
+                plan["checkpoints"][0]["expected_project_schema_effect_category"] = owner_category  # type: ignore[index]
+                plan["checkpoints"][1]["expected_project_schema_effect_category"] = "A-model-only"  # type: ignore[index]
+                if not related:
+                    plan["checkpoints"][0]["next_checkpoint_relation"] = None  # type: ignore[index]
+                    plan["checkpoints"][1]["prerequisite_checkpoint_ids"] = []  # type: ignore[index]
+                with self.assertRaises(execution_plan.PlanError):
+                    execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_contract_only_requires_an_earlier_contract_gate_owner(self) -> None:
+        for owner_category, related in (("none", True), ("explicit-contract-gate", False)):
+            with self.subTest(owner_category=owner_category, related=related):
+                plan, state = fixture_plan_state()
+                plan["checkpoints"][0]["expected_ipc_effect_category"] = owner_category  # type: ignore[index]
+                plan["checkpoints"][1]["expected_ipc_effect_category"] = "A-contract-only"  # type: ignore[index]
+                if not related:
+                    plan["checkpoints"][0]["next_checkpoint_relation"] = None  # type: ignore[index]
+                    plan["checkpoints"][1]["prerequisite_checkpoint_ids"] = []  # type: ignore[index]
+                with self.assertRaises(execution_plan.PlanError):
+                    execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_completed_historical_schema_categories_remain_valid(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        self.assertEqual(state["checkpoints"]["6A"], "DONE")  # type: ignore[index]
+        self.assertEqual(state["checkpoints"]["6E2A"], "DONE")  # type: ignore[index]
+        self.assertEqual(
+            execution_plan.checkpoint_for_id(plan, "6A")["expected_project_schema_effect_category"],
+            "schema-v3",
+        )
+        self.assertEqual(
+            execution_plan.checkpoint_for_id(plan, "6E2A")["expected_project_schema_effect_category"],
+            "schema-v4",
+        )
+        execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_schema_version_category_is_rejected_for_ipc(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["expected_ipc_effect_category"] = "schema-v5"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
+    def test_new_schema_version_category_is_rejected_for_planned_checkpoint(self) -> None:
+        plan, state = fixture_plan_state()
+        plan["checkpoints"][0]["expected_project_schema_effect_category"] = "schema-v5"  # type: ignore[index]
+        with self.assertRaises(execution_plan.PlanError):
+            execution_plan.validate_plan(plan, state, REPO_ROOT)
+
     def test_runner_allowed_workflow_path_is_valid_for_architecture_gate(self) -> None:
         plan, state = fixture_plan_state(["7A", "7B"])
         plan["checkpoints"][0]["architecture_gate"] = True  # type: ignore[index]
