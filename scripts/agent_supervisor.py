@@ -779,41 +779,111 @@ def _json_at_revision(repo_root: Path, revision: str, relative_path: str) -> dic
     return value
 
 
+def _state_leaves_checkpoint_next(
+    repo_root: Path, state: Mapping[str, Any], checkpoint_id: str, revision: str
+) -> bool:
+    statuses = state.get("checkpoints")
+    phase_status = state.get("phase_status")
+    if (
+        state.get("schema_version") != 1
+        or not isinstance(statuses, dict)
+        or not statuses
+        or any(
+            not isinstance(key, str)
+            or not isinstance(value, str)
+            or value not in execution_plan.VALID_CHECKPOINT_STATUSES
+            for key, value in statuses.items()
+        )
+        or not isinstance(phase_status, dict)
+        or any(
+            not isinstance(key, str)
+            or not isinstance(value, str)
+            or value not in execution_plan.VALID_PHASE_STATUSES
+            for key, value in phase_status.items()
+        )
+    ):
+        raise SupervisorError(f"invalid STATE.json at {revision}")
+    next_checkpoints = [
+        key for key, value in statuses.items() if value == "NEXT"
+    ]
+    if len(next_checkpoints) > 1 or state.get("current_next") != (
+        next_checkpoints[0] if next_checkpoints else None
+    ):
+        raise SupervisorError(f"invalid STATE.json at {revision}")
+    if not next_checkpoints and any(value != "DONE" for value in statuses.values()):
+        raise SupervisorError(f"invalid STATE.json at {revision}")
+    plan = _json_at_revision(repo_root, revision, "docs/execution/PLAN.json")
+    try:
+        checkpoints = execution_plan._checkpoint_map(plan, repo_root)
+        if set(statuses) != set(checkpoints):
+            raise execution_plan.PlanError("checkpoint statuses do not match PLAN.json")
+        expected_phases = execution_plan.derive_phase_statuses(plan, statuses, repo_root)
+        if phase_status != expected_phases:
+            raise execution_plan.PlanError("phase statuses do not match checkpoint statuses")
+        for checkpoint_key, checkpoint in checkpoints.items():
+            prerequisites = checkpoint["prerequisite_checkpoint_ids"]
+            if any(prerequisite not in checkpoints for prerequisite in prerequisites):
+                raise execution_plan.PlanError(
+                    f"checkpoint {checkpoint_key} has an unknown prerequisite"
+                )
+            if statuses[checkpoint_key] == "DONE" or checkpoint_key == state.get("current_next"):
+                if any(statuses[prerequisite] != "DONE" for prerequisite in prerequisites):
+                    raise execution_plan.PlanError(
+                        f"checkpoint {checkpoint_key} has an unfinished prerequisite"
+                    )
+    except (KeyError, execution_plan.PlanError) as exc:
+        raise SupervisorError(f"invalid STATE.json at {revision}: {exc}") from exc
+    if "verified_contract_versions" in state:
+        try:
+            execution_plan.validate_contract_versions(
+                state["verified_contract_versions"],
+                f"STATE.verified_contract_versions at {revision}",
+            )
+        except execution_plan.PlanError as exc:
+            raise SupervisorError(str(exc)) from exc
+    return (
+        state.get("current_next") == checkpoint_id
+        and statuses.get(checkpoint_id) == "NEXT"
+    )
+
+
 def _state_baseline_for_checkpoint(
     repo_root: Path, failed_sha: str, checkpoint_id: str
 ) -> str:
     try:
-        history = git_output(
-            repo_root,
-            "rev-list",
-            "--first-parent",
-            "--reverse",
-            f"{failed_sha}^",
-        ).splitlines()
+        first_parent = git_output(repo_root, "rev-parse", "--verify", f"{failed_sha}^1")
+        history = git_output(repo_root, "rev-list", "--first-parent", first_parent).splitlines()
     except subprocess.CalledProcessError as exc:
-        raise SupervisorError("FAILED_SHA has no state baseline history") from exc
-    previous: dict[str, Any] | None = None
+        raise SupervisorError("FAILED_SHA has no first-parent state baseline") from exc
+
+    failed_fingerprint = _active_checkpoint_fingerprint(repo_root, failed_sha, checkpoint_id)
+    baseline: str | None = None
     for revision in history:
-        state = _json_at_revision(repo_root, revision, "docs/execution/STATE.json")
-        statuses = state.get("checkpoints")
-        if not isinstance(statuses, dict):
-            previous = state
-            continue
-        if (
-            state.get("current_next") == checkpoint_id
-            and statuses.get(checkpoint_id) == "NEXT"
-            and (
-                previous is None
-                or previous.get("current_next") != checkpoint_id
-                or not isinstance(previous.get("checkpoints"), dict)
-                or previous["checkpoints"].get(checkpoint_id) != "NEXT"
-            )
+        state_path = "docs/execution/STATE.json"
+        if not git_output(repo_root, "ls-tree", revision, "--", state_path):
+            if baseline is not None:
+                return baseline
+            raise SupervisorError(f"first parent has no {state_path}")
+        state = _json_at_revision(repo_root, revision, state_path)
+        if not _state_leaves_checkpoint_next(
+            repo_root, state, checkpoint_id, revision
         ):
-            return revision
-        previous = state
-    raise SupervisorError(
-        f"could not find the state baseline that introduced NEXT checkpoint {checkpoint_id}"
-    )
+            if baseline is not None:
+                return baseline
+            raise SupervisorError(
+                f"first parent does not leave checkpoint {checkpoint_id} NEXT"
+            )
+        if _active_checkpoint_fingerprint(repo_root, revision, checkpoint_id) != failed_fingerprint:
+            if baseline is not None:
+                return baseline
+            raise SupervisorError(
+                "first parent active checkpoint contract fingerprint does not match FAILED_SHA"
+            )
+        baseline = revision
+
+    if baseline is not None:
+        return baseline
+    raise SupervisorError(f"could not find a state baseline for NEXT checkpoint {checkpoint_id}")
 
 
 def _active_checkpoint_fingerprint(

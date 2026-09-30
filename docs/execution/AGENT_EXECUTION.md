@@ -41,6 +41,10 @@ from checkpoint statuses and snapshots the exact verified source versions.
 bypass. It checks the original implementation and active checkpoint contract,
 accepts only trusted maintenance changes, and records the repaired HEAD as the
 verified implementation SHA with the failed implementation SHA as provenance.
+Its state baseline is the oldest first-parent revision in the contiguous run
+before the failed SHA that keeps the checkpoint NEXT under the same active
+contract fingerprint. Missing historical `STATE.json` ends that walk;
+malformed execution state fails closed.
 Repair history may also contain corrections confined to crate `tests/`
 directories or the OR app's `test/` and `integration_test/` directories; runtime
 source, manifests, workflows, evidence policy, and active checkpoint contracts

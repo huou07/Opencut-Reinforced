@@ -157,6 +157,8 @@ def make_repair_history(
     *,
     original_changes: dict[str, bytes | str] | None = None,
     failed_changes: dict[str, bytes | str] | None = None,
+    previous_contract_active: bool = False,
+    historical_state: bytes | str | None = None,
 ) -> tuple[str, str]:
     subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
     subprocess.run(["git", "config", "user.name", "Execution Test"], cwd=root, check=True)
@@ -164,6 +166,24 @@ def make_repair_history(
         ["git", "config", "user.email", "execution-test@example.invalid"],
         cwd=root,
         check=True,
+    )
+    commit_test_files(root, {"README.md": b"bootstrap\n"}, "repository bootstrap")
+    historical_state_value = (
+        historical_state
+        if historical_state is not None
+        else git_blob_from_main(
+            "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/execution/STATE.json"
+        )
+    )
+    commit_test_files(
+        root,
+        {
+            "docs/execution/PLAN.json": git_blob_from_main(
+                "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/execution/PLAN.json"
+            ),
+            "docs/execution/STATE.json": historical_state_value,
+        },
+        "execution infrastructure adds state",
     )
     baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
     failed_source = "954fc0215f06bbf684111fb497b35d0d06b01989"
@@ -186,7 +206,13 @@ def make_repair_history(
     base_files["docs/execution/phases/PHASE_8.md"] = b"future phase 8\n"
     if original_changes:
         base_files.update(original_changes)
-    commit_test_files(root, base_files, "state baseline introduces 7F0")
+    if previous_contract_active:
+        previous_files = dict(base_files)
+        previous_plan = json.loads(previous_files["docs/execution/PLAN.json"])
+        execution_plan.checkpoint_for_id(previous_plan, "7F0")["title"] = "Earlier 7F0 contract"
+        previous_files["docs/execution/PLAN.json"] = json.dumps(previous_plan, indent=2) + "\n"
+        commit_test_files(root, previous_files, "trusted maintenance changes active contract")
+    commit_test_files(root, base_files, "final 7F0 state baseline")
 
     failed_files = {
         path: git_blob_from_main(failed_source, path)
@@ -1863,6 +1889,88 @@ class RepairResumeTests(unittest.TestCase):
         with self.assertRaisesRegex(agent_supervisor.SupervisorError, message):
             agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
 
+    def test_baseline_walk_stops_before_bootstrap_without_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, failed_sha, _head = self._history(directory)
+            baseline = agent_supervisor._state_baseline_for_checkpoint(
+                root, failed_sha, "7F0"
+            )
+            first_parent = subprocess.run(
+                ["git", "rev-parse", f"{baseline}^1"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            bootstrap = subprocess.run(
+                ["git", "rev-parse", f"{first_parent}^1"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            missing_state = subprocess.run(
+                ["git", "ls-tree", bootstrap, "--", "docs/execution/STATE.json"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            expected = subprocess.run(
+                ["git", "rev-parse", f"{failed_sha}^1"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(baseline, expected)
+            self.assertEqual(missing_state, "")
+
+    def test_baseline_stops_at_active_contract_change_while_checkpoint_remains_next(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            failed_sha, _head = make_repair_history(root, previous_contract_active=True)
+            baseline = agent_supervisor._state_baseline_for_checkpoint(
+                root, failed_sha, "7F0"
+            )
+            previous = subprocess.run(
+                ["git", "rev-parse", f"{baseline}^1"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            previous_state = agent_supervisor._json_at_revision(
+                root, previous, "docs/execution/STATE.json"
+            )
+            self.assertEqual(previous_state["current_next"], "7F0")
+            self.assertEqual(previous_state["checkpoints"]["7F0"], "NEXT")
+            self.assertNotEqual(
+                agent_supervisor._active_checkpoint_fingerprint(root, previous, "7F0"),
+                agent_supervisor._active_checkpoint_fingerprint(root, failed_sha, "7F0"),
+            )
+            expected = subprocess.run(
+                ["git", "rev-parse", f"{failed_sha}^1"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(baseline, expected)
+            self.assertNotEqual(baseline, previous)
+
+    def test_malformed_state_in_execution_history_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            failed_sha, _head = make_repair_history(
+                root, historical_state=b"{malformed state\n"
+            )
+            with self.assertRaisesRegex(
+                agent_supervisor.SupervisorError,
+                "cannot read docs/execution/STATE.json",
+            ):
+                agent_supervisor._state_baseline_for_checkpoint(root, failed_sha, "7F0")
+
     def test_trusted_future_plan_and_spec_maintenance_with_version_metadata_is_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, head = self._history(directory)
@@ -1960,9 +2068,48 @@ class RepairResumeTests(unittest.TestCase):
     def test_original_implementation_protected_path_check_still_applies(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
-            protected = "docs/execution/EVIDENCE_POLICY.json"
+            protected = "docs/execution/architecture-policy.json"
             failed_sha, _head = make_repair_history(
-                root, failed_changes={protected: b"tampered policy\n"}
+                root,
+                failed_changes={
+                    protected: git_blob_from_main(
+                        "a5a0d88d22b23ad5ddbedca604f3c01edc882f50", protected
+                    )
+                    + b"\n"
+                },
+            )
+            self._reject(root, failed_sha, "original implementation changed protected")
+
+    def test_original_implementation_cannot_change_active_checkpoint_contract(self) -> None:
+        baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
+        for label, path in (
+            ("plan", "docs/execution/PLAN.json"),
+            ("phase", "docs/execution/phases/PHASE_7.md"),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                if label == "plan":
+                    plan = json.loads(git_blob_from_main(baseline, path))
+                    execution_plan.checkpoint_for_id(plan, "7F0")["title"] = "redefined"
+                    value: bytes | str = json.dumps(plan, indent=2) + "\n"
+                else:
+                    value = git_blob_from_main(baseline, path) + b"\nchanged contract\n"
+                root = Path(directory) / "repo"
+                failed_sha, _head = make_repair_history(
+                    root, failed_changes={path: value}
+                )
+                self._reject(root, failed_sha, "fingerprint")
+
+    def test_original_implementation_cannot_change_state(self) -> None:
+        baseline = "a5a0d88d22b23ad5ddbedca604f3c01edc882f50"
+        state = json.loads(git_blob_from_main(baseline, "docs/execution/STATE.json"))
+        state["last_updated"] = "changed by implementation"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            failed_sha, _head = make_repair_history(
+                root,
+                failed_changes={
+                    "docs/execution/STATE.json": json.dumps(state, indent=2) + "\n"
+                },
             )
             self._reject(root, failed_sha, "original implementation changed protected")
 
