@@ -1,0 +1,22 @@
+name: or_viewer_texture
+description: Native CPU pixel-buffer texture adapter for Opencut Reinforced.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      linux:
+        pluginClass: OrViewerTexturePlugin
+      macos:
+        pluginClass: OrViewerTexturePlugin
+      windows:
+        pluginClass: OrViewerTexturePluginCApi

@@ -318,6 +318,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  or_viewer_texture:
+    dependency: "direct main"
+    description:
+      path: "../../packages/or_viewer_texture"
+      relative: true
+    source: path
+    version: "0.1.0"
   path:
     dependency: transitive
     description:

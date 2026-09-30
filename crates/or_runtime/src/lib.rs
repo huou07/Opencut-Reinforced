@@ -601,6 +601,16 @@ impl FrameLease {
         }
     }
 
+    fn shared_software_copy(&self) -> Option<Self> {
+        match self.storage.as_ref()? {
+            FrameLeaseStorage::Software(bytes) => Some(Self {
+                descriptor: self.descriptor,
+                storage: Some(FrameLeaseStorage::Software(Arc::clone(bytes))),
+            }),
+            FrameLeaseStorage::Release(_) => None,
+        }
+    }
+
     pub fn is_released(&self) -> bool {
         self.storage.is_none()
     }
@@ -647,6 +657,153 @@ impl fmt::Display for FrameLeaseError {
 }
 
 impl Error for FrameLeaseError {}
+
+const VIEWER_MAX_FRAME_BYTES: usize = 256 * 1024 * 1024;
+const VIEWER_MAX_IN_FLIGHT: usize = 3;
+
+struct ViewerFrameState {
+    generation: Option<u64>,
+    latest: Option<FrameLease>,
+    in_flight: usize,
+}
+
+/// Bounded CPU presentation storage shared by native Flutter texture adapters.
+/// It keeps one latest frame and at most three Flutter-owned leases in flight.
+pub struct ViewerTextureAdapter {
+    state: Arc<Mutex<ViewerFrameState>>,
+}
+
+impl Default for ViewerTextureAdapter {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ViewerFrameState {
+                generation: None,
+                latest: None,
+                in_flight: 0,
+            })),
+        }
+    }
+}
+
+impl ViewerTextureAdapter {
+    /// Invalidates earlier work when a seek or project revision supersedes it.
+    pub fn advance_generation(&self, generation: u64) -> bool {
+        let mut state = lock(&self.state);
+        if state
+            .generation
+            .is_some_and(|current| generation <= current)
+        {
+            return false;
+        }
+        state.generation = Some(generation);
+        state.latest = None;
+        true
+    }
+
+    /// Publishes RGBA software pixels as a premultiplied BGRA Flutter frame.
+    /// Older generations are rejected; the mailbox retains only the newest
+    /// frame, while acquired leases remain alive through Flutter's release.
+    pub fn publish_rgba(
+        &self,
+        generation: u64,
+        width: u32,
+        height: u32,
+        timestamp: RationalTime,
+        rgba: &[u8],
+    ) -> Result<(), ViewerTextureError> {
+        let byte_count = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .filter(|bytes| *bytes <= VIEWER_MAX_FRAME_BYTES)
+            .ok_or(ViewerTextureError::InvalidSize)?;
+        if width == 0 || height == 0 || rgba.len() != byte_count {
+            return Err(ViewerTextureError::InvalidPixels);
+        }
+
+        let mut bgra = Vec::with_capacity(byte_count);
+        for pixel in rgba.chunks_exact(4) {
+            let alpha = u16::from(pixel[3]);
+            let premultiply = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;
+            bgra.extend_from_slice(&[
+                premultiply(pixel[2]),
+                premultiply(pixel[1]),
+                premultiply(pixel[0]),
+                pixel[3],
+            ]);
+        }
+
+        let descriptor =
+            FrameDescriptor::software(width, height, FramePixelFormat::Bgra8, timestamp)
+                .map_err(|_| ViewerTextureError::InvalidSize)?;
+        let frame = FrameLease::from_software(descriptor, bgra)
+            .map_err(|_| ViewerTextureError::InvalidPixels)?;
+        let mut state = lock(&self.state);
+        if state.generation.is_some_and(|current| generation < current) {
+            return Err(ViewerTextureError::StaleGeneration);
+        }
+        state.generation = Some(generation);
+        state.latest = Some(frame);
+        Ok(())
+    }
+
+    /// Acquires the newest frame if Flutter still has room to retain it.
+    pub fn acquire_latest(&self) -> Option<ViewerFrameLease> {
+        let mut state = lock(&self.state);
+        if state.in_flight == VIEWER_MAX_IN_FLIGHT {
+            return None;
+        }
+        let frame = state.latest.as_ref()?.shared_software_copy()?;
+        state.in_flight += 1;
+        Some(ViewerFrameLease {
+            frame,
+            state: Arc::clone(&self.state),
+        })
+    }
+}
+
+/// A frame held until Flutter signals that its pixel buffer can be released.
+pub struct ViewerFrameLease {
+    frame: FrameLease,
+    state: Arc<Mutex<ViewerFrameState>>,
+}
+
+impl ViewerFrameLease {
+    pub const fn descriptor(&self) -> &FrameDescriptor {
+        self.frame.descriptor()
+    }
+
+    pub fn pixels(&self) -> &[u8] {
+        self.frame
+            .software_bytes()
+            .expect("viewer texture frames own software pixels")
+    }
+}
+
+impl Drop for ViewerFrameLease {
+    fn drop(&mut self) {
+        let mut state = lock(&self.state);
+        state.in_flight = state.in_flight.saturating_sub(1);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ViewerTextureError {
+    InvalidSize,
+    InvalidPixels,
+    StaleGeneration,
+}
+
+impl fmt::Display for ViewerTextureError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidSize => "viewer frame size is invalid or exceeds the limit",
+            Self::InvalidPixels => "viewer frame pixels do not match the declared size",
+            Self::StaleGeneration => "viewer frame belongs to an obsolete generation",
+        })
+    }
+}
+
+impl Error for ViewerTextureError {}
 
 /// Independent limits for one runtime workload class.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1176,6 +1333,35 @@ mod tests {
 
     fn time(numerator: i64, denominator: u32) -> RationalTime {
         RationalTime::new(numerator, denominator).unwrap()
+    }
+
+    #[test]
+    fn viewer_mailbox_converts_pixels_rejects_stale_frames_and_bounds_leases() {
+        let adapter = ViewerTextureAdapter::default();
+        assert!(adapter.advance_generation(4));
+        assert_eq!(
+            adapter.publish_rgba(3, 1, 1, time(1, 24), &[200, 100, 50, 128]),
+            Err(ViewerTextureError::StaleGeneration)
+        );
+        adapter
+            .publish_rgba(4, 1, 1, time(1, 24), &[200, 100, 50, 128])
+            .unwrap();
+
+        let first = adapter.acquire_latest().unwrap();
+        assert_eq!(first.pixels(), &[25, 50, 100, 128]);
+        assert_eq!(first.descriptor().pixel_format(), FramePixelFormat::Bgra8);
+        let second = adapter.acquire_latest().unwrap();
+        let third = adapter.acquire_latest().unwrap();
+        assert!(adapter.acquire_latest().is_none());
+
+        assert!(adapter.advance_generation(5));
+        assert!(adapter.acquire_latest().is_none());
+        drop(first);
+        adapter
+            .publish_rgba(5, 1, 1, time(2, 24), &[0, 0, 0, 255])
+            .unwrap();
+        assert!(adapter.acquire_latest().is_some());
+        drop((second, third));
     }
 
     fn provider(value: &str) -> RuntimeProviderId {

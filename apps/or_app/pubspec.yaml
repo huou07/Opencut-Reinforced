@@ -12,6 +12,8 @@ dependencies:
   file_selector: ^1.1.0
   or_app_bridge:
     path: ../../packages/or_app_bridge
+  or_viewer_texture:
+    path: ../../packages/or_viewer_texture
 
 dev_dependencies:
   flutter_test:
