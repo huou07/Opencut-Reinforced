@@ -77,6 +77,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
     let original = new_project(&project_path);
     let session = ProjectFileSession::open(&project_path).unwrap();
     let server = LocalIpcServer::start(session, Some(&descriptor_path)).unwrap();
+    #[cfg(unix)]
     let endpoint = server.descriptor().endpoint().to_owned();
     let client = LocalIpcClient::open(&descriptor_path).unwrap();
 
@@ -132,6 +133,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.marker.move",
             "timeline.marker.rename",
             "timeline.marker.delete",
+            "timeline.sequence.set_frame_rate",
         ]
     );
     assert_eq!(
@@ -148,6 +150,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.clips",
             "timeline.snap",
             "timeline.markers",
+            "timeline.sequence.settings",
         ]
     );
     let describe_json = serde_json::to_string(&describe).unwrap();

@@ -41,6 +41,12 @@ from checkpoint statuses and snapshots the exact verified source versions.
 bypass. It checks the original implementation and active checkpoint contract,
 accepts only trusted maintenance changes, and records the repaired HEAD as the
 verified implementation SHA with the failed implementation SHA as provenance.
+Repair history may also contain corrections confined to crate `tests/`
+directories or the OR app's `test/` and `integration_test/` directories; runtime
+source, manifests, workflows, evidence policy, and active checkpoint contracts
+remain protected. The supervisor runs `cargo test --workspace` on the exact
+candidate before hosted verification, including after a repair. A local failure
+stops before GitHub polling and leaves state unchanged.
 
 ## Trust boundary
 

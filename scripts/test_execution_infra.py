@@ -1873,6 +1873,45 @@ class RepairResumeTests(unittest.TestCase):
         self.assertEqual(proof["candidate_versions"], contract_versions(project=5))
         self.assertEqual(proof["fingerprint"]["checkpoint"]["id"], "7F0")
 
+    def test_test_only_correction_is_allowed_and_keeps_active_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, failed_sha, _head = self._history(directory)
+            test_path = "crates/or_ipc/tests/local_transport.rs"
+            corrected_head = commit_test_files(
+                root, {test_path: b"corrected exact catalog expectations\n"}, "fix stale IPC test"
+            )
+            original_fingerprint = agent_supervisor._active_checkpoint_fingerprint(
+                root, failed_sha, "7F0"
+            )
+            corrected_fingerprint = agent_supervisor._active_checkpoint_fingerprint(
+                root, corrected_head, "7F0"
+            )
+            proof = agent_supervisor.validate_repair_resume_history(root, failed_sha, "7F0")
+            changed_paths = agent_supervisor._repair_history_paths(
+                root, failed_sha, corrected_head
+            )
+        self.assertEqual(original_fingerprint, corrected_fingerprint)
+        self.assertEqual(proof["head"], corrected_head)
+        self.assertIn(test_path, changed_paths)
+
+    def test_repair_test_surface_excludes_runtime_and_production_paths(self) -> None:
+        allowed = (
+            "crates/or_ipc/tests/local_transport.rs",
+            "crates/or_core/tests/project_storage.rs",
+            "apps/or_app/test/widget_test.dart",
+            "apps/or_app/integration_test/core_bridge_test.dart",
+        )
+        rejected = (
+            "crates/or_ipc/src/server.rs",
+            "crates/or_core/src/application.rs",
+            "Cargo.toml",
+            "Cargo.lock",
+            "apps/or_app/lib/main.dart",
+            ".github/workflows/platform-verification.yml",
+        )
+        self.assertTrue(all(agent_supervisor._repair_path_allowed(path) for path in allowed))
+        self.assertTrue(all(not agent_supervisor._repair_path_allowed(path) for path in rejected))
+
     def test_failed_sha_must_be_a_lowercase_full_sha(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _failed_sha, _head = self._history(directory)
@@ -1931,6 +1970,26 @@ class RepairResumeTests(unittest.TestCase):
         mutations = {
             "product": (
                 {"crates/or_core/src/project_document.rs": b"tampered product\n"},
+                "maintenance changed non-control-plane files",
+            ),
+            "ipc_runtime": (
+                {"crates/or_ipc/src/server.rs": b"tampered IPC runtime\n"},
+                "maintenance changed non-control-plane files",
+            ),
+            "core_runtime": (
+                {"crates/or_core/src/application.rs": b"tampered core runtime\n"},
+                "maintenance changed non-control-plane files",
+            ),
+            "manifest": (
+                {"Cargo.toml": b"tampered manifest\n"},
+                "maintenance changed non-control-plane files",
+            ),
+            "lockfile": (
+                {"Cargo.lock": b"tampered lockfile\n"},
+                "maintenance changed non-control-plane files",
+            ),
+            "flutter_runtime": (
+                {"apps/or_app/lib/main.dart": b"tampered Flutter runtime\n"},
                 "maintenance changed non-control-plane files",
             ),
             "workflow": (
@@ -2015,6 +2074,7 @@ class RepairResumeTests(unittest.TestCase):
             with (
                 mock.patch.object(agent_supervisor, "ensure_start_state"),
                 mock.patch.object(agent_supervisor, "_preflight_goal_data", return_value=preflight),
+                mock.patch.object(agent_supervisor, "_run_pre_host_checks"),
                 mock.patch.object(
                     agent_supervisor,
                     "verify_hosted_checkpoint",
@@ -2145,6 +2205,83 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(
             run_one.call_args.kwargs["implementation_sha"], implementation_sha
         )
+
+    def test_pre_host_stage_runs_the_headless_workspace_suite(self) -> None:
+        implementation_sha = "a" * 40
+        with (
+            mock.patch.object(agent_supervisor.subprocess, "run") as run,
+            mock.patch.object(agent_supervisor, "refuse_dirty_worktree"),
+            mock.patch.object(agent_supervisor, "git_output", return_value=implementation_sha),
+        ):
+            agent_supervisor._run_pre_host_checks(REPO_ROOT, implementation_sha)
+        run.assert_called_once_with(
+            ["cargo", "test", "--workspace"], cwd=REPO_ROOT, check=True
+        )
+
+    def test_pre_host_failure_stops_before_hosted_polling_state_change_or_retry(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        state_path = REPO_ROOT / "docs/execution/STATE.json"
+        before_state = state_path.read_bytes()
+        baseline_sha = "a" * 40
+        implementation_sha = "b" * 40
+        current_head = {"sha": baseline_sha}
+
+        def fake_git_output(_repo_root: Path, *arguments: str) -> str:
+            if arguments == ("status", "--porcelain", "--untracked-files=all"):
+                return ""
+            if arguments == ("status", "--porcelain"):
+                return ""
+            if arguments == ("branch", "--show-current"):
+                return "main"
+            if arguments == ("rev-parse", "HEAD"):
+                return current_head["sha"]
+            if arguments == ("rev-parse", "origin/main"):
+                return current_head["sha"]
+            if arguments == ("rev-list", "--left-right", "--count", "HEAD...origin/main"):
+                return "0\t0"
+            if arguments == ("fetch", "--prune", "origin"):
+                return ""
+            raise AssertionError(f"unexpected git command: {arguments}")
+
+        def runner_commits(_repo_root: Path, _runner: str, _prompt: str) -> int:
+            current_head["sha"] = implementation_sha
+            return 0
+
+        with (
+            mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(
+                execution_plan, "load_plan_state", return_value=(plan, state)
+            ),
+            mock.patch.object(agent_supervisor, "git_output", side_effect=fake_git_output),
+            mock.patch.object(
+                agent_supervisor, "invoke_runner", side_effect=runner_commits
+            ) as invoke,
+            mock.patch.object(
+                agent_supervisor.subprocess,
+                "run",
+                side_effect=subprocess.CalledProcessError(
+                    1, ["cargo", "test", "--workspace"]
+                ),
+            ) as local_test,
+            mock.patch.object(agent_supervisor, "verify_hosted_checkpoint") as verify,
+            mock.patch.object(agent_supervisor, "_github_api_for_repo") as github_api,
+            mock.patch.object(agent_supervisor, "finalize_verified_checkpoint") as finalize,
+        ):
+            with self.assertRaisesRegex(
+                agent_supervisor.SupervisorError, "pre-host verification failed"
+            ):
+                agent_supervisor.run_goal(
+                    REPO_ROOT, "milestone:desktop-mvp", "/runner"
+                )
+
+        invoke.assert_called_once()
+        local_test.assert_called_once_with(
+            ["cargo", "test", "--workspace"], cwd=REPO_ROOT, check=True
+        )
+        verify.assert_not_called()
+        github_api.assert_not_called()
+        finalize.assert_not_called()
+        self.assertEqual(state_path.read_bytes(), before_state)
 
     def test_phase_goal_runs_one_fresh_runner_per_checkpoint(self) -> None:
         plan, initial_state = execution_plan.load_plan_state(REPO_ROOT)

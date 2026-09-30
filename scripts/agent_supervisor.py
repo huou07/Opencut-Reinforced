@@ -58,6 +58,10 @@ REPAIR_ALLOWED_CONTROL_PATHS = {
     "scripts/test_execution_infra.py",
 }
 REPAIR_ALLOWED_PREFIXES = ("docs/execution/phases/",)
+REPAIR_TEST_PREFIXES = (
+    "apps/or_app/test/",
+    "apps/or_app/integration_test/",
+)
 
 
 def git_output(repo_root: Path, *arguments: str) -> str:
@@ -534,6 +538,20 @@ def _run_local_completion_checks(repo_root: Path) -> None:
         subprocess.run(command, cwd=repo_root, check=True)
 
 
+def _run_pre_host_checks(repo_root: Path, implementation_sha: str) -> None:
+    """Run headless Rust tests before spending time on hosted CI verification."""
+
+    try:
+        subprocess.run(["cargo", "test", "--workspace"], cwd=repo_root, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise SupervisorError("pre-host verification failed: cargo test --workspace") from exc
+    refuse_dirty_worktree(repo_root)
+    if git_output(repo_root, "rev-parse", "HEAD") != implementation_sha:
+        raise SupervisorError("HEAD changed during pre-host verification")
+    if git_output(repo_root, "rev-parse", "origin/main") != implementation_sha:
+        raise SupervisorError("origin/main changed during pre-host verification")
+
+
 def _github_api_for_repo(repo_root: Path, policy: Mapping[str, Any]) -> execution_evidence.GitHubApi:
     owner, repository = execution_evidence.repository_identity(repo_root)
     expected = policy["repository"]
@@ -875,8 +893,22 @@ def _repair_history_paths(repo_root: Path, failed_sha: str, head: str) -> set[st
 
 
 def _repair_path_allowed(path: str) -> bool:
-    return path in REPAIR_ALLOWED_CONTROL_PATHS or any(
-        path.startswith(prefix) for prefix in REPAIR_ALLOWED_PREFIXES
+    if "\\" in path:
+        return False
+    parts = path.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return False
+    crate_test = (
+        len(parts) >= 4
+        and parts[0] == "crates"
+        and bool(parts[1])
+        and parts[2] == "tests"
+    )
+    return (
+        path in REPAIR_ALLOWED_CONTROL_PATHS
+        or any(path.startswith(prefix) for prefix in REPAIR_ALLOWED_PREFIXES)
+        or crate_test
+        or any(path.startswith(prefix) for prefix in REPAIR_TEST_PREFIXES)
     )
 
 
@@ -1061,27 +1093,16 @@ def repair_resume_goal(
     plan = preflight["plan"]
     state = preflight["state"]
     resolution = preflight["resolution"]
-    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
-    subject = git_output(repo_root, "show", "-s", "--format=%s", proof["head"])
-    evidence_result = verify_hosted_checkpoint(
+    result = _run_one_checkpoint(
         repo_root,
-        plan,
-        checkpoint,
-        proof["head"],
-        subject,
+        plan=plan,
+        state=state,
+        resolution=resolution,
+        implementation_sha=proof["head"],
         implementation_origin_sha=failed_sha,
         api=api,
         clock=clock,
         sleep=sleep,
-    )
-    result = finalize_verified_checkpoint(
-        repo_root,
-        plan=plan,
-        state=state,
-        checkpoint=checkpoint,
-        evidence_result=evidence_result,
-        implementation_sha=proof["head"],
-        api=evidence_result["api"],
     )
     return [_verified_report(result, plan)]
 
@@ -1177,6 +1198,7 @@ def _run_one_checkpoint(
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     checkpoint = execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"])
+    _run_pre_host_checks(repo_root, implementation_sha)
     subject = git_output(repo_root, "show", "-s", "--format=%s", implementation_sha)
     evidence_result = verify_hosted_checkpoint(
         repo_root,
