@@ -60,8 +60,8 @@
     "7C0": "DONE",
     "7D": "DONE",
     "7E": "DONE",
-    "7F0": "NEXT",
-    "7F": "PLANNED",
+    "7F": "NEXT",
+    "7F0": "DONE",
     "7G": "PLANNED",
     "7H": "PLANNED",
     "8A": "PLANNED",
@@ -76,7 +76,7 @@
     "9D": "PLANNED",
     "9E": "PLANNED"
   },
-  "current_next": "7F0",
+  "current_next": "7F",
   "last_updated": "2026-09-30",
   "phase_status": {
     "10": "PLANNED",
@@ -95,8 +95,8 @@
   "repository": "Opencut Reinforced",
   "schema_version": 1,
   "verified_contract_versions": {
-    "project_schema": 4,
-    "recovery_schema": 1,
-    "ipc_protocol": 1
+    "ipc_protocol": 1,
+    "project_schema": 5,
+    "recovery_schema": 1
   }
 }
