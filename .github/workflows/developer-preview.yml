@@ -399,7 +399,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev libgtk-3-dev liblzma-dev patchelf
+          sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev libgtk-3-dev liblzma-dev libasound2-dev patchelf
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
