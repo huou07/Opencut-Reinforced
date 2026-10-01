@@ -16,6 +16,13 @@ use std::{
     time::Duration,
 };
 
+mod transport;
+
+pub use transport::{
+    PlaybackSnapshot, PreviewFrameRequest, PreviewFrameStep, PreviewTransport,
+    PreviewTransportError,
+};
+
 const QUEUE_CANCELLATION_POLL: Duration = Duration::from_millis(10);
 pub const MAX_PROVIDER_ID_BYTES: usize = 128;
 pub const SOFTWARE_PROVIDER_ID: &str = "software";

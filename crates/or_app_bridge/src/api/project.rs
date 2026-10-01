@@ -1,4 +1,5 @@
 use crate::frb_generated::StreamSink;
+use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
@@ -6,7 +7,7 @@ use or_core::{
     MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
     MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RationalTime, RecoveryApplyOutcome,
+    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
     TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation,
     TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TrackId,
@@ -56,6 +57,41 @@ pub struct ProjectMediaItemView {
 pub struct RationalTimeView {
     pub numerator: i64,
     pub denominator: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RationalRateView {
+    pub numerator: u32,
+    pub denominator: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTimelineSequenceSettingsView {
+    pub project_id: String,
+    pub project_instance_id: String,
+    pub project_revision: u64,
+    pub sequence_frame_rate: Option<RationalRateView>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreviewFrameStepView {
+    Previous,
+    Next,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectPreviewStateView {
+    pub position: RationalTimeView,
+    pub presented_time: Option<RationalTimeView>,
+    pub sequence_frame_rate: Option<RationalRateView>,
+    pub content_end: Option<RationalTimeView>,
+    pub playing: bool,
+    pub generation: u64,
+    pub frame_sequence: u64,
+    pub width: u32,
+    pub height: u32,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -274,6 +310,7 @@ impl std::error::Error for ProjectBridgeError {}
 pub struct ProjectHostHandle {
     host: LiveProjectHost,
     media_artifact_service: Option<MediaArtifactService>,
+    preview_runtime: PreviewRuntime,
 }
 
 pub fn create_project(path: String, name: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
@@ -294,6 +331,7 @@ fn start_project_host(
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
+        preview_runtime: PreviewRuntime::new(),
     })
 }
 
@@ -580,6 +618,120 @@ impl ProjectHostHandle {
             .as_ref()
             .ok_or_else(unexpected_response_error)?;
         Ok(timeline_marker_page_view(&result, page))
+    }
+
+    pub fn timeline_sequence_settings(
+        &self,
+    ) -> Result<ProjectTimelineSequenceSettingsView, ProjectBridgeError> {
+        let described = self.host.describe().map_err(host_error)?;
+        let result = self.query(QueryEnvelope::timeline_sequence_settings(
+            described.summary.project_id,
+            described.summary.project_instance_id,
+        ))?;
+        let settings = result
+            .timeline_sequence_settings
+            .ok_or_else(unexpected_response_error)?;
+        Ok(ProjectTimelineSequenceSettingsView {
+            project_id: result.summary.project_id.to_string(),
+            project_instance_id: result.summary.project_instance_id.to_string(),
+            project_revision: result.summary.project_revision.value(),
+            sequence_frame_rate: settings.sequence_frame_rate.map(rational_rate_view),
+        })
+    }
+
+    pub fn set_timeline_sequence_frame_rate(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        sequence_frame_rate: Option<RationalRateView>,
+    ) -> ProjectActionResult {
+        let rate = match sequence_frame_rate {
+            Some(rate) => match RationalRate::new(rate.numerator, rate.denominator) {
+                Ok(rate) => Some(rate),
+                Err(error) => {
+                    return action_error(ProjectBridgeError {
+                        code: "INVALID_SEQUENCE_FRAME_RATE".to_owned(),
+                        message: error.to_string(),
+                    });
+                }
+            },
+            None => None,
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::set_timeline_sequence_frame_rate(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    rate,
+                )
+            },
+        )
+    }
+
+    pub fn preview_state(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .status(&self.host)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_seek(
+        &self,
+        position: RationalTimeView,
+    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        let position =
+            RationalTime::new(position.numerator, position.denominator).map_err(|error| {
+                ProjectBridgeError {
+                    code: "INVALID_PREVIEW_TIME".to_owned(),
+                    message: error.to_string(),
+                }
+            })?;
+        self.preview_runtime
+            .seek(&self.host, position)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_play(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .play(&self.host)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_pause(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .pause(&self.host)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_step(
+        &self,
+        direction: PreviewFrameStepView,
+    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .step(
+                &self.host,
+                match direction {
+                    PreviewFrameStepView::Previous => or_runtime::PreviewFrameStep::Previous,
+                    PreviewFrameStepView::Next => or_runtime::PreviewFrameStep::Next,
+                },
+            )
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_tick(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .tick(&self.host)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1560,6 +1712,36 @@ fn rational_time_view(time: RationalTime) -> RationalTimeView {
     RationalTimeView {
         numerator: time.numerator(),
         denominator: time.denominator(),
+    }
+}
+
+fn rational_rate_view(rate: RationalRate) -> RationalRateView {
+    RationalRateView {
+        numerator: rate.numerator(),
+        denominator: rate.denominator(),
+    }
+}
+
+fn preview_state_view(snapshot: PreviewSnapshot) -> ProjectPreviewStateView {
+    ProjectPreviewStateView {
+        position: rational_time_view(snapshot.playback.position),
+        presented_time: snapshot.playback.presented_time.map(rational_time_view),
+        sequence_frame_rate: snapshot.playback.frame_rate.map(rational_rate_view),
+        content_end: snapshot.playback.content_end.map(rational_time_view),
+        playing: snapshot.playback.playing,
+        generation: snapshot.playback.generation,
+        frame_sequence: snapshot.playback.frame_sequence,
+        width: snapshot.width,
+        height: snapshot.height,
+        error_code: snapshot.error_code,
+        error_message: snapshot.error_message,
+    }
+}
+
+fn preview_bridge_error(error: PreviewError) -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: error.code,
+        message: error.message,
     }
 }
 

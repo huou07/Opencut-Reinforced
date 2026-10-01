@@ -72,6 +72,27 @@ OrViewerTexturePlugin::OrViewerTexturePlugin(
   texture_ = std::make_shared<flutter::TextureVariant>(
       flutter::PixelBufferTexture(copy_pixel_buffer));
   texture_id_ = texture_registrar_->RegisterTexture(texture_.get());
+  channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      registrar->messenger(), "or_viewer_texture",
+      &flutter::StandardMethodCodec::GetInstance());
+  channel_->SetMethodCallHandler(
+      [this](const auto& call, auto result) {
+        if (call.method_name() == "textureId") {
+          if (texture_id_ < 0) {
+            result->Error("TEXTURE_UNAVAILABLE",
+                          "The viewer texture could not be registered.");
+            return;
+          }
+          result->Success(flutter::EncodableValue(texture_id_));
+        } else if (call.method_name() == "frameAvailable") {
+          const bool marked = texture_id_ >= 0 &&
+                              texture_registrar_->MarkTextureFrameAvailable(
+                                  texture_id_);
+          result->Success(flutter::EncodableValue(marked));
+        } else {
+          result->NotImplemented();
+        }
+      });
 }
 
 OrViewerTexturePlugin::~OrViewerTexturePlugin() {

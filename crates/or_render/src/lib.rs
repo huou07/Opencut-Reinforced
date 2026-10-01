@@ -1,10 +1,10 @@
 //! The shared wgpu render spine for the runtime plane.
 //!
-//! Phase 7B is intentionally small: it owns a platform-neutral preview-surface
-//! contract, deterministic synthetic render-graph inputs, an offscreen wgpu
-//! target, and an explicit CPU readback path for tests and future encoders.
-//! Viewer presentation remains a handle-level contract; full-rate frame bytes
-//! are not part of the Flutter boundary.
+//! Phase 7B established a platform-neutral preview-surface contract,
+//! deterministic synthetic render-graph inputs, an offscreen wgpu target, and
+//! an explicit CPU readback path. Phase 7F adds GPU composition of decoded
+//! software video layers. Native adapters own viewer presentation; full-rate
+//! frame bytes remain outside the Flutter boundary.
 
 use or_runtime::{
     FrameAccess, FrameColorInfo, FrameDescriptor, FrameMemoryDomain, FramePixelFormat, FrameTiming,
@@ -77,7 +77,7 @@ impl RenderFormat {
     }
 }
 
-/// Opaque presentation identity supplied by the future viewer adapter.
+/// Opaque presentation identity supplied by the native viewer adapter.
 ///
 /// This is deliberately an application-level identity, not a raw Metal,
 /// DX12, Vulkan, or OS handle. Native interop belongs in a runtime adapter.
@@ -279,6 +279,9 @@ pub struct RenderDevice {
     _adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    video_bind_group_layout: wgpu::BindGroupLayout,
+    video_pipeline: wgpu::RenderPipeline,
+    video_sampler: wgpu::Sampler,
     adapter_info: RenderAdapterInfo,
     limits: wgpu::Limits,
 }
@@ -330,12 +333,112 @@ impl RenderDevice {
             .map_err(|error| RenderError::DeviceUnavailable {
                 message: error.to_string(),
             })?;
+        let video_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("or_render.video_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+        let video_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("or_render.video_blit"),
+            source: wgpu::ShaderSource::Wgsl(
+                r#"
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+}
+
+@group(0) @binding(0) var source: texture_2d<f32>;
+@group(0) @binding(1) var source_sampler: sampler;
+
+@vertex
+fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
+    let positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0),
+    );
+    let point = positions[index];
+    var output: VertexOutput;
+    output.position = vec4<f32>(point, 0.0, 1.0);
+    output.uv = vec2<f32>((point.x + 1.0) * 0.5, (1.0 - point.y) * 0.5);
+    return output;
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(source, source_sampler, input.uv);
+}
+"#
+                .into(),
+            ),
+        });
+        let video_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("or_render.video_pipeline_layout"),
+                bind_group_layouts: &[&video_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let video_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("or_render.video_pipeline"),
+            layout: Some(&video_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &video_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &video_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+        let video_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("or_render.video_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         Ok(Self {
             _instance: instance,
             _adapter: adapter,
             device,
             queue,
+            video_bind_group_layout,
+            video_pipeline,
+            video_sampler,
             adapter_info: RenderAdapterInfo {
                 name: adapter_info.name,
                 driver: adapter_info.driver,
@@ -450,6 +553,18 @@ impl RenderDevice {
             pixels,
         })
     }
+
+    /// Composites software-decoded RGBA layers through wgpu and reads back the
+    /// bounded CPU presentation frame required by the desktop texture fallback.
+    pub fn render_rgba_layers(
+        &self,
+        snapshot: RenderSnapshot,
+        size: RenderSize,
+        layers: &[RgbaVideoLayer<'_>],
+    ) -> Result<OffscreenReadback, RenderError> {
+        let frame = RenderGraph.render_rgba_layers(self, snapshot, size, layers)?;
+        self.readback(&frame)
+    }
 }
 
 impl fmt::Debug for RenderDevice {
@@ -546,6 +661,188 @@ impl RenderGraph {
             target: RenderTarget { texture },
         })
     }
+
+    fn render_rgba_layers(
+        &self,
+        renderer: &RenderDevice,
+        snapshot: RenderSnapshot,
+        size: RenderSize,
+        layers: &[RgbaVideoLayer<'_>],
+    ) -> Result<RenderedFrame, RenderError> {
+        if size.width() > renderer.limits.max_texture_dimension_2d
+            || size.height() > renderer.limits.max_texture_dimension_2d
+        {
+            return Err(RenderError::SizeExceedsDeviceLimit {
+                size,
+                limit: renderer.limits.max_texture_dimension_2d,
+            });
+        }
+        for layer in layers {
+            layer.validate()?;
+            if layer.width > renderer.limits.max_texture_dimension_2d
+                || layer.height > renderer.limits.max_texture_dimension_2d
+            {
+                return Err(RenderError::SourceSizeExceedsDeviceLimit {
+                    width: layer.width,
+                    height: layer.height,
+                    limit: renderer.limits.max_texture_dimension_2d,
+                });
+            }
+        }
+
+        let target = renderer.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.viewer_target"),
+            size: wgpu::Extent3d {
+                width: size.width(),
+                height: size.height(),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut sources = Vec::with_capacity(layers.len());
+        for layer in layers {
+            let source = renderer.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("or_render.viewer_source"),
+                size: wgpu::Extent3d {
+                    width: layer.width,
+                    height: layer.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            renderer.queue.write_texture(
+                source.as_image_copy(),
+                layer.pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(layer.width * 4),
+                    rows_per_image: Some(layer.height),
+                },
+                wgpu::Extent3d {
+                    width: layer.width,
+                    height: layer.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            let view = source.create_view(&wgpu::TextureViewDescriptor::default());
+            let bind_group = renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("or_render.viewer_layer"),
+                    layout: &renderer.video_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&renderer.video_sampler),
+                        },
+                    ],
+                });
+            sources.push((source, view, bind_group));
+        }
+
+        let attachments = [Some(wgpu::RenderPassColorAttachment {
+            view: &target_view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(SyntheticColor::BLACK.wgpu()),
+                store: wgpu::StoreOp::Store,
+            },
+        })];
+        let mut encoder = renderer
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("or_render.viewer_encoder"),
+            });
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("or_render.viewer_pass"),
+                color_attachments: &attachments,
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&renderer.video_pipeline);
+            for (_, _, bind_group) in &sources {
+                pass.set_bind_group(0, bind_group, &[]);
+                pass.draw(0..3, 0..1);
+            }
+        }
+        renderer.queue.submit(Some(encoder.finish()));
+
+        let descriptor = FrameDescriptor::new(
+            FrameMemoryDomain::HardwareSurface,
+            size.width(),
+            size.height(),
+            FramePixelFormat::Rgba8,
+            FrameColorInfo::default(),
+            FrameTiming::at(snapshot.requested_range().start()),
+            FrameAccess::ReadOnly,
+        )
+        .map_err(|error| RenderError::FrameDescriptor {
+            message: error.to_string(),
+        })?;
+        Ok(RenderedFrame {
+            snapshot,
+            surface: PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
+            descriptor,
+            target: RenderTarget { texture: target },
+        })
+    }
+}
+
+/// One software-decoded RGBA source layer passed to the render graph.
+#[derive(Clone, Copy, Debug)]
+pub struct RgbaVideoLayer<'a> {
+    width: u32,
+    height: u32,
+    pixels: &'a [u8],
+}
+
+impl<'a> RgbaVideoLayer<'a> {
+    pub fn new(width: u32, height: u32, pixels: &'a [u8]) -> Result<Self, RenderError> {
+        let layer = Self {
+            width,
+            height,
+            pixels,
+        };
+        layer.validate()?;
+        Ok(layer)
+    }
+
+    pub const fn width(self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(self) -> u32 {
+        self.height
+    }
+
+    fn validate(&self) -> Result<(), RenderError> {
+        let length = (self.width as usize)
+            .checked_mul(self.height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .filter(|length| *length <= 256 * 1024 * 1024)
+            .ok_or(RenderError::InvalidSourceFrame)?;
+        if self.width == 0 || self.height == 0 || self.pixels.len() != length {
+            return Err(RenderError::InvalidSourceFrame);
+        }
+        Ok(())
+    }
 }
 
 /// An owned GPU render target and its immutable runtime metadata.
@@ -621,6 +918,8 @@ pub enum RenderError {
     AdapterUnavailable { message: String },
     DeviceUnavailable { message: String },
     ViewerSurfaceNotImplemented,
+    InvalidSourceFrame,
+    SourceSizeExceedsDeviceLimit { width: u32, height: u32, limit: u32 },
     SizeExceedsDeviceLimit { size: RenderSize, limit: u32 },
     ReadbackSizeOverflow,
     DevicePoll { message: String },
@@ -642,6 +941,17 @@ impl fmt::Display for RenderError {
             }
             Self::ViewerSurfaceNotImplemented => formatter
                 .write_str("viewer surface rendering is reserved for the viewer checkpoint"),
+            Self::InvalidSourceFrame => {
+                formatter.write_str("viewer source frame has an invalid size or pixel buffer")
+            }
+            Self::SourceSizeExceedsDeviceLimit {
+                width,
+                height,
+                limit,
+            } => write!(
+                formatter,
+                "viewer source size {width}x{height} exceeds the device texture limit {limit}"
+            ),
             Self::SizeExceedsDeviceLimit { size, limit } => write!(
                 formatter,
                 "render size {}x{} exceeds the device texture limit {limit}",
@@ -718,6 +1028,33 @@ mod tests {
         assert_eq!(align_to_copy_row(4).unwrap(), 256);
         assert_eq!(align_to_copy_row(256).unwrap(), 256);
         assert_eq!(align_to_copy_row(257).unwrap(), 512);
+    }
+
+    #[test]
+    fn viewer_render_composites_video_pixels_through_wgpu_when_adapter_is_available() {
+        let layer_pixels = [255, 16, 8, 255].repeat(4);
+        let layer = RgbaVideoLayer::new(2, 2, &layer_pixels).unwrap();
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu viewer test: {error}");
+                return;
+            }
+        };
+
+        let rendered = renderer
+            .render_rgba_layers(snapshot(), render_size(2, 2), &[layer])
+            .unwrap();
+
+        assert_eq!(rendered.pixels(), &layer_pixels);
+    }
+
+    #[test]
+    fn viewer_render_rejects_invalid_rgba_layers_before_gpu_use() {
+        assert!(matches!(
+            RgbaVideoLayer::new(2, 2, &[0; 15]),
+            Err(RenderError::InvalidSourceFrame)
+        ));
     }
 
     #[test]

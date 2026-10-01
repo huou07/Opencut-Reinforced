@@ -150,6 +150,71 @@ impl SoftwareMediaDecoder {
         Ok(emitted)
     }
 
+    /// Decodes the source frame with the greatest presentation timestamp at or
+    /// before `source_time`, falling forward to the first frame when seeking
+    /// before a stream's first timestamp.
+    pub fn decode_video_frame_at(
+        &self,
+        source_time: RationalTime,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<Option<VideoFrame>, DecodeError> {
+        if cancellation.is_cancelled() {
+            return Err(DecodeError::Cancelled);
+        }
+        let range = TimeRange::new(source_time, RationalTime::ZERO).map_err(DecodeError::Time)?;
+        validate_range(range)?;
+        let mut input = format::input(&self.path).map_err(DecodeError::Ffmpeg)?;
+        let (stream_index, time_base, context) = {
+            let stream = input
+                .streams()
+                .best(ffmpeg::media::Type::Video)
+                .ok_or(DecodeError::MissingVideoStream)?;
+            (
+                stream.index(),
+                TimestampBase::new(stream.time_base(), stream.start_time())?,
+                codec::context::Context::from_parameters(stream.parameters())
+                    .map_err(DecodeError::Ffmpeg)?,
+            )
+        };
+        let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        seek_to_range(&mut input, stream_index, range, time_base)?;
+        let mut scaler = None;
+        let mut candidate = None;
+        for packet in input.packets() {
+            if cancellation.is_cancelled() {
+                return Err(DecodeError::Cancelled);
+            }
+            let (_, packet) = packet.map_err(DecodeError::Ffmpeg)?;
+            if packet.stream() != stream_index {
+                continue;
+            }
+            decoder.send_packet(&packet).map_err(DecodeError::Ffmpeg)?;
+            if drain_video_frame_at(
+                &mut decoder,
+                &mut scaler,
+                time_base,
+                source_time,
+                &self.budgets,
+                cancellation,
+                &mut candidate,
+            )? {
+                return Ok(candidate);
+            }
+        }
+
+        decoder.send_eof().map_err(DecodeError::Ffmpeg)?;
+        drain_video_frame_at(
+            &mut decoder,
+            &mut scaler,
+            time_base,
+            source_time,
+            &self.budgets,
+            cancellation,
+            &mut candidate,
+        )?;
+        Ok(candidate)
+    }
+
     /// Seeks and decodes the first audio stream, converting it to bounded,
     /// interleaved stereo F32 audio at 48 kHz.
     pub fn decode_audio(
@@ -394,14 +459,24 @@ fn emit_video_frame(
     scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
     job: &DecodeJob<'_, VideoFrame>,
 ) -> Result<bool, DecodeError> {
+    let frame = make_video_frame(decoded, timestamp, scaler, job.budgets)?;
+    queue_video(job.snapshot, frame, job.queue, job.cancellation)?;
+    Ok(job.range.duration().is_zero())
+}
+
+fn make_video_frame(
+    decoded: &VideoFrameBuffer,
+    timestamp: RationalTime,
+    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    budgets: &RuntimeBudgets,
+) -> Result<VideoFrame, DecodeError> {
     let (width, height, input_format) = (decoded.width(), decoded.height(), decoded.format());
     let packed_len = (width as usize)
         .checked_mul(height as usize)
         .and_then(|pixels| pixels.checked_mul(4))
         .filter(|bytes| *bytes <= MAX_SOFTWARE_FRAME_BYTES)
         .ok_or(DecodeError::VideoFrameTooLarge)?;
-    let budget = job
-        .budgets
+    let budget = budgets
         .decode()
         .try_acquire(packed_len as u64)
         .map_err(DecodeError::Budget)?;
@@ -452,16 +527,46 @@ fn emit_video_frame(
 
     let descriptor = FrameDescriptor::software(width, height, FramePixelFormat::Rgba8, timestamp)?;
     let lease = FrameLease::from_software(descriptor, pixels)?;
-    queue_video(
-        job.snapshot,
-        VideoFrame {
-            lease,
-            _budget: budget,
-        },
-        job.queue,
-        job.cancellation,
-    )?;
-    Ok(job.range.duration().is_zero())
+    Ok(VideoFrame {
+        lease,
+        _budget: budget,
+    })
+}
+
+fn drain_video_frame_at(
+    decoder: &mut codec::decoder::Video,
+    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    time_base: TimestampBase,
+    target: RationalTime,
+    budgets: &RuntimeBudgets,
+    cancellation: &or_runtime::CancellationToken,
+    candidate: &mut Option<VideoFrame>,
+) -> Result<bool, DecodeError> {
+    loop {
+        if cancellation.is_cancelled() {
+            return Err(DecodeError::Cancelled);
+        }
+        let mut decoded = VideoFrameBuffer::empty();
+        match decoder.receive_frame(&mut decoded) {
+            Ok(()) => {
+                let timestamp = decoded
+                    .timestamp()
+                    .ok_or(DecodeError::MissingTimestamp)
+                    .and_then(|pts| time_base.to_time(pts))?;
+                if timestamp > target {
+                    if candidate.is_none() {
+                        *candidate = Some(make_video_frame(&decoded, timestamp, scaler, budgets)?);
+                    }
+                    return Ok(true);
+                }
+                candidate.take();
+                *candidate = Some(make_video_frame(&decoded, timestamp, scaler, budgets)?);
+            }
+            Err(FfmpegError::Eof) => return Ok(true),
+            Err(error) if is_again(error) => return Ok(false),
+            Err(error) => return Err(DecodeError::Ffmpeg(error)),
+        }
+    }
 }
 
 fn drain_audio(

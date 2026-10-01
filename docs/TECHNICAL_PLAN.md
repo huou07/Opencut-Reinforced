@@ -342,14 +342,14 @@ After a command is validated and applied, Rust emits a domain change or state-in
 
 Hot UI paths should use scoped queries such as timeline viewport, track list, selection inspector, media bin, and job list. Do not serialize and copy the whole project into Dart or rebuild every surface for each timeline interaction. Start with simple scoped queries and invalidation; do not introduce a reactive state framework before it is needed.
 
-The Flutter bridge uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in `packages/or_app_bridge` and a thin `crates/or_app_bridge` adapter. Its opaque `ProjectHostHandle` owns a `LiveProjectHost`; it does not expose mutable `ProjectDocument` state to Dart. Typed operations cover create/open, summary, rename, undo/redo, save, close, recovery inspection/actions, bounded media-page query, import, remove, media-preview request/read, a separate ordered artifact-event stream, descriptor path, and project invalidation events. Flutter keeps an immutable active-project read model and refreshes it from Rust after project events; mutations carry the read model's expected revision and do not auto-retry conflicts. The desktop `file_selector` plugin chooses project/media paths only; Rust owns canonical file validation, preparation, commands, and persistence. The Media panel shows filename, format, duration, video/audio summary, generated video-thumbnail or audio-only waveform PNG, and source/MediaId on demand, with 50-item pages over the core's 100-item page limit. Import requires system `ffprobe`; preview generation requires system `ffmpeg`. If the probe backend is missing, Flutter shows:
+The Flutter bridge uses `flutter_rust_bridge` 2.13.0 with generated typed bindings in `packages/or_app_bridge` and a thin `crates/or_app_bridge` adapter. Its opaque `ProjectHostHandle` owns a `LiveProjectHost`; it does not expose mutable `ProjectDocument` state to Dart. Typed operations cover create/open, summary, rename, undo/redo, save, close, recovery inspection/actions, bounded media-page query, import, remove, media-preview request/read, explicit sequence-rate query/command, preview-state query, exact seek, play/pause/tick/frame-step, a separate ordered artifact-event stream, descriptor path, and project invalidation events. Flutter keeps an immutable active-project read model and refreshes it from Rust after project events; mutations carry the read model's expected revision and do not auto-retry conflicts. The desktop `file_selector` plugin chooses project/media paths only; Rust owns canonical file validation, preparation, commands, and persistence. The Media panel shows filename, format, duration, video/audio summary, generated video-thumbnail or audio-only waveform PNG, and source/MediaId on demand, with 50-item pages over the core's 100-item page limit. Import requires system `ffprobe`; library preview generation requires system `ffmpeg`; desktop viewer decode uses the linked FFmpeg runtime. Preview frame pixels stay in Rust/native memory, and Flutter receives only exact timing, status, dimensions, and an opaque texture ID. If the probe backend is missing, Flutter shows:
 
 ```text
 Media probe backend is unavailable.
 This Developer Preview currently requires a system-provided ffprobe.
 ```
 
-New/Open and media-file path integration remain unavailable on Android pending SAF support. CI builds each target, runs Flutter widget and lifecycle tests, and exercises the native macOS offline-media bridge behavior.
+New/Open and media-file path integration remain unavailable on Android pending SAF support. CI builds each target, runs Flutter widget and lifecycle tests, and exercises native macOS project lifecycle, offline-media, timeline-edit, and preview transport behavior.
 
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
@@ -382,7 +382,7 @@ Timeline/render evaluation should publish a stable read view such as `RenderSnap
 
 Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The native adapter selects a platform-appropriate synchronization primitive and a small bounded in-flight depth; the latest-frame mailbox replaces obsolete preview work. 7F1 proves platform adapter builds and 7G owns bounded queue tuning against repeatable target-hardware evidence.
 
-A frame should carry explicit dimensions, pixel or texture format, color information, and timing metadata. The exact representation remains implementation work.
+A frame carries explicit dimensions, pixel or texture format, color information, and timing metadata. The desktop preview path uses software-decoded RGBA layers lowered to wgpu output and the approved native pixel-buffer adapter; platform-specific interop remains optional.
 
 ### Phase 7F0 playback timing contract
 
@@ -795,9 +795,10 @@ Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is 
 The following architecture decisions are frozen for the remaining roadmap and
 are implemented only by their owning checkpoint:
 
-- Desktop viewer semantics belong to 7F0/7F1. A bounded native pixel-buffer
-  external texture is the correctness fallback; BGRA8888 with premultiplied
-  alpha is the common format. Shared GPU surfaces remain optional.
+- 7F0/7F1 lock the desktop viewer timing and texture contracts; 7F connects
+  product transport to the Rust runtime. A bounded native pixel-buffer
+  external texture remains the correctness fallback; BGRA8888 with
+  premultiplied alpha is the common format. Shared GPU surfaces remain optional.
 - FFmpeg 8.1.3 with `ffmpeg-the-third` 6.0.0 uses reproducible dynamic/shared
   linking and an LGPL-only configuration. 7F1 proves desktop link/load/package
   provenance; 9A0 proves Android package/load support.

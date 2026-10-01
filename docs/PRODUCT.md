@@ -50,7 +50,7 @@ semantics and migration rules are approved.
 
 ## Viewer
 
-**MVP FOUNDATION:** fit-to-view, 25%, 50%, 100%, and 200% zoom; playback and frame stepping on the explicit sequence frame lattice. Playback does not loop.
+**MVP FOUNDATION:** fit-to-view, 25%, 50%, 100%, and 200% zoom; exact seek and scrubbing plus playback and frame stepping on the explicit sequence frame lattice. Play and frame step require an explicitly configured project rate. Playback does not loop.
 
 **PLANNED:** fullscreen preview; cinema or viewer-focus mode; safe areas, grid, guides, rulers, bounding boxes, and transform handles.
 
@@ -68,8 +68,9 @@ The optimized Desktop MVP milestone is represented by the execution graph from
   performance/hardening gates. 7F0 locks the explicit sequence rate, exact
   frame lattice, and shared viewer presentation contract without adding viewer
   UI or playback controls. 7F1 proves desktop FFmpeg runtime packaging and the
-  native Flutter pixel-buffer texture adapter on macOS, Linux, and Windows
-  before 7F builds the product viewer.
+  native Flutter pixel-buffer texture adapter on macOS, Linux, and Windows.
+  7F connects the product viewer and exact-time transport through the Rust
+  runtime; hosted verification remains required before checkpoint advancement.
 - **Project/timeline gate (8A):** one schema-v6 typed timeline model gate for
   Video, Audio, Text, and Caption content, typed track state, and the project
   settings consumed by 8B–8E.

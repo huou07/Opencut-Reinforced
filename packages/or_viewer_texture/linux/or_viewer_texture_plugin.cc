@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -14,11 +15,10 @@
 
 namespace {
 constexpr size_t kMaxRetainedFrames = 3;
+constexpr size_t kMaxFrameBytes = 256 * 1024 * 1024;
 
 struct RetainedFrame {
-  OrViewerPixelBuffer lease{};
   std::vector<uint8_t> rgba;
-  OrViewerReleaseFrame release_frame = nullptr;
 };
 
 typedef struct _OrViewerTexture OrViewerTexture;
@@ -67,42 +67,40 @@ gboolean copy_pixels(FlPixelBufferTexture* texture,
                      GError**) {
   auto* self = reinterpret_cast<_OrViewerTexture*>(texture);
   std::lock_guard<std::mutex> guard(*self->mutex);
-  if (self->retained->size() >= kMaxRetainedFrames) return FALSE;
+  if (self->retained->size() >= kMaxRetainedFrames) {
+    self->retained->erase(self->retained->begin());
+  }
 
   OrViewerFfiApi api{};
   if (!load_ffi(&api)) return FALSE;
   RetainedFrame frame;
-  if (!api.acquire_latest(&frame.lease)) return FALSE;
-  frame.release_frame = api.release_frame;
-  if (frame.lease.pixels == nullptr ||
-      frame.lease.width == 0 || frame.lease.height == 0 ||
-      frame.lease.width > UINT32_MAX || frame.lease.height > UINT32_MAX ||
-      frame.lease.width > SIZE_MAX / frame.lease.height / 4) {
-    api.release_frame(frame.lease.release_context);
+  OrViewerPixelBuffer lease{};
+  if (!api.acquire_latest(&lease)) return FALSE;
+  if (lease.pixels == nullptr || lease.width == 0 || lease.height == 0 ||
+      lease.width > UINT32_MAX || lease.height > UINT32_MAX ||
+      lease.width > SIZE_MAX / lease.height / 4 ||
+      lease.width * lease.height * 4 > kMaxFrameBytes) {
+    api.release_frame(lease.release_context);
     return FALSE;
   }
-  const size_t byte_count = frame.lease.width * frame.lease.height * 4;
+  const size_t byte_count = lease.width * lease.height * 4;
   frame.rgba.resize(byte_count);
   for (size_t i = 0; i < byte_count; i += 4) {
-    frame.rgba[i] = frame.lease.pixels[i + 2];
-    frame.rgba[i + 1] = frame.lease.pixels[i + 1];
-    frame.rgba[i + 2] = frame.lease.pixels[i];
-    frame.rgba[i + 3] = frame.lease.pixels[i + 3];
+    frame.rgba[i] = lease.pixels[i + 2];
+    frame.rgba[i + 1] = lease.pixels[i + 1];
+    frame.rgba[i + 2] = lease.pixels[i];
+    frame.rgba[i + 3] = lease.pixels[i + 3];
   }
+  api.release_frame(lease.release_context);
   *pixels = frame.rgba.data();
-  *width = static_cast<uint32_t>(frame.lease.width);
-  *height = static_cast<uint32_t>(frame.lease.height);
+  *width = static_cast<uint32_t>(lease.width);
+  *height = static_cast<uint32_t>(lease.height);
   self->retained->push_back(std::move(frame));
   return TRUE;
 }
 
 void finalize(GObject* object) {
   auto* self = reinterpret_cast<_OrViewerTexture*>(object);
-  for (const auto& frame : *self->retained) {
-    if (frame.release_frame != nullptr) {
-      frame.release_frame(frame.lease.release_context);
-    }
-  }
   delete self->retained;
   delete self->mutex;
   G_OBJECT_CLASS(or_viewer_texture_parent_class)->finalize(object);
@@ -121,11 +119,40 @@ void or_viewer_texture_init(_OrViewerTexture* self) {
 struct PluginState {
   FlTextureRegistrar* registrar;
   _OrViewerTexture* texture;
+  FlMethodChannel* channel;
 };
+
+void method_call(FlMethodChannel*, FlMethodCall* call, gpointer data) {
+  auto* state = static_cast<PluginState*>(data);
+  g_autoptr(FlValue) value = nullptr;
+  const char* name = fl_method_call_get_name(call);
+  if (std::strcmp(name, "textureId") == 0) {
+    value = fl_value_new_int(fl_texture_get_id(FL_TEXTURE(state->texture)));
+  } else if (std::strcmp(name, "frameAvailable") == 0) {
+    const gboolean marked = fl_texture_registrar_mark_texture_frame_available(
+        state->registrar, FL_TEXTURE(state->texture));
+    value = fl_value_new_bool(marked);
+  } else {
+    g_autoptr(GError) error = nullptr;
+    if (!fl_method_call_respond_not_implemented(call, &error) && error != nullptr) {
+      g_warning("Failed to reply to viewer texture call: %s", error->message);
+    }
+    return;
+  }
+  g_autoptr(FlMethodResponse) response =
+      FL_METHOD_RESPONSE(fl_method_success_response_new(value));
+  g_autoptr(GError) error = nullptr;
+  if (!fl_method_call_respond(call, response, &error) && error != nullptr) {
+    g_warning("Failed to reply to viewer texture call: %s", error->message);
+  }
+}
 
 void destroy_plugin(gpointer data) {
   auto* state = static_cast<PluginState*>(data);
+  fl_method_channel_set_method_call_handler(state->channel, nullptr, nullptr,
+                                            nullptr);
   fl_texture_registrar_unregister_texture(state->registrar, FL_TEXTURE(state->texture));
+  g_object_unref(state->channel);
   g_object_unref(state->texture);
   g_object_unref(state->registrar);
   delete state;
@@ -141,8 +168,13 @@ extern "C" G_MODULE_EXPORT void or_viewer_texture_plugin_register_with_registrar
     g_object_unref(texture);
     return;
   }
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  auto* channel = fl_method_channel_new(
+      fl_plugin_registrar_get_messenger(registrar), "or_viewer_texture",
+      FL_METHOD_CODEC(codec));
   auto* state = new PluginState{
-      FL_TEXTURE_REGISTRAR(g_object_ref(texture_registrar)), texture};
+      FL_TEXTURE_REGISTRAR(g_object_ref(texture_registrar)), texture, channel};
+  fl_method_channel_set_method_call_handler(channel, method_call, state, nullptr);
   g_object_set_data_full(G_OBJECT(registrar), "or-viewer-texture-state", state,
                          destroy_plugin);
 }

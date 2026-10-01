@@ -2139,6 +2139,95 @@ void main() {
     expect(find.text('Timeline engine not implemented'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('viewer uses exact scrub and explicit sequence rate controls', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()..savePath = '/tmp/preview.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Preview');
+    await tester.pumpAndSettle();
+
+    expect(gateway.previewStateCalls, greaterThan(0));
+    expect(gateway.preview.contentEnd?.secondsForDisplay, 4);
+    expect(find.byKey(const ValueKey('preview-scrub-ruler')), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('preview-frame-rate')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('24 fps'));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewRate, const ProjectRationalRate(24, 1));
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('preview-next-frame')));
+    await tester.pumpAndSettle();
+    expect(gateway.previewStepCalls, 1);
+    expect(gateway.lastPreviewStep, ProjectPreviewFrameStep.next);
+
+    final previousSeekCalls = gateway.previewSeekCalls;
+    await tester.drag(
+      find.byKey(const ValueKey('preview-scrub-ruler')),
+      const Offset(90, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(previousSeekCalls));
+    expect(gateway.lastPreviewSeek, isNotNull);
+    expect(gateway.lastPreviewSeek!.numerator, greaterThan(BigInt.zero));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty preview keeps play and frame step unavailable', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()..savePath = '/tmp/empty-preview.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Empty preview');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('preview-scrub-ruler')), findsNothing);
+    for (final key in const [
+      ValueKey('preview-previous-frame'),
+      ValueKey('preview-play'),
+      ValueKey('preview-next-frame'),
+    ]) {
+      expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
+    }
+    expect(find.text('No media loaded'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 ProjectRecoveryInspection _inspection(ProjectRecoveryKind kind) =>
@@ -2267,6 +2356,20 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRecoveryInspection recoveryInspection = _inspection(
     ProjectRecoveryKind.none,
   );
+  ProjectPreviewState preview = ProjectPreviewState(
+    position: ProjectRationalTime(BigInt.zero, 1),
+    playing: false,
+    generation: BigInt.zero,
+    frameSequence: BigInt.zero,
+    width: 0,
+    height: 0,
+  );
+  int previewSeekCalls = 0;
+  int previewStateCalls = 0;
+  int previewStepCalls = 0;
+  ProjectRationalTime? lastPreviewSeek;
+  ProjectPreviewFrameStep? lastPreviewStep;
+  ProjectRationalRate? lastPreviewRate;
   List<ProjectMediaItem> initialMedia = [];
   List<ProjectTimelineTrack> initialTimelineTracks = [];
   Map<String, List<ProjectTimelineClip>> initialTimelineClips = {};
@@ -2404,6 +2507,94 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectReadModel> summary(ProjectSessionHandle handle) async {
     summaryCalls++;
     return _session(handle).view;
+  }
+
+  @override
+  Future<ProjectPreviewState> previewState(ProjectSessionHandle session) async {
+    previewStateCalls++;
+    return preview;
+  }
+
+  @override
+  Future<ProjectPreviewState> previewSeek(
+    ProjectSessionHandle session,
+    ProjectRationalTime position,
+  ) async {
+    previewSeekCalls++;
+    lastPreviewSeek = position;
+    return _copyPreview(
+      position: position,
+      presentedTime: position,
+      advanceGeneration: true,
+      advanceFrame: true,
+    );
+  }
+
+  @override
+  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) async =>
+      _copyPreview(playing: true, advanceGeneration: true);
+
+  @override
+  Future<ProjectPreviewState> previewPause(
+    ProjectSessionHandle session,
+  ) async => _copyPreview(playing: false);
+
+  @override
+  Future<ProjectPreviewState> previewStep(
+    ProjectSessionHandle session,
+    ProjectPreviewFrameStep direction,
+  ) async {
+    previewStepCalls++;
+    lastPreviewStep = direction;
+    return _copyPreview(advanceGeneration: true, advanceFrame: true);
+  }
+
+  @override
+  Future<ProjectPreviewState> previewTick(ProjectSessionHandle session) async =>
+      preview;
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectRationalRate? sequenceFrameRate,
+  ) async {
+    lastPreviewRate = sequenceFrameRate;
+    _copyPreview(
+      sequenceFrameRate: sequenceFrameRate,
+      updateFrameRate: true,
+      advanceGeneration: true,
+    );
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  ProjectPreviewState _copyPreview({
+    ProjectRationalTime? position,
+    ProjectRationalTime? presentedTime,
+    ProjectRationalRate? sequenceFrameRate,
+    bool updateFrameRate = false,
+    bool? playing,
+    bool advanceGeneration = false,
+    bool advanceFrame = false,
+  }) {
+    final current = preview;
+    return preview = ProjectPreviewState(
+      position: position ?? current.position,
+      presentedTime: presentedTime ?? current.presentedTime,
+      sequenceFrameRate: updateFrameRate
+          ? sequenceFrameRate
+          : current.sequenceFrameRate,
+      contentEnd: current.contentEnd,
+      playing: playing ?? current.playing,
+      generation:
+          current.generation + (advanceGeneration ? BigInt.one : BigInt.zero),
+      frameSequence:
+          current.frameSequence + (advanceFrame ? BigInt.one : BigInt.zero),
+      width: current.width,
+      height: current.height,
+      errorCode: current.errorCode,
+      errorMessage: current.errorMessage,
+    );
   }
 
   @override

@@ -270,27 +270,44 @@ verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 `or_runtime` tests the bounded viewer mailbox, RGBA-to-premultiplied-BGRA
 conversion, stale generation rejection, and the three-lease in-flight bound.
-`or_app_bridge` exposes the small native C ABI used by the desktop adapters and
-does not depend on FFmpeg. The Flutter package registers a pixel-buffer texture
-adapter on macOS, Linux, and Windows; Linux converts to RGBA because its
-concrete Flutter API requires that pixel order. macOS and Windows use their
-platform release callback to keep frame leases alive until Flutter releases
-the pixel buffer. Linux retains its pixel-buffer leases until texture
-unregistration, as required by the Flutter Linux API.
+`or_app_bridge` exposes the small native C ABI used by the desktop adapters.
+7F adds the FFmpeg dependency only for desktop targets; Android remains
+FFmpeg-free. The Flutter package registers a pixel-buffer texture adapter on
+macOS, Linux, and Windows. macOS and Windows use their platform release
+callback to keep frame leases alive until Flutter releases the pixel buffer.
+Linux converts the leased BGRA pixels into a bounded native-owned RGBA ring and
+releases the source lease when the synchronous copy completes; the owned
+buffers stay available to Flutter through the next render tick and are freed
+only as the ring advances or when the texture unregisters.
 
 Hosted macOS, Linux, and Windows jobs build the official FFmpeg 8.1.3 source
 archive with a configure-help-verified LGPL shared profile. It disables
 `libavdevice` and `libavfilter`, leaving the five shared runtime libraries
 `libavcodec`, `libavformat`, `libavutil`, `libswresample`, and `libswscale`.
 The configure defaults keep GPL, version3, and nonfree disabled.
-They verify the source archive SHA-512, build the Flutter bridge and texture
-adapter with `PKG_CONFIG_PATH` empty, then place the production `or_media`
-probe and shared libraries beside the bridge in the app bundle. The probe
-checks ABI majors and license with ambient FFmpeg search paths removed. Each
+They verify the source archive SHA-512 and place the production `or_media`
+probe and shared libraries beside the bridge in the app bundle. The 7F desktop
+app builds provide the same FFmpeg prefix to the Flutter Rust bridge; Android
+keeps the dependency excluded. The probe checks ABI majors and license with
+ambient FFmpeg search paths removed. Each
 job uploads the verified source archive, installed libraries, and a
 target-specific record of the toolchain, exact configure arguments, components,
 license posture, patch status, and runtime names. Local native Flutter runtime
 verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Phase 7F preview transport coverage
+
+`or_runtime::transport` tests exact seeks, explicit-rate requirements,
+half-open playback ends, frame-lattice stepping, monotonic-clock updates, and
+stale generations. `or_media` verifies the preceding source presentation
+timestamp, and `or_render` exercises GPU composition of decoded RGBA layers.
+Flutter widget tests check exact scrubbing, frame-rate selection, frame-step
+controls, and the no-playable-frames empty state against a fake gateway. The hosted macOS native integration test
+checks texture registration, an exact `7/15` seek through the Rust host without
+changing project revision, a rendered frame sequence/dimensions, play rejection
+while the sequence rate is unset, and configuration of an explicit `24/1` rate
+through the project command.
+Native Flutter runtime execution remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 7C0 coverage
 

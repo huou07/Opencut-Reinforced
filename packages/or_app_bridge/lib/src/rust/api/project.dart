@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `project_session_error`, `project_view`, `query`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -122,6 +122,22 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required int timelineTimeDenominator,
   });
 
+  Future<ProjectPreviewStateView> previewPause();
+
+  Future<ProjectPreviewStateView> previewPlay();
+
+  Future<ProjectPreviewStateView> previewSeek({
+    required RationalTimeView position,
+  });
+
+  Future<ProjectPreviewStateView> previewState();
+
+  Future<ProjectPreviewStateView> previewStep({
+    required PreviewFrameStepView direction,
+  });
+
+  Future<ProjectPreviewStateView> previewTick();
+
   Future<MediaArtifactBytesView?> readMediaArtifact({
     required MediaArtifactKindView kind,
     required String cacheKey,
@@ -190,6 +206,13 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectActionResult> save();
 
+  Future<ProjectActionResult> setTimelineSequenceFrameRate({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    RationalRateView? sequenceFrameRate,
+  });
+
   Future<ProjectActionResult> splitTimelineClip({
     required String projectId,
     required String projectInstanceId,
@@ -204,6 +227,8 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
   Stream<MediaArtifactEventView> subscribeMediaArtifactEvents();
 
   Future<ProjectView> summary();
+
+  Future<ProjectTimelineSequenceSettingsView> timelineSequenceSettings();
 
   Future<ProjectActionResult> trimTimelineClip({
     required String projectId,
@@ -337,6 +362,8 @@ class MediaArtifactRequestView {
           errorCode == other.errorCode &&
           message == other.message;
 }
+
+enum PreviewFrameStepView { previous, next }
 
 class ProjectActionResult {
   final bool succeeded;
@@ -524,6 +551,65 @@ class ProjectMediaPageView {
           nextOffset == other.nextOffset;
 }
 
+class ProjectPreviewStateView {
+  final RationalTimeView position;
+  final RationalTimeView? presentedTime;
+  final RationalRateView? sequenceFrameRate;
+  final RationalTimeView? contentEnd;
+  final bool playing;
+  final BigInt generation;
+  final BigInt frameSequence;
+  final int width;
+  final int height;
+  final String? errorCode;
+  final String? errorMessage;
+
+  const ProjectPreviewStateView({
+    required this.position,
+    this.presentedTime,
+    this.sequenceFrameRate,
+    this.contentEnd,
+    required this.playing,
+    required this.generation,
+    required this.frameSequence,
+    required this.width,
+    required this.height,
+    this.errorCode,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      position.hashCode ^
+      presentedTime.hashCode ^
+      sequenceFrameRate.hashCode ^
+      contentEnd.hashCode ^
+      playing.hashCode ^
+      generation.hashCode ^
+      frameSequence.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      errorCode.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectPreviewStateView &&
+          runtimeType == other.runtimeType &&
+          position == other.position &&
+          presentedTime == other.presentedTime &&
+          sequenceFrameRate == other.sequenceFrameRate &&
+          contentEnd == other.contentEnd &&
+          playing == other.playing &&
+          generation == other.generation &&
+          frameSequence == other.frameSequence &&
+          width == other.width &&
+          height == other.height &&
+          errorCode == other.errorCode &&
+          errorMessage == other.errorMessage;
+}
+
 class ProjectTimelineClipPageView {
   final String projectId;
   final String projectInstanceId;
@@ -682,6 +768,37 @@ class ProjectTimelineMarkerView {
           label == other.label;
 }
 
+class ProjectTimelineSequenceSettingsView {
+  final String projectId;
+  final String projectInstanceId;
+  final BigInt projectRevision;
+  final RationalRateView? sequenceFrameRate;
+
+  const ProjectTimelineSequenceSettingsView({
+    required this.projectId,
+    required this.projectInstanceId,
+    required this.projectRevision,
+    this.sequenceFrameRate,
+  });
+
+  @override
+  int get hashCode =>
+      projectId.hashCode ^
+      projectInstanceId.hashCode ^
+      projectRevision.hashCode ^
+      sequenceFrameRate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineSequenceSettingsView &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          projectInstanceId == other.projectInstanceId &&
+          projectRevision == other.projectRevision &&
+          sequenceFrameRate == other.sequenceFrameRate;
+}
+
 class ProjectTimelineSnapView {
   final String projectId;
   final String projectInstanceId;
@@ -837,6 +954,24 @@ class ProjectView {
           name == other.name &&
           dirty == other.dirty &&
           descriptorPath == other.descriptorPath;
+}
+
+class RationalRateView {
+  final int numerator;
+  final int denominator;
+
+  const RationalRateView({required this.numerator, required this.denominator});
+
+  @override
+  int get hashCode => numerator.hashCode ^ denominator.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RationalRateView &&
+          runtimeType == other.runtimeType &&
+          numerator == other.numerator &&
+          denominator == other.denominator;
 }
 
 class RationalTimeView {

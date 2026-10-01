@@ -98,7 +98,48 @@ private final class OrViewerTexture: NSObject, FlutterTexture {
 }
 
 public class OrViewerTexturePlugin: NSObject, FlutterPlugin {
+  private static let channelName = "or_viewer_texture"
+
+  private var registrar: FlutterPluginRegistrar?
+  private var textureId: Int64 = -1
+  private var texture: OrViewerTexture?
+
   public static func register(with registrar: FlutterPluginRegistrar) {
-    _ = registrar.textures.register(OrViewerTexture())
+    let plugin = OrViewerTexturePlugin()
+    let texture = OrViewerTexture()
+    plugin.registrar = registrar
+    plugin.texture = texture
+    plugin.textureId = registrar.textures.register(texture)
+    registrar.addMethodCallDelegate(
+      plugin,
+      channel: FlutterMethodChannel(
+        name: channelName,
+        binaryMessenger: registrar.messenger
+      )
+    )
+  }
+
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "textureId":
+      guard textureId >= 0 else {
+        result(FlutterError(
+          code: "TEXTURE_UNAVAILABLE",
+          message: "The viewer texture could not be registered.",
+          details: nil
+        ))
+        return
+      }
+      result(textureId)
+    case "frameAvailable":
+      guard textureId >= 0, let registrar else {
+        result(false)
+        return
+      }
+      registrar.textures.textureFrameAvailable(textureId)
+      result(true)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 }

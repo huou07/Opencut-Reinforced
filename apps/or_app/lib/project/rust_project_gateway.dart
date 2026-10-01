@@ -35,6 +35,95 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectPreviewState> previewState(ProjectSessionHandle session) async {
+    try {
+      return _preview(await _host(session).previewState());
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectPreviewState> previewSeek(
+    ProjectSessionHandle session,
+    ProjectRationalTime position,
+  ) async {
+    try {
+      return _preview(
+        await _host(session).previewSeek(position: _rustTime(position)),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) async {
+    try {
+      return _preview(await _host(session).previewPlay());
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectPreviewState> previewPause(ProjectSessionHandle session) async {
+    try {
+      return _preview(await _host(session).previewPause());
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectPreviewState> previewStep(
+    ProjectSessionHandle session,
+    ProjectPreviewFrameStep direction,
+  ) async {
+    try {
+      return _preview(
+        await _host(session).previewStep(
+          direction: switch (direction) {
+            ProjectPreviewFrameStep.previous =>
+              rust.PreviewFrameStepView.previous,
+            ProjectPreviewFrameStep.next => rust.PreviewFrameStepView.next,
+          },
+        ),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectPreviewState> previewTick(ProjectSessionHandle session) async {
+    try {
+      return _preview(await _host(session).previewTick());
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectRationalRate? sequenceFrameRate,
+  ) async => _action(
+    await _host(session).setTimelineSequenceFrameRate(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      sequenceFrameRate: sequenceFrameRate == null
+          ? null
+          : rust.RationalRateView(
+              numerator: sequenceFrameRate.numerator,
+              denominator: sequenceFrameRate.denominator,
+            ),
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> rename(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -693,6 +782,36 @@ class RustProjectGateway implements ProjectGateway {
   static ProjectRationalTime _projectRationalTime(
     rust.RationalTimeView value,
   ) => ProjectRationalTime(BigInt.from(value.numerator), value.denominator);
+
+  static ProjectPreviewState _preview(rust.ProjectPreviewStateView value) =>
+      ProjectPreviewState(
+        position: _projectRationalTime(value.position),
+        presentedTime: value.presentedTime == null
+            ? null
+            : _projectRationalTime(value.presentedTime!),
+        sequenceFrameRate: value.sequenceFrameRate == null
+            ? null
+            : ProjectRationalRate(
+                value.sequenceFrameRate!.numerator,
+                value.sequenceFrameRate!.denominator,
+              ),
+        contentEnd: value.contentEnd == null
+            ? null
+            : _projectRationalTime(value.contentEnd!),
+        playing: value.playing,
+        generation: value.generation,
+        frameSequence: value.frameSequence,
+        width: value.width,
+        height: value.height,
+        errorCode: value.errorCode,
+        errorMessage: value.errorMessage,
+      );
+
+  static rust.RationalTimeView _rustTime(ProjectRationalTime value) =>
+      rust.RationalTimeView(
+        numerator: value.numerator.toInt(),
+        denominator: value.denominator,
+      );
 
   static ProjectTimelineTrackKind _projectTimelineKind(
     rust.TimelineTrackKindView kind,

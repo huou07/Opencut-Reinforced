@@ -129,15 +129,19 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
-      - name: Verify the shared Flutter bridge has no FFmpeg dependency
+      - name: Verify desktop and Android bridge media boundaries
         run: |
           set -euo pipefail
-          for target in x86_64-unknown-linux-gnu aarch64-linux-android; do
-            if cargo tree --locked -p or_app_bridge --target "$target" --edges normal | grep -E 'or_media|ffmpeg'; then
-              echo "Unexpected FFmpeg dependency in or_app_bridge for $target"
-              exit 1
-            fi
-          done
+          desktop_tree="$(cargo tree --locked -p or_app_bridge --target x86_64-unknown-linux-gnu --edges normal)"
+          if ! grep -E 'or_media|ffmpeg' <<< "$desktop_tree"; then
+            echo 'Desktop or_app_bridge must link the software preview decoder'
+            exit 1
+          fi
+          android_tree="$(cargo tree --locked -p or_app_bridge --target aarch64-linux-android --edges normal)"
+          if grep -E 'or_media|ffmpeg' <<< "$android_tree"; then
+            echo 'Unexpected FFmpeg dependency in Android or_app_bridge'
+            exit 1
+          fi
 
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
@@ -264,8 +268,8 @@ jobs:
       - name: Build macOS app with Rust bridge and texture adapter
         working-directory: apps/or_app
         env:
-          FFMPEG_DIR: ''
-          PKG_CONFIG_PATH: ''
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build macos --debug
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
@@ -282,6 +286,9 @@ jobs:
           for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib libswresample*.dylib libswscale*.dylib; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
           done
+          if ! otool -l "$bridge" | grep -Fq '@loader_path'; then
+            install_name_tool -add_rpath @loader_path "$bridge"
+          fi
           for library in "$runtime_dir"/libavcodec*.dylib "$runtime_dir"/libavformat*.dylib \
             "$runtime_dir"/libavutil*.dylib "$runtime_dir"/libswresample*.dylib "$runtime_dir"/libswscale*.dylib; do
             if [ -L "$library" ]; then continue; fi
@@ -293,6 +300,10 @@ jobs:
             install_name_tool -add_rpath @loader_path "$probe"
           fi
           codesign --force --deep --sign - --timestamp=none "$app"
+          otool -L "$bridge"
+          otool -l "$bridge" | grep -F '@loader_path'
+          if otool -L "$bridge" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
+          if otool -l "$bridge" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           otool -L "$probe"
           otool -l "$probe" | grep -F '@loader_path'
           if otool -L "$probe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
@@ -341,6 +352,9 @@ jobs:
 
       - name: Run native bridge diagnostics smoke test
         working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
           --plain-name "native bridge diagnostics match the CLI snapshot"
@@ -348,10 +362,23 @@ jobs:
 
       - name: Run native Flutter project lifecycle test
         working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
           --name
           "^(native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
+
+      - name: Run native Flutter preview transport test
+        working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+        run: >-
+          flutter test integration_test/core_bridge_test.dart -d macos
+          --plain-name
+          "native preview transport keeps exact time and explicit rate"
 
   linux:
     name: Linux native build
@@ -444,8 +471,9 @@ jobs:
       - name: Build Linux app with Rust bridge and texture adapter
         working-directory: apps/or_app
         env:
-          FFMPEG_DIR: ''
-          PKG_CONFIG_PATH: ''
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build linux --debug
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
@@ -473,6 +501,14 @@ jobs:
             if [ -L "$library" ]; then continue; fi
             readelf -d "$library" | grep -F '$ORIGIN'
           done
+          readelf -d "$bridge" | grep -E 'NEEDED|RUNPATH'
+          readelf -d "$bridge" | grep -F '$ORIGIN'
+          env -u LD_LIBRARY_PATH python3 - "$bridge" <<'PY'
+          import ctypes
+          import sys
+
+          ctypes.CDLL(sys.argv[1])
+          PY
           env -u LD_LIBRARY_PATH "$probe"
 
       - name: Preserve Linux FFmpeg source and runtime provenance
@@ -633,8 +669,8 @@ jobs:
       - name: Build Windows app with Rust bridge and texture adapter
         working-directory: apps/or_app
         env:
-          FFMPEG_DIR: ''
-          PKG_CONFIG_PATH: ''
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build windows --debug
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
@@ -661,6 +697,8 @@ jobs:
           $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
           & $dumpbin /dependents $probe
           $env:PATH = "$runtimeDir;$bundle;$env:SystemRoot\System32;$env:SystemRoot"
+          $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
+          [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
           & $probe
 
       - name: Preserve Windows FFmpeg source and runtime provenance

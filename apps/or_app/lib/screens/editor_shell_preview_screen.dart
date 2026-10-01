@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
@@ -14,6 +16,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     super.key,
     this.isProjectWorkspace = false,
     this.project,
+    this.projectGateway,
+    this.projectSession,
     this.notice,
     this.busy = false,
     this.mediaPage,
@@ -59,6 +63,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
 
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
+  final ProjectGateway? projectGateway;
+  final ProjectSessionHandle? projectSession;
   final String? notice;
   final bool busy;
   final ProjectMediaPage? mediaPage;
@@ -190,15 +196,39 @@ const _editorTools = [
 class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String _selectedTool = 'Media';
   bool _snapEnabled = true;
+  late final ValueNotifier<ProjectPreviewState?> _previewState;
+
+  @override
+  void initState() {
+    super.initState();
+    _previewState = ValueNotifier(null);
+  }
 
   @override
   void didUpdateWidget(covariant EditorShellPreviewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.project?.projectId != widget.project?.projectId ||
+    final projectIdentityChanged =
+        oldWidget.project?.projectId != widget.project?.projectId ||
         oldWidget.project?.projectInstanceId !=
-            widget.project?.projectInstanceId) {
+            widget.project?.projectInstanceId ||
+        oldWidget.projectSession != widget.projectSession;
+    if (projectIdentityChanged) {
       _snapEnabled = true;
     }
+    if (projectIdentityChanged ||
+        oldWidget.project?.revision != widget.project?.revision) {
+      _previewState.value = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _previewState.dispose();
+    super.dispose();
+  }
+
+  void _onPreviewStateChanged(ProjectPreviewState state) {
+    _previewState.value = state;
   }
 
   @override
@@ -279,7 +309,15 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 ),
               ),
               const VerticalDivider(width: 1),
-              const Expanded(child: _ViewerPanel(compact: false)),
+              Expanded(
+                child: _ViewerPanel(
+                  compact: false,
+                  gateway: widget.projectGateway,
+                  session: widget.projectSession,
+                  project: widget.project,
+                  onStateChanged: _onPreviewStateChanged,
+                ),
+              ),
               const VerticalDivider(width: 1),
               SizedBox(width: wide ? 236 : 188, child: const _InspectorPanel()),
             ],
@@ -305,6 +343,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           flex: 2,
           child: _TimelinePanel(
             compact: false,
+            previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
             project: widget.project,
             tracks: widget.timelineTracks,
@@ -343,7 +382,16 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   Widget _compactLayout() {
     return Column(
       children: [
-        const Expanded(flex: 4, child: _ViewerPanel(compact: true)),
+        Expanded(
+          flex: 4,
+          child: _ViewerPanel(
+            compact: true,
+            gateway: widget.projectGateway,
+            session: widget.projectSession,
+            project: widget.project,
+            onStateChanged: _onPreviewStateChanged,
+          ),
+        ),
         _TimelineToolbar(
           compact: true,
           isProjectWorkspace: widget.isProjectWorkspace,
@@ -363,6 +411,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           flex: 2,
           child: _TimelinePanel(
             compact: true,
+            previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
             project: widget.project,
             tracks: widget.timelineTracks,
@@ -1115,42 +1164,284 @@ String _mediaDisplayName(String sourceUri) {
   return normalized.split('/').last;
 }
 
-class _ViewerPanel extends StatelessWidget {
-  const _ViewerPanel({required this.compact});
+class _ViewerPanel extends StatefulWidget {
+  const _ViewerPanel({
+    required this.compact,
+    required this.gateway,
+    required this.session,
+    required this.project,
+    required this.onStateChanged,
+  });
 
   final bool compact;
+  final ProjectGateway? gateway;
+  final ProjectSessionHandle? session;
+  final ProjectReadModel? project;
+  final ValueChanged<ProjectPreviewState> onStateChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
+  State<_ViewerPanel> createState() => _ViewerPanelState();
+}
+
+class _ViewerPanelState extends State<_ViewerPanel> {
+  static const _rateChoices = [
+    _FrameRateChoice(
+      rate: ProjectRationalRate(24000, 1001),
+      label: '23.976 (24000/1001) fps',
+    ),
+    _FrameRateChoice(rate: ProjectRationalRate(24, 1), label: '24 fps'),
+    _FrameRateChoice(rate: ProjectRationalRate(25, 1), label: '25 fps'),
+    _FrameRateChoice(rate: ProjectRationalRate(30, 1), label: '30 fps'),
+    _FrameRateChoice(rate: ProjectRationalRate(50, 1), label: '50 fps'),
+    _FrameRateChoice(rate: ProjectRationalRate(60, 1), label: '60 fps'),
+    _FrameRateChoice.unset(),
+  ];
+
+  ProjectPreviewState? _preview;
+  ProjectRationalTime? _scrubPosition;
+  String? _error;
+  Timer? _timer;
+  int? _textureId;
+  int _epoch = 0;
+  bool _busy = false;
+  bool _tickInFlight = false;
+
+  bool get _connected => widget.gateway != null && widget.session != null;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_initialize());
+  }
+
+  @override
+  void didUpdateWidget(covariant _ViewerPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldProject = oldWidget.project;
+    final project = widget.project;
+    if (oldWidget.gateway != widget.gateway ||
+        oldWidget.session != widget.session ||
+        oldProject?.projectId != project?.projectId ||
+        oldProject?.projectInstanceId != project?.projectInstanceId ||
+        oldProject?.revision != project?.revision) {
+      unawaited(_initialize());
+    }
+  }
+
+  @override
+  void dispose() {
+    _epoch++;
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
+    final epoch = ++_epoch;
+    _timer?.cancel();
+    _timer = null;
+    _tickInFlight = false;
+    if (!mounted) return;
+    setState(() {
+      _preview = null;
+      _scrubPosition = null;
+      _textureId = null;
+      _error = null;
+      _busy = _connected;
+    });
+    final gateway = widget.gateway;
+    final session = widget.session;
+    if (gateway == null || session == null) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
+
+    try {
+      final textureIdFuture = OrViewerTexture.textureId();
+      final state = await gateway.previewState(session);
+      if (!_isCurrent(epoch)) return;
+      _acceptState(state, epoch);
+      final rendered = await gateway.previewSeek(session, state.position);
+      _acceptState(rendered, epoch);
+      if (_isCurrent(epoch)) setState(() => _busy = false);
+      final textureId = await textureIdFuture;
+      if (!_isCurrent(epoch)) return;
+      setState(() => _textureId = textureId);
+      final preview = _preview;
+      if (textureId != null &&
+          preview != null &&
+          preview.frameSequence > BigInt.zero) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_isCurrent(epoch) && _textureId == textureId) {
+            unawaited(OrViewerTexture.frameAvailable());
+          }
+        });
+      }
+    } catch (error) {
+      if (_isCurrent(epoch)) {
+        setState(() {
+          _busy = false;
+          _error = _errorMessage(error);
+        });
+      }
+    }
+  }
+
+  bool _isCurrent(int epoch) => mounted && epoch == _epoch;
+
+  void _acceptState(ProjectPreviewState state, int epoch) {
+    if (!_isCurrent(epoch) || _isOlder(state)) return;
+    final previous = _preview;
+    setState(() {
+      _preview = state;
+      _scrubPosition = null;
+      _error = state.errorMessage;
+    });
+    widget.onStateChanged(state);
+    if (_textureId != null &&
+        (previous == null || state.frameSequence > previous.frameSequence)) {
+      unawaited(OrViewerTexture.frameAvailable());
+    }
+    if (state.playing) {
+      _startTimer(epoch);
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  bool _isOlder(ProjectPreviewState incoming) {
+    final current = _preview;
+    if (current == null) return false;
+    final generationOrder = incoming.generation.compareTo(current.generation);
+    if (generationOrder != 0) return generationOrder < 0;
+    if (incoming.frameSequence < current.frameSequence ||
+        incoming.position.compareTo(current.position) < 0) {
+      return true;
+    }
+    return !current.playing && incoming.playing;
+  }
+
+  void _startTimer(int epoch) {
+    if (_timer != null) return;
+    _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_isCurrent(epoch) || _tickInFlight || _busy) return;
+      unawaited(_tick(epoch));
+    });
+  }
+
+  Future<void> _tick(int epoch) async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    if (gateway == null || session == null || _tickInFlight) return;
+    _tickInFlight = true;
+    try {
+      _acceptState(await gateway.previewTick(session), epoch);
+    } catch (error) {
+      if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
+    } finally {
+      _tickInFlight = false;
+    }
+  }
+
+  Future<void> _run(
+    Future<ProjectPreviewState> Function(
+      ProjectGateway gateway,
+      ProjectSessionHandle session,
+    )
+    action,
+  ) async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    if (gateway == null || session == null || _busy) return;
+    final epoch = _epoch;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      _acceptState(await action(gateway, session), epoch);
+    } catch (error) {
+      if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
+    } finally {
+      if (_isCurrent(epoch)) setState(() => _busy = false);
+    }
+  }
+
+  String _errorMessage(Object error) => switch (error) {
+    ProjectGatewayException(:final message) => message,
+    _ => error.toString(),
+  };
+
+  void _onScrubChanged(double seconds) {
+    final position = _timeFromSeconds(seconds);
+    setState(() => _scrubPosition = position);
+    final state = _preview;
+    if (state != null) {
+      widget.onStateChanged(
+        ProjectPreviewState(
+          position: position,
+          presentedTime: state.presentedTime,
+          sequenceFrameRate: state.sequenceFrameRate,
+          contentEnd: state.contentEnd,
+          playing: state.playing,
+          generation: state.generation,
+          frameSequence: state.frameSequence,
+          width: state.width,
+          height: state.height,
+          errorCode: state.errorCode,
+          errorMessage: state.errorMessage,
+        ),
+      );
+    }
+  }
+
+  Future<void> _setFrameRate(ProjectRationalRate? rate) async {
+    final project = widget.project;
+    if (project == null) return;
+    await _run((gateway, session) async {
+      final result = await gateway.setTimelineSequenceFrameRate(
+        session,
+        project,
+        rate,
+      );
+      if (!result.succeeded) {
+        throw ProjectGatewayException(result.errorCode, result.message);
+      }
+      return gateway.previewState(session);
+    });
+  }
+
+  Widget _buildViewerSurface() {
+    final textureId = _textureId;
+    final preview = _preview;
+    final hasSession = _connected;
+    final width = preview?.width ?? 0;
+    final height = preview?.height ?? 0;
+    final aspectRatio = width > 0 && height > 0 ? width / height : 16 / 9;
+    return Container(
+      key: const ValueKey('editor-viewer-surface'),
+      alignment: Alignment.center,
       color: OrColors.background,
-      child: Column(
-        children: [
-          _PanelHeader(
-            title: 'Viewer',
-            height: compact ? 34 : 38,
-            trailing: const OrBadge('Preview surface'),
-          ),
-          Expanded(
-            child: Container(
-              key: const ValueKey('editor-viewer-surface'),
-              alignment: Alignment.center,
-              color: OrColors.background,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: compact ? 520 : 660,
-                  maxHeight: compact ? 360 : 420,
-                ),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0C0C0D),
-                      border: Border.all(color: OrColors.borderStrong),
-                      borderRadius: BorderRadius.circular(OrRadii.small),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Column(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: widget.compact ? 520 : 660,
+          maxHeight: widget.compact ? 360 : 420,
+        ),
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C0C0D),
+              border: Border.all(color: OrColors.borderStrong),
+              borderRadius: BorderRadius.circular(OrRadii.small),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (preview?.contentEnd == null)
+                  const Center(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -1168,69 +1459,359 @@ class _ViewerPanel extends StatelessWidget {
                         ),
                       ],
                     ),
+                  )
+                else if (textureId != null)
+                  Texture(
+                    key: ValueKey('or-viewer-texture-$textureId'),
+                    textureId: textureId,
+                    filterQuality: FilterQuality.medium,
+                  )
+                else
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hasSession
+                              ? Icons.error_outline
+                              : Icons.movie_outlined,
+                          size: 22,
+                          color: OrColors.textMuted,
+                        ),
+                        const SizedBox(height: OrSpacing.x2),
+                        Text(
+                          hasSession
+                              ? 'Viewer texture unavailable'
+                              : 'Open a project to preview',
+                          style: const TextStyle(
+                            color: OrColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                if (_busy)
+                  const Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: OrColors.backgroundRaised,
+                        border: Border.fromBorderSide(
+                          BorderSide(color: OrColors.border),
+                        ),
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(OrRadii.small),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: OrSpacing.x2,
+                          vertical: OrSpacing.x1,
+                        ),
+                        child: Text(
+                          'Updating preview',
+                          style: TextStyle(
+                            color: OrColors.textSecondary,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          _PreviewTransport(compact: compact),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    final endSeconds = preview?.contentEnd?.secondsForDisplay ?? 0;
+    final hasRange = endSeconds.isFinite && endSeconds > 0;
+    final shownPosition = _scrubPosition ?? preview?.position;
+    final frameRate = preview?.sequenceFrameRate;
+    final hasPlayableFrames = hasRange;
+    final canStep =
+        _connected && frameRate != null && hasPlayableFrames && !_busy;
+    final canPlay =
+        _connected && frameRate != null && hasPlayableFrames && !_busy;
+    final rulerMaximum = hasRange ? endSeconds : 1.0;
+    final sliderValue = (shownPosition?.secondsForDisplay ?? 0)
+        .clamp(0.0, rulerMaximum)
+        .toDouble();
+
+    return ColoredBox(
+      color: OrColors.background,
+      child: Column(
+        children: [
+          _PanelHeader(
+            title: 'Viewer',
+            height: widget.compact ? 34 : 38,
+            trailing: OrBadge(
+              preview == null || preview.width == 0
+                  ? 'Preview'
+                  : '${preview.width} × ${preview.height}',
+            ),
+          ),
+          Expanded(child: _buildViewerSurface()),
+          Container(
+            decoration: const BoxDecoration(
+              color: OrColors.backgroundRaised,
+              border: Border(top: BorderSide(color: OrColors.border)),
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              OrSpacing.x3,
+              OrSpacing.x1,
+              OrSpacing.x3,
+              OrSpacing.x1,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasRange) ...[
+                  SizedBox(
+                    height: 8,
+                    child: CustomPaint(
+                      painter: _PreviewRulerPainter(),
+                      size: Size.infinite,
+                    ),
+                  ),
+                  SizedBox(
+                    height: 32,
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2,
+                        activeTrackColor: OrColors.selection,
+                        inactiveTrackColor: OrColors.borderStrong,
+                        thumbColor: OrColors.text,
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 10,
+                        ),
+                      ),
+                      child: Slider(
+                        key: const ValueKey('preview-scrub-ruler'),
+                        min: 0,
+                        max: rulerMaximum,
+                        value: sliderValue,
+                        onChanged: _busy || !_connected
+                            ? null
+                            : _onScrubChanged,
+                        onChangeEnd: _busy || !_connected
+                            ? null
+                            : (seconds) {
+                                setState(() => _scrubPosition = null);
+                                unawaited(
+                                  _run(
+                                    (gateway, session) => gateway.previewSeek(
+                                      session,
+                                      _timeFromSeconds(seconds),
+                                    ),
+                                  ),
+                                );
+                              },
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _clockLabel(0),
+                        style: const TextStyle(
+                          color: OrColors.textMuted,
+                          fontFamily: 'monospace',
+                          fontSize: 9,
+                        ),
+                      ),
+                      Text(
+                        _clockLabel(endSeconds),
+                        style: const TextStyle(
+                          color: OrColors.textMuted,
+                          fontFamily: 'monospace',
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                Row(
+                  children: [
+                    IconButton(
+                      key: const ValueKey('preview-previous-frame'),
+                      tooltip: 'Previous frame',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: canStep
+                          ? () => unawaited(
+                              _run(
+                                (gateway, session) => gateway.previewStep(
+                                  session,
+                                  ProjectPreviewFrameStep.previous,
+                                ),
+                              ),
+                            )
+                          : null,
+                      icon: const Icon(Icons.skip_previous_outlined, size: 18),
+                    ),
+                    IconButton(
+                      key: const ValueKey('preview-play'),
+                      tooltip: preview?.playing == true ? 'Pause' : 'Play',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: preview?.playing == true
+                          ? () => unawaited(
+                              _run((gateway, session) {
+                                return gateway.previewPause(session);
+                              }),
+                            )
+                          : canPlay
+                          ? () => unawaited(
+                              _run((gateway, session) {
+                                return gateway.previewPlay(session);
+                              }),
+                            )
+                          : null,
+                      icon: Icon(
+                        preview?.playing == true
+                            ? Icons.pause_outlined
+                            : Icons.play_arrow_outlined,
+                        size: 20,
+                      ),
+                    ),
+                    IconButton(
+                      key: const ValueKey('preview-next-frame'),
+                      tooltip: 'Next frame',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: canStep
+                          ? () => unawaited(
+                              _run(
+                                (gateway, session) => gateway.previewStep(
+                                  session,
+                                  ProjectPreviewFrameStep.next,
+                                ),
+                              ),
+                            )
+                          : null,
+                      icon: const Icon(Icons.skip_next_outlined, size: 18),
+                    ),
+                    Expanded(
+                      child: Text(
+                        shownPosition == null
+                            ? '0/1'
+                            : _timeFeedback(
+                                shownPosition,
+                                preview?.presentedTime,
+                              ),
+                        key: const ValueKey('preview-time-readout'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: OrColors.textSecondary,
+                          fontFamily: 'monospace',
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<_FrameRateChoice>(
+                      key: const ValueKey('preview-frame-rate'),
+                      tooltip: 'Set sequence frame rate',
+                      enabled: _connected && widget.project != null && !_busy,
+                      onSelected: (choice) =>
+                          unawaited(_setFrameRate(choice.rate)),
+                      itemBuilder: (context) => [
+                        for (final choice in _rateChoices)
+                          PopupMenuItem(
+                            value: choice,
+                            child: Text(choice.label),
+                          ),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          frameRate == null
+                              ? 'Set rate'
+                              : '${frameRate.canonical} fps',
+                          key: const ValueKey('preview-rate-label'),
+                          style: const TextStyle(
+                            color: OrColors.textSecondary,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: OrSpacing.x1),
+                    child: Text(
+                      _error!,
+                      key: const ValueKey('preview-error'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: OrColors.danger,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _PreviewTransport extends StatelessWidget {
-  const _PreviewTransport({required this.compact});
+class _FrameRateChoice {
+  const _FrameRateChoice({required this.rate, required this.label});
+  const _FrameRateChoice.unset() : rate = null, label = 'Clear rate';
 
-  final bool compact;
+  final ProjectRationalRate? rate;
+  final String label;
+}
+
+class _PreviewRulerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = OrColors.borderStrong
+      ..strokeWidth = 1;
+    for (var index = 0; index <= 8; index++) {
+      final x = size.width * index / 8;
+      canvas.drawLine(Offset(x, 0), Offset(x, index.isEven ? 7 : 4), line);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: compact ? 42 : 44,
-      decoration: const BoxDecoration(
-        color: OrColors.backgroundRaised,
-        border: Border(top: BorderSide(color: OrColors.border)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Tooltip(
-            message: 'Playback is unavailable in this Developer Preview',
-            child: IconButton(
-              key: const ValueKey('preview-previous-frame'),
-              onPressed: null,
-              icon: const Icon(Icons.skip_previous_outlined, size: 18),
-            ),
-          ),
-          Tooltip(
-            message: 'Playback is unavailable in this Developer Preview',
-            child: IconButton(
-              key: const ValueKey('preview-play'),
-              onPressed: null,
-              icon: const Icon(Icons.play_arrow_outlined, size: 20),
-            ),
-          ),
-          Tooltip(
-            message: 'Playback is unavailable in this Developer Preview',
-            child: IconButton(
-              key: const ValueKey('preview-next-frame'),
-              onPressed: null,
-              icon: const Icon(Icons.skip_next_outlined, size: 18),
-            ),
-          ),
-          if (!compact) ...[
-            const SizedBox(width: OrSpacing.x2),
-            const Text(
-              'Playback unavailable',
-              style: TextStyle(color: OrColors.textMuted, fontSize: 11),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant _PreviewRulerPainter oldDelegate) => false;
+}
+
+ProjectRationalTime _timeFromSeconds(double seconds) => ProjectRationalTime(
+  BigInt.from((seconds.clamp(0, double.maxFinite) * 1000000).round()),
+  1000000,
+);
+
+String _clockLabel(double seconds) {
+  final milliseconds = (seconds * 1000).round();
+  final minutes = milliseconds ~/ 60000;
+  final wholeSeconds = milliseconds ~/ 1000 % 60;
+  final fraction = milliseconds % 1000;
+  return '${minutes.toString().padLeft(2, '0')}:${wholeSeconds.toString().padLeft(2, '0')}.${fraction.toString().padLeft(3, '0')}';
+}
+
+String _timeFeedback(
+  ProjectRationalTime position,
+  ProjectRationalTime? presentedTime,
+) {
+  final time = position.secondsForDisplay;
+  final display = _clockLabel(time);
+  final frame = presentedTime == null ? '' : ' · ${presentedTime.canonical}';
+  return '$display · ${position.canonical}$frame';
 }
 
 class _InspectorPanel extends StatelessWidget {
@@ -1404,6 +1985,7 @@ class _UnavailableTimelineAction extends StatelessWidget {
 class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     required this.compact,
+    required this.previewState,
     required this.isProjectWorkspace,
     required this.project,
     required this.tracks,
@@ -1436,6 +2018,7 @@ class _TimelinePanel extends StatefulWidget {
   });
 
   final bool compact;
+  final ValueListenable<ProjectPreviewState?> previewState;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
   final ProjectTimelineTracks? tracks;
@@ -1531,6 +2114,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<ProjectPreviewState?>(
+      valueListenable: widget.previewState,
+      builder: (context, preview, _) => _buildTimeline(context, preview),
+    );
+  }
+
+  Widget _buildTimeline(BuildContext context, ProjectPreviewState? preview) {
     return Container(
       key: const ValueKey('editor-timeline-region'),
       width: double.infinity,
@@ -1577,13 +2167,16 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               ),
             )
           else
-            Expanded(child: _buildProjectTimeline(context)),
+            Expanded(child: _buildProjectTimeline(context, preview)),
         ],
       ),
     );
   }
 
-  Widget _buildProjectTimeline(BuildContext context) {
+  Widget _buildProjectTimeline(
+    BuildContext context,
+    ProjectPreviewState? preview,
+  ) {
     final snapshot = widget.tracks;
     if (widget.loading && snapshot == null) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
@@ -1726,6 +2319,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                             height: _timelineRulerHeight,
                             child: _TimelineMarkerRuler(
                               markers: widget.markerPage?.items ?? const [],
+                              playhead: preview?.position,
                               pixelsPerSecond: scale,
                               tickSeconds: tickSeconds,
                               width: canvasWidth,
@@ -1770,6 +2364,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                               width: canvasWidth,
                               pixelsPerSecond: scale,
                               tickSeconds: tickSeconds,
+                              playhead: preview?.position,
                               gesture: _gesture,
                               snapGuide: _snapGuide,
                               onOpenClip: (clip) => unawaited(
@@ -2253,6 +2848,7 @@ class _TimelineRulerPainter extends CustomPainter {
 class _TimelineMarkerRuler extends StatefulWidget {
   const _TimelineMarkerRuler({
     required this.markers,
+    required this.playhead,
     required this.pixelsPerSecond,
     required this.tickSeconds,
     required this.width,
@@ -2265,6 +2861,7 @@ class _TimelineMarkerRuler extends StatefulWidget {
   });
 
   final List<ProjectTimelineMarker> markers;
+  final ProjectRationalTime? playhead;
   final double pixelsPerSecond;
   final double tickSeconds;
   final double width;
@@ -2296,6 +2893,17 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
           ),
         ),
       ),
+      if (widget.playhead != null)
+        Positioned(
+          key: const ValueKey('timeline-playhead-ruler'),
+          left: _xFor(widget.playhead!),
+          top: 0,
+          bottom: 0,
+          width: 2,
+          child: const IgnorePointer(
+            child: ColoredBox(color: OrColors.selection),
+          ),
+        ),
       for (final marker in widget.markers) ..._markerWidgets(marker),
       if (widget.snapGuide?.targetKind == ProjectTimelineSnapTargetKind.marker)
         Positioned(
@@ -2759,6 +3367,7 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.width,
     required this.pixelsPerSecond,
     required this.tickSeconds,
+    required this.playhead,
     required this.gesture,
     required this.snapGuide,
     required this.onOpenClip,
@@ -2779,6 +3388,7 @@ class _TimelineTrackLane extends StatelessWidget {
   final double width;
   final double pixelsPerSecond;
   final double tickSeconds;
+  final ProjectRationalTime? playhead;
   final _TimelinePointerGesture? gesture;
   final _TimelineSnapGuide? snapGuide;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
@@ -2825,6 +3435,20 @@ class _TimelineTrackLane extends StatelessWidget {
             _positionedClip(context, clip),
         if (gesture != null && gesture!.targetTrackId == track.trackId)
           _positionedGhost(gesture!),
+        if (playhead != null &&
+            playhead!.secondsForDisplay.isFinite &&
+            playhead!.secondsForDisplay >= 0 &&
+            playhead!.secondsForDisplay * pixelsPerSecond <= width)
+          Positioned(
+            key: ValueKey('timeline-playhead-${track.trackId}'),
+            left: playhead!.secondsForDisplay * pixelsPerSecond,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            child: const IgnorePointer(
+              child: ColoredBox(color: OrColors.selection),
+            ),
+          ),
       ],
     ),
   );

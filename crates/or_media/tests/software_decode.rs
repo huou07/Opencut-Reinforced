@@ -73,6 +73,20 @@ fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
 }
 
 #[test]
+fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
+    let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+
+    let frame = decoder
+        .decode_video_frame_at(time(3, 8), &cancellation)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(frame.descriptor().timing().timestamp(), time(1, 4));
+    assert_eq!(frame.pixels().len(), 16 * 16 * 4);
+}
+
+#[test]
 fn software_audio_seek_resamples_and_clips_to_the_exact_requested_range() {
     let snapshot = snapshot(time(1, 4), time(1, 4));
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();

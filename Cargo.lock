@@ -1246,6 +1246,8 @@ dependencies = [
  "flutter_rust_bridge",
  "or_core",
  "or_ipc",
+ "or_media",
+ "or_render",
  "or_runtime",
 ]
 

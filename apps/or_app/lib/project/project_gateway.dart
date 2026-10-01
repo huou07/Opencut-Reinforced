@@ -48,6 +48,11 @@ class ProjectRationalTime {
     );
   }
 
+  int compareTo(ProjectRationalTime other) =>
+      (numerator * BigInt.from(other.denominator)).compareTo(
+        other.numerator * BigInt.from(denominator),
+      );
+
   static ProjectRationalTime? tryParse(String value) {
     final match = _syntax.firstMatch(value);
     if (match == null) return null;
@@ -65,6 +70,45 @@ class ProjectRationalTime {
     return ProjectRationalTime(numerator, denominator.toInt());
   }
 }
+
+class ProjectRationalRate {
+  const ProjectRationalRate(this.numerator, this.denominator);
+
+  final int numerator;
+  final int denominator;
+
+  String get canonical => '$numerator/$denominator';
+}
+
+class ProjectPreviewState {
+  const ProjectPreviewState({
+    required this.position,
+    required this.playing,
+    required this.generation,
+    required this.frameSequence,
+    required this.width,
+    required this.height,
+    this.presentedTime,
+    this.sequenceFrameRate,
+    this.contentEnd,
+    this.errorCode,
+    this.errorMessage,
+  });
+
+  final ProjectRationalTime position;
+  final ProjectRationalTime? presentedTime;
+  final ProjectRationalRate? sequenceFrameRate;
+  final ProjectRationalTime? contentEnd;
+  final bool playing;
+  final BigInt generation;
+  final BigInt frameSequence;
+  final int width;
+  final int height;
+  final String? errorCode;
+  final String? errorMessage;
+}
+
+enum ProjectPreviewFrameStep { previous, next }
 
 class ProjectReadModel {
   const ProjectReadModel({
@@ -437,6 +481,23 @@ abstract interface class ProjectGateway {
   Future<ProjectSessionHandle> createProject(String path, String name);
   Future<ProjectSessionHandle> openProject(String path);
   Future<ProjectReadModel> summary(ProjectSessionHandle session);
+  Future<ProjectPreviewState> previewState(ProjectSessionHandle session);
+  Future<ProjectPreviewState> previewSeek(
+    ProjectSessionHandle session,
+    ProjectRationalTime position,
+  );
+  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session);
+  Future<ProjectPreviewState> previewPause(ProjectSessionHandle session);
+  Future<ProjectPreviewState> previewStep(
+    ProjectSessionHandle session,
+    ProjectPreviewFrameStep direction,
+  );
+  Future<ProjectPreviewState> previewTick(ProjectSessionHandle session);
+  Future<ProjectActionResult> setTimelineSequenceFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectRationalRate? sequenceFrameRate,
+  );
   Future<ProjectActionResult> rename(
     ProjectSessionHandle session,
     ProjectReadModel current,

@@ -1,11 +1,43 @@
 use or_core::RationalTime;
 use or_runtime::{ViewerFrameLease, ViewerTextureAdapter};
-use std::{ffi::c_void, slice, sync::OnceLock};
+use std::{
+    ffi::c_void,
+    slice,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 static VIEWER_TEXTURE_ADAPTER: OnceLock<ViewerTextureAdapter> = OnceLock::new();
+static VIEWER_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn adapter() -> &'static ViewerTextureAdapter {
     VIEWER_TEXTURE_ADAPTER.get_or_init(ViewerTextureAdapter::default)
+}
+
+pub(crate) fn next_generation() -> Option<u64> {
+    VIEWER_GENERATION
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            current.checked_add(1)
+        })
+        .ok()
+        .and_then(|previous| previous.checked_add(1))
+}
+
+pub(crate) fn advance_generation(generation: u64) -> bool {
+    VIEWER_GENERATION.fetch_max(generation, Ordering::SeqCst);
+    adapter().advance_generation(generation)
+}
+
+pub(crate) fn publish_rgba_frame(
+    generation: u64,
+    width: u32,
+    height: u32,
+    timestamp: RationalTime,
+    rgba: &[u8],
+) -> Result<(), or_runtime::ViewerTextureError> {
+    adapter().publish_rgba(generation, width, height, timestamp, rgba)
 }
 
 /// C ABI pixel data held until the Flutter platform release callback.
@@ -20,7 +52,7 @@ pub struct OrViewerPixelBuffer {
 /// Starts a newer seek/project generation and discards any older queued frame.
 #[unsafe(no_mangle)]
 pub extern "C" fn or_viewer_advance_generation(generation: u64) -> bool {
-    adapter().advance_generation(generation)
+    advance_generation(generation)
 }
 
 /// Publishes CPU RGBA pixels from native runtime code; this is not a Dart API.
@@ -48,9 +80,7 @@ pub extern "C" fn or_viewer_publish_rgba(
         return false;
     }
     let rgba = unsafe { slice::from_raw_parts(pixels, length) };
-    adapter()
-        .publish_rgba(generation, width, height, RationalTime::ZERO, rgba)
-        .is_ok()
+    publish_rgba_frame(generation, width, height, RationalTime::ZERO, rgba).is_ok()
 }
 
 /// Acquires the latest valid frame for a Flutter pixel-buffer callback.

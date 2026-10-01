@@ -244,6 +244,8 @@ class _AppShellState extends State<AppShell> {
           : EditorShellPreviewScreen(
               isProjectWorkspace: true,
               project: _activeProject,
+              projectGateway: widget.projectGateway,
+              projectSession: _activeSession,
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,

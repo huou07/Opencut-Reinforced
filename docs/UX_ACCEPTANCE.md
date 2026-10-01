@@ -145,6 +145,12 @@ today.
   Frame use runtime work and do not mutate `ProjectRevision`.
 - Frame stepping uses the exact project frame/time policy, and stale frames may
   be dropped without corrupting canonical state.
+- Exact seek and scrub preserve the requested rational timeline time; display
+  labels may use floating-point conversions only.
+- Play and frame-step controls stay unavailable until an explicit sequence
+  rate is set through the existing validated project setting command.
+- Timeline content end is half-open and includes audio-only duration; an empty
+  timeline has no playable frames, and playback never loops.
 - Preview behavior remains consistent with export semantics.
 
 ### Phase 8 Desktop MVP

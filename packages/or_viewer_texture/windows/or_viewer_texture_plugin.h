@@ -2,6 +2,8 @@
 #define OR_VIEWER_TEXTURE_PLUGIN_H_
 
 #include <flutter/plugin_registrar_windows.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 #include <flutter/texture_registrar.h>
 
 #include <cstdint>
@@ -17,6 +19,7 @@ class OrViewerTexturePlugin : public flutter::Plugin {
   flutter::TextureRegistrar* texture_registrar_;
   int64_t texture_id_ = -1;
   std::shared_ptr<flutter::TextureVariant> texture_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 };
 
 #endif

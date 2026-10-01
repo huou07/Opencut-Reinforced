@@ -12,6 +12,7 @@ import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
 import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
+import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -193,6 +194,68 @@ void main() {
       'project_saved',
       'session_closing',
     ]);
+  });
+
+  testWidgets('native preview transport keeps exact time and explicit rate', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    final directory = Directory.systemTemp.createTempSync('or-preview-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final gateway = _ObservedRustProjectGateway();
+    const coreGateway = RustCoreGateway();
+    await tester.pumpWidget(
+      OrApp(
+        gateway: coreGateway,
+        projectGateway: gateway,
+        projectFilePicker: _NativeProjectPicker(
+          '${directory.path}/preview.orproj',
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('home-new-project')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('new-project-name')),
+      'Preview Project',
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    final session = gateway.activeSession!;
+    expect(await OrViewerTexture.textureId(), isNotNull);
+    final project = await gateway.summary(session);
+    final exactTime = ProjectRationalTime(BigInt.from(7), 15);
+    final preview = await gateway.previewSeek(session, exactTime);
+    expect(preview.position.canonical, '7/15');
+    expect(preview.presentedTime?.canonical, '7/15');
+    expect(preview.frameSequence, greaterThan(BigInt.zero));
+    expect(preview.width, greaterThan(0));
+    expect(preview.height, greaterThan(0));
+    expect((await gateway.summary(session)).revision, project.revision);
+    await expectLater(
+      gateway.previewPlay(session),
+      throwsA(
+        isA<ProjectGatewayException>().having(
+          (error) => error.code,
+          'code',
+          'SEQUENCE_FRAME_RATE_REQUIRED',
+        ),
+      ),
+    );
+
+    final configured = await gateway.setTimelineSequenceFrameRate(
+      session,
+      project,
+      const ProjectRationalRate(24, 1),
+    );
+    expect(configured.succeeded, isTrue);
+    expect(configured.view?.revision, project.revision + BigInt.one);
+    final configuredPreview = await gateway.previewState(session);
+    expect(configuredPreview.sequenceFrameRate?.canonical, '24/1');
+    expect(configuredPreview.contentEnd, isNull);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -801,6 +864,45 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   @override
   Future<ProjectReadModel> summary(ProjectSessionHandle session) =>
       _gateway.summary(session);
+
+  @override
+  Future<ProjectPreviewState> previewState(ProjectSessionHandle session) =>
+      _gateway.previewState(session);
+
+  @override
+  Future<ProjectPreviewState> previewSeek(
+    ProjectSessionHandle session,
+    ProjectRationalTime position,
+  ) => _gateway.previewSeek(session, position);
+
+  @override
+  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) =>
+      _gateway.previewPlay(session);
+
+  @override
+  Future<ProjectPreviewState> previewPause(ProjectSessionHandle session) =>
+      _gateway.previewPause(session);
+
+  @override
+  Future<ProjectPreviewState> previewStep(
+    ProjectSessionHandle session,
+    ProjectPreviewFrameStep direction,
+  ) => _gateway.previewStep(session, direction);
+
+  @override
+  Future<ProjectPreviewState> previewTick(ProjectSessionHandle session) =>
+      _gateway.previewTick(session);
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectRationalRate? sequenceFrameRate,
+  ) => _gateway.setTimelineSequenceFrameRate(
+    session,
+    current,
+    sequenceFrameRate,
+  );
 
   @override
   Future<ProjectActionResult> rename(

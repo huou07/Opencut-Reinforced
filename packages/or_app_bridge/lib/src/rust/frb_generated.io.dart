@@ -79,6 +79,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
+  RationalRateView dco_decode_box_autoadd_rational_rate_view(dynamic raw);
+
+  @protected
   RationalTimeView dco_decode_box_autoadd_rational_time_view(dynamic raw);
 
   @protected
@@ -159,10 +162,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
 
   @protected
+  RationalRateView? dco_decode_opt_box_autoadd_rational_rate_view(dynamic raw);
+
+  @protected
   RationalTimeView? dco_decode_opt_box_autoadd_rational_time_view(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  PreviewFrameStepView dco_decode_preview_frame_step_view(dynamic raw);
 
   @protected
   ProjectActionResult dco_decode_project_action_result(dynamic raw);
@@ -178,6 +187,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectMediaPageView dco_decode_project_media_page_view(dynamic raw);
+
+  @protected
+  ProjectPreviewStateView dco_decode_project_preview_state_view(dynamic raw);
 
   @protected
   ProjectTimelineClipPageView dco_decode_project_timeline_clip_page_view(
@@ -198,6 +210,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineSequenceSettingsView
+  dco_decode_project_timeline_sequence_settings_view(dynamic raw);
+
+  @protected
   ProjectTimelineSnapView dco_decode_project_timeline_snap_view(dynamic raw);
 
   @protected
@@ -210,6 +226,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectView dco_decode_project_view(dynamic raw);
+
+  @protected
+  RationalRateView dco_decode_rational_rate_view(dynamic raw);
 
   @protected
   RationalTimeView dco_decode_rational_time_view(dynamic raw);
@@ -313,6 +332,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
+  RationalRateView sse_decode_box_autoadd_rational_rate_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RationalTimeView sse_decode_box_autoadd_rational_time_view(
     SseDeserializer deserializer,
   );
@@ -405,12 +429,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RationalRateView? sse_decode_opt_box_autoadd_rational_rate_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RationalTimeView? sse_decode_opt_box_autoadd_rational_time_view(
     SseDeserializer deserializer,
   );
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  PreviewFrameStepView sse_decode_preview_frame_step_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ProjectActionResult sse_decode_project_action_result(
@@ -438,6 +472,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectPreviewStateView sse_decode_project_preview_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineClipPageView sse_decode_project_timeline_clip_page_view(
     SseDeserializer deserializer,
   );
@@ -458,6 +497,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineSequenceSettingsView
+  sse_decode_project_timeline_sequence_settings_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineSnapView sse_decode_project_timeline_snap_view(
     SseDeserializer deserializer,
   );
@@ -474,6 +519,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectView sse_decode_project_view(SseDeserializer deserializer);
+
+  @protected
+  RationalRateView sse_decode_rational_rate_view(SseDeserializer deserializer);
 
   @protected
   RationalTimeView sse_decode_rational_time_view(SseDeserializer deserializer);
@@ -596,6 +644,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rational_rate_view(
+    RationalRateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_rational_time_view(
     RationalTimeView self,
     SseSerializer serializer,
@@ -707,6 +761,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_rational_rate_view(
+    RationalRateView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_rational_time_view(
     RationalTimeView? self,
     SseSerializer serializer,
@@ -714,6 +774,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_preview_frame_step_view(
+    PreviewFrameStepView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_project_action_result(
@@ -746,6 +812,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_preview_state_view(
+    ProjectPreviewStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_timeline_clip_page_view(
     ProjectTimelineClipPageView self,
     SseSerializer serializer,
@@ -770,6 +842,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_timeline_sequence_settings_view(
+    ProjectTimelineSequenceSettingsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_timeline_snap_view(
     ProjectTimelineSnapView self,
     SseSerializer serializer,
@@ -789,6 +867,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_project_view(ProjectView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rational_rate_view(
+    RationalRateView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_rational_time_view(
