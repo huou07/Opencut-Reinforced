@@ -54,7 +54,7 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `macOS native build and bridge smoke`: project-storage, recovery, real Unix IPC and shared-host/attached-CLI parity tests, macOS app build, CLI bootstrap capture, and native Flutter bridge/project-lifecycle integration tests.
 - `Linux native build`: Linux app build.
 - `Windows native build`: project-storage and recovery tests, real named-pipe IPC and attached-CLI shared-host parity tests, owner-only endpoint ACL tests, and the Windows app build.
-- `Android APK build`: debug APK build; no emulator runtime test is currently configured.
+- `Android APK build`: FFmpeg 8.1.3 shared-library builds and Rust cross-link probes for `arm64-v8a`, `armeabi-v7a`, and `x86_64`; APK package checks for all three ABIs; and x86_64 emulator FFmpeg runtime plus Flutter/Rust bridge integration coverage.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit and includes four app packages, three desktop CLI packages, checksums, and build information.
 
 The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify
@@ -132,7 +132,7 @@ Review third-party agent tooling before installing it. Do not install additional
 
 - CodeQL is not enabled yet. Evaluate coverage for Rust and GitHub Actions workflows; Flutter/Dart should continue to use its own static-analysis and test tooling.
 - Add stable-release signing, notarization, and attestations when distribution requirements are scoped.
-- Add Android runtime and Storage Access Framework checks when Android project-file integration is implemented.
+- Add Storage Access Framework checks when Android project-file integration is implemented.
 
 ## Approved agent tooling
 

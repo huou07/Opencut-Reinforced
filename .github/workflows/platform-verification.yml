@@ -848,12 +848,17 @@ jobs:
   android:
     name: Android APK build
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 120
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install FFmpeg cross-build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang libclang-dev pkg-config unzip xz-utils
 
       - name: Set up Java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -864,10 +869,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      - name: Install Android platform and Rust NDK
+      - name: Install Android platform, Rust NDK, and x86_64 emulator
         run: >-
           sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
-          "ndk;28.2.13676358"
+          "ndk;28.2.13676358" "emulator"
+          "system-images;android-36;google_apis;x86_64"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -886,14 +892,226 @@ jobs:
         working-directory: apps/or_app
         run: flutter pub get
 
-      - name: Verify Android bridge stays pre-9A0
+      - name: Build and cross-link LGPL-only FFmpeg 8.1.3 for Android
+        id: android-ffmpeg-build
+        timeout-minutes: 75
         run: |
           set -euo pipefail
-          if cargo tree --locked -p or_app_bridge --target aarch64-linux-android --edges normal | grep -E 'or_media|ffmpeg'; then
-            echo 'Unexpected Android FFmpeg dependency before 9A0'
+          archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          ndk="$ANDROID_HOME/ndk/28.2.13676358"
+          toolchain="$ndk/toolchains/llvm/prebuilt/linux-x86_64"
+          build_root="$RUNNER_TEMP/android-ffmpeg"
+          info_root="$RUNNER_TEMP/android-ffmpeg-build-info"
+          jni_root="$GITHUB_WORKSPACE/apps/or_app/android/app/src/main/jniLibs"
+          mkdir -p "$build_root/install" "$build_root/probes" "$info_root"
+          curl --fail --location --silent --show-error --retry 3 --max-time 600 \
+            https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
+          xz --test "$archive"
+          tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
+
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            case "$abi" in
+              arm64-v8a)
+                rust_target=aarch64-linux-android
+                linker_env=CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER
+                ffmpeg_arch=aarch64
+                clang_prefix=aarch64-linux-android
+                cpu_args=()
+                ;;
+              armeabi-v7a)
+                rust_target=armv7-linux-androideabi
+                linker_env=CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER
+                ffmpeg_arch=arm
+                clang_prefix=armv7a-linux-androideabi
+                cpu_args=(--cpu=armv7-a)
+                ;;
+              x86_64)
+                rust_target=x86_64-linux-android
+                linker_env=CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER
+                ffmpeg_arch=x86_64
+                clang_prefix=x86_64-linux-android
+                cpu_args=()
+                ;;
+            esac
+
+            clang="$toolchain/bin/${clang_prefix}21-clang"
+            clangxx="$toolchain/bin/${clang_prefix}21-clang++"
+            prefix="$build_root/install/$abi"
+            probe_dir="$build_root/probes/$abi"
+            jni_dir="$jni_root/$abi"
+            test -x "$clang"
+            test -x "$clangxx"
+
+            rm -rf "$RUNNER_TEMP/ffmpeg-8.1.3"
+            tar -xJf "$archive" -C "$RUNNER_TEMP"
+            cd "$RUNNER_TEMP/ffmpeg-8.1.3"
+            read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
+            configure_args=(
+              "--prefix=$prefix"
+              --target-os=android
+              "--arch=$ffmpeg_arch"
+              --enable-cross-compile
+              --enable-pic
+              "--cc=$clang"
+              "--cxx=$clangxx"
+              "--ar=$toolchain/bin/llvm-ar"
+              "--nm=$toolchain/bin/llvm-nm"
+              "--ranlib=$toolchain/bin/llvm-ranlib"
+              "--strip=$toolchain/bin/llvm-strip"
+              "${cpu_args[@]}"
+              "${common_configure_args[@]}"
+            )
+            ./configure "${configure_args[@]}"
+            make -j2
+            make install
+
+            pkg_config_path="$prefix/lib/pkgconfig"
+            for library in avcodec avformat avutil swresample swscale; do
+              test -f "$pkg_config_path/lib$library.pc"
+              PKG_CONFIG_PATH="$pkg_config_path" PKG_CONFIG_ALLOW_CROSS=1 pkg-config --modversion "lib$library"
+              test "$(PKG_CONFIG_PATH="$pkg_config_path" PKG_CONFIG_ALLOW_CROSS=1 pkg-config --variable=prefix "lib$library")" = "$prefix"
+            done
+
+            env "$linker_env=$clang" \
+              FFMPEG_DIR="$prefix" \
+              PKG_CONFIG_PATH="$pkg_config_path" \
+              PKG_CONFIG_ALLOW_CROSS=1 \
+              cargo build --locked --release --target "$rust_target" \
+                --manifest-path "$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/Cargo.toml"
+            probe="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/$rust_target/release/ffmpeg-link-probe"
+            test -f "$probe"
+            mkdir -p "$probe_dir" "$jni_dir"
+            install -m 755 "$probe" "$probe_dir/ffmpeg-link-probe"
+
+            for library in avcodec avformat avutil swresample swscale; do
+              shared="$prefix/lib/lib$library.so"
+              test -f "$shared"
+              soname="$("$toolchain/bin/llvm-readelf" -d "$shared" | sed -n 's/.*Library soname: \[\([^]]*\)\].*/\1/p')"
+              test -n "$soname"
+              test -f "$prefix/lib/$soname"
+              for runtime in "$prefix/lib/lib$library.so"*; do
+                test -e "$runtime" || continue
+                cp -L "$runtime" "$jni_dir/$(basename "$runtime")"
+              done
+            done
+
+            {
+              echo "Target: Android $abi ($rust_target)"
+              echo "NDK: 28.2.13676358"
+              echo "FFmpeg release: 8.1.3"
+              echo "Rust binding: ffmpeg-the-third 6.0.0"
+              echo "Official source URL: https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz"
+              echo "Official upstream tag commit: 1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
+              echo "Source archive SHA-512: acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1"
+              echo "Patch status: unpatched upstream release archive"
+              echo "Configure arguments: ${configure_args[*]}"
+              echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
+              echo "Enabled protocols: file"
+              echo "Enabled demuxers: matroska"
+              echo "Enabled decoders: ffv1, pcm_s16le"
+              echo "Enabled encoders: ffv1, pcm_s16le"
+              echo "Enabled muxers: matroska"
+              echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
+              echo "Compiler: $("$clang" --version | head -n 1)"
+              echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
+              echo "Rust toolchain: $(rustc --version)"
+              echo "Runtime library names:"
+              find "$prefix/lib" -maxdepth 1 \( -type f -o -type l \) -name 'lib*.so*' -exec basename {} \; | sort
+            } > "$info_root/$abi.txt"
+            cat "$info_root/$abi.txt"
+            cd "$RUNNER_TEMP"
+          done
+
+      - name: Verify Android bridge remains FFmpeg-independent
+        run: |
+          set -euo pipefail
+          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+            android_tree="$(cargo tree --locked -p or_app_bridge --target "$target" --edges normal)"
+            if grep -E 'or_media|ffmpeg' <<< "$android_tree"; then
+              echo "Unexpected FFmpeg dependency in Android or_app_bridge for $target"
+              exit 1
+            fi
+          done
+
+      - name: Build debug APK with FFmpeg shared libraries for all ABIs
+        working-directory: apps/or_app
+        run: flutter build apk --debug --target-platform android-arm,android-arm64,android-x64
+
+      - name: Verify Android APK contains FFmpeg libraries for all ABIs
+        run: |
+          set -euo pipefail
+          apk="$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
+          toolchain="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64"
+          test -f "$apk"
+          apk_entries="$(unzip -Z1 "$apk")"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            prefix="$RUNNER_TEMP/android-ffmpeg/install/$abi"
+            for library in avcodec avformat avutil swresample swscale; do
+              shared="$prefix/lib/lib$library.so"
+              soname="$("$toolchain/bin/llvm-readelf" -d "$shared" | sed -n 's/.*Library soname: \[\([^]]*\)\].*/\1/p')"
+              test -n "$soname"
+              grep -Fxq "lib/$abi/lib$library.so" <<< "$apk_entries"
+              grep -Fxq "lib/$abi/$soname" <<< "$apk_entries"
+            done
+          done
+
+      - name: Verify FFmpeg runtime and Flutter Rust bridge on x86_64 emulator
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          avd_name=or-api36-x86_64
+          printf 'no\n' | avdmanager create avd --force --name "$avd_name" \
+            --package 'system-images;android-36;google_apis;x86_64' --device pixel_2
+          emulator -avd "$avd_name" -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/android-emulator.log" 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+          adb wait-for-device
+          booted=0
+          for attempt in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
+              booted=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$booted" != 1 ]]; then
+            cat "$RUNNER_TEMP/android-emulator.log"
             exit 1
           fi
+          test "$(adb shell getprop ro.product.cpu.abi | tr -d '\r')" = x86_64
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
 
-      - name: Build debug APK with Rust bridge
-        working-directory: apps/or_app
-        run: flutter build apk --debug
+          apk="$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
+          runtime_dir="$RUNNER_TEMP/android-apk-ffmpeg-x86_64"
+          probe="$RUNNER_TEMP/android-ffmpeg/probes/x86_64/ffmpeg-link-probe"
+          mkdir -p "$runtime_dir"
+          unzip -jo "$apk" 'lib/x86_64/libav*.so*' 'lib/x86_64/libsw*.so*' -d "$runtime_dir"
+          test -f "$probe"
+          adb shell mkdir -p /data/local/tmp/ffmpeg-runtime
+          for library in "$runtime_dir"/*; do
+            adb push "$library" "/data/local/tmp/ffmpeg-runtime/$(basename "$library")"
+          done
+          adb push "$probe" /data/local/tmp/ffmpeg-link-probe
+          adb shell chmod 755 /data/local/tmp/ffmpeg-link-probe
+          adb shell 'LD_LIBRARY_PATH=/data/local/tmp/ffmpeg-runtime /data/local/tmp/ffmpeg-link-probe'
+
+          cd "$GITHUB_WORKSPACE/apps/or_app"
+          flutter test integration_test/core_bridge_test.dart -d emulator-5554 \
+            --plain-name "Rust project bridge stores editable titles and manual captions"
+
+      - name: Preserve Android FFmpeg source and build provenance
+        if: always() && steps.android-ffmpeg-build.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ffmpeg-8.1.3-android
+          path: |
+            ${{ runner.temp }}/ffmpeg-8.1.3.tar.xz
+            ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
+            ${{ runner.temp }}/android-ffmpeg/**
+            ${{ runner.temp }}/android-ffmpeg-build-info/**
+          if-no-files-found: error
+          retention-days: 14
