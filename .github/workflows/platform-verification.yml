@@ -129,6 +129,20 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
+      - name: Install FFmpeg development libraries for Flutter host tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev
+          pkg_config_path="$(pkg-config --variable=pc_path pkg-config)"
+          test -n "$pkg_config_path"
+          PKG_CONFIG_PATH="$pkg_config_path" pkg-config --modversion libavutil
+          mkdir -p "$HOME/.cargo"
+          # Cargo [env] reaches build.rs when Flutter's native-assets hook drops step env.
+          cat > "$HOME/.cargo/config.toml" <<EOF
+          [env]
+          PKG_CONFIG_PATH = { value = "$pkg_config_path", force = true }
+          EOF
+
       - name: Verify desktop and Android bridge media boundaries
         run: |
           set -euo pipefail
@@ -229,6 +243,13 @@ jobs:
           make -j2
           make install
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          mkdir -p "$HOME/.cargo"
+          # Cargo [env] reaches build.rs when Flutter's native-assets hook drops step env.
+          cat > "$HOME/.cargo/config.toml" <<EOF
+          [env]
+          FFMPEG_DIR = { value = "$prefix", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
+          EOF
           for library in avcodec avformat avutil swresample swscale; do
             test -f "$prefix/lib/pkgconfig/lib$library.pc"
           done
@@ -431,6 +452,16 @@ jobs:
           make -j2
           make install
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          mkdir -p "$HOME/.cargo"
+          # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
+          cat > "$HOME/.cargo/config.toml" <<EOF
+          [build]
+          rustflags = ["-C", "link-arg=-Wl,-rpath,\$ORIGIN"]
+
+          [env]
+          FFMPEG_DIR = { value = "$prefix", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
+          EOF
           for library in avcodec avformat avutil swresample swscale; do
             test -f "$prefix/lib/pkgconfig/lib$library.pc"
           done
@@ -620,8 +651,18 @@ jobs:
             test -n "$import_library"
             cp "$import_library" "$prefix/lib/$library.lib"
           done
+          cargo_home="$(cygpath -u "$CARGO_HOME")"
+          libclang_path="$(cygpath -am /clang64/bin)"
+          mkdir -p "$cargo_home"
+          # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
+          cat > "$cargo_home/config.toml" <<EOF
+          [env]
+          FFMPEG_DIR = { value = "$prefix_win", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix_win/lib/pkgconfig", force = true }
+          LIBCLANG_PATH = { value = "$libclang_path", force = true }
+          EOF
           echo "FFMPEG_INSTALL_PREFIX=$prefix_win" >> "$GITHUB_ENV"
-          echo "LIBCLANG_PATH=$(cygpath -am /clang64/bin)" >> "$GITHUB_ENV"
+          echo "LIBCLANG_PATH=$libclang_path" >> "$GITHUB_ENV"
           echo "INCLUDE=$prefix_win/include;$INCLUDE" >> "$GITHUB_ENV"
           echo "LIB=$prefix_win/lib;$prefix_win/bin;$LIB" >> "$GITHUB_ENV"
           echo "$prefix_win/bin" >> "$GITHUB_PATH"
