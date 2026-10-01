@@ -1,0 +1,82 @@
+{
+  "checkpoint_id": "7G",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 5,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "required": false
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "db228f9b5b9791f1cdb4752e21095b0146b8177c",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36828631635",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36828631635,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "db228f9b5b9791f1cdb4752e21095b0146b8177c",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36828631682",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36828631682,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "db228f9b5b9791f1cdb4752e21095b0146b8177c",
+  "implementation_subject": "feat(runtime): add deterministic resource budget metrics",
+  "schema_version": 1,
+  "verified_at_utc": "2026-10-01T07:38:31Z"
+}
