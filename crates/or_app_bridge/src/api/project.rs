@@ -10,9 +10,9 @@ use or_core::{
     ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineMarkerPage,
     TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
-    TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TrackId, TrackKind,
-    apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
-    inspect_project_recovery, prepare_media_import,
+    TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
+    TrackState, apply_project_recovery, discard_project_recovery,
+    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{
@@ -98,6 +98,8 @@ pub struct ProjectPreviewStateView {
 pub enum TimelineTrackKindView {
     Video,
     Audio,
+    Text,
+    Caption,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -133,7 +135,16 @@ pub enum TimelineSnapTargetKindView {
 pub struct ProjectTimelineTrackView {
     pub track_id: String,
     pub kind: TimelineTrackKindView,
+    pub state: ProjectTimelineTrackStateView,
     pub clip_count: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTimelineTrackStateView {
+    pub locked: bool,
+    pub visible: bool,
+    pub muted: bool,
+    pub solo: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -556,12 +567,12 @@ impl ProjectHostHandle {
 
     pub fn list_timeline_tracks(&self) -> Result<ProjectTimelineTracksView, ProjectBridgeError> {
         let described = self.host.describe().map_err(host_error)?;
-        let result = self.query(QueryEnvelope::timeline_tracks(
+        let result = self.query(QueryEnvelope::timeline_tracks_v2(
             described.summary.project_id,
             described.summary.project_instance_id,
         ))?;
         let tracks = result
-            .timeline_tracks
+            .timeline_tracks_v2
             .ok_or_else(unexpected_response_error)?;
         Ok(ProjectTimelineTracksView {
             project_id: result.summary.project_id.to_string(),
@@ -803,6 +814,8 @@ impl ProjectHostHandle {
                     match kind {
                         TimelineTrackKindView::Video => TrackKind::Video,
                         TimelineTrackKindView::Audio => TrackKind::Audio,
+                        TimelineTrackKindView::Text => TrackKind::Text,
+                        TimelineTrackKindView::Caption => TrackKind::Caption,
                     },
                 )
             },
@@ -830,6 +843,35 @@ impl ProjectHostHandle {
                     project_instance_id,
                     revision,
                     track_id,
+                )
+            },
+        )
+    }
+
+    pub fn set_timeline_track_state(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        state: ProjectTimelineTrackStateView,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        let state = TrackState::new(state.locked, state.visible, state.muted, state.solo);
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::set_timeline_track_state(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    state,
                 )
             },
         )
@@ -1745,15 +1787,20 @@ fn preview_bridge_error(error: PreviewError) -> ProjectBridgeError {
     }
 }
 
-fn timeline_track_view(track: &TimelineTrackSummary) -> ProjectTimelineTrackView {
+fn timeline_track_view(track: &TimelineTrackSummaryV2) -> ProjectTimelineTrackView {
     ProjectTimelineTrackView {
         track_id: track.track_id.to_string(),
         kind: match track.kind {
             TrackKind::Video => TimelineTrackKindView::Video,
             TrackKind::Audio => TimelineTrackKindView::Audio,
-            TrackKind::Text | TrackKind::Caption => {
-                unreachable!("schema-v1 bridge queries reject text and caption tracks")
-            }
+            TrackKind::Text => TimelineTrackKindView::Text,
+            TrackKind::Caption => TimelineTrackKindView::Caption,
+        },
+        state: ProjectTimelineTrackStateView {
+            locked: track.state.locked(),
+            visible: track.state.visible(),
+            muted: track.state.muted(),
+            solo: track.state.solo(),
         },
         clip_count: u64::try_from(track.clip_count).expect("bounded count fits in u64"),
     }
@@ -2088,7 +2135,7 @@ mod tests {
         ParametersFingerprint, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSummary,
         QueryResult, RationalTime, SourceFingerprint, TimeRange, TimelineClipPage,
         TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapResult,
-        TimelineSnapTargetKind, TimelineTrackSummary, TrackId, TrackKind,
+        TimelineSnapTargetKind, TimelineTrackSummaryV2, TrackId, TrackKind, TrackState,
     };
     use std::path::PathBuf;
 
@@ -2151,13 +2198,18 @@ mod tests {
     #[test]
     fn timeline_bridge_views_keep_ids_identity_and_exact_rational_values() {
         let track_id = TrackId::generate();
-        let track = timeline_track_view(&TimelineTrackSummary {
+        let track = timeline_track_view(&TimelineTrackSummaryV2 {
             track_id,
             kind: TrackKind::Audio,
+            state: TrackState::new(true, true, true, true),
             clip_count: 3,
         });
         assert_eq!(track.track_id, track_id.to_string());
         assert_eq!(track.kind, super::TimelineTrackKindView::Audio);
+        assert!(track.state.locked);
+        assert!(track.state.visible);
+        assert!(track.state.muted);
+        assert!(track.state.solo);
         assert_eq!(track.clip_count, 3);
 
         let project_id = ProjectId::generate();

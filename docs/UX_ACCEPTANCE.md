@@ -63,14 +63,29 @@ headless or widget-level checks:
 
 ### Timeline and project state
 
-- The workspace displays canonical Video/Audio track order and bounded clip
-  read models with derived V#/A# labels.
+- The workspace displays canonical Video/Audio/Text/Caption track order and
+  bounded track read models with derived V#/A#/T#/C# labels.
 - Video/Audio tracks can be added and empty tracks removed; clips can be
   inserted at exact times, moved between same-kind tracks, explicitly deleted,
-  trimmed, split, and ripple-deleted through Rust commands.
-- Timeline action menus expose exactly Move, Trim, Split, Delete, and Ripple
-  Delete. Dialogs show current timing, exact fields, and Rust-generated split
-  IDs where applicable.
+  duplicated, trimmed, split, and ripple-deleted through existing Rust
+  commands. Duplicate inserts after the selected clip while retaining its
+  exact source range.
+- Timeline action menus expose exactly Move, Duplicate, Trim, Split, Delete,
+  and Ripple Delete. Dialogs show current timing, exact fields, and
+  Rust-generated split IDs where applicable.
+- A pointer or keyboard action selects at most one clip. Ctrl+D (or Cmd+D on
+  macOS) duplicates it through the existing insert command; Escape clears the
+  selection. Delete/Backspace asks for confirmation before deleting.
+- Track visibility, audio mute, lock, and solo controls send the typed Rust
+  track-state command and refresh from canonical state. Locked tracks reject
+  clip edits and media drops; visible/muted and solo flags remain independent.
+- Supported media can be dragged from its dedicated library handle onto a
+  compatible unlocked timeline lane. Rust validates the insertion, and the
+  stream-specific exact duration is preserved. The accessible Add to Timeline
+  dialog remains available.
+- Timeline zoom and horizontal viewport are presentation-only. Zoom stays
+  between 12.5% and 800%, Fit returns to the content view, and changing view
+  state does not change `ProjectRevision`.
 - Ripple Delete confirms that only later clips on the selected track shift left;
   other tracks and global markers do not move.
 - Timeline dialogs refresh from Rust after a command and never apply optimistic

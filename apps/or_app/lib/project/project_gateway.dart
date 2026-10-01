@@ -190,7 +190,40 @@ class ProjectMediaPage {
   final int? nextOffset;
 }
 
-enum ProjectTimelineTrackKind { video, audio }
+enum ProjectTimelineTrackKind { video, audio, text, caption }
+
+class ProjectTimelineTrackState {
+  const ProjectTimelineTrackState({
+    required this.locked,
+    required this.visible,
+    required this.muted,
+    required this.solo,
+  });
+
+  static const defaults = ProjectTimelineTrackState(
+    locked: false,
+    visible: true,
+    muted: false,
+    solo: false,
+  );
+
+  final bool locked;
+  final bool visible;
+  final bool muted;
+  final bool solo;
+
+  ProjectTimelineTrackState copyWith({
+    bool? locked,
+    bool? visible,
+    bool? muted,
+    bool? solo,
+  }) => ProjectTimelineTrackState(
+    locked: locked ?? this.locked,
+    visible: visible ?? this.visible,
+    muted: muted ?? this.muted,
+    solo: solo ?? this.solo,
+  );
+}
 
 enum ProjectTimelineTrimEdge { start, end }
 
@@ -211,11 +244,13 @@ class ProjectTimelineTrack {
     required this.trackId,
     required this.kind,
     required this.clipCount,
+    this.state = ProjectTimelineTrackState.defaults,
   });
 
   final String trackId;
   final ProjectTimelineTrackKind kind;
   final int clipCount;
+  final ProjectTimelineTrackState state;
 }
 
 class ProjectTimelineTracks {
@@ -548,6 +583,12 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String trackId,
   );
+  Future<ProjectActionResult> setTimelineTrackState(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectTimelineTrackState state,
+  });
   Future<ProjectActionResult> insertTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

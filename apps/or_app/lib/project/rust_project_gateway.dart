@@ -222,6 +222,12 @@ class RustProjectGateway implements ProjectGateway {
                 trackId: track.trackId,
                 kind: _projectTimelineKind(track.kind),
                 clipCount: track.clipCount.toInt(),
+                state: ProjectTimelineTrackState(
+                  locked: track.state.locked,
+                  visible: track.state.visible,
+                  muted: track.state.muted,
+                  solo: track.state.solo,
+                ),
               ),
             )
             .toList(growable: false),
@@ -393,6 +399,27 @@ class RustProjectGateway implements ProjectGateway {
       projectInstanceId: current.projectInstanceId,
       expectedRevision: current.revision,
       trackId: trackId,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> setTimelineTrackState(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectTimelineTrackState state,
+  }) async => _action(
+    await _host(session).setTimelineTrackState(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      state: rust.ProjectTimelineTrackStateView(
+        locked: state.locked,
+        visible: state.visible,
+        muted: state.muted,
+        solo: state.solo,
+      ),
     ),
   );
 
@@ -818,6 +845,8 @@ class RustProjectGateway implements ProjectGateway {
   ) => switch (kind) {
     rust.TimelineTrackKindView.video => ProjectTimelineTrackKind.video,
     rust.TimelineTrackKindView.audio => ProjectTimelineTrackKind.audio,
+    rust.TimelineTrackKindView.text => ProjectTimelineTrackKind.text,
+    rust.TimelineTrackKindView.caption => ProjectTimelineTrackKind.caption,
   };
 
   static rust.TimelineTrackKindView _rustTimelineKind(
@@ -825,6 +854,8 @@ class RustProjectGateway implements ProjectGateway {
   ) => switch (kind) {
     ProjectTimelineTrackKind.video => rust.TimelineTrackKindView.video,
     ProjectTimelineTrackKind.audio => rust.TimelineTrackKindView.audio,
+    ProjectTimelineTrackKind.text => rust.TimelineTrackKindView.text,
+    ProjectTimelineTrackKind.caption => rust.TimelineTrackKindView.caption,
   };
 }
 

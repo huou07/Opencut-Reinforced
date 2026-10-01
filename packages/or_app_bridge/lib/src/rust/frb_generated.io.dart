@@ -76,6 +76,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineTrackStateView
+  dco_decode_box_autoadd_project_timeline_track_state_view(dynamic raw);
+
+  @protected
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
@@ -217,6 +221,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectTimelineSnapView dco_decode_project_timeline_snap_view(dynamic raw);
 
   @protected
+  ProjectTimelineTrackStateView dco_decode_project_timeline_track_state_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectTimelineTrackView dco_decode_project_timeline_track_view(dynamic raw);
 
   @protected
@@ -325,6 +334,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineTrackStateView
+  sse_decode_box_autoadd_project_timeline_track_state_view(
     SseDeserializer deserializer,
   );
 
@@ -508,6 +523,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineTrackStateView sse_decode_project_timeline_track_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineTrackView sse_decode_project_timeline_track_view(
     SseDeserializer deserializer,
   );
@@ -634,6 +654,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_media_artifact_bytes_view(
     MediaArtifactBytesView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_project_timeline_track_state_view(
+    ProjectTimelineTrackStateView self,
     SseSerializer serializer,
   );
 
@@ -850,6 +876,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_timeline_snap_view(
     ProjectTimelineSnapView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_track_state_view(
+    ProjectTimelineTrackStateView self,
     SseSerializer serializer,
   );
 

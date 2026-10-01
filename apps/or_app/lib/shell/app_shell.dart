@@ -271,11 +271,13 @@ class _AppShellState extends State<AppShell> {
               onAddAudioTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.audio),
               onRemoveTimelineTrack: _removeTimelineTrack,
+              onSetTimelineTrackState: _setTimelineTrackState,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
               onMoveTimelineClip: _moveTimelineClip,
+              onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
               onDeleteTimelineClip: _deleteTimelineClip,
               onTrimTimelineClip: _trimTimelineClip,
@@ -885,6 +887,22 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Future<void> _setTimelineTrackState(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectTimelineTrackState state,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.setTimelineTrackState(
+        session,
+        current,
+        trackId: track.trackId,
+        state: state,
+      ),
+    );
+  }
+
   Future<void> _insertMediaIntoTimeline(
     ProjectReadModel expected,
     ProjectMediaItem media,
@@ -930,6 +948,32 @@ class _AppShellState extends State<AppShell> {
         identical(session, _activeSession)) {
       await _refreshProjectState(session);
     }
+  }
+
+  Future<void> _duplicateTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  ) async {
+    final timelineStart = ProjectRationalTime.tryParse(
+      clip.timelineStart.add(clip.sourceDuration).canonical,
+    );
+    if (timelineStart == null) {
+      _showUnavailable('The clip cannot be duplicated at that exact time.');
+      return;
+    }
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.insertTimelineClip(
+        session,
+        current,
+        trackId: track.trackId,
+        mediaId: clip.mediaId,
+        timelineStart: timelineStart,
+        sourceStart: clip.sourceStart,
+        duration: clip.sourceDuration,
+      ),
+    );
   }
 
   Future<ProjectTimelineSnapResult> _resolveTimelineSnap(
@@ -1279,6 +1323,10 @@ class _AppShellState extends State<AppShell> {
         } else {
           final pages = <String, ProjectTimelineClipPage>{};
           for (final track in tracks.items) {
+            if (track.kind == ProjectTimelineTrackKind.text ||
+                track.kind == ProjectTimelineTrackKind.caption) {
+              continue;
+            }
             final page = track.clipCount == 0
                 ? ProjectTimelineClipPage(
                     projectId: tracks.projectId,

@@ -522,6 +522,25 @@ hardening commit itself must pass both workflows.
 - `crates/or_ipc/tests/live_host.rs` exercises typed timeline commands and queries through the existing generic IPC v1 route. The Flutter bridge retains its legacy media-only timeline view for this checkpoint; no native Flutter runtime behavior is added.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
+## Phase 8B timeline usability coverage
+
+- `crates/or_app_bridge/src/api/project.rs` tests preserve typed Video, Audio,
+  Text, and Caption track kinds plus lock, visibility, mute, and solo state in
+  the v2 track read model. The bridge exposes the existing typed track-state
+  command without changing IPC or project schema contracts.
+- `apps/or_app/test/widget_test.dart` covers persistent track visibility/mute,
+  lock, and solo commands; single-clip selection, Ctrl+D, Escape, and confirmed
+  Delete-key flow; duplicate insertion at the exact clip end with its source
+  range retained; view-only zoom and Fit; and compatible media drag insertion
+  with exact pointer time and stream duration. Incompatible drops are
+  rejected. Existing timeline editing, paging, marker, stale-revision, and
+  compact-layout regressions remain in the same suite.
+- The hosted-only native bridge test verifies typed track-state commands and
+  v2 track-state readback across save/reopen. It compiles locally through
+  Flutter analysis; native Flutter runtime execution remains CI-only. Local
+  native/runtime verification is
+  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
 ## Future verification layers
 
 ### CONFORMANCE

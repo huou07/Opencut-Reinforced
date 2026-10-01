@@ -679,6 +679,292 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('timeline track controls dispatch typed persistent state', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'state-video',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 0,
+        ),
+        ProjectTimelineTrack(
+          trackId: 'state-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 0,
+        ),
+      ];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-track-state.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Track state');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-track-enabled-state-video')),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastTrackState?.visible, isFalse);
+    expect(gateway.setTimelineTrackStateCalls, 1);
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-track-lock-state-video')),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastTrackState?.locked, isTrue);
+    expect(gateway.lastTrackState?.visible, isFalse);
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-track-solo-state-video')),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastTrackState?.solo, isTrue);
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-track-enabled-state-audio')),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastTrackStateId, 'state-audio');
+    expect(gateway.lastTrackState?.muted, isTrue);
+    expect(gateway.lastSession!.view.revision, BigInt.from(4));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('timeline duplicate preserves exact source range', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'duplicate-clip',
+      mediaId: 'duplicate-media',
+      timelineStart: ProjectRationalTime(BigInt.one, 3),
+      sourceStart: ProjectRationalTime(BigInt.one, 5),
+      sourceDuration: ProjectRationalTime(BigInt.from(7), 3),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'duplicate-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'duplicate-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-duplicate.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Duplicate clip');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-duplicate-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-duplicate-duplicate-clip')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTrackId, 'duplicate-track');
+    expect(
+      _sameRational(
+        gateway.lastInsertTimelineStart!,
+        ProjectRationalTime(BigInt.from(8), 3),
+      ),
+      isTrue,
+    );
+    expect(
+      _sameRational(gateway.lastInsertSourceStart!, clip.sourceStart),
+      isTrue,
+    );
+    expect(
+      _sameRational(gateway.lastInsertDuration!, clip.sourceDuration),
+      isTrue,
+    );
+    expect(gateway.lastSession!.clips['duplicate-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'timeline selection supports Ctrl+D and zoom stays presentation-only',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      final clip = ProjectTimelineClip(
+        clipId: 'keyboard-clip',
+        mediaId: 'keyboard-media',
+        timelineStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'keyboard-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'keyboard-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/timeline-keyboard.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Timeline keyboard');
+
+      final revision = gateway.lastSession!.view.revision;
+      await tester.tap(find.byKey(const ValueKey('timeline-zoom-in')));
+      await tester.pumpAndSettle();
+      expect(find.text('125%'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('timeline-fit-zoom')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('timeline-zoom-label')),
+          matching: find.text('Fit'),
+        ),
+        findsOneWidget,
+      );
+      expect(gateway.lastSession!.view.revision, revision);
+
+      await tester.tap(
+        find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('timeline-selection-duplicate')),
+        findsOneWidget,
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyD);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyD);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(gateway.insertTimelineClipCalls, 1);
+      expect(gateway.lastInsertTrackId, 'keyboard-track');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('timeline-selection-duplicate')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close').last);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete clip?'), findsOneWidget);
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect(gateway.deleteTimelineClipCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('media drag inserts on a compatible timeline track', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'audio-only-media',
+          sourceUri: Uri.file('/tmp/audio-only.wav').toString(),
+          formatNames: const ['wav'],
+          duration: '9 s',
+          videoDetails: null,
+          audioDetails: 'pcm',
+          firstAudioDuration: ProjectRationalTime(BigInt.from(9), 1),
+        ),
+        ProjectMediaItem(
+          mediaId: 'av-media',
+          sourceUri: Uri.file('/tmp/av-media.mov').toString(),
+          formatNames: const ['mov'],
+          duration: '5 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: 'aac',
+          firstVideoDuration: ProjectRationalTime(BigInt.from(3), 2),
+          firstAudioDuration: ProjectRationalTime(BigInt.from(5), 2),
+        ),
+      ]
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'drop-video',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 0,
+        ),
+        ProjectTimelineTrack(
+          trackId: 'drop-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 0,
+        ),
+      ];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-drag-insert.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Timeline drag insert');
+
+    Future<void> dragFromHandle(Offset start, Offset target) async {
+      final gesture = await tester.startGesture(start);
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveTo(target);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    final videoLane = find.byKey(
+      const ValueKey('timeline-drop-target-drop-video'),
+    );
+    await tester.ensureVisible(videoLane);
+    final invalidStart = tester.getCenter(
+      find.byKey(const ValueKey('media-drag-handle-audio-only-media')),
+    );
+    final videoRect = tester.getRect(videoLane);
+    final invalidTarget = Offset(videoRect.left + 64, videoRect.center.dy);
+    await dragFromHandle(invalidStart, invalidTarget);
+    expect(gateway.insertTimelineClipCalls, 0);
+
+    final audioLane = find.byKey(
+      const ValueKey('timeline-drop-target-drop-audio'),
+    );
+    await tester.ensureVisible(audioLane);
+    final validStart = tester.getCenter(
+      find.byKey(const ValueKey('media-drag-handle-av-media')),
+    );
+    final audioRect = tester.getRect(audioLane);
+    final validTarget = Offset(audioRect.left + 64, audioRect.center.dy);
+    await dragFromHandle(validStart, validTarget);
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTrackId, 'drop-audio');
+    expect(
+      _sameRational(
+        gateway.lastInsertTimelineStart!,
+        ProjectRationalTime(BigInt.one, 1),
+      ),
+      isTrue,
+    );
+    expect(
+      _sameRational(
+        gateway.lastInsertDuration!,
+        ProjectRationalTime(BigInt.from(5), 2),
+      ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'attached timeline event refreshes tracks and rejects stale insert',
     (tester) async {
@@ -2401,7 +2687,14 @@ class _FakeProjectGateway implements ProjectGateway {
   String? lastSnapTrackId;
   int addTimelineTrackCalls = 0;
   int removeTimelineTrackCalls = 0;
+  int setTimelineTrackStateCalls = 0;
+  String? lastTrackStateId;
+  ProjectTimelineTrackState? lastTrackState;
   int insertTimelineClipCalls = 0;
+  String? lastInsertTrackId;
+  ProjectRationalTime? lastInsertTimelineStart;
+  ProjectRationalTime? lastInsertSourceStart;
+  ProjectRationalTime? lastInsertDuration;
   int moveTimelineClipCalls = 0;
   String? lastMoveClipId;
   String? lastMoveTrackId;
@@ -2872,6 +3165,35 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectActionResult> setTimelineTrackState(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectTimelineTrackState state,
+  }) async {
+    setTimelineTrackStateCalls++;
+    lastTrackStateId = trackId;
+    lastTrackState = state;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.tracks.indexWhere(
+      (track) => track.trackId == trackId,
+    );
+    if (index < 0) return _timelineOperationFailure('TIMELINE_TRACK_NOT_FOUND');
+    final track = session.tracks[index];
+    session.tracks[index] = ProjectTimelineTrack(
+      trackId: track.trackId,
+      kind: track.kind,
+      clipCount: track.clipCount,
+      state: state,
+    );
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
   Future<ProjectActionResult> insertTimelineClip(
     ProjectSessionHandle handle,
     ProjectReadModel current, {
@@ -2882,6 +3204,10 @@ class _FakeProjectGateway implements ProjectGateway {
     required ProjectRationalTime duration,
   }) async {
     insertTimelineClipCalls++;
+    lastInsertTrackId = trackId;
+    lastInsertTimelineStart = timelineStart;
+    lastInsertSourceStart = sourceStart;
+    lastInsertDuration = duration;
     final session = _session(handle);
     final failure = _timelineFailure();
     if (failure != null) return failure;
@@ -2905,6 +3231,7 @@ class _FakeProjectGateway implements ProjectGateway {
             trackId: track.trackId,
             kind: track.kind,
             clipCount: clips.length,
+            state: track.state,
           )
         else
           track,
@@ -2956,6 +3283,7 @@ class _FakeProjectGateway implements ProjectGateway {
           trackId: track.trackId,
           kind: track.kind,
           clipCount: session.clips[track.trackId]!.length,
+          state: track.state,
         ),
     ];
     _timelineChanged(session);
@@ -2989,6 +3317,7 @@ class _FakeProjectGateway implements ProjectGateway {
             trackId: track.trackId,
             kind: track.kind,
             clipCount: session.clips[track.trackId]!.length,
+            state: track.state,
           )
         else
           track,
@@ -3085,6 +3414,7 @@ class _FakeProjectGateway implements ProjectGateway {
             trackId: track.trackId,
             kind: track.kind,
             clipCount: session.clips[track.trackId]!.length,
+            state: track.state,
           ),
       ];
       _timelineChanged(session);
@@ -3125,6 +3455,7 @@ class _FakeProjectGateway implements ProjectGateway {
             trackId: track.trackId,
             kind: track.kind,
             clipCount: session.clips[track.trackId]!.length,
+            state: track.state,
           ),
       ];
       _timelineChanged(session);

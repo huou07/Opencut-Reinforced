@@ -598,6 +598,26 @@ void main() {
         )).items,
         hasLength(2),
       );
+      final trackState = await gateway.setTimelineTrackState(
+        session,
+        current,
+        trackId: track.trackId,
+        state: const ProjectTimelineTrackState(
+          locked: true,
+          visible: false,
+          muted: false,
+          solo: true,
+        ),
+      );
+      expect(trackState.succeeded, isTrue);
+      current = trackState.view!;
+      expect(current.revision, BigInt.from(13));
+      final updatedTrack = (await gateway.listTimelineTracks(session))
+          .items
+          .single;
+      expect(updatedTrack.state.locked, isTrue);
+      expect(updatedTrack.state.visible, isFalse);
+      expect(updatedTrack.state.solo, isTrue);
       expect(
         (await gateway.listMediaPage(session, offset: 0, limit: 10)).items,
         hasLength(1),
@@ -605,7 +625,7 @@ void main() {
 
       final saved = await gateway.save(session);
       expect(saved.succeeded, isTrue);
-      expect(saved.view?.revision, BigInt.from(12));
+      expect(saved.view?.revision, BigInt.from(13));
       expect(saved.view?.dirty, isFalse);
       await gateway.close(session, discardUnsaved: false);
 
@@ -613,11 +633,14 @@ void main() {
       final reopened = await gateway.summary(reopenedSession);
       expect(reopened.projectId, originalProjectId);
       expect(reopened.projectInstanceId, isNot(originalInstanceId));
-      expect(reopened.revision, BigInt.from(12));
+      expect(reopened.revision, BigInt.from(13));
       expect(reopened.dirty, isFalse);
       final reopenedTracks = await gateway.listTimelineTracks(reopenedSession);
       expect(reopenedTracks.items.single.trackId, track.trackId);
       expect(reopenedTracks.items.single.kind, ProjectTimelineTrackKind.video);
+      expect(reopenedTracks.items.single.state.locked, isTrue);
+      expect(reopenedTracks.items.single.state.visible, isFalse);
+      expect(reopenedTracks.items.single.state.solo, isTrue);
       final reopenedClips = (await gateway.listTimelineClips(
         reopenedSession,
         trackId: track.trackId,
@@ -1005,6 +1028,19 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String trackId,
   ) => _gateway.removeTimelineTrack(session, current, trackId);
+
+  @override
+  Future<ProjectActionResult> setTimelineTrackState(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectTimelineTrackState state,
+  }) => _gateway.setTimelineTrackState(
+    session,
+    current,
+    trackId: trackId,
+    state: state,
+  );
 
   @override
   Future<ProjectActionResult> insertTimelineClip(

@@ -19,6 +19,7 @@ export 'src/rust/api/project.dart'
         ProjectTimelineMarkerPageView,
         ProjectTimelineMarkerView,
         ProjectTimelineSequenceSettingsView,
+        ProjectTimelineTrackStateView,
         ProjectTimelineTrackView,
         ProjectTimelineTracksView,
         ProjectView,

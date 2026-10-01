@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -211,6 +211,14 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     RationalRateView? sequenceFrameRate,
+  });
+
+  Future<ProjectActionResult> setTimelineTrackState({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required ProjectTimelineTrackStateView state,
   });
 
   Future<ProjectActionResult> splitTimelineClip({
@@ -862,19 +870,50 @@ class ProjectTimelineSnapView {
           targetMarkerId == other.targetMarkerId;
 }
 
+class ProjectTimelineTrackStateView {
+  final bool locked;
+  final bool visible;
+  final bool muted;
+  final bool solo;
+
+  const ProjectTimelineTrackStateView({
+    required this.locked,
+    required this.visible,
+    required this.muted,
+    required this.solo,
+  });
+
+  @override
+  int get hashCode =>
+      locked.hashCode ^ visible.hashCode ^ muted.hashCode ^ solo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineTrackStateView &&
+          runtimeType == other.runtimeType &&
+          locked == other.locked &&
+          visible == other.visible &&
+          muted == other.muted &&
+          solo == other.solo;
+}
+
 class ProjectTimelineTrackView {
   final String trackId;
   final TimelineTrackKindView kind;
+  final ProjectTimelineTrackStateView state;
   final BigInt clipCount;
 
   const ProjectTimelineTrackView({
     required this.trackId,
     required this.kind,
+    required this.state,
     required this.clipCount,
   });
 
   @override
-  int get hashCode => trackId.hashCode ^ kind.hashCode ^ clipCount.hashCode;
+  int get hashCode =>
+      trackId.hashCode ^ kind.hashCode ^ state.hashCode ^ clipCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -883,6 +922,7 @@ class ProjectTimelineTrackView {
           runtimeType == other.runtimeType &&
           trackId == other.trackId &&
           kind == other.kind &&
+          state == other.state &&
           clipCount == other.clipCount;
 }
 
@@ -1071,6 +1111,6 @@ enum TimelineSnapTargetKindView {
   marker,
 }
 
-enum TimelineTrackKindView { video, audio }
+enum TimelineTrackKindView { video, audio, text, caption }
 
 enum TimelineTrimEdgeView { start, end }
