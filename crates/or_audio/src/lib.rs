@@ -3,25 +3,33 @@ use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 use std::num::{NonZeroU32, NonZeroUsize};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use or_core::{RationalRate, RationalTime, TimeError};
+use or_core::{
+    AudioSettings, MAX_AUDIO_GAIN_MILLIDECIBELS, MIN_AUDIO_GAIN_MILLIDECIBELS, RationalRate,
+    RationalTime, TimeError,
+};
 use or_runtime::{CancellationToken, RenderSnapshot};
 
 /// Fixed-capacity interleaved audio storage shared by one producer and one
 /// device callback consumer.
 pub struct AudioBuffer {
+    inner: Arc<AudioBufferInner>,
+}
+
+struct AudioBufferInner {
     samples: Vec<UnsafeCell<f32>>,
     channels: usize,
     read_index: AtomicUsize,
     write_index: AtomicUsize,
 }
 
-// SAFETY: split() lends exactly one non-Sync producer and one non-Sync
-// consumer for the buffer's exclusive borrow. The producer writes only free
-// slots and publishes them with Release; the consumer reads only published
-// slots and releases them with Release before the producer can reuse them.
-unsafe impl Sync for AudioBuffer {}
+// SAFETY: split consumes the buffer and creates one non-Sync producer and one
+// non-Sync consumer. The producer writes only free slots and publishes them
+// with Release; the consumer reads only published slots and releases them with
+// Release before the producer can reuse them.
+unsafe impl Sync for AudioBufferInner {}
 
 impl AudioBuffer {
     pub fn new(
@@ -39,33 +47,36 @@ impl AudioBuffer {
         samples.resize_with(capacity_samples, || UnsafeCell::new(0.0));
 
         Ok(Self {
-            samples,
-            channels: channels.get(),
-            read_index: AtomicUsize::new(0),
-            write_index: AtomicUsize::new(0),
+            inner: Arc::new(AudioBufferInner {
+                samples,
+                channels: channels.get(),
+                read_index: AtomicUsize::new(0),
+                write_index: AtomicUsize::new(0),
+            }),
         })
     }
 
     pub fn capacity_frames(&self) -> usize {
-        self.samples.len() / self.channels
+        self.inner.samples.len() / self.inner.channels
     }
 
-    pub const fn channels(&self) -> usize {
-        self.channels
+    pub fn channels(&self) -> usize {
+        self.inner.channels
     }
 
-    /// Splits the buffer into its sole producer and callback consumer.
-    pub fn split(&mut self, clock: AudioClockMessage) -> (AudioProducer<'_>, AudioConsumer<'_>) {
-        self.read_index.store(0, Ordering::Relaxed);
-        self.write_index.store(0, Ordering::Relaxed);
+    /// Consumes the buffer and creates its sole producer and callback consumer.
+    pub fn split(self, clock: AudioClockMessage) -> (AudioProducer, AudioConsumer) {
+        self.inner.read_index.store(0, Ordering::Relaxed);
+        self.inner.write_index.store(0, Ordering::Relaxed);
+        let consumer_buffer = Arc::clone(&self.inner);
         (
             AudioProducer {
-                buffer: self,
+                buffer: self.inner,
                 write_index: 0,
                 _not_sync: PhantomData,
             },
             AudioConsumer {
-                buffer: self,
+                buffer: consumer_buffer,
                 read_index: 0,
                 clock,
                 _not_sync: PhantomData,
@@ -75,13 +86,13 @@ impl AudioBuffer {
 }
 
 /// The decode/resample side of the bounded audio buffer.
-pub struct AudioProducer<'a> {
-    buffer: &'a AudioBuffer,
+pub struct AudioProducer {
+    buffer: Arc<AudioBufferInner>,
     write_index: usize,
     _not_sync: PhantomData<Cell<()>>,
 }
 
-impl AudioProducer<'_> {
+impl AudioProducer {
     /// Copies a complete interleaved block without waiting or growing storage.
     pub fn try_push(
         &mut self,
@@ -122,14 +133,14 @@ impl AudioProducer<'_> {
 }
 
 /// The sole callback-side consumer of an audio buffer.
-pub struct AudioConsumer<'a> {
-    buffer: &'a AudioBuffer,
+pub struct AudioConsumer {
+    buffer: Arc<AudioBufferInner>,
     read_index: usize,
     clock: AudioClockMessage,
     _not_sync: PhantomData<Cell<()>>,
 }
 
-impl AudioConsumer<'_> {
+impl AudioConsumer {
     /// Fills one device callback block. Missing samples become silence; this
     /// method performs no allocation, locking, project access, or waiting.
     pub fn render_into(
@@ -223,6 +234,11 @@ impl AudioClockMessage {
     /// Device frames include frames rendered as silence during underruns.
     pub const fn device_frames(self) -> u64 {
         self.device_frames
+    }
+
+    pub(crate) const fn with_device_frames(mut self, device_frames: u64) -> Self {
+        self.device_frames = device_frames;
+        self
     }
 
     /// Converts the device position to exact timeline seconds.
@@ -409,13 +425,97 @@ impl fmt::Display for AvSynchronizerError {
 
 impl Error for AvSynchronizerError {}
 
+/// Applies the persisted basic clip gain, pan, and linear fades to one
+/// interleaved stereo block. The block's first sample offset is exact timeline
+/// time relative to the clip start.
+pub fn process_audio_clip(
+    samples: &mut [f32],
+    clip_offset: RationalTime,
+    clip_duration: RationalTime,
+    settings: AudioSettings,
+) -> Result<(), AudioProcessError> {
+    if !samples.len().is_multiple_of(2) {
+        return Err(AudioProcessError::IncompleteStereoFrame);
+    }
+    if clip_offset.is_negative()
+        || clip_duration.is_negative()
+        || settings.gain_millidecibels < MIN_AUDIO_GAIN_MILLIDECIBELS
+        || settings.gain_millidecibels > MAX_AUDIO_GAIN_MILLIDECIBELS
+        || !(-10_000..=10_000).contains(&settings.pan_basis_points)
+        || settings.fade_in.is_negative()
+        || settings.fade_out.is_negative()
+        || settings.fade_in > clip_duration
+        || settings.fade_out > clip_duration
+    {
+        return Err(AudioProcessError::InvalidSettings);
+    }
+
+    const SAMPLE_RATE: f64 = 48_000.0;
+    let gain = 10.0_f64.powf(f64::from(settings.gain_millidecibels) / 20_000.0) as f32;
+    let pan = f32::from(settings.pan_basis_points) / 10_000.0;
+    let left_pan = (1.0 - pan).min(1.0);
+    let right_pan = (1.0 + pan).min(1.0);
+    let offset = seconds(clip_offset);
+    let duration = seconds(clip_duration);
+    let fade_in = seconds(settings.fade_in);
+    let fade_out = seconds(settings.fade_out);
+
+    let (stereo_frames, _) = samples.as_chunks_mut::<2>();
+    for (frame, stereo) in stereo_frames.iter_mut().enumerate() {
+        let time = offset + frame as f64 / SAMPLE_RATE;
+        let fade_in_gain = if fade_in == 0.0 {
+            1.0
+        } else {
+            (time / fade_in).clamp(0.0, 1.0) as f32
+        };
+        let fade_out_gain = if fade_out == 0.0 {
+            1.0
+        } else {
+            ((duration - time) / fade_out).clamp(0.0, 1.0) as f32
+        };
+        let level = gain * fade_in_gain * fade_out_gain;
+        stereo[0] *= level * left_pan;
+        stereo[1] *= level * right_pan;
+    }
+    Ok(())
+}
+
+fn seconds(time: RationalTime) -> f64 {
+    time.numerator() as f64 / f64::from(time.denominator())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioProcessError {
+    IncompleteStereoFrame,
+    InvalidSettings,
+}
+
+impl fmt::Display for AudioProcessError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IncompleteStereoFrame => {
+                formatter.write_str("audio samples do not form whole stereo frames")
+            }
+            Self::InvalidSettings => formatter.write_str("audio settings or clip time are invalid"),
+        }
+    }
+}
+
+impl Error for AudioProcessError {}
+
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+mod device;
+
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub use device::{DesktopAudioOutput, DesktopAudioOutputError};
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AudioBuffer, AudioClockError, AudioClockMessage, AudioPushError, AudioRenderError,
-        AvSynchronizer, AvSynchronizerError, VideoSyncAction,
+        AudioBuffer, AudioClockError, AudioClockMessage, AudioProcessError, AudioPushError,
+        AudioRenderError, AvSynchronizer, AvSynchronizerError, VideoSyncAction, process_audio_clip,
     };
-    use or_core::{ProjectDocument, RationalTime};
+    use or_core::{AudioSettings, ProjectDocument, RationalTime};
     use or_runtime::{CancellationToken, RenderSnapshot};
     use std::num::{NonZeroU32, NonZeroUsize};
 
@@ -461,7 +561,7 @@ mod tests {
     #[test]
     fn callback_uses_audio_as_master_and_silences_underruns() {
         let token = CancellationToken::new();
-        let mut buffer = buffer(2, 2);
+        let buffer = buffer(2, 2);
         let (mut producer, mut consumer) = buffer.split(clock(48_000, time(3, 2)));
         producer.try_push(&[0.25, -0.25], &token).unwrap();
 
@@ -480,7 +580,8 @@ mod tests {
     #[test]
     fn bounded_buffer_reports_full_and_wraps_without_growing() {
         let token = CancellationToken::new();
-        let mut buffer = buffer(2, 2);
+        let buffer = buffer(2, 2);
+        let capacity_frames = buffer.capacity_frames();
         let (mut producer, mut consumer) = buffer.split(clock(48_000, RationalTime::ZERO));
         producer.try_push(&[1.0, 2.0, 3.0, 4.0], &token).unwrap();
         assert_eq!(
@@ -496,7 +597,7 @@ mod tests {
         let mut wrapped = [0.0; 4];
         consumer.render_into(&mut wrapped, &token).unwrap();
         assert_eq!(wrapped, [5.0, 6.0, 7.0, 8.0]);
-        assert_eq!(buffer.capacity_frames(), 2);
+        assert_eq!(capacity_frames, 2);
     }
 
     #[test]
@@ -505,7 +606,7 @@ mod tests {
 
         let token = CancellationToken::new();
         let producer_token = token.clone();
-        let mut buffer = buffer(64, 2);
+        let buffer = buffer(64, 2);
         let (mut producer, mut consumer) = buffer.split(clock(48_000, RationalTime::ZERO));
         std::thread::scope(|scope| {
             let producer_thread = scope.spawn(move || {
@@ -568,7 +669,7 @@ mod tests {
     #[test]
     fn cancellation_silences_output_advances_device_clock_and_rejects_input() {
         let token = CancellationToken::new();
-        let mut buffer = buffer(2, 2);
+        let buffer = buffer(2, 2);
         let (mut producer, mut consumer) = buffer.split(clock(48_000, RationalTime::ZERO));
         producer.try_push(&[1.0, 2.0], &token).unwrap();
         token.cancel();
@@ -588,7 +689,7 @@ mod tests {
     #[test]
     fn callback_rejects_partial_device_frames_as_silence() {
         let token = CancellationToken::new();
-        let mut buffer = buffer(1, 2);
+        let buffer = buffer(1, 2);
         let (_, mut consumer) = buffer.split(clock(48_000, RationalTime::ZERO));
         let mut output = [9.0; 3];
         assert_eq!(
@@ -604,7 +705,7 @@ mod tests {
         let snapshot = RenderSnapshot::at_time(&project, RationalTime::ZERO).unwrap();
         let video_snapshot = RenderSnapshot::at_time(&project, time(1, 500)).unwrap();
         let audio_clock = AudioClockMessage::new(NonZeroU32::new(48_000).unwrap(), snapshot);
-        let mut buffer = buffer(1, 2);
+        let buffer = buffer(1, 2);
         let (_, mut consumer) = buffer.split(audio_clock);
         let token = CancellationToken::new();
         let report = consumer.render_into(&mut [0.0; 192], &token).unwrap();
@@ -638,6 +739,54 @@ mod tests {
         assert_eq!(
             AvSynchronizer::new(time(-1, 1)),
             Err(AvSynchronizerError::NegativeDriftTolerance)
+        );
+    }
+
+    #[test]
+    fn clip_gain_pan_and_fades_process_interleaved_stereo_samples() {
+        let mut samples = [1.0; 8];
+        process_audio_clip(
+            &mut samples,
+            RationalTime::ZERO,
+            time(4, 48_000),
+            AudioSettings {
+                pan_basis_points: 10_000,
+                fade_in: time(1, 48_000),
+                fade_out: time(2, 48_000),
+                ..AudioSettings::DEFAULT
+            },
+        )
+        .unwrap();
+        assert_eq!(samples[0], 0.0);
+        assert_eq!(samples[1], 0.0);
+        assert_eq!(samples[2], 0.0);
+        assert_eq!(samples[3], 1.0);
+        assert_eq!(samples[5], 1.0);
+        assert_eq!(samples[7], 0.5);
+    }
+
+    #[test]
+    fn clip_processor_rejects_invalid_blocks_and_ranges() {
+        assert_eq!(
+            process_audio_clip(
+                &mut [0.0; 3],
+                RationalTime::ZERO,
+                time(1, 1),
+                AudioSettings::DEFAULT
+            ),
+            Err(AudioProcessError::IncompleteStereoFrame)
+        );
+        assert_eq!(
+            process_audio_clip(
+                &mut [0.0; 2],
+                RationalTime::ZERO,
+                time(1, 1),
+                AudioSettings {
+                    gain_millidecibels: 24_001,
+                    ..AudioSettings::DEFAULT
+                },
+            ),
+            Err(AudioProcessError::InvalidSettings)
         );
     }
 }

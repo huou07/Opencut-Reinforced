@@ -41,7 +41,7 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 #[test]
 fn device_callback_does_not_allocate() {
-    let mut buffer =
+    let buffer =
         AudioBuffer::new(NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(2).unwrap()).unwrap();
     let project = ProjectDocument::new("audio callback test");
     let snapshot = RenderSnapshot::at_time(&project, RationalTime::ZERO).unwrap();

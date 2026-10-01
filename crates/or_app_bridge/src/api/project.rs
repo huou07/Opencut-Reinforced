@@ -2,19 +2,20 @@ use crate::frb_generated::StreamSink;
 use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig,
-    ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, FontIdentity, JobManagerConfig,
-    MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
-    MediaArtifactRequestState, MediaArtifactService, MediaArtifactServiceConfig, MediaId,
-    MediaItem, MediaStreamMetadata, Opacity, OperationError, OperationErrorCode,
-    ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError, ProjectRevision,
-    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
+    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
+    CacheStoreConfig, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, EffectReference,
+    FontIdentity, JobManagerConfig, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
+    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
+    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, Opacity, OperationError,
+    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
+    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
     TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
     TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
     TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
-    TrackState, Transform, VisualSettings, apply_project_recovery, discard_project_recovery,
-    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
+    TrackState, Transform, TransitionKind, TransitionReference, VisualSettings,
+    apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
+    inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{
@@ -240,6 +241,28 @@ pub struct ProjectTimelineVisualSettingsView {
     pub crop_right_basis_points: u16,
     pub crop_bottom_basis_points: u16,
     pub opacity_basis_points: u16,
+    pub brightness_amount_milli: i16,
+    pub contrast_amount_milli: u16,
+    pub saturation_amount_milli: u16,
+    pub gaussian_blur_radius_milli: u32,
+    pub update_brightness: bool,
+    pub update_contrast: bool,
+    pub update_saturation: bool,
+    pub update_gaussian_blur: bool,
+    pub transition_in_kind: u8,
+    pub transition_in_duration: RationalTimeView,
+    pub transition_out_kind: u8,
+    pub transition_out_duration: RationalTimeView,
+    pub update_transition_in: bool,
+    pub update_transition_out: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTimelineAudioSettingsView {
+    pub gain_millidecibels: i32,
+    pub pan_basis_points: i16,
+    pub fade_in: RationalTimeView,
+    pub fade_out: RationalTimeView,
 }
 
 #[derive(Clone, Debug)]
@@ -682,7 +705,7 @@ impl ProjectHostHandle {
         track_id: String,
         clip_id: String,
     ) -> Result<ProjectTimelineVisualSettingsView, ProjectBridgeError> {
-        let (_, _, _, clip) = self.find_video_clip(
+        let (_, _, _, clip) = self.find_visual_clip(
             &project_id,
             &project_instance_id,
             expected_revision,
@@ -704,7 +727,7 @@ impl ProjectHostHandle {
         clip_id: String,
         settings: ProjectTimelineVisualSettingsView,
     ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision, clip) = match self.find_video_clip(
+        let (project_id, project_instance_id, revision, clip) = match self.find_visual_clip(
             &project_id,
             &project_instance_id,
             expected_revision,
@@ -735,6 +758,25 @@ impl ProjectHostHandle {
         visual.opacity = Opacity {
             basis_points: settings.opacity_basis_points,
         };
+        visual.effects = effects_from_view(&visual.effects, &settings);
+        if settings.update_transition_in {
+            visual.transition_in = match transition_from_view(
+                settings.transition_in_kind,
+                settings.transition_in_duration,
+            ) {
+                Ok(transition) => transition,
+                Err(error) => return action_error(error),
+            };
+        }
+        if settings.update_transition_out {
+            visual.transition_out = match transition_from_view(
+                settings.transition_out_kind,
+                settings.transition_out_duration,
+            ) {
+                Ok(transition) => transition,
+                Err(error) => return action_error(error),
+            };
+        }
         self.dispatch_command(CommandEnvelope::update_timeline_clip(
             project_id,
             project_instance_id,
@@ -743,6 +785,70 @@ impl ProjectHostHandle {
             clip.timeline_duration,
             clip.content,
             ClipSettings::Visual(visual),
+        ))
+    }
+
+    pub fn get_timeline_clip_audio_settings(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+    ) -> Result<ProjectTimelineAudioSettingsView, ProjectBridgeError> {
+        let (_, _, _, clip) = self.find_audio_clip(
+            &project_id,
+            &project_instance_id,
+            expected_revision,
+            &track_id,
+            &clip_id,
+        )?;
+        let ClipSettings::Audio(settings) = clip.settings else {
+            return Err(unsupported_audio_settings());
+        };
+        Ok(audio_settings_view(settings))
+    }
+
+    pub fn update_timeline_clip_audio_settings(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        settings: ProjectTimelineAudioSettingsView,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision, clip) = match self.find_audio_clip(
+            &project_id,
+            &project_instance_id,
+            expected_revision,
+            &track_id,
+            &clip_id,
+        ) {
+            Ok(result) => result,
+            Err(error) => return action_error(error),
+        };
+        let fade_in = match time_from_view(settings.fade_in) {
+            Ok(time) => time,
+            Err(error) => return action_error(error),
+        };
+        let fade_out = match time_from_view(settings.fade_out) {
+            Ok(time) => time,
+            Err(error) => return action_error(error),
+        };
+        self.dispatch_command(CommandEnvelope::update_timeline_clip(
+            project_id,
+            project_instance_id,
+            revision,
+            clip.clip_id,
+            clip.timeline_duration,
+            clip.content,
+            ClipSettings::Audio(AudioSettings {
+                gain_millidecibels: settings.gain_millidecibels,
+                pan_basis_points: settings.pan_basis_points,
+                fade_in,
+                fade_out,
+            }),
         ))
     }
 
@@ -1769,7 +1875,7 @@ impl ProjectHostHandle {
         Ok(())
     }
 
-    fn find_video_clip(
+    fn find_visual_clip(
         &self,
         project_id: &str,
         project_instance_id: &str,
@@ -1793,8 +1899,38 @@ impl ProjectHostHandle {
                 track_id,
                 clip_id,
             )?;
-        if track_kind != TrackKind::Video {
+        if !track_kind.is_visual() {
             return Err(unsupported_visual_settings());
+        }
+        Ok((project_id, project_instance_id, revision, clip))
+    }
+
+    fn find_audio_clip(
+        &self,
+        project_id: &str,
+        project_instance_id: &str,
+        expected_revision: u64,
+        track_id: &str,
+        clip_id: &str,
+    ) -> Result<
+        (
+            ProjectId,
+            ProjectInstanceId,
+            ProjectRevision,
+            TimelineClipState,
+        ),
+        ProjectBridgeError,
+    > {
+        let (project_id, project_instance_id, revision, track_kind, clip) = self
+            .find_timeline_clip_state(
+                project_id,
+                project_instance_id,
+                expected_revision,
+                track_id,
+                clip_id,
+            )?;
+        if track_kind != TrackKind::Audio {
+            return Err(unsupported_audio_settings());
         }
         Ok((project_id, project_instance_id, revision, clip))
     }
@@ -2307,6 +2443,26 @@ fn text_clip_content(
 }
 
 fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSettingsView {
+    let mut brightness_amount_milli = 0;
+    let mut contrast_amount_milli = 1_000;
+    let mut saturation_amount_milli = 1_000;
+    let mut gaussian_blur_radius_milli = 0;
+    for effect in &settings.effects {
+        match *effect {
+            EffectReference::Brightness { amount_milli } => {
+                brightness_amount_milli = amount_milli;
+            }
+            EffectReference::Contrast { amount_milli } => {
+                contrast_amount_milli = amount_milli;
+            }
+            EffectReference::Saturation { amount_milli } => {
+                saturation_amount_milli = amount_milli;
+            }
+            EffectReference::GaussianBlur { radius_milli } => {
+                gaussian_blur_radius_milli = radius_milli;
+            }
+        }
+    }
     ProjectTimelineVisualSettingsView {
         x_milli_canvas: settings.transform.x_milli_canvas,
         y_milli_canvas: settings.transform.y_milli_canvas,
@@ -2320,7 +2476,140 @@ fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSetti
         crop_right_basis_points: settings.crop.right_basis_points,
         crop_bottom_basis_points: settings.crop.bottom_basis_points,
         opacity_basis_points: settings.opacity.basis_points,
+        brightness_amount_milli,
+        contrast_amount_milli,
+        saturation_amount_milli,
+        gaussian_blur_radius_milli,
+        update_brightness: false,
+        update_contrast: false,
+        update_saturation: false,
+        update_gaussian_blur: false,
+        transition_in_kind: transition_kind_code(settings.transition_in),
+        transition_in_duration: settings
+            .transition_in
+            .map(|transition| rational_time_view(transition.duration))
+            .unwrap_or_else(|| rational_time_view(RationalTime::ZERO)),
+        transition_out_kind: transition_kind_code(settings.transition_out),
+        transition_out_duration: settings
+            .transition_out
+            .map(|transition| rational_time_view(transition.duration))
+            .unwrap_or_else(|| rational_time_view(RationalTime::ZERO)),
+        update_transition_in: false,
+        update_transition_out: false,
     }
+}
+
+fn effects_from_view(
+    existing: &[EffectReference],
+    settings: &ProjectTimelineVisualSettingsView,
+) -> Vec<EffectReference> {
+    let mut effects = Vec::with_capacity(existing.len().saturating_add(4));
+    for effect in existing {
+        let kind = effect_kind_code(*effect);
+        if !effect_kind_modified(settings, kind) {
+            effects.push(*effect);
+        } else if let Some(updated) = effect_from_view(settings, kind) {
+            effects.push(updated);
+        }
+    }
+    for kind in 1..=4 {
+        if effect_kind_modified(settings, kind)
+            && !existing
+                .iter()
+                .any(|effect| effect_kind_code(*effect) == kind)
+            && let Some(effect) = effect_from_view(settings, kind)
+        {
+            effects.push(effect);
+        }
+    }
+    effects
+}
+
+fn effect_kind_code(effect: EffectReference) -> u8 {
+    match effect {
+        EffectReference::Brightness { .. } => 1,
+        EffectReference::Contrast { .. } => 2,
+        EffectReference::Saturation { .. } => 3,
+        EffectReference::GaussianBlur { .. } => 4,
+    }
+}
+
+fn effect_kind_modified(settings: &ProjectTimelineVisualSettingsView, kind: u8) -> bool {
+    match kind {
+        1 => settings.update_brightness,
+        2 => settings.update_contrast,
+        3 => settings.update_saturation,
+        4 => settings.update_gaussian_blur,
+        _ => false,
+    }
+}
+
+fn effect_from_view(
+    settings: &ProjectTimelineVisualSettingsView,
+    kind: u8,
+) -> Option<EffectReference> {
+    match kind {
+        1 if settings.brightness_amount_milli != 0 => Some(EffectReference::Brightness {
+            amount_milli: settings.brightness_amount_milli,
+        }),
+        2 if settings.contrast_amount_milli != 1_000 => Some(EffectReference::Contrast {
+            amount_milli: settings.contrast_amount_milli,
+        }),
+        3 if settings.saturation_amount_milli != 1_000 => Some(EffectReference::Saturation {
+            amount_milli: settings.saturation_amount_milli,
+        }),
+        4 if settings.gaussian_blur_radius_milli != 0 => Some(EffectReference::GaussianBlur {
+            radius_milli: settings.gaussian_blur_radius_milli,
+        }),
+        _ => None,
+    }
+}
+
+fn transition_kind_code(transition: Option<TransitionReference>) -> u8 {
+    match transition.map(|transition| transition.kind) {
+        None => 0,
+        Some(TransitionKind::CrossDissolve) => 1,
+        Some(TransitionKind::FadeThroughBlack) => 2,
+        Some(TransitionKind::Wipe) => 3,
+    }
+}
+
+fn transition_from_view(
+    kind: u8,
+    duration: RationalTimeView,
+) -> Result<Option<TransitionReference>, ProjectBridgeError> {
+    if kind == 0 {
+        return Ok(None);
+    }
+    let kind = match kind {
+        1 => TransitionKind::CrossDissolve,
+        2 => TransitionKind::FadeThroughBlack,
+        3 => TransitionKind::Wipe,
+        _ => {
+            return Err(ProjectBridgeError {
+                code: "INVALID_TRANSITION_KIND".to_owned(),
+                message: "The selected transition is not supported.".to_owned(),
+            });
+        }
+    };
+    let duration = time_from_view(duration)?;
+    Ok(Some(TransitionReference { kind, duration }))
+}
+
+fn audio_settings_view(settings: AudioSettings) -> ProjectTimelineAudioSettingsView {
+    ProjectTimelineAudioSettingsView {
+        gain_millidecibels: settings.gain_millidecibels,
+        pan_basis_points: settings.pan_basis_points,
+        fade_in: rational_time_view(settings.fade_in),
+        fade_out: rational_time_view(settings.fade_out),
+    }
+}
+
+fn time_from_view(time: RationalTimeView) -> Result<RationalTime, ProjectBridgeError> {
+    RationalTime::new(time.numerator, time.denominator).map_err(|error| ProjectBridgeError {
+        code: "INVALID_TIMELINE_TIME".to_owned(),
+        message: error.to_string(),
+    })
 }
 
 fn ensure_visual_settings_snapshot(
@@ -2344,7 +2633,16 @@ fn ensure_visual_settings_snapshot(
 fn unsupported_visual_settings() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
-        message: "Video transform settings are only available for video clips.".to_owned(),
+        message: "Transform, effect, and transition settings are only available for visual clips."
+            .to_owned(),
+    }
+}
+
+fn unsupported_audio_settings() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
+        message: "Audio gain, pan, and fade settings are only available for audio clips."
+            .to_owned(),
     }
 }
 
@@ -2637,21 +2935,91 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        CachePlatform, MediaArtifactKindView, configured_media_artifact_cache_root,
-        media_artifact_event_view, operation_error_code, rational_time_view,
-        timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
-        timeline_track_view,
+        CachePlatform, MediaArtifactKindView, audio_settings_view,
+        configured_media_artifact_cache_root, effects_from_view, media_artifact_event_view,
+        operation_error_code, rational_time_view, timeline_clip_page_view,
+        timeline_marker_page_view, timeline_snap_view, timeline_track_view, visual_settings_view,
     };
     use or_core::{
-        CacheArtifactKind, CacheKey, ClipContent, ClipId, ClipSettings, JobId, MarkerId,
-        MediaArtifactEvent, MediaArtifactEventState, MediaId, OperationErrorCode,
-        ParametersFingerprint, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSummary,
-        QueryResult, RationalTime, SourceFingerprint, TextFormatting, TimeRange,
+        AudioSettings, CacheArtifactKind, CacheKey, ClipContent, ClipId, ClipSettings,
+        EffectReference, JobId, MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaId,
+        OperationErrorCode, ParametersFingerprint, ProjectId, ProjectInstanceId, ProjectRevision,
+        ProjectSummary, QueryResult, RationalTime, SourceFingerprint, TextFormatting, TimeRange,
         TimelineClipPageV2, TimelineClipState, TimelineMarkerPage, TimelineMarkerState,
         TimelineSnapMovingAnchor, TimelineSnapResult, TimelineSnapTargetKind,
-        TimelineTrackSummaryV2, TrackId, TrackKind, TrackState, VisualSettings,
+        TimelineTrackSummaryV2, TrackId, TrackKind, TrackState, TransitionKind,
+        TransitionReference, VisualSettings,
     };
     use std::path::PathBuf;
+
+    #[test]
+    fn typed_effect_and_audio_settings_survive_bridge_view_conversion() {
+        let visual = VisualSettings {
+            effects: vec![
+                EffectReference::Brightness { amount_milli: 250 },
+                EffectReference::Contrast {
+                    amount_milli: 1_250,
+                },
+                EffectReference::Saturation { amount_milli: 750 },
+                EffectReference::GaussianBlur {
+                    radius_milli: 1_500,
+                },
+            ],
+            transition_in: Some(TransitionReference {
+                kind: TransitionKind::CrossDissolve,
+                duration: RationalTime::new(1, 2).unwrap(),
+            }),
+            transition_out: Some(TransitionReference {
+                kind: TransitionKind::Wipe,
+                duration: RationalTime::new(1, 3).unwrap(),
+            }),
+            ..VisualSettings::default()
+        };
+
+        let mut view = visual_settings_view(&visual);
+        view.update_brightness = true;
+        view.update_contrast = true;
+        view.update_saturation = true;
+        view.update_gaussian_blur = true;
+        assert_eq!(effects_from_view(&visual.effects, &view), visual.effects);
+        assert_eq!(view.transition_in_kind, 1);
+        assert_eq!(
+            view.transition_in_duration,
+            rational_time_view(RationalTime::new(1, 2).unwrap())
+        );
+        assert_eq!(view.transition_out_kind, 3);
+        assert_eq!(
+            view.transition_out_duration,
+            rational_time_view(RationalTime::new(1, 3).unwrap())
+        );
+
+        view.update_brightness = true;
+        view.update_contrast = false;
+        view.update_saturation = false;
+        view.update_gaussian_blur = false;
+        view.brightness_amount_milli = -250;
+        assert_eq!(
+            effects_from_view(&visual.effects, &view),
+            vec![
+                EffectReference::Brightness { amount_milli: -250 },
+                visual.effects[1],
+                visual.effects[2],
+                visual.effects[3],
+            ]
+        );
+
+        let audio = AudioSettings {
+            gain_millidecibels: -6_250,
+            pan_basis_points: -3_750,
+            fade_in: RationalTime::new(1, 2).unwrap(),
+            fade_out: RationalTime::new(3, 4).unwrap(),
+        };
+        let audio_view = audio_settings_view(audio);
+        assert_eq!(audio_view.gain_millidecibels, -6_250);
+        assert_eq!(audio_view.pan_basis_points, -3_750);
+        assert_eq!(audio_view.fade_in, rational_time_view(audio.fade_in));
+        assert_eq!(audio_view.fade_out, rational_time_view(audio.fade_out));
+    }
 
     #[test]
     fn artifact_cache_roots_follow_desktop_platform_conventions() {

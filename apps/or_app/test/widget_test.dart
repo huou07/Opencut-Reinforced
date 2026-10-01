@@ -951,20 +951,63 @@ void main() {
         find.byKey(const ValueKey('timeline-selection-duplicate')),
         findsOneWidget,
       );
+      final inspectorScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('inspector-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
       expect(find.text('TRANSFORM'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-x')),
         '250',
       );
-      await tester.ensureVisible(
+      await tester.enterText(
+        find.byKey(const ValueKey('inspector-visual-brightness')),
+        '250',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('inspector-visual-contrast')),
+        '1250',
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('inspector-visual-transition_in_kind')),
+        200,
+        scrollable: inspectorScrollable,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('inspector-visual-transition_in_kind')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cross dissolve').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('inspector-visual-transition_in_duration')),
+        '1/2',
+      );
+      await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-apply')),
+        200,
+        scrollable: inspectorScrollable,
       );
       await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
       await tester.pumpAndSettle();
       expect(gateway.updateVisualSettingsCalls, 1);
       expect(gateway.lastVisualSettings?.xMilliCanvas, 250);
-      await tester.ensureVisible(
+      expect(gateway.lastVisualSettings?.brightnessAmountMilli, 250);
+      expect(gateway.lastVisualSettings?.contrastAmountMilli, 1250);
+      expect(
+        gateway.lastVisualSettings?.transitionIn,
+        ProjectTimelineTransition.crossDissolve,
+      );
+      expect(
+        gateway.lastVisualSettings?.transitionInDuration?.canonical,
+        '1/2',
+      );
+      await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-reset')),
+        200,
+        scrollable: inspectorScrollable,
       );
       await tester.tap(find.byKey(const ValueKey('inspector-visual-reset')));
       await tester.pumpAndSettle();
@@ -972,6 +1015,11 @@ void main() {
       expect(gateway.lastVisualSettings?.xMilliCanvas, 0);
       expect(gateway.lastVisualSettings?.scaleXMilli, 1000);
       expect(gateway.lastVisualSettings?.opacityBasisPoints, 10000);
+      expect(gateway.lastVisualSettings?.brightnessAmountMilli, 0);
+      expect(
+        gateway.lastVisualSettings?.transitionIn,
+        ProjectTimelineTransition.none,
+      );
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.keyD);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.keyD);
@@ -1389,6 +1437,71 @@ void main() {
     ]) {
       expect(ProjectRationalTime.tryParse(invalid), isNull, reason: invalid);
     }
+  });
+
+  testWidgets('audio inspector writes gain, pan, and exact fades', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'audio-inspector-clip',
+      mediaId: 'audio-inspector-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'audio-inspector-track',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'audio-inspector-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/audio-inspector.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Audio inspector');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-audio-inspector-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close').last);
+    await tester.pumpAndSettle();
+    expect(find.text('AUDIO'), findsOneWidget);
+    expect(gateway.getAudioSettingsCalls, 1);
+    await tester.enterText(
+      find.byKey(const ValueKey('inspector-audio-gain_db')),
+      '-6.25',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('inspector-audio-pan_percent')),
+      '-37.5',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('inspector-audio-fade_in')),
+      '1/2',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('inspector-audio-fade_out')),
+      '1/3',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('inspector-audio-apply')),
+    );
+    await tester.tap(find.byKey(const ValueKey('inspector-audio-apply')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAudioSettingsCalls, 1);
+    expect(gateway.lastAudioSettings?.gainMilliDecibels, -6250);
+    expect(gateway.lastAudioSettings?.panBasisPoints, -3750);
+    expect(gateway.lastAudioSettings?.fadeIn.canonical, '1/2');
+    expect(gateway.lastAudioSettings?.fadeOut.canonical, '1/3');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -2815,6 +2928,9 @@ class _FakeProjectGateway implements ProjectGateway {
   int getVisualSettingsCalls = 0;
   int updateVisualSettingsCalls = 0;
   ProjectTimelineVisualSettings? lastVisualSettings;
+  int getAudioSettingsCalls = 0;
+  int updateAudioSettingsCalls = 0;
+  ProjectTimelineAudioSettings? lastAudioSettings;
   int timelineMarkersCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
   int resolveTimelineSnapCalls = 0;
@@ -3245,6 +3361,46 @@ class _FakeProjectGateway implements ProjectGateway {
       return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
     }
     session.visualSettings[clipId] = settings;
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async {
+    getAudioSettingsCalls++;
+    final session = _session(handle);
+    return session.audioSettings[clipId] ??
+        ProjectTimelineAudioSettings.identity;
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAudioSettings(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineAudioSettings settings,
+  }) async {
+    updateAudioSettingsCalls++;
+    lastAudioSettings = settings;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final trackExists = session.tracks.any(
+      (track) =>
+          track.trackId == trackId &&
+          track.kind == ProjectTimelineTrackKind.audio,
+    );
+    final clipExists = (session.clips[trackId] ?? const <ProjectTimelineClip>[])
+        .any((clip) => clip.clipId == clipId);
+    if (!trackExists || !clipExists) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    session.audioSettings[clipId] = settings;
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }
@@ -4129,6 +4285,7 @@ class _FakeSession implements ProjectSessionHandle {
   final List<ProjectTimelineMarker> markers = [];
   final Map<String, List<ProjectTimelineClip>> clips = {};
   final Map<String, ProjectTimelineVisualSettings> visualSettings = {};
+  final Map<String, ProjectTimelineAudioSettings> audioSettings = {};
   int nextTrackId = 1;
   int nextClipId = 1;
   int nextMarkerId = 1;

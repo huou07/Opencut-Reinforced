@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `ensure_visual_settings_snapshot`, `event_view`, `failed`, `find_timeline_clip_state`, `find_video_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `failed`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -60,6 +60,14 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String markerId,
+  });
+
+  Future<ProjectTimelineAudioSettingsView> getTimelineClipAudioSettings({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
   });
 
   Future<ProjectTimelineVisualSettingsView> getTimelineClipVisualSettings({
@@ -274,6 +282,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectId,
     required String projectInstanceId,
     required BigInt expectedRevision,
+  });
+
+  Future<ProjectActionResult> updateTimelineClipAudioSettings({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineAudioSettingsView settings,
   });
 
   Future<ProjectActionResult> updateTimelineClipVisualSettings({
@@ -727,6 +744,37 @@ class ProjectTextFormattingView {
           color == other.color;
 }
 
+class ProjectTimelineAudioSettingsView {
+  final int gainMillidecibels;
+  final int panBasisPoints;
+  final RationalTimeView fadeIn;
+  final RationalTimeView fadeOut;
+
+  const ProjectTimelineAudioSettingsView({
+    required this.gainMillidecibels,
+    required this.panBasisPoints,
+    required this.fadeIn,
+    required this.fadeOut,
+  });
+
+  @override
+  int get hashCode =>
+      gainMillidecibels.hashCode ^
+      panBasisPoints.hashCode ^
+      fadeIn.hashCode ^
+      fadeOut.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineAudioSettingsView &&
+          runtimeType == other.runtimeType &&
+          gainMillidecibels == other.gainMillidecibels &&
+          panBasisPoints == other.panBasisPoints &&
+          fadeIn == other.fadeIn &&
+          fadeOut == other.fadeOut;
+}
+
 class ProjectTimelineClipPageView {
   final String projectId;
   final String projectInstanceId;
@@ -1091,6 +1139,20 @@ class ProjectTimelineVisualSettingsView {
   final int cropRightBasisPoints;
   final int cropBottomBasisPoints;
   final int opacityBasisPoints;
+  final int brightnessAmountMilli;
+  final int contrastAmountMilli;
+  final int saturationAmountMilli;
+  final int gaussianBlurRadiusMilli;
+  final bool updateBrightness;
+  final bool updateContrast;
+  final bool updateSaturation;
+  final bool updateGaussianBlur;
+  final int transitionInKind;
+  final RationalTimeView transitionInDuration;
+  final int transitionOutKind;
+  final RationalTimeView transitionOutDuration;
+  final bool updateTransitionIn;
+  final bool updateTransitionOut;
 
   const ProjectTimelineVisualSettingsView({
     required this.xMilliCanvas,
@@ -1105,6 +1167,20 @@ class ProjectTimelineVisualSettingsView {
     required this.cropRightBasisPoints,
     required this.cropBottomBasisPoints,
     required this.opacityBasisPoints,
+    required this.brightnessAmountMilli,
+    required this.contrastAmountMilli,
+    required this.saturationAmountMilli,
+    required this.gaussianBlurRadiusMilli,
+    required this.updateBrightness,
+    required this.updateContrast,
+    required this.updateSaturation,
+    required this.updateGaussianBlur,
+    required this.transitionInKind,
+    required this.transitionInDuration,
+    required this.transitionOutKind,
+    required this.transitionOutDuration,
+    required this.updateTransitionIn,
+    required this.updateTransitionOut,
   });
 
   @override
@@ -1120,7 +1196,21 @@ class ProjectTimelineVisualSettingsView {
       cropTopBasisPoints.hashCode ^
       cropRightBasisPoints.hashCode ^
       cropBottomBasisPoints.hashCode ^
-      opacityBasisPoints.hashCode;
+      opacityBasisPoints.hashCode ^
+      brightnessAmountMilli.hashCode ^
+      contrastAmountMilli.hashCode ^
+      saturationAmountMilli.hashCode ^
+      gaussianBlurRadiusMilli.hashCode ^
+      updateBrightness.hashCode ^
+      updateContrast.hashCode ^
+      updateSaturation.hashCode ^
+      updateGaussianBlur.hashCode ^
+      transitionInKind.hashCode ^
+      transitionInDuration.hashCode ^
+      transitionOutKind.hashCode ^
+      transitionOutDuration.hashCode ^
+      updateTransitionIn.hashCode ^
+      updateTransitionOut.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1138,7 +1228,21 @@ class ProjectTimelineVisualSettingsView {
           cropTopBasisPoints == other.cropTopBasisPoints &&
           cropRightBasisPoints == other.cropRightBasisPoints &&
           cropBottomBasisPoints == other.cropBottomBasisPoints &&
-          opacityBasisPoints == other.opacityBasisPoints;
+          opacityBasisPoints == other.opacityBasisPoints &&
+          brightnessAmountMilli == other.brightnessAmountMilli &&
+          contrastAmountMilli == other.contrastAmountMilli &&
+          saturationAmountMilli == other.saturationAmountMilli &&
+          gaussianBlurRadiusMilli == other.gaussianBlurRadiusMilli &&
+          updateBrightness == other.updateBrightness &&
+          updateContrast == other.updateContrast &&
+          updateSaturation == other.updateSaturation &&
+          updateGaussianBlur == other.updateGaussianBlur &&
+          transitionInKind == other.transitionInKind &&
+          transitionInDuration == other.transitionInDuration &&
+          transitionOutKind == other.transitionOutKind &&
+          transitionOutDuration == other.transitionOutDuration &&
+          updateTransitionIn == other.updateTransitionIn &&
+          updateTransitionOut == other.updateTransitionOut;
 }
 
 class ProjectView {

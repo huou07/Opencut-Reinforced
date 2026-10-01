@@ -215,6 +215,27 @@ impl PreviewTransport {
         Ok(self.state)
     }
 
+    /// Stops playback at the exact position reported by an external master clock.
+    pub fn pause_at_master_clock(
+        &mut self,
+        position: RationalTime,
+    ) -> Result<PlaybackSnapshot, PreviewTransportError> {
+        if !self.state.playing {
+            return Ok(self.state);
+        }
+        if position.is_negative() {
+            return Err(PreviewTransportError::NegativeTime);
+        }
+        self.state.position = self
+            .state
+            .content_end
+            .filter(|end| position >= *end)
+            .unwrap_or(position);
+        self.state.playing = false;
+        self.anchor = None;
+        Ok(self.state)
+    }
+
     /// Returns at most one newly due output-lattice frame; callers may drop late work.
     pub fn tick(
         &mut self,
@@ -252,6 +273,50 @@ impl PreviewTransport {
         }
         let time = rate.frame_time(frame_index)?;
         if content_end.is_some_and(|end| time >= end) {
+            return Ok(None);
+        }
+        self.requested_frame = Some(frame_index);
+        Ok(Some(PreviewFrameRequest {
+            time,
+            frame_index: Some(frame_index),
+            generation: self.state.generation,
+        }))
+    }
+
+    /// Uses an external exact-time master, such as the audio device clock, to
+    /// request at most one newly due sequence-lattice frame.
+    pub fn tick_from_master_clock(
+        &mut self,
+        master_time: RationalTime,
+    ) -> Result<Option<PreviewFrameRequest>, PreviewTransportError> {
+        if !self.state.playing {
+            return Ok(None);
+        }
+        if master_time.is_negative() {
+            return Err(PreviewTransportError::NegativeTime);
+        }
+        let rate = self
+            .state
+            .frame_rate
+            .ok_or(PreviewTransportError::FrameRateUnavailable)?;
+        let frame_index =
+            if let Some(end) = self.state.content_end.filter(|end| master_time >= *end) {
+                self.state.position = end;
+                self.state.playing = false;
+                self.anchor = None;
+                let Some(last) = rate.frame_index_ceil(end)?.checked_sub(1) else {
+                    return Ok(None);
+                };
+                last
+            } else {
+                self.state.position = master_time;
+                rate.frame_index_floor(master_time)?
+            };
+        if self.requested_frame == Some(frame_index) {
+            return Ok(None);
+        }
+        let time = rate.frame_time(frame_index)?;
+        if self.state.content_end.is_some_and(|end| time >= end) {
             return Ok(None);
         }
         self.requested_frame = Some(frame_index);
@@ -311,6 +376,47 @@ mod tests {
         assert_eq!(result.position, requested);
         assert!(!result.playing);
         assert_eq!(result.presented_time, None);
+    }
+
+    #[test]
+    fn audio_master_clock_drives_frames_and_stops_at_exact_content_end() {
+        let mut transport = PreviewTransport::new(Some(rate()), Some(time(1, 10)));
+        transport.play(Instant::now()).unwrap();
+        assert_eq!(
+            transport
+                .tick_from_master_clock(time(3, 100))
+                .unwrap()
+                .unwrap()
+                .time,
+            RationalTime::ZERO
+        );
+        assert_eq!(
+            transport
+                .tick_from_master_clock(time(5, 100))
+                .unwrap()
+                .unwrap()
+                .time,
+            time(1, 24)
+        );
+        assert_eq!(
+            transport
+                .tick_from_master_clock(time(1, 10))
+                .unwrap()
+                .unwrap()
+                .time,
+            time(2, 24)
+        );
+        assert!(!transport.snapshot().playing);
+        assert_eq!(transport.snapshot().position, time(1, 10));
+    }
+
+    #[test]
+    fn pause_preserves_external_clock_position_without_rounding() {
+        let mut transport = PreviewTransport::new(Some(rate()), Some(time(2, 1)));
+        transport.play(Instant::now()).unwrap();
+        let paused = transport.pause_at_master_clock(time(1001, 1000)).unwrap();
+        assert_eq!(paused.position, time(1001, 1000));
+        assert!(!paused.playing);
     }
 
     #[test]

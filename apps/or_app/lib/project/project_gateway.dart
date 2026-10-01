@@ -370,6 +370,17 @@ class ProjectTimelineVisualSettings {
     required this.cropRightBasisPoints,
     required this.cropBottomBasisPoints,
     required this.opacityBasisPoints,
+    this.brightnessAmountMilli = 0,
+    this.contrastAmountMilli = 1000,
+    this.saturationAmountMilli = 1000,
+    this.gaussianBlurRadiusMilli = 0,
+    this.transitionIn = ProjectTimelineTransition.none,
+    this.transitionInDuration,
+    this.transitionOut = ProjectTimelineTransition.none,
+    this.transitionOutDuration,
+    this.modifiedEffects = const {},
+    this.updateTransitionIn = false,
+    this.updateTransitionOut = false,
   });
 
   static const identity = ProjectTimelineVisualSettings(
@@ -385,6 +396,20 @@ class ProjectTimelineVisualSettings {
     cropRightBasisPoints: 0,
     cropBottomBasisPoints: 0,
     opacityBasisPoints: 10000,
+    brightnessAmountMilli: 0,
+    contrastAmountMilli: 1000,
+    saturationAmountMilli: 1000,
+    gaussianBlurRadiusMilli: 0,
+    transitionIn: ProjectTimelineTransition.none,
+    transitionOut: ProjectTimelineTransition.none,
+    modifiedEffects: {
+      ProjectTimelineEffectKind.brightness,
+      ProjectTimelineEffectKind.contrast,
+      ProjectTimelineEffectKind.saturation,
+      ProjectTimelineEffectKind.gaussianBlur,
+    },
+    updateTransitionIn: true,
+    updateTransitionOut: true,
   );
 
   final int xMilliCanvas;
@@ -399,6 +424,47 @@ class ProjectTimelineVisualSettings {
   final int cropRightBasisPoints;
   final int cropBottomBasisPoints;
   final int opacityBasisPoints;
+  final int brightnessAmountMilli;
+  final int contrastAmountMilli;
+  final int saturationAmountMilli;
+  final int gaussianBlurRadiusMilli;
+  final ProjectTimelineTransition transitionIn;
+  final ProjectRationalTime? transitionInDuration;
+  final ProjectTimelineTransition transitionOut;
+  final ProjectRationalTime? transitionOutDuration;
+  final Set<ProjectTimelineEffectKind> modifiedEffects;
+  final bool updateTransitionIn;
+  final bool updateTransitionOut;
+}
+
+enum ProjectTimelineTransition { none, crossDissolve, fadeThroughBlack, wipe }
+
+enum ProjectTimelineEffectKind {
+  brightness,
+  contrast,
+  saturation,
+  gaussianBlur,
+}
+
+class ProjectTimelineAudioSettings {
+  const ProjectTimelineAudioSettings({
+    required this.gainMilliDecibels,
+    required this.panBasisPoints,
+    required this.fadeIn,
+    required this.fadeOut,
+  });
+
+  static final identity = ProjectTimelineAudioSettings(
+    gainMilliDecibels: 0,
+    panBasisPoints: 0,
+    fadeIn: ProjectRationalTime(BigInt.zero, 1),
+    fadeOut: ProjectRationalTime(BigInt.zero, 1),
+  );
+
+  final int gainMilliDecibels;
+  final int panBasisPoints;
+  final ProjectRationalTime fadeIn;
+  final ProjectRationalTime fadeOut;
 }
 
 class ProjectTimelineClipPage {
@@ -688,6 +754,19 @@ abstract interface class ProjectGateway {
     required String trackId,
     required String clipId,
     required ProjectTimelineVisualSettings settings,
+  });
+  Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  });
+  Future<ProjectActionResult> updateTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineAudioSettings settings,
   });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {

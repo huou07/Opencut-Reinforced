@@ -579,6 +579,25 @@ hardening commit itself must pass both workflows.
   test that launches the native app remains hosted-only;
   `LOCAL NATIVE VERIFICATION: NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
+## Phase 8E basic audio and effects coverage
+
+- `or_audio` tests deterministic gain, linear pan, fade envelopes, invalid
+  ranges, exact device-clock conversion, underrun silence, bounded SPSC
+  transfer, and the callback's no-allocation contract. The desktop stream is
+  compiled against cpal 0.18.1 but no physical audio device is needed by CI.
+- `or_render` tests byte-domain brightness and contrast, Rec.709 saturation,
+  bounded blur, and the alpha, black-fade, and wipe transition semantics.
+  `or_app_bridge` tests exact rational audio/effect/transition DTO conversion.
+- Flutter widget tests exercise the visual-effect/transition Inspector and the
+  audio Inspector's gain, pan, and exact fade edits. The hosted bridge
+  lifecycle tests save and reopen typed visual effects, transitions, and audio
+  clip settings.
+- Hosted Linux builds install `libasound2-dev` for cpal's ALSA compile path;
+  macOS and Windows hosted builds compile their native host backends. These
+  checks do not open an output device. Local Rust tests, Flutter analysis, and
+  widget tests are allowed; native Flutter runtime execution remains
+  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
 ## Future verification layers
 
 ### CONFORMANCE

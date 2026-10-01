@@ -188,6 +188,17 @@ today.
   Move, duplicate, and delete continue through the canonical timeline command
   path. Preview text is rasterized from bundled Inter rather than Flutter text
   widgets or host-installed fonts.
+- For 8E, selecting an unlocked Audio clip exposes gain in dB, pan in percent,
+  and exact rational fade-in/fade-out times in the Inspector. Apply and Reset
+  use the canonical clip-update command and preserve exact clip timing. Desktop
+  playback consumes bounded prepared stereo buffers; missing output hardware
+  does not prevent video-only preview.
+- For 8E, selecting an unlocked Video, Text, or Caption clip exposes the
+  closed brightness, contrast, saturation, and blur controls plus transition-in
+  and transition-out choices for Cross Dissolve, Fade Through Black, and Wipe.
+  Transition durations are exact rational times bounded by clip duration.
+  Preview applies these typed settings to the selected layer through the shared
+  render path.
 - Automatic captions are not a Desktop MVP acceptance item; they belong to
   Phase 10.
 - Complex linked clips, grouping, nested timelines, and multicamera are

@@ -318,6 +318,18 @@ class RustProjectGateway implements ProjectGateway {
         cropRightBasisPoints: settings.cropRightBasisPoints,
         cropBottomBasisPoints: settings.cropBottomBasisPoints,
         opacityBasisPoints: settings.opacityBasisPoints,
+        brightnessAmountMilli: settings.brightnessAmountMilli,
+        contrastAmountMilli: settings.contrastAmountMilli,
+        saturationAmountMilli: settings.saturationAmountMilli,
+        gaussianBlurRadiusMilli: settings.gaussianBlurRadiusMilli,
+        transitionIn: _projectTransition(settings.transitionInKind),
+        transitionInDuration: _projectRationalTime(
+          settings.transitionInDuration,
+        ),
+        transitionOut: _projectTransition(settings.transitionOutKind),
+        transitionOutDuration: _projectRationalTime(
+          settings.transitionOutDuration,
+        ),
       );
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
@@ -351,6 +363,81 @@ class RustProjectGateway implements ProjectGateway {
         cropRightBasisPoints: settings.cropRightBasisPoints,
         cropBottomBasisPoints: settings.cropBottomBasisPoints,
         opacityBasisPoints: settings.opacityBasisPoints,
+        brightnessAmountMilli: settings.brightnessAmountMilli,
+        contrastAmountMilli: settings.contrastAmountMilli,
+        saturationAmountMilli: settings.saturationAmountMilli,
+        gaussianBlurRadiusMilli: settings.gaussianBlurRadiusMilli,
+        updateBrightness: settings.modifiedEffects.contains(
+          ProjectTimelineEffectKind.brightness,
+        ),
+        updateContrast: settings.modifiedEffects.contains(
+          ProjectTimelineEffectKind.contrast,
+        ),
+        updateSaturation: settings.modifiedEffects.contains(
+          ProjectTimelineEffectKind.saturation,
+        ),
+        updateGaussianBlur: settings.modifiedEffects.contains(
+          ProjectTimelineEffectKind.gaussianBlur,
+        ),
+        transitionInKind: _rustTransition(settings.transitionIn),
+        transitionInDuration: _rustTime(
+          settings.transitionInDuration ?? ProjectRationalTime(BigInt.zero, 1),
+        ),
+        updateTransitionIn: settings.updateTransitionIn,
+        transitionOutKind: _rustTransition(settings.transitionOut),
+        transitionOutDuration: _rustTime(
+          settings.transitionOutDuration ?? ProjectRationalTime(BigInt.zero, 1),
+        ),
+        updateTransitionOut: settings.updateTransitionOut,
+      ),
+    ),
+  );
+
+  @override
+  Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async {
+    try {
+      final settings = await _host(session).getTimelineClipAudioSettings(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        expectedRevision: current.revision,
+        trackId: trackId,
+        clipId: clipId,
+      );
+      return ProjectTimelineAudioSettings(
+        gainMilliDecibels: settings.gainMillidecibels,
+        panBasisPoints: settings.panBasisPoints,
+        fadeIn: _projectRationalTime(settings.fadeIn),
+        fadeOut: _projectRationalTime(settings.fadeOut),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineAudioSettings settings,
+  }) async => _action(
+    await _host(session).updateTimelineClipAudioSettings(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      settings: rust.ProjectTimelineAudioSettingsView(
+        gainMillidecibels: settings.gainMilliDecibels,
+        panBasisPoints: settings.panBasisPoints,
+        fadeIn: _rustTime(settings.fadeIn),
+        fadeOut: _rustTime(settings.fadeOut),
       ),
     ),
   );
@@ -1028,6 +1115,22 @@ class RustProjectGateway implements ProjectGateway {
         numerator: value.numerator.toInt(),
         denominator: value.denominator,
       );
+
+  static ProjectTimelineTransition _projectTransition(int value) =>
+      switch (value) {
+        1 => ProjectTimelineTransition.crossDissolve,
+        2 => ProjectTimelineTransition.fadeThroughBlack,
+        3 => ProjectTimelineTransition.wipe,
+        _ => ProjectTimelineTransition.none,
+      };
+
+  static int _rustTransition(ProjectTimelineTransition value) =>
+      switch (value) {
+        ProjectTimelineTransition.none => 0,
+        ProjectTimelineTransition.crossDissolve => 1,
+        ProjectTimelineTransition.fadeThroughBlack => 2,
+        ProjectTimelineTransition.wipe => 3,
+      };
 
   static ProjectTimelineTrackKind _projectTimelineKind(
     rust.TimelineTrackKindView kind,

@@ -31,6 +31,7 @@ export 'src/rust/api/project.dart'
         RecoveryInspectionView,
         ProjectTimelineSnapView,
         ProjectTimelineVisualSettingsView,
+        ProjectTimelineAudioSettingsView,
         TimelineSnapMovingAnchorView,
         TimelineSnapOperationView,
         TimelineSnapTargetKindView,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
@@ -191,6 +192,116 @@ void main() {
       await gateway.close(session, discardUnsaved: true);
     },
   );
+
+  testWidgets('Rust project bridge saves and reopens audio clip settings', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('or-audio-bridge-');
+    const gateway = RustProjectGateway();
+    ProjectSessionHandle? activeSession;
+    addTearDown(() async {
+      if (activeSession != null) {
+        await gateway.close(activeSession, discardUnsaved: true);
+      }
+      directory.deleteSync(recursive: true);
+    });
+
+    final audioPath = '${directory.path}/silent-audio.wav';
+    await File(audioPath)
+        .writeAsBytes(_silentWave(sampleRate: 48000, frames: 12000));
+    var session = await gateway.createProject(
+      '${directory.path}/audio-project.orproj',
+      'Audio bridge',
+    );
+    activeSession = session;
+    var current = await gateway.summary(session);
+    final imported = await gateway.importMedia(session, current, audioPath);
+    expect(imported.succeeded, isTrue);
+    current = imported.view!;
+    final media = (await gateway.listMediaPage(
+      session,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+
+    final addedTrack = await gateway.addTimelineTrack(
+      session,
+      current,
+      ProjectTimelineTrackKind.audio,
+    );
+    expect(addedTrack.succeeded, isTrue);
+    current = addedTrack.view!;
+    final track = (await gateway.listTimelineTracks(session)).items.single;
+    final inserted = await gateway.insertTimelineClip(
+      session,
+      current,
+      trackId: track.trackId,
+      mediaId: media.mediaId,
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      duration: ProjectRationalTime(BigInt.one, 4),
+    );
+    expect(inserted.succeeded, isTrue);
+    current = inserted.view!;
+    final clip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+
+    final initial = await gateway.getTimelineClipAudioSettings(
+      session,
+      current,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+    );
+    expect(initial.gainMilliDecibels, 0);
+    final settings = ProjectTimelineAudioSettings(
+      gainMilliDecibels: -6250,
+      panBasisPoints: -3750,
+      fadeIn: ProjectRationalTime(BigInt.one, 8),
+      fadeOut: ProjectRationalTime(BigInt.one, 16),
+    );
+    final updated = await gateway.updateTimelineClipAudioSettings(
+      session,
+      current,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+      settings: settings,
+    );
+    expect(updated.succeeded, isTrue);
+    current = updated.view!;
+    expect((await gateway.save(session)).succeeded, isTrue);
+    await gateway.close(session, discardUnsaved: false);
+    activeSession = null;
+
+    session = await gateway.openProject(
+      '${directory.path}/audio-project.orproj',
+    );
+    activeSession = session;
+    current = await gateway.summary(session);
+    final reopenedTrack = (await gateway.listTimelineTracks(session))
+        .items
+        .single;
+    final reopenedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: reopenedTrack.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    final reopened = await gateway.getTimelineClipAudioSettings(
+      session,
+      current,
+      trackId: reopenedTrack.trackId,
+      clipId: reopenedClip.clipId,
+    );
+    expect(reopened.gainMilliDecibels, -6250);
+    expect(reopened.panBasisPoints, -3750);
+    expect(reopened.fadeIn.canonical, '1/8');
+    expect(reopened.fadeOut.canonical, '1/16');
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('native Flutter project lifecycle uses one Rust host', (
     tester,
@@ -727,7 +838,7 @@ void main() {
       expect(initialVisual.xMilliCanvas, 0);
       expect(initialVisual.scaleXMilli, 1000);
       expect(initialVisual.opacityBasisPoints, 10000);
-      const visualSettings = ProjectTimelineVisualSettings(
+      final visualSettings = ProjectTimelineVisualSettings(
         xMilliCanvas: 250,
         yMilliCanvas: -125,
         scaleXMilli: 1500,
@@ -740,6 +851,22 @@ void main() {
         cropRightBasisPoints: 500,
         cropBottomBasisPoints: 1500,
         opacityBasisPoints: 6250,
+        brightnessAmountMilli: 500,
+        contrastAmountMilli: 1250,
+        saturationAmountMilli: 750,
+        gaussianBlurRadiusMilli: 1000,
+        transitionIn: ProjectTimelineTransition.crossDissolve,
+        transitionInDuration: ProjectRationalTime(BigInt.one, 2),
+        transitionOut: ProjectTimelineTransition.wipe,
+        transitionOutDuration: ProjectRationalTime(BigInt.one, 4),
+        modifiedEffects: {
+          ProjectTimelineEffectKind.brightness,
+          ProjectTimelineEffectKind.contrast,
+          ProjectTimelineEffectKind.saturation,
+          ProjectTimelineEffectKind.gaussianBlur,
+        },
+        updateTransitionIn: true,
+        updateTransitionOut: true,
       );
       final visualUpdate = await gateway.updateTimelineClipVisualSettings(
         session,
@@ -793,6 +920,17 @@ void main() {
         updatedVisual.opacityBasisPoints,
         visualSettings.opacityBasisPoints,
       );
+      expect(updatedVisual.brightnessAmountMilli, 500);
+      expect(updatedVisual.contrastAmountMilli, 1250);
+      expect(updatedVisual.saturationAmountMilli, 750);
+      expect(updatedVisual.gaussianBlurRadiusMilli, 1000);
+      expect(
+        updatedVisual.transitionIn,
+        ProjectTimelineTransition.crossDissolve,
+      );
+      expect(updatedVisual.transitionInDuration!.canonical, '1/2');
+      expect(updatedVisual.transitionOut, ProjectTimelineTransition.wipe);
+      expect(updatedVisual.transitionOutDuration!.canonical, '1/4');
       final trackState = await gateway.setTimelineTrackState(
         session,
         current,
@@ -878,6 +1016,17 @@ void main() {
         reopenedVisual.opacityBasisPoints,
         visualSettings.opacityBasisPoints,
       );
+      expect(reopenedVisual.brightnessAmountMilli, 500);
+      expect(reopenedVisual.contrastAmountMilli, 1250);
+      expect(reopenedVisual.saturationAmountMilli, 750);
+      expect(reopenedVisual.gaussianBlurRadiusMilli, 1000);
+      expect(
+        reopenedVisual.transitionIn,
+        ProjectTimelineTransition.crossDissolve,
+      );
+      expect(reopenedVisual.transitionInDuration!.canonical, '1/2');
+      expect(reopenedVisual.transitionOut, ProjectTimelineTransition.wipe);
+      expect(reopenedVisual.transitionOutDuration!.canonical, '1/4');
       final reopenedClips = (await gateway.listTimelineClips(
         reopenedSession,
         trackId: track.trackId,
@@ -1117,6 +1266,40 @@ class _NativeProjectPicker implements ProjectFilePicker {
       projectPath;
 }
 
+Uint8List _silentWave({required int sampleRate, required int frames}) {
+  final sampleBytes = frames * 2;
+  final bytes = Uint8List(44 + sampleBytes);
+  void writeAscii(int offset, String value) {
+    bytes.setRange(offset, offset + value.length, value.codeUnits);
+  }
+
+  void writeU16(int offset, int value) {
+    bytes[offset] = value & 0xff;
+    bytes[offset + 1] = (value >> 8) & 0xff;
+  }
+
+  void writeU32(int offset, int value) {
+    for (var byte = 0; byte < 4; byte++) {
+      bytes[offset + byte] = (value >> (8 * byte)) & 0xff;
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  writeU32(4, 36 + sampleBytes);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  writeU32(16, 16);
+  writeU16(20, 1);
+  writeU16(22, 1);
+  writeU32(24, sampleRate);
+  writeU32(28, sampleRate * 2);
+  writeU16(32, 2);
+  writeU16(34, 16);
+  writeAscii(36, 'data');
+  writeU32(40, sampleBytes);
+  return bytes;
+}
+
 class _ObservedRustProjectGateway implements ProjectGateway {
   ProjectSessionHandle? activeSession;
   Object? lastError;
@@ -1249,6 +1432,34 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required String clipId,
     required ProjectTimelineVisualSettings settings,
   }) => _gateway.updateTimelineClipVisualSettings(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    settings: settings,
+  );
+
+  @override
+  Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) => _gateway.getTimelineClipAudioSettings(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAudioSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineAudioSettings settings,
+  }) => _gateway.updateTimelineClipAudioSettings(
     session,
     current,
     trackId: trackId,

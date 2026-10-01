@@ -6,7 +6,7 @@
 //! software video layers. Native adapters own viewer presentation; full-rate
 //! frame bytes remain outside the Flutter boundary.
 
-use or_core::{Crop, Opacity, Transform};
+use or_core::{Crop, EffectReference, Opacity, Transform, TransitionKind};
 use or_runtime::{
     FrameAccess, FrameColorInfo, FrameDescriptor, FrameMemoryDomain, FramePixelFormat, FrameTiming,
     RenderSnapshot,
@@ -870,6 +870,210 @@ pub struct RgbaVideoLayer<'a> {
     opacity: Opacity,
 }
 
+/// A typed transition stage applied to one RGBA layer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VisualTransition {
+    pub kind: TransitionKind,
+    /// Visible progress in basis points, from 0 through 10,000.
+    pub visibility_basis_points: u16,
+    pub entering: bool,
+}
+
+/// Applies the closed Phase 8 visual-effect set and transitions to a bounded
+/// RGBA frame before it enters the shared compositor.
+pub fn process_visual_rgba(
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+    effects: &[EffectReference],
+    transitions: &[VisualTransition],
+) -> Result<Vec<u8>, RenderError> {
+    let length = rgba_length(width, height)?;
+    if pixels.len() != length {
+        return Err(RenderError::InvalidSourceFrame);
+    }
+    let mut output = allocate_rgba(length)?;
+    output.copy_from_slice(pixels);
+    let mut scratch = None;
+    for effect in effects {
+        let valid = match *effect {
+            EffectReference::Brightness { amount_milli } => {
+                (-1_000..=1_000).contains(&amount_milli)
+            }
+            EffectReference::Contrast { amount_milli }
+            | EffectReference::Saturation { amount_milli } => amount_milli <= 4_000,
+            EffectReference::GaussianBlur { radius_milli } => radius_milli <= 128_000,
+        };
+        if !valid {
+            return Err(RenderError::InvalidVideoSettings);
+        }
+        match *effect {
+            EffectReference::Brightness { amount_milli } => {
+                let offset = f32::from(amount_milli) * (255.0 / 1_000.0);
+                for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
+                    for channel in &mut pixel[..3] {
+                        *channel = (f32::from(*channel) + offset).round().clamp(0.0, 255.0) as u8;
+                    }
+                }
+            }
+            EffectReference::Contrast { amount_milli } => {
+                let factor = f32::from(amount_milli) / 1_000.0;
+                for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
+                    for channel in &mut pixel[..3] {
+                        *channel = ((f32::from(*channel) - 128.0) * factor + 128.0)
+                            .round()
+                            .clamp(0.0, 255.0) as u8;
+                    }
+                }
+            }
+            EffectReference::Saturation { amount_milli } => {
+                let factor = f32::from(amount_milli) / 1_000.0;
+                for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
+                    let red = f32::from(pixel[0]);
+                    let green = f32::from(pixel[1]);
+                    let blue = f32::from(pixel[2]);
+                    let luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+                    for (channel, value) in pixel[..3].iter_mut().zip([red, green, blue]) {
+                        *channel = (luma + (value - luma) * factor).round().clamp(0.0, 255.0) as u8;
+                    }
+                }
+            }
+            EffectReference::GaussianBlur { radius_milli } => {
+                let radius = usize::try_from(radius_milli.div_ceil(1_000))
+                    .map_err(|_| RenderError::InvalidVideoSettings)?;
+                if radius != 0 {
+                    if scratch.is_none() {
+                        scratch = Some(allocate_rgba(length)?);
+                    }
+                    let scratch = scratch.as_mut().expect("blur scratch was initialized");
+                    box_blur_axis(
+                        &output,
+                        scratch,
+                        width as usize,
+                        height as usize,
+                        radius,
+                        true,
+                    )?;
+                    box_blur_axis(
+                        scratch,
+                        &mut output,
+                        width as usize,
+                        height as usize,
+                        radius,
+                        false,
+                    )?;
+                }
+            }
+        }
+    }
+    let width = width as usize;
+    let height = height as usize;
+    for transition in transitions {
+        if transition.visibility_basis_points > 10_000 {
+            return Err(RenderError::InvalidVideoSettings);
+        }
+        match transition.kind {
+            TransitionKind::CrossDissolve => {
+                let alpha_scale = f32::from(transition.visibility_basis_points) / 10_000.0;
+                for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
+                    pixel[3] = (f32::from(pixel[3]) * alpha_scale).round() as u8;
+                }
+            }
+            TransitionKind::FadeThroughBlack => {
+                let color_scale = f32::from(transition.visibility_basis_points) / 10_000.0;
+                for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
+                    for channel in &mut pixel[..3] {
+                        *channel = (f32::from(*channel) * color_scale).round() as u8;
+                    }
+                }
+            }
+            TransitionKind::Wipe => {
+                let visible =
+                    (transition.visibility_basis_points as u128 * width as u128 / 10_000) as usize;
+                let wipe_start = if transition.entering {
+                    0
+                } else {
+                    width.saturating_sub(visible)
+                };
+                let wipe_end = if transition.entering { visible } else { width };
+                for row in 0..height {
+                    for column in 0..width {
+                        if column < wipe_start || column >= wipe_end {
+                            let offset = (row * width + column) * 4;
+                            output[offset + 3] = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn rgba_length(width: u32, height: u32) -> Result<usize, RenderError> {
+    (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .filter(|length| width != 0 && height != 0 && *length <= 256 * 1024 * 1024)
+        .ok_or(RenderError::InvalidSourceFrame)
+}
+
+fn allocate_rgba(length: usize) -> Result<Vec<u8>, RenderError> {
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(length)
+        .map_err(|_| RenderError::AllocationFailed)?;
+    bytes.resize(length, 0);
+    Ok(bytes)
+}
+
+fn box_blur_axis(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    radius: usize,
+    horizontal: bool,
+) -> Result<(), RenderError> {
+    let line_length = if horizontal { width } else { height };
+    let line_count = if horizontal { height } else { width };
+    let mut prefix = Vec::<[u64; 4]>::new();
+    prefix
+        .try_reserve_exact(line_length.saturating_add(1))
+        .map_err(|_| RenderError::AllocationFailed)?;
+    for line in 0..line_count {
+        prefix.clear();
+        prefix.push([0; 4]);
+        for position in 0..line_length {
+            let pixel_offset = if horizontal {
+                (line * width + position) * 4
+            } else {
+                (position * width + line) * 4
+            };
+            let mut sum = *prefix.last().expect("prefix contains the initial zero");
+            for channel in 0..4 {
+                sum[channel] += u64::from(source[pixel_offset + channel]);
+            }
+            prefix.push(sum);
+        }
+        for position in 0..line_length {
+            let left = position.saturating_sub(radius);
+            let right = position.saturating_add(radius).min(line_length - 1);
+            let count = (right - left + 1) as u64;
+            let pixel_offset = if horizontal {
+                (line * width + position) * 4
+            } else {
+                (position * width + line) * 4
+            };
+            for channel in 0..4 {
+                let sum = prefix[right + 1][channel] - prefix[left][channel];
+                destination[pixel_offset + channel] = ((sum + count / 2) / count) as u8;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl<'a> RgbaVideoLayer<'a> {
     pub fn new(width: u32, height: u32, pixels: &'a [u8]) -> Result<Self, RenderError> {
         let layer = Self {
@@ -939,12 +1143,7 @@ impl<'a> RgbaVideoLayer<'a> {
     }
 
     fn validate(&self) -> Result<(), RenderError> {
-        let length = (self.width as usize)
-            .checked_mul(self.height as usize)
-            .and_then(|pixels| pixels.checked_mul(4))
-            .filter(|length| *length <= 256 * 1024 * 1024)
-            .ok_or(RenderError::InvalidSourceFrame)?;
-        if self.width == 0 || self.height == 0 || self.pixels.len() != length {
+        if self.pixels.len() != rgba_length(self.width, self.height)? {
             return Err(RenderError::InvalidSourceFrame);
         }
         Ok(())
@@ -1026,6 +1225,7 @@ pub enum RenderError {
     ViewerSurfaceNotImplemented,
     InvalidSourceFrame,
     InvalidVideoSettings,
+    AllocationFailed,
     SourceSizeExceedsDeviceLimit { width: u32, height: u32, limit: u32 },
     SizeExceedsDeviceLimit { size: RenderSize, limit: u32 },
     ReadbackSizeOverflow,
@@ -1051,8 +1251,12 @@ impl fmt::Display for RenderError {
             Self::InvalidSourceFrame => {
                 formatter.write_str("viewer source frame has an invalid size or pixel buffer")
             }
-            Self::InvalidVideoSettings => formatter
-                .write_str("video transform, crop, or opacity is outside its supported range"),
+            Self::InvalidVideoSettings => {
+                formatter.write_str("video settings are outside their supported range")
+            }
+            Self::AllocationFailed => {
+                formatter.write_str("could not allocate bounded RGBA processing memory")
+            }
             Self::SourceSizeExceedsDeviceLimit {
                 width,
                 height,
@@ -1312,6 +1516,98 @@ mod tests {
                 ),
             Err(RenderError::InvalidVideoSettings)
         ));
+    }
+
+    #[test]
+    fn typed_brightness_contrast_saturation_and_blur_are_deterministic() {
+        let pixels = [20, 40, 60, 255, 0, 0, 0, 255, 0, 0, 0, 255];
+        let bright = process_visual_rgba(
+            3,
+            1,
+            &pixels,
+            &[EffectReference::Brightness { amount_milli: 500 }],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(&bright[..4], &[148, 168, 188, 255]);
+
+        let contrast = process_visual_rgba(
+            1,
+            1,
+            &[20, 40, 60, 255],
+            &[EffectReference::Contrast { amount_milli: 0 }],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(contrast, [128, 128, 128, 255]);
+
+        let saturation = process_visual_rgba(
+            1,
+            1,
+            &[255, 0, 0, 255],
+            &[EffectReference::Saturation { amount_milli: 0 }],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(saturation, [54, 54, 54, 255]);
+
+        let blur = process_visual_rgba(
+            3,
+            1,
+            &[255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255],
+            &[EffectReference::GaussianBlur {
+                radius_milli: 1_000,
+            }],
+            &[],
+        )
+        .unwrap();
+        assert_eq!([blur[0], blur[4], blur[8]], [128, 85, 0]);
+    }
+
+    #[test]
+    fn transitions_apply_typed_opacity_black_fade_and_left_to_right_wipe() {
+        let pixels = [200, 100, 50, 255, 100, 50, 25, 255];
+        let dissolve = process_visual_rgba(
+            2,
+            1,
+            &pixels,
+            &[],
+            &[VisualTransition {
+                kind: TransitionKind::CrossDissolve,
+                visibility_basis_points: 5_000,
+                entering: true,
+            }],
+        )
+        .unwrap();
+        assert_eq!([dissolve[3], dissolve[7]], [128, 128]);
+
+        let black = process_visual_rgba(
+            1,
+            1,
+            &pixels[..4],
+            &[],
+            &[VisualTransition {
+                kind: TransitionKind::FadeThroughBlack,
+                visibility_basis_points: 5_000,
+                entering: false,
+            }],
+        )
+        .unwrap();
+        assert_eq!(black, [100, 50, 25, 255]);
+
+        let wipe = process_visual_rgba(
+            2,
+            1,
+            &pixels,
+            &[],
+            &[VisualTransition {
+                kind: TransitionKind::Wipe,
+                visibility_basis_points: 5_000,
+                entering: true,
+            }],
+        )
+        .unwrap();
+        assert_eq!([wipe[3], wipe[7]], [255, 0]);
     }
 
     #[test]

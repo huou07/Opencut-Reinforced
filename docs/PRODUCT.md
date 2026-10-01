@@ -123,13 +123,13 @@ The transcript and caption workflow includes searching, replacing, jumping from 
 
 ## Audio
 
-**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, mute, solo, and fades. Desktop device output uses cpal 0.18.1 through `or_audio`; its callback consumes bounded prepared buffers and does not mutate projects or take project locks.
+**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, track mute/solo, and clip fades. The Inspector exposes gain in dB, pan as a percentage, and exact rational fade durations. Desktop output uses cpal 0.18.1 through `or_audio`; the callback consumes bounded prepared 48 kHz stereo f32 buffers and does not mutate projects or take project locks. Devices without that format report output unavailable while video preview can use its monotonic clock.
 
 **PLANNED:** mixer; normalization and loudness controls; EQ; compressor; limiter; noise reduction; voice enhancement and isolation; automatic ducking; beat detection; music, sound-effect, and ambience libraries; audio stems.
 
 ## Effects and transitions
 
-**MVP FOUNDATION:** a small useful set of basic transitions and effects, evaluated by the shared preview and export pipeline.
+**MVP FOUNDATION:** typed brightness, contrast, saturation, and blur plus Cross Dissolve, Fade Through Black, and Wipe transitions. The video Inspector exposes one transition-in and one transition-out setting per clip. Preview applies those settings to bounded media and text layers before composition; 8F must preserve their documented semantics in export.
 
 **PLANNED:** effect categories for color, blur, sharpen, distortion, light, stylize, utility, and audio; cut, cross dissolve, fade, dip, slide, push, zoom, wipe, mask, light, and stylized transitions; save effect presets; favorites; apply a transition to an edit point.
 

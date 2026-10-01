@@ -81,6 +81,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineAudioSettingsView
+  dco_decode_box_autoadd_project_timeline_audio_settings_view(dynamic raw);
+
+  @protected
   ProjectTimelineTrackStateView
   dco_decode_box_autoadd_project_timeline_track_state_view(dynamic raw);
 
@@ -108,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HealthStatus dco_decode_health_status(dynamic raw);
+
+  @protected
+  int dco_decode_i_16(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -218,6 +225,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectTextFormattingView dco_decode_project_text_formatting_view(
     dynamic raw,
   );
+
+  @protected
+  ProjectTimelineAudioSettingsView
+  dco_decode_project_timeline_audio_settings_view(dynamic raw);
 
   @protected
   ProjectTimelineClipPageView dco_decode_project_timeline_clip_page_view(
@@ -385,6 +396,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineAudioSettingsView
+  sse_decode_box_autoadd_project_timeline_audio_settings_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineTrackStateView
   sse_decode_box_autoadd_project_timeline_track_state_view(
     SseDeserializer deserializer,
@@ -420,6 +437,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HealthStatus sse_decode_health_status(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -562,6 +582,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectTextFormattingView sse_decode_project_text_formatting_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ProjectTimelineAudioSettingsView
+  sse_decode_project_timeline_audio_settings_view(SseDeserializer deserializer);
 
   @protected
   ProjectTimelineClipPageView sse_decode_project_timeline_clip_page_view(
@@ -758,6 +782,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_project_timeline_audio_settings_view(
+    ProjectTimelineAudioSettingsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_timeline_track_state_view(
     ProjectTimelineTrackStateView self,
     SseSerializer serializer,
@@ -801,6 +831,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_health_status(HealthStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -970,6 +1003,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_text_formatting_view(
     ProjectTextFormattingView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_timeline_audio_settings_view(
+    ProjectTimelineAudioSettingsView self,
     SseSerializer serializer,
   );
 

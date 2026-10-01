@@ -62,6 +62,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onRenameTimelineMarker,
     this.onDeleteTimelineMarker,
     this.onUpdateTimelineClipVisualSettings,
+    this.onUpdateTimelineClipAudioSettings,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -206,6 +207,13 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineVisualSettings settings,
   )?
   onUpdateTimelineClipVisualSettings;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+    ProjectTimelineAudioSettings settings,
+  )?
+  onUpdateTimelineClipAudioSettings;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -407,11 +415,16 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   session: widget.projectSession,
                   trackId: _selectedTrackId,
                   clipId: _selectedClipId,
-                  isVideoTrack:
-                      _selectedTrackKind == ProjectTimelineTrackKind.video,
+                  isVisualTrack:
+                      _selectedTrackKind == ProjectTimelineTrackKind.video ||
+                      _selectedTrackKind == ProjectTimelineTrackKind.text ||
+                      _selectedTrackKind == ProjectTimelineTrackKind.caption,
+                  isAudioTrack:
+                      _selectedTrackKind == ProjectTimelineTrackKind.audio,
                   trackLocked: _selectedInspectorTrack?.state.locked ?? true,
                   busy: widget.busy,
                   onUpdate: widget.onUpdateTimelineClipVisualSettings,
+                  onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                 ),
               ),
             ],
@@ -2024,10 +2037,12 @@ class _InspectorPanel extends StatefulWidget {
     required this.session,
     required this.trackId,
     required this.clipId,
-    required this.isVideoTrack,
+    required this.isVisualTrack,
+    required this.isAudioTrack,
     required this.trackLocked,
     required this.busy,
     required this.onUpdate,
+    required this.onUpdateAudio,
   });
 
   final bool isProjectWorkspace;
@@ -2036,7 +2051,8 @@ class _InspectorPanel extends StatefulWidget {
   final ProjectSessionHandle? session;
   final String? trackId;
   final String? clipId;
-  final bool isVideoTrack;
+  final bool isVisualTrack;
+  final bool isAudioTrack;
   final bool trackLocked;
   final bool busy;
   final Future<ProjectReadModel?> Function(
@@ -2046,6 +2062,13 @@ class _InspectorPanel extends StatefulWidget {
     ProjectTimelineVisualSettings,
   )?
   onUpdate;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel,
+    String,
+    String,
+    ProjectTimelineAudioSettings,
+  )?
+  onUpdateAudio;
 
   @override
   State<_InspectorPanel> createState() => _InspectorPanelState();
@@ -2053,12 +2076,19 @@ class _InspectorPanel extends StatefulWidget {
 
 class _InspectorPanelState extends State<_InspectorPanel> {
   final Map<String, TextEditingController> _fields = {
-    for (final key in _visualFieldKeys) key: TextEditingController(),
+    for (final key in [..._visualFieldKeys, ..._visualTimeFieldKeys])
+      key: TextEditingController(),
+  };
+  final Map<String, TextEditingController> _audioFields = {
+    for (final key in _audioFieldKeys) key: TextEditingController(),
   };
   bool _loading = false;
   bool _saving = false;
   String? _error;
   int _loadGeneration = 0;
+  final Set<ProjectTimelineEffectKind> _modifiedEffects = {};
+  bool _updateTransitionIn = false;
+  bool _updateTransitionOut = false;
 
   @override
   void initState() {
@@ -2075,7 +2105,8 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         oldWidget.project?.revision != widget.project?.revision ||
         oldWidget.trackId != widget.trackId ||
         oldWidget.clipId != widget.clipId ||
-        oldWidget.isVideoTrack != widget.isVideoTrack) {
+        oldWidget.isVisualTrack != widget.isVisualTrack ||
+        oldWidget.isAudioTrack != widget.isAudioTrack) {
       _loadSettings();
     }
   }
@@ -2084,6 +2115,9 @@ class _InspectorPanelState extends State<_InspectorPanel> {
   void dispose() {
     _loadGeneration++;
     for (final field in _fields.values) {
+      field.dispose();
+    }
+    for (final field in _audioFields.values) {
       field.dispose();
     }
     super.dispose();
@@ -2097,7 +2131,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     final trackId = widget.trackId;
     final clipId = widget.clipId;
     if (!widget.isProjectWorkspace ||
-        !widget.isVideoTrack ||
+        (!widget.isVisualTrack && !widget.isAudioTrack) ||
         project == null ||
         gateway == null ||
         session == null ||
@@ -2114,14 +2148,25 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       _error = null;
     });
     try {
-      final settings = await gateway.getTimelineClipVisualSettings(
-        session,
-        project,
-        trackId: trackId,
-        clipId: clipId,
-      );
-      if (!mounted || generation != _loadGeneration) return;
-      _writeSettings(settings);
+      if (widget.isAudioTrack) {
+        final settings = await gateway.getTimelineClipAudioSettings(
+          session,
+          project,
+          trackId: trackId,
+          clipId: clipId,
+        );
+        if (!mounted || generation != _loadGeneration) return;
+        _writeAudioSettings(settings);
+      } else {
+        final settings = await gateway.getTimelineClipVisualSettings(
+          session,
+          project,
+          trackId: trackId,
+          clipId: clipId,
+        );
+        if (!mounted || generation != _loadGeneration) return;
+        _writeSettings(settings);
+      }
     } on ProjectGatewayException catch (error) {
       if (!mounted || generation != _loadGeneration) return;
       setState(() => _error = error.message);
@@ -2148,6 +2193,28 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     _fields['crop_right']!.text = '${settings.cropRightBasisPoints}';
     _fields['crop_bottom']!.text = '${settings.cropBottomBasisPoints}';
     _fields['opacity']!.text = '${settings.opacityBasisPoints}';
+    _fields['brightness']!.text = '${settings.brightnessAmountMilli}';
+    _fields['contrast']!.text = '${settings.contrastAmountMilli}';
+    _fields['saturation']!.text = '${settings.saturationAmountMilli}';
+    _fields['blur']!.text = '${settings.gaussianBlurRadiusMilli}';
+    _fields['transition_in_kind']!.text = '${settings.transitionIn.index}';
+    _fields['transition_in_duration']!.text =
+        settings.transitionInDuration?.canonical ?? '0/1';
+    _fields['transition_out_kind']!.text = '${settings.transitionOut.index}';
+    _fields['transition_out_duration']!.text =
+        settings.transitionOutDuration?.canonical ?? '0/1';
+    _modifiedEffects.clear();
+    _updateTransitionIn = false;
+    _updateTransitionOut = false;
+  }
+
+  void _writeAudioSettings(ProjectTimelineAudioSettings settings) {
+    _audioFields['gain_db']!.text = (settings.gainMilliDecibels / 1000)
+        .toStringAsFixed(3);
+    _audioFields['pan_percent']!.text = (settings.panBasisPoints / 100)
+        .toStringAsFixed(2);
+    _audioFields['fade_in']!.text = settings.fadeIn.canonical;
+    _audioFields['fade_out']!.text = settings.fadeOut.canonical;
   }
 
   ProjectTimelineVisualSettings? _readSettings() {
@@ -2175,7 +2242,33 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         values['crop_bottom']! > 10000 ||
         values['opacity']! > 10000 ||
         values['crop_left']! + values['crop_right']! >= 10000 ||
-        values['crop_top']! + values['crop_bottom']! >= 10000) {
+        values['crop_top']! + values['crop_bottom']! >= 10000 ||
+        values['brightness']! < -1000 ||
+        values['brightness']! > 1000 ||
+        values['contrast']! < 0 ||
+        values['contrast']! > 4000 ||
+        values['saturation']! < 0 ||
+        values['saturation']! > 4000 ||
+        values['blur']! < 0 ||
+        values['blur']! > 128000 ||
+        values['transition_in_kind']! < 0 ||
+        values['transition_in_kind']! > 3 ||
+        values['transition_out_kind']! < 0 ||
+        values['transition_out_kind']! > 3) {
+      return null;
+    }
+    final transitionInDuration = ProjectRationalTime.tryParse(
+      _fields['transition_in_duration']!.text,
+    );
+    final transitionOutDuration = ProjectRationalTime.tryParse(
+      _fields['transition_out_duration']!.text,
+    );
+    if (transitionInDuration == null ||
+        transitionOutDuration == null ||
+        (values['transition_in_kind'] != 0 &&
+            !transitionInDuration.isPositive) ||
+        (values['transition_out_kind'] != 0 &&
+            !transitionOutDuration.isPositive)) {
       return null;
     }
     return ProjectTimelineVisualSettings(
@@ -2191,6 +2284,48 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       cropRightBasisPoints: values['crop_right']!,
       cropBottomBasisPoints: values['crop_bottom']!,
       opacityBasisPoints: values['opacity']!,
+      brightnessAmountMilli: values['brightness']!,
+      contrastAmountMilli: values['contrast']!,
+      saturationAmountMilli: values['saturation']!,
+      gaussianBlurRadiusMilli: values['blur']!,
+      transitionIn:
+          ProjectTimelineTransition.values[values['transition_in_kind']!],
+      transitionInDuration: transitionInDuration,
+      transitionOut:
+          ProjectTimelineTransition.values[values['transition_out_kind']!],
+      transitionOutDuration: transitionOutDuration,
+      modifiedEffects: Set.unmodifiable(_modifiedEffects),
+      updateTransitionIn: _updateTransitionIn,
+      updateTransitionOut: _updateTransitionOut,
+    );
+  }
+
+  ProjectTimelineAudioSettings? _readAudioSettings() {
+    final gain = double.tryParse(_audioFields['gain_db']!.text);
+    final pan = double.tryParse(_audioFields['pan_percent']!.text);
+    final fadeIn = ProjectRationalTime.tryParse(_audioFields['fade_in']!.text);
+    final fadeOut = ProjectRationalTime.tryParse(
+      _audioFields['fade_out']!.text,
+    );
+    if (gain == null ||
+        !gain.isFinite ||
+        gain < -96 ||
+        gain > 24 ||
+        pan == null ||
+        !pan.isFinite ||
+        pan < -100 ||
+        pan > 100 ||
+        fadeIn == null ||
+        fadeIn.numerator < BigInt.zero ||
+        fadeOut == null ||
+        fadeOut.numerator < BigInt.zero) {
+      return null;
+    }
+    return ProjectTimelineAudioSettings(
+      gainMilliDecibels: (gain * 1000).round(),
+      panBasisPoints: (pan * 100).round(),
+      fadeIn: fadeIn,
+      fadeOut: fadeOut,
     );
   }
 
@@ -2216,18 +2351,53 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     }
   }
 
+  Future<void> _applyAudio(ProjectTimelineAudioSettings settings) async {
+    final project = widget.project;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    final onUpdate = widget.onUpdateAudio;
+    if (project == null ||
+        trackId == null ||
+        clipId == null ||
+        onUpdate == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await onUpdate(project, trackId, clipId, settings);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Widget _numberField(String key, String label, {required bool signed}) {
-    final expression = RegExp(signed ? r'^-?\d{0,7}$' : r'^\d{0,6}$');
+    final expression = RegExp(signed ? r'^-?\d{0,7}$' : r'^\d{0,7}$');
     final limit = switch (key) {
       'x' || 'y' => 100000,
       'rotation' => 360000,
       'scale_x' || 'scale_y' => 100000,
+      'brightness' => 1000,
+      'blur' => 128000,
+      'contrast' || 'saturation' => 4000,
       _ => 10000,
     };
     return TextField(
       key: ValueKey('inspector-visual-$key'),
       controller: _fields[key],
       enabled: !widget.busy && !_saving && !_loading && !widget.trackLocked,
+      onChanged: (value) {
+        final effect = switch (key) {
+          'brightness' => ProjectTimelineEffectKind.brightness,
+          'contrast' => ProjectTimelineEffectKind.contrast,
+          'saturation' => ProjectTimelineEffectKind.saturation,
+          'blur' => ProjectTimelineEffectKind.gaussianBlur,
+          _ => null,
+        };
+        if (effect != null) _modifiedEffects.add(effect);
+      },
       keyboardType: TextInputType.numberWithOptions(signed: signed),
       inputFormatters: [
         TextInputFormatter.withFunction((oldValue, newValue) {
@@ -2237,6 +2407,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           if (value == null) return newValue;
           final minimum = switch (key) {
             'x' || 'y' || 'rotation' => -limit,
+            'brightness' => -limit,
             'scale_x' || 'scale_y' => 1,
             _ => 0,
           };
@@ -2255,6 +2426,190 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       style: const TextStyle(fontSize: 11),
     );
   }
+
+  Widget _visualTimeField(String key, String label) => TextField(
+    key: ValueKey('inspector-visual-$key'),
+    controller: _fields[key],
+    enabled: !widget.busy && !_saving && !_loading && !widget.trackLocked,
+    onChanged: (_) {
+      if (key == 'transition_in_duration') {
+        _updateTransitionIn = true;
+      } else {
+        _updateTransitionOut = true;
+      }
+    },
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      counterText: '',
+      helperText: 'Exact seconds, for example 1/2',
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: OrSpacing.x1,
+        vertical: OrSpacing.x1,
+      ),
+    ),
+    style: const TextStyle(fontSize: 11),
+  );
+
+  Widget _transitionField(String key, String label) =>
+      DropdownButtonFormField<int>(
+        key: ValueKey('inspector-visual-$key'),
+        initialValue: int.tryParse(_fields[key]!.text) ?? 0,
+        isExpanded: true,
+        items: const [
+          DropdownMenuItem(value: 0, child: Text('None')),
+          DropdownMenuItem(value: 1, child: Text('Cross dissolve')),
+          DropdownMenuItem(value: 2, child: Text('Fade through black')),
+          DropdownMenuItem(value: 3, child: Text('Wipe')),
+        ],
+        onChanged: widget.busy || _saving || _loading || widget.trackLocked
+            ? null
+            : (value) {
+                if (value != null) {
+                  setState(() {
+                    _fields[key]!.text = '$value';
+                    if (key == 'transition_in_kind') {
+                      _updateTransitionIn = true;
+                    } else {
+                      _updateTransitionOut = true;
+                    }
+                  });
+                }
+              },
+        decoration: InputDecoration(labelText: label, isDense: true),
+      );
+
+  Widget _audioNumberField(
+    String key,
+    String label, {
+    required bool decimal,
+    required int minimum,
+    required int maximum,
+  }) => TextField(
+    key: ValueKey('inspector-audio-$key'),
+    controller: _audioFields[key],
+    enabled: !widget.busy && !_saving && !_loading && !widget.trackLocked,
+    keyboardType: TextInputType.numberWithOptions(
+      signed: minimum < 0,
+      decimal: decimal,
+    ),
+    inputFormatters: [
+      TextInputFormatter.withFunction((oldValue, newValue) {
+        final expression = RegExp(
+          decimal ? r'^-?\d{0,3}(\.\d{0,3})?$' : r'^-?\d{0,3}$',
+        );
+        if (!expression.hasMatch(newValue.text) ||
+            newValue.text.isEmpty ||
+            newValue.text == '-') {
+          return expression.hasMatch(newValue.text) ? newValue : oldValue;
+        }
+        final parsed = double.tryParse(newValue.text);
+        if (parsed == null) return oldValue;
+        return parsed >= minimum && parsed <= maximum ? newValue : oldValue;
+      }),
+    ],
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      counterText: '',
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: OrSpacing.x1,
+        vertical: OrSpacing.x1,
+      ),
+    ),
+    style: const TextStyle(fontSize: 11),
+  );
+
+  Widget _audioTimeField(String key, String label) => TextField(
+    key: ValueKey('inspector-audio-$key'),
+    controller: _audioFields[key],
+    enabled: !widget.busy && !_saving && !_loading && !widget.trackLocked,
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      counterText: '',
+      helperText: 'Exact seconds, for example 1/2',
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: OrSpacing.x1,
+        vertical: OrSpacing.x1,
+      ),
+    ),
+    style: const TextStyle(fontSize: 11),
+  );
+
+  Widget _audioEditor() => ListView(
+    key: const ValueKey('inspector-scroll'),
+    padding: const EdgeInsets.all(OrSpacing.x2),
+    children: [
+      Text(
+        'AUDIO',
+        style: TextStyle(
+          color: OrColors.textMuted,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      const SizedBox(height: OrSpacing.x1),
+      _audioNumberField(
+        'gain_db',
+        'Gain (dB)',
+        decimal: true,
+        minimum: -96,
+        maximum: 24,
+      ),
+      const SizedBox(height: OrSpacing.x1),
+      _audioNumberField(
+        'pan_percent',
+        'Pan (%)',
+        decimal: true,
+        minimum: -100,
+        maximum: 100,
+      ),
+      const SizedBox(height: OrSpacing.x1),
+      _audioTimeField('fade_in', 'Fade in'),
+      const SizedBox(height: OrSpacing.x1),
+      _audioTimeField('fade_out', 'Fade out'),
+      if (_error != null) ...[
+        const SizedBox(height: OrSpacing.x2),
+        Text(
+          _error!,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.error,
+            fontSize: 11,
+          ),
+        ),
+      ],
+      const SizedBox(height: OrSpacing.x2),
+      Row(
+        children: [
+          OutlinedButton(
+            key: const ValueKey('inspector-audio-reset'),
+            onPressed: widget.busy || _saving || widget.trackLocked
+                ? null
+                : () => _applyAudio(ProjectTimelineAudioSettings.identity),
+            child: const Text('Reset'),
+          ),
+          const Spacer(),
+          FilledButton(
+            key: const ValueKey('inspector-audio-apply'),
+            onPressed: widget.busy || _saving || widget.trackLocked || _loading
+                ? null
+                : () {
+                    final settings = _readAudioSettings();
+                    if (settings == null) {
+                      setState(
+                        () => _error = 'Enter valid gain, pan, and nonnegative rational fade times.',
+                      );
+                      return;
+                    }
+                    _applyAudio(settings);
+                  },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    ],
+  );
 
   Widget _pair(
     String leftKey,
@@ -2280,7 +2635,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     final hasSelection = widget.clipId != null && widget.trackId != null;
     final canEdit =
         widget.isProjectWorkspace &&
-        widget.isVideoTrack &&
+        (widget.isVisualTrack || widget.isAudioTrack) &&
         hasSelection &&
         !widget.trackLocked;
     return ColoredBox(
@@ -2293,14 +2648,14 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           if (!canEdit)
             Expanded(
               child: OrEmptyState(
-                title: hasSelection ? 'Video clip settings' : 'No selection',
+                title: hasSelection ? 'Clip settings' : 'No selection',
                 message: !widget.isProjectWorkspace
                     ? 'Inspector controls are unavailable in this preview.'
                     : widget.trackLocked
-                    ? 'Unlock the selected track to edit video settings.'
+                    ? 'Unlock the selected track to edit clip settings.'
                     : hasSelection
-                    ? 'Transform controls are available for selected video clips.'
-                    : 'Select a video clip to edit transform, crop, and opacity.',
+                    ? 'Select a video or audio clip to edit its settings.'
+                    : 'Select a video or audio clip to edit its settings.',
                 icon: Icons.tune_outlined,
               ),
             )
@@ -2308,9 +2663,12 @@ class _InspectorPanelState extends State<_InspectorPanel> {
             const Expanded(
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
+          else if (widget.isAudioTrack)
+            Expanded(child: _audioEditor())
           else
             Expanded(
               child: ListView(
+                key: const ValueKey('inspector-scroll'),
                 padding: const EdgeInsets.all(OrSpacing.x2),
                 children: [
                   Text(
@@ -2396,6 +2754,59 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'Opacity (basis points)',
                     signed: false,
                   ),
+                  const SizedBox(height: OrSpacing.x3),
+                  Text(
+                    'EFFECTS',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _numberField(
+                    'brightness',
+                    'Brightness (milli)',
+                    signed: true,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'contrast',
+                    'Contrast (milli)',
+                    false,
+                    'saturation',
+                    'Saturation (milli)',
+                    false,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _numberField(
+                    'blur',
+                    'Blur radius (milli-pixels)',
+                    signed: false,
+                  ),
+                  const SizedBox(height: OrSpacing.x3),
+                  Text(
+                    'TRANSITIONS',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _transitionField('transition_in_kind', 'Transition in'),
+                  const SizedBox(height: OrSpacing.x1),
+                  _visualTimeField(
+                    'transition_in_duration',
+                    'Transition in duration',
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _transitionField('transition_out_kind', 'Transition out'),
+                  const SizedBox(height: OrSpacing.x1),
+                  _visualTimeField(
+                    'transition_out_duration',
+                    'Transition out duration',
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: OrSpacing.x2),
                     Text(
@@ -2463,7 +2874,20 @@ const _visualFieldKeys = [
   'crop_right',
   'crop_bottom',
   'opacity',
+  'brightness',
+  'contrast',
+  'saturation',
+  'blur',
+  'transition_in_kind',
+  'transition_out_kind',
 ];
+
+const _visualTimeFieldKeys = [
+  'transition_in_duration',
+  'transition_out_duration',
+];
+
+const _audioFieldKeys = ['gain_db', 'pan_percent', 'fade_in', 'fade_out'];
 
 class _TimelineToolbar extends StatelessWidget {
   const _TimelineToolbar({
