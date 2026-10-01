@@ -65,8 +65,8 @@
     "7F1": "DONE",
     "7G": "DONE",
     "7H": "DONE",
-    "8A": "NEXT",
-    "8B": "PLANNED",
+    "8A": "DONE",
+    "8B": "NEXT",
     "8C": "PLANNED",
     "8D": "PLANNED",
     "8E": "PLANNED",
@@ -78,7 +78,7 @@
     "9D": "PLANNED",
     "9E": "PLANNED"
   },
-  "current_next": "8A",
+  "current_next": "8B",
   "last_updated": "2026-10-01",
   "phase_status": {
     "10": "PLANNED",
@@ -98,7 +98,7 @@
   "schema_version": 1,
   "verified_contract_versions": {
     "ipc_protocol": 1,
-    "project_schema": 5,
+    "project_schema": 6,
     "recovery_schema": 1
   }
 }
