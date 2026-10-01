@@ -266,7 +266,7 @@ jobs:
             echo "Official upstream tag commit: 1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
             echo "Source archive SHA-512: acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1"
             echo "Patch status: unpatched upstream release archive"
-            echo "Packaging modifications: copies shared libraries beside the desktop media probe and adds @loader_path runtime paths; preserved install prefix remains unchanged"
+            echo "Packaging modifications: copies shared libraries beside the desktop media probe and into the app Frameworks directory, and adds @loader_path runtime paths; preserved install prefix remains unchanged"
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled components: file protocol; Matroska demuxer; FFV1 and PCM S16LE decoders"
@@ -299,14 +299,18 @@ jobs:
           app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
           bridge="$app/Contents/Frameworks/or_app_bridge.framework/Versions/A/or_app_bridge"
           runtime_dir="$(dirname "$bridge")"
+          frameworks="$app/Contents/Frameworks"
           probe_source="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe"
           probe="$runtime_dir/ffmpeg-link-probe"
           test -f "$bridge"
           test -f "$probe_source"
+          mkdir -p "$frameworks"
           install -m 755 "$probe_source" "$probe"
           for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib libswresample*.dylib libswscale*.dylib; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$frameworks/"
           done
+          test -f "$frameworks/libavutil.60.dylib"
           if ! otool -l "$bridge" | grep -Fq '@loader_path'; then
             install_name_tool -add_rpath @loader_path "$bridge"
           fi
@@ -651,11 +655,11 @@ jobs:
             test -n "$import_library"
             cp "$import_library" "$prefix/lib/$library.lib"
           done
-          cargo_home="$(cygpath -u "$CARGO_HOME")"
+          workspace="$(cygpath -u "$GITHUB_WORKSPACE")"
           libclang_path="$(cygpath -am /clang64/bin)"
-          mkdir -p "$cargo_home"
-          # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
-          cat > "$cargo_home/config.toml" <<EOF
+          mkdir -p "$workspace/.cargo"
+          # Project config is discovered even when Flutter's isolated hook filters CARGO_HOME.
+          cat > "$workspace/.cargo/config.toml" <<EOF
           [env]
           FFMPEG_DIR = { value = "$prefix_win", force = true }
           PKG_CONFIG_PATH = { value = "$prefix_win/lib/pkgconfig", force = true }
@@ -712,7 +716,7 @@ jobs:
         env:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
-        run: flutter build windows --debug
+        run: flutter build windows --debug --verbose
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
         shell: pwsh
