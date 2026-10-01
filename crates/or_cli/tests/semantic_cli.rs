@@ -1,7 +1,7 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MarkerId, ProjectDocument,
-    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, load_project_file,
-    save_project_file_atomic, write_recovery_checkpoint,
+    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, TrackKind,
+    load_project_file, save_project_file_atomic, write_recovery_checkpoint,
 };
 use or_ipc::{LiveProjectHost, ProjectHostEventKind};
 use serde_json::Value;
@@ -546,7 +546,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 5);
+    assert_eq!(saved_bytes["schema_version"], 6);
 
     let mut first_page_args = path_args(
         &["media", "list"],
@@ -1290,7 +1290,7 @@ fn project_paths_remain_os_strings_and_names_require_utf8() {
 }
 
 #[test]
-fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
+fn headless_timeline_cli_uses_commands_saves_v6_and_keeps_exact_times() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Timeline CLI");
@@ -1311,7 +1311,7 @@ fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
     ))
     .0;
     assert_eq!(empty_tracks["query_id"], "timeline.tracks");
-    assert_eq!(empty_tracks["timeline_tracks"], serde_json::json!([]));
+    assert_eq!(empty_tracks["timeline_tracks_v2"], serde_json::json!([]));
     let track_id = "22222222-2222-4222-8222-222222222222";
     let added_track = json_success(path_args(
         &["timeline", "add-track"],
@@ -1341,13 +1341,13 @@ fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
         &["--json"],
     ))
     .0;
-    assert_eq!(track_query["timeline_tracks"][0]["track_id"], track_id);
-    assert_eq!(track_query["timeline_tracks"][0]["kind"], "video");
+    assert_eq!(track_query["timeline_tracks_v2"][0]["track_id"], track_id);
+    assert_eq!(track_query["timeline_tracks_v2"][0]["kind"], "video");
     assert_eq!(
-        track_query["timeline_tracks"][1]["track_id"],
+        track_query["timeline_tracks_v2"][1]["track_id"],
         generated_track_id
     );
-    assert_eq!(track_query["timeline_tracks"][1]["kind"], "audio");
+    assert_eq!(track_query["timeline_tracks_v2"][1]["kind"], "audio");
     let human_tracks = cli(path_args(
         &["timeline", "tracks"],
         "--project",
@@ -1357,8 +1357,12 @@ fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
     assert!(human_tracks.status.success());
     let human_tracks = String::from_utf8(human_tracks.stdout).unwrap();
     assert!(human_tracks.starts_with("Tracks at revision 3:\n"));
-    assert!(human_tracks.contains(&format!("{track_id} video (0 clips)")));
-    assert!(human_tracks.contains(&format!("{generated_track_id} audio (0 clips)")));
+    assert!(human_tracks.contains(&format!(
+        "{track_id} video (0 clips, locked=false, visible=true, muted=false, solo=false)"
+    )));
+    assert!(human_tracks.contains(&format!(
+        "{generated_track_id} audio (0 clips, locked=false, visible=true, muted=false, solo=false)"
+    )));
 
     let supplied_clip_id = "33333333-3333-4333-8333-333333333333";
     let inserted = json_success(path_args(
@@ -1464,31 +1468,31 @@ fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
     ))
     .0;
     assert_eq!(page["query_id"], "timeline.clips");
-    assert_eq!(page["timeline_clip_page"]["total_count"], 2);
+    assert_eq!(page["timeline_clip_page_v2"]["total_count"], 2);
     assert_eq!(
-        page["timeline_clip_page"]["items"][0]["clip_id"],
+        page["timeline_clip_page_v2"]["items"][0]["clip_id"],
         supplied_clip_id
     );
     assert_eq!(
-        page["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        page["timeline_clip_page_v2"]["items"][0]["timeline_start"]["numerator"],
         3004
     );
     assert_eq!(
-        page["timeline_clip_page"]["items"][0]["timeline_start"]["denominator"],
+        page["timeline_clip_page_v2"]["items"][0]["timeline_start"]["denominator"],
         1001
     );
     assert_eq!(
-        page["timeline_clip_page"]["items"][0]["source_range"]["start"]["numerator"],
+        page["timeline_clip_page_v2"]["items"][0]["content"]["source_range"]["start"]["numerator"],
         1
     );
     assert_eq!(
-        page["timeline_clip_page"]["items"][0]["source_range"]["duration"]["denominator"],
+        page["timeline_clip_page_v2"]["items"][0]["content"]["source_range"]["duration"]["denominator"],
         2
     );
-    assert_eq!(page["timeline_clip_page"]["next_offset"], 1);
+    assert_eq!(page["timeline_clip_page_v2"]["next_offset"], 1);
 
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 5);
+    assert_eq!(saved_bytes["schema_version"], 6);
     let saved = load_project_file(&project_path).unwrap();
     assert_eq!(saved.revision(), ProjectRevision::new(6));
     assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
@@ -1571,10 +1575,135 @@ fn headless_timeline_cli_uses_commands_saves_v5_and_keeps_exact_times() {
         &["--json"],
     ))
     .0;
-    assert_eq!(empty_after_delete["timeline_tracks"], serde_json::json!([]));
+    assert_eq!(
+        empty_after_delete["timeline_tracks_v2"],
+        serde_json::json!([])
+    );
     assert_eq!(
         load_project_file(&project_path).unwrap().revision(),
         ProjectRevision::new(10)
+    );
+}
+
+#[test]
+fn headless_typed_timeline_cli_persists_text_captions_and_track_state() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Typed timeline");
+    let text_track = "22222222-2222-4222-8222-222222222222";
+    let caption_track = "33333333-3333-4333-8333-333333333333";
+
+    for (kind, track_id) in [("text", text_track), ("caption", caption_track)] {
+        let result = json_success(path_args(
+            &["timeline", "add-track"],
+            "--project",
+            &project_path,
+            &["--kind", kind, "--id", track_id, "--json"],
+        ))
+        .0;
+        assert_eq!(result["command"]["schema_version"], 2);
+    }
+
+    let title = json_success(path_args(
+        &["timeline", "insert-text"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            text_track,
+            "--at",
+            "1/3",
+            "--duration",
+            "7/3",
+            "--text",
+            "A title",
+            "--id",
+            "44444444-4444-4444-8444-444444444444",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(
+        title["command"]["command_id"],
+        "timeline.clip.insert_content"
+    );
+    assert_eq!(title["command"]["after_revision"], 3);
+
+    let caption = json_success(path_args(
+        &["timeline", "insert-caption"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            caption_track,
+            "--at",
+            "3/2",
+            "--duration",
+            "1/2",
+            "--text",
+            "One cue",
+            "--json",
+        ],
+    ))
+    .0;
+    let caption_id = caption["clip_id"].as_str().unwrap();
+    assert!(caption_id.parse::<ClipId>().is_ok());
+
+    let changed_state = json_success(path_args(
+        &["timeline", "set-track-state"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            text_track,
+            "--locked",
+            "false",
+            "--visible",
+            "false",
+            "--muted",
+            "false",
+            "--solo",
+            "true",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(
+        changed_state["command"]["command_id"],
+        "timeline.track.set_state"
+    );
+
+    let clips = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", text_track, "--json"],
+    ))
+    .0;
+    let text_clip = &clips["timeline_clip_page_v2"]["items"][0];
+    assert_eq!(text_clip["content"]["type"], "text");
+    assert_eq!(text_clip["content"]["text"], "A title");
+    assert!(text_clip["content"].get("media_id").is_none());
+    assert!(text_clip["content"].get("source_range").is_none());
+    assert_eq!(text_clip["timeline_start"]["numerator"], 1);
+    assert_eq!(text_clip["timeline_start"]["denominator"], 3);
+    assert_eq!(text_clip["timeline_duration"]["numerator"], 7);
+    assert_eq!(text_clip["timeline_duration"]["denominator"], 3);
+
+    let project = load_project_file(&project_path).unwrap();
+    assert_eq!(project.timeline().tracks()[0].kind(), TrackKind::Text);
+    assert_eq!(project.timeline().tracks()[1].kind(), TrackKind::Caption);
+    assert!(project.timeline().tracks()[0].state().solo());
+    assert!(!project.timeline().tracks()[0].state().visible());
+    assert_eq!(project.timeline().tracks()[1].clips().len(), 1);
+    assert_eq!(
+        project.timeline().tracks()[1].clips()[0].content().text(),
+        Some("One cue")
+    );
+    assert_eq!(project.timeline().tracks()[1].clips()[0].media_id(), None);
+    assert_eq!(
+        project.timeline().tracks()[1].clips()[0].source_range(),
+        None
     );
 }
 
@@ -1628,11 +1757,11 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
     ))
     .0;
     assert_eq!(
-        accepted_page["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        accepted_page["timeline_clip_page_v2"]["items"][0]["timeline_start"]["numerator"],
         3
     );
     assert_eq!(
-        accepted_page["timeline_clip_page"]["items"][0]["timeline_start"]["denominator"],
+        accepted_page["timeline_clip_page_v2"]["items"][0]["timeline_start"]["denominator"],
         1
     );
     let revision_before = load_project_file(&project_path).unwrap().revision();
@@ -1675,7 +1804,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v5_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v6_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -1789,22 +1918,25 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v5_result() 
         &["--track", track_id, "--json"],
     ))
     .0;
-    assert_eq!(clips["timeline_clip_page"]["total_count"], 2);
-    assert_eq!(clips["timeline_clip_page"]["items"][0]["clip_id"], clip_id);
+    assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 2);
     assert_eq!(
-        clips["timeline_clip_page"]["items"][0]["source_range"]["duration"]["numerator"],
+        clips["timeline_clip_page_v2"]["items"][0]["clip_id"],
+        clip_id
+    );
+    assert_eq!(
+        clips["timeline_clip_page_v2"]["items"][0]["content"]["source_range"]["duration"]["numerator"],
         1
     );
     assert_eq!(
-        clips["timeline_clip_page"]["items"][1]["clip_id"],
+        clips["timeline_clip_page_v2"]["items"][1]["clip_id"],
         second_clip_id
     );
     assert_eq!(
-        clips["timeline_clip_page"]["items"][1]["timeline_start"]["numerator"],
+        clips["timeline_clip_page_v2"]["items"][1]["timeline_start"]["numerator"],
         11
     );
     assert_eq!(
-        clips["timeline_clip_page"]["items"][1]["timeline_start"]["denominator"],
+        clips["timeline_clip_page_v2"]["items"][1]["timeline_start"]["denominator"],
         4
     );
     assert_eq!(
@@ -1813,7 +1945,7 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v5_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        5
+        6
     );
 }
 
@@ -2110,14 +2242,17 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
         initial.project_instance_id.to_string()
     );
     assert_eq!(tracks["project_revision"], 3);
-    assert_eq!(tracks["timeline_tracks"][0]["track_id"], track_id);
+    assert_eq!(tracks["timeline_tracks_v2"][0]["track_id"], track_id);
     let clips = json_success(attach_args(
         &["timeline", "clips"],
         &descriptor,
         &["--track", track_id, "--json"],
     ))
     .0;
-    assert_eq!(clips["timeline_clip_page"]["items"][0]["clip_id"], clip_id);
+    assert_eq!(
+        clips["timeline_clip_page_v2"]["items"][0]["clip_id"],
+        clip_id
+    );
 
     let moved = json_success(attach_args(
         &["timeline", "move-clip"],
@@ -2160,7 +2295,7 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
     ))
     .0;
     assert_eq!(
-        after_undo["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        after_undo["timeline_clip_page_v2"]["items"][0]["timeline_start"]["numerator"],
         2
     );
     let undo_move = json_success(attach_args(&["history", "undo"], &descriptor, &["--json"])).0;
@@ -2176,7 +2311,7 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
     ))
     .0;
     assert_eq!(
-        back_at_start["timeline_clip_page"]["items"][0]["timeline_start"]["numerator"],
+        back_at_start["timeline_clip_page_v2"]["items"][0]["timeline_start"]["numerator"],
         0
     );
     let redone = json_success(attach_args(&["history", "redo"], &descriptor, &["--json"])).0;
@@ -2214,7 +2349,7 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
     ))
     .0;
     assert_eq!(
-        tracks_after_remove["timeline_tracks"],
+        tracks_after_remove["timeline_tracks_v2"],
         serde_json::json!([])
     );
     assert!(host.is_dirty().unwrap());

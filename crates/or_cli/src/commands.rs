@@ -1,11 +1,11 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, CommandResult,
-    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
-    OperationError, ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
-    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
-    RecoveryConflictReason, RecoveryInspection, TrackId, TrackKind, apply_project_recovery,
-    command_catalog, discard_project_recovery, inspect_project_recovery, prepare_media_import,
-    query_catalog,
+    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
+    CommandResult, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId,
+    MediaItem, OperationError, ProjectFileMediaImportError, ProjectFileSession,
+    ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting, TrackId,
+    TrackKind, TrackState, VisualSettings, apply_project_recovery, command_catalog,
+    discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -582,6 +582,38 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("track_id", track_id.to_string())),
             ))
         }
+        "set-track-state" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--locked",
+                    "--visible",
+                    "--muted",
+                    "--solo",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let state = TrackState::new(
+                required_bool(&options, "--locked", json)?,
+                required_bool(&options, "--visible", json)?,
+                required_bool(&options, "--muted", json)?,
+                required_bool(&options, "--solo", json)?,
+            );
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.track.set_state",
+                json!({"track_id": track_id, "state": state}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "add-marker" => {
             let options = Options::parse(
                 action_args,
@@ -776,6 +808,72 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "insert-text" | "insert-caption" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--at",
+                    "--duration",
+                    "--text",
+                    "--id",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let timeline_start =
+                parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let duration = parse_cli_rational(
+                &required_name(&options, "--duration", json)?,
+                "--duration",
+                json,
+            )?;
+            let text = required_name(&options, "--text", json)?;
+            let clip_id = match options.value("--id") {
+                Some(value) => parse_clip_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--id must be valid UTF-8"))?,
+                    json,
+                )?,
+                None => ClipId::generate(),
+            };
+            let content = if action == "insert-text" {
+                ClipContent::Text {
+                    text,
+                    formatting: TextFormatting::default(),
+                }
+            } else {
+                ClipContent::Caption {
+                    text,
+                    formatting: TextFormatting::default(),
+                }
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.insert_content",
+                json!({
+                    "clip_id": clip_id,
+                    "track_id": track_id,
+                    "timeline_start": rational_value(timeline_start),
+                    "timeline_duration": rational_value(duration),
+                    "content": content,
+                    "settings": ClipSettings::Visual(VisualSettings::default()),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
         "move-clip" => {
             let options = Options::parse(
                 action_args,
@@ -897,7 +995,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, remove-track, insert-clip, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -1019,7 +1117,7 @@ fn timeline_query_request(
 
 fn render_timeline_tracks(result: &QueryResult, json: bool) -> Result<String, CliError> {
     let tracks = result
-        .timeline_tracks
+        .timeline_tracks_v2
         .as_ref()
         .ok_or_else(|| CliError::operation_message(json, "timeline.tracks returned no tracks"))?;
     if json {
@@ -1038,8 +1136,19 @@ fn render_timeline_tracks(result: &QueryResult, json: bool) -> Result<String, Cl
             let kind = match track.kind {
                 TrackKind::Video => "video",
                 TrackKind::Audio => "audio",
+                TrackKind::Text => "text",
+                TrackKind::Caption => "caption",
             };
-            format!("{} {} ({} clips)", track.track_id, kind, track.clip_count)
+            format!(
+                "{} {} ({} clips, locked={}, visible={}, muted={}, solo={})",
+                track.track_id,
+                kind,
+                track.clip_count,
+                track.state.locked(),
+                track.state.visible(),
+                track.state.muted(),
+                track.state.solo(),
+            )
         }));
     }
     Ok(lines.join("\n"))
@@ -1047,7 +1156,7 @@ fn render_timeline_tracks(result: &QueryResult, json: bool) -> Result<String, Cl
 
 fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, CliError> {
     let page = result
-        .timeline_clip_page
+        .timeline_clip_page_v2
         .as_ref()
         .ok_or_else(|| CliError::operation_message(json, "timeline.clips returned no clip page"))?;
     if json {
@@ -1062,15 +1171,32 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
     if page.items.is_empty() {
         lines.push("No clips in this page.".to_owned());
     } else {
-        lines.extend(page.items.iter().map(|clip| {
-            format!(
+        lines.extend(page.items.iter().map(|clip| match &clip.content {
+            ClipContent::Media {
+                media_id,
+                source_range,
+            } => format!(
                 "{} media={} at={} source={} duration={}",
                 clip.clip_id,
-                clip.media_id,
+                media_id,
                 format_cli_rational(clip.timeline_start),
-                format_cli_rational(clip.source_range.start()),
-                format_cli_rational(clip.source_range.duration())
-            )
+                format_cli_rational(source_range.start()),
+                format_cli_rational(clip.timeline_duration)
+            ),
+            ClipContent::Text { text, .. } => format!(
+                "{} text={:?} at={} duration={}",
+                clip.clip_id,
+                text,
+                format_cli_rational(clip.timeline_start),
+                format_cli_rational(clip.timeline_duration)
+            ),
+            ClipContent::Caption { text, .. } => format!(
+                "{} caption={:?} at={} duration={}",
+                clip.clip_id,
+                text,
+                format_cli_rational(clip.timeline_start),
+                format_cli_rational(clip.timeline_duration)
+            ),
         }));
     }
     if let Some(next_offset) = page.next_offset {
@@ -1218,7 +1344,12 @@ fn parse_track_kind(value: &str, json: bool) -> Result<TrackKind, CliError> {
     match value {
         "video" => Ok(TrackKind::Video),
         "audio" => Ok(TrackKind::Audio),
-        _ => Err(CliError::usage(json, "--kind must be video or audio")),
+        "text" => Ok(TrackKind::Text),
+        "caption" => Ok(TrackKind::Caption),
+        _ => Err(CliError::usage(
+            json,
+            "--kind must be video, audio, text, or caption",
+        )),
     }
 }
 
@@ -2166,6 +2297,17 @@ fn required_name(options: &Options, flag: &str, json: bool) -> Result<String, Cl
         .to_str()
         .map(str::to_owned)
         .ok_or_else(|| CliError::usage(json, "--name must be valid UTF-8"))
+}
+
+fn required_bool(options: &Options, flag: &str, json: bool) -> Result<bool, CliError> {
+    match required_name(options, flag, json)?.as_str() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(CliError::usage(
+            json,
+            format!("{flag} must be true or false"),
+        )),
+    }
 }
 
 fn required_path(options: &Options, flag: &str, json: bool) -> Result<PathBuf, CliError> {

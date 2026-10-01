@@ -38,9 +38,9 @@ mod desktop {
     use super::{PreviewError, PreviewSnapshot};
     use crate::viewer_texture;
     use or_core::{
-        ApplicationRequest, ApplicationResponse, MediaId, MediaSourceRef, ProjectId,
-        ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-        TimeRange, TimelineClipState, TimelineTrackSummary, TrackKind,
+        ApplicationRequest, ApplicationResponse, LegacyTimelineClipState, MediaId, MediaSourceRef,
+        ProjectId, ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate,
+        RationalTime, TimeRange, TimelineTrackSummary, TrackKind,
     };
     use or_ipc::LiveProjectHost;
     use or_media::SoftwareMediaDecoder;
@@ -629,7 +629,7 @@ mod desktop {
         host: &LiveProjectHost,
         key: ProgramKey,
         track: TimelineTrackSummary,
-    ) -> Result<Vec<TimelineClipState>, PreviewError> {
+    ) -> Result<Vec<LegacyTimelineClipState>, PreviewError> {
         let mut clips = Vec::new();
         let mut offset = 0usize;
         loop {
@@ -664,7 +664,7 @@ mod desktop {
         content_end: &mut Option<RationalTime>,
         video_clips: &mut Vec<VideoClip>,
         track_kind: TrackKind,
-        clip: TimelineClipState,
+        clip: LegacyTimelineClipState,
         sources: &HashMap<MediaId, MediaSourceRef>,
     ) -> Result<(), PreviewError> {
         let end = clip

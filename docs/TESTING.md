@@ -512,6 +512,16 @@ state/evidence completion commit intentionally skips Platform verification via
 the metadata-only push filter, but still runs Repository hygiene; the
 hardening commit itself must pass both workflows.
 
+## Phase 8A typed project model and timeline contract coverage
+
+- Timeline model tests cover Video, Audio, Text, and Caption tracks; Media, Text, and Caption clip content; stable IDs; exact starts and positive exact durations; media source-range preservation; bounded text and typed clip settings; per-kind track-state rules; solo evaluation by medium; and locked-track mutation rejection.
+- Strict project codec tests cover schema-v6 round trips, unknown-field and closed-enum rejection, typed setting bounds, and v5-to-v6 migration with stable media/clip identity, exact source duration, default state/settings, and preserved project revision. Earlier v1–v4 migration and clean-open behavior remain covered.
+- Application tests cover typed insert/update commands, typed v2 track/clip queries, exact duration-based move/trim/split/ripple behavior, validation atomicity, persistent track state, undo/redo, and unchanged IPC protocol v1 dispatch.
+- `crates/or_cli/tests/semantic_cli.rs` covers text and caption insertion, all four track kinds, persistent track-state changes, typed query output, schema-v6 persistence, and the shared application path.
+- Recovery tests verify that the recovery sidecar remains schema v1, preserves typed text content in a nested schema-v6 snapshot, and inspects/applies/reloads it without changing project identity or revision. Legacy nested snapshots still save as schema v6.
+- `crates/or_ipc/tests/live_host.rs` exercises typed timeline commands and queries through the existing generic IPC v1 route. The Flutter bridge retains its legacy media-only timeline view for this checkpoint; no native Flutter runtime behavior is added.
+- Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
 ## Future verification layers
 
 ### CONFORMANCE

@@ -3,16 +3,16 @@ use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
-    CommandEnvelope, JobManagerConfig, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
-    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
+    CommandEnvelope, JobManagerConfig, LegacyTimelineClipState, MarkerId, MediaArtifactEvent,
+    MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
     MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
     ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
-    RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineClipState,
-    TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation,
-    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TrackId,
-    TrackKind, apply_project_recovery, discard_project_recovery,
-    ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
+    RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineMarkerPage,
+    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
+    TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge, TrackId, TrackKind,
+    apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
+    inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
 use std::{
@@ -1751,6 +1751,9 @@ fn timeline_track_view(track: &TimelineTrackSummary) -> ProjectTimelineTrackView
         kind: match track.kind {
             TrackKind::Video => TimelineTrackKindView::Video,
             TrackKind::Audio => TimelineTrackKindView::Audio,
+            TrackKind::Text | TrackKind::Caption => {
+                unreachable!("schema-v1 bridge queries reject text and caption tracks")
+            }
         },
         clip_count: u64::try_from(track.clip_count).expect("bounded count fits in u64"),
     }
@@ -1775,7 +1778,7 @@ fn timeline_clip_page_view(
     }
 }
 
-fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
+fn timeline_clip_view(clip: &LegacyTimelineClipState) -> ProjectTimelineClipView {
     ProjectTimelineClipView {
         clip_id: clip.clip_id.to_string(),
         media_id: clip.media_id.to_string(),
@@ -2044,6 +2047,7 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineTrackIdAlreadyExists => "TIMELINE_TRACK_ID_ALREADY_EXISTS",
         OperationErrorCode::TimelineTrackNotFound => "TIMELINE_TRACK_NOT_FOUND",
         OperationErrorCode::TimelineTrackNotEmpty => "TIMELINE_TRACK_NOT_EMPTY",
+        OperationErrorCode::TimelineTrackLocked => "TIMELINE_TRACK_LOCKED",
         OperationErrorCode::TimelineClipIdAlreadyExists => "TIMELINE_CLIP_ID_ALREADY_EXISTS",
         OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
@@ -2079,12 +2083,12 @@ mod tests {
         timeline_track_view,
     };
     use or_core::{
-        CacheArtifactKind, CacheKey, ClipId, JobId, MarkerId, MediaArtifactEvent,
-        MediaArtifactEventState, MediaId, OperationErrorCode, ParametersFingerprint, ProjectId,
-        ProjectInstanceId, ProjectRevision, ProjectSummary, QueryResult, RationalTime,
-        SourceFingerprint, TimeRange, TimelineClipPage, TimelineClipState, TimelineMarkerPage,
-        TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapResult, TimelineSnapTargetKind,
-        TimelineTrackSummary, TrackId, TrackKind,
+        CacheArtifactKind, CacheKey, ClipId, JobId, LegacyTimelineClipState, MarkerId,
+        MediaArtifactEvent, MediaArtifactEventState, MediaId, OperationErrorCode,
+        ParametersFingerprint, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSummary,
+        QueryResult, RationalTime, SourceFingerprint, TimeRange, TimelineClipPage,
+        TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapResult,
+        TimelineSnapTargetKind, TimelineTrackSummary, TrackId, TrackKind,
     };
     use std::path::PathBuf;
 
@@ -2170,7 +2174,9 @@ mod tests {
             media_page: None,
             media_item: None,
             timeline_tracks: None,
+            timeline_tracks_v2: None,
             timeline_clip_page: None,
+            timeline_clip_page_v2: None,
             timeline_snap: None,
             timeline_marker_page: None,
             timeline_sequence_settings: None,
@@ -2179,7 +2185,7 @@ mod tests {
         let media_id = MediaId::generate();
         let clip_page = TimelineClipPage {
             track_id,
-            items: vec![TimelineClipState {
+            items: vec![LegacyTimelineClipState {
                 clip_id,
                 media_id,
                 timeline_start: RationalTime::new(3003, 1001).unwrap(),
@@ -2236,7 +2242,9 @@ mod tests {
             media_page: None,
             media_item: None,
             timeline_tracks: None,
+            timeline_tracks_v2: None,
             timeline_clip_page: None,
+            timeline_clip_page_v2: None,
             timeline_snap: None,
             timeline_marker_page: None,
             timeline_sequence_settings: None,
@@ -2289,7 +2297,9 @@ mod tests {
             media_page: None,
             media_item: None,
             timeline_tracks: None,
+            timeline_tracks_v2: None,
             timeline_clip_page: None,
+            timeline_clip_page_v2: None,
             timeline_snap: None,
             timeline_marker_page: None,
             timeline_sequence_settings: None,

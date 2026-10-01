@@ -202,7 +202,7 @@ pub enum IpcErrorCode {
     deny_unknown_fields
 )]
 pub enum IpcResponseResult {
-    Success(IpcSuccess),
+    Success(Box<IpcSuccess>),
     ApplicationError(OperationError),
     Error(IpcErrorCode),
 }

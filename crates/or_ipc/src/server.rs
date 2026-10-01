@@ -402,31 +402,31 @@ fn handle_connection_with(
 fn dispatch(session: &mut ProjectFileSession, request: IpcRequest) -> (IpcResponseResult, bool) {
     match request {
         IpcRequest::Describe => (
-            IpcResponseResult::Success(IpcSuccess::Describe(describe(session))),
+            IpcResponseResult::Success(Box::new(IpcSuccess::Describe(describe(session)))),
             false,
         ),
         IpcRequest::Application(request) => {
             let response = session.handle_application_request(request);
             let result = match response {
-                ApplicationResponse::Command(result) => IpcResponseResult::Success(
+                ApplicationResponse::Command(result) => IpcResponseResult::Success(Box::new(
                     IpcSuccess::Application(ApplicationSuccess::Command(result)),
-                ),
-                ApplicationResponse::Query(result) => IpcResponseResult::Success(
+                )),
+                ApplicationResponse::Query(result) => IpcResponseResult::Success(Box::new(
                     IpcSuccess::Application(ApplicationSuccess::Query(result)),
-                ),
-                ApplicationResponse::Transaction(result) => IpcResponseResult::Success(
+                )),
+                ApplicationResponse::Transaction(result) => IpcResponseResult::Success(Box::new(
                     IpcSuccess::Application(ApplicationSuccess::Transaction(result)),
-                ),
+                )),
                 ApplicationResponse::Error(error) => IpcResponseResult::ApplicationError(error),
             };
             (result, false)
         }
         IpcRequest::Save => match session.save() {
             Ok(()) => (
-                IpcResponseResult::Success(IpcSuccess::Save(SaveResponse {
+                IpcResponseResult::Success(Box::new(IpcSuccess::Save(SaveResponse {
                     project_revision: session.session().project_revision(),
                     dirty: session.is_dirty(),
-                })),
+                }))),
                 false,
             ),
             Err(error) => (
@@ -441,7 +441,10 @@ fn dispatch(session: &mut ProjectFileSession, request: IpcRequest) -> (IpcRespon
                     false,
                 )
             } else {
-                (IpcResponseResult::Success(IpcSuccess::Shutdown), true)
+                (
+                    IpcResponseResult::Success(Box::new(IpcSuccess::Shutdown)),
+                    true,
+                )
             }
         }
     }
@@ -469,7 +472,10 @@ fn dispatch_shared(
     if state.session.session().project_revision() != before {
         state.publish(ProjectHostEventKind::ProjectChanged);
     }
-    if matches!(&result, IpcResponseResult::Success(IpcSuccess::Save(_))) {
+    if matches!(
+        &result,
+        IpcResponseResult::Success(success) if matches!(success.as_ref(), IpcSuccess::Save(_))
+    ) {
         state.publish(ProjectHostEventKind::ProjectSaved);
     }
     if shutdown {

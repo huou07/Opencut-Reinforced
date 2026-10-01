@@ -212,29 +212,31 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
     assert_eq!(tracks[2].kind(), TrackKind::Video);
     assert_eq!(tracks[0].clips().len(), 1);
     assert_eq!(tracks[0].clips()[0].id(), clip_b);
-    assert_eq!(tracks[0].clips()[0].media_id(), media_id);
+    assert_eq!(tracks[0].clips()[0].media_id(), Some(media_id));
     assert_eq!(
         tracks[0].clips()[0].timeline_start(),
         RationalTime::new(4, 1).unwrap()
     );
     assert_eq!(
         tracks[0].clips()[0].source_range(),
-        TimeRange::new(
-            RationalTime::new(3, 2).unwrap(),
-            RationalTime::new(2, 1).unwrap()
+        Some(
+            TimeRange::new(
+                RationalTime::new(3, 2).unwrap(),
+                RationalTime::new(2, 1).unwrap()
+            )
+            .unwrap()
         )
-        .unwrap()
     );
     assert_eq!(tracks[2].clips().len(), 1);
     assert_eq!(tracks[2].clips()[0].id(), clip_a);
-    assert_eq!(tracks[2].clips()[0].media_id(), media_id);
+    assert_eq!(tracks[2].clips()[0].media_id(), Some(media_id));
     assert_eq!(
         tracks[2].clips()[0].timeline_start(),
         RationalTime::new(8, 1).unwrap()
     );
     assert_eq!(
         tracks[2].clips()[0].source_range(),
-        TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap()).unwrap()
+        Some(TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap()).unwrap())
     );
 
     let reopened = ProjectFileSession::open(&path).unwrap();
@@ -308,7 +310,7 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
-fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v5() {
+fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v6() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let seeded = project_with_timeline_media();
@@ -395,7 +397,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v5() {
 
     session.save().unwrap();
     let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 5);
+    assert_eq!(encoded["schema_version"], 6);
     for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
         assert!(!encoded.to_string().contains(runtime_state));
     }
@@ -414,11 +416,13 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v5() {
     assert_eq!(clips[0].timeline_start(), RationalTime::new(3, 2).unwrap());
     assert_eq!(
         clips[0].source_range(),
-        TimeRange::new(
-            RationalTime::new(1, 2).unwrap(),
-            RationalTime::new(5, 2).unwrap()
+        Some(
+            TimeRange::new(
+                RationalTime::new(1, 2).unwrap(),
+                RationalTime::new(5, 2).unwrap()
+            )
+            .unwrap()
         )
-        .unwrap()
     );
     assert_eq!(clips[1].id(), clip_b);
     assert_eq!(clips[1].timeline_start(), RationalTime::new(6, 1).unwrap());
@@ -578,7 +582,7 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 5")
+            .contains("\"schema_version\": 6")
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {

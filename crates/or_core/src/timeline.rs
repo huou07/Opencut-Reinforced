@@ -15,6 +15,15 @@ pub const MAX_TIMELINE_CLIPS: usize = 100_000;
 pub const MAX_TIMELINE_CLIPS_PER_TRACK: usize = 100_000;
 pub const MAX_TIMELINE_MARKERS: usize = 10_000;
 pub const MAX_TIMELINE_MARKER_LABEL_BYTES: usize = 256;
+pub const MAX_TIMELINE_TEXT_BYTES: usize = 65_536;
+pub const MAX_TIMELINE_CAPTION_BYTES: usize = 4_096;
+pub const MAX_CLIP_EFFECTS: usize = 16;
+pub const MIN_TEXT_SIZE_MILLI_POINTS: u32 = 4_000;
+pub const MAX_TEXT_SIZE_MILLI_POINTS: u32 = 256_000;
+pub const MAX_TRANSFORM_POSITION_MILLI_CANVAS: i32 = 100_000;
+pub const MAX_TRANSFORM_SCALE_MILLI: u32 = 100_000;
+pub const MAX_AUDIO_GAIN_MILLIDECIBELS: i32 = 24_000;
+pub const MIN_AUDIO_GAIN_MILLIDECIBELS: i32 = -96_000;
 
 macro_rules! timeline_id {
     ($name:ident) => {
@@ -108,14 +117,424 @@ impl Error for TimelineIdParseError {
 pub enum TrackKind {
     Video,
     Audio,
+    Text,
+    Caption,
+}
+
+impl TrackKind {
+    pub const fn is_visual(self) -> bool {
+        matches!(self, Self::Video | Self::Text | Self::Caption)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrackState {
+    locked: bool,
+    visible: bool,
+    muted: bool,
+    solo: bool,
+}
+
+impl TrackState {
+    pub const DEFAULT: Self = Self {
+        locked: false,
+        visible: true,
+        muted: false,
+        solo: false,
+    };
+
+    pub const fn new(locked: bool, visible: bool, muted: bool, solo: bool) -> Self {
+        Self {
+            locked,
+            visible,
+            muted,
+            solo,
+        }
+    }
+
+    pub const fn locked(self) -> bool {
+        self.locked
+    }
+
+    pub const fn visible(self) -> bool {
+        self.visible
+    }
+
+    pub const fn muted(self) -> bool {
+        self.muted
+    }
+
+    pub const fn solo(self) -> bool {
+        self.solo
+    }
+}
+
+impl Default for TrackState {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ClipContent {
+    Media {
+        media_id: MediaId,
+        source_range: TimeRange,
+    },
+    Text {
+        #[serde(deserialize_with = "crate::project_document::deserialize_text_content")]
+        text: String,
+        formatting: TextFormatting,
+    },
+    Caption {
+        #[serde(deserialize_with = "crate::project_document::deserialize_caption_content")]
+        text: String,
+        formatting: TextFormatting,
+    },
+}
+
+impl ClipContent {
+    pub const fn media_id(&self) -> Option<MediaId> {
+        match self {
+            Self::Media { media_id, .. } => Some(*media_id),
+            Self::Text { .. } | Self::Caption { .. } => None,
+        }
+    }
+
+    pub const fn source_range(&self) -> Option<TimeRange> {
+        match self {
+            Self::Media { source_range, .. } => Some(*source_range),
+            Self::Text { .. } | Self::Caption { .. } => None,
+        }
+    }
+
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Self::Text { text, .. } | Self::Caption { text, .. } => Some(text),
+            Self::Media { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FontIdentity {
+    BundledInter,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextWeight {
+    Regular,
+    Medium,
+    Semibold,
+    Bold,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAlignment {
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextColor {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
+}
+
+impl TextColor {
+    pub const WHITE: Self = Self {
+        red: 255,
+        green: 255,
+        blue: 255,
+        alpha: 255,
+    };
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextFormatting {
+    pub font: FontIdentity,
+    pub size_milli_points: u32,
+    pub weight: TextWeight,
+    pub alignment: TextAlignment,
+    pub color: TextColor,
+}
+
+impl TextFormatting {
+    pub const DEFAULT: Self = Self {
+        font: FontIdentity::BundledInter,
+        size_milli_points: 48_000,
+        weight: TextWeight::Regular,
+        alignment: TextAlignment::Center,
+        color: TextColor::WHITE,
+    };
+
+    pub(crate) fn is_valid(self) -> bool {
+        (MIN_TEXT_SIZE_MILLI_POINTS..=MAX_TEXT_SIZE_MILLI_POINTS).contains(&self.size_milli_points)
+    }
+}
+
+impl Default for TextFormatting {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Transform {
+    pub x_milli_canvas: i32,
+    pub y_milli_canvas: i32,
+    pub scale_x_milli: u32,
+    pub scale_y_milli: u32,
+    pub rotation_milli_degrees: i32,
+    pub anchor_x_basis_points: u16,
+    pub anchor_y_basis_points: u16,
+}
+
+impl Transform {
+    pub const IDENTITY: Self = Self {
+        x_milli_canvas: 0,
+        y_milli_canvas: 0,
+        scale_x_milli: 1_000,
+        scale_y_milli: 1_000,
+        rotation_milli_degrees: 0,
+        anchor_x_basis_points: 5_000,
+        anchor_y_basis_points: 5_000,
+    };
+
+    fn is_valid(self) -> bool {
+        (-MAX_TRANSFORM_POSITION_MILLI_CANVAS..=MAX_TRANSFORM_POSITION_MILLI_CANVAS)
+            .contains(&self.x_milli_canvas)
+            && (-MAX_TRANSFORM_POSITION_MILLI_CANVAS..=MAX_TRANSFORM_POSITION_MILLI_CANVAS)
+                .contains(&self.y_milli_canvas)
+            && (1..=MAX_TRANSFORM_SCALE_MILLI).contains(&self.scale_x_milli)
+            && (1..=MAX_TRANSFORM_SCALE_MILLI).contains(&self.scale_y_milli)
+            && (-360_000..=360_000).contains(&self.rotation_milli_degrees)
+            && self.anchor_x_basis_points <= 10_000
+            && self.anchor_y_basis_points <= 10_000
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Crop {
+    pub left_basis_points: u16,
+    pub top_basis_points: u16,
+    pub right_basis_points: u16,
+    pub bottom_basis_points: u16,
+}
+
+impl Crop {
+    pub const NONE: Self = Self {
+        left_basis_points: 0,
+        top_basis_points: 0,
+        right_basis_points: 0,
+        bottom_basis_points: 0,
+    };
+
+    fn is_valid(self) -> bool {
+        self.left_basis_points <= 10_000
+            && self.right_basis_points <= 10_000
+            && self.top_basis_points <= 10_000
+            && self.bottom_basis_points <= 10_000
+            && u32::from(self.left_basis_points) + u32::from(self.right_basis_points) < 10_000
+            && u32::from(self.top_basis_points) + u32::from(self.bottom_basis_points) < 10_000
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Opacity {
+    pub basis_points: u16,
+}
+
+impl Opacity {
+    pub const OPAQUE: Self = Self {
+        basis_points: 10_000,
+    };
+
+    fn is_valid(self) -> bool {
+        self.basis_points <= 10_000
+    }
+}
+
+impl Default for Opacity {
+    fn default() -> Self {
+        Self::OPAQUE
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum EffectReference {
+    Brightness { amount_milli: i16 },
+    Contrast { amount_milli: u16 },
+    Saturation { amount_milli: u16 },
+    GaussianBlur { radius_milli: u32 },
+}
+
+impl EffectReference {
+    fn is_valid(self) -> bool {
+        match self {
+            Self::Brightness { amount_milli } => (-1_000..=1_000).contains(&amount_milli),
+            Self::Contrast { amount_milli } | Self::Saturation { amount_milli } => {
+                amount_milli <= 4_000
+            }
+            Self::GaussianBlur { radius_milli } => radius_milli <= 128_000,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    CrossDissolve,
+    FadeThroughBlack,
+    Wipe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransitionReference {
+    pub kind: TransitionKind,
+    pub duration: RationalTime,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VisualSettings {
+    pub transform: Transform,
+    pub crop: Crop,
+    pub opacity: Opacity,
+    #[serde(deserialize_with = "crate::project_document::deserialize_effect_references")]
+    pub effects: Vec<EffectReference>,
+    pub transition_in: Option<TransitionReference>,
+    pub transition_out: Option<TransitionReference>,
+}
+
+impl VisualSettings {
+    pub fn is_valid_for_duration(&self, duration: RationalTime) -> bool {
+        self.transform.is_valid()
+            && self.crop.is_valid()
+            && self.opacity.is_valid()
+            && self.effects.len() <= MAX_CLIP_EFFECTS
+            && self.effects.iter().all(|effect| effect.is_valid())
+            && [self.transition_in, self.transition_out]
+                .into_iter()
+                .flatten()
+                .all(|transition| {
+                    transition.duration.is_positive() && transition.duration <= duration
+                })
+    }
+}
+
+impl Default for VisualSettings {
+    fn default() -> Self {
+        Self {
+            transform: Transform::IDENTITY,
+            crop: Crop::NONE,
+            opacity: Opacity::OPAQUE,
+            effects: Vec::new(),
+            transition_in: None,
+            transition_out: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AudioSettings {
+    pub gain_millidecibels: i32,
+    pub pan_basis_points: i16,
+    pub fade_in: RationalTime,
+    pub fade_out: RationalTime,
+}
+
+impl AudioSettings {
+    pub const DEFAULT: Self = Self {
+        gain_millidecibels: 0,
+        pan_basis_points: 0,
+        fade_in: RationalTime::ZERO,
+        fade_out: RationalTime::ZERO,
+    };
+
+    fn is_valid_for_duration(self, duration: RationalTime) -> bool {
+        (MIN_AUDIO_GAIN_MILLIDECIBELS..=MAX_AUDIO_GAIN_MILLIDECIBELS)
+            .contains(&self.gain_millidecibels)
+            && (-10_000..=10_000).contains(&self.pan_basis_points)
+            && !self.fade_in.is_negative()
+            && !self.fade_out.is_negative()
+            && self.fade_in <= duration
+            && self.fade_out <= duration
+    }
+}
+
+impl Default for AudioSettings {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ClipSettings {
+    Visual(VisualSettings),
+    Audio(AudioSettings),
+}
+
+impl ClipSettings {
+    pub(crate) fn default_for(kind: TrackKind) -> Self {
+        if kind == TrackKind::Audio {
+            Self::Audio(AudioSettings::DEFAULT)
+        } else {
+            Self::Visual(VisualSettings::default())
+        }
+    }
+
+    pub(crate) fn is_valid_for(&self, kind: TrackKind, duration: RationalTime) -> bool {
+        match (kind, self) {
+            (TrackKind::Audio, Self::Audio(settings)) => settings.is_valid_for_duration(duration),
+            (TrackKind::Video | TrackKind::Text | TrackKind::Caption, Self::Visual(settings)) => {
+                settings.is_valid_for_duration(duration)
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelineClip {
     id: ClipId,
-    media_id: MediaId,
     timeline_start: RationalTime,
-    source_range: TimeRange,
+    timeline_duration: RationalTime,
+    content: ClipContent,
+    settings: ClipSettings,
 }
 
 impl TimelineClip {
@@ -123,50 +542,92 @@ impl TimelineClip {
         self.id
     }
 
-    pub const fn media_id(&self) -> MediaId {
-        self.media_id
+    pub const fn timeline_duration(&self) -> RationalTime {
+        self.timeline_duration
+    }
+
+    pub const fn content(&self) -> &ClipContent {
+        &self.content
+    }
+
+    pub const fn settings(&self) -> &ClipSettings {
+        &self.settings
+    }
+
+    pub const fn media_id(&self) -> Option<MediaId> {
+        self.content.media_id()
     }
 
     pub const fn timeline_start(&self) -> RationalTime {
         self.timeline_start
     }
 
-    pub const fn source_range(&self) -> TimeRange {
-        self.source_range
+    pub const fn source_range(&self) -> Option<TimeRange> {
+        self.content.source_range()
     }
 
-    pub(crate) const fn from_parts_for_codec(
+    #[cfg(test)]
+    pub(crate) fn from_parts_for_codec(
         id: ClipId,
         media_id: MediaId,
         timeline_start: RationalTime,
         source_range: TimeRange,
     ) -> Self {
-        Self {
-            id,
-            media_id,
-            timeline_start,
-            source_range,
-        }
+        Self::from_media_for_codec(id, TrackKind::Video, media_id, timeline_start, source_range)
     }
 
-    pub(crate) const fn from_parts_for_command(
+    pub(crate) fn from_media_for_codec(
         id: ClipId,
+        track_kind: TrackKind,
         media_id: MediaId,
         timeline_start: RationalTime,
         source_range: TimeRange,
     ) -> Self {
+        Self::from_content_for_codec(
+            id,
+            timeline_start,
+            source_range.duration(),
+            ClipContent::Media {
+                media_id,
+                source_range,
+            },
+            ClipSettings::default_for(track_kind),
+        )
+    }
+
+    pub(crate) fn from_content_for_codec(
+        id: ClipId,
+        timeline_start: RationalTime,
+        timeline_duration: RationalTime,
+        content: ClipContent,
+        settings: ClipSettings,
+    ) -> Self {
         Self {
             id,
-            media_id,
             timeline_start,
-            source_range,
+            timeline_duration,
+            content,
+            settings,
         }
     }
 
-    pub(crate) const fn with_timeline_start_for_command(
-        self,
+    pub(crate) fn from_content_for_command(
+        id: ClipId,
         timeline_start: RationalTime,
+        timeline_duration: RationalTime,
+        content: ClipContent,
+        settings: ClipSettings,
     ) -> Self {
+        Self {
+            id,
+            timeline_start,
+            timeline_duration,
+            content,
+            settings,
+        }
+    }
+
+    pub(crate) fn with_timeline_start_for_command(self, timeline_start: RationalTime) -> Self {
         Self {
             timeline_start,
             ..self
@@ -234,6 +695,7 @@ impl TimelineMarker {
 pub struct TimelineTrack {
     id: TrackId,
     kind: TrackKind,
+    state: TrackState,
     clips: Vec<TimelineClip>,
 }
 
@@ -246,6 +708,10 @@ impl TimelineTrack {
         self.kind
     }
 
+    pub const fn state(&self) -> TrackState {
+        self.state
+    }
+
     pub fn clips(&self) -> &[TimelineClip] {
         &self.clips
     }
@@ -255,15 +721,44 @@ impl TimelineTrack {
         kind: TrackKind,
         clips: Vec<TimelineClip>,
     ) -> Self {
-        Self { id, kind, clips }
+        Self {
+            id,
+            kind,
+            state: TrackState::DEFAULT,
+            clips,
+        }
+    }
+
+    pub(crate) fn from_parts_with_state_for_codec(
+        id: TrackId,
+        kind: TrackKind,
+        state: TrackState,
+        clips: Vec<TimelineClip>,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            state,
+            clips,
+        }
     }
 
     pub(crate) fn empty_for_command(id: TrackId, kind: TrackKind) -> Self {
         Self {
             id,
             kind,
+            state: TrackState::DEFAULT,
             clips: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_state_for_command(mut self, state: TrackState) -> Self {
+        self.state = state;
+        self
+    }
+
+    pub(crate) fn set_state_for_command(&mut self, state: TrackState) {
+        self.state = state;
     }
 }
 
@@ -287,16 +782,27 @@ impl ProjectTimeline {
         self.sequence_frame_rate
     }
 
-    /// Returns the greatest exact clip end across audio and video tracks.
+    /// Returns the greatest exact clip end across all editable tracks.
     pub fn content_end(&self) -> Result<Option<RationalTime>, TimeError> {
         let mut end = None;
         for clip in self.tracks.iter().flat_map(|track| &track.clips) {
-            let clip_end = clip
-                .timeline_start
-                .checked_add(clip.source_range.duration())?;
+            let clip_end = clip.timeline_start.checked_add(clip.timeline_duration)?;
             end = Some(end.map_or(clip_end, |current: RationalTime| current.max(clip_end)));
         }
         Ok(end)
+    }
+
+    /// Applies visibility and solo by medium without changing stored track flags.
+    pub fn track_enabled_for_evaluation(&self, track_id: TrackId) -> Option<bool> {
+        let track = self.tracks.iter().find(|track| track.id == track_id)?;
+        let has_solo = self.tracks.iter().any(|candidate| {
+            candidate.kind.is_visual() == track.kind.is_visual() && candidate.state.solo
+        });
+        Some(if track.kind.is_visual() {
+            track.state.visible && (!has_solo || track.state.solo)
+        } else {
+            !track.state.muted && (!has_solo || track.state.solo)
+        })
     }
 
     /// Returns the exact global sequence-lattice time if it precedes the content end.
@@ -450,36 +956,23 @@ impl ProjectTimeline {
                 if !clip_ids.insert(clip.id) || clip.timeline_start.is_negative() {
                     return Err(TimelineValidationError);
                 }
-
-                let source_start = clip.source_range.start();
-                let duration = clip.source_range.duration();
-                if source_start.is_negative() || !duration.is_positive() {
+                if !clip.timeline_duration.is_positive()
+                    || !clip
+                        .settings
+                        .is_valid_for(track.kind, clip.timeline_duration)
+                {
                     return Err(TimelineValidationError);
                 }
-
                 let timeline_end = clip
                     .timeline_start
-                    .checked_add(duration)
+                    .checked_add(clip.timeline_duration)
                     .map_err(|_| TimelineValidationError)?;
-                let source_end = source_start
-                    .checked_add(duration)
-                    .map_err(|_| TimelineValidationError)?;
+
+                validate_clip_content(clip, track.kind, &media_by_id)?;
 
                 if previous_start.is_some_and(|start| clip.timeline_start <= start)
                     || previous_end.is_some_and(|end| clip.timeline_start < end)
                 {
-                    return Err(TimelineValidationError);
-                }
-
-                let item = media_by_id
-                    .get(&clip.media_id)
-                    .ok_or(TimelineValidationError)?;
-                let (has_compatible_stream, stream_duration) = matching_stream(track.kind, item);
-                if !has_compatible_stream {
-                    return Err(TimelineValidationError);
-                }
-                let known_duration = stream_duration.or(item.metadata().duration());
-                if known_duration.is_some_and(|end| source_end > end) {
                     return Err(TimelineValidationError);
                 }
 
@@ -511,7 +1004,7 @@ impl ProjectTimeline {
         self.tracks
             .iter()
             .flat_map(|track| &track.clips)
-            .any(|clip| clip.media_id == media_id)
+            .any(|clip| clip.content.media_id() == Some(media_id))
     }
 
     pub(crate) fn try_reserve_tracks(
@@ -538,6 +1031,10 @@ impl ProjectTimeline {
 
     pub(crate) fn insert_track_for_command(&mut self, index: usize, track: TimelineTrack) {
         self.tracks.insert(index, track);
+    }
+
+    pub(crate) fn set_track_state_for_command(&mut self, index: usize, state: TrackState) {
+        self.tracks[index].set_state_for_command(state);
     }
 
     pub(crate) fn remove_track_for_command(&mut self, index: usize) -> TimelineTrack {
@@ -589,6 +1086,56 @@ impl ProjectTimeline {
     pub(crate) fn replace_marker_for_command(&mut self, index: usize, marker: TimelineMarker) {
         self.markers[index] = marker;
     }
+}
+
+fn validate_clip_content(
+    clip: &TimelineClip,
+    track_kind: TrackKind,
+    media_by_id: &HashMap<MediaId, &MediaItem>,
+) -> Result<(), TimelineValidationError> {
+    match (&clip.content, track_kind) {
+        (
+            ClipContent::Media {
+                media_id,
+                source_range,
+            },
+            TrackKind::Video | TrackKind::Audio,
+        ) => {
+            let source_start = source_range.start();
+            let source_duration = source_range.duration();
+            if source_start.is_negative()
+                || !source_duration.is_positive()
+                || source_duration != clip.timeline_duration
+            {
+                return Err(TimelineValidationError);
+            }
+            let source_end = source_start
+                .checked_add(source_duration)
+                .map_err(|_| TimelineValidationError)?;
+            let item = media_by_id.get(media_id).ok_or(TimelineValidationError)?;
+            let (has_compatible_stream, stream_duration) = matching_stream(track_kind, item);
+            if !has_compatible_stream
+                || stream_duration
+                    .or(item.metadata().duration())
+                    .is_some_and(|end| source_end > end)
+            {
+                return Err(TimelineValidationError);
+            }
+        }
+        (ClipContent::Text { text, formatting }, TrackKind::Text)
+        | (ClipContent::Caption { text, formatting }, TrackKind::Caption) => {
+            let max_text_bytes = if track_kind == TrackKind::Caption {
+                MAX_TIMELINE_CAPTION_BYTES
+            } else {
+                MAX_TIMELINE_TEXT_BYTES
+            };
+            if text.trim().is_empty() || text.len() > max_text_bytes || !formatting.is_valid() {
+                return Err(TimelineValidationError);
+            }
+        }
+        _ => return Err(TimelineValidationError),
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -653,9 +1200,10 @@ impl Error for TimelineValidationError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
-        MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, SequenceTimingError,
-        TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
+        ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
+        MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,
+        ProjectTimeline, SequenceTimingError, TextFormatting, TimelineClip, TimelineMarker,
+        TimelineTrack, TrackId, TrackKind, TrackState, VisualSettings,
     };
     use crate::{
         AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
@@ -801,6 +1349,96 @@ mod tests {
     }
 
     #[test]
+    fn typed_text_and_caption_clips_validate_without_media_and_tracks_evaluate_flags_by_medium() {
+        let text_track_id = TrackId::from_str(TRACK_ID).unwrap();
+        let caption_track_id = TrackId::from_str("88888888-8888-4888-8888-888888888888").unwrap();
+        let audio_track_id = TrackId::from_str("99999999-9999-4999-8999-999999999999").unwrap();
+        let text_clip = TimelineClip::from_content_for_codec(
+            ClipId::from_str(CLIP_ID).unwrap(),
+            time(1, 3),
+            time(7, 3),
+            ClipContent::Text {
+                text: "Title 🎬".to_owned(),
+                formatting: TextFormatting::default(),
+            },
+            ClipSettings::Visual(VisualSettings::default()),
+        );
+        let caption_clip = TimelineClip::from_content_for_codec(
+            ClipId::from_str("55555555-5555-4555-8555-555555555555").unwrap(),
+            time(3, 2),
+            time(1, 2),
+            ClipContent::Caption {
+                text: "One cue".to_owned(),
+                formatting: TextFormatting::default(),
+            },
+            ClipSettings::Visual(VisualSettings::default()),
+        );
+        assert_eq!(text_clip.media_id(), None);
+        assert_eq!(text_clip.source_range(), None);
+        assert_eq!(text_clip.timeline_duration(), time(7, 3));
+
+        let text_state = TrackState::new(false, true, false, true);
+        let caption_state = TrackState::new(false, true, false, false);
+        let audio_state = TrackState::new(true, true, false, true);
+        let timeline = ProjectTimeline::from_tracks_for_codec(vec![
+            TimelineTrack::from_parts_with_state_for_codec(
+                text_track_id,
+                TrackKind::Text,
+                text_state,
+                vec![text_clip],
+            ),
+            TimelineTrack::from_parts_with_state_for_codec(
+                caption_track_id,
+                TrackKind::Caption,
+                caption_state,
+                vec![caption_clip],
+            ),
+            TimelineTrack::from_parts_with_state_for_codec(
+                audio_track_id,
+                TrackKind::Audio,
+                audio_state,
+                vec![],
+            ),
+        ]);
+        assert!(timeline.validate(&[]).is_ok());
+        assert_eq!(
+            timeline.track_enabled_for_evaluation(text_track_id),
+            Some(true)
+        );
+        assert_eq!(
+            timeline.track_enabled_for_evaluation(caption_track_id),
+            Some(false)
+        );
+        assert_eq!(
+            timeline.track_enabled_for_evaluation(audio_track_id),
+            Some(true)
+        );
+        assert_eq!(timeline.tracks()[0].state(), text_state);
+        assert_eq!(timeline.tracks()[1].state(), caption_state);
+        assert_eq!(timeline.tracks()[2].state(), audio_state);
+
+        let mismatched = TimelineClip::from_content_for_codec(
+            ClipId::from_str("66666666-6666-4666-8666-666666666666").unwrap(),
+            RationalTime::ZERO,
+            time(1, 1),
+            ClipContent::Text {
+                text: "Not a caption".to_owned(),
+                formatting: TextFormatting::default(),
+            },
+            ClipSettings::Visual(VisualSettings::default()),
+        );
+        assert!(
+            ProjectTimeline::from_tracks_for_codec(vec![track(
+                "77777777-7777-4777-8777-777777777777",
+                TrackKind::Caption,
+                vec![mismatched],
+            )])
+            .validate(&[])
+            .is_err()
+        );
+    }
+
+    #[test]
     fn validation_accepts_compatible_offline_media_and_same_media_reuse() {
         let item = media(Some(time(12, 1)), vec![video_stream(None)]);
         let timeline = ProjectTimeline::from_tracks_for_codec(vec![track(
@@ -911,8 +1549,9 @@ mod tests {
                 track(
                     "88888888-8888-4888-8888-888888888888",
                     TrackKind::Audio,
-                    vec![TimelineClip::from_parts_for_codec(
+                    vec![TimelineClip::from_media_for_codec(
                         ClipId::from_str("99999999-9999-4999-8999-999999999999").unwrap(),
+                        TrackKind::Audio,
                         MediaId::from_str("66666666-6666-4666-8666-666666666666").unwrap(),
                         time(0, 1),
                         TimeRange::new(time(0, 1), time(1, 1)).unwrap(),

@@ -120,7 +120,7 @@ The original `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
 }
 ```
 
-The current `.orproj` schema is v5. Its envelope keeps the format marker and project identity/revision/name, then stores ordered `media`, `timeline.tracks`, global `timeline.markers`, and the required nullable `timeline.sequence_frame_rate`. `ProjectDocument` owns a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, UTF-8 name, ordered media items, and canonical `ProjectTimeline`. Private versioned DTOs and explicit conversion keep domain changes from silently changing the file contract. The decoder strictly accepts v1–v5; v5 requires `sequence_frame_rate` to be either `null` or an exact positive `RationalRate`, and all versions validate required fields and reject unknown fields. The Rust encoder emits deterministic pretty v5 JSON with a trailing newline; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The version probe rejects unsupported versions before decoding. Bounded load remains 64 MiB. Migrations from v1–v4 set the sequence rate to `null` and preserve project ID, revision, name, and existing media/timeline state. A clean open never rewrites the file, and the next explicit save writes v5 without a conversion-only revision increment.
+The current `.orproj` schema is v6. Its envelope keeps the format marker and project identity/revision/name, then stores ordered `media`, `timeline.tracks`, global `timeline.markers`, and the required nullable `timeline.sequence_frame_rate`. `ProjectDocument` owns a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, UTF-8 name, ordered media items, and canonical `ProjectTimeline`. Private versioned DTOs and explicit conversion keep domain changes from silently changing the file contract. The decoder strictly accepts v1–v6; v6 validates closed track/content enums, exact clip timing, track state, and bounded typed settings, and all versions reject unknown fields. The Rust encoder emits deterministic pretty v6 JSON with a trailing newline; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The version probe rejects unsupported versions before decoding. Bounded load remains 64 MiB. Migrations from v1–v4 set the sequence rate to `null` and preserve project ID, revision, name, and existing media/timeline state. V5 preserves its nullable sequence rate and migrates media clips with their exact source duration and default typed settings. A clean open never rewrites the file, and the next explicit save writes v6 without a conversion-only revision increment.
 
 7F0 implements schema v5 with one strict `timeline.sequence_frame_rate` field
 encoded as either `null` or an exact `RationalRate`. Strict migrations from
@@ -128,8 +128,7 @@ v1–v4 set the rate to `null`; new projects also begin unset. Recovery remains
 envelope v1 and accepts nested v5 snapshots. Opening a migrated project stays
 clean and leaves disk bytes unchanged until explicit save.
 
-Phase 8A owns the next project-schema gate from the verified v5 baseline and
-may increment it exactly once. It generalizes the one canonical Rust timeline
+The Phase 8A project-schema gate starts from the verified v5 baseline and increments it exactly once. It generalizes the one canonical Rust timeline
 to closed Video, Audio, Text, and Caption track kinds and closed Media, Text,
 and Caption clip content. Every clip retains stable `ClipId`, exact start, and
 positive exact duration; media clips preserve `MediaId` and exact source range,
@@ -292,12 +291,18 @@ or timeline rename-marker --project PATH --id MARKER_ID --label LABEL [--json]
 or timeline rename-marker --attach DESCRIPTOR --id MARKER_ID --label LABEL [--json]
 or timeline delete-marker --project PATH --id MARKER_ID [--json]
 or timeline delete-marker --attach DESCRIPTOR --id MARKER_ID [--json]
-or timeline add-track --project PATH --kind video|audio [--id TRACK_ID] [--json]
-or timeline add-track --attach DESCRIPTOR --kind video|audio [--id TRACK_ID] [--json]
+or timeline add-track --project PATH --kind video|audio|text|caption [--id TRACK_ID] [--json]
+or timeline add-track --attach DESCRIPTOR --kind video|audio|text|caption [--id TRACK_ID] [--json]
+or timeline set-track-state --project PATH --track TRACK_ID --locked BOOL --visible BOOL --muted BOOL --solo BOOL [--json]
+or timeline set-track-state --attach DESCRIPTOR --track TRACK_ID --locked BOOL --visible BOOL --muted BOOL --solo BOOL [--json]
 or timeline remove-track --project PATH --track TRACK_ID [--json]
 or timeline remove-track --attach DESCRIPTOR --track TRACK_ID [--json]
 or timeline insert-clip --project PATH --track TRACK_ID --media MEDIA_ID --at NUM/DEN --source-start NUM/DEN --duration NUM/DEN [--id CLIP_ID] [--json]
 or timeline insert-clip --attach DESCRIPTOR --track TRACK_ID --media MEDIA_ID --at NUM/DEN --source-start NUM/DEN --duration NUM/DEN [--id CLIP_ID] [--json]
+or timeline insert-text --project PATH --track TRACK_ID --at NUM/DEN --duration NUM/DEN --text TEXT [--id CLIP_ID] [--json]
+or timeline insert-text --attach DESCRIPTOR --track TRACK_ID --at NUM/DEN --duration NUM/DEN --text TEXT [--id CLIP_ID] [--json]
+or timeline insert-caption --project PATH --track TRACK_ID --at NUM/DEN --duration NUM/DEN --text TEXT [--id CLIP_ID] [--json]
+or timeline insert-caption --attach DESCRIPTOR --track TRACK_ID --at NUM/DEN --duration NUM/DEN --text TEXT [--id CLIP_ID] [--json]
 or timeline move-clip --project PATH --clip CLIP_ID --track TRACK_ID --at NUM/DEN [--json]
 or timeline move-clip --attach DESCRIPTOR --clip CLIP_ID --track TRACK_ID --at NUM/DEN [--json]
 or timeline delete-clip --project PATH --clip CLIP_ID [--json]
@@ -316,7 +321,7 @@ or session describe --attach DESCRIPTOR [--json]
 or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]
 ```
 
-Headless commands and queries use `ProjectFileSession` and the shared application path. A real headless mutation saves through exact-base checked atomic persistence; a no-op does not rewrite the file. Timeline commands do not edit project JSON in the CLI. `--id` is optional for add-track and insert-clip; omitted IDs are generated as UUIDv4 before command construction and returned in success output, while supplied IDs must be canonical lowercase UUIDv4. Rational input is exact `NUM/DEN` (`i64` numerator and positive `u32` denominator); decimal seconds, timecode, and frame shortcuts are rejected. Recovery status reports `none`, `candidate`, `stale`, or `conflict`; apply and discard call the existing recovery APIs. Unresolved candidate/conflict/invalid recovery blocks mutable file-session opening.
+Headless commands and queries use `ProjectFileSession` and the shared application path. A real headless mutation saves through exact-base checked atomic persistence; a no-op does not rewrite the file. Timeline commands do not edit project JSON in the CLI. `--id` is optional for add-track and clip insertion; omitted IDs are generated as UUIDv4 before command construction and returned in success output, while supplied IDs must be canonical lowercase UUIDv4. Timeline track and clip queries return the typed schema-v2 read models. Rational input is exact `NUM/DEN` (`i64` numerator and positive `u32` denominator); decimal seconds, timecode, and frame shortcuts are rejected. Recovery status reports `none`, `candidate`, `stale`, or `conflict`; apply and discard call the existing recovery APIs. Unresolved candidate/conflict/invalid recovery blocks mutable file-session opening.
 
 Attached summary, rename, timeline commands/queries, undo/redo, save, describe, and shutdown require an explicit descriptor via `--attach`; there is no endpoint scanning. Mutations use the same application envelope and revision preconditions as headless operations, do not retry stale commands, and leave the shared live session dirty until explicit `project save`. Undo/redo require attachment because history is session-local and not persisted. `session serve` remains a developer/headless host; the Flutter application can also host a session and exposes its descriptor under Settings → Advanced / Developer. Neither host autosaves.
 
@@ -400,7 +405,7 @@ The desktop preview uses the same software fallback on all three supported deskt
 The canonical `ProjectTimeline.sequence_frame_rate` is optional and explicit:
 one exact `RationalRate` in frames per second. No project or active source
 supplies an implicit default.
-The schema-v5 `timeline.sequence.set_frame_rate` command accepts an exact rate
+The schema-v6 `timeline.sequence.set_frame_rate` command accepts an exact rate
 or `null`; the read-only `timeline.sequence.settings` query returns it. Both
 use the existing validated application boundary and generic
 `ApplicationRequest` IPC route, with operation schema v1 and no IPC protocol

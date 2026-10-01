@@ -17,13 +17,14 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, MAX_MEDIA_PAGE_SIZE,
-    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError,
-    OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor,
-    QueryEnvelope, QueryResult, TimelineClipPage, TimelineClipState, TimelineMarkerPage,
-    TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
-    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrimEdge,
-    TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, LegacyTimelineClipState,
+    MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage,
+    OperationError, OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary,
+    QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage, TimelineClipPageV2,
+    TimelineClipState, TimelineMarkerPage, TimelineMarkerState, TimelineSequenceSettings,
+    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
+    TimelineTrackSummary, TimelineTrackSummaryV2, TimelineTrimEdge, TransactionEnvelope,
+    TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
@@ -74,9 +75,15 @@ pub use project_storage::{
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{
-    ClipId, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,
-    MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId, ProjectTimeline, SequenceTimingError,
-    TimelineClip, TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind,
+    AudioSettings, ClipContent, ClipId, ClipSettings, Crop, EffectReference, FontIdentity,
+    MAX_AUDIO_GAIN_MILLIDECIBELS, MAX_CLIP_EFFECTS, MAX_TEXT_SIZE_MILLI_POINTS,
+    MAX_TIMELINE_CAPTION_BYTES, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
+    MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TEXT_BYTES,
+    MAX_TIMELINE_TRACKS, MAX_TRANSFORM_POSITION_MILLI_CANVAS, MAX_TRANSFORM_SCALE_MILLI,
+    MIN_AUDIO_GAIN_MILLIDECIBELS, MIN_TEXT_SIZE_MILLI_POINTS, MarkerId, Opacity, ProjectTimeline,
+    SequenceTimingError, TextAlignment, TextColor, TextFormatting, TextWeight, TimelineClip,
+    TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind, TrackState, Transform,
+    TransitionKind, TransitionReference, VisualSettings,
 };
 
 const APP_NAME: &str = "Opencut Reinforced";

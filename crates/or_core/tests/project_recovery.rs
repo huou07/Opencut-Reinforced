@@ -1,11 +1,11 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_RECOVERY_FILE_BYTES,
-    MarkerId, MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession,
-    ProjectRecoveryError, ProjectRevision, ProjectSession, RationalRate, RationalTime,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TimeRange, TrackId,
-    TrackKind, apply_project_recovery, decode_project, discard_project_recovery, encode_project,
-    inspect_project_recovery, load_project_file, save_project_file_atomic,
-    write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
+    MAX_RECOVERY_FILE_BYTES, MarkerId, MediaId, OperationErrorCode, ProjectDocument,
+    ProjectFileSession, ProjectRecoveryError, ProjectRevision, ProjectSession, RationalRate,
+    RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
+    TimeRange, TrackId, TrackKind, VisualSettings, apply_project_recovery, decode_project,
+    discard_project_recovery, encode_project, inspect_project_recovery, load_project_file,
+    save_project_file_atomic, write_recovery_checkpoint,
 };
 use serde_json::{Value, json};
 use std::{
@@ -265,7 +265,7 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
     write_recovery_checkpoint(&path, &base, &recovery).unwrap();
     let sidecar: Value = serde_json::from_slice(&fs::read(recovery_path(&path)).unwrap()).unwrap();
     assert_eq!(sidecar["schema_version"], 1);
-    assert_eq!(sidecar["recovery_project"]["schema_version"], 5);
+    assert_eq!(sidecar["recovery_project"]["schema_version"], 6);
     let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
         panic!("expected a timeline recovery candidate");
     };
@@ -296,18 +296,20 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
     assert_eq!(applied.timeline().tracks()[0].clips().len(), 1);
     let clip = &applied.timeline().tracks()[0].clips()[0];
     assert_eq!(clip.id(), clip_id);
-    assert_eq!(clip.media_id(), media_id);
+    assert_eq!(clip.media_id(), Some(media_id));
     assert_eq!(
         clip.timeline_start(),
         RationalTime::new(3004, 1001).unwrap()
     );
     assert_eq!(
         clip.source_range(),
-        TimeRange::new(
-            RationalTime::new(1, 2).unwrap(),
-            RationalTime::new(2, 1).unwrap()
+        Some(
+            TimeRange::new(
+                RationalTime::new(1, 2).unwrap(),
+                RationalTime::new(2, 1).unwrap()
+            )
+            .unwrap()
         )
-        .unwrap()
     );
     assert!(!recovery_path(&path).exists());
 
@@ -327,7 +329,78 @@ fn dirty_timeline_commands_round_trip_through_recovery_snapshot_and_apply() {
 }
 
 #[test]
-fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v5() {
+fn recovery_v1_preserves_typed_text_clips_through_schema_v6_snapshot_and_apply() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let base = ProjectDocument::new("Typed recovery");
+    save_project_file_atomic(&path, &base).unwrap();
+    let mut session = ProjectFileSession::open(&path).unwrap();
+    let project_id = session.session().project_id();
+    let instance_id = session.session().project_instance_id();
+    let track_id = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let clip_id = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+
+    let track_add = CommandEnvelope::add_timeline_track(
+        project_id,
+        instance_id,
+        session.session().project_revision(),
+        track_id,
+        TrackKind::Text,
+    );
+    assert!(matches!(
+        session.handle_application_request(ApplicationRequest::Command(track_add)),
+        ApplicationResponse::Command(result) if result.changed
+    ));
+    let insert = CommandEnvelope::insert_timeline_clip_content(
+        project_id,
+        instance_id,
+        session.session().project_revision(),
+        clip_id,
+        track_id,
+        RationalTime::new(3004, 1001).unwrap(),
+        RationalTime::new(250, 1001).unwrap(),
+        ClipContent::Text {
+            text: "Autosaved title".to_owned(),
+            formatting: TextFormatting::default(),
+        },
+        ClipSettings::Visual(VisualSettings::default()),
+    );
+    assert!(matches!(
+        session.handle_application_request(ApplicationRequest::Command(insert)),
+        ApplicationResponse::Command(result) if result.changed
+    ));
+
+    let recovered = session.session().project().clone();
+    assert_eq!(recovered.revision(), ProjectRevision::new(2));
+    write_recovery_checkpoint(&path, &base, &recovered).unwrap();
+    let sidecar: Value = serde_json::from_slice(&fs::read(recovery_path(&path)).unwrap()).unwrap();
+    assert_eq!(sidecar["schema_version"], 1);
+    assert_eq!(sidecar["recovery_project"]["schema_version"], 6);
+    assert_eq!(
+        sidecar["recovery_project"]["project"]["timeline"]["tracks"][0]["clips"][0]["timeline_start"]
+            ["numerator"],
+        3004
+    );
+    assert_eq!(
+        sidecar["recovery_project"]["project"]["timeline"]["tracks"][0]["clips"][0]["content"]["type"],
+        "text"
+    );
+
+    let RecoveryInspection::Candidate(candidate) = inspect_project_recovery(&path).unwrap() else {
+        panic!("expected the typed recovery candidate");
+    };
+    assert_eq!(candidate.recovery_project(), &recovered);
+    assert!(matches!(
+        apply_project_recovery(&path).unwrap(),
+        RecoveryApplyOutcome::AppliedAndCleaned
+    ));
+    assert_eq!(load_project_file(&path).unwrap(), recovered);
+    let saved: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(saved["schema_version"], 6);
+}
+
+#[test]
+fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v6() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Legacy base");
@@ -358,11 +431,11 @@ fn recovery_v1_sidecar_still_reads_nested_v1_projects_and_applies_as_v5() {
     assert_eq!(applied.revision(), ProjectRevision::new(1));
     assert_eq!(applied.name(), "Recovered legacy");
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 5);
+    assert_eq!(encoded["schema_version"], 6);
 }
 
 #[test]
-fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v5() {
+fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v6() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Legacy v2 base");
@@ -392,11 +465,11 @@ fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_as_v5() {
     ));
     assert_eq!(load_project_file(&path).unwrap(), recovery);
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 5);
+    assert_eq!(encoded["schema_version"], 6);
 }
 
 #[test]
-fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_as_v5_without_revision_change() {
+fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_as_v6_without_revision_change() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Saved base");
@@ -467,7 +540,7 @@ fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_as_v5_without_revi
     assert_eq!(applied.revision(), ProjectRevision::new(1));
     assert_eq!(applied.timeline(), recovery.timeline());
     let encoded: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 5);
+    assert_eq!(encoded["schema_version"], 6);
 }
 
 #[test]

@@ -1,13 +1,14 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, OperationErrorCode,
-    ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult, RationalRate,
+    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
+    OperationErrorCode, ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult,
+    RationalRate, TextFormatting, TrackId, TrackKind, VisualSettings,
 };
 use or_ipc::{
     ApplicationSuccess, IpcProtocolError, LiveProjectHost, LocalIpcClient,
     OR_LOCAL_IPC_PROTOCOL_VERSION, ProjectHostEventKind,
 };
 use serde_json::json;
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, path::PathBuf, str::FromStr, time::Duration};
 use uuid::Uuid;
 
 struct TestDirectory(PathBuf);
@@ -133,6 +134,117 @@ fn sequence_settings_use_generic_application_requests_over_ipc_v1() {
             .timeline()
             .sequence_frame_rate(),
         Some(rate)
+    );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn typed_timeline_requests_use_generic_application_route_over_ipc_v1() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    let session = ProjectFileSession::create_new(&project_path, "Typed IPC").unwrap();
+    let mut host = LiveProjectHost::start(session, Some(&descriptor_path)).unwrap();
+    let events = host.subscribe_events().unwrap();
+    let client = LocalIpcClient::open(&descriptor_path).unwrap();
+    let initial = summary(&client);
+    assert_eq!(
+        client.describe().unwrap().protocol_version,
+        OR_LOCAL_IPC_PROTOCOL_VERSION
+    );
+
+    let track_id = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let add_track = CommandEnvelope::add_timeline_track(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+        initial.summary.project_revision,
+        track_id,
+        TrackKind::Text,
+    );
+    assert!(matches!(
+        client
+            .application(ApplicationRequest::Command(add_track))
+            .unwrap(),
+        ApplicationSuccess::Command(result)
+            if result.changed && result.after_revision == ProjectRevision::new(1)
+    ));
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let clip_id = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+    let insert = CommandEnvelope::insert_timeline_clip_content(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+        ProjectRevision::new(1),
+        clip_id,
+        track_id,
+        or_core::RationalTime::new(3003, 1001).unwrap(),
+        or_core::RationalTime::new(250, 1001).unwrap(),
+        ClipContent::Text {
+            text: "IPC title".to_owned(),
+            formatting: TextFormatting::default(),
+        },
+        ClipSettings::Visual(VisualSettings::default()),
+    );
+    assert!(matches!(
+        client
+            .application(ApplicationRequest::Command(insert))
+            .unwrap(),
+        ApplicationSuccess::Command(result)
+            if result.changed && result.after_revision == ProjectRevision::new(2)
+    ));
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap().kind,
+        ProjectHostEventKind::ProjectChanged
+    );
+
+    let tracks_query = QueryEnvelope::timeline_tracks_v2(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+    );
+    let ApplicationSuccess::Query(tracks) = client
+        .application(ApplicationRequest::Query(tracks_query))
+        .unwrap()
+    else {
+        panic!("expected the typed track query");
+    };
+    assert_eq!(tracks.schema_version, 2);
+    assert_eq!(tracks.timeline_tracks_v2.unwrap()[0].kind, TrackKind::Text);
+    let clips_query = QueryEnvelope::timeline_clips_v2(
+        initial.summary.project_id,
+        initial.summary.project_instance_id,
+        track_id,
+        0,
+        10,
+    );
+    let ApplicationSuccess::Query(clips) = client
+        .application(ApplicationRequest::Query(clips_query))
+        .unwrap()
+    else {
+        panic!("expected the typed clip query");
+    };
+    let clip = &clips.timeline_clip_page_v2.unwrap().items[0];
+    assert_eq!(clip.clip_id, clip_id);
+    assert_eq!(
+        clip.timeline_start,
+        or_core::RationalTime::new(3003, 1001).unwrap()
+    );
+    assert_eq!(clip.content.text(), Some("IPC title"));
+    assert_eq!(clip.media_id(), None);
+    assert_eq!(clip.source_range(), None);
+
+    client.save().unwrap();
+    host.shutdown(false).unwrap();
+    let reloaded = ProjectFileSession::open(&project_path).unwrap();
+    assert_eq!(
+        reloaded.session().project_revision(),
+        ProjectRevision::new(2)
+    );
+    assert_eq!(
+        reloaded.session().project().timeline().tracks()[0].clips()[0].id(),
+        clip_id
     );
 }
 

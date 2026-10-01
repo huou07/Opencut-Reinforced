@@ -76,7 +76,7 @@ impl LocalIpcClient {
                 return Err(IpcProtocolError::ResponseMismatch);
             }
             match response.result {
-                IpcResponseResult::Success(result) => Ok(result),
+                IpcResponseResult::Success(result) => Ok(*result),
                 IpcResponseResult::ApplicationError(error) => {
                     Err(IpcProtocolError::Application(error))
                 }
