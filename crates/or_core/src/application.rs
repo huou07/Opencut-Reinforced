@@ -7502,24 +7502,26 @@ mod tests {
             ))
             .unwrap();
 
-        let mut visual = VisualSettings::default();
-        visual.transform = Transform {
-            x_milli_canvas: 250,
-            y_milli_canvas: -125,
-            scale_x_milli: 1_500,
-            scale_y_milli: 750,
-            rotation_milli_degrees: 15_000,
-            anchor_x_basis_points: 2_500,
-            anchor_y_basis_points: 7_500,
-        };
-        visual.crop = Crop {
-            left_basis_points: 1_000,
-            top_basis_points: 2_000,
-            right_basis_points: 500,
-            bottom_basis_points: 1_500,
-        };
-        visual.opacity = Opacity {
-            basis_points: 6_250,
+        let visual = VisualSettings {
+            transform: Transform {
+                x_milli_canvas: 250,
+                y_milli_canvas: -125,
+                scale_x_milli: 1_500,
+                scale_y_milli: 750,
+                rotation_milli_degrees: 15_000,
+                anchor_x_basis_points: 2_500,
+                anchor_y_basis_points: 7_500,
+            },
+            crop: Crop {
+                left_basis_points: 1_000,
+                top_basis_points: 2_000,
+                right_basis_points: 500,
+                bottom_basis_points: 1_500,
+            },
+            opacity: Opacity {
+                basis_points: 6_250,
+            },
+            ..VisualSettings::default()
         };
         session
             .execute_command(CommandEnvelope::update_timeline_clip(
