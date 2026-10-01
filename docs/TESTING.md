@@ -437,7 +437,23 @@ Future MotionScene and procedural-motion coverage is checkpoint-scoped:
 
 ## Performance instrumentation and benchmarks
 
-Performance work is planned. Local diagnostic instrumentation should eventually measure decode latency, render CPU time, render GPU time where available, present latency, dropped frames, audio underruns, queue depth, memory use, GPU/resource memory where measurable, cache hit/miss, and export throughput. This is local performance diagnosis, not telemetry or network reporting.
+Phase 7G adds deterministic `ResourceBudget::metrics()` snapshots for current
+and peak in-flight resources/bytes, successful acquisitions, and in-flight or
+byte-budget rejections. These counters use no clock and send no telemetry. The
+hosted `software_decode` fixture test records one 16×16 RGBA frame (1,024
+bytes), one occupied slot in a four-item queue, a peak decode budget of one
+lease/1,024 bytes, and zero usage after release. Existing audio conformance
+tests report exact underrun frames and sample counts. These are repeatable
+resource and semantic measurements; they do not measure latency or throughput.
+
+`DEDICATED_HARDWARE_PERFORMANCE = UNVERIFIED`: no dedicated or self-hosted
+benchmark machine is documented for this checkpoint. Shared hosted-runner
+timings are not used to claim FPS, GPU speed, hardware-path benefit, or a
+performance regression threshold. Future local diagnostic instrumentation may
+measure decode latency, render CPU/GPU time where available, present latency,
+dropped frames, audio underruns, queue depth, memory, cache hit/miss, and export
+throughput. This remains local performance diagnosis, not telemetry or network
+reporting.
 
 Before claiming a hardware optimization, use controlled, repeatable media fixtures and benchmark scenarios. Representative workload classes may include:
 

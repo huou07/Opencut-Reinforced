@@ -869,6 +869,33 @@ pub struct ResourceBudget {
 struct BudgetState {
     in_flight: usize,
     bytes: u64,
+    peak_in_flight: usize,
+    peak_bytes: u64,
+    successful_acquisitions: u64,
+    in_flight_rejections: u64,
+    byte_rejections: u64,
+}
+
+/// Deterministic current and peak resource usage for one runtime budget.
+///
+/// Acquisition counters saturate at `u64::MAX`; usage fields describe the
+/// current budget lifetime and do not include wall-clock measurements.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ResourceBudgetMetrics {
+    /// Number of leases currently acquired from this budget.
+    pub in_flight: usize,
+    /// Bytes currently accounted to acquired leases.
+    pub bytes_in_use: u64,
+    /// Highest simultaneous lease count observed during this budget lifetime.
+    pub peak_in_flight: usize,
+    /// Highest simultaneous byte count observed during this budget lifetime.
+    pub peak_bytes: u64,
+    /// Number of successful lease acquisitions during this budget lifetime.
+    pub successful_acquisitions: u64,
+    /// Acquisitions rejected by the in-flight limit during this budget lifetime.
+    pub in_flight_rejections: u64,
+    /// Acquisitions rejected by the byte limit during this budget lifetime.
+    pub byte_rejections: u64,
 }
 
 impl ResourceBudget {
@@ -891,14 +918,30 @@ impl ResourceBudget {
         lock(&self.state).bytes
     }
 
+    /// Returns deterministic usage and budget-pressure measurements.
+    pub fn metrics(&self) -> ResourceBudgetMetrics {
+        let state = lock(&self.state);
+        ResourceBudgetMetrics {
+            in_flight: state.in_flight,
+            bytes_in_use: state.bytes,
+            peak_in_flight: state.peak_in_flight,
+            peak_bytes: state.peak_bytes,
+            successful_acquisitions: state.successful_acquisitions,
+            in_flight_rejections: state.in_flight_rejections,
+            byte_rejections: state.byte_rejections,
+        }
+    }
+
     pub fn try_acquire(&self, bytes: u64) -> Result<BudgetLease, BudgetAcquireError> {
         let mut state = lock(&self.state);
         if state.in_flight >= self.limits.max_in_flight {
+            state.in_flight_rejections = state.in_flight_rejections.saturating_add(1);
             return Err(BudgetAcquireError::InFlightLimit {
                 limit: self.limits.max_in_flight,
             });
         }
         if bytes > self.limits.max_bytes.saturating_sub(state.bytes) {
+            state.byte_rejections = state.byte_rejections.saturating_add(1);
             return Err(BudgetAcquireError::ByteLimit {
                 limit: self.limits.max_bytes,
                 requested_bytes: bytes,
@@ -907,6 +950,9 @@ impl ResourceBudget {
         let projected = state.bytes + bytes;
         state.in_flight += 1;
         state.bytes = projected;
+        state.peak_in_flight = state.peak_in_flight.max(state.in_flight);
+        state.peak_bytes = state.peak_bytes.max(state.bytes);
+        state.successful_acquisitions = state.successful_acquisitions.saturating_add(1);
         Ok(BudgetLease {
             budget: Some(self.clone()),
             bytes,
@@ -1508,6 +1554,48 @@ mod tests {
                 requested_bytes: 11,
             })
         ));
+    }
+
+    #[test]
+    fn resource_budget_metrics_record_usage_peaks_and_pressure() {
+        let budget = ResourceBudget::new(BudgetLimits::new(1, 10).unwrap());
+        let lease = budget.try_acquire(6).unwrap();
+        assert_eq!(
+            budget.metrics(),
+            ResourceBudgetMetrics {
+                in_flight: 1,
+                bytes_in_use: 6,
+                peak_in_flight: 1,
+                peak_bytes: 6,
+                successful_acquisitions: 1,
+                in_flight_rejections: 0,
+                byte_rejections: 0,
+            }
+        );
+        assert!(matches!(
+            budget.try_acquire(1),
+            Err(BudgetAcquireError::InFlightLimit { limit: 1 })
+        ));
+        drop(lease);
+        assert!(matches!(
+            budget.try_acquire(11),
+            Err(BudgetAcquireError::ByteLimit {
+                limit: 10,
+                requested_bytes: 11,
+            })
+        ));
+        assert_eq!(
+            budget.metrics(),
+            ResourceBudgetMetrics {
+                in_flight: 0,
+                bytes_in_use: 0,
+                peak_in_flight: 1,
+                peak_bytes: 6,
+                successful_acquisitions: 1,
+                in_flight_rejections: 1,
+                byte_rejections: 1,
+            }
+        );
     }
 
     #[test]

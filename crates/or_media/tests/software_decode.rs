@@ -1,6 +1,8 @@
 use or_core::{MediaSourceRef, ProjectDocument, RationalTime, TimeRange};
 use or_media::{SnapshotQueue, SoftwareMediaDecoder};
-use or_runtime::{BudgetLimits, CancellationToken, RenderSnapshot, RuntimeBudgets};
+use or_runtime::{
+    BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
+};
 use std::{path::Path, path::PathBuf};
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
@@ -59,6 +61,20 @@ fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
             .unwrap(),
         1
     );
+    assert_eq!(queue.capacity(), 4);
+    assert_eq!(queue.len(), 1);
+    assert_eq!(
+        budgets.decode().metrics(),
+        ResourceBudgetMetrics {
+            in_flight: 1,
+            bytes_in_use: 1024,
+            peak_in_flight: 1,
+            peak_bytes: 1024,
+            successful_acquisitions: 1,
+            in_flight_rejections: 0,
+            byte_rejections: 0,
+        }
+    );
     let item = queue.try_pop_current().unwrap().unwrap();
     let frame = item.into_value();
     assert_eq!(frame.descriptor().width(), 16);
@@ -70,6 +86,8 @@ fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
 
     drop(frame);
     assert_eq!(budgets.decode().bytes_in_use(), 0);
+    assert_eq!(budgets.decode().metrics().in_flight, 0);
+    assert_eq!(budgets.decode().metrics().peak_bytes, 1024);
 }
 
 #[test]
