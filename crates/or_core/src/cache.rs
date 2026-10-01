@@ -148,7 +148,7 @@ impl CacheKey {
         }
         let bytes = value.as_bytes();
         let mut digest = [0_u8; 32];
-        for (index, pair) in bytes.chunks_exact(2).enumerate() {
+        for (index, pair) in bytes.as_chunks::<2>().0.iter().enumerate() {
             let high = lower_hex_nibble(pair[0]).ok_or(CacheKeyParseError::InvalidCharacter)?;
             let low = lower_hex_nibble(pair[1]).ok_or(CacheKeyParseError::InvalidCharacter)?;
             digest[index] = (high << 4) | low;

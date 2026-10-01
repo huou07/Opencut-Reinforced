@@ -312,15 +312,15 @@ impl JobManager {
             let mut completions = Vec::new();
             for id in pending {
                 state.tasks.remove(&id);
-                if let Some(record) = state.records.get_mut(&id) {
-                    if record.state == JobState::Queued {
-                        record.state = JobState::Cancelled;
-                        record
-                            .cancel
-                            .store(true, std::sync::atomic::Ordering::SeqCst);
-                        if let Some(completion) = state.completions.remove(&id) {
-                            completions.push(completion);
-                        }
+                if let Some(record) = state.records.get_mut(&id)
+                    && record.state == JobState::Queued
+                {
+                    record.state = JobState::Cancelled;
+                    record
+                        .cancel
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                    if let Some(completion) = state.completions.remove(&id) {
+                        completions.push(completion);
                     }
                 }
             }
