@@ -711,6 +711,10 @@ jobs:
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
           cargo build --locked --release --manifest-path tools/ffmpeg-link-probe/Cargo.toml
 
+      - name: Expose clang64 DLLs to Flutter's native-assets hook
+        shell: msys2 {0}
+        run: echo "$LIBCLANG_PATH" >> "$GITHUB_PATH"
+
       - name: Build Windows app with Rust bridge and texture adapter
         working-directory: apps/or_app
         env:
