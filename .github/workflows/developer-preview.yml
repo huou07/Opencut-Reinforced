@@ -1001,14 +1001,21 @@ jobs:
           - Desktop application packages include their matching FFmpeg shared libraries and LGPL notices; the release also includes the matching source archive and per-platform build information.
           - Android builds remain available, but linked FFmpeg and viewer playback are not enabled on Android.
 
-          Still unavailable: media-to-timeline drag insertion, track reorder, multi-select, linked clips, timeline zoom, transforms, crop, opacity, text/captions, effects, transitions, export, and audio device output.
+          **PHASE 8F — EXPORT, AUTOSAVE, AND DESKTOP MVP HARDENING**
 
-          OR remains a pre-MVP project, not a usable video editor.
+          - Desktop export writes Matroska with FFV1 video and stereo 48 kHz PCM S16LE audio through the linked LGPL software FFmpeg runtime. It runs as a bounded background job with progress and cancellation.
+          - Export evaluates the same timeline content, exact frame timing, transforms, crop, opacity, effects, transitions, and bundled-font text as preview. Export reads a captured project revision and does not mutate project state.
+          - In-progress output stays in a unique sibling staging directory; only a completed file is published to the chosen `.mkv` destination. Cancellation, missing media, or encode failures preserve an existing destination and leave a new destination absent.
+          - Periodic autosave writes the bounded recovery sidecar without replacing the canonical `.orproj` file. Explicit Save remains the canonical project-file action; recovery inspection and user-selected recovery remain available.
+
+          Still unavailable: track reorder, multi-select, linked clips, automatic captions, filesystem watching, and Android Storage Access Framework integration.
+
+          OR remains a pre-release desktop video editor. This Developer Preview is for testing and is not a production release.
 
           Core foundation:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
-          - ProjectDocument with `.orproj` v5 encoding and v1–v4 migration
+          - ProjectDocument with `.orproj` v6 encoding and v1–v5 migration
           - Bounded .orproj file loading and atomic save
           - Command and query contracts
           - Transactions
@@ -1030,17 +1037,12 @@ jobs:
 
           Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
 
-          Recovery decisions are explicit. There is no periodic recovery checkpoint scheduler or autosave.
+          Recovery decisions remain explicit. Periodic autosave updates only the recovery sidecar; it never silently overwrites the canonical project.
 
           Not implemented:
-          - Media-to-timeline drag insertion
           - Track reorder, multi-select, and linked clips
-          - Timeline zoom
-          - Transforms, crop, and opacity
-          - Text, manual captions, effects, and transitions
-          - Audio device output
-          - Export
-          - Autosave scheduling and filesystem watching
+          - Automatic captions
+          - Filesystem watching
           - Android Storage Access Framework integration
 
           These are debug developer builds for testing only, with no production signing. The macOS app has only an ad-hoc signature and is not notarized; CLI builds are unsigned, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.

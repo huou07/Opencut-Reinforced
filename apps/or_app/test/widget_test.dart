@@ -1259,6 +1259,55 @@ void main() {
     expect(find.text('Saved'), findsOneWidget);
   });
 
+  testWidgets('dirty projects periodically autosave to recovery', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/autosave.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Autosave');
+
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pumpAndSettle();
+    expect(gateway.autosaveCalls, 0);
+
+    await _renameActiveProject(tester, 'Autosaved edit');
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pumpAndSettle();
+    expect(gateway.autosaveCalls, 1);
+    expect(find.text('Recovery saved'), findsOneWidget);
+    expect(gateway.lastSession!.view.dirty, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('export starts through the gateway and can be cancelled', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.mkv';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    await tester.pump();
+    expect(picker.exportPathCalls, 1);
+    expect(gateway.exportCalls, 1);
+    expect(gateway.lastExportDestination, '/tmp/export-project.mkv');
+    expect(find.byKey(const ValueKey('cancel-export')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('cancel-export')));
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.exportCancelCalls, 1);
+    expect(find.text('Export cancelled'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('save failure leaves the project open and dirty', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway()
@@ -2859,9 +2908,11 @@ class _FakeProjectPicker implements ProjectFilePicker {
   String? openPath;
   String? mediaPath;
   String? savePath;
+  String? exportPath;
   int openCalls = 0;
   int mediaOpenCalls = 0;
   int saveCalls = 0;
+  int exportPathCalls = 0;
 
   @override
   bool get isSupported => supported;
@@ -2882,6 +2933,12 @@ class _FakeProjectPicker implements ProjectFilePicker {
   Future<String?> saveProjectPath({required String suggestedName}) async {
     saveCalls++;
     return savePath;
+  }
+
+  @override
+  Future<String?> saveExportPath({required String suggestedName}) async {
+    exportPathCalls++;
+    return exportPath;
   }
 }
 
@@ -2988,6 +3045,12 @@ class _FakeProjectGateway implements ProjectGateway {
   String? lastImportPath;
   String? lastRemovedMediaId;
   int saveCalls = 0;
+  int autosaveCalls = 0;
+  int exportCalls = 0;
+  int exportStatusCalls = 0;
+  int exportCancelCalls = 0;
+  String? lastExportDestination;
+  ProjectExportJob? _exportJob;
   int closeCalls = 0;
   bool? lastCloseDiscard;
   int inspectCalls = 0;
@@ -4162,6 +4225,73 @@ class _FakeProjectGateway implements ProjectGateway {
     _savedByPath[session.path] = session.view;
     session.emit('project_saved');
     return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> autosaveCheckpoint(
+    ProjectSessionHandle handle,
+  ) async {
+    autosaveCalls++;
+    return const ProjectActionResult(
+      succeeded: true,
+      message: 'Recovery checkpoint updated.',
+    );
+  }
+
+  @override
+  Future<ProjectExportJob> startExport(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String destination,
+  ) async {
+    exportCalls++;
+    lastExportDestination = destination;
+    _exportJob = ProjectExportJob(
+      succeeded: true,
+      errorCode: '',
+      message: 'Export queued.',
+      jobId: '11111111-1111-4111-8111-111111111111',
+      state: 'running',
+      progressCompleted: BigInt.zero,
+      progressTotal: BigInt.from(30),
+    );
+    return _exportJob!;
+  }
+
+  @override
+  Future<ProjectExportJob> exportStatus(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String jobId,
+  ) async {
+    exportStatusCalls++;
+    return _exportJob ??
+        const ProjectExportJob(
+          succeeded: false,
+          errorCode: 'EXPORT_JOB_NOT_FOUND',
+          message: 'not found',
+          jobId: '',
+          state: '',
+        );
+  }
+
+  @override
+  Future<ProjectExportJob> cancelExport(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String jobId,
+  ) async {
+    exportCancelCalls++;
+    _exportJob = ProjectExportJob(
+      succeeded: true,
+      errorCode: '',
+      message: 'Export cancelled.',
+      jobId: jobId,
+      state: 'cancelled',
+      progressCompleted: _exportJob?.progressCompleted,
+      progressTotal: _exportJob?.progressTotal,
+    );
+    return _exportJob!;
   }
 
   @override

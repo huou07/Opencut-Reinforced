@@ -2,7 +2,7 @@ mod manager;
 
 pub use manager::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobManager, JobManagerConfig,
-    JobManagerConfigError, JobSnapshot, JobSubmitError,
+    JobManagerConfigError, JobProgress, JobSnapshot, JobSubmitError,
 };
 
 use crate::UuidV4ParseError;
@@ -65,6 +65,7 @@ pub enum JobKind {
     ThumbnailGenerate,
     WaveformGenerate,
     ProxyGenerate,
+    Export,
 }
 
 /// Lifecycle state shared by future bounded background jobs.
@@ -118,6 +119,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&JobKind::WaveformGenerate).unwrap(),
             "\"waveform_generate\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobKind::Export).unwrap(),
+            "\"export\""
         );
         assert_eq!(
             serde_json::to_string(&JobKind::ProxyGenerate).unwrap(),

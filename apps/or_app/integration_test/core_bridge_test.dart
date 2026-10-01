@@ -1264,6 +1264,9 @@ class _NativeProjectPicker implements ProjectFilePicker {
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>
       projectPath;
+
+  @override
+  Future<String?> saveExportPath({required String suggestedName}) async => null;
 }
 
 Uint8List _silentWave({required int sampleRate, required int frames}) {
@@ -1715,6 +1718,32 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   @override
   Future<ProjectActionResult> save(ProjectSessionHandle session) =>
       _gateway.save(session);
+
+  @override
+  Future<ProjectActionResult> autosaveCheckpoint(
+    ProjectSessionHandle session,
+  ) => _gateway.autosaveCheckpoint(session);
+
+  @override
+  Future<ProjectExportJob> startExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String destination,
+  ) => _gateway.startExport(session, current, destination);
+
+  @override
+  Future<ProjectExportJob> exportStatus(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  ) => _gateway.exportStatus(session, current, jobId);
+
+  @override
+  Future<ProjectExportJob> cancelExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  ) => _gateway.cancelExport(session, current, jobId);
 
   @override
   Future<void> close(

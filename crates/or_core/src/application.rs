@@ -1745,6 +1745,64 @@ pub enum ApplicationRequest {
     Command(CommandEnvelope),
     Query(QueryEnvelope),
     Transaction(TransactionEnvelope),
+    Export(ExportRequest),
+}
+
+/// Runtime-only export command routed through the same application and IPC path as edits.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "operation",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ExportRequest {
+    Start {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        destination: String,
+    },
+    Status {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        job_id: crate::JobId,
+    },
+    Cancel {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        job_id: crate::JobId,
+    },
+}
+
+/// Result for an export request. Export work never changes the project revision.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExportResponse {
+    pub succeeded: bool,
+    pub error_code: String,
+    pub message: String,
+    pub job: Option<crate::JobSnapshot>,
+}
+
+impl ExportResponse {
+    pub fn success(message: impl Into<String>, job: crate::JobSnapshot) -> Self {
+        Self {
+            succeeded: true,
+            error_code: String::new(),
+            message: message.into(),
+            job: Some(job),
+        }
+    }
+
+    pub fn failure(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            succeeded: false,
+            error_code: code.into(),
+            message: message.into(),
+            job: None,
+        }
+    }
 }
 
 /// The typed result of dispatching an [`ApplicationRequest`].
@@ -1759,6 +1817,7 @@ pub enum ApplicationResponse {
     Command(CommandResult),
     Query(QueryResult),
     Transaction(TransactionResult),
+    Export(ExportResponse),
     Error(OperationError),
 }
 
@@ -1829,6 +1888,10 @@ impl ProjectSession {
                 .execute_transaction(envelope)
                 .map(ApplicationResponse::Transaction)
                 .unwrap_or_else(ApplicationResponse::Error),
+            ApplicationRequest::Export(_) => ApplicationResponse::Export(ExportResponse::failure(
+                "EXPORT_RUNTIME_UNAVAILABLE",
+                "the project host has no export runtime",
+            )),
         }
     }
 

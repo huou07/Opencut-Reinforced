@@ -38,7 +38,7 @@ impl LocalIpcServer {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, IpcProtocolError> {
-        Self::start_shared(shared_host_state(session), descriptor_path)
+        Self::start_shared(shared_host_state(session, None), descriptor_path)
     }
 
     pub(crate) fn start_shared(
@@ -405,19 +405,7 @@ fn dispatch(session: &mut ProjectFileSession, request: IpcRequest) -> (IpcRespon
         ),
         IpcRequest::Application(request) => {
             let response = session.handle_application_request(request);
-            let result = match response {
-                ApplicationResponse::Command(result) => IpcResponseResult::Success(Box::new(
-                    IpcSuccess::Application(ApplicationSuccess::Command(result)),
-                )),
-                ApplicationResponse::Query(result) => IpcResponseResult::Success(Box::new(
-                    IpcSuccess::Application(ApplicationSuccess::Query(result)),
-                )),
-                ApplicationResponse::Transaction(result) => IpcResponseResult::Success(Box::new(
-                    IpcSuccess::Application(ApplicationSuccess::Transaction(result)),
-                )),
-                ApplicationResponse::Error(error) => IpcResponseResult::ApplicationError(error),
-            };
-            (result, false)
+            (dispatch_application_response(response), false)
         }
         IpcRequest::Save => match session.save() {
             Ok(()) => (
@@ -466,7 +454,13 @@ fn dispatch_shared(
     }
 
     let before = state.session.session().project_revision();
-    let (result, shutdown) = dispatch(&mut state.session, request);
+    let (result, shutdown) = match request {
+        IpcRequest::Application(request) => (
+            dispatch_application_response(state.handle_application_request(request)),
+            false,
+        ),
+        request => dispatch(&mut state.session, request),
+    };
     if state.session.session().project_revision() != before {
         state.publish(ProjectHostEventKind::ProjectChanged);
     }
@@ -481,6 +475,24 @@ fn dispatch_shared(
         state.publish(ProjectHostEventKind::SessionClosing);
     }
     (result, shutdown)
+}
+
+fn dispatch_application_response(response: ApplicationResponse) -> IpcResponseResult {
+    match response {
+        ApplicationResponse::Command(result) => IpcResponseResult::Success(Box::new(
+            IpcSuccess::Application(ApplicationSuccess::Command(result)),
+        )),
+        ApplicationResponse::Query(result) => IpcResponseResult::Success(Box::new(
+            IpcSuccess::Application(ApplicationSuccess::Query(result)),
+        )),
+        ApplicationResponse::Transaction(result) => IpcResponseResult::Success(Box::new(
+            IpcSuccess::Application(ApplicationSuccess::Transaction(result)),
+        )),
+        ApplicationResponse::Export(result) => IpcResponseResult::Success(Box::new(
+            IpcSuccess::Application(ApplicationSuccess::Export(result)),
+        )),
+        ApplicationResponse::Error(error) => IpcResponseResult::ApplicationError(error),
+    }
 }
 
 fn describe(session: &ProjectFileSession) -> DescribeResponse {

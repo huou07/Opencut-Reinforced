@@ -43,12 +43,14 @@ mod desktop {
     };
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
-        EffectReference, MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, Opacity, ProjectId,
-        ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+        EffectReference, ExportRequest, ExportResponse, JobCancelOutcome, JobContext, JobFailure,
+        JobKind, JobManager, JobManagerConfig, JobState, MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId,
+        MediaSourceRef, MediaStreamMetadata, Opacity, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
         TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
         TransitionReference,
     };
-    use or_ipc::LiveProjectHost;
+    use or_ipc::{ExportRequestHandler, LiveProjectHost};
     use or_media::{SnapshotQueue, SoftwareMediaDecoder};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
@@ -65,7 +67,7 @@ mod desktop {
         pin::Pin,
         sync::{
             Arc, Mutex, MutexGuard, OnceLock,
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             mpsc,
         },
         task::{Context, Poll, Wake, Waker},
@@ -92,8 +94,8 @@ mod desktop {
         render_lock: Mutex<()>,
         cancellation: Mutex<CancellationToken>,
         generation: AtomicU64,
-        budgets: RuntimeBudgets,
-        text_rasterizer: Mutex<TextRasterizer>,
+        render_resources: Arc<RenderResources>,
+        export_jobs: JobManager,
     }
 
     impl PreviewRuntime {
@@ -109,8 +111,229 @@ mod desktop {
                 render_lock: Mutex::new(()),
                 cancellation: Mutex::new(CancellationToken::new()),
                 generation: AtomicU64::new(0),
-                budgets,
-                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                render_resources: Arc::new(RenderResources {
+                    budgets,
+                    text_rasterizer: Mutex::new(TextRasterizer::new()),
+                }),
+                export_jobs: JobManager::new(
+                    JobManagerConfig::new(1, 1, 32).expect("valid bounded export jobs"),
+                ),
+            }
+        }
+
+        fn handle_export_request(
+            &self,
+            session: &ProjectSession,
+            request: ExportRequest,
+        ) -> ExportResponse {
+            match request {
+                ExportRequest::Start {
+                    project_id,
+                    project_instance_id,
+                    expected_project_revision,
+                    destination,
+                } => {
+                    if project_id != session.project_id()
+                        || project_instance_id != session.project_instance_id()
+                    {
+                        return ExportResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "export request belongs to a different project session",
+                        );
+                    }
+                    if expected_project_revision != session.project_revision() {
+                        return ExportResponse::failure(
+                            "REVISION_CONFLICT",
+                            "the project changed before export started; refresh and retry",
+                        );
+                    }
+                    let destination = std::path::PathBuf::from(destination);
+                    if !destination.is_absolute()
+                        || !destination
+                            .extension()
+                            .and_then(std::ffi::OsStr::to_str)
+                            .is_some_and(|extension| extension.eq_ignore_ascii_case("mkv"))
+                    {
+                        return ExportResponse::failure(
+                            "INVALID_EXPORT_DESTINATION",
+                            "choose an absolute Matroska destination with an .mkv extension",
+                        );
+                    }
+                    if !*FFMPEG_LICENSE_OK.get_or_init(or_media::verify_ffmpeg_runtime) {
+                        return ExportResponse::failure(
+                            "FFMPEG_UNAVAILABLE",
+                            "the approved LGPL FFmpeg runtime could not be loaded",
+                        );
+                    }
+                    let program = match load_program_from_session(session) {
+                        Ok(program) => Arc::new(program),
+                        Err(error) => {
+                            return ExportResponse::failure(error.code, error.message);
+                        }
+                    };
+                    let Some(frame_rate) = program.frame_rate else {
+                        return ExportResponse::failure(
+                            "SEQUENCE_FRAME_RATE_REQUIRED",
+                            "set the sequence frame rate before exporting",
+                        );
+                    };
+                    let Some(content_end) = program.content_end.filter(|end| end.is_positive())
+                    else {
+                        return ExportResponse::failure(
+                            "EXPORT_EMPTY_TIMELINE",
+                            "add timed timeline content before exporting",
+                        );
+                    };
+                    let frame_count = match frame_rate.frame_index_ceil(content_end) {
+                        Ok(count) if count > 0 => count,
+                        Ok(_) => {
+                            return ExportResponse::failure(
+                                "EXPORT_EMPTY_TIMELINE",
+                                "the timeline contains no output frames",
+                            );
+                        }
+                        Err(error) => {
+                            return ExportResponse::failure(
+                                "EXPORT_DURATION_INVALID",
+                                error.to_string(),
+                            );
+                        }
+                    };
+                    let output_size = program
+                        .video_clips
+                        .iter()
+                        .find_map(|clip| clip.source_dimensions)
+                        .map(|(width, height)| fit_size(width, height))
+                        .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT));
+                    let render_resources = Arc::clone(&self.render_resources);
+                    let submit = self.export_jobs.submit(JobKind::Export, move |job| {
+                        let cancellation = CancellationToken::new();
+                        let watcher_cancellation = cancellation.clone();
+                        let watcher_job = job.clone();
+                        let watcher_stopped = Arc::new(AtomicBool::new(false));
+                        let stop_watcher = Arc::clone(&watcher_stopped);
+                        let watcher = thread::Builder::new()
+                            .name("or-export-cancel-watch".to_owned())
+                            .spawn(move || {
+                                while !stop_watcher.load(Ordering::SeqCst) {
+                                    if watcher_job.is_cancelled() {
+                                        watcher_cancellation.cancel();
+                                        return;
+                                    }
+                                    thread::sleep(Duration::from_millis(5));
+                                }
+                            })
+                            .map_err(|error| JobFailure::with_message(error.to_string()))?;
+                        let result = export_program(
+                            program,
+                            destination,
+                            output_size,
+                            frame_count,
+                            frame_rate,
+                            render_resources,
+                            job,
+                            &cancellation,
+                        );
+                        watcher_stopped.store(true, Ordering::SeqCst);
+                        let _ = watcher.join();
+                        result.map_err(JobFailure::with_message)
+                    });
+                    let job_id = match submit {
+                        Ok(job_id) => job_id,
+                        Err(error) => {
+                            let (code, message) = match error {
+                                or_core::JobSubmitError::QueueFull => {
+                                    ("EXPORT_QUEUE_FULL", "another export is queued or running")
+                                }
+                                or_core::JobSubmitError::RecordCapacityExceeded => (
+                                    "EXPORT_JOB_CAPACITY",
+                                    "export job history is full; wait for active work to finish",
+                                ),
+                                or_core::JobSubmitError::Shutdown => (
+                                    "EXPORT_RUNTIME_UNAVAILABLE",
+                                    "the export runtime is shutting down",
+                                ),
+                            };
+                            return ExportResponse::failure(code, message);
+                        }
+                    };
+                    self.export_jobs.snapshot(job_id).map_or_else(
+                        || {
+                            ExportResponse::failure(
+                                "EXPORT_JOB_UNAVAILABLE",
+                                "the new export job could not be inspected",
+                            )
+                        },
+                        |snapshot| ExportResponse::success("Export queued.", snapshot),
+                    )
+                }
+                ExportRequest::Status {
+                    project_id,
+                    project_instance_id,
+                    job_id,
+                } => {
+                    if !export_request_matches_session(project_id, project_instance_id, session) {
+                        return ExportResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "export job belongs to a different project session",
+                        );
+                    }
+                    self.export_jobs.snapshot(job_id).map_or_else(
+                        || {
+                            ExportResponse::failure(
+                                "EXPORT_JOB_NOT_FOUND",
+                                "the export job is no longer available",
+                            )
+                        },
+                        |snapshot| ExportResponse::success("Export status.", snapshot),
+                    )
+                }
+                ExportRequest::Cancel {
+                    project_id,
+                    project_instance_id,
+                    job_id,
+                } => {
+                    if !export_request_matches_session(project_id, project_instance_id, session) {
+                        return ExportResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "export job belongs to a different project session",
+                        );
+                    }
+                    let outcome = match self.export_jobs.cancel(job_id) {
+                        Ok(outcome) => outcome,
+                        Err(_) => {
+                            return ExportResponse::failure(
+                                "EXPORT_JOB_NOT_FOUND",
+                                "the export job is no longer available",
+                            );
+                        }
+                    };
+                    let message = match outcome {
+                        JobCancelOutcome::CancelledQueued => "Export cancelled.",
+                        JobCancelOutcome::CancellationRequested => "Cancellation requested.",
+                        JobCancelOutcome::AlreadyTerminal(JobState::Succeeded) => {
+                            "Export already completed."
+                        }
+                        JobCancelOutcome::AlreadyTerminal(JobState::Failed) => {
+                            "Export already failed."
+                        }
+                        JobCancelOutcome::AlreadyTerminal(JobState::Cancelled) => {
+                            "Export already cancelled."
+                        }
+                        JobCancelOutcome::AlreadyTerminal(JobState::Queued | JobState::Running) => {
+                            "Cancellation was requested."
+                        }
+                    };
+                    self.export_jobs.snapshot(job_id).map_or_else(
+                        || {
+                            ExportResponse::failure(
+                                "EXPORT_JOB_NOT_FOUND",
+                                "the export job is no longer available",
+                            )
+                        },
+                        |snapshot| ExportResponse::success(message, snapshot),
+                    )
+                }
             }
         }
 
@@ -207,7 +430,11 @@ mod desktop {
             let (audio_playback, audio_error) = if program.audio_clips.is_empty() {
                 (None, None)
             } else {
-                match AudioPlayback::start(Arc::clone(&program), origin, self.budgets.clone()) {
+                match AudioPlayback::start(
+                    Arc::clone(&program),
+                    origin,
+                    self.render_resources.budgets.clone(),
+                ) {
                     Ok(audio) => (Some(audio), None),
                     Err(error) => (None, Some(error.message)),
                 }
@@ -483,7 +710,37 @@ mod desktop {
             generation: u64,
             cancellation: &CancellationToken,
         ) -> Result<Presentation, PreviewError> {
-            if cancellation.is_cancelled() {
+            self.render_resources.render_with_size(
+                program,
+                time,
+                None,
+                Some((generation, &self.generation)),
+                false,
+                cancellation,
+            )
+        }
+    }
+
+    struct RenderResources {
+        budgets: RuntimeBudgets,
+        text_rasterizer: Mutex<TextRasterizer>,
+    }
+
+    impl RenderResources {
+        fn render_with_size(
+            &self,
+            program: &PreviewProgram,
+            time: RationalTime,
+            fixed_size: Option<(u32, u32)>,
+            expected_generation: Option<(u64, &AtomicU64)>,
+            fail_on_decode_error: bool,
+            cancellation: &CancellationToken,
+        ) -> Result<Presentation, PreviewError> {
+            if cancellation.is_cancelled()
+                || expected_generation.is_some_and(|(generation, current)| {
+                    current.load(Ordering::SeqCst) != generation
+                })
+            {
                 return Err(PreviewError::new(
                     "PREVIEW_CANCELLED",
                     "preview request was superseded",
@@ -543,17 +800,31 @@ mod desktop {
                     }
                 }
             }
-            if cancellation.is_cancelled() || self.generation.load(Ordering::SeqCst) != generation {
+            if cancellation.is_cancelled()
+                || expected_generation.is_some_and(|(generation, current)| {
+                    current.load(Ordering::SeqCst) != generation
+                })
+            {
                 return Err(PreviewError::new(
                     "PREVIEW_CANCELLED",
                     "preview request was superseded",
                 ));
             }
+            if fail_on_decode_error && let Some(message) = &decode_error {
+                return Err(PreviewError::new(
+                    "EXPORT_MEDIA_DECODE_FAILED",
+                    message.clone(),
+                ));
+            }
 
-            let (width, height) = frames
-                .first()
-                .map(|(frame, _)| fit_size(frame.descriptor().width(), frame.descriptor().height()))
-                .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT));
+            let (width, height) = fixed_size.unwrap_or_else(|| {
+                frames
+                    .first()
+                    .map(|(frame, _)| {
+                        fit_size(frame.descriptor().width(), frame.descriptor().height())
+                    })
+                    .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT))
+            });
             let size = RenderSize::new(width, height)
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
             let mut processed_video_pixels = Vec::with_capacity(frames.len());
@@ -700,7 +971,9 @@ mod desktop {
                 error_message: decode_error,
             })
         }
+    }
 
+    impl PreviewRuntime {
         fn request_is_current(
             &self,
             request: PreviewFrameRequest,
@@ -731,6 +1004,16 @@ mod desktop {
     impl Default for PreviewRuntime {
         fn default() -> Self {
             Self::new()
+        }
+    }
+
+    impl ExportRequestHandler for PreviewRuntime {
+        fn handle_export_request(
+            &self,
+            session: &ProjectSession,
+            request: ExportRequest,
+        ) -> ExportResponse {
+            PreviewRuntime::handle_export_request(self, session, request)
         }
     }
 
@@ -805,6 +1088,7 @@ mod desktop {
 
     struct VideoClip {
         source: MediaSourceRef,
+        source_dimensions: Option<(u32, u32)>,
         timeline_start: RationalTime,
         source_start: RationalTime,
         duration: RationalTime,
@@ -850,23 +1134,52 @@ mod desktop {
         host: &LiveProjectHost,
         key: ProgramKey,
     ) -> Result<PreviewProgram, PreviewError> {
+        load_program_with_query(key, |request| query(host, request))
+    }
+
+    fn load_program_from_session(session: &ProjectSession) -> Result<PreviewProgram, PreviewError> {
+        let key = ProgramKey {
+            project_id: session.project_id(),
+            project_instance_id: session.project_instance_id(),
+            revision: session.project_revision(),
+        };
+        load_program_with_query(key, |request| {
+            session
+                .execute_query(request)
+                .map_err(|error| PreviewError::new("PREVIEW_QUERY_FAILED", error.to_string()))
+        })
+    }
+
+    fn load_program_with_query(
+        key: ProgramKey,
+        mut query_request: impl FnMut(QueryEnvelope) -> Result<QueryResult, PreviewError>,
+    ) -> Result<PreviewProgram, PreviewError> {
         let mut media_sources = HashMap::new();
+        let mut media_dimensions = HashMap::new();
         let mut offset = 0usize;
         loop {
-            let result = query(
-                host,
-                QueryEnvelope::media_list(
-                    key.project_id,
-                    key.project_instance_id,
-                    offset,
-                    PAGE_SIZE,
-                ),
-            )?;
+            let result = query_request(QueryEnvelope::media_list(
+                key.project_id,
+                key.project_instance_id,
+                offset,
+                PAGE_SIZE,
+            ))?;
             ensure_key(&result, key)?;
             let page = result.media_page.ok_or_else(|| {
                 PreviewError::new("PREVIEW_QUERY_FAILED", "media page was missing")
             })?;
             for item in page.items {
+                let dimensions = item
+                    .metadata()
+                    .streams()
+                    .iter()
+                    .find_map(|stream| match stream {
+                        MediaStreamMetadata::Video(video) => Some((video.width(), video.height())),
+                        MediaStreamMetadata::Audio(_) | MediaStreamMetadata::Other(_) => None,
+                    });
+                if let Some(dimensions) = dimensions {
+                    media_dimensions.insert(item.id(), dimensions);
+                }
                 media_sources.insert(item.id(), item.source().clone());
             }
             let Some(next) = page.next_offset else { break };
@@ -879,10 +1192,10 @@ mod desktop {
             offset = next;
         }
 
-        let result = query(
-            host,
-            QueryEnvelope::timeline_tracks_v2(key.project_id, key.project_instance_id),
-        )?;
+        let result = query_request(QueryEnvelope::timeline_tracks_v2(
+            key.project_id,
+            key.project_instance_id,
+        ))?;
         ensure_key(&result, key)?;
         let tracks = result.timeline_tracks_v2.ok_or_else(|| {
             PreviewError::new("PREVIEW_QUERY_FAILED", "timeline tracks were missing")
@@ -907,7 +1220,7 @@ mod desktop {
                     track.state.visible() && (!has_visual_solo || track.state.solo())
                 }
             };
-            for clip in list_clips(host, key, &track)? {
+            for clip in list_clips(key, &track, &mut query_request)? {
                 add_clip(
                     &mut content_end,
                     &mut video_clips,
@@ -917,14 +1230,15 @@ mod desktop {
                     render_track,
                     clip,
                     &media_sources,
+                    &media_dimensions,
                 )?;
             }
         }
 
-        let result = query(
-            host,
-            QueryEnvelope::timeline_sequence_settings(key.project_id, key.project_instance_id),
-        )?;
+        let result = query_request(QueryEnvelope::timeline_sequence_settings(
+            key.project_id,
+            key.project_instance_id,
+        ))?;
         ensure_key(&result, key)?;
         let frame_rate = result
             .timeline_sequence_settings
@@ -943,23 +1257,20 @@ mod desktop {
     }
 
     fn list_clips(
-        host: &LiveProjectHost,
         key: ProgramKey,
         track: &TimelineTrackSummaryV2,
+        query_request: &mut impl FnMut(QueryEnvelope) -> Result<QueryResult, PreviewError>,
     ) -> Result<Vec<TimelineClipState>, PreviewError> {
         let mut clips = Vec::new();
         let mut offset = 0usize;
         loop {
-            let result = query(
-                host,
-                QueryEnvelope::timeline_clips_v2(
-                    key.project_id,
-                    key.project_instance_id,
-                    track.track_id,
-                    offset,
-                    MAX_TIMELINE_CLIP_PAGE_SIZE,
-                ),
-            )?;
+            let result = query_request(QueryEnvelope::timeline_clips_v2(
+                key.project_id,
+                key.project_instance_id,
+                track.track_id,
+                offset,
+                MAX_TIMELINE_CLIP_PAGE_SIZE,
+            ))?;
             ensure_key(&result, key)?;
             let page = result.timeline_clip_page_v2.ok_or_else(|| {
                 PreviewError::new("PREVIEW_QUERY_FAILED", "timeline clip page was missing")
@@ -987,6 +1298,7 @@ mod desktop {
         render_track: bool,
         clip: TimelineClipState,
         sources: &HashMap<MediaId, MediaSourceRef>,
+        media_dimensions: &HashMap<MediaId, (u32, u32)>,
     ) -> Result<(), PreviewError> {
         let end = clip
             .timeline_start
@@ -1010,6 +1322,7 @@ mod desktop {
                 })?;
                 video_clips.push(VideoClip {
                     source,
+                    source_dimensions: media_dimensions.get(&media_id).copied(),
                     timeline_start: clip.timeline_start,
                     source_start: source_range.start(),
                     duration: clip.timeline_duration,
@@ -1186,6 +1499,154 @@ mod desktop {
         PreviewError::new(code, error.to_string())
     }
 
+    fn export_request_matches_session(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        session: &ProjectSession,
+    ) -> bool {
+        project_id == session.project_id() && project_instance_id == session.project_instance_id()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn export_program(
+        program: Arc<PreviewProgram>,
+        destination: std::path::PathBuf,
+        output_size: (u32, u32),
+        frame_count: u64,
+        frame_rate: RationalRate,
+        render_resources: Arc<RenderResources>,
+        job: &JobContext,
+        cancellation: &CancellationToken,
+    ) -> Result<(), String> {
+        let content_end = program
+            .content_end
+            .ok_or_else(|| "timeline duration is unavailable".to_owned())?;
+        let total_audio_frames = audio_frames_ceil(content_end)?;
+        i64::try_from(total_audio_frames)
+            .map_err(|_| "audio duration exceeds the output sample clock".to_owned())?;
+        let mut writer = or_media::MatroskaFfv1PcmS16leWriter::create(
+            destination,
+            output_size.0,
+            output_size.1,
+            frame_rate.numerator(),
+            frame_rate.denominator(),
+        )
+        .map_err(|error| error.to_string())?;
+        let mut audio_cursor = 0_u64;
+        job.report_progress(0, frame_count);
+        for frame_index in 0..frame_count {
+            if job.is_cancelled() || cancellation.is_cancelled() {
+                return Err("export was cancelled".to_owned());
+            }
+            let time = frame_rate
+                .frame_time(frame_index)
+                .map_err(|error| error.to_string())?;
+            let presentation = render_resources
+                .render_with_size(&program, time, Some(output_size), None, true, cancellation)
+                .map_err(|error| error.to_string())?;
+            writer
+                .write_video_frame(
+                    &presentation.pixels,
+                    presentation.width,
+                    presentation.height,
+                    frame_index,
+                )
+                .map_err(|error| error.to_string())?;
+            let next_time = frame_rate
+                .frame_time(frame_index.saturating_add(1))
+                .map_err(|error| error.to_string())?;
+            let audio_until = audio_frames_floor(next_time)
+                .map_err(|_| "audio output time exceeds the sample clock".to_owned())?
+                .max(0) as u64;
+            write_export_audio_until(
+                &mut writer,
+                &program,
+                &render_resources.budgets,
+                &mut audio_cursor,
+                audio_until.min(total_audio_frames),
+                job,
+                cancellation,
+            )?;
+            job.report_progress(frame_index + 1, frame_count);
+        }
+        write_export_audio_until(
+            &mut writer,
+            &program,
+            &render_resources.budgets,
+            &mut audio_cursor,
+            total_audio_frames,
+            job,
+            cancellation,
+        )?;
+        if job.is_cancelled() || cancellation.is_cancelled() {
+            return Err("export was cancelled".to_owned());
+        }
+        writer.finish().map_err(|error| error.to_string())
+    }
+
+    fn write_export_audio_until(
+        writer: &mut or_media::MatroskaFfv1PcmS16leWriter,
+        program: &PreviewProgram,
+        budgets: &RuntimeBudgets,
+        audio_cursor: &mut u64,
+        audio_until: u64,
+        job: &JobContext,
+        cancellation: &CancellationToken,
+    ) -> Result<(), String> {
+        while *audio_cursor < audio_until {
+            if job.is_cancelled() || cancellation.is_cancelled() {
+                return Err("export was cancelled".to_owned());
+            }
+            let frame_count = (audio_until - *audio_cursor).min(AUDIO_BUFFER_FRAMES as u64);
+            let sample_count = usize::try_from(frame_count)
+                .ok()
+                .and_then(|frames| frames.checked_mul(2))
+                .ok_or_else(|| "audio block exceeds the memory limit".to_owned())?;
+            let mut mixed = vec![0.0_f32; sample_count];
+            let block_start = audio_time_for_frames(*audio_cursor)
+                .map_err(|_| "audio block time exceeds the sample clock".to_owned())?;
+            let error = Mutex::new(None);
+            mix_audio_window(
+                &mut mixed,
+                &program.audio_clips,
+                program.key,
+                block_start,
+                budgets.clone(),
+                cancellation,
+                &error,
+                true,
+            )?;
+            if job.is_cancelled() || cancellation.is_cancelled() {
+                return Err("export was cancelled".to_owned());
+            }
+            let pcm: Vec<i16> = mixed.into_iter().map(float_to_s16).collect();
+            writer
+                .write_audio_frames(&pcm, *audio_cursor)
+                .map_err(|error| error.to_string())?;
+            *audio_cursor += frame_count;
+        }
+        Ok(())
+    }
+
+    fn audio_frames_ceil(time: RationalTime) -> Result<u64, String> {
+        if time.is_negative() {
+            return Err("audio duration cannot be negative".to_owned());
+        }
+        let numerator = i128::from(time.numerator()) * i128::from(AUDIO_SAMPLE_RATE);
+        let denominator = i128::from(time.denominator());
+        let quotient = numerator.div_euclid(denominator);
+        let rounded = quotient + i128::from(numerator.rem_euclid(denominator) != 0);
+        u64::try_from(rounded).map_err(|_| "audio sample count overflowed".to_owned())
+    }
+
+    fn float_to_s16(sample: f32) -> i16 {
+        if !sample.is_finite() {
+            return 0;
+        }
+        let sample = sample.clamp(-1.0, 1.0);
+        (sample * if sample < 0.0 { 32_768.0 } else { 32_767.0 }).round() as i16
+    }
+
     struct AudioPlayback {
         output: DesktopAudioOutput,
         cancellation: CancellationToken,
@@ -1344,6 +1805,7 @@ mod desktop {
                 budgets.clone(),
                 cancellation,
                 error,
+                false,
             ) {
                 set_audio_error(error, &message);
             }
@@ -1385,6 +1847,7 @@ mod desktop {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn mix_audio_window(
         output: &mut [f32],
         clips: &[AudioClip],
@@ -1393,6 +1856,7 @@ mod desktop {
         budgets: RuntimeBudgets,
         cancellation: &CancellationToken,
         error: &Mutex<Option<String>>,
+        fail_on_decode_error: bool,
     ) -> Result<(), String> {
         let block_duration = audio_time_for_frames((output.len() / 2) as u64)
             .map_err(|_| "audio block duration overflowed".to_owned())?;
@@ -1477,6 +1941,9 @@ mod desktop {
                 }
                 set_audio_error(error, &message);
             }
+        }
+        if fail_on_decode_error && let Some(message) = lock(error).clone() {
+            return Err(message);
         }
         Ok(())
     }
@@ -1579,8 +2046,8 @@ mod desktop {
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 mod desktop {
     use super::{PreviewError, PreviewSnapshot};
-    use or_core::RationalTime;
-    use or_ipc::LiveProjectHost;
+    use or_core::{ExportRequest, ExportResponse, ProjectSession, RationalTime};
+    use or_ipc::{ExportRequestHandler, LiveProjectHost};
     use or_runtime::PreviewFrameStep;
 
     pub struct PreviewRuntime;
@@ -1622,6 +2089,19 @@ mod desktop {
         }
         pub fn tick(&self, _host: &LiveProjectHost) -> Result<PreviewSnapshot, PreviewError> {
             Err(Self::unavailable())
+        }
+    }
+
+    impl ExportRequestHandler for PreviewRuntime {
+        fn handle_export_request(
+            &self,
+            _session: &ProjectSession,
+            _request: ExportRequest,
+        ) -> ExportResponse {
+            ExportResponse::failure(
+                "EXPORT_UNAVAILABLE",
+                "software export is currently supported on desktop only",
+            )
         }
     }
 }

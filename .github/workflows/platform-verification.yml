@@ -30,7 +30,9 @@ env:
     --disable-avfilter
     --enable-protocol=file
     --enable-demuxer=matroska
+    --enable-muxer=matroska
     --enable-decoder=ffv1,pcm_s16le
+    --enable-encoder=ffv1,pcm_s16le
 
 jobs:
   rust:
@@ -90,6 +92,12 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
         run: cargo test --locked -p or_media --test software_decode
+
+      - name: Verify fixed-profile software export against linked FFmpeg
+        timeout-minutes: 10
+        env:
+          LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+        run: cargo test --locked -p or_media --test software_export
 
       - name: Verify Phase 7 runtime hardening contracts
         run: |
@@ -279,8 +287,8 @@ jobs:
             echo "Enabled protocols: file"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: none"
-            echo "Enabled muxers: none"
+            echo "Enabled encoders: ffv1, pcm_s16le"
+            echo "Enabled muxers: matroska"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(clang --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -524,8 +532,8 @@ jobs:
             echo "Enabled protocols: file"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: none"
-            echo "Enabled muxers: none"
+            echo "Enabled encoders: ffv1, pcm_s16le"
+            echo "Enabled muxers: matroska"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(cc --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -742,8 +750,8 @@ jobs:
             echo "Enabled protocols: file"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: none"
-            echo "Enabled muxers: none"
+            echo "Enabled encoders: ffv1, pcm_s16le"
+            echo "Enabled muxers: matroska"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Packaging modifications: versionless MSVC import-library aliases are copied for Rust linking; upstream import libraries and DLLs are retained"
             echo "MSVC import library names exposed to Rust: avcodec.lib, avformat.lib, avutil.lib, swresample.lib, swscale.lib"

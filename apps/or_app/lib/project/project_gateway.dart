@@ -142,6 +142,30 @@ class ProjectActionResult {
   final ProjectReadModel? view;
 }
 
+class ProjectExportJob {
+  const ProjectExportJob({
+    required this.succeeded,
+    required this.errorCode,
+    required this.message,
+    required this.jobId,
+    required this.state,
+    this.progressCompleted,
+    this.progressTotal,
+    this.failureMessage,
+  });
+
+  final bool succeeded;
+  final String errorCode;
+  final String message;
+  final String jobId;
+  final String state;
+  final BigInt? progressCompleted;
+  final BigInt? progressTotal;
+  final String? failureMessage;
+
+  bool get isActive => state == 'queued' || state == 'running';
+}
+
 /// Read-only media data returned by the bounded project query.
 class ProjectMediaItem {
   const ProjectMediaItem({
@@ -902,6 +926,22 @@ abstract interface class ProjectGateway {
     String mediaId,
   );
   Future<ProjectActionResult> save(ProjectSessionHandle session);
+  Future<ProjectActionResult> autosaveCheckpoint(ProjectSessionHandle session);
+  Future<ProjectExportJob> startExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String destination,
+  );
+  Future<ProjectExportJob> exportStatus(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  );
+  Future<ProjectExportJob> cancelExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  );
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,

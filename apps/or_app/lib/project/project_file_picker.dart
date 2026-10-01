@@ -7,6 +7,7 @@ abstract interface class ProjectFilePicker {
   Future<String?> openProjectPath();
   Future<String?> openMediaPath();
   Future<String?> saveProjectPath({required String suggestedName});
+  Future<String?> saveExportPath({required String suggestedName});
 }
 
 class FileSelectorProjectPicker implements ProjectFilePicker {
@@ -15,6 +16,10 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   static const _projectType = XTypeGroup(
     label: 'Opencut Reinforced project',
     extensions: ['orproj'],
+  );
+  static const _exportType = XTypeGroup(
+    label: 'Matroska video',
+    extensions: ['mkv'],
   );
 
   @override
@@ -40,6 +45,16 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
     if (!isSupported) return null;
     final location = await getSaveLocation(
       acceptedTypeGroups: [_projectType],
+      suggestedName: suggestedName,
+    );
+    return location?.path;
+  }
+
+  @override
+  Future<String?> saveExportPath({required String suggestedName}) async {
+    if (!isSupported) return null;
+    final location = await getSaveLocation(
+      acceptedTypeGroups: [_exportType],
       suggestedName: suggestedName,
     );
     return location?.path;

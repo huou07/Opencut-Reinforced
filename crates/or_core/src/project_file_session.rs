@@ -2,8 +2,8 @@ use crate::project_storage::create_project_file_new;
 use crate::{
     ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaImportError,
     MediaItem, OperationError, ProjectDocument, ProjectSession, ProjectStorageError,
-    RecoveryInspection, inspect_project_recovery, load_project_file, prepare_media_import,
-    save_project_file_atomic,
+    RecoveryInspection, discard_project_recovery, inspect_project_recovery, load_project_file,
+    prepare_media_import, save_project_file_atomic, write_recovery_checkpoint,
 };
 use serde::Serialize;
 use std::{
@@ -84,6 +84,7 @@ impl ProjectFileSessionErrorCode {
 pub struct ProjectFileSession {
     project_path: PathBuf,
     last_saved_project: ProjectDocument,
+    last_autosaved_project: Option<ProjectDocument>,
     session: ProjectSession,
 }
 
@@ -101,6 +102,7 @@ impl ProjectFileSession {
         Ok(Self {
             project_path,
             last_saved_project: project.clone(),
+            last_autosaved_project: None,
             session: ProjectSession::open(project),
         })
     }
@@ -114,6 +116,7 @@ impl ProjectFileSession {
         Ok(Self {
             project_path,
             last_saved_project: project.clone(),
+            last_autosaved_project: None,
             session: ProjectSession::open(project),
         })
     }
@@ -128,6 +131,54 @@ impl ProjectFileSession {
 
     pub fn is_dirty(&self) -> bool {
         self.session.project() != &self.last_saved_project
+    }
+
+    /// Writes a recovery sidecar for dirty in-memory state without touching the canonical file.
+    /// Returns whether a checkpoint was written.
+    pub fn autosave_checkpoint(&mut self) -> Result<bool, ProjectFileSessionError> {
+        let current_project = self.session.project().clone();
+        let inspection = inspect_project_recovery(&self.project_path)
+            .map_err(|error| recovery_error(&error.to_string()))?;
+
+        if current_project == self.last_saved_project {
+            if let (Some(autosaved), RecoveryInspection::Candidate(candidate)) =
+                (&self.last_autosaved_project, &inspection)
+                && candidate.recovery_project() == autosaved
+            {
+                discard_project_recovery(&self.project_path)
+                    .map_err(|error| recovery_error(&error.to_string()))?;
+            }
+            self.last_autosaved_project = None;
+            return Ok(false);
+        }
+
+        match inspection {
+            RecoveryInspection::None | RecoveryInspection::Stale(_) => {}
+            RecoveryInspection::Candidate(candidate)
+                if candidate.recovery_project() == &current_project
+                    || self.last_autosaved_project.as_ref()
+                        == Some(candidate.recovery_project()) => {}
+            RecoveryInspection::Candidate(_) | RecoveryInspection::Conflict { .. } => {
+                return Err(recovery_error(
+                    "an unrelated recovery checkpoint needs explicit attention",
+                ));
+            }
+        }
+
+        write_recovery_checkpoint(
+            &self.project_path,
+            &self.last_saved_project,
+            &current_project,
+        )
+        .map_err(|error| match error {
+            crate::ProjectRecoveryError::DiskBaseMismatch => ProjectFileSessionError {
+                code: ProjectFileSessionErrorCode::ProjectFileChanged,
+                detail: "the project file no longer matches this session's saved base".to_owned(),
+            },
+            error => recovery_error(&error.to_string()),
+        })?;
+        self.last_autosaved_project = Some(current_project);
+        Ok(true)
     }
 
     /// Dispatches through the same command, query, and transaction paths as ProjectSession.
@@ -163,7 +214,6 @@ impl ProjectFileSession {
 
     /// Saves only if recovery state is safe and the canonical file still equals the saved base.
     pub fn save(&mut self) -> Result<(), ProjectFileSessionError> {
-        check_recovery(&self.project_path)?;
         let current_disk = load_project_file(&self.project_path).map_err(storage_error)?;
         if current_disk != self.last_saved_project {
             return Err(ProjectFileSessionError {
@@ -173,8 +223,21 @@ impl ProjectFileSession {
         }
 
         let current_project = self.session.project();
+        match inspect_project_recovery(&self.project_path)
+            .map_err(|error| recovery_error(&error.to_string()))?
+        {
+            RecoveryInspection::None | RecoveryInspection::Stale(_) => {}
+            RecoveryInspection::Candidate(candidate)
+                if candidate.recovery_project() == current_project => {}
+            RecoveryInspection::Candidate(_) | RecoveryInspection::Conflict { .. } => {
+                return Err(recovery_error(
+                    "a recovery checkpoint needs explicit attention",
+                ));
+            }
+        }
         save_project_file_atomic(&self.project_path, current_project).map_err(storage_error)?;
         self.last_saved_project = current_project.clone();
+        self.last_autosaved_project = None;
         Ok(())
     }
 }
@@ -502,6 +565,104 @@ mod tests {
             ProjectFileSessionErrorCode::ProjectFileChanged
         );
         assert!(session.is_dirty());
+        assert_eq!(load_project_file(path).unwrap(), external);
+    }
+
+    #[test]
+    fn autosave_updates_only_a_recovery_checkpoint_and_preserves_the_canonical_file() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        save_project_file_atomic(&path, &base).unwrap();
+        let canonical_bytes = fs::read(&path).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+
+        session.handle_application_request(rename(session.session(), "B"));
+        assert!(session.autosave_checkpoint().unwrap());
+        assert_eq!(fs::read(&path).unwrap(), canonical_bytes);
+        let first = match inspect_project_recovery(&path).unwrap() {
+            RecoveryInspection::Candidate(candidate) => candidate.recovery_project().clone(),
+            inspection => panic!("expected candidate, got {inspection:?}"),
+        };
+        assert_eq!(first, *session.session().project());
+
+        session.handle_application_request(rename(session.session(), "C"));
+        assert!(session.autosave_checkpoint().unwrap());
+        assert_eq!(fs::read(&path).unwrap(), canonical_bytes);
+        let latest = match inspect_project_recovery(&path).unwrap() {
+            RecoveryInspection::Candidate(candidate) => candidate.recovery_project().clone(),
+            inspection => panic!("expected updated candidate, got {inspection:?}"),
+        };
+        assert_eq!(latest, *session.session().project());
+    }
+
+    #[test]
+    fn explicit_save_promotes_its_autosaved_snapshot_to_the_canonical_project() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        save_project_file_atomic(&path, &base).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "B"));
+        assert!(session.autosave_checkpoint().unwrap());
+
+        session.save().unwrap();
+
+        assert!(!session.is_dirty());
+        assert_eq!(
+            load_project_file(&path).unwrap(),
+            *session.session().project()
+        );
+        assert!(matches!(
+            inspect_project_recovery(&path).unwrap(),
+            RecoveryInspection::Stale(_)
+        ));
+    }
+
+    #[test]
+    fn autosave_preserves_an_unrelated_recovery_candidate() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        let unrelated = document("Recovery from another session", 5);
+        save_project_file_atomic(&path, &base).unwrap();
+        write_recovery_checkpoint(&path, &base, &unrelated).unwrap();
+        let checkpoint_bytes = fs::read(directory.0.join(".sample.orproj.or-recovery")).unwrap();
+        let session = ProjectFileSession::open(&path).unwrap_err();
+        assert_eq!(
+            session.code(),
+            ProjectFileSessionErrorCode::RecoveryRequired
+        );
+        discard_checkpoint_for_test(&path);
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "Local edit"));
+        write_recovery_checkpoint(&path, &base, &unrelated).unwrap();
+
+        assert_eq!(
+            session.autosave_checkpoint().unwrap_err().code(),
+            ProjectFileSessionErrorCode::RecoveryRequired
+        );
+        assert_eq!(
+            fs::read(directory.0.join(".sample.orproj.or-recovery")).unwrap(),
+            checkpoint_bytes
+        );
+    }
+
+    #[test]
+    fn autosave_refuses_to_checkpoint_after_an_exact_disk_base_conflict() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        save_project_file_atomic(&path, &base).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "Local edit"));
+        let external = document("External edit", 4);
+        save_project_file_atomic(&path, &external).unwrap();
+
+        assert_eq!(
+            session.autosave_checkpoint().unwrap_err().code(),
+            ProjectFileSessionErrorCode::ProjectFileChanged
+        );
         assert_eq!(load_project_file(path).unwrap(), external);
     }
 

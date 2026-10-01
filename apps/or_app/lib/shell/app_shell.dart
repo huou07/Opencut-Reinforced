@@ -26,6 +26,7 @@ const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
 const _timelineMarkerPageSize = 100;
 const _maxActiveMediaPreviewRequests = 8;
+const _autosaveInterval = Duration(seconds: 30);
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -51,9 +52,18 @@ class _AppShellState extends State<AppShell> {
   String? _projectNotice;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
+  Timer? _autosaveTimer;
+  Timer? _exportPollTimer;
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
+  bool _autosaveInFlight = false;
+  String? _autosaveStatus;
+  bool _autosaveFailed = false;
+  bool _exportPollInFlight = false;
+  bool _exportFailed = false;
+  ProjectExportJob? _exportJob;
+  String? _exportStatus;
   ProjectMediaPage? _mediaPage;
   final Map<String, ProjectMediaPreview> _mediaPreviews = {};
   final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
@@ -83,6 +93,10 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _autosaveTimer = Timer.periodic(
+      _autosaveInterval,
+      (_) => unawaited(_autosaveProject()),
+    );
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _onExitRequested,
     );
@@ -90,6 +104,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _autosaveTimer?.cancel();
+    _exportPollTimer?.cancel();
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
@@ -166,6 +182,23 @@ class _AppShellState extends State<AppShell> {
                       AppTopBar(
                         title: title,
                         compact: compact,
+                        statusLabel: editor
+                            ? (_exportStatus ?? _autosaveStatus)
+                            : null,
+                        statusIsError: _exportStatus != null
+                            ? _exportFailed
+                            : _autosaveFailed,
+                        onExport:
+                            editor &&
+                                _activeSession != null &&
+                                widget.projectFilePicker.isSupported &&
+                                !(_exportJob?.isActive ?? false)
+                            ? _startExport
+                            : null,
+                        onCancelExport: _exportJob?.isActive == true
+                            ? _cancelExport
+                            : null,
+                        exportIsActive: _exportJob?.isActive ?? false,
                         onHome: () => _select(AppDestination.home),
                         onOpenCommandPalette: _openCommandPalette,
                         onExitEditorPreview: editor
@@ -778,6 +811,12 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (event.kind == 'project_changed' || event.kind == 'project_saved') {
+      if (event.kind == 'project_saved') {
+        setState(() {
+          _autosaveStatus = null;
+          _autosaveFailed = false;
+        });
+      }
       await _refreshProjectState(session);
     }
   }
@@ -866,6 +905,180 @@ class _AppShellState extends State<AppShell> {
     await _runProjectAction(
       (session, _) => widget.projectGateway.save(session),
     );
+  }
+
+  Future<void> _startExport() async {
+    final session = _activeSession;
+    if (session == null || !widget.projectFilePicker.isSupported) return;
+    try {
+      final current = await widget.projectGateway.summary(session);
+      if (!mounted || !identical(session, _activeSession)) return;
+      final suggestedName = _exportSuggestedName(current.name);
+      final destination = await widget.projectFilePicker.saveExportPath(
+        suggestedName: suggestedName,
+      );
+      if (destination == null ||
+          !mounted ||
+          !identical(session, _activeSession)) {
+        return;
+      }
+      final result = await widget.projectGateway.startExport(
+        session,
+        current,
+        destination,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _activeProject = current;
+        _exportJob = result;
+        _exportFailed = !result.succeeded;
+        _exportStatus = _exportJobLabel(result);
+      });
+      if (result.succeeded && result.isActive) {
+        _exportPollTimer?.cancel();
+        _exportPollTimer = Timer.periodic(
+          const Duration(milliseconds: 400),
+          (_) => unawaited(_pollExport()),
+        );
+      }
+    } on ProjectGatewayException catch (error) {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() {
+          _exportStatus = error.message;
+          _exportFailed = true;
+        });
+      }
+    } catch (_) {
+      if (mounted && identical(session, _activeSession)) {
+        setState(() {
+          _exportStatus = 'Export could not start';
+          _exportFailed = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _pollExport() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    final job = _exportJob;
+    if (session == null ||
+        project == null ||
+        job == null ||
+        _exportPollInFlight) {
+      return;
+    }
+    _exportPollInFlight = true;
+    try {
+      final status = await widget.projectGateway.exportStatus(
+        session,
+        project,
+        job.jobId,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _exportJob = status;
+        _exportFailed = !status.succeeded || status.state == 'failed';
+        _exportStatus = _exportJobLabel(status);
+      });
+      if (!status.succeeded || !status.isActive) _exportPollTimer?.cancel();
+    } catch (_) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _exportStatus = 'Export status unavailable';
+        _exportFailed = true;
+      });
+      _exportPollTimer?.cancel();
+    } finally {
+      _exportPollInFlight = false;
+    }
+  }
+
+  Future<void> _cancelExport() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    final job = _exportJob;
+    if (session == null || project == null || job == null || !job.isActive) {
+      return;
+    }
+    try {
+      final result = await widget.projectGateway.cancelExport(
+        session,
+        project,
+        job.jobId,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _exportJob = result;
+        _exportFailed = !result.succeeded;
+        _exportStatus = _exportJobLabel(result);
+      });
+      if (!result.succeeded || !result.isActive) _exportPollTimer?.cancel();
+    } catch (_) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _exportStatus = 'Export cancellation failed';
+        _exportFailed = true;
+      });
+    }
+  }
+
+  static String _exportSuggestedName(String projectName) {
+    final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    return '${base.isEmpty ? 'Untitled' : base}.mkv';
+  }
+
+  static String _exportJobLabel(ProjectExportJob job) {
+    if (!job.succeeded) {
+      return job.message.isEmpty ? 'Export failed' : job.message;
+    }
+    return switch (job.state) {
+      'queued' => 'Export queued',
+      'running' =>
+        job.progressCompleted != null && job.progressTotal != null
+            ? 'Export ${job.progressCompleted}/${job.progressTotal}'
+            : 'Exporting',
+      'succeeded' => 'Export complete',
+      'failed' => job.failureMessage ?? 'Export failed',
+      'cancelled' => 'Export cancelled',
+      _ => job.message,
+    };
+  }
+
+  Future<void> _autosaveProject() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    if (session == null ||
+        project == null ||
+        !project.dirty ||
+        _autosaveInFlight) {
+      return;
+    }
+    _autosaveInFlight = true;
+    if (mounted) {
+      setState(() {
+        _autosaveStatus = 'Autosaving recovery';
+        _autosaveFailed = false;
+      });
+    }
+    try {
+      final result = await widget.projectGateway.autosaveCheckpoint(session);
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _autosaveFailed = !result.succeeded;
+        _autosaveStatus = result.succeeded
+            ? 'Recovery saved'
+            : 'Autosave needs attention';
+      });
+    } catch (_) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      setState(() {
+        _autosaveStatus = 'Autosave needs attention';
+        _autosaveFailed = true;
+      });
+    } finally {
+      _autosaveInFlight = false;
+    }
   }
 
   Future<void> _undoProject() async {
@@ -2199,6 +2412,7 @@ class _AppShellState extends State<AppShell> {
   void _clearActiveProject(ProjectSessionHandle session) {
     if (!identical(session, _activeSession)) return;
     _mediaRefreshGeneration++;
+    _exportPollTimer?.cancel();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
     _mediaPreviewQueue.clear();
@@ -2228,6 +2442,11 @@ class _AppShellState extends State<AppShell> {
       _timelineRefreshGeneration++;
       _activeProjectPath = null;
       _projectNotice = null;
+      _autosaveStatus = null;
+      _autosaveFailed = false;
+      _exportJob = null;
+      _exportStatus = null;
+      _exportFailed = false;
     });
   }
 

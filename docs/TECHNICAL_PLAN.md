@@ -168,13 +168,13 @@ The replacement primitive provides atomic namespace/file replacement on supporte
 
 ### Phase 4E2 snapshot recovery checkpoint
 
-The recovery format is a separate versioned sidecar beside the `.orproj` file. It prefixes the project filename with `.` and appends `.or-recovery` (for example, `/projects/movie.orproj` uses `/projects/.movie.orproj.or-recovery`). Its strict envelope uses format marker `opencut-reinforced-recovery`, schema version 1, and contains two `.orproj` snapshots (v1–v5): the exact saved base at revision N and the newer unsaved recovery snapshot at revision M, where M > N. The recovery file is bounded to 136 MiB; each nested project is decoded and validated by the project codec and remains subject to the 64 MiB project limit. Cross-schema base/recovery combinations are supported and tested. This snapshot checkpoint is the initial pre-MVP representation and may evolve after real scale measurements.
+The recovery format is a separate versioned sidecar beside the `.orproj` file. It prefixes the project filename with `.` and appends `.or-recovery` (for example, `/projects/movie.orproj` uses `/projects/.movie.orproj.or-recovery`). Its strict envelope uses format marker `opencut-reinforced-recovery`, schema version 1, and contains two `.orproj` snapshots (v1–v6): the exact saved base at revision N and the newer unsaved recovery snapshot at revision M, where M > N. The recovery file is bounded to 136 MiB; each nested project is decoded and validated by the project codec and remains subject to the 64 MiB project limit. Cross-schema base/recovery combinations are supported and tested. This snapshot checkpoint is the initial recovery representation and may evolve after real scale measurements.
 
-Writing a checkpoint requires matching `ProjectId` values, a newer recovery revision, and an on-disk canonical `ProjectDocument` exactly equal to the supplied base. The write uses the same same-directory atomic replacement primitive as project saves and does not mutate the canonical project. The recovery envelope remains v1; nested project snapshots can use project schema v1–v5, including persistent markers and the optional sequence rate in v5. Runtime `ProjectInstanceId` and session history are not stored.
+Writing a checkpoint requires matching `ProjectId` values, a newer recovery revision, and an on-disk canonical `ProjectDocument` exactly equal to the supplied base. The write uses the same same-directory atomic replacement primitive as project saves and does not mutate the canonical project. The recovery envelope remains v1; nested project snapshots can use project schema v1–v6, including persistent markers, sequence settings, and typed timeline content. Runtime `ProjectInstanceId` and session history are not stored.
 
 Inspection reads and classifies without changing files or project state. If the canonical project exactly equals base N, the recovery is a candidate. If it equals the recovery snapshot or has the same project ID with a revision newer than M, the checkpoint is stale. A different project lineage or other state that cannot prove the exact base is a conflict; a missing canonical file is an orphaned conflict. Project loading does not inspect or apply recovery automatically, and conflicts never select a winner silently.
 
-Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. This is a snapshot checkpoint foundation, not event sourcing, command replay, persistent history, autosave, or a recovery UI.
+Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. Phase 8F uses this snapshot foundation for periodic autosave and explicit recovery UI; it is not event sourcing, command replay, or persistent history.
 
 ### Phase 4F file-backed session and shared dispatch
 
@@ -184,7 +184,7 @@ Applying is explicit and re-inspects the current canonical file before saving. I
 
 ### Project revisions
 
-`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; the v1–v5 codecs preserve the stored revision during encode/decode. A changed rename, media add/remove, marker edit, sequence-rate edit, or transaction increments once; an exact no-op, failed operation, net-no-op transaction, and read-only query leave the revision unchanged. Undo and redo restore content through new canonical mutations, so they increment from the current revision rather than moving it backward. Migration from v1–v4 to v5 during explicit save does not increment revision. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
+`ProjectRevision` is a persistent canonical project-state value backed by an unsigned 64-bit integer. Phase 4A implements its initial value, zero, and checked increment; the v1–v6 codecs preserve the stored revision during encode/decode. A changed rename, media add/remove, marker edit, sequence-rate edit, or transaction increments once; an exact no-op, failed operation, net-no-op transaction, and read-only query leave the revision unchanged. Undo and redo restore content through new canonical mutations, so they increment from the current revision rather than moving it backward. Schema migration during explicit save does not increment revision. Project ID and revision survive save/reopen; each fresh runtime open receives a new ephemeral `ProjectInstanceId`, which is excluded from the project document.
 
 `CommandEnvelope` v1 uses `ProjectId` + `ProjectInstanceId` + `expected_project_revision` as live mutation preconditions. This distinguishes a stale client attached to a previous runtime session even when the same project reopens at the same revision. Revision overflow is checked and reported without mutation; it must never wrap. Restoring older snapshot content through OR is a new mutation: at current revision 100, restoring content captured at revision 20 results in revision 101, not 20.
 
@@ -331,9 +331,9 @@ or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]
 
 Headless commands and queries use `ProjectFileSession` and the shared application path. A real headless mutation saves through exact-base checked atomic persistence; a no-op does not rewrite the file. Timeline commands do not edit project JSON in the CLI. `--id` is optional for add-track and clip insertion; omitted IDs are generated as UUIDv4 before command construction and returned in success output, while supplied IDs must be canonical lowercase UUIDv4. Timeline track and clip queries return the typed schema-v2 read models. Rational input is exact `NUM/DEN` (`i64` numerator and positive `u32` denominator); decimal seconds, timecode, and frame shortcuts are rejected. Recovery status reports `none`, `candidate`, `stale`, or `conflict`; apply and discard call the existing recovery APIs. Unresolved candidate/conflict/invalid recovery blocks mutable file-session opening.
 
-Attached summary, rename, timeline commands/queries, undo/redo, save, describe, and shutdown require an explicit descriptor via `--attach`; there is no endpoint scanning. Mutations use the same application envelope and revision preconditions as headless operations, do not retry stale commands, and leave the shared live session dirty until explicit `project save`. Undo/redo require attachment because history is session-local and not persisted. `session serve` remains a developer/headless host; the Flutter application can also host a session and exposes its descriptor under Settings → Advanced / Developer. Neither host autosaves.
+Attached summary, rename, timeline commands/queries, undo/redo, save, describe, and shutdown require an explicit descriptor via `--attach`; there is no endpoint scanning. Mutations use the same application envelope and revision preconditions as headless operations, do not retry stale commands, and leave the shared live session dirty until explicit `project save`. Undo/redo require attachment because history is session-local and not persisted. `session serve` remains a developer/headless host; the Flutter application can also host a session and exposes its descriptor under Settings → Advanced / Developer. The Flutter shell schedules recovery-checkpoint autosave; the headless CLI server has no periodic scheduler.
 
-Media list is available against either a project file (`--project`) or attached descriptor (`--attach`); pagination defaults to the maximum 100-item page. Media add takes a source path. Headless add/remove open `ProjectFileSession`, execute the actual command, and safely save. Attached add first describes the live host, prepares/probes the source locally, then sends a normal `media.add` command with the captured revision; a concurrent edit returns `REVISION_CONFLICT` without retry. Attached remove uses the same semantic command path. IPC does not gain arbitrary filesystem access. `or media probe` remains read-only.
+Media list is available against either a project file (`--project`) or attached descriptor (`--attach`); pagination defaults to the maximum 100-item page. Media add takes a source path. Headless add/remove open `ProjectFileSession`, execute the actual command, and safely save. Attached add first describes the live host, prepares/probes the source locally, then sends a normal `media.add` command with the captured revision; a concurrent edit returns `REVISION_CONFLICT` without retry. Attached remove uses the same semantic command path. IPC does not expose arbitrary file reads; the typed export request writes only its validated destination. `or media probe` remains read-only.
 
 JSON success responses use the core result or descriptor structures; JSON errors use stable categories and codes. Exit codes are 0 for success, 2 for usage, 3 for application operation errors, 4 for project storage/recovery/session errors, and 5 for IPC errors. Filesystem paths remain OS paths; project names must be UTF-8. No command accepts shell instructions; IPC does not expose arbitrary file reads or writes, and CLI file operations are limited to the documented project and recovery commands.
 
@@ -341,9 +341,9 @@ Dry-run, long-running job progress, and agent EditPlans remain future work. Do n
 
 ## 8. Local IPC
 
-Phase 4F implements `or_ipc` protocol v1 for application/control requests only. Frames contain a four-byte big-endian length and strict JSON body, bounded to 1 MiB. Each request uses a UUIDv4 ID echoed by the response; one request is processed per connection. Supported requests are `Describe`, shared `ApplicationRequest`, `Save`, and guarded `Shutdown`. The descriptor is strict and versioned and contains the endpoint, project/runtime IDs, and a random per-server token. Authentication and protocol checks happen before project disclosure or dispatch.
+Phase 4F implements `or_ipc` protocol v1 for application/control requests. Frames contain a four-byte big-endian length and strict JSON body, bounded to 1 MiB. Each request uses a UUIDv4 ID echoed by the response; one request is processed per connection. Supported requests are `Describe`, shared `ApplicationRequest` (including the Phase 8F export job request/status/cancel contract), `Save`, and guarded `Shutdown`. The descriptor is strict and versioned and contains the endpoint, project/runtime IDs, and a random per-server token. Authentication and protocol checks happen before project disclosure or dispatch.
 
-macOS/Linux use Unix-domain sockets in a server-created private runtime directory, with 0700 directory and 0600 socket/descriptor permissions. Sandboxed macOS builds place this directory in the app-provided temporary directory and include the local server entitlement; the app code creates no TCP listener. Windows uses a named pipe configured to reject remote clients; its runtime directory, descriptor file, and pipe have protected owner-only DACLs. There is no TCP, HTTP, WebSocket, LAN listener, or fallback. The token is not printed or logged; descriptor access is the client credential. This is a same-user local automation boundary, not isolation from malicious processes running as the same OS user. `LiveProjectHost` owns one `ProjectFileSession`, serializes direct bridge and IPC requests through the same control-plane state, and exposes no arbitrary path or shell operation. The Flutter application and developer/headless `or session serve` command can each host one live project. Neither autosaves.
+macOS/Linux use Unix-domain sockets in a server-created private runtime directory, with 0700 directory and 0600 socket/descriptor permissions. Sandboxed macOS builds place this directory in the app-provided temporary directory and include the local server entitlement; the app code creates no TCP listener. Windows uses a named pipe configured to reject remote clients; its runtime directory, descriptor file, and pipe have protected owner-only DACLs. There is no TCP, HTTP, WebSocket, LAN listener, or fallback. The token is not printed or logged; descriptor access is the client credential. This is a same-user local automation boundary, not isolation from malicious processes running as the same OS user. `LiveProjectHost` owns one `ProjectFileSession`, serializes direct bridge and IPC requests through the same control-plane state, and does not expose arbitrary file reads or shell execution. Export validates an absolute caller-supplied `.mkv` destination and does not read arbitrary files or execute shell commands. The Flutter shell schedules sidecar autosave; the headless `or session serve` command has no periodic scheduler.
 
 Timeout/cancellation, subscriptions, multiple simultaneous sessions, and remote clients are not part of protocol v1.
 
@@ -765,15 +765,27 @@ Native and OpenFX compatibility is later and has a higher trust cost. Do not tre
 
 ## 19. Export and interchange
 
-Export uses the same timeline and render evaluation as preview and runs as a
-background job with progress and cancellation. Phase 8F's mandatory software
-correctness profile is Matroska with FFV1 video and PCM S16LE audio through
-linked FFmpeg. 8F enables only the extra mux/encode components this profile
-needs. H.264, H.265/HEVC, AV1, VP9, NVENC, VideoToolbox, MediaCodec, and other
-delivery or hardware paths are optional and do not gate Desktop MVP. Export
-does not mutate canonical project state. Periodic autosave writes the approved
-recovery checkpoint; explicit Save remains the canonical project-file action,
-and autosave never silently overwrites that file.
+Desktop export captures one project revision through the shared application
+request and queues bounded background work with monotonic frame progress and
+cancellation. It evaluates exact sequence frame times through the same timeline
+loader, renderer, text rasterizer, transform/crop/opacity, and visual effect and
+transition path as preview; audio reuses the bounded timeline mixer and the
+typed gain, pan, and fade processor. Video uses Matroska + FFV1; audio is stereo
+48 kHz PCM S16LE. The selected destination must be an absolute `.mkv` path.
+Output is encoded inside a unique sibling staging directory (owner-only on
+Unix) and published only after both streams and the trailer finish. Cancellation,
+offline media, and encode failures clean staging output, preserve an existing
+destination, and leave a new destination absent.
+Export does not mutate canonical project state or increment its revision.
+This checkpoint enables only the muxer and encoders required by this profile.
+H.264, H.265/HEVC, AV1, VP9, NVENC, VideoToolbox, MediaCodec, and other delivery
+or hardware paths are optional and do not gate Desktop MVP.
+
+The Flutter shell submits a recovery-checkpoint autosave every 30 seconds while
+the project is dirty. The Rust file session validates the exact saved base and
+updates only the bounded recovery sidecar. Explicit Save remains the canonical
+project-file action, and autosave never silently overwrites that file. Recovery
+inspection, apply, and discard remain explicit user actions.
 
 The native OR format is not OpenTimelineIO. Phase 16E uses a bounded OTIO JSON
 adapter implemented directly in Rust/serde against a documented subset; it

@@ -207,6 +207,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectBridgeError dco_decode_project_bridge_error(dynamic raw);
 
   @protected
+  ProjectExportJobView dco_decode_project_export_job_view(dynamic raw);
+
+  @protected
   ProjectHostEventView dco_decode_project_host_event_view(dynamic raw);
 
   @protected
@@ -550,6 +553,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectBridgeError sse_decode_project_bridge_error(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectExportJobView sse_decode_project_export_job_view(
     SseDeserializer deserializer,
   );
 
@@ -967,6 +975,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_bridge_error(
     ProjectBridgeError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_export_job_view(
+    ProjectExportJobView self,
     SseSerializer serializer,
   );
 

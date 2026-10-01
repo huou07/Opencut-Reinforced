@@ -1,8 +1,17 @@
 use crate::{IpcProtocolError, LocalIpcServer};
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ProjectFileSession, ProjectFileSessionError,
-    ProjectRevision, QueryEnvelope, QueryResult,
+    ApplicationRequest, ApplicationResponse, ExportRequest, ExportResponse, ProjectFileSession,
+    ProjectFileSessionError, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
 };
+
+/// Runtime extension for application operations that need desktop media services.
+pub trait ExportRequestHandler: Send + Sync {
+    fn handle_export_request(
+        &self,
+        session: &ProjectSession,
+        request: ExportRequest,
+    ) -> ExportResponse;
+}
 use std::{
     error::Error,
     fmt,
@@ -82,7 +91,24 @@ impl LiveProjectHost {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, LiveProjectHostError> {
-        let shared = shared_host_state(session);
+        Self::start_with_handler(session, descriptor_path, None)
+    }
+
+    /// Starts IPC with one shared export handler for direct and remote requests.
+    pub fn start_with_export_handler(
+        session: ProjectFileSession,
+        descriptor_path: Option<&Path>,
+        handler: Arc<dyn ExportRequestHandler>,
+    ) -> Result<Self, LiveProjectHostError> {
+        Self::start_with_handler(session, descriptor_path, Some(handler))
+    }
+
+    fn start_with_handler(
+        session: ProjectFileSession,
+        descriptor_path: Option<&Path>,
+        handler: Option<Arc<dyn ExportRequestHandler>>,
+    ) -> Result<Self, LiveProjectHostError> {
+        let shared = shared_host_state(session, handler);
         let server = LocalIpcServer::start_shared(Arc::clone(&shared), descriptor_path)?;
         Ok(Self {
             shared,
@@ -113,7 +139,7 @@ impl LiveProjectHost {
     ) -> Result<ApplicationResponse, LiveProjectHostError> {
         let mut state = self.lock_open()?;
         let before = state.session.session().project_revision();
-        let response = state.session.handle_application_request(request);
+        let response = state.handle_application_request(request);
         let after = state.session.session().project_revision();
         if after != before {
             state.publish(ProjectHostEventKind::ProjectChanged);
@@ -127,6 +153,14 @@ impl LiveProjectHost {
         let revision = state.session.session().project_revision();
         state.publish(ProjectHostEventKind::ProjectSaved);
         Ok(revision)
+    }
+
+    /// Periodically checkpoints dirty state to the recovery sidecar.
+    pub fn autosave_checkpoint(&self) -> Result<bool, LiveProjectHostError> {
+        self.lock_open()?
+            .session
+            .autosave_checkpoint()
+            .map_err(Into::into)
     }
 
     pub fn is_dirty(&self) -> Result<bool, LiveProjectHostError> {
@@ -182,12 +216,34 @@ impl LiveProjectHost {
 
 pub(crate) struct LiveProjectHostState {
     pub(crate) session: ProjectFileSession,
+    export_handler: Option<Arc<dyn ExportRequestHandler>>,
     pub(crate) closing: bool,
     sequence: u64,
     subscribers: Vec<mpsc::Sender<ProjectHostEvent>>,
 }
 
 impl LiveProjectHostState {
+    pub(crate) fn handle_application_request(
+        &mut self,
+        request: ApplicationRequest,
+    ) -> ApplicationResponse {
+        match request {
+            ApplicationRequest::Export(export_request) => {
+                if let Some(handler) = &self.export_handler {
+                    ApplicationResponse::Export(
+                        handler.handle_export_request(self.session.session(), export_request),
+                    )
+                } else {
+                    ApplicationResponse::Export(ExportResponse::failure(
+                        "EXPORT_RUNTIME_UNAVAILABLE",
+                        "the project host has no export runtime",
+                    ))
+                }
+            }
+            request => self.session.handle_application_request(request),
+        }
+    }
+
     pub(crate) fn publish(&mut self, kind: ProjectHostEventKind) {
         let Some(sequence) = self.sequence.checked_add(1) else {
             return;
@@ -208,9 +264,13 @@ impl LiveProjectHostState {
     }
 }
 
-pub(crate) fn shared_host_state(session: ProjectFileSession) -> Arc<Mutex<LiveProjectHostState>> {
+pub(crate) fn shared_host_state(
+    session: ProjectFileSession,
+    export_handler: Option<Arc<dyn ExportRequestHandler>>,
+) -> Arc<Mutex<LiveProjectHostState>> {
     Arc::new(Mutex::new(LiveProjectHostState {
         session,
+        export_handler,
         closing: false,
         sequence: 0,
         subscribers: Vec::new(),

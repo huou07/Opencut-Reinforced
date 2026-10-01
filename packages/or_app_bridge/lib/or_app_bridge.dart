@@ -13,6 +13,7 @@ export 'src/rust/api/project.dart'
         PreviewFrameStepView,
         ProjectHostEventView,
         ProjectHostHandle,
+        ProjectExportJobView,
         ProjectPreviewStateView,
         ProjectTimelineClipPageView,
         ProjectTimelineClipView,

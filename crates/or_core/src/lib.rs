@@ -17,14 +17,14 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, LegacyTimelineClipState,
-    MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage,
-    OperationError, OperationErrorCode, ProjectChange, ProjectSession, ProjectSummary,
-    QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage, TimelineClipPageV2,
-    TimelineClipState, TimelineMarkerPage, TimelineMarkerState, TimelineSequenceSettings,
-    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
-    TimelineTrackSummary, TimelineTrackSummaryV2, TimelineTrimEdge, TransactionEnvelope,
-    TransactionResult, command_catalog, query_catalog,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportRequest, ExportResponse,
+    LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
+    MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode,
+    ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult,
+    TimelineClipPage, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
+    TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
+    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrackSummaryV2,
+    TimelineTrimEdge, TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
@@ -33,7 +33,7 @@ pub use cache::{
 };
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
-    JobManagerConfig, JobManagerConfigError, JobSnapshot, JobState, JobSubmitError,
+    JobManagerConfig, JobManagerConfigError, JobProgress, JobSnapshot, JobState, JobSubmitError,
 };
 pub use media::{
     AudioStreamMetadata, MAX_MEDIA_CHANNEL_LAYOUT_BYTES, MAX_MEDIA_CODEC_NAME_BYTES,

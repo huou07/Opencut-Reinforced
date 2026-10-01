@@ -4,11 +4,12 @@ use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
     CacheStoreConfig, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, EffectReference,
-    FontIdentity, JobManagerConfig, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
-    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
-    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, Opacity, OperationError,
-    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
+    ExportRequest, ExportResponse, FontIdentity, JobId, JobManagerConfig, JobSnapshot, JobState,
+    MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
+    MediaArtifactRequestState, MediaArtifactService, MediaArtifactServiceConfig, MediaId,
+    MediaItem, MediaStreamMetadata, Opacity, OperationError, OperationErrorCode,
+    ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError, ProjectRevision,
+    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
     TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
     TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
@@ -17,11 +18,14 @@ use or_core::{
     apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
     inspect_project_recovery, prepare_media_import,
 };
-use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
+use or_ipc::{
+    ExportRequestHandler, LiveProjectHost, LiveProjectHostError, ProjectHostEvent,
+    ProjectHostEventKind,
+};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
-    sync::mpsc,
+    sync::{Arc, mpsc},
     thread,
 };
 
@@ -41,6 +45,18 @@ pub struct ProjectActionResult {
     pub error_code: String,
     pub message: String,
     pub view: Option<ProjectView>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectExportJobView {
+    pub succeeded: bool,
+    pub error_code: String,
+    pub message: String,
+    pub job_id: String,
+    pub state: String,
+    pub progress_completed: Option<u64>,
+    pub progress_total: Option<u64>,
+    pub failure_message: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -409,7 +425,7 @@ impl std::error::Error for ProjectBridgeError {}
 pub struct ProjectHostHandle {
     host: LiveProjectHost,
     media_artifact_service: Option<MediaArtifactService>,
-    preview_runtime: PreviewRuntime,
+    preview_runtime: Arc<PreviewRuntime>,
 }
 
 pub fn create_project(path: String, name: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
@@ -426,11 +442,14 @@ pub fn open_project(path: String) -> Result<ProjectHostHandle, ProjectBridgeErro
 fn start_project_host(
     session: ProjectFileSession,
 ) -> Result<ProjectHostHandle, ProjectBridgeError> {
-    let host = LiveProjectHost::start(session, None).map_err(host_error)?;
+    let preview_runtime = Arc::new(PreviewRuntime::new());
+    let export_handler: Arc<dyn ExportRequestHandler> = preview_runtime.clone();
+    let host = LiveProjectHost::start_with_export_handler(session, None, export_handler)
+        .map_err(host_error)?;
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
-        preview_runtime: PreviewRuntime::new(),
+        preview_runtime,
     })
 }
 
@@ -1843,6 +1862,123 @@ impl ProjectHostHandle {
         }
     }
 
+    pub fn autosave_checkpoint(&self) -> ProjectActionResult {
+        match self.host.autosave_checkpoint() {
+            Ok(written) => ProjectActionResult {
+                succeeded: true,
+                error_code: String::new(),
+                message: if written {
+                    "Recovery checkpoint updated.".to_owned()
+                } else {
+                    "No unsaved recovery update was needed.".to_owned()
+                },
+                view: None,
+            },
+            Err(error) => action_error(host_error(error)),
+        }
+    }
+
+    pub fn start_export(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        destination: String,
+    ) -> ProjectExportJobView {
+        let (project_id, project_instance_id, expected_project_revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => {
+                    return export_job_view(ExportResponse::failure(error.code, error.message));
+                }
+            };
+        self.handle_export_application_request(ExportRequest::Start {
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            destination,
+        })
+    }
+
+    pub fn export_status(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        job_id: String,
+    ) -> ProjectExportJobView {
+        let (project_id, project_instance_id) =
+            match parse_export_identity(&project_id, &project_instance_id) {
+                Ok(identity) => identity,
+                Err(error) => {
+                    return export_job_view(ExportResponse::failure(error.code, error.message));
+                }
+            };
+        let job_id = match JobId::from_str(&job_id) {
+            Ok(job_id) => job_id,
+            Err(error) => {
+                return export_job_view(ExportResponse::failure(
+                    "INVALID_EXPORT_JOB_ID",
+                    error.to_string(),
+                ));
+            }
+        };
+        self.handle_export_application_request(ExportRequest::Status {
+            project_id,
+            project_instance_id,
+            job_id,
+        })
+    }
+
+    pub fn cancel_export(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        job_id: String,
+    ) -> ProjectExportJobView {
+        let (project_id, project_instance_id) =
+            match parse_export_identity(&project_id, &project_instance_id) {
+                Ok(identity) => identity,
+                Err(error) => {
+                    return export_job_view(ExportResponse::failure(error.code, error.message));
+                }
+            };
+        let job_id = match JobId::from_str(&job_id) {
+            Ok(job_id) => job_id,
+            Err(error) => {
+                return export_job_view(ExportResponse::failure(
+                    "INVALID_EXPORT_JOB_ID",
+                    error.to_string(),
+                ));
+            }
+        };
+        self.handle_export_application_request(ExportRequest::Cancel {
+            project_id,
+            project_instance_id,
+            job_id,
+        })
+    }
+
+    fn handle_export_application_request(&self, request: ExportRequest) -> ProjectExportJobView {
+        match self
+            .host
+            .handle_application_request(ApplicationRequest::Export(request))
+        {
+            Ok(ApplicationResponse::Export(response)) => export_job_view(response),
+            Ok(ApplicationResponse::Error(error)) => export_job_view(ExportResponse::failure(
+                "EXPORT_REQUEST_FAILED",
+                error.to_string(),
+            )),
+            Ok(_) => export_job_view(ExportResponse::failure(
+                "UNEXPECTED_EXPORT_RESPONSE",
+                "project host returned an unexpected export response",
+            )),
+            Err(error) => export_job_view(ExportResponse::failure(
+                "EXPORT_HOST_UNAVAILABLE",
+                error.to_string(),
+            )),
+        }
+    }
+
     pub fn close(&mut self, discard_unsaved: bool) -> ProjectActionResult {
         match self.host.shutdown(discard_unsaved) {
             Ok(()) => {
@@ -2287,6 +2423,51 @@ fn preview_state_view(snapshot: PreviewSnapshot) -> ProjectPreviewStateView {
         height: snapshot.height,
         error_code: snapshot.error_code,
         error_message: snapshot.error_message,
+    }
+}
+
+fn parse_export_identity(
+    project_id: &str,
+    project_instance_id: &str,
+) -> Result<(ProjectId, ProjectInstanceId), ProjectBridgeError> {
+    let project_id = ProjectId::from_str(project_id).map_err(|error| ProjectBridgeError {
+        code: "INVALID_PROJECT_ID".to_owned(),
+        message: error.to_string(),
+    })?;
+    let project_instance_id =
+        ProjectInstanceId::from_str(project_instance_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_PROJECT_INSTANCE_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+    Ok((project_id, project_instance_id))
+}
+
+fn export_job_view(response: ExportResponse) -> ProjectExportJobView {
+    let job = response.job;
+    ProjectExportJobView {
+        succeeded: response.succeeded,
+        error_code: response.error_code,
+        message: response.message,
+        job_id: job
+            .as_ref()
+            .map_or_else(String::new, |job| job.id.to_string()),
+        state: job.as_ref().map_or_else(String::new, |job| {
+            match job.state {
+                JobState::Queued => "queued",
+                JobState::Running => "running",
+                JobState::Succeeded => "succeeded",
+                JobState::Failed => "failed",
+                JobState::Cancelled => "cancelled",
+            }
+            .to_owned()
+        }),
+        progress_completed: job
+            .as_ref()
+            .and_then(|job: &JobSnapshot| job.progress.map(|progress| progress.completed)),
+        progress_total: job
+            .as_ref()
+            .and_then(|job: &JobSnapshot| job.progress.map(|progress| progress.total)),
+        failure_message: job.and_then(|job| job.failure_message),
     }
 }
 

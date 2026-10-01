@@ -901,6 +901,51 @@ class RustProjectGateway implements ProjectGateway {
       _action(await _host(session).save());
 
   @override
+  Future<ProjectActionResult> autosaveCheckpoint(
+    ProjectSessionHandle session,
+  ) async => _action(await _host(session).autosaveCheckpoint());
+
+  @override
+  Future<ProjectExportJob> startExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String destination,
+  ) async => _exportJob(
+    await _host(session).startExport(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      destination: destination,
+    ),
+  );
+
+  @override
+  Future<ProjectExportJob> exportStatus(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  ) async => _exportJob(
+    await _host(session).exportStatus(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      jobId: jobId,
+    ),
+  );
+
+  @override
+  Future<ProjectExportJob> cancelExport(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String jobId,
+  ) async => _exportJob(
+    await _host(session).cancelExport(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      jobId: jobId,
+    ),
+  );
+
+  @override
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,
@@ -972,6 +1017,18 @@ class RustProjectGateway implements ProjectGateway {
         errorCode: result.errorCode,
         message: result.message,
         view: result.view == null ? null : _readModel(result.view!),
+      );
+
+  static ProjectExportJob _exportJob(rust.ProjectExportJobView value) =>
+      ProjectExportJob(
+        succeeded: value.succeeded,
+        errorCode: value.errorCode,
+        message: value.message,
+        jobId: value.jobId,
+        state: value.state,
+        progressCompleted: value.progressCompleted,
+        progressTotal: value.progressTotal,
+        failureMessage: value.failureMessage,
       );
 
   static ProjectRecoveryActionResult _recoveryAction(

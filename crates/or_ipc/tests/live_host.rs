@@ -1,14 +1,21 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
+    ExportRequest, ExportResponse, JobId, JobKind, JobProgress, JobSnapshot, JobState,
     OperationErrorCode, ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult,
     RationalRate, TextFormatting, TrackId, TrackKind, VisualSettings,
 };
 use or_ipc::{
-    ApplicationSuccess, IpcProtocolError, LiveProjectHost, LocalIpcClient,
+    ApplicationSuccess, ExportRequestHandler, IpcProtocolError, LiveProjectHost, LocalIpcClient,
     OR_LOCAL_IPC_PROTOCOL_VERSION, ProjectHostEventKind,
 };
 use serde_json::json;
-use std::{fs, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use uuid::Uuid;
 
 struct TestDirectory(PathBuf);
@@ -64,6 +71,101 @@ fn summary(client: &LocalIpcClient) -> QueryResult {
         ApplicationSuccess::Query(summary) => summary,
         _ => panic!("expected project.summary query"),
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn export_job_requests_share_the_live_application_and_ipc_route_without_mutation() {
+    #[derive(Default)]
+    struct RecordingExportHandler(Mutex<Vec<ExportRequest>>);
+
+    impl ExportRequestHandler for RecordingExportHandler {
+        fn handle_export_request(
+            &self,
+            _session: &or_core::ProjectSession,
+            request: ExportRequest,
+        ) -> ExportResponse {
+            self.0.lock().unwrap().push(request);
+            ExportResponse::success(
+                "Export status.",
+                JobSnapshot {
+                    id: JobId::generate(),
+                    kind: JobKind::Export,
+                    state: JobState::Running,
+                    sequence: 0,
+                    progress: Some(JobProgress {
+                        completed: 3,
+                        total: 9,
+                    }),
+                    failure_message: None,
+                },
+            )
+        }
+    }
+
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    let session = ProjectFileSession::create_new(&project_path, "Export").unwrap();
+    let handler = Arc::new(RecordingExportHandler::default());
+    let mut host = LiveProjectHost::start_with_export_handler(
+        session,
+        Some(&descriptor_path),
+        handler.clone(),
+    )
+    .unwrap();
+    let client = LocalIpcClient::open(&descriptor_path).unwrap();
+    let initial = host.describe().unwrap();
+    let job_id = JobId::generate();
+    let start = ExportRequest::Start {
+        project_id: initial.summary.project_id,
+        project_instance_id: initial.summary.project_instance_id,
+        expected_project_revision: initial.summary.project_revision,
+        destination: directory
+            .0
+            .join("output.mkv")
+            .to_string_lossy()
+            .into_owned(),
+    };
+
+    let ApplicationResponse::Export(started) = host
+        .handle_application_request(ApplicationRequest::Export(start.clone()))
+        .unwrap()
+    else {
+        panic!("expected the direct export response");
+    };
+    assert!(started.succeeded);
+    assert_eq!(started.job.unwrap().progress.unwrap().completed, 3);
+
+    let status = ExportRequest::Status {
+        project_id: initial.summary.project_id,
+        project_instance_id: initial.summary.project_instance_id,
+        job_id,
+    };
+    let cancel = ExportRequest::Cancel {
+        project_id: initial.summary.project_id,
+        project_instance_id: initial.summary.project_instance_id,
+        job_id,
+    };
+    for request in [status.clone(), cancel.clone()] {
+        assert!(matches!(
+            client
+                .application(ApplicationRequest::Export(request))
+                .unwrap(),
+            ApplicationSuccess::Export(response) if response.succeeded
+        ));
+    }
+
+    assert_eq!(
+        handler.0.lock().unwrap().as_slice(),
+        &[start, status, cancel]
+    );
+    assert_eq!(
+        host.describe().unwrap().summary.project_revision,
+        ProjectRevision::new(0)
+    );
+    assert!(!host.is_dirty().unwrap());
+    host.shutdown(false).unwrap();
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]

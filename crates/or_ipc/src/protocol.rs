@@ -1,6 +1,6 @@
 use or_core::{
-    ApplicationRequest, CommandResult, OperationError, ProjectId, ProjectInstanceId,
-    ProjectRevision, QueryResult, TransactionResult,
+    ApplicationRequest, CommandResult, ExportResponse, OperationError, ProjectId,
+    ProjectInstanceId, ProjectRevision, QueryResult, TransactionResult,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt, io};
@@ -155,6 +155,7 @@ pub enum ApplicationSuccess {
     Command(CommandResult),
     Query(QueryResult),
     Transaction(TransactionResult),
+    Export(ExportResponse),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

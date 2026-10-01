@@ -1,4 +1,5 @@
 use super::{JobId, JobKind, JobState};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
     error::Error,
@@ -61,13 +62,21 @@ impl fmt::Display for JobManagerConfigError {
 
 impl Error for JobManagerConfigError {}
 
-/// Failure returned by a job body. Carries no payload into manager state.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct JobFailure;
+/// Failure returned by a job body with a bounded public diagnostic.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct JobFailure {
+    message: Option<String>,
+}
 
 impl JobFailure {
     pub const fn new() -> Self {
-        Self
+        Self { message: None }
+    }
+
+    pub fn with_message(message: impl Into<String>) -> Self {
+        Self {
+            message: Some(message.into()),
+        }
     }
 }
 
@@ -75,6 +84,7 @@ impl JobFailure {
 #[derive(Clone)]
 pub struct JobContext {
     cancelled: Arc<std::sync::atomic::AtomicBool>,
+    progress: Arc<Mutex<Option<JobProgress>>>,
 }
 
 impl JobContext {
@@ -82,15 +92,44 @@ impl JobContext {
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    /// Reports bounded monotonic work progress when a total is known.
+    pub fn report_progress(&self, completed: u64, total: u64) {
+        if total == 0 {
+            return;
+        }
+        let progress = JobProgress {
+            completed: completed.min(total),
+            total,
+        };
+        let mut current = self
+            .progress
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if current.is_none_or(|previous| {
+            previous.total != progress.total || progress.completed >= previous.completed
+        }) {
+            *current = Some(progress);
+        }
+    }
+}
+
+/// Exact completed and total work units for a bounded background job.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct JobProgress {
+    pub completed: u64,
+    pub total: u64,
 }
 
 /// Read-only snapshot of one tracked job.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct JobSnapshot {
     pub id: JobId,
     pub kind: JobKind,
     pub state: JobState,
     pub sequence: u64,
+    pub progress: Option<JobProgress>,
+    pub failure_message: Option<String>,
 }
 
 /// Non-blocking submission failure.
@@ -129,6 +168,8 @@ struct JobRecord {
     state: JobState,
     sequence: u64,
     cancel: Arc<std::sync::atomic::AtomicBool>,
+    progress: Arc<Mutex<Option<JobProgress>>>,
+    failure_message: Option<String>,
 }
 
 #[derive(Default)]
@@ -207,6 +248,7 @@ impl JobManager {
     {
         let id = JobId::generate();
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let progress = Arc::new(Mutex::new(None));
         let config = self.shared.config;
 
         let mut state = lock(&self.shared);
@@ -233,6 +275,8 @@ impl JobManager {
                 state: JobState::Queued,
                 sequence,
                 cancel,
+                progress,
+                failure_message: None,
             },
         );
         state.tasks.insert(id, Box::new(body));
@@ -253,6 +297,11 @@ impl JobManager {
             kind: record.kind,
             state: record.state,
             sequence: record.sequence,
+            progress: *record
+                .progress
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            failure_message: record.failure_message.clone(),
         })
     }
 
@@ -370,35 +419,40 @@ fn worker_loop(shared: Arc<Shared>) {
             let Some(id) = state.pending.pop_front() else {
                 continue;
             };
-            let Some(record) = state.records.get_mut(&id) else {
-                continue;
+            let (cancel, progress) = {
+                let Some(record) = state.records.get_mut(&id) else {
+                    continue;
+                };
+                if record.state != JobState::Queued {
+                    continue;
+                }
+                record.state = JobState::Running;
+                (Arc::clone(&record.cancel), Arc::clone(&record.progress))
             };
-            if record.state != JobState::Queued {
-                continue;
-            }
-            record.state = JobState::Running;
-            let cancel = Arc::clone(&record.cancel);
             let body = state.tasks.remove(&id);
-            body.map(|body| (id, cancel, body))
+            body.map(|body| (id, cancel, progress, body))
         };
 
-        let Some((id, cancel, body)) = work else {
+        let Some((id, cancel, progress, body)) = work else {
             continue;
         };
         let context = JobContext {
             cancelled: Arc::clone(&cancel),
+            progress,
         };
         let outcome = catch_unwind(AssertUnwindSafe(|| body(&context)));
         let was_cancelled = cancel.load(std::sync::atomic::Ordering::SeqCst);
-        let final_state = match (outcome, was_cancelled) {
-            (_, true) => JobState::Cancelled,
-            (Ok(Ok(())), false) => JobState::Succeeded,
-            (Ok(Err(_)) | Err(_), false) => JobState::Failed,
+        let (final_state, failure_message) = match (outcome, was_cancelled) {
+            (_, true) => (JobState::Cancelled, None),
+            (Ok(Ok(())), false) => (JobState::Succeeded, None),
+            (Ok(Err(failure)), false) => (JobState::Failed, failure.message),
+            (Err(_), false) => (JobState::Failed, Some("job worker panicked".to_owned())),
         };
         let completion = {
             let mut state = lock(&shared);
             if let Some(record) = state.records.get_mut(&id) {
                 record.state = final_state;
+                record.failure_message = failure_message;
             }
             state.completions.remove(&id)
         };
@@ -647,6 +701,36 @@ mod tests {
     fn successful_job_reaches_succeeded() {
         let manager = JobManager::new(JobManagerConfig::new(1, 4, 10).unwrap());
         let id = submit_success(&manager);
+        wait_until(|| state_of(&manager, id) == JobState::Succeeded);
+        manager.shutdown();
+    }
+
+    #[test]
+    fn progress_is_bounded_monotonic_and_visible_in_snapshots() {
+        let manager = JobManager::new(JobManagerConfig::new(1, 4, 10).unwrap());
+        let gate = Arc::new(Gate::new());
+        let id = {
+            let gate = Arc::clone(&gate);
+            manager
+                .submit(JobKind::Export, move |context| {
+                    context.report_progress(3, 10);
+                    context.report_progress(2, 10);
+                    context.report_progress(20, 10);
+                    context.report_progress(0, 0);
+                    gate.wait();
+                    Ok(())
+                })
+                .unwrap()
+        };
+        wait_until(|| state_of(&manager, id) == JobState::Running);
+        assert_eq!(
+            manager.snapshot(id).unwrap().progress,
+            Some(JobProgress {
+                completed: 10,
+                total: 10
+            })
+        );
+        gate.release();
         wait_until(|| state_of(&manager, id) == JobState::Succeeded);
         manager.shutdown();
     }

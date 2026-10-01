@@ -11,6 +11,11 @@ class AppTopBar extends StatelessWidget {
     required this.onOpenCommandPalette,
     required this.onHome,
     this.onExitEditorPreview,
+    this.onExport,
+    this.onCancelExport,
+    this.exportIsActive = false,
+    this.statusLabel,
+    this.statusIsError = false,
   });
 
   final String title;
@@ -18,6 +23,11 @@ class AppTopBar extends StatelessWidget {
   final VoidCallback onOpenCommandPalette;
   final VoidCallback onHome;
   final VoidCallback? onExitEditorPreview;
+  final VoidCallback? onExport;
+  final VoidCallback? onCancelExport;
+  final bool exportIsActive;
+  final String? statusLabel;
+  final bool statusIsError;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +100,65 @@ class AppTopBar extends StatelessWidget {
                   ),
                 ),
               ),
+              if (statusLabel != null) ...[
+                Icon(
+                  statusIsError
+                      ? Icons.warning_amber_outlined
+                      : Icons.save_outlined,
+                  size: 15,
+                  color: statusIsError ? OrColors.warning : OrColors.textMuted,
+                ),
+                const SizedBox(width: OrSpacing.x1),
+                Text(
+                  statusLabel!,
+                  style: TextStyle(
+                    color: statusIsError
+                        ? OrColors.warning
+                        : OrColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(width: OrSpacing.x3),
+              ],
+              if (onExport != null) ...[
+                if (compact)
+                  Tooltip(
+                    message: 'Export project',
+                    child: IconButton(
+                      key: const ValueKey('export-project'),
+                      onPressed: onExport,
+                      icon: const Icon(Icons.ios_share_outlined, size: 18),
+                      color: OrColors.textSecondary,
+                    ),
+                  )
+                else
+                  OutlinedButton.icon(
+                    key: const ValueKey('export-project'),
+                    onPressed: onExport,
+                    icon: const Icon(Icons.ios_share_outlined, size: 17),
+                    label: const Text('Export'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: OrSpacing.x3,
+                      ),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(width: OrSpacing.x1),
+              ],
+              if (exportIsActive && onCancelExport != null) ...[
+                Tooltip(
+                  message: 'Cancel export',
+                  child: IconButton(
+                    key: const ValueKey('cancel-export'),
+                    onPressed: onCancelExport,
+                    icon: const Icon(Icons.close_outlined, size: 17),
+                    color: OrColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: OrSpacing.x1),
+              ],
               if (showPreviewBadge) ...[
                 const _PreviewBadge(),
                 const SizedBox(width: OrSpacing.x3),
