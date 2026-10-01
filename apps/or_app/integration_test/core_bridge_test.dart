@@ -82,6 +82,7 @@ void main() {
     final projectPath = '${directory.path}/native-project.orproj';
     final picker = _NativeProjectPicker(projectPath);
     final gateway = _ObservedRustProjectGateway();
+    final creation = gateway.projectCreationCompletion;
     const coreGateway = RustCoreGateway();
 
     await tester.pumpWidget(
@@ -99,8 +100,19 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
     await tester.pumpAndSettle();
-    final creation = gateway.projectCreationCompletion;
-    if (creation != null) await creation;
+    final creationCompleted = await tester.runAsync(
+      () => creation
+          .then((_) => true)
+          .timeout(const Duration(seconds: 30), onTimeout: () => false),
+    );
+    expect(
+      creationCompleted,
+      isTrue,
+      reason:
+          'Native project creation did not complete within 30 seconds at '
+          '$projectPath; native bridge error: '
+          '${gateway.lastError ?? "none recorded"}',
+    );
 
     final session = gateway.activeSession;
     final errorMessage = tester
@@ -848,20 +860,20 @@ class _NativeProjectPicker implements ProjectFilePicker {
 class _ObservedRustProjectGateway implements ProjectGateway {
   ProjectSessionHandle? activeSession;
   Object? lastError;
-  Future<void>? projectCreationCompletion;
+  final Completer<void> _projectCreationCompletion = Completer<void>();
+  Future<void> get projectCreationCompletion =>
+      _projectCreationCompletion.future;
   static const _gateway = RustProjectGateway();
 
   @override
   Future<ProjectSessionHandle> createProject(String path, String name) async {
-    final completion = Completer<void>();
-    projectCreationCompletion = completion.future;
     try {
       return activeSession = await _gateway.createProject(path, name);
     } catch (error) {
       lastError = error;
       rethrow;
     } finally {
-      completion.complete();
+      _projectCreationCompletion.complete();
     }
   }
 

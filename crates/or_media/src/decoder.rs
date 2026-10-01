@@ -18,12 +18,9 @@ use or_runtime::{
     BudgetAcquireError, BudgetLease, FrameDescriptor, FrameDescriptorError, FrameLease,
     FrameLeaseError, FramePixelFormat, RenderSnapshot, RuntimeBudgets,
 };
-use std::{
-    error::Error,
-    fmt,
-    io::{self, ErrorKind},
-    path::PathBuf,
-};
+#[cfg(not(windows))]
+use std::io::{self, ErrorKind};
+use std::{error::Error, fmt, path::PathBuf};
 
 const OUTPUT_AUDIO_RATE: u32 = 48_000;
 const OUTPUT_AUDIO_CHANNELS: usize = 2;
@@ -826,7 +823,19 @@ fn map_snapshot_send_error<T>(error: SnapshotQueueSendError<T>) -> DecodeError {
 }
 
 fn is_again(error: FfmpegError) -> bool {
-    matches!(error, FfmpegError::Other { errno } if io::Error::from_raw_os_error(errno).kind() == ErrorKind::WouldBlock)
+    let FfmpegError::Other { errno } = error else {
+        return false;
+    };
+
+    #[cfg(windows)]
+    {
+        // FFmpeg stores POSIX errno, while std::io expects a Win32 error code.
+        errno == 11
+    }
+    #[cfg(not(windows))]
+    {
+        io::Error::from_raw_os_error(errno).kind() == ErrorKind::WouldBlock
+    }
 }
 
 #[derive(Debug)]
@@ -929,5 +938,14 @@ mod tests {
         assert_eq!(ceil_sample_offset(time(1, 44_100)).unwrap(), 2);
         assert_eq!(floor_sample_offset(time(1, 44_100)).unwrap(), 1);
         assert_eq!(sample_offset_time(48_000).unwrap(), time(1, 1));
+    }
+
+    #[test]
+    fn ffmpeg_eagain_is_a_normal_decoder_drain_result() {
+        // FFmpeg exposes POSIX errno: Darwin uses 35; Windows/Linux use 11.
+        let eagain_errno = if cfg!(target_os = "macos") { 35 } else { 11 };
+        assert!(is_again(FfmpegError::Other {
+            errno: eagain_errno,
+        }));
     }
 }

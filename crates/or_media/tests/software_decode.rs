@@ -3,11 +3,9 @@ use or_media::{DecodeError, SnapshotQueue, SoftwareMediaDecoder};
 use or_runtime::{
     BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
 };
-use std::{path::Path, path::PathBuf, sync::Mutex};
+use std::path::{Path, PathBuf};
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
-// ponytail: serialize FFmpeg initialization and decoding until tests have independent resources.
-static FFMPEG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {
     RationalTime::new(numerator, denominator).unwrap()
@@ -51,9 +49,6 @@ fn file_uri(path: &Path) -> String {
 
 #[test]
 fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
-    let _guard = FFMPEG_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let snapshot = snapshot(time(1, 4), time(1, 4));
     let budgets = budgets();
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets.clone()).unwrap();
@@ -97,9 +92,6 @@ fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
 
 #[test]
 fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
-    let _guard = FFMPEG_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
     let cancellation = CancellationToken::new();
 
@@ -114,9 +106,6 @@ fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
 
 #[test]
 fn cancelled_software_video_seek_returns_before_opening_media() {
-    let _guard = FFMPEG_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
     let cancellation = CancellationToken::new();
     cancellation.cancel();
@@ -129,9 +118,6 @@ fn cancelled_software_video_seek_returns_before_opening_media() {
 
 #[test]
 fn software_audio_seek_resamples_and_clips_to_the_exact_requested_range() {
-    let _guard = FFMPEG_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let snapshot = snapshot(time(1, 4), time(1, 4));
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
     let queue = SnapshotQueue::new(snapshot, 8).unwrap();

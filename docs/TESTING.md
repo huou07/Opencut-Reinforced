@@ -114,6 +114,7 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 
 - Widget tests inject fake project gateways and file pickers. They cover desktop create/open, cancellation, exact project-name preservation, revision-zero creation, close and switch Save/Discard/Cancel decisions, save failures, stale-revision refresh without retry, event-sequence invalidation, recovery candidate/stale/conflict/invalid handling, Android's unavailable New/Open state, keyboard shortcuts, and exit cancellation.
 - The macOS native integration test uses the generated Rust bridge to create and open a real `.orproj`, check revision and runtime identity, rename/undo/redo/save through the Flutter workspace, inspect the Advanced / Developer descriptor surface, verify descriptor cleanup, and reopen with the persistent project ID but a fresh runtime instance ID.
+- The native lifecycle test captures project-creation completion before the UI action and awaits the Rust bridge operation through `WidgetTester.runAsync`, with a bounded timeout that includes bridge-error diagnostics.
 - `crates/or_cli/tests/semantic_cli.rs` launches the actual `or` executable against a `LiveProjectHost`. Direct host commands model the bridge path while attached CLI commands query and mutate the same host. It verifies GUI-style rename → CLI summary, CLI rename and undo → direct summary, direct redo → CLI summary, shared identity/history/revision/dirty state, explicit save, and ordered change/save events.
 - The `LiveProjectHost` tests separately exercise direct access and `LocalIpcClient` access to the same session, revision-conflict behavior, dirty shutdown protection, and endpoint cleanup on Unix and Windows transports.
 - The native UI test does not spawn an external CLI process from the sandboxed application. Process-level CLI parity is exercised by the Rust integration test outside the app sandbox.
@@ -323,7 +324,9 @@ The build and probe steps have explicit time limits. The current 7C workflow
 uses the LGPL-only dynamic configuration with only the `file` protocol, Matroska
 demuxer, FFV1, and PCM S16LE enabled, then exports that prefix to production
 workspace checks. A bounded linked decode test verifies software video seek,
-audio seek, decoding, resampling, and exact range clipping. FFmpeg source builds
+audio seek, decoding, resampling, exact range clipping, and cross-platform
+classification of FFmpeg's POSIX `EAGAIN` decoder-drain status. The test uses no
+global FFmpeg serialization lock. FFmpeg source builds
 and the binding probe are hosted checks; native application execution remains
 disallowed locally by policy.
 
@@ -331,7 +334,9 @@ disallowed locally by policy.
 
 The 7D review found no enabled hardware decoder or native-frame interop adapter
 to verify. The software decode integration test checks an exact-time seek,
-owned RGBA pixels, and budget release. `or_runtime` tests cover centralized
+owned RGBA pixels, and budget release; `or_media` also tests that FFmpeg's
+POSIX `EAGAIN` is treated as normal decoder-drain backpressure, including on
+Windows. `or_runtime` tests cover centralized
 stable-hardware selection, software fallback when no hardware is available,
 metadata-only hardware-frame leases, and exactly-once release; these contracts
 do not represent a platform decoder or native surface. No target-hardware
