@@ -728,7 +728,7 @@ impl ViewerTextureAdapter {
         }
 
         let mut bgra = Vec::with_capacity(byte_count);
-        for pixel in rgba.chunks_exact(4) {
+        for pixel in rgba.as_chunks::<4>().0 {
             let alpha = u16::from(pixel[3]);
             let premultiply = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;
             bgra.extend_from_slice(&[

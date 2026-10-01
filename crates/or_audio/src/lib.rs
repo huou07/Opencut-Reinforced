@@ -88,7 +88,7 @@ impl AudioProducer<'_> {
         samples: &[f32],
         cancellation: &CancellationToken,
     ) -> Result<(), AudioPushError> {
-        if samples.len() % self.buffer.channels != 0 {
+        if !samples.len().is_multiple_of(self.buffer.channels) {
             return Err(AudioPushError::IncompleteFrame);
         }
         if cancellation.is_cancelled() {
@@ -137,7 +137,7 @@ impl AudioConsumer<'_> {
         output: &mut [f32],
         cancellation: &CancellationToken,
     ) -> Result<AudioRenderReport, AudioRenderError> {
-        if output.len() % self.buffer.channels != 0 {
+        if !output.len().is_multiple_of(self.buffer.channels) {
             output.fill(0.0);
             return Err(AudioRenderError::IncompleteFrame);
         }
@@ -530,11 +530,11 @@ mod tests {
                     break;
                 }
                 consumer.render_into(&mut output, &token).unwrap();
-                for frame in output.chunks_exact(2) {
-                    if frame == [0.0, 0.0] {
+                for frame in output.as_chunks::<2>().0 {
+                    if *frame == [0.0, 0.0] {
                         continue;
                     }
-                    if frame != [expected, expected] {
+                    if *frame != [expected, expected] {
                         out_of_order = true;
                         break;
                     }

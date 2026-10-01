@@ -235,8 +235,8 @@ fn system_ffmpeg_generates_v1_video_only_proxy_and_preserves_vfr_timing() {
     assert_eq!(video["pix_fmt"], "yuv420p");
     let width = video["width"].as_u64().expect("proxy width");
     let height = video["height"].as_u64().expect("proxy height");
-    assert!(width > 0 && width <= 960 && width % 2 == 0);
-    assert!(height > 0 && height <= 540 && height % 2 == 0);
+    assert!(width > 0 && width <= 960 && width.is_multiple_of(2));
+    assert!(height > 0 && height <= 540 && height.is_multiple_of(2));
     assert!(proxy_probe["chapters"].as_array().is_none_or(Vec::is_empty));
     for tags in [format.get("tags"), video.get("tags")]
         .into_iter()

@@ -645,8 +645,11 @@ fn emit_audio_frame(
         return Err(DecodeError::InvalidAudioFrame);
     }
     let mut samples = Vec::with_capacity(byte_len / std::mem::size_of::<f32>());
-    for bytes in data[..byte_len].chunks_exact(std::mem::size_of::<f32>()) {
-        samples.push(f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
+    for bytes in data[..byte_len]
+        .as_chunks::<{ std::mem::size_of::<f32>() }>()
+        .0
+    {
+        samples.push(f32::from_ne_bytes(*bytes));
     }
     let Some((timestamp, samples)) = clip_audio(timestamp, job.range, samples)? else {
         return Ok(past_range(timestamp, job.range));

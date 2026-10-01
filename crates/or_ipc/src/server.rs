@@ -307,10 +307,8 @@ fn serve(
         if stopping.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(shutdown) = handle_shared_connection(&mut stream, &shared, &auth_token) {
-            if shutdown {
-                break;
-            }
+        if let Ok(true) = handle_shared_connection(&mut stream, &shared, &auth_token) {
+            break;
         }
     }
     drop(listener);
