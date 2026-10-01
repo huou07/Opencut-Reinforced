@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Size;
@@ -98,6 +99,8 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
     await tester.pumpAndSettle();
+    final creation = gateway.projectCreationCompletion;
+    if (creation != null) await creation;
 
     final session = gateway.activeSession;
     final errorMessage = tester
@@ -845,15 +848,20 @@ class _NativeProjectPicker implements ProjectFilePicker {
 class _ObservedRustProjectGateway implements ProjectGateway {
   ProjectSessionHandle? activeSession;
   Object? lastError;
+  Future<void>? projectCreationCompletion;
   static const _gateway = RustProjectGateway();
 
   @override
   Future<ProjectSessionHandle> createProject(String path, String name) async {
+    final completion = Completer<void>();
+    projectCreationCompletion = completion.future;
     try {
       return activeSession = await _gateway.createProject(path, name);
     } catch (error) {
       lastError = error;
       rethrow;
+    } finally {
+      completion.complete();
     }
   }
 
