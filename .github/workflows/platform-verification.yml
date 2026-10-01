@@ -937,6 +937,7 @@ jobs:
 
             clang="$toolchain/bin/${clang_prefix}21-clang"
             clangxx="$toolchain/bin/${clang_prefix}21-clang++"
+            cc_env="CC_${rust_target//-/_}"
             prefix="$build_root/install/$abi"
             probe_dir="$build_root/probes/$abi"
             jni_dir="$jni_root/$abi"
@@ -973,7 +974,7 @@ jobs:
               test "$(PKG_CONFIG_PATH="$pkg_config_path" PKG_CONFIG_ALLOW_CROSS=1 pkg-config --variable=prefix "lib$library")" = "$prefix"
             done
 
-            env "$linker_env=$clang" \
+            env "$linker_env=$clang" "$cc_env=$clang" \
               FFMPEG_DIR="$prefix" \
               PKG_CONFIG_PATH="$pkg_config_path" \
               PKG_CONFIG_ALLOW_CROSS=1 \
