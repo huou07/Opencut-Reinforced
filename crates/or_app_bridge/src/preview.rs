@@ -41,11 +41,11 @@ mod desktop {
         ApplicationRequest, ApplicationResponse, ClipContent, ClipSettings, Crop,
         MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, Opacity, ProjectId,
         ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-        TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
+        TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
     };
     use or_ipc::LiveProjectHost;
     use or_media::SoftwareMediaDecoder;
-    use or_render::{RenderDevice, RenderSize, RgbaVideoLayer};
+    use or_render::{RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer};
     use or_runtime::{
         BudgetLimits, CancellationToken, PreviewFrameRequest, PreviewFrameStep, PreviewTransport,
         RenderSnapshot, RuntimeBudgets,
@@ -68,6 +68,7 @@ mod desktop {
     const MAX_VIEWER_HEIGHT: u32 = 1080;
     const MAX_BLANK_WIDTH: u32 = 640;
     const MAX_BLANK_HEIGHT: u32 = 360;
+    const MAX_TEXT_OVERLAY_BYTES: usize = 64 * 1024 * 1024;
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
@@ -78,6 +79,7 @@ mod desktop {
         cancellation: Mutex<CancellationToken>,
         generation: AtomicU64,
         budgets: RuntimeBudgets,
+        text_rasterizer: Mutex<TextRasterizer>,
     }
 
     impl PreviewRuntime {
@@ -93,6 +95,7 @@ mod desktop {
                 cancellation: Mutex::new(CancellationToken::new()),
                 generation: AtomicU64::new(0),
                 budgets,
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
             }
         }
 
@@ -420,7 +423,7 @@ mod desktop {
                 .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT));
             let size = RenderSize::new(width, height)
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
-            let layers = frames
+            let mut layers = frames
                 .iter()
                 .map(|(frame, transform, crop, opacity)| {
                     RgbaVideoLayer::new(
@@ -432,6 +435,50 @@ mod desktop {
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+            let mut active_text_clips = Vec::new();
+            for clip in &program.text_clips {
+                let end = clip
+                    .timeline_start
+                    .checked_add(clip.duration)
+                    .map_err(|error| {
+                        PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
+                    })?;
+                if time >= clip.timeline_start && time < end {
+                    active_text_clips.push(clip);
+                }
+            }
+            let bytes_per_text_layer = (width as usize)
+                .checked_mul(height as usize)
+                .and_then(|pixels| pixels.checked_mul(4))
+                .ok_or_else(|| {
+                    PreviewError::new("TEXT_RENDER_LIMIT", "text canvas is too large")
+                })?;
+            let text_bytes = active_text_clips
+                .len()
+                .checked_mul(bytes_per_text_layer)
+                .filter(|bytes| *bytes <= MAX_TEXT_OVERLAY_BYTES)
+                .ok_or_else(|| {
+                    PreviewError::new(
+                        "TEXT_RENDER_LIMIT",
+                        "active text layers exceed the preview memory limit",
+                    )
+                })?;
+            let mut text_pixels = Vec::with_capacity(active_text_clips.len());
+            for clip in &active_text_clips {
+                let pixels = lock(&self.text_rasterizer)
+                    .rasterize(&clip.text, clip.formatting, width, height)
+                    .map_err(|error| PreviewError::new("TEXT_RENDER_FAILED", error.to_string()))?;
+                text_pixels.push(pixels);
+            }
+            debug_assert!(text_pixels.iter().map(Vec::len).sum::<usize>() <= text_bytes);
+            for (clip, pixels) in active_text_clips.iter().zip(&text_pixels) {
+                layers.push(
+                    RgbaVideoLayer::new(width, height, pixels)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?
+                        .with_visual_settings(clip.transform, clip.crop, clip.opacity)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?,
+                );
+            }
             let renderer = renderer()?;
             let rendered = renderer
                 .render_rgba_layers(snapshot, size, &layers)
@@ -540,12 +587,23 @@ mod desktop {
         frame_rate: Option<RationalRate>,
         content_end: Option<RationalTime>,
         video_clips: Vec<VideoClip>,
+        text_clips: Vec<TextClip>,
     }
 
     struct VideoClip {
         source: MediaSourceRef,
         timeline_start: RationalTime,
         source_start: RationalTime,
+        duration: RationalTime,
+        transform: Transform,
+        crop: Crop,
+        opacity: Opacity,
+    }
+
+    struct TextClip {
+        text: String,
+        formatting: TextFormatting,
+        timeline_start: RationalTime,
         duration: RationalTime,
         transform: Transform,
         crop: Crop,
@@ -603,17 +661,24 @@ mod desktop {
         })?;
         let mut content_end = None;
         let mut video_clips = Vec::new();
-        let has_video_solo = tracks
-            .iter()
-            .any(|track| track.kind == TrackKind::Video && track.state.solo());
+        let mut text_clips = Vec::new();
+        let has_visual_solo = tracks.iter().any(|track| {
+            matches!(
+                track.kind,
+                TrackKind::Video | TrackKind::Text | TrackKind::Caption
+            ) && track.state.solo()
+        });
         for track in tracks {
-            let render_track = track.kind == TrackKind::Video
-                && track.state.visible()
-                && (!has_video_solo || track.state.solo());
+            let render_track = matches!(
+                track.kind,
+                TrackKind::Video | TrackKind::Text | TrackKind::Caption
+            ) && track.state.visible()
+                && (!has_visual_solo || track.state.solo());
             for clip in list_clips(host, key, &track)? {
                 add_clip(
                     &mut content_end,
                     &mut video_clips,
+                    &mut text_clips,
                     track.kind,
                     render_track,
                     clip,
@@ -638,6 +703,7 @@ mod desktop {
             frame_rate,
             content_end,
             video_clips,
+            text_clips,
         })
     }
 
@@ -679,6 +745,7 @@ mod desktop {
     fn add_clip(
         content_end: &mut Option<RationalTime>,
         video_clips: &mut Vec<VideoClip>,
+        text_clips: &mut Vec<TextClip>,
         track_kind: TrackKind,
         render_track: bool,
         clip: TimelineClipState,
@@ -689,35 +756,58 @@ mod desktop {
             .checked_add(clip.timeline_duration)
             .map_err(|error| PreviewError::new("INVALID_TIMELINE_TIME", error.to_string()))?;
         *content_end = Some(content_end.map_or(end, |current| current.max(end)));
-        if track_kind == TrackKind::Video && render_track {
-            let ClipContent::Media {
-                media_id,
-                source_range,
-            } = clip.content
-            else {
+        if !render_track {
+            return Ok(());
+        }
+        let ClipSettings::Visual(settings) = clip.settings else {
+            if track_kind == TrackKind::Audio {
+                return Ok(());
+            }
+            return Err(PreviewError::new(
+                "PREVIEW_QUERY_FAILED",
+                "visual clip settings were missing",
+            ));
+        };
+        match (track_kind, clip.content) {
+            (
+                TrackKind::Video,
+                ClipContent::Media {
+                    media_id,
+                    source_range,
+                },
+            ) => {
+                let source = sources.get(&media_id).cloned().ok_or_else(|| {
+                    PreviewError::new("PREVIEW_QUERY_FAILED", "timeline media source was missing")
+                })?;
+                video_clips.push(VideoClip {
+                    source,
+                    timeline_start: clip.timeline_start,
+                    source_start: source_range.start(),
+                    duration: clip.timeline_duration,
+                    transform: settings.transform,
+                    crop: settings.crop,
+                    opacity: settings.opacity,
+                });
+            }
+            (TrackKind::Text, ClipContent::Text { text, formatting })
+            | (TrackKind::Caption, ClipContent::Caption { text, formatting }) => {
+                text_clips.push(TextClip {
+                    text,
+                    formatting,
+                    timeline_start: clip.timeline_start,
+                    duration: clip.timeline_duration,
+                    transform: settings.transform,
+                    crop: settings.crop,
+                    opacity: settings.opacity,
+                });
+            }
+            (TrackKind::Audio, _) => {}
+            _ => {
                 return Err(PreviewError::new(
                     "PREVIEW_QUERY_FAILED",
-                    "video track contained unsupported clip content",
+                    "timeline track contained unsupported clip content",
                 ));
-            };
-            let source = sources.get(&media_id).cloned().ok_or_else(|| {
-                PreviewError::new("PREVIEW_QUERY_FAILED", "timeline media source was missing")
-            })?;
-            let ClipSettings::Visual(settings) = clip.settings else {
-                return Err(PreviewError::new(
-                    "PREVIEW_QUERY_FAILED",
-                    "video clip visual settings were missing",
-                ));
-            };
-            video_clips.push(VideoClip {
-                source,
-                timeline_start: clip.timeline_start,
-                source_start: source_range.start(),
-                duration: clip.timeline_duration,
-                transform: settings.transform,
-                crop: settings.crop,
-                opacity: settings.opacity,
-            });
+            }
         }
         Ok(())
     }

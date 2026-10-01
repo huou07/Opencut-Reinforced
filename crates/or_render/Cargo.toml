@@ -8,8 +8,7 @@ license.workspace = true
 [dependencies]
 or_core = { path = "../or_core" }
 or_runtime = { path = "../or_runtime" }
-# wgpu 25.0.2 is the newest pinned release compatible with the workspace MSRV
-# (Rust 1.85); its upstream license is MIT OR Apache-2.0.
+# wgpu 25.0.2 is the pinned render backend; its upstream license is MIT OR Apache-2.0.
 wgpu = { version = "=25.0.2", default-features = false, features = [
     "wgsl",
     "vulkan",
@@ -17,3 +16,4 @@ wgpu = { version = "=25.0.2", default-features = false, features = [
     "dx12",
     "metal",
 ] }
+cosmic-text = { version = "=0.19.0", default-features = false, features = ["std", "swash"] }

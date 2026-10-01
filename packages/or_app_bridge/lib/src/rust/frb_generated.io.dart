@@ -76,6 +76,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextFormattingView dco_decode_box_autoadd_project_text_formatting_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectTimelineTrackStateView
   dco_decode_box_autoadd_project_timeline_track_state_view(dynamic raw);
 
@@ -97,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Capability dco_decode_capability(dynamic raw);
+
+  @protected
+  FontIdentityView dco_decode_font_identity_view(dynamic raw);
 
   @protected
   HealthStatus dco_decode_health_status(dynamic raw);
@@ -167,6 +175,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextFormattingView?
+  dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw);
+
+  @protected
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
 
   @protected
@@ -198,6 +210,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectPreviewStateView dco_decode_project_preview_state_view(dynamic raw);
+
+  @protected
+  ProjectTextColorView dco_decode_project_text_color_view(dynamic raw);
+
+  @protected
+  ProjectTextFormattingView dco_decode_project_text_formatting_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectTimelineClipPageView dco_decode_project_timeline_clip_page_view(
@@ -255,6 +275,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw);
+
+  @protected
+  TextAlignmentView dco_decode_text_alignment_view(dynamic raw);
+
+  @protected
+  TextWeightView dco_decode_text_weight_view(dynamic raw);
+
+  @protected
+  TimelineClipContentKindView dco_decode_timeline_clip_content_kind_view(
+    dynamic raw,
+  );
 
   @protected
   TimelineSnapMovingAnchorView dco_decode_timeline_snap_moving_anchor_view(
@@ -349,6 +380,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextFormattingView sse_decode_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTimelineTrackStateView
   sse_decode_box_autoadd_project_timeline_track_state_view(
     SseDeserializer deserializer,
@@ -378,6 +414,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Capability sse_decode_capability(SseDeserializer deserializer);
+
+  @protected
+  FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer);
 
   @protected
   HealthStatus sse_decode_health_status(SseDeserializer deserializer);
@@ -456,6 +495,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextFormattingView?
+  sse_decode_opt_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectView? sse_decode_opt_box_autoadd_project_view(
     SseDeserializer deserializer,
   );
@@ -505,6 +550,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectPreviewStateView sse_decode_project_preview_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextColorView sse_decode_project_text_color_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextFormattingView sse_decode_project_text_formatting_view(
     SseDeserializer deserializer,
   );
 
@@ -576,6 +631,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TextAlignmentView sse_decode_text_alignment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TextWeightView sse_decode_text_weight_view(SseDeserializer deserializer);
+
+  @protected
+  TimelineClipContentKindView sse_decode_timeline_clip_content_kind_view(
     SseDeserializer deserializer,
   );
 
@@ -684,6 +752,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_project_text_formatting_view(
+    ProjectTextFormattingView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_timeline_track_state_view(
     ProjectTimelineTrackStateView self,
     SseSerializer serializer,
@@ -718,6 +792,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_capability(Capability self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_font_identity_view(
+    FontIdentityView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_health_status(HealthStatus self, SseSerializer serializer);
@@ -813,6 +893,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_project_text_formatting_view(
+    ProjectTextFormattingView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_project_view(
     ProjectView? self,
     SseSerializer serializer,
@@ -872,6 +958,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_preview_state_view(
     ProjectPreviewStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_text_color_view(
+    ProjectTextColorView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_text_formatting_view(
+    ProjectTextFormattingView self,
     SseSerializer serializer,
   );
 
@@ -959,6 +1057,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_recovery_inspection_view(
     RecoveryInspectionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_alignment_view(
+    TextAlignmentView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_weight_view(
+    TextWeightView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_timeline_clip_content_kind_view(
+    TimelineClipContentKindView self,
     SseSerializer serializer,
   );
 

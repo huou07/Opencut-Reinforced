@@ -39,6 +39,7 @@ These are the current direct dependencies for the executable architecture and fo
 | [sha2](https://github.com/RustCrypto/hashes) | 0.11.0 | Deterministic SHA-256 cache-key derivation for the disposable media cache (`default-features = false`, `alloc` only) | MIT OR Apache-2.0 |
 | [rusqlite](https://github.com/rusqlite/rusqlite) | 0.40.1 | Private disposable cache index only (`default-features = false`, `bundled` feature) | MIT |
 | [windows-sys](https://docs.rs/crate/windows-sys/0.61.2) | 0.61.2 | Windows-only atomic project-file replacement, named pipes, and owner-only endpoint ACLs (`cfg(windows)` target dependency) | MIT OR Apache-2.0 |
+| [cosmic-text](https://crates.io/crates/cosmic-text/0.19.0) | 0.19.0 | Bundled-font shaping and rasterization in `or_render` (`default-features = false`, `std` and `swash`) | MIT OR Apache-2.0 |
 | [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge/versions/2.13.0) | 2.13.0 | Generated typed Dart/Rust bridge bindings | MIT |
 | [flutter_rust_bridge_hooks](https://pub.dev/packages/flutter_rust_bridge_hooks/versions/2.13.0) | 2.13.0 | Native-assets hook and Rust library packaging | MIT |
 | [file_selector](https://pub.dev/packages/file_selector/versions/1.1.0/license) | 1.1.0 | Flutter-ecosystem native open/save location selection for desktop projects | BSD-3-Clause |
@@ -158,10 +159,12 @@ These references do not pre-approve any model weights.
 Fonts, music, sound effects, ambience, templates, stickers, shapes, LUTs, and
 other shipped or community content need rights that cover the intended
 inclusion and redistribution. Track source, author, version, license,
-compatibility, dependencies, and checksum. Phase 8D's deterministic bundled
-font baseline is Inter 4.1 under SIL Open Font License 1.1; that checkpoint
-must pin the exact release/file and record hash, license file, attribution, and
-provenance. Do not present example or unknown metadata as a verified license.
+compatibility, dependencies, and checksum. The bundled Inter 4.1 font baseline
+uses the official v4.1 release under SIL Open Font License 1.1. Its exact files,
+SHA-256 values, license-file hash, attribution, and archive provenance are
+recorded in [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md#12-audio-and-text). The font
+license accompanies the binaries at `crates/or_render/assets/fonts/inter/LICENSE.txt`.
+Do not present example or unknown metadata as a verified license.
 
 ## Secrets
 

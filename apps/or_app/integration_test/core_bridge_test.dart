@@ -72,6 +72,126 @@ void main() {
     }
   });
 
+  testWidgets(
+    'Rust project bridge stores editable titles and manual captions',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync('or-text-bridge-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      const gateway = RustProjectGateway();
+      final session = await gateway.createProject(
+        '${directory.path}/text-project.orproj',
+        'Text bridge',
+      );
+      var current = await gateway.summary(session);
+      final textTrackResult = await gateway.addTimelineTrack(
+        session,
+        current,
+        ProjectTimelineTrackKind.text,
+      );
+      expect(textTrackResult.succeeded, isTrue);
+      current = textTrackResult.view!;
+      final textTrack = (await gateway.listTimelineTracks(session))
+          .items
+          .single;
+      const titleFormatting = ProjectTextFormatting(
+        font: ProjectFontIdentity.bundledInter,
+        sizeMilliPoints: 36000,
+        weight: ProjectTextWeight.semibold,
+        alignment: ProjectTextAlignment.center,
+        color: ProjectTextColor.white,
+      );
+      final insertTitle = await gateway.insertTimelineTextClip(
+        session,
+        current,
+        trackId: textTrack.trackId,
+        timelineStart: ProjectRationalTime(BigInt.one, 3),
+        timelineDuration: ProjectRationalTime(BigInt.from(5), 2),
+        content: const ProjectTimelineTextContent(
+          kind: ProjectTimelineClipContentKind.text,
+          text: 'Opening title',
+          formatting: titleFormatting,
+        ),
+      );
+      expect(insertTitle.succeeded, isTrue);
+      current = insertTitle.view!;
+      var page = await gateway.listTimelineClips(
+        session,
+        trackId: textTrack.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      final title = page.items.single;
+      expect(title.contentKind, ProjectTimelineClipContentKind.text);
+      expect(title.text, 'Opening title');
+      expect(title.timelineStart.canonical, '1/3');
+      expect(title.timelineDuration.canonical, '5/2');
+      expect(title.formatting?.weight, ProjectTextWeight.semibold);
+
+      final updateTitle = await gateway.updateTimelineTextClip(
+        session,
+        current,
+        trackId: textTrack.trackId,
+        clipId: title.clipId,
+        timelineDuration: ProjectRationalTime(BigInt.from(3), 1),
+        content: const ProjectTimelineTextContent(
+          kind: ProjectTimelineClipContentKind.text,
+          text: 'Updated title',
+          formatting: titleFormatting,
+        ),
+      );
+      expect(updateTitle.succeeded, isTrue);
+      current = updateTitle.view!;
+      page = await gateway.listTimelineClips(
+        session,
+        trackId: textTrack.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(page.items.single.text, 'Updated title');
+      expect(page.items.single.clipId, title.clipId);
+      expect(page.items.single.timelineStart.canonical, '1/3');
+      expect(page.items.single.timelineDuration.canonical, '3/1');
+
+      final captionTrackResult = await gateway.addTimelineTrack(
+        session,
+        current,
+        ProjectTimelineTrackKind.caption,
+      );
+      expect(captionTrackResult.succeeded, isTrue);
+      current = captionTrackResult.view!;
+      final captionTrack = (await gateway.listTimelineTracks(session))
+          .items
+          .last;
+      final insertCaption = await gateway.insertTimelineTextClip(
+        session,
+        current,
+        trackId: captionTrack.trackId,
+        timelineStart: ProjectRationalTime(BigInt.from(4), 1),
+        timelineDuration: ProjectRationalTime(BigInt.one, 1),
+        content: const ProjectTimelineTextContent(
+          kind: ProjectTimelineClipContentKind.caption,
+          text: 'A manual caption',
+          formatting: ProjectTextFormatting.defaults,
+        ),
+      );
+      expect(insertCaption.succeeded, isTrue);
+      final captions = await gateway.listTimelineClips(
+        session,
+        trackId: captionTrack.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(
+        captions.items.single.contentKind,
+        ProjectTimelineClipContentKind.caption,
+      );
+      expect(captions.items.single.text, 'A manual caption');
+      expect(captions.items.single.timelineStart.canonical, '4/1');
+      expect(captions.items.single.timelineDuration.canonical, '1/1');
+      await gateway.close(session, discardUnsaved: true);
+    },
+  );
+
   testWidgets('native Flutter project lifecycle uses one Rust host', (
     tester,
   ) async {
@@ -368,8 +488,8 @@ void main() {
       );
       expect(clip.mediaId, media.mediaId);
       expect(clip.timelineStart.canonical, '0/1');
-      expect(clip.sourceStart.canonical, '1/2');
-      expect(clip.sourceDuration.canonical, '2/1');
+      expect(clip.sourceStart!.canonical, '1/2');
+      expect(clip.timelineDuration.canonical, '2/1');
       expect(page.projectRevision, current.revision);
 
       final undoneInsert = await gateway.undo(session, current);
@@ -432,8 +552,8 @@ void main() {
       );
       expect(page.items.single.clipId, clip.clipId);
       expect(page.items.single.mediaId, clip.mediaId);
-      expect(page.items.single.sourceStart.canonical, '1/2');
-      expect(page.items.single.sourceDuration.canonical, '2/1');
+      expect(page.items.single.sourceStart!.canonical, '1/2');
+      expect(page.items.single.timelineDuration.canonical, '2/1');
       expect(page.items.single.timelineStart.canonical, '3/1');
 
       final noOpMove = await gateway.moveTimelineClip(
@@ -464,8 +584,8 @@ void main() {
         limit: 100,
       );
       expect(page.items.single.timelineStart.canonical, '7/2');
-      expect(page.items.single.sourceStart.canonical, '1/1');
-      expect(page.items.single.sourceDuration.canonical, '3/2');
+      expect(page.items.single.sourceStart!.canonical, '1/1');
+      expect(page.items.single.timelineDuration.canonical, '3/2');
 
       final trimmedEnd = await gateway.trimTimelineClip(
         session,
@@ -485,11 +605,11 @@ void main() {
       );
       expect(
         page.items.single.timelineStart
-            .add(page.items.single.sourceDuration)
+            .add(page.items.single.timelineDuration)
             .canonical,
         '9/2',
       );
-      expect(page.items.single.sourceDuration.canonical, '1/1');
+      expect(page.items.single.timelineDuration.canonical, '1/1');
 
       final noOpTrim = await gateway.trimTimelineClip(
         session,
@@ -522,8 +642,8 @@ void main() {
         (candidate) => candidate.clipId != clip.clipId,
       );
       expect(rightClip.timelineStart.canonical, '4/1');
-      expect(rightClip.sourceStart.canonical, '3/2');
-      expect(rightClip.sourceDuration.canonical, '1/2');
+      expect(rightClip.sourceStart!.canonical, '3/2');
+      expect(rightClip.timelineDuration.canonical, '1/2');
 
       final insertedLater = await gateway.insertTimelineClip(
         session,
@@ -1204,6 +1324,40 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     timelineStart: timelineStart,
     sourceStart: sourceStart,
     duration: duration,
+  );
+
+  @override
+  Future<ProjectActionResult> insertTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) => _gateway.insertTimelineTextClip(
+    session,
+    current,
+    trackId: trackId,
+    timelineStart: timelineStart,
+    timelineDuration: timelineDuration,
+    content: content,
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) => _gateway.updateTimelineTextClip(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    timelineDuration: timelineDuration,
+    content: content,
   );
 
   @override

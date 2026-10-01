@@ -2,17 +2,18 @@ use crate::frb_generated::StreamSink;
 use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
-    ClipSettings, CommandEnvelope, Crop, JobManagerConfig, LegacyTimelineClipState, MarkerId,
-    MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState,
-    MediaArtifactService, MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata,
-    Opacity, OperationError, OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId,
-    ProjectRecoveryError, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage,
-    TimelineClipPageV2, TimelineClipState, TimelineMarkerPage, TimelineMarkerState,
-    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
-    TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind, TrackState, Transform,
-    VisualSettings, apply_project_recovery, discard_project_recovery,
+    ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig,
+    ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, FontIdentity, JobManagerConfig,
+    MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
+    MediaArtifactRequestState, MediaArtifactService, MediaArtifactServiceConfig, MediaId,
+    MediaItem, MediaStreamMetadata, Opacity, OperationError, OperationErrorCode,
+    ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError, ProjectRevision,
+    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
+    RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
+    TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
+    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
+    TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
+    TrackState, Transform, VisualSettings, apply_project_recovery, discard_project_recovery,
     ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
@@ -156,13 +157,60 @@ pub struct ProjectTimelineTracksView {
     pub items: Vec<ProjectTimelineTrackView>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimelineClipContentKindView {
+    Media,
+    Text,
+    Caption,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FontIdentityView {
+    BundledInter,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextWeightView {
+    Regular,
+    Medium,
+    Semibold,
+    Bold,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextAlignmentView {
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTextColorView {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTextFormattingView {
+    pub font: FontIdentityView,
+    pub size_milli_points: u32,
+    pub weight: TextWeightView,
+    pub alignment: TextAlignmentView,
+    pub color: ProjectTextColorView,
+}
+
 #[derive(Clone, Debug)]
 pub struct ProjectTimelineClipView {
     pub clip_id: String,
-    pub media_id: String,
+    pub content_kind: TimelineClipContentKindView,
+    pub media_id: Option<String>,
+    pub text: Option<String>,
+    pub formatting: Option<ProjectTextFormattingView>,
     pub timeline_start: RationalTimeView,
-    pub source_start: RationalTimeView,
-    pub source_duration: RationalTimeView,
+    pub timeline_duration: RationalTimeView,
+    pub source_start: Option<RationalTimeView>,
 }
 
 #[derive(Clone, Debug)]
@@ -612,7 +660,7 @@ impl ProjectHostHandle {
         let offset = usize::try_from(offset).map_err(|_| timeline_query_arguments_error())?;
         let limit = usize::try_from(limit).map_err(|_| timeline_query_arguments_error())?;
         let described = self.host.describe().map_err(host_error)?;
-        let result = self.query(QueryEnvelope::timeline_clips(
+        let result = self.query(QueryEnvelope::timeline_clips_v2(
             described.summary.project_id,
             described.summary.project_instance_id,
             track_id,
@@ -620,7 +668,7 @@ impl ProjectHostHandle {
             limit,
         ))?;
         let page = result
-            .timeline_clip_page
+            .timeline_clip_page_v2
             .as_ref()
             .ok_or_else(unexpected_response_error)?;
         Ok(timeline_clip_page_view(&result, page))
@@ -1021,6 +1069,133 @@ impl ProjectHostHandle {
                     media_id,
                     timeline_start,
                     source_range,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_timeline_text_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        content_kind: TimelineClipContentKindView,
+        timeline_start_numerator: i64,
+        timeline_start_denominator: u32,
+        timeline_duration_numerator: i64,
+        timeline_duration_denominator: u32,
+        text: String,
+        formatting: ProjectTextFormattingView,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        let timeline_start =
+            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        let timeline_duration =
+            match RationalTime::new(timeline_duration_numerator, timeline_duration_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        let content = match text_clip_content(content_kind, text, formatting) {
+            Ok(content) => content,
+            Err(error) => return action_error(error),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::insert_timeline_clip_content(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    ClipId::generate(),
+                    track_id,
+                    timeline_start,
+                    timeline_duration,
+                    content,
+                    ClipSettings::Visual(VisualSettings::default()),
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_timeline_text_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        content_kind: TimelineClipContentKindView,
+        timeline_duration_numerator: i64,
+        timeline_duration_denominator: u32,
+        text: String,
+        formatting: ProjectTextFormattingView,
+    ) -> ProjectActionResult {
+        let (_, _, _, track_kind, clip) = match self.find_timeline_clip_state(
+            &project_id,
+            &project_instance_id,
+            expected_revision,
+            &track_id,
+            &clip_id,
+        ) {
+            Ok(found) => found,
+            Err(error) => return action_error(error),
+        };
+        let content = match text_clip_content(content_kind, text, formatting) {
+            Ok(content) => content,
+            Err(error) => return action_error(error),
+        };
+        let matching_content = matches!(
+            (&clip.content, content_kind),
+            (ClipContent::Text { .. }, TimelineClipContentKindView::Text)
+                | (
+                    ClipContent::Caption { .. },
+                    TimelineClipContentKindView::Caption
+                )
+        );
+        let matching_track = matches!(
+            (track_kind, content_kind),
+            (TrackKind::Text, TimelineClipContentKindView::Text)
+                | (TrackKind::Caption, TimelineClipContentKindView::Caption)
+        );
+        if !matching_content || !matching_track {
+            return action_error(ProjectBridgeError {
+                code: "TIMELINE_CLIP_CONTENT_MISMATCH".to_owned(),
+                message: "The selected clip is not the requested text or caption type.".to_owned(),
+            });
+        }
+        let timeline_duration =
+            match RationalTime::new(timeline_duration_numerator, timeline_duration_denominator) {
+                Ok(time) => time,
+                Err(_) => return action_error(timeline_arguments_error()),
+            };
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::update_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    timeline_duration,
+                    content,
+                    clip.settings,
                 )
             },
         )
@@ -1610,6 +1785,37 @@ impl ProjectHostHandle {
         ),
         ProjectBridgeError,
     > {
+        let (project_id, project_instance_id, revision, track_kind, clip) = self
+            .find_timeline_clip_state(
+                project_id,
+                project_instance_id,
+                expected_revision,
+                track_id,
+                clip_id,
+            )?;
+        if track_kind != TrackKind::Video {
+            return Err(unsupported_visual_settings());
+        }
+        Ok((project_id, project_instance_id, revision, clip))
+    }
+
+    fn find_timeline_clip_state(
+        &self,
+        project_id: &str,
+        project_instance_id: &str,
+        expected_revision: u64,
+        track_id: &str,
+        clip_id: &str,
+    ) -> Result<
+        (
+            ProjectId,
+            ProjectInstanceId,
+            ProjectRevision,
+            TrackKind,
+            TimelineClipState,
+        ),
+        ProjectBridgeError,
+    > {
         let (project_id, project_instance_id, revision) =
             parse_session_identity(project_id, project_instance_id, expected_revision)?;
         let track_id = TrackId::from_str(track_id).map_err(|error| ProjectBridgeError {
@@ -1632,11 +1838,9 @@ impl ProjectHostHandle {
             .and_then(|items| items.iter().find(|item| item.track_id == track_id))
             .ok_or_else(|| ProjectBridgeError {
                 code: "TIMELINE_TRACK_NOT_FOUND".to_owned(),
-                message: "The selected video track no longer exists.".to_owned(),
+                message: "The selected timeline track no longer exists.".to_owned(),
             })?;
-        if track.kind != TrackKind::Video {
-            return Err(unsupported_visual_settings());
-        }
+        let track_kind = track.kind;
 
         let mut offset = 0;
         loop {
@@ -1653,7 +1857,13 @@ impl ProjectHostHandle {
                 .as_ref()
                 .ok_or_else(unexpected_response_error)?;
             if let Some(clip) = page.items.iter().find(|item| item.clip_id == clip_id) {
-                return Ok((project_id, project_instance_id, revision, clip.clone()));
+                return Ok((
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_kind,
+                    clip.clone(),
+                ));
             }
             let Some(next_offset) = page.next_offset else {
                 break;
@@ -1665,7 +1875,7 @@ impl ProjectHostHandle {
         }
         Err(ProjectBridgeError {
             code: "TIMELINE_CLIP_NOT_FOUND".to_owned(),
-            message: "The selected video clip no longer exists.".to_owned(),
+            message: "The selected timeline clip no longer exists.".to_owned(),
         })
     }
 
@@ -1972,7 +2182,7 @@ fn timeline_track_view(track: &TimelineTrackSummaryV2) -> ProjectTimelineTrackVi
 
 fn timeline_clip_page_view(
     result: &QueryResult,
-    page: &TimelineClipPage,
+    page: &TimelineClipPageV2,
 ) -> ProjectTimelineClipPageView {
     ProjectTimelineClipPageView {
         project_id: result.summary.project_id.to_string(),
@@ -1989,13 +2199,110 @@ fn timeline_clip_page_view(
     }
 }
 
-fn timeline_clip_view(clip: &LegacyTimelineClipState) -> ProjectTimelineClipView {
+fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
+    let (content_kind, media_id, text, formatting, source_start) = match &clip.content {
+        ClipContent::Media {
+            media_id,
+            source_range,
+        } => (
+            TimelineClipContentKindView::Media,
+            Some(media_id.to_string()),
+            None,
+            None,
+            Some(rational_time_view(source_range.start())),
+        ),
+        ClipContent::Text { text, formatting } => (
+            TimelineClipContentKindView::Text,
+            None,
+            Some(text.clone()),
+            Some(text_formatting_view(*formatting)),
+            None,
+        ),
+        ClipContent::Caption { text, formatting } => (
+            TimelineClipContentKindView::Caption,
+            None,
+            Some(text.clone()),
+            Some(text_formatting_view(*formatting)),
+            None,
+        ),
+    };
     ProjectTimelineClipView {
         clip_id: clip.clip_id.to_string(),
-        media_id: clip.media_id.to_string(),
+        content_kind,
+        media_id,
+        text,
+        formatting,
         timeline_start: rational_time_view(clip.timeline_start),
-        source_start: rational_time_view(clip.source_range.start()),
-        source_duration: rational_time_view(clip.source_range.duration()),
+        timeline_duration: rational_time_view(clip.timeline_duration),
+        source_start,
+    }
+}
+
+fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView {
+    ProjectTextFormattingView {
+        font: match formatting.font {
+            FontIdentity::BundledInter => FontIdentityView::BundledInter,
+        },
+        size_milli_points: formatting.size_milli_points,
+        weight: match formatting.weight {
+            TextWeight::Regular => TextWeightView::Regular,
+            TextWeight::Medium => TextWeightView::Medium,
+            TextWeight::Semibold => TextWeightView::Semibold,
+            TextWeight::Bold => TextWeightView::Bold,
+        },
+        alignment: match formatting.alignment {
+            TextAlignment::Start => TextAlignmentView::Start,
+            TextAlignment::Center => TextAlignmentView::Center,
+            TextAlignment::End => TextAlignmentView::End,
+        },
+        color: ProjectTextColorView {
+            red: formatting.color.red,
+            green: formatting.color.green,
+            blue: formatting.color.blue,
+            alpha: formatting.color.alpha,
+        },
+    }
+}
+
+fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting {
+    TextFormatting {
+        font: match view.font {
+            FontIdentityView::BundledInter => FontIdentity::BundledInter,
+        },
+        size_milli_points: view.size_milli_points,
+        weight: match view.weight {
+            TextWeightView::Regular => TextWeight::Regular,
+            TextWeightView::Medium => TextWeight::Medium,
+            TextWeightView::Semibold => TextWeight::Semibold,
+            TextWeightView::Bold => TextWeight::Bold,
+        },
+        alignment: match view.alignment {
+            TextAlignmentView::Start => TextAlignment::Start,
+            TextAlignmentView::Center => TextAlignment::Center,
+            TextAlignmentView::End => TextAlignment::End,
+        },
+        color: TextColor {
+            red: view.color.red,
+            green: view.color.green,
+            blue: view.color.blue,
+            alpha: view.color.alpha,
+        },
+    }
+}
+
+fn text_clip_content(
+    kind: TimelineClipContentKindView,
+    text: String,
+    formatting: ProjectTextFormattingView,
+) -> Result<ClipContent, ProjectBridgeError> {
+    let formatting = text_formatting_from_view(formatting);
+    match kind {
+        TimelineClipContentKindView::Text => Ok(ClipContent::Text { text, formatting }),
+        TimelineClipContentKindView::Caption => Ok(ClipContent::Caption { text, formatting }),
+        TimelineClipContentKindView::Media => Err(ProjectBridgeError {
+            code: "INVALID_TIMELINE_TEXT_CONTENT".to_owned(),
+            message: "Only text and caption content can use the text editor.".to_owned(),
+        }),
     }
 }
 
@@ -2336,12 +2643,13 @@ mod tests {
         timeline_track_view,
     };
     use or_core::{
-        CacheArtifactKind, CacheKey, ClipId, JobId, LegacyTimelineClipState, MarkerId,
+        CacheArtifactKind, CacheKey, ClipContent, ClipId, ClipSettings, JobId, MarkerId,
         MediaArtifactEvent, MediaArtifactEventState, MediaId, OperationErrorCode,
         ParametersFingerprint, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSummary,
-        QueryResult, RationalTime, SourceFingerprint, TimeRange, TimelineClipPage,
-        TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapResult,
-        TimelineSnapTargetKind, TimelineTrackSummaryV2, TrackId, TrackKind, TrackState,
+        QueryResult, RationalTime, SourceFingerprint, TextFormatting, TimeRange,
+        TimelineClipPageV2, TimelineClipState, TimelineMarkerPage, TimelineMarkerState,
+        TimelineSnapMovingAnchor, TimelineSnapResult, TimelineSnapTargetKind,
+        TimelineTrackSummaryV2, TrackId, TrackKind, TrackState, VisualSettings,
     };
     use std::path::PathBuf;
 
@@ -2440,19 +2748,47 @@ mod tests {
             timeline_sequence_settings: None,
         };
         let clip_id = ClipId::generate();
+        let text_clip_id = ClipId::generate();
+        let caption_clip_id = ClipId::generate();
         let media_id = MediaId::generate();
-        let clip_page = TimelineClipPage {
+        let clip_page = TimelineClipPageV2 {
             track_id,
-            items: vec![LegacyTimelineClipState {
-                clip_id,
-                media_id,
-                timeline_start: RationalTime::new(3003, 1001).unwrap(),
-                source_range: TimeRange::new(
-                    RationalTime::new(1, 2).unwrap(),
-                    RationalTime::new(5, 2).unwrap(),
-                )
-                .unwrap(),
-            }],
+            items: vec![
+                TimelineClipState {
+                    clip_id,
+                    timeline_start: RationalTime::new(3003, 1001).unwrap(),
+                    timeline_duration: RationalTime::new(5, 2).unwrap(),
+                    content: ClipContent::Media {
+                        media_id,
+                        source_range: TimeRange::new(
+                            RationalTime::new(1, 2).unwrap(),
+                            RationalTime::new(5, 2).unwrap(),
+                        )
+                        .unwrap(),
+                    },
+                    settings: ClipSettings::Visual(VisualSettings::default()),
+                },
+                TimelineClipState {
+                    clip_id: text_clip_id,
+                    timeline_start: RationalTime::new(1, 3).unwrap(),
+                    timeline_duration: RationalTime::new(7, 3).unwrap(),
+                    content: ClipContent::Text {
+                        text: "Title".to_owned(),
+                        formatting: TextFormatting::default(),
+                    },
+                    settings: ClipSettings::Visual(VisualSettings::default()),
+                },
+                TimelineClipState {
+                    clip_id: caption_clip_id,
+                    timeline_start: RationalTime::new(3, 2).unwrap(),
+                    timeline_duration: RationalTime::new(1, 2).unwrap(),
+                    content: ClipContent::Caption {
+                        text: "Cue".to_owned(),
+                        formatting: TextFormatting::default(),
+                    },
+                    settings: ClipSettings::Visual(VisualSettings::default()),
+                },
+            ],
             total_count: 9,
             offset: 4,
             limit: 5,
@@ -2469,18 +2805,40 @@ mod tests {
         assert_eq!(view.next_offset, Some(9));
         let clip = &view.items[0];
         assert_eq!(clip.clip_id, clip_id.to_string());
-        assert_eq!(clip.media_id, media_id.to_string());
+        assert_eq!(clip.content_kind, super::TimelineClipContentKindView::Media);
+        assert_eq!(
+            clip.media_id.as_deref(),
+            Some(media_id.to_string().as_str())
+        );
         assert_eq!(
             clip.timeline_start,
             rational_time_view(RationalTime::new(3003, 1001).unwrap())
         );
         assert_eq!(
             clip.source_start,
-            rational_time_view(RationalTime::new(1, 2).unwrap())
+            Some(rational_time_view(RationalTime::new(1, 2).unwrap()))
         );
         assert_eq!(
-            clip.source_duration,
+            clip.timeline_duration,
             rational_time_view(RationalTime::new(5, 2).unwrap())
+        );
+        let text = &view.items[1];
+        assert_eq!(text.clip_id, text_clip_id.to_string());
+        assert_eq!(text.content_kind, super::TimelineClipContentKindView::Text);
+        assert_eq!(text.media_id, None);
+        assert_eq!(text.source_start, None);
+        assert_eq!(text.text.as_deref(), Some("Title"));
+        assert_eq!(
+            text.formatting,
+            Some(super::text_formatting_view(TextFormatting::default()))
+        );
+        assert_eq!(
+            text.timeline_duration,
+            rational_time_view(RationalTime::new(7, 3).unwrap())
+        );
+        assert_eq!(
+            view.items[2].content_kind,
+            super::TimelineClipContentKindView::Caption
         );
     }
 

@@ -101,7 +101,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Text
 
-**MVP FOUNDATION:** add and edit basic text and title clips on the timeline with a minimal set of formatting controls. Export geometry uses the bundled Inter 4.1 baseline through the shared cosmic-text 0.19.0 shaping/render path, independent of host-installed fonts.
+**MVP FOUNDATION:** add and edit basic title clips and manual captions on their timeline tracks. The editor exposes exact duration plus bundled-font size, weight, alignment, and color controls. Preview text uses the bundled Inter 4.1 baseline through cosmic-text 0.19.0, independent of host-installed fonts; the 8F exporter will use the same typed content and renderer semantics.
 
 **PLANNED:** body text, lower thirds, credits, callouts; font, weight, size, alignment, letter spacing, line height, fill, stroke, shadow, and background controls; text templates, saved styles, font library, and in/out/loop animation.
 
@@ -109,7 +109,9 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Captions and transcript
 
-**PLANNED:** automatic captions; local transcription; word timestamps; caption segmentation; inline editing; transcript editor; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; SRT, VTT, and ASS import or export.
+**MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting.
+
+**PLANNED:** automatic captions; local transcription; word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; SRT, VTT, and ASS import or export.
 
 The transcript and caption workflow includes searching, replacing, jumping from a transcript segment to its timeline position, and reviewing translated text. Recognition and translation remain editable outputs, not authoritative project instructions.
 

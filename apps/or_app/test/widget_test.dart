@@ -487,7 +487,7 @@ void main() {
           mediaId: 'bulk-media',
           timelineStart: ProjectRationalTime(BigInt.from(index * 2), 1),
           sourceStart: ProjectRationalTime(BigInt.zero, 1),
-          sourceDuration: ProjectRationalTime(BigInt.one, 1),
+          timelineDuration: ProjectRationalTime(BigInt.one, 1),
         ),
     ];
     final gateway = _FakeProjectGateway()
@@ -650,7 +650,7 @@ void main() {
           mediaId: 'stale-media',
           timelineStart: ProjectRationalTime(BigInt.from(index * 2), 1),
           sourceStart: ProjectRationalTime(BigInt.zero, 1),
-          sourceDuration: ProjectRationalTime(BigInt.one, 1),
+          timelineDuration: ProjectRationalTime(BigInt.one, 1),
         ),
     ];
     final gateway = _FakeProjectGateway()
@@ -731,6 +731,117 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('titles and manual captions can be added and edited', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-text-captions.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Text and captions');
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-add-text-track')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-add-text-track')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-add-title')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-add-title')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-content')),
+      'Opening title',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-duration')),
+      '7/2',
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+    await tester.pumpAndSettle();
+
+    final title = gateway.lastSession!.clips['track-1']!.single;
+    expect(title.contentKind, ProjectTimelineClipContentKind.text);
+    expect(title.text, 'Opening title');
+    expect(title.timelineStart.canonical, '0/1');
+    expect(title.timelineDuration.canonical, '7/2');
+    expect(title.formatting?.font, ProjectFontIdentity.bundledInter);
+    expect(title.formatting?.sizeMilliPoints, 48000);
+    expect(title.formatting?.weight, ProjectTextWeight.regular);
+    expect(title.formatting?.alignment, ProjectTextAlignment.center);
+    expect(title.formatting?.color.red, 255);
+    expect(title.formatting?.color.green, 255);
+    expect(title.formatting?.color.blue, 255);
+    expect(title.formatting?.color.alpha, 255);
+    expect(gateway.insertTimelineTextClipCalls, 1);
+
+    await tester.tap(find.byKey(ValueKey('timeline-clip-${title.clipId}')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('timeline-edit-text-${title.clipId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-content')),
+      'Updated title',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-duration')),
+      '9/2',
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+    await tester.pumpAndSettle();
+
+    final updatedTitle = gateway.lastSession!.clips['track-1']!.single;
+    expect(gateway.updateTimelineTextClipCalls, 1);
+    expect(gateway.lastTextClipId, title.clipId);
+    expect(updatedTitle.text, 'Updated title');
+    expect(updatedTitle.timelineDuration.canonical, '9/2');
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-add-caption-track')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-add-caption-track')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastSession!.tracks.map((track) => track.kind), [
+      ProjectTimelineTrackKind.text,
+      ProjectTimelineTrackKind.caption,
+    ]);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-add-manual-caption')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-add-manual-caption')));
+    await tester.pumpAndSettle();
+    expect(find.text('Add Manual Caption'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-content')),
+      'A manual caption',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-save-text')),
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('timeline-save-text')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineTextClipCalls, 2);
+    final caption =
+        gateway.lastSession!.clips[gateway.lastTextTrackId!]!.single;
+    expect(caption.contentKind, ProjectTimelineClipContentKind.caption);
+    expect(caption.text, 'A manual caption');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('timeline duplicate preserves exact source range', (
     tester,
   ) async {
@@ -740,7 +851,7 @@ void main() {
       mediaId: 'duplicate-media',
       timelineStart: ProjectRationalTime(BigInt.one, 3),
       sourceStart: ProjectRationalTime(BigInt.one, 5),
-      sourceDuration: ProjectRationalTime(BigInt.from(7), 3),
+      timelineDuration: ProjectRationalTime(BigInt.from(7), 3),
     );
     final gateway = _FakeProjectGateway()
       ..initialTimelineTracks = const [
@@ -777,11 +888,11 @@ void main() {
       isTrue,
     );
     expect(
-      _sameRational(gateway.lastInsertSourceStart!, clip.sourceStart),
+      _sameRational(gateway.lastInsertSourceStart!, clip.sourceStart!),
       isTrue,
     );
     expect(
-      _sameRational(gateway.lastInsertDuration!, clip.sourceDuration),
+      _sameRational(gateway.lastInsertDuration!, clip.timelineDuration),
       isTrue,
     );
     expect(gateway.lastSession!.clips['duplicate-track'], hasLength(2));
@@ -797,7 +908,7 @@ void main() {
         mediaId: 'keyboard-media',
         timelineStart: ProjectRationalTime(BigInt.zero, 1),
         sourceStart: ProjectRationalTime(BigInt.zero, 1),
-        sourceDuration: ProjectRationalTime(BigInt.from(2), 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
       );
       final gateway = _FakeProjectGateway()
         ..initialTimelineTracks = const [
@@ -1353,7 +1464,7 @@ void main() {
       mediaId: 'pointer-media',
       timelineStart: ProjectRationalTime(BigInt.from(2), 1),
       sourceStart: ProjectRationalTime(BigInt.zero, 1),
-      sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
     );
     final gateway = _FakeProjectGateway()
       ..initialTimelineTracks = const [
@@ -1453,7 +1564,7 @@ void main() {
             mediaId: 'quantized-media',
             timelineStart: ProjectRationalTime(BigInt.from(2), 1),
             sourceStart: ProjectRationalTime(BigInt.zero, 1),
-            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
           ),
         ],
       };
@@ -1513,7 +1624,7 @@ void main() {
             mediaId: 'trim-pointer-media',
             timelineStart: ProjectRationalTime(BigInt.from(2), 1),
             sourceStart: ProjectRationalTime(BigInt.zero, 1),
-            sourceDuration: ProjectRationalTime(BigInt.from(6), 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
           ),
         ],
       };
@@ -1588,7 +1699,7 @@ void main() {
             mediaId: 'lane-media',
             timelineStart: ProjectRationalTime(BigInt.from(2), 1),
             sourceStart: ProjectRationalTime(BigInt.zero, 1),
-            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
           ),
         ],
         'video-two': [],
@@ -1638,7 +1749,7 @@ void main() {
             mediaId: 'stale-pointer-media',
             timelineStart: ProjectRationalTime(BigInt.from(2), 1),
             sourceStart: ProjectRationalTime(BigInt.zero, 1),
-            sourceDuration: ProjectRationalTime(BigInt.from(4), 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
           ),
         ],
       };
@@ -1720,8 +1831,8 @@ void main() {
       expect(gateway.lastSession!.view.revision, BigInt.from(2));
       final clip = gateway.lastSession!.clips.values.single.single;
       expect(clip.timelineStart.canonical, '2/1');
-      expect(clip.sourceStart.canonical, '0/1');
-      expect(clip.sourceDuration.canonical, '4/1');
+      expect(clip.sourceStart!.canonical, '0/1');
+      expect(clip.timelineDuration.canonical, '4/1');
       final tooltip = tester.widget<Tooltip>(
         find.byKey(ValueKey('timeline-clip-tooltip-${clip.clipId}')),
       );
@@ -1808,7 +1919,7 @@ void main() {
             .values
             .single
             .single
-            .sourceDuration
+            .timelineDuration
             .canonical,
         '5/2',
       );
@@ -1872,7 +1983,12 @@ void main() {
       expect(gateway.insertTimelineClipCalls, 1);
       expect(gateway.lastSession!.clips['track-1'], isEmpty);
       expect(
-        gateway.lastSession!.clips['track-2']!.single.sourceDuration.canonical,
+        gateway
+            .lastSession!
+            .clips['track-2']!
+            .single
+            .timelineDuration
+            .canonical,
         '3/1',
       );
     },
@@ -1962,21 +2078,21 @@ void main() {
         mediaId: 'missing-media',
         timelineStart: ProjectRationalTime(BigInt.from(2), 1),
         sourceStart: ProjectRationalTime(BigInt.zero, 1),
-        sourceDuration: ProjectRationalTime(BigInt.from(6), 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
       );
       final laterClip = ProjectTimelineClip(
         clipId: 'later-clip',
         mediaId: 'missing-media',
         timelineStart: ProjectRationalTime(BigInt.from(10), 1),
         sourceStart: ProjectRationalTime(BigInt.from(6), 1),
-        sourceDuration: ProjectRationalTime(BigInt.one, 1),
+        timelineDuration: ProjectRationalTime(BigInt.one, 1),
       );
       final otherTrackClip = ProjectTimelineClip(
         clipId: 'other-track-clip',
         mediaId: 'missing-media',
         timelineStart: ProjectRationalTime(BigInt.from(1), 1),
         sourceStart: ProjectRationalTime(BigInt.zero, 1),
-        sourceDuration: ProjectRationalTime(BigInt.one, 1),
+        timelineDuration: ProjectRationalTime(BigInt.one, 1),
       );
       final gateway = _FakeProjectGateway()
         ..initialTimelineTracks = const [
@@ -2063,7 +2179,7 @@ void main() {
         '3/1',
       );
       expect(
-        gateway.lastSession!.clips['edit-track']!.first.sourceStart.canonical,
+        gateway.lastSession!.clips['edit-track']!.first.sourceStart!.canonical,
         '1/1',
       );
       expect(
@@ -2071,7 +2187,7 @@ void main() {
             .lastSession!
             .clips['edit-track']!
             .first
-            .sourceDuration
+            .timelineDuration
             .canonical,
         '5/1',
       );
@@ -2169,7 +2285,7 @@ void main() {
       mediaId: 'missing-media',
       timelineStart: ProjectRationalTime(BigInt.one, 2),
       sourceStart: ProjectRationalTime(BigInt.zero, 1),
-      sourceDuration: ProjectRationalTime(BigInt.from(2), 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
     );
     final gateway = _FakeProjectGateway()
       ..initialTimelineTracks = const [
@@ -2719,6 +2835,13 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastInsertTimelineStart;
   ProjectRationalTime? lastInsertSourceStart;
   ProjectRationalTime? lastInsertDuration;
+  int insertTimelineTextClipCalls = 0;
+  int updateTimelineTextClipCalls = 0;
+  String? lastTextTrackId;
+  String? lastTextClipId;
+  ProjectRationalTime? lastTextTimelineStart;
+  ProjectRationalTime? lastTextTimelineDuration;
+  ProjectTimelineTextContent? lastTextContent;
   int moveTimelineClipCalls = 0;
   String? lastMoveClipId;
   String? lastMoveTrackId;
@@ -3284,7 +3407,7 @@ class _FakeProjectGateway implements ProjectGateway {
         mediaId: mediaId,
         timelineStart: timelineStart,
         sourceStart: sourceStart,
-        sourceDuration: duration,
+        timelineDuration: duration,
       ),
     );
     clips.sort((a, b) => _compareRational(a.timelineStart, b.timelineStart));
@@ -3300,6 +3423,98 @@ class _FakeProjectGateway implements ProjectGateway {
         else
           track,
     ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> insertTimelineTextClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) async {
+    insertTimelineTextClipCalls++;
+    lastTextTrackId = trackId;
+    lastTextTimelineStart = timelineStart;
+    lastTextTimelineDuration = timelineDuration;
+    lastTextContent = content;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final track = session.tracks.where((item) => item.trackId == trackId);
+    if (track.isEmpty ||
+        (content.kind == ProjectTimelineClipContentKind.text &&
+            track.first.kind != ProjectTimelineTrackKind.text) ||
+        (content.kind == ProjectTimelineClipContentKind.caption &&
+            track.first.kind != ProjectTimelineTrackKind.caption)) {
+      return _timelineOperationFailure('TIMELINE_TRACK_NOT_FOUND');
+    }
+    final clipId = 'clip-${session.nextClipId++}';
+    final clips = session.clips.putIfAbsent(trackId, () => []);
+    clips.add(
+      ProjectTimelineClip(
+        clipId: clipId,
+        contentKind: content.kind,
+        text: content.text,
+        formatting: content.formatting,
+        timelineStart: timelineStart,
+        timelineDuration: timelineDuration,
+      ),
+    );
+    clips.sort((a, b) => _compareRational(a.timelineStart, b.timelineStart));
+    session.tracks = [
+      for (final item in session.tracks)
+        if (item.trackId == trackId)
+          ProjectTimelineTrack(
+            trackId: item.trackId,
+            kind: item.kind,
+            clipCount: clips.length,
+            state: item.state,
+          )
+        else
+          item,
+    ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineTextClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) async {
+    updateTimelineTextClipCalls++;
+    lastTextTrackId = trackId;
+    lastTextClipId = clipId;
+    lastTextTimelineDuration = timelineDuration;
+    lastTextContent = content;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final clips = session.clips[trackId];
+    if (clips == null) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    final index = clips.indexWhere((clip) => clip.clipId == clipId);
+    if (index < 0) return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    final clip = clips[index];
+    clips[index] = ProjectTimelineClip(
+      clipId: clip.clipId,
+      contentKind: content.kind,
+      text: content.text,
+      formatting: content.formatting,
+      timelineStart: clip.timelineStart,
+      timelineDuration: timelineDuration,
+    );
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }
@@ -3336,7 +3551,7 @@ class _FakeProjectGateway implements ProjectGateway {
       mediaId: clip.mediaId,
       timelineStart: timelineStart,
       sourceStart: clip.sourceStart,
-      sourceDuration: clip.sourceDuration,
+      timelineDuration: clip.timelineDuration,
     );
     final clips = session.clips[trackId]!;
     clips.add(moved);
@@ -3420,7 +3635,7 @@ class _FakeProjectGateway implements ProjectGateway {
           ? _subtractRational(clip.timelineEnd, timelineTime)
           : _subtractRational(timelineTime, clip.timelineStart);
       final sourceStart = edge == ProjectTimelineTrimEdge.start
-          ? clip.sourceStart.add(
+          ? clip.sourceStart!.add(
               _subtractRational(timelineTime, clip.timelineStart),
             )
           : clip.sourceStart;
@@ -3431,7 +3646,7 @@ class _FakeProjectGateway implements ProjectGateway {
             ? timelineTime
             : clip.timelineStart,
         sourceStart: sourceStart,
-        sourceDuration: duration,
+        timelineDuration: duration,
       );
       _timelineChanged(session);
       return ProjectActionResult(succeeded: true, view: session.view);
@@ -3461,15 +3676,15 @@ class _FakeProjectGateway implements ProjectGateway {
         clipId: 'clip-${session.nextClipId++}',
         mediaId: clip.mediaId,
         timelineStart: timelineTime,
-        sourceStart: clip.sourceStart.add(leftDuration),
-        sourceDuration: rightDuration,
+        sourceStart: clip.sourceStart!.add(leftDuration),
+        timelineDuration: rightDuration,
       );
       entry.value[index] = ProjectTimelineClip(
         clipId: clip.clipId,
         mediaId: clip.mediaId,
         timelineStart: clip.timelineStart,
         sourceStart: clip.sourceStart,
-        sourceDuration: leftDuration,
+        timelineDuration: leftDuration,
       );
       entry.value.insert(index + 1, right);
       session.tracks = [
@@ -3501,7 +3716,7 @@ class _FakeProjectGateway implements ProjectGateway {
     for (final entry in session.clips.entries) {
       final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
       if (index < 0) continue;
-      final duration = entry.value[index].sourceDuration;
+      final duration = entry.value[index].timelineDuration;
       entry.value.removeAt(index);
       for (var suffix = index; suffix < entry.value.length; suffix++) {
         final clip = entry.value[suffix];
@@ -3510,7 +3725,7 @@ class _FakeProjectGateway implements ProjectGateway {
           mediaId: clip.mediaId,
           timelineStart: _subtractRational(clip.timelineStart, duration),
           sourceStart: clip.sourceStart,
-          sourceDuration: clip.sourceDuration,
+          timelineDuration: clip.timelineDuration,
         );
       }
       session.tracks = [

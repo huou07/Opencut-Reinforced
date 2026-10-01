@@ -270,12 +270,18 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.video),
               onAddAudioTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.audio),
+              onAddTextTrack: () =>
+                  _addTimelineTrack(ProjectTimelineTrackKind.text),
+              onAddCaptionTrack: () =>
+                  _addTimelineTrack(ProjectTimelineTrackKind.caption),
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
+              onInsertTimelineTextClip: _insertTimelineTextClip,
+              onUpdateTimelineTextClip: _updateTimelineTextClip,
               onUpdateTimelineClipVisualSettings:
                   _updateTimelineClipVisualSettings,
               onMoveTimelineClip: _moveTimelineClip,
@@ -927,6 +933,46 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Future<void> _insertTimelineTextClip(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectRationalTime timelineStart,
+    ProjectRationalTime timelineDuration,
+    ProjectTimelineTextContent content,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.insertTimelineTextClip(
+        session,
+        current,
+        trackId: track.trackId,
+        timelineStart: timelineStart,
+        timelineDuration: timelineDuration,
+        content: content,
+      ),
+    );
+  }
+
+  Future<void> _updateTimelineTextClip(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+    ProjectRationalTime timelineDuration,
+    ProjectTimelineTextContent content,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.updateTimelineTextClip(
+        session,
+        current,
+        trackId: track.trackId,
+        clipId: clip.clipId,
+        timelineDuration: timelineDuration,
+        content: content,
+      ),
+    );
+  }
+
   Future<ProjectReadModel?> _updateTimelineClipVisualSettings(
     ProjectReadModel expected,
     String trackId,
@@ -975,10 +1021,30 @@ class _AppShellState extends State<AppShell> {
     ProjectTimelineClip clip,
   ) async {
     final timelineStart = ProjectRationalTime.tryParse(
-      clip.timelineStart.add(clip.sourceDuration).canonical,
+      clip.timelineStart.add(clip.timelineDuration).canonical,
     );
     if (timelineStart == null) {
       _showUnavailable('The clip cannot be duplicated at that exact time.');
+      return;
+    }
+    if (clip.contentKind != ProjectTimelineClipContentKind.media) {
+      await _insertTimelineTextClip(
+        expected,
+        track,
+        timelineStart,
+        clip.timelineDuration,
+        ProjectTimelineTextContent(
+          kind: clip.contentKind,
+          text: clip.text ?? '',
+          formatting: clip.formatting ?? ProjectTextFormatting.defaults,
+        ),
+      );
+      return;
+    }
+    final mediaId = clip.mediaId;
+    final sourceStart = clip.sourceStart;
+    if (mediaId == null || sourceStart == null) {
+      _showUnavailable('The media clip is missing its source range.');
       return;
     }
     await _runProjectActionAtSnapshot(
@@ -987,10 +1053,10 @@ class _AppShellState extends State<AppShell> {
         session,
         current,
         trackId: track.trackId,
-        mediaId: clip.mediaId,
+        mediaId: mediaId,
         timelineStart: timelineStart,
-        sourceStart: clip.sourceStart,
-        duration: clip.sourceDuration,
+        sourceStart: sourceStart,
+        duration: clip.timelineDuration,
       ),
     );
   }
@@ -1342,10 +1408,6 @@ class _AppShellState extends State<AppShell> {
         } else {
           final pages = <String, ProjectTimelineClipPage>{};
           for (final track in tracks.items) {
-            if (track.kind == ProjectTimelineTrackKind.text ||
-                track.kind == ProjectTimelineTrackKind.caption) {
-              continue;
-            }
             final page = track.clipCount == 0
                 ? ProjectTimelineClipPage(
                     projectId: tracks.projectId,

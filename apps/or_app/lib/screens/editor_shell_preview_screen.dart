@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -39,12 +40,16 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onRemoveMedia,
     this.onAddVideoTrack,
     this.onAddAudioTrack,
+    this.onAddTextTrack,
+    this.onAddCaptionTrack,
     this.onRemoveTimelineTrack,
     this.onSetTimelineTrackState,
     this.onLoadMoreTimelineClips,
     this.onLoadMoreTimelineMarkers,
     this.onRefreshTimeline,
     this.onAddMediaToTimeline,
+    this.onInsertTimelineTextClip,
+    this.onUpdateTimelineTextClip,
     this.onMoveTimelineClip,
     this.onDuplicateTimelineClip,
     this.onResolveTimelineSnap,
@@ -89,6 +94,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
+  final VoidCallback? onAddTextTrack;
+  final VoidCallback? onAddCaptionTrack;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTimelineTrack;
   final Future<void> Function(
@@ -109,6 +116,22 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime duration,
   )?
   onAddMediaToTimeline;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineTrack,
+    ProjectRationalTime,
+    ProjectRationalTime,
+    ProjectTimelineTextContent,
+  )?
+  onInsertTimelineTextClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineTrack,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+    ProjectTimelineTextContent,
+  )?
+  onUpdateTimelineTextClip;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectTimelineClip clip,
@@ -402,6 +425,12 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          onAddTextTrack: widget.onAddTextTrack,
+          onAddCaptionTrack: widget.onAddCaptionTrack,
+          onAddTitle: () =>
+              _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
+          onAddCaption: () =>
+              _showAddTimelineTextClip(ProjectTimelineClipContentKind.caption),
           onAddMarker: widget.isProjectWorkspace
               ? _showAddTimelineMarker
               : null,
@@ -427,6 +456,8 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             busy: widget.busy,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
+            onAddTextTrack: widget.onAddTextTrack,
+            onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
             onLoadMore: widget.onLoadMoreTimelineClips,
@@ -439,6 +470,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
             onRenameMarker: widget.onRenameTimelineMarker,
@@ -474,6 +506,12 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onUndo: widget.onUndo,
           onAddVideoTrack: widget.onAddVideoTrack,
           onAddAudioTrack: widget.onAddAudioTrack,
+          onAddTextTrack: widget.onAddTextTrack,
+          onAddCaptionTrack: widget.onAddCaptionTrack,
+          onAddTitle: () =>
+              _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
+          onAddCaption: () =>
+              _showAddTimelineTextClip(ProjectTimelineClipContentKind.caption),
           onAddMarker: widget.isProjectWorkspace
               ? _showAddTimelineMarker
               : null,
@@ -499,6 +537,8 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             busy: widget.busy,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
+            onAddTextTrack: widget.onAddTextTrack,
+            onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
             onLoadMore: widget.onLoadMoreTimelineClips,
@@ -511,6 +551,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+            onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
             onRenameMarker: widget.onRenameTimelineMarker,
@@ -556,6 +597,48 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       project: project,
       onAdd: onAdd,
     );
+  }
+
+  Future<void> _showAddTimelineTextClip(
+    ProjectTimelineClipContentKind contentKind,
+  ) async {
+    final project = widget.project;
+    final onInsert = widget.onInsertTimelineTextClip;
+    if (!widget.isProjectWorkspace ||
+        project == null ||
+        onInsert == null ||
+        widget.busy) {
+      return;
+    }
+    if (contentKind == ProjectTimelineClipContentKind.media) return;
+    final trackKind = contentKind == ProjectTimelineClipContentKind.text
+        ? ProjectTimelineTrackKind.text
+        : ProjectTimelineTrackKind.caption;
+    ProjectTimelineTrack? track;
+    for (final candidate
+        in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+      if (candidate.kind == trackKind && !candidate.state.locked) {
+        track = candidate;
+        break;
+      }
+    }
+    if (track == null) {
+      _showTimelineEditError(
+        'Add an unlocked ${contentKind == ProjectTimelineClipContentKind.text ? 'text' : 'caption'} track first.',
+      );
+      return;
+    }
+    final start =
+        _previewState.value?.position ?? ProjectRationalTime(BigInt.zero, 1);
+    final edit = await _showTimelineTextClipDialog(
+      context: context,
+      contentKind: contentKind,
+      duration: ProjectRationalTime(BigInt.from(5), 1),
+      formatting: ProjectTextFormatting.defaults,
+    );
+    if (edit != null && mounted) {
+      await onInsert(project, track, start, edit.duration, edit.content);
+    }
   }
 }
 
@@ -2390,6 +2473,10 @@ class _TimelineToolbar extends StatelessWidget {
     required this.onUndo,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
+    required this.onAddTextTrack,
+    required this.onAddCaptionTrack,
+    required this.onAddTitle,
+    required this.onAddCaption,
     required this.onAddMarker,
     required this.snapEnabled,
     required this.onSnapChanged,
@@ -2401,6 +2488,10 @@ class _TimelineToolbar extends StatelessWidget {
   final VoidCallback? onUndo;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
+  final VoidCallback? onAddTextTrack;
+  final VoidCallback? onAddCaptionTrack;
+  final VoidCallback? onAddTitle;
+  final VoidCallback? onAddCaption;
   final VoidCallback? onAddMarker;
   final bool snapEnabled;
   final ValueChanged<bool>? onSnapChanged;
@@ -2489,6 +2580,30 @@ class _TimelineToolbar extends StatelessWidget {
                   ),
                 ),
               ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-text-track'),
+                onPressed: busy ? null : onAddTextTrack,
+                icon: const Icon(Icons.text_fields_outlined, size: 16),
+                label: Text(compact ? 'Add Text' : 'Add Text Track'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-caption-track'),
+                onPressed: busy ? null : onAddCaptionTrack,
+                icon: const Icon(Icons.subtitles_outlined, size: 16),
+                label: Text(compact ? 'Add Captions' : 'Add Caption Track'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-title'),
+                onPressed: busy ? null : onAddTitle,
+                icon: const Icon(Icons.title, size: 16),
+                label: const Text('Add Title'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-add-manual-caption'),
+                onPressed: busy ? null : onAddCaption,
+                icon: const Icon(Icons.subtitles_outlined, size: 16),
+                label: const Text('Add Caption'),
+              ),
             ] else ...[
               _UnavailableTimelineAction(
                 tooltip: 'Undo is unavailable in this Developer Preview',
@@ -2541,6 +2656,8 @@ class _TimelinePanel extends StatefulWidget {
     required this.busy,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
+    required this.onAddTextTrack,
+    required this.onAddCaptionTrack,
     required this.onRemoveTrack,
     required this.onSetTrackState,
     required this.onLoadMore,
@@ -2553,6 +2670,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onTrimClip,
     required this.onSplitClip,
     required this.onRippleDeleteClip,
+    required this.onUpdateTextClip,
     required this.onAddMarker,
     required this.onMoveMarker,
     required this.onRenameMarker,
@@ -2578,6 +2696,8 @@ class _TimelinePanel extends StatefulWidget {
   final bool busy;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
+  final VoidCallback? onAddTextTrack;
+  final VoidCallback? onAddCaptionTrack;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTrack;
   final Future<void> Function(
@@ -2627,6 +2747,14 @@ class _TimelinePanel extends StatefulWidget {
   onSplitClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineTrack,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+    ProjectTimelineTextContent,
+  )?
+  onUpdateTextClip;
   final Future<void> Function(ProjectReadModel, ProjectRationalTime, String)?
   onAddMarker;
   final Future<void> Function(
@@ -2820,6 +2948,18 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                   icon: const Icon(Icons.graphic_eq_outlined, size: 16),
                   label: const Text('Add Audio Track'),
                 ),
+                OutlinedButton.icon(
+                  key: const ValueKey('timeline-empty-add-text'),
+                  onPressed: widget.busy ? null : widget.onAddTextTrack,
+                  icon: const Icon(Icons.text_fields_outlined, size: 16),
+                  label: const Text('Add Text Track'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('timeline-empty-add-caption'),
+                  onPressed: widget.busy ? null : widget.onAddCaptionTrack,
+                  icon: const Icon(Icons.subtitles_outlined, size: 16),
+                  label: const Text('Add Caption Track'),
+                ),
               ],
             ),
           ],
@@ -2838,7 +2978,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           for (final page in widget.clipPages.values) {
             for (final clip in page.items) {
               final start = clip.timelineStart.secondsForDisplay;
-              final duration = clip.sourceDuration.secondsForDisplay;
+              final duration = clip.timelineDuration.secondsForDisplay;
               final end = start + duration;
               if (start.isFinite && duration.isFinite && end.isFinite) {
                 endSeconds = math.max(endSeconds, end);
@@ -3023,6 +3163,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               onSplit: widget.onSplitClip,
                                               onRippleDelete:
                                                   widget.onRippleDeleteClip,
+                                              onEditTextClip:
+                                                  widget.onUpdateTextClip,
                                               busy: widget.busy,
                                             );
                                             if (mounted) {
@@ -3672,9 +3814,9 @@ class _TimelinePointerGesture {
   };
 
   double get visualDurationSeconds => switch (kind) {
-    _TimelinePointerEditKind.move => clip.sourceDuration.secondsForDisplay,
+    _TimelinePointerEditKind.move => clip.timelineDuration.secondsForDisplay,
     _TimelinePointerEditKind.trim =>
-      clip.sourceDuration.secondsForDisplay +
+      clip.timelineDuration.secondsForDisplay +
           (edge == ProjectTimelineTrimEdge.start
               ? -deltaSeconds
               : deltaSeconds),
@@ -4489,7 +4631,7 @@ class _TimelineTrackLane extends StatelessWidget {
 
   Widget _positionedClip(BuildContext context, ProjectTimelineClip clip) {
     final start = clip.timelineStart.secondsForDisplay;
-    final duration = clip.sourceDuration.secondsForDisplay;
+    final duration = clip.timelineDuration.secondsForDisplay;
     final rawLeft = start * pixelsPerSecond;
     final rawWidth = duration * pixelsPerSecond;
     if (!rawLeft.isFinite || !rawWidth.isFinite || rawWidth <= 0) {
@@ -4498,11 +4640,18 @@ class _TimelineTrackLane extends StatelessWidget {
     final left = rawLeft.clamp(0.0, width).toDouble();
     final clipWidth = math.min(math.max(2.0, rawWidth), width - left);
     if (clipWidth <= 0) return const SizedBox.shrink();
-    final media = _findMedia(mediaItems, clip.mediaId);
-    final title = media == null
-        ? 'Media ${clip.mediaId.substring(0, math.min(8, clip.mediaId.length))}'
-        : _mediaDisplayName(media.sourceUri);
-    final durationLabel = clip.sourceDuration.canonical;
+    final mediaId = clip.mediaId;
+    final media = mediaId == null ? null : _findMedia(mediaItems, mediaId);
+    final textLabel = (clip.text ?? '').replaceAll('\n', ' ');
+    final title = switch (clip.contentKind) {
+      ProjectTimelineClipContentKind.media =>
+        media == null
+            ? 'Media ${mediaId == null ? '' : mediaId.substring(0, math.min(8, mediaId.length))}'
+            : _mediaDisplayName(media.sourceUri),
+      ProjectTimelineClipContentKind.text => 'Text: $textLabel',
+      ProjectTimelineClipContentKind.caption => 'Caption: $textLabel',
+    };
+    final durationLabel = clip.timelineDuration.canonical;
     final visualTrack = track.kind != ProjectTimelineTrackKind.audio;
     final trackEnabled = visualTrack ? track.state.visible : !track.state.muted;
     final background = visualTrack
@@ -4547,6 +4696,12 @@ class _TimelineTrackLane extends StatelessWidget {
       ),
     );
     final bodyInset = math.min(6.0, clipWidth / 2);
+    final contentDetails = switch (clip.contentKind) {
+      ProjectTimelineClipContentKind.media =>
+        'Media ID: ${mediaId ?? ''}\nSource range: ${clip.sourceStart?.canonical ?? ''} + ${clip.timelineDuration.canonical}',
+      ProjectTimelineClipContentKind.text => 'Title: ${clip.text ?? ''}',
+      ProjectTimelineClipContentKind.caption => 'Caption: ${clip.text ?? ''}',
+    };
     return Positioned(
       left: left,
       top: 5,
@@ -4563,7 +4718,7 @@ class _TimelineTrackLane extends StatelessWidget {
           child: Tooltip(
             key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
             message:
-                'Clip ID: ${clip.clipId}\nMedia ID: ${clip.mediaId}\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart.canonical} + ${clip.sourceDuration.canonical}',
+                'Clip ID: ${clip.clipId}\n$contentDetails\nTimeline start: ${clip.timelineStart.canonical}\nTimeline duration: ${clip.timelineDuration.canonical}',
             child: Material(
               color: background,
               borderRadius: BorderRadius.circular(OrRadii.small),
@@ -4581,8 +4736,19 @@ class _TimelineTrackLane extends StatelessWidget {
                       child: body,
                     ),
                   ),
-                  _trimHandle(clip, start: true, label: 'Trim start of $title'),
-                  _trimHandle(clip, start: false, label: 'Trim end of $title'),
+                  if (clip.contentKind ==
+                      ProjectTimelineClipContentKind.media) ...[
+                    _trimHandle(
+                      clip,
+                      start: true,
+                      label: 'Trim start of $title',
+                    ),
+                    _trimHandle(
+                      clip,
+                      start: false,
+                      label: 'Trim end of $title',
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -5298,9 +5464,18 @@ Future<void> _showTimelineClipActions({
   onSplit,
   required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDelete,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineTrack,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+    ProjectTimelineTextContent,
+  )?
+  onEditTextClip,
   required bool busy,
 }) async {
-  final media = clip.mediaId;
+  final isMedia = clip.contentKind == ProjectTimelineClipContentKind.media;
+  final isCaption = clip.contentKind == ProjectTimelineClipContentKind.caption;
   final canMove =
       project != null &&
       !track.state.locked &&
@@ -5310,17 +5485,29 @@ Future<void> _showTimelineClipActions({
       );
   final canDuplicate =
       project != null && !track.state.locked && onDuplicate != null;
-  final canTrim = project != null && !track.state.locked && onTrim != null;
-  final canSplit = project != null && !track.state.locked && onSplit != null;
+  final canTrim =
+      isMedia && project != null && !track.state.locked && onTrim != null;
+  final canSplit =
+      isMedia && project != null && !track.state.locked && onSplit != null;
+  final canEditText =
+      !isMedia &&
+      project != null &&
+      !track.state.locked &&
+      onEditTextClip != null;
   final canRippleDelete =
       project != null && !track.state.locked && onRippleDelete != null;
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Clip'),
-      content: Text(
-        'Clip ID: ${clip.clipId}\nMedia ID: $media\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart.canonical} + ${clip.sourceDuration.canonical}',
-      ),
+      content: Text(switch (clip.contentKind) {
+        ProjectTimelineClipContentKind.media =>
+          'Clip ID: ${clip.clipId}\nMedia ID: ${clip.mediaId ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart?.canonical ?? ''} + ${clip.timelineDuration.canonical}',
+        ProjectTimelineClipContentKind.text =>
+          'Clip ID: ${clip.clipId}\nTitle: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
+        ProjectTimelineClipContentKind.caption =>
+          'Clip ID: ${clip.clipId}\nCaption: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
+      }),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(),
@@ -5355,6 +5542,25 @@ Future<void> _showTimelineClipActions({
                 },
           child: const Text('Duplicate'),
         ),
+        if (!isMedia)
+          TextButton(
+            key: ValueKey('timeline-edit-text-${clip.clipId}'),
+            onPressed: busy || !canEditText
+                ? null
+                : () {
+                    Navigator.of(dialogContext).pop();
+                    unawaited(
+                      _editTimelineTextClip(
+                        context: context,
+                        project: project,
+                        track: track,
+                        clip: clip,
+                        onUpdate: onEditTextClip,
+                      ),
+                    );
+                  },
+            child: Text(isCaption ? 'Edit Caption' : 'Edit Title'),
+          ),
         TextButton(
           key: ValueKey('timeline-trim-${clip.clipId}'),
           onPressed: busy || !canTrim
@@ -5427,6 +5633,297 @@ Future<void> _showTimelineClipActions({
       ],
     ),
   );
+}
+
+class _TimelineTextClipEdit {
+  const _TimelineTextClipEdit({required this.content, required this.duration});
+
+  final ProjectTimelineTextContent content;
+  final ProjectRationalTime duration;
+}
+
+Future<void> _editTimelineTextClip({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineTrack track,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineTrack,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+    ProjectTimelineTextContent,
+  )?
+  onUpdate,
+}) async {
+  if (project == null || onUpdate == null) return;
+  final edit = await _showTimelineTextClipDialog(
+    context: context,
+    contentKind: clip.contentKind,
+    text: clip.text ?? '',
+    duration: clip.timelineDuration,
+    formatting: clip.formatting ?? ProjectTextFormatting.defaults,
+  );
+  if (edit != null) {
+    await onUpdate(project, track, clip, edit.duration, edit.content);
+  }
+}
+
+Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
+  required BuildContext context,
+  required ProjectTimelineClipContentKind contentKind,
+  String text = '',
+  required ProjectRationalTime duration,
+  required ProjectTextFormatting formatting,
+}) async {
+  if (contentKind == ProjectTimelineClipContentKind.media) return null;
+  final textController = TextEditingController(text: text);
+  final durationController = TextEditingController(text: duration.canonical);
+  final sizeController = TextEditingController(
+    text: (formatting.sizeMilliPoints / 1000)
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'\.?0+$'), ''),
+  );
+  var weight = formatting.weight;
+  var alignment = formatting.alignment;
+  final colors = <ProjectTextColor>[
+    ProjectTextColor.white,
+    ProjectTextColor(red: 255, green: 220, blue: 90, alpha: 255),
+    ProjectTextColor(red: 110, green: 210, blue: 255, alpha: 255),
+  ];
+  var colorIndex = colors.indexWhere(
+    (color) =>
+        color.red == formatting.color.red &&
+        color.green == formatting.color.green &&
+        color.blue == formatting.color.blue &&
+        color.alpha == formatting.color.alpha,
+  );
+  if (colorIndex < 0) {
+    colors.add(formatting.color);
+    colorIndex = colors.length - 1;
+  }
+  bool fieldsAreValid() {
+    final durationValue = ProjectRationalTime.tryParse(durationController.text);
+    final sizePoints = double.tryParse(sizeController.text.trim());
+    final maxTextBytes = contentKind == ProjectTimelineClipContentKind.caption
+        ? 4096
+        : 65536;
+    return textController.text.trim().isNotEmpty &&
+        utf8.encode(textController.text).length <= maxTextBytes &&
+        durationValue != null &&
+        durationValue.numerator > BigInt.zero &&
+        sizePoints != null &&
+        sizePoints.isFinite &&
+        sizePoints >= 4 &&
+        sizePoints <= 256;
+  }
+
+  final canSave = ValueNotifier(fieldsAreValid());
+  void updateValidity() => canSave.value = fieldsAreValid();
+  textController.addListener(updateValidity);
+  durationController.addListener(updateValidity);
+  sizeController.addListener(updateValidity);
+  final title = switch (contentKind) {
+    ProjectTimelineClipContentKind.text =>
+      text.isEmpty ? 'Add Title' : 'Edit Title',
+    ProjectTimelineClipContentKind.caption =>
+      text.isEmpty ? 'Add Manual Caption' : 'Edit Manual Caption',
+    ProjectTimelineClipContentKind.media => '',
+  };
+  try {
+    return await showDialog<_TimelineTextClipEdit>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  key: const ValueKey('timeline-text-content'),
+                  controller: textController,
+                  autofocus: true,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText:
+                        contentKind == ProjectTimelineClipContentKind.text
+                        ? 'Title text'
+                        : 'Caption text',
+                    hintText: 'Enter text',
+                    isDense: true,
+                  ),
+                ),
+                _ExactRationalField(
+                  fieldKey: const ValueKey('timeline-text-duration'),
+                  label: 'Duration (NUM/DEN seconds)',
+                  controller: durationController,
+                  onChanged: updateValidity,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: OrSpacing.x2),
+                  child: TextField(
+                    key: const ValueKey('timeline-text-size'),
+                    controller: sizeController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Font size (pt)',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                DropdownButtonFormField<ProjectTextWeight>(
+                  key: const ValueKey('timeline-text-weight'),
+                  initialValue: weight,
+                  decoration: const InputDecoration(
+                    labelText: 'Weight',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ProjectTextWeight.regular,
+                      child: Text('Regular'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextWeight.medium,
+                      child: Text('Medium'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextWeight.semibold,
+                      child: Text('Semibold'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextWeight.bold,
+                      child: Text('Bold'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => weight = value);
+                    updateValidity();
+                  },
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                DropdownButtonFormField<ProjectTextAlignment>(
+                  key: const ValueKey('timeline-text-alignment'),
+                  initialValue: alignment,
+                  decoration: const InputDecoration(
+                    labelText: 'Alignment',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ProjectTextAlignment.start,
+                      child: Text('Left'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextAlignment.center,
+                      child: Text('Center'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextAlignment.end,
+                      child: Text('Right'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => alignment = value);
+                    updateValidity();
+                  },
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                DropdownButtonFormField<int>(
+                  key: const ValueKey('timeline-text-color'),
+                  initialValue: colorIndex,
+                  decoration: const InputDecoration(
+                    labelText: 'Color',
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: 0, child: Text('White')),
+                    const DropdownMenuItem(value: 1, child: Text('Yellow')),
+                    const DropdownMenuItem(value: 2, child: Text('Cyan')),
+                    if (colors.length > 3)
+                      const DropdownMenuItem(
+                        value: 3,
+                        child: Text('Current custom color'),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => colorIndex = value);
+                    updateValidity();
+                  },
+                ),
+                const SizedBox(height: OrSpacing.x1),
+                const Text(
+                  'New clips start at the preview playhead.',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canSave,
+              builder: (context, valid, _) => FilledButton(
+                key: const ValueKey('timeline-save-text'),
+                onPressed: valid
+                    ? () {
+                        final parsedDuration = ProjectRationalTime.tryParse(
+                          durationController.text,
+                        );
+                        final sizePoints = double.tryParse(
+                          sizeController.text.trim(),
+                        );
+                        if (parsedDuration == null || sizePoints == null) {
+                          return;
+                        }
+                        final content = ProjectTimelineTextContent(
+                          kind: contentKind,
+                          text: textController.text,
+                          formatting: ProjectTextFormatting(
+                            font: formatting.font,
+                            sizeMilliPoints: (sizePoints * 1000).round(),
+                            weight: weight,
+                            alignment: alignment,
+                            color: colors[colorIndex],
+                          ),
+                        );
+                        Navigator.of(dialogContext).pop(
+                          _TimelineTextClipEdit(
+                            content: content,
+                            duration: parsedDuration,
+                          ),
+                        );
+                      }
+                    : null,
+                child: Text(text.isEmpty ? 'Add' : 'Save'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    textController.removeListener(updateValidity);
+    durationController.removeListener(updateValidity);
+    sizeController.removeListener(updateValidity);
+    textController.dispose();
+    durationController.dispose();
+    sizeController.dispose();
+    canSave.dispose();
+  }
 }
 
 Future<void> _showTrimTimelineClipDialog({

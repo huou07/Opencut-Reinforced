@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1611983821;
+  int get rustContentHash => 326487986;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -154,6 +154,22 @@ abstract class RustLibApi extends BaseApi {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleInsertTimelineTextClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineStartNumerator,
+    required int timelineStartDenominator,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
   });
 
   Future<ProjectMediaPageView> crateApiProjectProjectHostHandleListMediaPage({
@@ -392,6 +408,21 @@ abstract class RustLibApi extends BaseApi {
     required String trackId,
     required String clipId,
     required ProjectTimelineVisualSettingsView settings,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineTextClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
   });
 
   Future<AppInfo> crateApiAppInfo();
@@ -909,6 +940,96 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleInsertTimelineTextClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineStartNumerator,
+    required int timelineStartDenominator,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_timeline_clip_content_kind_view(contentKind, serializer);
+          sse_encode_i_64(timelineStartNumerator, serializer);
+          sse_encode_u_32(timelineStartDenominator, serializer);
+          sse_encode_i_64(timelineDurationNumerator, serializer);
+          sse_encode_u_32(timelineDurationDenominator, serializer);
+          sse_encode_String(text, serializer);
+          sse_encode_box_autoadd_project_text_formatting_view(
+            formatting,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleInsertTimelineTextClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          contentKind,
+          timelineStartNumerator,
+          timelineStartDenominator,
+          timelineDurationNumerator,
+          timelineDurationDenominator,
+          text,
+          formatting,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleInsertTimelineTextClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_insert_timeline_text_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "contentKind",
+          "timelineStartNumerator",
+          "timelineStartDenominator",
+          "timelineDurationNumerator",
+          "timelineDurationDenominator",
+          "text",
+          "formatting",
+        ],
+      );
+
+  @override
   Future<ProjectMediaPageView> crateApiProjectProjectHostHandleListMediaPage({
     required ProjectHostHandle that,
     required BigInt offset,
@@ -927,7 +1048,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -970,7 +1091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -1012,7 +1133,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -1051,7 +1172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -1102,7 +1223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -1170,7 +1291,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -1223,7 +1344,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -1259,7 +1380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -1297,7 +1418,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1333,7 +1454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 19,
             port: port_,
           );
         },
@@ -1371,7 +1492,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1407,7 +1528,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1448,7 +1569,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1492,7 +1613,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1541,7 +1662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1598,7 +1719,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1656,7 +1777,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1709,7 +1830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1764,7 +1885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1805,7 +1926,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1860,7 +1981,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1927,7 +2048,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1977,7 +2098,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -2025,7 +2146,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -2089,7 +2210,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 34,
             port: port_,
           );
         },
@@ -2154,7 +2275,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 35,
             port: port_,
           );
         },
@@ -2210,7 +2331,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 35,
+              funcId: 36,
               port: port_,
             );
           },
@@ -2255,7 +2376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 36,
+              funcId: 37,
               port: port_,
             );
           },
@@ -2295,7 +2416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -2332,7 +2453,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 39,
             port: port_,
           );
         },
@@ -2384,7 +2505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 40,
             port: port_,
           );
         },
@@ -2445,7 +2566,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 41,
             port: port_,
           );
         },
@@ -2502,7 +2623,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 42,
             port: port_,
           );
         },
@@ -2542,6 +2663,92 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineTextClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_timeline_clip_content_kind_view(contentKind, serializer);
+          sse_encode_i_64(timelineDurationNumerator, serializer);
+          sse_encode_u_32(timelineDurationDenominator, serializer);
+          sse_encode_String(text, serializer);
+          sse_encode_box_autoadd_project_text_formatting_view(
+            formatting,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 43,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleUpdateTimelineTextClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          contentKind,
+          timelineDurationNumerator,
+          timelineDurationDenominator,
+          text,
+          formatting,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleUpdateTimelineTextClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_update_timeline_text_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "contentKind",
+          "timelineDurationNumerator",
+          "timelineDurationDenominator",
+          "text",
+          "formatting",
+        ],
+      );
+
+  @override
   Future<AppInfo> crateApiAppInfo() {
     return handler.executeNormal(
       NormalTask(
@@ -2550,7 +2757,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 44,
             port: port_,
           );
         },
@@ -2580,7 +2787,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 45,
             port: port_,
           );
         },
@@ -2607,7 +2814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 46,
             port: port_,
           );
         },
@@ -2639,7 +2846,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 47,
             port: port_,
           );
         },
@@ -2673,7 +2880,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 48,
             port: port_,
           );
         },
@@ -2700,7 +2907,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 49,
             port: port_,
           );
         },
@@ -2730,7 +2937,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 50,
             port: port_,
           );
         },
@@ -2758,7 +2965,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 51,
             port: port_,
           );
         },
@@ -2875,6 +3082,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextFormattingView dco_decode_box_autoadd_project_text_formatting_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_project_text_formatting_view(raw);
+  }
+
+  @protected
   ProjectTimelineTrackStateView
   dco_decode_box_autoadd_project_timeline_track_state_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -2922,6 +3137,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       id: dco_decode_String(arr[0]),
       version: dco_decode_u_32(arr[1]),
     );
+  }
+
+  @protected
+  FontIdentityView dco_decode_font_identity_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return FontIdentityView.values[raw as int];
   }
 
   @protected
@@ -3088,6 +3309,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextFormattingView?
+  dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_project_text_formatting_view(raw);
+  }
+
+  @protected
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_project_view(raw);
@@ -3218,6 +3448,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextColorView dco_decode_project_text_color_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ProjectTextColorView(
+      red: dco_decode_u_8(arr[0]),
+      green: dco_decode_u_8(arr[1]),
+      blue: dco_decode_u_8(arr[2]),
+      alpha: dco_decode_u_8(arr[3]),
+    );
+  }
+
+  @protected
+  ProjectTextFormattingView dco_decode_project_text_formatting_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return ProjectTextFormattingView(
+      font: dco_decode_font_identity_view(arr[0]),
+      sizeMilliPoints: dco_decode_u_32(arr[1]),
+      weight: dco_decode_text_weight_view(arr[2]),
+      alignment: dco_decode_text_alignment_view(arr[3]),
+      color: dco_decode_project_text_color_view(arr[4]),
+    );
+  }
+
+  @protected
   ProjectTimelineClipPageView dco_decode_project_timeline_clip_page_view(
     dynamic raw,
   ) {
@@ -3242,14 +3503,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return ProjectTimelineClipView(
       clipId: dco_decode_String(arr[0]),
-      mediaId: dco_decode_String(arr[1]),
-      timelineStart: dco_decode_rational_time_view(arr[2]),
-      sourceStart: dco_decode_rational_time_view(arr[3]),
-      sourceDuration: dco_decode_rational_time_view(arr[4]),
+      contentKind: dco_decode_timeline_clip_content_kind_view(arr[1]),
+      mediaId: dco_decode_opt_String(arr[2]),
+      text: dco_decode_opt_String(arr[3]),
+      formatting: dco_decode_opt_box_autoadd_project_text_formatting_view(
+        arr[4],
+      ),
+      timelineStart: dco_decode_rational_time_view(arr[5]),
+      timelineDuration: dco_decode_rational_time_view(arr[6]),
+      sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[7]),
     );
   }
 
@@ -3465,6 +3731,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TextAlignmentView dco_decode_text_alignment_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TextAlignmentView.values[raw as int];
+  }
+
+  @protected
+  TextWeightView dco_decode_text_weight_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TextWeightView.values[raw as int];
+  }
+
+  @protected
+  TimelineClipContentKindView dco_decode_timeline_clip_content_kind_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TimelineClipContentKindView.values[raw as int];
+  }
+
+  @protected
   TimelineSnapMovingAnchorView dco_decode_timeline_snap_moving_anchor_view(
     dynamic raw,
   ) {
@@ -3644,6 +3930,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextFormattingView sse_decode_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_project_text_formatting_view(deserializer));
+  }
+
+  @protected
   ProjectTimelineTrackStateView
   sse_decode_box_autoadd_project_timeline_track_state_view(
     SseDeserializer deserializer,
@@ -3697,6 +3991,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_id = sse_decode_String(deserializer);
     var var_version = sse_decode_u_32(deserializer);
     return Capability(id: var_id, version: var_version);
+  }
+
+  @protected
+  FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return FontIdentityView.values[inner];
   }
 
   @protected
@@ -3913,6 +4214,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextFormattingView?
+  sse_decode_opt_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_project_text_formatting_view(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ProjectView? sse_decode_opt_box_autoadd_project_view(
     SseDeserializer deserializer,
   ) {
@@ -4115,6 +4432,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextColorView sse_decode_project_text_color_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_red = sse_decode_u_8(deserializer);
+    var var_green = sse_decode_u_8(deserializer);
+    var var_blue = sse_decode_u_8(deserializer);
+    var var_alpha = sse_decode_u_8(deserializer);
+    return ProjectTextColorView(
+      red: var_red,
+      green: var_green,
+      blue: var_blue,
+      alpha: var_alpha,
+    );
+  }
+
+  @protected
+  ProjectTextFormattingView sse_decode_project_text_formatting_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_font = sse_decode_font_identity_view(deserializer);
+    var var_sizeMilliPoints = sse_decode_u_32(deserializer);
+    var var_weight = sse_decode_text_weight_view(deserializer);
+    var var_alignment = sse_decode_text_alignment_view(deserializer);
+    var var_color = sse_decode_project_text_color_view(deserializer);
+    return ProjectTextFormattingView(
+      font: var_font,
+      sizeMilliPoints: var_sizeMilliPoints,
+      weight: var_weight,
+      alignment: var_alignment,
+      color: var_color,
+    );
+  }
+
+  @protected
   ProjectTimelineClipPageView sse_decode_project_timeline_clip_page_view(
     SseDeserializer deserializer,
   ) {
@@ -4147,16 +4500,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_clipId = sse_decode_String(deserializer);
-    var var_mediaId = sse_decode_String(deserializer);
+    var var_contentKind = sse_decode_timeline_clip_content_kind_view(
+      deserializer,
+    );
+    var var_mediaId = sse_decode_opt_String(deserializer);
+    var var_text = sse_decode_opt_String(deserializer);
+    var var_formatting =
+        sse_decode_opt_box_autoadd_project_text_formatting_view(deserializer);
     var var_timelineStart = sse_decode_rational_time_view(deserializer);
-    var var_sourceStart = sse_decode_rational_time_view(deserializer);
-    var var_sourceDuration = sse_decode_rational_time_view(deserializer);
+    var var_timelineDuration = sse_decode_rational_time_view(deserializer);
+    var var_sourceStart = sse_decode_opt_box_autoadd_rational_time_view(
+      deserializer,
+    );
     return ProjectTimelineClipView(
       clipId: var_clipId,
+      contentKind: var_contentKind,
       mediaId: var_mediaId,
+      text: var_text,
+      formatting: var_formatting,
       timelineStart: var_timelineStart,
+      timelineDuration: var_timelineDuration,
       sourceStart: var_sourceStart,
-      sourceDuration: var_sourceDuration,
     );
   }
 
@@ -4422,6 +4786,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TextAlignmentView sse_decode_text_alignment_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TextAlignmentView.values[inner];
+  }
+
+  @protected
+  TextWeightView sse_decode_text_weight_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TextWeightView.values[inner];
+  }
+
+  @protected
+  TimelineClipContentKindView sse_decode_timeline_clip_content_kind_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TimelineClipContentKindView.values[inner];
+  }
+
+  @protected
   TimelineSnapMovingAnchorView sse_decode_timeline_snap_moving_anchor_view(
     SseDeserializer deserializer,
   ) {
@@ -4626,6 +5015,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_project_text_formatting_view(
+    ProjectTextFormattingView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_text_formatting_view(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_project_timeline_track_state_view(
     ProjectTimelineTrackStateView self,
     SseSerializer serializer,
@@ -4681,6 +5079,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
     sse_encode_u_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_font_identity_view(
+    FontIdentityView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -4871,6 +5278,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_project_text_formatting_view(
+    ProjectTextFormattingView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_project_text_formatting_view(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_project_view(
     ProjectView? self,
     SseSerializer serializer,
@@ -5032,6 +5452,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_project_text_color_view(
+    ProjectTextColorView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.red, serializer);
+    sse_encode_u_8(self.green, serializer);
+    sse_encode_u_8(self.blue, serializer);
+    sse_encode_u_8(self.alpha, serializer);
+  }
+
+  @protected
+  void sse_encode_project_text_formatting_view(
+    ProjectTextFormattingView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_font_identity_view(self.font, serializer);
+    sse_encode_u_32(self.sizeMilliPoints, serializer);
+    sse_encode_text_weight_view(self.weight, serializer);
+    sse_encode_text_alignment_view(self.alignment, serializer);
+    sse_encode_project_text_color_view(self.color, serializer);
+  }
+
+  @protected
   void sse_encode_project_timeline_clip_page_view(
     ProjectTimelineClipPageView self,
     SseSerializer serializer,
@@ -5055,10 +5500,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.clipId, serializer);
-    sse_encode_String(self.mediaId, serializer);
+    sse_encode_timeline_clip_content_kind_view(self.contentKind, serializer);
+    sse_encode_opt_String(self.mediaId, serializer);
+    sse_encode_opt_String(self.text, serializer);
+    sse_encode_opt_box_autoadd_project_text_formatting_view(
+      self.formatting,
+      serializer,
+    );
     sse_encode_rational_time_view(self.timelineStart, serializer);
-    sse_encode_rational_time_view(self.sourceStart, serializer);
-    sse_encode_rational_time_view(self.sourceDuration, serializer);
+    sse_encode_rational_time_view(self.timelineDuration, serializer);
+    sse_encode_opt_box_autoadd_rational_time_view(self.sourceStart, serializer);
   }
 
   @protected
@@ -5234,6 +5685,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.recoveryName, serializer);
     sse_encode_String(self.conflictReason, serializer);
     sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_text_alignment_view(
+    TextAlignmentView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_text_weight_view(
+    TextWeightView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_timeline_clip_content_kind_view(
+    TimelineClipContentKindView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -5460,6 +5938,34 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     durationNumerator: durationNumerator,
     durationDenominator: durationDenominator,
   );
+
+  Future<ProjectActionResult> insertTimelineTextClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineStartNumerator,
+    required int timelineStartDenominator,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleInsertTimelineTextClip(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        contentKind: contentKind,
+        timelineStartNumerator: timelineStartNumerator,
+        timelineStartDenominator: timelineStartDenominator,
+        timelineDurationNumerator: timelineDurationNumerator,
+        timelineDurationDenominator: timelineDurationDenominator,
+        text: text,
+        formatting: formatting,
+      );
 
   Future<ProjectMediaPageView> listMediaPage({
     required BigInt offset,
@@ -5795,5 +6301,31 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         trackId: trackId,
         clipId: clipId,
         settings: settings,
+      );
+
+  Future<ProjectActionResult> updateTimelineTextClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required TimelineClipContentKindView contentKind,
+    required PlatformInt64 timelineDurationNumerator,
+    required int timelineDurationDenominator,
+    required String text,
+    required ProjectTextFormattingView formatting,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleUpdateTimelineTextClip(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        clipId: clipId,
+        contentKind: contentKind,
+        timelineDurationNumerator: timelineDurationNumerator,
+        timelineDurationDenominator: timelineDurationDenominator,
+        text: text,
+        formatting: formatting,
       );
 }

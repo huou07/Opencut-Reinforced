@@ -409,7 +409,7 @@ jobs:
           --plain-name "native bridge diagnostics match the CLI snapshot"
           "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
 
-      - name: Run native Flutter project lifecycle test
+      - name: Run native Flutter project and typed text bridge tests
         working-directory: apps/or_app
         env:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
@@ -417,7 +417,7 @@ jobs:
         run: >-
           flutter test integration_test/core_bridge_test.dart -d macos
           --name
-          "^(native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
+          "^(Rust project bridge stores editable titles and manual captions|native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
 
       - name: Run native Flutter preview transport test
         working-directory: apps/or_app

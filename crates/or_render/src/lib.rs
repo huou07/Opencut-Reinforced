@@ -1336,8 +1336,8 @@ mod tests {
 
         assert_eq!(first_readback, second_readback);
         assert_eq!(first_readback.pixels().len(), 3 * 2 * 4);
-        for pixel in first_readback.pixels().chunks_exact(4) {
-            assert_eq!(pixel, SyntheticColor::GREEN.channels());
+        for pixel in first_readback.pixels().as_chunks::<4>().0 {
+            assert_eq!(*pixel, SyntheticColor::GREEN.channels());
         }
         assert_eq!(
             first.descriptor().memory_domain(),
@@ -1372,3 +1372,5 @@ mod tests {
         }
     }
 }
+pub mod text;
+pub use text::{TextRasterError, TextRasterizer};

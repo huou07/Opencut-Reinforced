@@ -519,7 +519,7 @@ hardening commit itself must pass both workflows.
 - Application tests cover typed insert/update commands, typed v2 track/clip queries, exact duration-based move/trim/split/ripple behavior, validation atomicity, persistent track state, undo/redo, and unchanged IPC protocol v1 dispatch.
 - `crates/or_cli/tests/semantic_cli.rs` covers text and caption insertion, all four track kinds, persistent track-state changes, typed query output, schema-v6 persistence, and the shared application path.
 - Recovery tests verify that the recovery sidecar remains schema v1, preserves typed text content in a nested schema-v6 snapshot, and inspects/applies/reloads it without changing project identity or revision. Legacy nested snapshots still save as schema v6.
-- `crates/or_ipc/tests/live_host.rs` exercises typed timeline commands and queries through the existing generic IPC v1 route. The Flutter bridge retains its legacy media-only timeline view for this checkpoint; no native Flutter runtime behavior is added.
+- `crates/or_ipc/tests/live_host.rs` exercises typed timeline commands and queries through the existing generic IPC v1 route. The original 8A Flutter bridge view was media-only; the 8D bridge now exposes media, text, and caption clip content without changing IPC or project schema contracts.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 8B timeline usability coverage
@@ -555,6 +555,29 @@ hardening commit itself must pass both workflows.
   visual-setting field, verifies revision behavior, saves/reopens, and reads
   the same values. Native Flutter runtime execution remains
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Phase 8D basic text and manual-caption coverage
+
+- `or_render::TextRasterizer` tests load exactly the four bundled Inter faces,
+  produce deterministic transparent RGBA for multiline text, preserve the
+  configured color and alpha, and reject invalid dimensions or an oversized
+  canvas. The font files and OFL notice are checksum-pinned in
+  `docs/TECHNICAL_PLAN.md`.
+- `or_app_bridge` DTO tests cover Media, Text, and Caption read models with
+  optional media/source fields, formatting, stable IDs, and exact rational
+  starts and durations. The hosted Rust bridge integration test inserts and
+  edits a title, then inserts a manual caption and reads the persisted typed
+  values through the generated Flutter Rust Bridge.
+- Flutter widget tests add text and caption tracks, create a title at the
+  preview playhead, edit its content and exact duration, and create a manual
+  caption through the fake gateway. `flutter analyze` checks the generated
+  binding consumer and integration-test adapter.
+- Active preview overlays use the shared bundled-font rasterizer with bounded
+  canvas memory; no automatic transcription, arbitrary font path, or font scan
+  is introduced. Export reuses this text path when 8F implements the exporter.
+- The widget and Rust unit suites may run locally. The Flutter integration
+  test that launches the native app remains hosted-only;
+  `LOCAL NATIVE VERIFICATION: NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers
 

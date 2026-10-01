@@ -259,10 +259,24 @@ class RustProjectGateway implements ProjectGateway {
             .map(
               (clip) => ProjectTimelineClip(
                 clipId: clip.clipId,
+                contentKind: switch (clip.contentKind) {
+                  rust.TimelineClipContentKindView.media =>
+                    ProjectTimelineClipContentKind.media,
+                  rust.TimelineClipContentKindView.text =>
+                    ProjectTimelineClipContentKind.text,
+                  rust.TimelineClipContentKindView.caption =>
+                    ProjectTimelineClipContentKind.caption,
+                },
                 mediaId: clip.mediaId,
+                text: clip.text,
+                formatting: clip.formatting == null
+                    ? null
+                    : _projectTextFormatting(clip.formatting!),
                 timelineStart: _projectRationalTime(clip.timelineStart),
-                sourceStart: _projectRationalTime(clip.sourceStart),
-                sourceDuration: _projectRationalTime(clip.sourceDuration),
+                timelineDuration: _projectRationalTime(clip.timelineDuration),
+                sourceStart: clip.sourceStart == null
+                    ? null
+                    : _projectRationalTime(clip.sourceStart!),
               ),
             )
             .toList(growable: false),
@@ -510,6 +524,53 @@ class RustProjectGateway implements ProjectGateway {
       sourceStartDenominator: sourceStart.denominator,
       durationNumerator: duration.numerator.toInt(),
       durationDenominator: duration.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> insertTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) async => _action(
+    await _host(session).insertTimelineTextClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      contentKind: _rustClipContentKind(content.kind),
+      timelineStartNumerator: timelineStart.numerator.toInt(),
+      timelineStartDenominator: timelineStart.denominator,
+      timelineDurationNumerator: timelineDuration.numerator.toInt(),
+      timelineDurationDenominator: timelineDuration.denominator,
+      text: content.text,
+      formatting: _rustTextFormatting(content.formatting),
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  }) async => _action(
+    await _host(session).updateTimelineTextClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      contentKind: _rustClipContentKind(content.kind),
+      timelineDurationNumerator: timelineDuration.numerator.toInt(),
+      timelineDurationDenominator: timelineDuration.denominator,
+      text: content.text,
+      formatting: _rustTextFormatting(content.formatting),
     ),
   );
 
@@ -874,6 +935,69 @@ class RustProjectGateway implements ProjectGateway {
   static ProjectRationalTime _projectRationalTime(
     rust.RationalTimeView value,
   ) => ProjectRationalTime(BigInt.from(value.numerator), value.denominator);
+
+  static ProjectTextFormatting _projectTextFormatting(
+    rust.ProjectTextFormattingView value,
+  ) => ProjectTextFormatting(
+    font: switch (value.font) {
+      rust.FontIdentityView.bundledInter => ProjectFontIdentity.bundledInter,
+    },
+    sizeMilliPoints: value.sizeMilliPoints,
+    weight: switch (value.weight) {
+      rust.TextWeightView.regular => ProjectTextWeight.regular,
+      rust.TextWeightView.medium => ProjectTextWeight.medium,
+      rust.TextWeightView.semibold => ProjectTextWeight.semibold,
+      rust.TextWeightView.bold => ProjectTextWeight.bold,
+    },
+    alignment: switch (value.alignment) {
+      rust.TextAlignmentView.start => ProjectTextAlignment.start,
+      rust.TextAlignmentView.center => ProjectTextAlignment.center,
+      rust.TextAlignmentView.end => ProjectTextAlignment.end,
+    },
+    color: ProjectTextColor(
+      red: value.color.red,
+      green: value.color.green,
+      blue: value.color.blue,
+      alpha: value.color.alpha,
+    ),
+  );
+
+  static rust.ProjectTextFormattingView _rustTextFormatting(
+    ProjectTextFormatting value,
+  ) => rust.ProjectTextFormattingView(
+    font: switch (value.font) {
+      ProjectFontIdentity.bundledInter => rust.FontIdentityView.bundledInter,
+    },
+    sizeMilliPoints: value.sizeMilliPoints,
+    weight: switch (value.weight) {
+      ProjectTextWeight.regular => rust.TextWeightView.regular,
+      ProjectTextWeight.medium => rust.TextWeightView.medium,
+      ProjectTextWeight.semibold => rust.TextWeightView.semibold,
+      ProjectTextWeight.bold => rust.TextWeightView.bold,
+    },
+    alignment: switch (value.alignment) {
+      ProjectTextAlignment.start => rust.TextAlignmentView.start,
+      ProjectTextAlignment.center => rust.TextAlignmentView.center,
+      ProjectTextAlignment.end => rust.TextAlignmentView.end,
+    },
+    color: rust.ProjectTextColorView(
+      red: value.color.red,
+      green: value.color.green,
+      blue: value.color.blue,
+      alpha: value.color.alpha,
+    ),
+  );
+
+  static rust.TimelineClipContentKindView _rustClipContentKind(
+    ProjectTimelineClipContentKind kind,
+  ) => switch (kind) {
+    ProjectTimelineClipContentKind.media =>
+      rust.TimelineClipContentKindView.media,
+    ProjectTimelineClipContentKind.text =>
+      rust.TimelineClipContentKindView.text,
+    ProjectTimelineClipContentKind.caption =>
+      rust.TimelineClipContentKindView.caption,
+  };
 
   static ProjectPreviewState _preview(rust.ProjectPreviewStateView value) =>
       ProjectPreviewState(

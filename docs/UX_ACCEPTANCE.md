@@ -181,6 +181,13 @@ today.
   height. Apply and Reset use the canonical project command, preserve clip
   content and exact timing, and update the preview. Undo/redo and save/reopen
   retain the same visual settings.
+- For 8D, the timeline offers Text and Caption tracks. Add Title and Add
+  Caption create typed clips at the preview playhead on an unlocked matching
+  track; adding captions is manual and does not invoke transcription. Users can
+  edit text, exact duration, bundled Inter size, weight, alignment, and color.
+  Move, duplicate, and delete continue through the canonical timeline command
+  path. Preview text is rasterized from bundled Inter rather than Flutter text
+  widgets or host-installed fonts.
 - Automatic captions are not a Desktop MVP acceptance item; they belong to
   Phase 10.
 - Complex linked clips, grouping, nested timelines, and multicamera are

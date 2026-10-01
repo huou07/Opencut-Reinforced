@@ -192,6 +192,71 @@ class ProjectMediaPage {
 
 enum ProjectTimelineTrackKind { video, audio, text, caption }
 
+enum ProjectTimelineClipContentKind { media, text, caption }
+
+enum ProjectFontIdentity { bundledInter }
+
+enum ProjectTextWeight { regular, medium, semibold, bold }
+
+enum ProjectTextAlignment { start, center, end }
+
+class ProjectTextColor {
+  const ProjectTextColor({
+    required this.red,
+    required this.green,
+    required this.blue,
+    required this.alpha,
+  });
+
+  static const white = ProjectTextColor(
+    red: 255,
+    green: 255,
+    blue: 255,
+    alpha: 255,
+  );
+
+  final int red;
+  final int green;
+  final int blue;
+  final int alpha;
+}
+
+class ProjectTextFormatting {
+  const ProjectTextFormatting({
+    required this.font,
+    required this.sizeMilliPoints,
+    required this.weight,
+    required this.alignment,
+    required this.color,
+  });
+
+  static const defaults = ProjectTextFormatting(
+    font: ProjectFontIdentity.bundledInter,
+    sizeMilliPoints: 48000,
+    weight: ProjectTextWeight.regular,
+    alignment: ProjectTextAlignment.center,
+    color: ProjectTextColor.white,
+  );
+
+  final ProjectFontIdentity font;
+  final int sizeMilliPoints;
+  final ProjectTextWeight weight;
+  final ProjectTextAlignment alignment;
+  final ProjectTextColor color;
+}
+
+class ProjectTimelineTextContent {
+  const ProjectTimelineTextContent({
+    required this.kind,
+    required this.text,
+    required this.formatting,
+  });
+
+  final ProjectTimelineClipContentKind kind;
+  final String text;
+  final ProjectTextFormatting formatting;
+}
+
 class ProjectTimelineTrackState {
   const ProjectTimelineTrackState({
     required this.locked,
@@ -270,19 +335,25 @@ class ProjectTimelineTracks {
 class ProjectTimelineClip {
   const ProjectTimelineClip({
     required this.clipId,
-    required this.mediaId,
+    this.contentKind = ProjectTimelineClipContentKind.media,
+    this.mediaId,
+    this.text,
+    this.formatting,
     required this.timelineStart,
-    required this.sourceStart,
-    required this.sourceDuration,
+    required this.timelineDuration,
+    this.sourceStart,
   });
 
   final String clipId;
-  final String mediaId;
+  final ProjectTimelineClipContentKind contentKind;
+  final String? mediaId;
+  final String? text;
+  final ProjectTextFormatting? formatting;
   final ProjectRationalTime timelineStart;
-  final ProjectRationalTime sourceStart;
-  final ProjectRationalTime sourceDuration;
+  final ProjectRationalTime timelineDuration;
+  final ProjectRationalTime? sourceStart;
 
-  ProjectRationalTime get timelineEnd => timelineStart.add(sourceDuration);
+  ProjectRationalTime get timelineEnd => timelineStart.add(timelineDuration);
 }
 
 class ProjectTimelineVisualSettings {
@@ -655,6 +726,22 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+  });
+  Future<ProjectActionResult> insertTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required ProjectRationalTime timelineStart,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
+  });
+  Future<ProjectActionResult> updateTimelineTextClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalTime timelineDuration,
+    required ProjectTimelineTextContent content,
   });
   Future<ProjectActionResult> moveTimelineClip(
     ProjectSessionHandle session,
