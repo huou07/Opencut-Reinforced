@@ -1,0 +1,150 @@
+{
+  "checkpoint_id": "8F",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 6,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "assets": [
+      {
+        "name": "opencut-reinforced-macos-debug.zip",
+        "size": 42905220
+      },
+      {
+        "name": "opencut-reinforced-windows-x64-debug.zip",
+        "size": 44360987
+      },
+      {
+        "name": "opencut-reinforced-linux-x64-debug.tar.gz",
+        "size": 38636958
+      },
+      {
+        "name": "opencut-reinforced-android-debug.apk",
+        "size": 166354195
+      },
+      {
+        "name": "opencut-reinforced-cli-macos.zip",
+        "size": 2939268
+      },
+      {
+        "name": "opencut-reinforced-cli-windows-x64.zip",
+        "size": 2377585
+      },
+      {
+        "name": "opencut-reinforced-cli-linux-x64.tar.gz",
+        "size": 1577816
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 991
+      },
+      {
+        "name": "BUILD-INFO.txt",
+        "size": 1459
+      },
+      {
+        "name": "FFMPEG-BUILD-INFO.txt",
+        "size": 5604
+      },
+      {
+        "name": "ffmpeg-8.1.3-source.tar.xz",
+        "size": 11732036
+      }
+    ],
+    "build_info": "BUILD-INFO.txt",
+    "checksums": "SHA256SUMS.txt",
+    "release_url": "https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-a81622e84d79",
+    "required": true,
+    "source_sha": "a81622e84d79df3459a10f09f8354743b9214e66",
+    "status": "verified",
+    "tag": "dev-a81622e84d79",
+    "workflow_file": ".github/workflows/developer-preview.yml",
+    "workflow_name": "Developer Preview",
+    "workflow_run": {
+      "attempt": 1,
+      "conclusion": "success",
+      "id": 36936456305,
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Verify and publish prerelease",
+          "status": "completed"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36936456305"
+    }
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "a81622e84d79df3459a10f09f8354743b9214e66",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36934512103",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36934512103,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "a81622e84d79df3459a10f09f8354743b9214e66",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36934512085",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36934512085,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "a81622e84d79df3459a10f09f8354743b9214e66",
+  "implementation_subject": "fix(ci): install ALSA headers for Linux preview builds",
+  "schema_version": 1,
+  "verified_at_utc": "2026-10-01T22:51:01Z"
+}
