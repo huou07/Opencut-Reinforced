@@ -174,6 +174,14 @@ and basic transition/effect references are part of that model. UI selection and
 viewport state remain presentation-only. Playback speed remains 1x through
 Desktop MVP; Phase 13B owns speed mapping.
 
+Checkpoint 8C applies the existing schema-v6 visual settings through the shared
+`timeline.clip.update` command. The desktop Inspector reads and updates bounded
+fixed-point transform, crop, and opacity values while retaining exact project
+values. The preview queries typed timeline-v2 clips and applies transform,
+anchor, crop, and opacity in the wgpu layer pipeline; GPU uniforms and textures
+remain runtime-only. The Flutter timeline keeps its media-only clip read model
+for editing, with visual settings read through the typed v2 bridge path.
+
 Phase 5A defines `JobId`, `JobKind::MediaProbe`, and the `Queued`, `Running`, `Succeeded`, `Failed`, and `Cancelled` states as a small shared job boundary. Public media probing still runs synchronously. Phase 5C adds a bounded `JobManager` over Rust standard-library threads: callers pass an explicit non-zero worker, queue, and record configuration; the manager creates exactly that many worker threads and never one per job; submission is non-blocking and returns a structured backpressure error when the bounded pending queue is full; tracked records are bounded and only terminal records are reclaimed oldest-first by a manager-local sequence; cancellation is cooperative for queued and running jobs; a panicking task is contained and cannot kill the pool; and shutdown stops submissions, skips queued work, signals running work, and joins workers. Phase 5D adds concrete thumbnail and waveform job kinds. A `MediaArtifactService` uses `JobManagerConfig(2, 32, 128)` and `CacheStoreConfig(8 MiB, 256 MiB)` in the desktop bridge. It returns `Ready`, `Queued`, `Running`, `NotApplicable`, or `Failed` request states; queue/record pressure is surfaced, identical in-flight cache keys share work, terminal artifact events carry an independent monotonic sequence, and cancellation/close kills and reaps the child process before workers join. The service does not mutate project state. It is not a realtime media scheduler and targets no playback or per-frame work. There is still no job progress API, job persistence, or priority system. Playback-critical decode, audio, and render work must eventually take priority over opportunistic work such as thumbnail and waveform generation, proxy creation, and AI analysis. Workers do not mutate canonical project state; results that affect a project must return through validated application commands.
 
 ### Local IPC and platform boundary

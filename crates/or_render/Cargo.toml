@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+or_core = { path = "../or_core" }
 or_runtime = { path = "../or_runtime" }
 # wgpu 25.0.2 is the newest pinned release compatible with the workspace MSRV
 # (Rust 1.85); its upstream license is MIT OR Apache-2.0.
@@ -16,6 +17,3 @@ wgpu = { version = "=25.0.2", default-features = false, features = [
     "dx12",
     "metal",
 ] }
-
-[dev-dependencies]
-or_core = { path = "../or_core" }

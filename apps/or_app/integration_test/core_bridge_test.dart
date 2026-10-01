@@ -598,6 +598,81 @@ void main() {
         )).items,
         hasLength(2),
       );
+      final initialVisual = await gateway.getTimelineClipVisualSettings(
+        session,
+        current,
+        trackId: track.trackId,
+        clipId: clip.clipId,
+      );
+      expect(initialVisual.xMilliCanvas, 0);
+      expect(initialVisual.scaleXMilli, 1000);
+      expect(initialVisual.opacityBasisPoints, 10000);
+      const visualSettings = ProjectTimelineVisualSettings(
+        xMilliCanvas: 250,
+        yMilliCanvas: -125,
+        scaleXMilli: 1500,
+        scaleYMilli: 750,
+        rotationMilliDegrees: 15000,
+        anchorXBasisPoints: 2500,
+        anchorYBasisPoints: 7500,
+        cropLeftBasisPoints: 1000,
+        cropTopBasisPoints: 2000,
+        cropRightBasisPoints: 500,
+        cropBottomBasisPoints: 1500,
+        opacityBasisPoints: 6250,
+      );
+      final visualUpdate = await gateway.updateTimelineClipVisualSettings(
+        session,
+        current,
+        trackId: track.trackId,
+        clipId: clip.clipId,
+        settings: visualSettings,
+      );
+      expect(visualUpdate.succeeded, isTrue);
+      current = visualUpdate.view!;
+      expect(current.revision, BigInt.from(13));
+      final updatedVisual = await gateway.getTimelineClipVisualSettings(
+        session,
+        current,
+        trackId: track.trackId,
+        clipId: clip.clipId,
+      );
+      expect(updatedVisual.xMilliCanvas, visualSettings.xMilliCanvas);
+      expect(updatedVisual.yMilliCanvas, visualSettings.yMilliCanvas);
+      expect(updatedVisual.scaleXMilli, visualSettings.scaleXMilli);
+      expect(updatedVisual.scaleYMilli, visualSettings.scaleYMilli);
+      expect(
+        updatedVisual.rotationMilliDegrees,
+        visualSettings.rotationMilliDegrees,
+      );
+      expect(
+        updatedVisual.anchorXBasisPoints,
+        visualSettings.anchorXBasisPoints,
+      );
+      expect(
+        updatedVisual.anchorYBasisPoints,
+        visualSettings.anchorYBasisPoints,
+      );
+      expect(
+        updatedVisual.cropLeftBasisPoints,
+        visualSettings.cropLeftBasisPoints,
+      );
+      expect(
+        updatedVisual.cropTopBasisPoints,
+        visualSettings.cropTopBasisPoints,
+      );
+      expect(
+        updatedVisual.cropRightBasisPoints,
+        visualSettings.cropRightBasisPoints,
+      );
+      expect(
+        updatedVisual.cropBottomBasisPoints,
+        visualSettings.cropBottomBasisPoints,
+      );
+      expect(
+        updatedVisual.opacityBasisPoints,
+        visualSettings.opacityBasisPoints,
+      );
       final trackState = await gateway.setTimelineTrackState(
         session,
         current,
@@ -611,7 +686,7 @@ void main() {
       );
       expect(trackState.succeeded, isTrue);
       current = trackState.view!;
-      expect(current.revision, BigInt.from(13));
+      expect(current.revision, BigInt.from(14));
       final updatedTrack = (await gateway.listTimelineTracks(session))
           .items
           .single;
@@ -625,7 +700,7 @@ void main() {
 
       final saved = await gateway.save(session);
       expect(saved.succeeded, isTrue);
-      expect(saved.view?.revision, BigInt.from(13));
+      expect(saved.view?.revision, BigInt.from(14));
       expect(saved.view?.dirty, isFalse);
       await gateway.close(session, discardUnsaved: false);
 
@@ -633,7 +708,7 @@ void main() {
       final reopened = await gateway.summary(reopenedSession);
       expect(reopened.projectId, originalProjectId);
       expect(reopened.projectInstanceId, isNot(originalInstanceId));
-      expect(reopened.revision, BigInt.from(13));
+      expect(reopened.revision, BigInt.from(14));
       expect(reopened.dirty, isFalse);
       final reopenedTracks = await gateway.listTimelineTracks(reopenedSession);
       expect(reopenedTracks.items.single.trackId, track.trackId);
@@ -641,6 +716,48 @@ void main() {
       expect(reopenedTracks.items.single.state.locked, isTrue);
       expect(reopenedTracks.items.single.state.visible, isFalse);
       expect(reopenedTracks.items.single.state.solo, isTrue);
+      final reopenedVisual = await gateway.getTimelineClipVisualSettings(
+        reopenedSession,
+        reopened,
+        trackId: track.trackId,
+        clipId: clip.clipId,
+      );
+      expect(reopenedVisual.xMilliCanvas, visualSettings.xMilliCanvas);
+      expect(reopenedVisual.yMilliCanvas, visualSettings.yMilliCanvas);
+      expect(reopenedVisual.scaleXMilli, visualSettings.scaleXMilli);
+      expect(reopenedVisual.scaleYMilli, visualSettings.scaleYMilli);
+      expect(
+        reopenedVisual.rotationMilliDegrees,
+        visualSettings.rotationMilliDegrees,
+      );
+      expect(
+        reopenedVisual.anchorXBasisPoints,
+        visualSettings.anchorXBasisPoints,
+      );
+      expect(
+        reopenedVisual.anchorYBasisPoints,
+        visualSettings.anchorYBasisPoints,
+      );
+      expect(
+        reopenedVisual.cropLeftBasisPoints,
+        visualSettings.cropLeftBasisPoints,
+      );
+      expect(
+        reopenedVisual.cropTopBasisPoints,
+        visualSettings.cropTopBasisPoints,
+      );
+      expect(
+        reopenedVisual.cropRightBasisPoints,
+        visualSettings.cropRightBasisPoints,
+      );
+      expect(
+        reopenedVisual.cropBottomBasisPoints,
+        visualSettings.cropBottomBasisPoints,
+      );
+      expect(
+        reopenedVisual.opacityBasisPoints,
+        visualSettings.opacityBasisPoints,
+      );
       final reopenedClips = (await gateway.listTimelineClips(
         reopenedSession,
         trackId: track.trackId,
@@ -989,6 +1106,34 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     trackId: trackId,
     offset: offset,
     limit: limit,
+  );
+
+  @override
+  Future<ProjectTimelineVisualSettings> getTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) => _gateway.getTimelineClipVisualSettings(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineVisualSettings settings,
+  }) => _gateway.updateTimelineClipVisualSettings(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    settings: settings,
   );
 
   @override

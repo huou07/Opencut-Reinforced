@@ -6,11 +6,13 @@
 //! software video layers. Native adapters own viewer presentation; full-rate
 //! frame bytes remain outside the Flutter boundary.
 
+use or_core::{Crop, Opacity, Transform};
 use or_runtime::{
     FrameAccess, FrameColorInfo, FrameDescriptor, FrameMemoryDomain, FramePixelFormat, FrameTiming,
     RenderSnapshot,
 };
 use std::{error::Error, fmt, sync::mpsc};
+use wgpu::util::DeviceExt;
 
 /// The exact upstream wgpu version used by this render foundation.
 pub const WGPU_VERSION: &str = "25.0.2";
@@ -353,6 +355,16 @@ impl RenderDevice {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
         let video_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -364,8 +376,16 @@ struct VertexOutput {
     @location(0) uv: vec2<f32>,
 }
 
+struct LayerSettings {
+    translation_scale: vec4<f32>,
+    rotation_anchor_aspect: vec4<f32>,
+    crop: vec4<f32>,
+    opacity: vec4<f32>,
+}
+
 @group(0) @binding(0) var source: texture_2d<f32>;
 @group(0) @binding(1) var source_sampler: sampler;
+@group(0) @binding(2) var<uniform> settings: LayerSettings;
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
@@ -375,15 +395,38 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         vec2<f32>(-1.0, 3.0),
     );
     let point = positions[index];
+    let anchor = vec2<f32>(
+        settings.rotation_anchor_aspect.y * 2.0 - 1.0,
+        1.0 - settings.rotation_anchor_aspect.z * 2.0,
+    );
+    let aspect = settings.rotation_anchor_aspect.w;
+    let aspect_scale = vec2<f32>(aspect, 1.0);
+    let delta = (point - anchor) * aspect_scale;
+    let scaled = delta * settings.translation_scale.zw;
+    let angle = settings.rotation_anchor_aspect.x;
+    let cosine = cos(angle);
+    let sine = sin(angle);
+    let rotated = vec2<f32>(
+        cosine * scaled.x + sine * scaled.y,
+        -sine * scaled.x + cosine * scaled.y,
+    );
     var output: VertexOutput;
-    output.position = vec4<f32>(point, 0.0, 1.0);
+    output.position = vec4<f32>(
+        anchor + rotated / aspect_scale + settings.translation_scale.xy,
+        0.0,
+        1.0,
+    );
     output.uv = vec2<f32>((point.x + 1.0) * 0.5, (1.0 - point.y) * 0.5);
     return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(source, source_sampler, input.uv);
+    let crop_size = vec2<f32>(1.0) - settings.crop.xy - settings.crop.zw;
+    let source_uv = settings.crop.xy + input.uv * crop_size;
+    var color = textureSample(source, source_sampler, source_uv);
+    color.a *= settings.opacity.x;
+    return color;
 }
 "#
                 .into(),
@@ -736,6 +779,13 @@ impl RenderGraph {
                 },
             );
             let view = source.create_view(&wgpu::TextureViewDescriptor::default());
+            let uniform = renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("or_render.viewer_layer_settings"),
+                    contents: &layer.settings_uniform(size),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
             let bind_group = renderer
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -750,9 +800,13 @@ impl RenderGraph {
                             binding: 1,
                             resource: wgpu::BindingResource::Sampler(&renderer.video_sampler),
                         },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: uniform.as_entire_binding(),
+                        },
                     ],
                 });
-            sources.push((source, view, bind_group));
+            sources.push((source, view, uniform, bind_group));
         }
 
         let attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -777,7 +831,7 @@ impl RenderGraph {
                 occlusion_query_set: None,
             });
             pass.set_pipeline(&renderer.video_pipeline);
-            for (_, _, bind_group) in &sources {
+            for (_, _, _, bind_group) in &sources {
                 pass.set_bind_group(0, bind_group, &[]);
                 pass.draw(0..3, 0..1);
             }
@@ -811,6 +865,9 @@ pub struct RgbaVideoLayer<'a> {
     width: u32,
     height: u32,
     pixels: &'a [u8],
+    transform: Transform,
+    crop: Crop,
+    opacity: Opacity,
 }
 
 impl<'a> RgbaVideoLayer<'a> {
@@ -819,6 +876,9 @@ impl<'a> RgbaVideoLayer<'a> {
             width,
             height,
             pixels,
+            transform: Transform::IDENTITY,
+            crop: Crop::NONE,
+            opacity: Opacity::OPAQUE,
         };
         layer.validate()?;
         Ok(layer)
@@ -830,6 +890,52 @@ impl<'a> RgbaVideoLayer<'a> {
 
     pub const fn height(self) -> u32 {
         self.height
+    }
+
+    pub fn with_visual_settings(
+        mut self,
+        transform: Transform,
+        crop: Crop,
+        opacity: Opacity,
+    ) -> Result<Self, RenderError> {
+        if !transform.is_valid() || !crop.is_valid() || !opacity.is_valid() {
+            return Err(RenderError::InvalidVideoSettings);
+        }
+        self.transform = transform;
+        self.crop = crop;
+        self.opacity = opacity;
+        Ok(self)
+    }
+
+    fn settings_uniform(&self, size: RenderSize) -> [u8; 64] {
+        let transform = self.transform;
+        let crop = self.crop;
+        let opacity = self.opacity;
+        let angle = (transform.rotation_milli_degrees as f32 / 1_000.0).to_radians();
+        let values = [
+            transform.x_milli_canvas as f32 / 500.0,
+            -(transform.y_milli_canvas as f32) / 500.0,
+            transform.scale_x_milli as f32 / 1_000.0,
+            transform.scale_y_milli as f32 / 1_000.0,
+            angle,
+            transform.anchor_x_basis_points as f32 / 10_000.0,
+            transform.anchor_y_basis_points as f32 / 10_000.0,
+            size.width() as f32 / size.height() as f32,
+            crop.left_basis_points as f32 / 10_000.0,
+            crop.top_basis_points as f32 / 10_000.0,
+            crop.right_basis_points as f32 / 10_000.0,
+            crop.bottom_basis_points as f32 / 10_000.0,
+            opacity.basis_points as f32 / 10_000.0,
+            0.0,
+            0.0,
+            0.0,
+        ];
+        let mut bytes = [0; 64];
+        for (index, value) in values.into_iter().enumerate() {
+            let offset = index * 4;
+            bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        bytes
     }
 
     fn validate(&self) -> Result<(), RenderError> {
@@ -919,6 +1025,7 @@ pub enum RenderError {
     DeviceUnavailable { message: String },
     ViewerSurfaceNotImplemented,
     InvalidSourceFrame,
+    InvalidVideoSettings,
     SourceSizeExceedsDeviceLimit { width: u32, height: u32, limit: u32 },
     SizeExceedsDeviceLimit { size: RenderSize, limit: u32 },
     ReadbackSizeOverflow,
@@ -944,6 +1051,8 @@ impl fmt::Display for RenderError {
             Self::InvalidSourceFrame => {
                 formatter.write_str("viewer source frame has an invalid size or pixel buffer")
             }
+            Self::InvalidVideoSettings => formatter
+                .write_str("video transform, crop, or opacity is outside its supported range"),
             Self::SourceSizeExceedsDeviceLimit {
                 width,
                 height,
@@ -975,7 +1084,7 @@ impl Error for RenderError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use or_core::{ProjectDocument, RationalTime, TimeRange};
+    use or_core::{Crop, Opacity, ProjectDocument, RationalTime, TimeRange, Transform};
     use std::{
         future::Future,
         pin::Pin,
@@ -1050,10 +1159,158 @@ mod tests {
     }
 
     #[test]
+    fn viewer_render_applies_crop_opacity_and_transform_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu visual settings test: {error}");
+                return;
+            }
+        };
+
+        let split_pixels = [
+            255, 0, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255,
+        ];
+        let cropped_layer = RgbaVideoLayer::new(2, 2, &split_pixels)
+            .unwrap()
+            .with_visual_settings(
+                Transform::IDENTITY,
+                Crop {
+                    left_basis_points: 5_000,
+                    ..Crop::NONE
+                },
+                Opacity {
+                    basis_points: 5_000,
+                },
+            )
+            .unwrap();
+        let cropped = renderer
+            .render_rgba_layers(snapshot(), render_size(2, 2), &[cropped_layer])
+            .unwrap();
+        let first = &cropped.pixels()[..4];
+        let second = &cropped.pixels()[4..8];
+        assert!(first[0].abs_diff(32) <= 2, "first pixel: {first:?}");
+        assert!(first[1].abs_diff(96) <= 2, "first pixel: {first:?}");
+        assert!(second[0] <= 1, "second pixel: {second:?}");
+        assert!(second[1].abs_diff(128) <= 2, "second pixel: {second:?}");
+        assert_eq!(first[3], 255);
+        assert_eq!(second[3], 255);
+
+        let rotated_layer = RgbaVideoLayer::new(2, 2, &split_pixels)
+            .unwrap()
+            .with_visual_settings(
+                Transform {
+                    rotation_milli_degrees: 180_000,
+                    ..Transform::IDENTITY
+                },
+                Crop::NONE,
+                Opacity::OPAQUE,
+            )
+            .unwrap();
+        let rotated = renderer
+            .render_rgba_layers(snapshot(), render_size(2, 2), &[rotated_layer])
+            .unwrap();
+        assert_eq!(&rotated.pixels()[..4], &[0, 255, 0, 255]);
+        assert_eq!(&rotated.pixels()[4..8], &[255, 0, 0, 255]);
+
+        let solid_pixels = [255, 0, 0, 255].repeat(4);
+        let translated_layer = RgbaVideoLayer::new(2, 2, &solid_pixels)
+            .unwrap()
+            .with_visual_settings(
+                Transform {
+                    x_milli_canvas: 500,
+                    ..Transform::IDENTITY
+                },
+                Crop::NONE,
+                Opacity::OPAQUE,
+            )
+            .unwrap();
+        let translated = renderer
+            .render_rgba_layers(snapshot(), render_size(2, 2), &[translated_layer])
+            .unwrap();
+        assert_eq!(&translated.pixels()[..4], &[0, 0, 0, 255]);
+        assert_eq!(&translated.pixels()[4..8], &[255, 0, 0, 255]);
+
+        let scaled_layer = RgbaVideoLayer::new(2, 2, &solid_pixels)
+            .unwrap()
+            .with_visual_settings(
+                Transform {
+                    scale_x_milli: 500,
+                    ..Transform::IDENTITY
+                },
+                Crop::NONE,
+                Opacity::OPAQUE,
+            )
+            .unwrap();
+        let scaled = renderer
+            .render_rgba_layers(snapshot(), render_size(4, 2), &[scaled_layer])
+            .unwrap();
+        assert_eq!(&scaled.pixels()[..4], &[0, 0, 0, 255]);
+        assert_eq!(&scaled.pixels()[4..8], &[255, 0, 0, 255]);
+
+        let anchored_layer = RgbaVideoLayer::new(2, 2, &solid_pixels)
+            .unwrap()
+            .with_visual_settings(
+                Transform {
+                    scale_x_milli: 500,
+                    anchor_x_basis_points: 0,
+                    ..Transform::IDENTITY
+                },
+                Crop::NONE,
+                Opacity::OPAQUE,
+            )
+            .unwrap();
+        let anchored = renderer
+            .render_rgba_layers(snapshot(), render_size(4, 2), &[anchored_layer])
+            .unwrap();
+        assert_eq!(&anchored.pixels()[..4], &[255, 0, 0, 255]);
+    }
+
+    #[test]
     fn viewer_render_rejects_invalid_rgba_layers_before_gpu_use() {
         assert!(matches!(
             RgbaVideoLayer::new(2, 2, &[0; 15]),
             Err(RenderError::InvalidSourceFrame)
+        ));
+        let pixels = [0; 16];
+        assert!(matches!(
+            RgbaVideoLayer::new(2, 2, &pixels)
+                .unwrap()
+                .with_visual_settings(
+                    Transform {
+                        scale_x_milli: 0,
+                        ..Transform::IDENTITY
+                    },
+                    Crop::NONE,
+                    Opacity::OPAQUE,
+                ),
+            Err(RenderError::InvalidVideoSettings)
+        ));
+        assert!(matches!(
+            RgbaVideoLayer::new(2, 2, &pixels)
+                .unwrap()
+                .with_visual_settings(
+                    Transform::IDENTITY,
+                    Crop {
+                        left_basis_points: 5_000,
+                        right_basis_points: 5_000,
+                        ..Crop::NONE
+                    },
+                    Opacity::OPAQUE,
+                ),
+            Err(RenderError::InvalidVideoSettings)
+        ));
+        assert!(matches!(
+            RgbaVideoLayer::new(2, 2, &pixels)
+                .unwrap()
+                .with_visual_settings(
+                    Transform::IDENTITY,
+                    Crop::NONE,
+                    Opacity {
+                        basis_points: 10_001
+                    },
+                ),
+            Err(RenderError::InvalidVideoSettings)
         ));
     }
 

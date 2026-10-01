@@ -5004,13 +5004,14 @@ mod tests {
         TransactionEnvelope, command_catalog, query_catalog,
     };
     use crate::{
-        AudioStreamMetadata, ClipContent, ClipId, ClipSettings, MAX_MEDIA_PAGE_SIZE,
+        AudioStreamMetadata, ClipContent, ClipId, ClipSettings, Crop, MAX_MEDIA_PAGE_SIZE,
         MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_CLIPS, MAX_TIMELINE_MARKER_LABEL_BYTES,
         MAX_TIMELINE_MARKER_PAGE_SIZE, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,
-        MediaId, MediaItem, MediaMetadata, MediaSourceRef, MediaStreamMetadata, ProjectDocument,
-        ProjectId, ProjectInstanceId, ProjectRevision, ProjectTimeline, RationalRate, RationalTime,
-        TextFormatting, TimeRange, TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
-        TrackState, VideoStreamMetadata, VisualSettings, decode_project, encode_project,
+        MediaId, MediaItem, MediaMetadata, MediaSourceRef, MediaStreamMetadata, Opacity,
+        ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision, ProjectTimeline,
+        RationalRate, RationalTime, TextFormatting, TimeRange, TimelineClip, TimelineMarker,
+        TimelineTrack, TrackId, TrackKind, TrackState, Transform, VideoStreamMetadata,
+        VisualSettings, decode_project, encode_project,
     };
     use serde_json::{Value, json};
     use std::{num::NonZeroU32, str::FromStr};
@@ -7461,6 +7462,144 @@ mod tests {
         assert_eq!(
             session.project().timeline().tracks()[0].clips()[0].content(),
             &updated_content
+        );
+    }
+
+    #[test]
+    fn video_visual_settings_update_validation_history_and_serialization_are_exact() {
+        let mut session = fixed_session();
+        let media_id = MediaId::from_str(MEDIA_A).unwrap();
+        let track_id = TrackId::from_str(TRACK_A).unwrap();
+        let clip_id = ClipId::from_str(CLIP_A).unwrap();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/transform.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+
+        let content = ClipContent::Media {
+            media_id,
+            source_range: TimeRange::new(
+                RationalTime::new(1, 4).unwrap(),
+                RationalTime::new(2, 1).unwrap(),
+            )
+            .unwrap(),
+        };
+        let duration = RationalTime::new(2, 1).unwrap();
+        session
+            .execute_command(CommandEnvelope::insert_timeline_clip_content(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                clip_id,
+                track_id,
+                RationalTime::new(3, 2).unwrap(),
+                duration,
+                content.clone(),
+                ClipSettings::Visual(VisualSettings::default()),
+            ))
+            .unwrap();
+
+        let mut visual = VisualSettings::default();
+        visual.transform = Transform {
+            x_milli_canvas: 250,
+            y_milli_canvas: -125,
+            scale_x_milli: 1_500,
+            scale_y_milli: 750,
+            rotation_milli_degrees: 15_000,
+            anchor_x_basis_points: 2_500,
+            anchor_y_basis_points: 7_500,
+        };
+        visual.crop = Crop {
+            left_basis_points: 1_000,
+            top_basis_points: 2_000,
+            right_basis_points: 500,
+            bottom_basis_points: 1_500,
+        };
+        visual.opacity = Opacity {
+            basis_points: 6_250,
+        };
+        session
+            .execute_command(CommandEnvelope::update_timeline_clip(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                clip_id,
+                duration,
+                content.clone(),
+                ClipSettings::Visual(visual.clone()),
+            ))
+            .unwrap();
+
+        let read_settings = |session: &ProjectSession| {
+            session
+                .execute_query(QueryEnvelope::timeline_clips_v2(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    track_id,
+                    0,
+                    10,
+                ))
+                .unwrap()
+                .timeline_clip_page_v2
+                .unwrap()
+                .items
+                .remove(0)
+        };
+        let updated = read_settings(&session);
+        assert_eq!(updated.timeline_start, RationalTime::new(3, 2).unwrap());
+        assert_eq!(updated.timeline_duration, duration);
+        assert_eq!(updated.content, content);
+        assert_eq!(updated.settings, ClipSettings::Visual(visual.clone()));
+
+        let invalid_before = session.project().clone();
+        let invalid_history = session.history.clone();
+        let mut invalid_visual = visual.clone();
+        invalid_visual.transform.scale_x_milli = 0;
+        let error = session
+            .execute_command(CommandEnvelope::update_timeline_clip(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                clip_id,
+                duration,
+                content.clone(),
+                ClipSettings::Visual(invalid_visual),
+            ))
+            .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project(), &invalid_before);
+        assert_eq!(session.history, invalid_history);
+
+        let decoded = decode_project(&encode_project(session.project()).unwrap()).unwrap();
+        assert_eq!(
+            decoded.timeline().tracks()[0].clips()[0].settings(),
+            &ClipSettings::Visual(visual.clone())
+        );
+
+        session
+            .execute_command(CommandEnvelope::undo(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+            ))
+            .unwrap();
+        assert_eq!(
+            read_settings(&session).settings,
+            ClipSettings::Visual(VisualSettings::default())
+        );
+        session
+            .execute_command(CommandEnvelope::redo(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+            ))
+            .unwrap();
+        assert_eq!(
+            read_settings(&session).settings,
+            ClipSettings::Visual(visual)
         );
     }
 

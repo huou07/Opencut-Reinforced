@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `event_view`, `failed`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `view_from_query`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `cache_artifact_kind`, `cache_unavailable_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `ensure_visual_settings_snapshot`, `event_view`, `failed`, `find_video_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_cache_root`, `media_artifact_event_view`, `media_item_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_session_identity`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_view`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `start_project_host`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `unexpected_response_error`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -60,6 +60,14 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String markerId,
+  });
+
+  Future<ProjectTimelineVisualSettingsView> getTimelineClipVisualSettings({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
   });
 
   /// Prepares media without holding the live-host lock, then dispatches with the
@@ -252,6 +260,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectId,
     required String projectInstanceId,
     required BigInt expectedRevision,
+  });
+
+  Future<ProjectActionResult> updateTimelineClipVisualSettings({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineVisualSettingsView settings,
   });
 }
 
@@ -955,6 +972,69 @@ class ProjectTimelineTracksView {
           projectInstanceId == other.projectInstanceId &&
           projectRevision == other.projectRevision &&
           items == other.items;
+}
+
+class ProjectTimelineVisualSettingsView {
+  final int xMilliCanvas;
+  final int yMilliCanvas;
+  final int scaleXMilli;
+  final int scaleYMilli;
+  final int rotationMilliDegrees;
+  final int anchorXBasisPoints;
+  final int anchorYBasisPoints;
+  final int cropLeftBasisPoints;
+  final int cropTopBasisPoints;
+  final int cropRightBasisPoints;
+  final int cropBottomBasisPoints;
+  final int opacityBasisPoints;
+
+  const ProjectTimelineVisualSettingsView({
+    required this.xMilliCanvas,
+    required this.yMilliCanvas,
+    required this.scaleXMilli,
+    required this.scaleYMilli,
+    required this.rotationMilliDegrees,
+    required this.anchorXBasisPoints,
+    required this.anchorYBasisPoints,
+    required this.cropLeftBasisPoints,
+    required this.cropTopBasisPoints,
+    required this.cropRightBasisPoints,
+    required this.cropBottomBasisPoints,
+    required this.opacityBasisPoints,
+  });
+
+  @override
+  int get hashCode =>
+      xMilliCanvas.hashCode ^
+      yMilliCanvas.hashCode ^
+      scaleXMilli.hashCode ^
+      scaleYMilli.hashCode ^
+      rotationMilliDegrees.hashCode ^
+      anchorXBasisPoints.hashCode ^
+      anchorYBasisPoints.hashCode ^
+      cropLeftBasisPoints.hashCode ^
+      cropTopBasisPoints.hashCode ^
+      cropRightBasisPoints.hashCode ^
+      cropBottomBasisPoints.hashCode ^
+      opacityBasisPoints.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTimelineVisualSettingsView &&
+          runtimeType == other.runtimeType &&
+          xMilliCanvas == other.xMilliCanvas &&
+          yMilliCanvas == other.yMilliCanvas &&
+          scaleXMilli == other.scaleXMilli &&
+          scaleYMilli == other.scaleYMilli &&
+          rotationMilliDegrees == other.rotationMilliDegrees &&
+          anchorXBasisPoints == other.anchorXBasisPoints &&
+          anchorYBasisPoints == other.anchorYBasisPoints &&
+          cropLeftBasisPoints == other.cropLeftBasisPoints &&
+          cropTopBasisPoints == other.cropTopBasisPoints &&
+          cropRightBasisPoints == other.cropRightBasisPoints &&
+          cropBottomBasisPoints == other.cropBottomBasisPoints &&
+          opacityBasisPoints == other.opacityBasisPoints;
 }
 
 class ProjectView {

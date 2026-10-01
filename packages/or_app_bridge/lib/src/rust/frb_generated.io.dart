@@ -80,6 +80,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_project_timeline_track_state_view(dynamic raw);
 
   @protected
+  ProjectTimelineVisualSettingsView
+  dco_decode_box_autoadd_project_timeline_visual_settings_view(dynamic raw);
+
+  @protected
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
@@ -234,6 +238,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineVisualSettingsView
+  dco_decode_project_timeline_visual_settings_view(dynamic raw);
+
+  @protected
   ProjectView dco_decode_project_view(dynamic raw);
 
   @protected
@@ -268,6 +276,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimelineTrimEdgeView dco_decode_timeline_trim_edge_view(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -340,6 +351,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTimelineTrackStateView
   sse_decode_box_autoadd_project_timeline_track_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineVisualSettingsView
+  sse_decode_box_autoadd_project_timeline_visual_settings_view(
     SseDeserializer deserializer,
   );
 
@@ -538,6 +555,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTimelineVisualSettingsView
+  sse_decode_project_timeline_visual_settings_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectView sse_decode_project_view(SseDeserializer deserializer);
 
   @protected
@@ -580,6 +603,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TimelineTrimEdgeView sse_decode_timeline_trim_edge_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -660,6 +686,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_project_timeline_track_state_view(
     ProjectTimelineTrackStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_project_timeline_visual_settings_view(
+    ProjectTimelineVisualSettingsView self,
     SseSerializer serializer,
   );
 
@@ -898,6 +930,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_timeline_visual_settings_view(
+    ProjectTimelineVisualSettingsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_view(ProjectView self, SseSerializer serializer);
 
   @protected
@@ -953,6 +991,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TimelineTrimEdgeView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

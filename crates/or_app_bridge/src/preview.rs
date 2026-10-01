@@ -38,9 +38,10 @@ mod desktop {
     use super::{PreviewError, PreviewSnapshot};
     use crate::viewer_texture;
     use or_core::{
-        ApplicationRequest, ApplicationResponse, LegacyTimelineClipState, MediaId, MediaSourceRef,
-        ProjectId, ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate,
-        RationalTime, TimeRange, TimelineTrackSummary, TrackKind,
+        ApplicationRequest, ApplicationResponse, ClipContent, ClipSettings, Crop,
+        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, Opacity, ProjectId,
+        ProjectInstanceId, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+        TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
     };
     use or_ipc::LiveProjectHost;
     use or_media::SoftwareMediaDecoder;
@@ -392,7 +393,9 @@ mod desktop {
                     }
                 };
                 match decoder.decode_video_frame_at(source_time, cancellation) {
-                    Ok(Some(frame)) => frames.push(frame),
+                    Ok(Some(frame)) => {
+                        frames.push((frame, clip.transform, clip.crop, clip.opacity));
+                    }
                     Ok(None) => {}
                     Err(error) if matches!(error, or_media::DecodeError::Cancelled) => {
                         return Err(PreviewError::new("PREVIEW_CANCELLED", error.to_string()));
@@ -411,18 +414,21 @@ mod desktop {
 
             let (width, height) = frames
                 .first()
-                .map(|frame| fit_size(frame.descriptor().width(), frame.descriptor().height()))
+                .map(|(frame, _, _, _)| {
+                    fit_size(frame.descriptor().width(), frame.descriptor().height())
+                })
                 .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT));
             let size = RenderSize::new(width, height)
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
             let layers = frames
                 .iter()
-                .map(|frame| {
+                .map(|(frame, transform, crop, opacity)| {
                     RgbaVideoLayer::new(
                         frame.descriptor().width(),
                         frame.descriptor().height(),
                         frame.pixels(),
-                    )
+                    )?
+                    .with_visual_settings(*transform, *crop, *opacity)
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
@@ -541,6 +547,9 @@ mod desktop {
         timeline_start: RationalTime,
         source_start: RationalTime,
         duration: RationalTime,
+        transform: Transform,
+        crop: Crop,
+        opacity: Opacity,
     }
 
     struct Presentation {
@@ -586,20 +595,27 @@ mod desktop {
 
         let result = query(
             host,
-            QueryEnvelope::timeline_tracks(key.project_id, key.project_instance_id),
+            QueryEnvelope::timeline_tracks_v2(key.project_id, key.project_instance_id),
         )?;
         ensure_key(&result, key)?;
-        let tracks = result.timeline_tracks.ok_or_else(|| {
+        let tracks = result.timeline_tracks_v2.ok_or_else(|| {
             PreviewError::new("PREVIEW_QUERY_FAILED", "timeline tracks were missing")
         })?;
         let mut content_end = None;
         let mut video_clips = Vec::new();
+        let has_video_solo = tracks
+            .iter()
+            .any(|track| track.kind == TrackKind::Video && track.state.solo());
         for track in tracks {
-            for clip in list_clips(host, key, track)? {
+            let render_track = track.kind == TrackKind::Video
+                && track.state.visible()
+                && (!has_video_solo || track.state.solo());
+            for clip in list_clips(host, key, &track)? {
                 add_clip(
                     &mut content_end,
                     &mut video_clips,
                     track.kind,
+                    render_track,
                     clip,
                     &media_sources,
                 )?;
@@ -628,23 +644,23 @@ mod desktop {
     fn list_clips(
         host: &LiveProjectHost,
         key: ProgramKey,
-        track: TimelineTrackSummary,
-    ) -> Result<Vec<LegacyTimelineClipState>, PreviewError> {
+        track: &TimelineTrackSummaryV2,
+    ) -> Result<Vec<TimelineClipState>, PreviewError> {
         let mut clips = Vec::new();
         let mut offset = 0usize;
         loop {
             let result = query(
                 host,
-                QueryEnvelope::timeline_clips(
+                QueryEnvelope::timeline_clips_v2(
                     key.project_id,
                     key.project_instance_id,
                     track.track_id,
                     offset,
-                    PAGE_SIZE,
+                    MAX_TIMELINE_CLIP_PAGE_SIZE,
                 ),
             )?;
             ensure_key(&result, key)?;
-            let page = result.timeline_clip_page.ok_or_else(|| {
+            let page = result.timeline_clip_page_v2.ok_or_else(|| {
                 PreviewError::new("PREVIEW_QUERY_FAILED", "timeline clip page was missing")
             })?;
             clips.extend(page.items);
@@ -664,23 +680,43 @@ mod desktop {
         content_end: &mut Option<RationalTime>,
         video_clips: &mut Vec<VideoClip>,
         track_kind: TrackKind,
-        clip: LegacyTimelineClipState,
+        render_track: bool,
+        clip: TimelineClipState,
         sources: &HashMap<MediaId, MediaSourceRef>,
     ) -> Result<(), PreviewError> {
         let end = clip
             .timeline_start
-            .checked_add(clip.source_range.duration())
+            .checked_add(clip.timeline_duration)
             .map_err(|error| PreviewError::new("INVALID_TIMELINE_TIME", error.to_string()))?;
         *content_end = Some(content_end.map_or(end, |current| current.max(end)));
-        if track_kind == TrackKind::Video {
-            let source = sources.get(&clip.media_id).cloned().ok_or_else(|| {
+        if track_kind == TrackKind::Video && render_track {
+            let ClipContent::Media {
+                media_id,
+                source_range,
+            } = clip.content
+            else {
+                return Err(PreviewError::new(
+                    "PREVIEW_QUERY_FAILED",
+                    "video track contained unsupported clip content",
+                ));
+            };
+            let source = sources.get(&media_id).cloned().ok_or_else(|| {
                 PreviewError::new("PREVIEW_QUERY_FAILED", "timeline media source was missing")
             })?;
+            let ClipSettings::Visual(settings) = clip.settings else {
+                return Err(PreviewError::new(
+                    "PREVIEW_QUERY_FAILED",
+                    "video clip visual settings were missing",
+                ));
+            };
             video_clips.push(VideoClip {
                 source,
                 timeline_start: clip.timeline_start,
-                source_start: clip.source_range.start(),
-                duration: clip.source_range.duration(),
+                source_start: source_range.start(),
+                duration: clip.timeline_duration,
+                transform: settings.transform,
+                crop: settings.crop,
+                opacity: settings.opacity,
             });
         }
         Ok(())

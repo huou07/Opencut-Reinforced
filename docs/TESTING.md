@@ -541,6 +541,21 @@ hardening commit itself must pass both workflows.
   native/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
+## Phase 8C video transform foundation coverage
+
+- `or_core` verifies exact visual-setting updates, range rejection without
+  project/history mutation, undo/redo, and schema-v6 encode/decode. `or_render`
+  checks crop, opacity, translation, scale, rotation, and anchor behavior
+  through wgpu readback when a headless adapter is available.
+- Flutter widget coverage selects a video clip, edits transform values through
+  the Inspector, and dispatches the visual-settings update through the project
+  gateway. `flutter analyze` checks the generated bridge consumer and hosted
+  integration-test adapter.
+- The hosted native bridge lifecycle test reads defaults, updates every
+  visual-setting field, verifies revision behavior, saves/reopens, and reads
+  the same values. Native Flutter runtime execution remains
+  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
 ## Future verification layers
 
 ### CONFORMANCE

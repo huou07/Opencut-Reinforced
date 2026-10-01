@@ -285,6 +285,51 @@ class ProjectTimelineClip {
   ProjectRationalTime get timelineEnd => timelineStart.add(sourceDuration);
 }
 
+class ProjectTimelineVisualSettings {
+  const ProjectTimelineVisualSettings({
+    required this.xMilliCanvas,
+    required this.yMilliCanvas,
+    required this.scaleXMilli,
+    required this.scaleYMilli,
+    required this.rotationMilliDegrees,
+    required this.anchorXBasisPoints,
+    required this.anchorYBasisPoints,
+    required this.cropLeftBasisPoints,
+    required this.cropTopBasisPoints,
+    required this.cropRightBasisPoints,
+    required this.cropBottomBasisPoints,
+    required this.opacityBasisPoints,
+  });
+
+  static const identity = ProjectTimelineVisualSettings(
+    xMilliCanvas: 0,
+    yMilliCanvas: 0,
+    scaleXMilli: 1000,
+    scaleYMilli: 1000,
+    rotationMilliDegrees: 0,
+    anchorXBasisPoints: 5000,
+    anchorYBasisPoints: 5000,
+    cropLeftBasisPoints: 0,
+    cropTopBasisPoints: 0,
+    cropRightBasisPoints: 0,
+    cropBottomBasisPoints: 0,
+    opacityBasisPoints: 10000,
+  );
+
+  final int xMilliCanvas;
+  final int yMilliCanvas;
+  final int scaleXMilli;
+  final int scaleYMilli;
+  final int rotationMilliDegrees;
+  final int anchorXBasisPoints;
+  final int anchorYBasisPoints;
+  final int cropLeftBasisPoints;
+  final int cropTopBasisPoints;
+  final int cropRightBasisPoints;
+  final int cropBottomBasisPoints;
+  final int opacityBasisPoints;
+}
+
 class ProjectTimelineClipPage {
   ProjectTimelineClipPage({
     required this.projectId,
@@ -559,6 +604,19 @@ abstract interface class ProjectGateway {
     required String trackId,
     required int offset,
     required int limit,
+  });
+  Future<ProjectTimelineVisualSettings> getTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  });
+  Future<ProjectActionResult> updateTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineVisualSettings settings,
   });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {

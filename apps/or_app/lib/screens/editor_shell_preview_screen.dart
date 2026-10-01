@@ -56,6 +56,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onMoveTimelineMarker,
     this.onRenameTimelineMarker,
     this.onDeleteTimelineMarker,
+    this.onUpdateTimelineClipVisualSettings,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -175,6 +176,13 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineMarker marker,
   )?
   onDeleteTimelineMarker;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+    ProjectTimelineVisualSettings settings,
+  )?
+  onUpdateTimelineClipVisualSettings;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -210,6 +218,9 @@ const _editorTools = [
 
 class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String _selectedTool = 'Media';
+  String? _selectedTrackId;
+  String? _selectedClipId;
+  ProjectTimelineTrackKind? _selectedTrackKind;
   bool _snapEnabled = true;
   late final ValueNotifier<ProjectPreviewState?> _previewState;
 
@@ -229,6 +240,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         oldWidget.projectSession != widget.projectSession;
     if (projectIdentityChanged) {
       _snapEnabled = true;
+      _selectedTrackId = null;
+      _selectedClipId = null;
+      _selectedTrackKind = null;
     }
     if (projectIdentityChanged ||
         oldWidget.project?.revision != widget.project?.revision) {
@@ -244,6 +258,33 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void _onPreviewStateChanged(ProjectPreviewState state) {
     _previewState.value = state;
+  }
+
+  void _onTimelineClipSelectionChanged(
+    String? trackId,
+    String? clipId,
+    ProjectTimelineTrackKind? kind,
+  ) {
+    if (_selectedTrackId == trackId &&
+        _selectedClipId == clipId &&
+        _selectedTrackKind == kind) {
+      return;
+    }
+    setState(() {
+      _selectedTrackId = trackId;
+      _selectedClipId = clipId;
+      _selectedTrackKind = kind;
+    });
+  }
+
+  ProjectTimelineTrack? get _selectedInspectorTrack {
+    final selectedId = _selectedTrackId;
+    if (selectedId == null) return null;
+    for (final track
+        in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+      if (track.trackId == selectedId) return track;
+    }
+    return null;
   }
 
   @override
@@ -334,7 +375,22 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 ),
               ),
               const VerticalDivider(width: 1),
-              SizedBox(width: wide ? 236 : 188, child: const _InspectorPanel()),
+              SizedBox(
+                width: wide ? 236 : 188,
+                child: _InspectorPanel(
+                  isProjectWorkspace: widget.isProjectWorkspace,
+                  project: widget.project,
+                  gateway: widget.projectGateway,
+                  session: widget.projectSession,
+                  trackId: _selectedTrackId,
+                  clipId: _selectedClipId,
+                  isVideoTrack:
+                      _selectedTrackKind == ProjectTimelineTrackKind.video,
+                  trackLocked: _selectedInspectorTrack?.state.locked ?? true,
+                  busy: widget.busy,
+                  onUpdate: widget.onUpdateTimelineClipVisualSettings,
+                ),
+              ),
             ],
           ),
         ),
@@ -391,6 +447,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
             onAddMediaToTimeline: widget.onAddMediaToTimeline,
+            onClipSelectionChanged: _onTimelineClipSelectionChanged,
           ),
         ),
       ],
@@ -462,6 +519,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
             onAddMediaToTimeline: widget.onAddMediaToTimeline,
+            onClipSelectionChanged: _onTimelineClipSelectionChanged,
           ),
         ),
         _MobileToolDock(
@@ -1875,30 +1933,454 @@ String _timeFeedback(
   return '$display · ${position.canonical}$frame';
 }
 
-class _InspectorPanel extends StatelessWidget {
-  const _InspectorPanel();
+class _InspectorPanel extends StatefulWidget {
+  const _InspectorPanel({
+    required this.isProjectWorkspace,
+    required this.project,
+    required this.gateway,
+    required this.session,
+    required this.trackId,
+    required this.clipId,
+    required this.isVideoTrack,
+    required this.trackLocked,
+    required this.busy,
+    required this.onUpdate,
+  });
+
+  final bool isProjectWorkspace;
+  final ProjectReadModel? project;
+  final ProjectGateway? gateway;
+  final ProjectSessionHandle? session;
+  final String? trackId;
+  final String? clipId;
+  final bool isVideoTrack;
+  final bool trackLocked;
+  final bool busy;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel,
+    String,
+    String,
+    ProjectTimelineVisualSettings,
+  )?
+  onUpdate;
+
+  @override
+  State<_InspectorPanel> createState() => _InspectorPanelState();
+}
+
+class _InspectorPanelState extends State<_InspectorPanel> {
+  final Map<String, TextEditingController> _fields = {
+    for (final key in _visualFieldKeys) key: TextEditingController(),
+  };
+  bool _loading = false;
+  bool _saving = false;
+  String? _error;
+  int _loadGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InspectorPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.project?.projectId != widget.project?.projectId ||
+        oldWidget.project?.projectInstanceId !=
+            widget.project?.projectInstanceId ||
+        oldWidget.project?.revision != widget.project?.revision ||
+        oldWidget.trackId != widget.trackId ||
+        oldWidget.clipId != widget.clipId ||
+        oldWidget.isVideoTrack != widget.isVideoTrack) {
+      _loadSettings();
+    }
+  }
+
+  @override
+  void dispose() {
+    _loadGeneration++;
+    for (final field in _fields.values) {
+      field.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final generation = ++_loadGeneration;
+    final project = widget.project;
+    final gateway = widget.gateway;
+    final session = widget.session;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    if (!widget.isProjectWorkspace ||
+        !widget.isVideoTrack ||
+        project == null ||
+        gateway == null ||
+        session == null ||
+        trackId == null ||
+        clipId == null) {
+      setState(() {
+        _loading = false;
+        _error = null;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final settings = await gateway.getTimelineClipVisualSettings(
+        session,
+        project,
+        trackId: trackId,
+        clipId: clipId,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      _writeSettings(settings);
+    } on ProjectGatewayException catch (error) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() => _error = error.message);
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() => _error = 'Video settings could not be loaded.');
+    } finally {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  void _writeSettings(ProjectTimelineVisualSettings settings) {
+    _fields['x']!.text = '${settings.xMilliCanvas}';
+    _fields['y']!.text = '${settings.yMilliCanvas}';
+    _fields['scale_x']!.text = '${settings.scaleXMilli}';
+    _fields['scale_y']!.text = '${settings.scaleYMilli}';
+    _fields['rotation']!.text = '${settings.rotationMilliDegrees}';
+    _fields['anchor_x']!.text = '${settings.anchorXBasisPoints}';
+    _fields['anchor_y']!.text = '${settings.anchorYBasisPoints}';
+    _fields['crop_left']!.text = '${settings.cropLeftBasisPoints}';
+    _fields['crop_top']!.text = '${settings.cropTopBasisPoints}';
+    _fields['crop_right']!.text = '${settings.cropRightBasisPoints}';
+    _fields['crop_bottom']!.text = '${settings.cropBottomBasisPoints}';
+    _fields['opacity']!.text = '${settings.opacityBasisPoints}';
+  }
+
+  ProjectTimelineVisualSettings? _readSettings() {
+    final values = <String, int>{};
+    for (final key in _visualFieldKeys) {
+      final value = int.tryParse(_fields[key]!.text);
+      if (value == null) return null;
+      values[key] = value;
+    }
+    if (values['x']! < -100000 ||
+        values['x']! > 100000 ||
+        values['y']! < -100000 ||
+        values['y']! > 100000 ||
+        values['scale_x']! < 1 ||
+        values['scale_x']! > 100000 ||
+        values['scale_y']! < 1 ||
+        values['scale_y']! > 100000 ||
+        values['rotation']! < -360000 ||
+        values['rotation']! > 360000 ||
+        values['anchor_x']! > 10000 ||
+        values['anchor_y']! > 10000 ||
+        values['crop_left']! > 10000 ||
+        values['crop_top']! > 10000 ||
+        values['crop_right']! > 10000 ||
+        values['crop_bottom']! > 10000 ||
+        values['opacity']! > 10000 ||
+        values['crop_left']! + values['crop_right']! >= 10000 ||
+        values['crop_top']! + values['crop_bottom']! >= 10000) {
+      return null;
+    }
+    return ProjectTimelineVisualSettings(
+      xMilliCanvas: values['x']!,
+      yMilliCanvas: values['y']!,
+      scaleXMilli: values['scale_x']!,
+      scaleYMilli: values['scale_y']!,
+      rotationMilliDegrees: values['rotation']!,
+      anchorXBasisPoints: values['anchor_x']!,
+      anchorYBasisPoints: values['anchor_y']!,
+      cropLeftBasisPoints: values['crop_left']!,
+      cropTopBasisPoints: values['crop_top']!,
+      cropRightBasisPoints: values['crop_right']!,
+      cropBottomBasisPoints: values['crop_bottom']!,
+      opacityBasisPoints: values['opacity']!,
+    );
+  }
+
+  Future<void> _apply(ProjectTimelineVisualSettings settings) async {
+    final project = widget.project;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    final onUpdate = widget.onUpdate;
+    if (project == null ||
+        trackId == null ||
+        clipId == null ||
+        onUpdate == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await onUpdate(project, trackId, clipId, settings);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _numberField(String key, String label, {required bool signed}) {
+    final expression = RegExp(signed ? r'^-?\d{0,7}$' : r'^\d{0,6}$');
+    final limit = switch (key) {
+      'x' || 'y' => 100000,
+      'rotation' => 360000,
+      'scale_x' || 'scale_y' => 100000,
+      _ => 10000,
+    };
+    return TextField(
+      key: ValueKey('inspector-visual-$key'),
+      controller: _fields[key],
+      enabled: !widget.busy && !_saving && !_loading && !widget.trackLocked,
+      keyboardType: TextInputType.numberWithOptions(signed: signed),
+      inputFormatters: [
+        TextInputFormatter.withFunction((oldValue, newValue) {
+          if (!expression.hasMatch(newValue.text)) return oldValue;
+          if (newValue.text.isEmpty || newValue.text == '-') return newValue;
+          final value = int.tryParse(newValue.text);
+          if (value == null) return newValue;
+          final minimum = switch (key) {
+            'x' || 'y' || 'rotation' => -limit,
+            'scale_x' || 'scale_y' => 1,
+            _ => 0,
+          };
+          return value >= minimum && value <= limit ? newValue : oldValue;
+        }),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        counterText: '',
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: OrSpacing.x1,
+          vertical: OrSpacing.x1,
+        ),
+      ),
+      style: const TextStyle(fontSize: 11),
+    );
+  }
+
+  Widget _pair(
+    String leftKey,
+    String leftLabel,
+    bool leftSigned,
+    String rightKey,
+    String rightLabel,
+    bool rightSigned,
+  ) {
+    return Row(
+      children: [
+        Expanded(child: _numberField(leftKey, leftLabel, signed: leftSigned)),
+        const SizedBox(width: OrSpacing.x1),
+        Expanded(
+          child: _numberField(rightKey, rightLabel, signed: rightSigned),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
+    final hasSelection = widget.clipId != null && widget.trackId != null;
+    final canEdit =
+        widget.isProjectWorkspace &&
+        widget.isVideoTrack &&
+        hasSelection &&
+        !widget.trackLocked;
+    return ColoredBox(
       color: OrColors.backgroundRaised,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelHeader(title: 'Inspector'),
-          Divider(height: 1),
-          Expanded(
-            child: OrEmptyState(
-              title: 'No selection',
-              message: 'Inspector controls are unavailable in this preview.',
-              icon: Icons.tune_outlined,
+          const _PanelHeader(title: 'Inspector'),
+          const Divider(height: 1),
+          if (!canEdit)
+            Expanded(
+              child: OrEmptyState(
+                title: hasSelection ? 'Video clip settings' : 'No selection',
+                message: !widget.isProjectWorkspace
+                    ? 'Inspector controls are unavailable in this preview.'
+                    : widget.trackLocked
+                    ? 'Unlock the selected track to edit video settings.'
+                    : hasSelection
+                    ? 'Transform controls are available for selected video clips.'
+                    : 'Select a video clip to edit transform, crop, and opacity.',
+                icon: Icons.tune_outlined,
+              ),
+            )
+          else if (_loading)
+            const Expanded(
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(OrSpacing.x2),
+                children: [
+                  Text(
+                    'TRANSFORM',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'x',
+                    'X (milli-canvas)',
+                    true,
+                    'y',
+                    'Y (milli-canvas)',
+                    true,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'scale_x',
+                    'Scale X (milli)',
+                    false,
+                    'scale_y',
+                    'Scale Y (milli)',
+                    false,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _numberField(
+                    'rotation',
+                    'Rotation (milli-deg)',
+                    signed: true,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'anchor_x',
+                    'Anchor X (bp)',
+                    false,
+                    'anchor_y',
+                    'Anchor Y (bp)',
+                    false,
+                  ),
+                  const SizedBox(height: OrSpacing.x3),
+                  Text(
+                    'CROP',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'crop_left',
+                    'Left (bp)',
+                    false,
+                    'crop_right',
+                    'Right (bp)',
+                    false,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _pair(
+                    'crop_top',
+                    'Top (bp)',
+                    false,
+                    'crop_bottom',
+                    'Bottom (bp)',
+                    false,
+                  ),
+                  const SizedBox(height: OrSpacing.x3),
+                  Text(
+                    'OPACITY',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _numberField(
+                    'opacity',
+                    'Opacity (basis points)',
+                    signed: false,
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: OrSpacing.x2),
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: OrSpacing.x2),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        key: const ValueKey('inspector-visual-reset'),
+                        onPressed: widget.busy || _saving || widget.trackLocked
+                            ? null
+                            : () => _apply(
+                                ProjectTimelineVisualSettings.identity,
+                              ),
+                        child: const Text('Reset'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        key: const ValueKey('inspector-visual-apply'),
+                        onPressed:
+                            widget.busy ||
+                                _saving ||
+                                widget.trackLocked ||
+                                _loading
+                            ? null
+                            : () {
+                                final settings = _readSettings();
+                                if (settings == null) {
+                                  setState(
+                                    () => _error = 'Enter valid whole numbers within the supported ranges.',
+                                  );
+                                  return;
+                                }
+                                _apply(settings);
+                              },
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 }
+
+const _visualFieldKeys = [
+  'x',
+  'y',
+  'scale_x',
+  'scale_y',
+  'rotation',
+  'anchor_x',
+  'anchor_y',
+  'crop_left',
+  'crop_top',
+  'crop_right',
+  'crop_bottom',
+  'opacity',
+];
 
 class _TimelineToolbar extends StatelessWidget {
   const _TimelineToolbar({
@@ -2079,6 +2561,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onTimelineEditError,
     required this.mediaItems,
     required this.onAddMediaToTimeline,
+    this.onClipSelectionChanged,
   });
 
   final bool compact;
@@ -2168,6 +2651,12 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onAddMediaToTimeline;
+  final void Function(
+    String? trackId,
+    String? clipId,
+    ProjectTimelineTrackKind? kind,
+  )?
+  onClipSelectionChanged;
 
   @override
   State<_TimelinePanel> createState() => _TimelinePanelState();
@@ -2518,9 +3007,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                                     scale,
                                                   ),
                                         onOpenClip: (clip) {
-                                          setState(
-                                            () => _selectedClipId = clip.clipId,
-                                          );
+                                          _selectClip(track, clip);
                                           unawaited(() async {
                                             await _showTimelineClipActions(
                                               context: context,
@@ -2646,7 +3133,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               key: const ValueKey('timeline-selection-clear'),
               tooltip: 'Clear selection',
               visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() => _selectedClipId = null),
+              onPressed: _clearSelection,
               icon: const Icon(Icons.close, size: 15),
             ),
           ],
@@ -2763,7 +3250,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape &&
         _selectedClipId != null) {
-      setState(() => _selectedClipId = null);
+      _clearSelection();
       return KeyEventResult.handled;
     }
     final clip = _selectedClip;
@@ -2819,6 +3306,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         pixelsPerSecond: _pixelsPerSecondForGesture(),
       );
     });
+    widget.onClipSelectionChanged?.call(track.trackId, clip.clipId, track.kind);
   }
 
   void _updateMoveGesture(ProjectTimelineClip clip, DragUpdateDetails details) {
@@ -2878,6 +3366,17 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         pixelsPerSecond: _pixelsPerSecondForGesture(),
       );
     });
+    widget.onClipSelectionChanged?.call(track.trackId, clip.clipId, track.kind);
+  }
+
+  void _selectClip(ProjectTimelineTrack track, ProjectTimelineClip clip) {
+    setState(() => _selectedClipId = clip.clipId);
+    widget.onClipSelectionChanged?.call(track.trackId, clip.clipId, track.kind);
+  }
+
+  void _clearSelection() {
+    setState(() => _selectedClipId = null);
+    widget.onClipSelectionChanged?.call(null, null, null);
   }
 
   void _updateTrimGesture(ProjectTimelineClip clip, DragUpdateDetails details) {

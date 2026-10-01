@@ -175,6 +175,12 @@ today.
   captions, basic gain/pan/fades, basic transitions/effects, export, autosave,
   recovery, save/reopen, and preview/playback are accepted at their locked
   checkpoints.
+- For 8C, selecting an unlocked Video clip exposes numeric position, scale,
+  rotation, anchor, crop, and opacity controls in the Inspector. Values stay
+  within the typed project ranges; crop edges cannot remove the full width or
+  height. Apply and Reset use the canonical project command, preserve clip
+  content and exact timing, and update the preview. Undo/redo and save/reopen
+  retain the same visual settings.
 - Automatic captions are not a Desktop MVP acceptance item; they belong to
   Phase 10.
 - Complex linked clips, grouping, nested timelines, and multicamera are

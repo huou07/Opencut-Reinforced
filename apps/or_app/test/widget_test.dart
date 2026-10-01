@@ -840,6 +840,27 @@ void main() {
         find.byKey(const ValueKey('timeline-selection-duplicate')),
         findsOneWidget,
       );
+      expect(find.text('TRANSFORM'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('inspector-visual-x')),
+        '250',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('inspector-visual-apply')),
+      );
+      await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
+      await tester.pumpAndSettle();
+      expect(gateway.updateVisualSettingsCalls, 1);
+      expect(gateway.lastVisualSettings?.xMilliCanvas, 250);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('inspector-visual-reset')),
+      );
+      await tester.tap(find.byKey(const ValueKey('inspector-visual-reset')));
+      await tester.pumpAndSettle();
+      expect(gateway.updateVisualSettingsCalls, 2);
+      expect(gateway.lastVisualSettings?.xMilliCanvas, 0);
+      expect(gateway.lastVisualSettings?.scaleXMilli, 1000);
+      expect(gateway.lastVisualSettings?.opacityBasisPoints, 10000);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.keyD);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.keyD);
@@ -2675,6 +2696,9 @@ class _FakeProjectGateway implements ProjectGateway {
   int mediaListCalls = 0;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
+  int getVisualSettingsCalls = 0;
+  int updateVisualSettingsCalls = 0;
+  ProjectTimelineVisualSettings? lastVisualSettings;
   int timelineMarkersCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
   int resolveTimelineSnapCalls = 0;
@@ -3060,6 +3084,46 @@ class _FakeProjectGateway implements ProjectGateway {
       limit: limit,
       nextOffset: end < clips.length ? end : null,
     );
+  }
+
+  @override
+  Future<ProjectTimelineVisualSettings> getTimelineClipVisualSettings(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async {
+    getVisualSettingsCalls++;
+    final session = _session(handle);
+    return session.visualSettings[clipId] ??
+        ProjectTimelineVisualSettings.identity;
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipVisualSettings(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineVisualSettings settings,
+  }) async {
+    updateVisualSettingsCalls++;
+    lastVisualSettings = settings;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final trackExists = session.tracks.any(
+      (track) =>
+          track.trackId == trackId &&
+          track.kind == ProjectTimelineTrackKind.video,
+    );
+    final clipExists = (session.clips[trackId] ?? const <ProjectTimelineClip>[])
+        .any((clip) => clip.clipId == clipId);
+    if (!trackExists || !clipExists) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    session.visualSettings[clipId] = settings;
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
   }
 
   @override
@@ -3849,6 +3913,7 @@ class _FakeSession implements ProjectSessionHandle {
   List<ProjectTimelineTrack> tracks = [];
   final List<ProjectTimelineMarker> markers = [];
   final Map<String, List<ProjectTimelineClip>> clips = {};
+  final Map<String, ProjectTimelineVisualSettings> visualSettings = {};
   int nextTrackId = 1;
   int nextClipId = 1;
   int nextMarkerId = 1;

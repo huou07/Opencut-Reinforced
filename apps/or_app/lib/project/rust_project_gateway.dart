@@ -277,6 +277,71 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectTimelineVisualSettings> getTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async {
+    try {
+      final settings = await _host(session).getTimelineClipVisualSettings(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        expectedRevision: current.revision,
+        trackId: trackId,
+        clipId: clipId,
+      );
+      return ProjectTimelineVisualSettings(
+        xMilliCanvas: settings.xMilliCanvas,
+        yMilliCanvas: settings.yMilliCanvas,
+        scaleXMilli: settings.scaleXMilli,
+        scaleYMilli: settings.scaleYMilli,
+        rotationMilliDegrees: settings.rotationMilliDegrees,
+        anchorXBasisPoints: settings.anchorXBasisPoints,
+        anchorYBasisPoints: settings.anchorYBasisPoints,
+        cropLeftBasisPoints: settings.cropLeftBasisPoints,
+        cropTopBasisPoints: settings.cropTopBasisPoints,
+        cropRightBasisPoints: settings.cropRightBasisPoints,
+        cropBottomBasisPoints: settings.cropBottomBasisPoints,
+        opacityBasisPoints: settings.opacityBasisPoints,
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipVisualSettings(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectTimelineVisualSettings settings,
+  }) async => _action(
+    await _host(session).updateTimelineClipVisualSettings(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      settings: rust.ProjectTimelineVisualSettingsView(
+        xMilliCanvas: settings.xMilliCanvas,
+        yMilliCanvas: settings.yMilliCanvas,
+        scaleXMilli: settings.scaleXMilli,
+        scaleYMilli: settings.scaleYMilli,
+        rotationMilliDegrees: settings.rotationMilliDegrees,
+        anchorXBasisPoints: settings.anchorXBasisPoints,
+        anchorYBasisPoints: settings.anchorYBasisPoints,
+        cropLeftBasisPoints: settings.cropLeftBasisPoints,
+        cropTopBasisPoints: settings.cropTopBasisPoints,
+        cropRightBasisPoints: settings.cropRightBasisPoints,
+        cropBottomBasisPoints: settings.cropBottomBasisPoints,
+        opacityBasisPoints: settings.opacityBasisPoints,
+      ),
+    ),
+  );
+
+  @override
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {
     required int offset,

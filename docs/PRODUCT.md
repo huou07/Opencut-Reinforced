@@ -76,7 +76,8 @@ The optimized Desktop MVP milestone is represented by the execution graph from
   settings consumed by 8B–8E.
 - **Timeline usability (8B):** selection, duplicate, track enabled/locked/solo,
   timeline zoom, direct media-to-timeline insertion, and bounded viewport input.
-- **Video (8C):** typed transform, crop, and opacity.
+- **Video (8C):** typed transform, crop, and opacity, edited through bounded
+  Inspector controls and applied by the shared preview render path.
 - **Text (8D):** basic text and manual captions through cosmic-text 0.19.0
   using the bundled deterministic Inter 4.1 font identity. Automatic captions
   are Phase 10, not Desktop MVP.

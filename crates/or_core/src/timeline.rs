@@ -312,7 +312,7 @@ impl Transform {
         anchor_y_basis_points: 5_000,
     };
 
-    fn is_valid(self) -> bool {
+    pub fn is_valid(self) -> bool {
         (-MAX_TRANSFORM_POSITION_MILLI_CANVAS..=MAX_TRANSFORM_POSITION_MILLI_CANVAS)
             .contains(&self.x_milli_canvas)
             && (-MAX_TRANSFORM_POSITION_MILLI_CANVAS..=MAX_TRANSFORM_POSITION_MILLI_CANVAS)
@@ -348,7 +348,7 @@ impl Crop {
         bottom_basis_points: 0,
     };
 
-    fn is_valid(self) -> bool {
+    pub fn is_valid(self) -> bool {
         self.left_basis_points <= 10_000
             && self.right_basis_points <= 10_000
             && self.top_basis_points <= 10_000
@@ -369,7 +369,7 @@ impl Opacity {
         basis_points: 10_000,
     };
 
-    fn is_valid(self) -> bool {
+    pub fn is_valid(self) -> bool {
         self.basis_points <= 10_000
     }
 }

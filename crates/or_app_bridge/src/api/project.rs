@@ -3,15 +3,16 @@ use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, CacheArtifactKind, CacheKey, CacheStoreConfig, ClipId,
-    CommandEnvelope, JobManagerConfig, LegacyTimelineClipState, MarkerId, MediaArtifactEvent,
-    MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
-    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, OperationError,
-    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
-    RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage, TimelineMarkerPage,
-    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
-    TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
-    TrackState, apply_project_recovery, discard_project_recovery,
+    ClipSettings, CommandEnvelope, Crop, JobManagerConfig, LegacyTimelineClipState, MarkerId,
+    MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState,
+    MediaArtifactService, MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata,
+    Opacity, OperationError, OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId,
+    ProjectRecoveryError, ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TimeRange, TimelineClipPage,
+    TimelineClipPageV2, TimelineClipState, TimelineMarkerPage, TimelineMarkerState,
+    TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind,
+    TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind, TrackState, Transform,
+    VisualSettings, apply_project_recovery, discard_project_recovery,
     ffmpeg_executable_from_environment, inspect_project_recovery, prepare_media_import,
 };
 use or_ipc::{LiveProjectHost, LiveProjectHostError, ProjectHostEvent, ProjectHostEventKind};
@@ -175,6 +176,22 @@ pub struct ProjectTimelineClipPageView {
     pub offset: u64,
     pub limit: u64,
     pub next_offset: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTimelineVisualSettingsView {
+    pub x_milli_canvas: i32,
+    pub y_milli_canvas: i32,
+    pub scale_x_milli: u32,
+    pub scale_y_milli: u32,
+    pub rotation_milli_degrees: i32,
+    pub anchor_x_basis_points: u16,
+    pub anchor_y_basis_points: u16,
+    pub crop_left_basis_points: u16,
+    pub crop_top_basis_points: u16,
+    pub crop_right_basis_points: u16,
+    pub crop_bottom_basis_points: u16,
+    pub opacity_basis_points: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -607,6 +624,78 @@ impl ProjectHostHandle {
             .as_ref()
             .ok_or_else(unexpected_response_error)?;
         Ok(timeline_clip_page_view(&result, page))
+    }
+
+    pub fn get_timeline_clip_visual_settings(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+    ) -> Result<ProjectTimelineVisualSettingsView, ProjectBridgeError> {
+        let (_, _, _, clip) = self.find_video_clip(
+            &project_id,
+            &project_instance_id,
+            expected_revision,
+            &track_id,
+            &clip_id,
+        )?;
+        let ClipSettings::Visual(settings) = clip.settings else {
+            return Err(unsupported_visual_settings());
+        };
+        Ok(visual_settings_view(&settings))
+    }
+
+    pub fn update_timeline_clip_visual_settings(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        settings: ProjectTimelineVisualSettingsView,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision, clip) = match self.find_video_clip(
+            &project_id,
+            &project_instance_id,
+            expected_revision,
+            &track_id,
+            &clip_id,
+        ) {
+            Ok(result) => result,
+            Err(error) => return action_error(error),
+        };
+        let ClipSettings::Visual(mut visual) = clip.settings else {
+            return action_error(unsupported_visual_settings());
+        };
+        visual.transform = Transform {
+            x_milli_canvas: settings.x_milli_canvas,
+            y_milli_canvas: settings.y_milli_canvas,
+            scale_x_milli: settings.scale_x_milli,
+            scale_y_milli: settings.scale_y_milli,
+            rotation_milli_degrees: settings.rotation_milli_degrees,
+            anchor_x_basis_points: settings.anchor_x_basis_points,
+            anchor_y_basis_points: settings.anchor_y_basis_points,
+        };
+        visual.crop = Crop {
+            left_basis_points: settings.crop_left_basis_points,
+            top_basis_points: settings.crop_top_basis_points,
+            right_basis_points: settings.crop_right_basis_points,
+            bottom_basis_points: settings.crop_bottom_basis_points,
+        };
+        visual.opacity = Opacity {
+            basis_points: settings.opacity_basis_points,
+        };
+        self.dispatch_command(CommandEnvelope::update_timeline_clip(
+            project_id,
+            project_instance_id,
+            revision,
+            clip.clip_id,
+            clip.timeline_duration,
+            clip.content,
+            ClipSettings::Visual(visual),
+        ))
     }
 
     pub fn list_timeline_markers(
@@ -1505,6 +1594,81 @@ impl ProjectHostHandle {
         Ok(())
     }
 
+    fn find_video_clip(
+        &self,
+        project_id: &str,
+        project_instance_id: &str,
+        expected_revision: u64,
+        track_id: &str,
+        clip_id: &str,
+    ) -> Result<
+        (
+            ProjectId,
+            ProjectInstanceId,
+            ProjectRevision,
+            TimelineClipState,
+        ),
+        ProjectBridgeError,
+    > {
+        let (project_id, project_instance_id, revision) =
+            parse_session_identity(project_id, project_instance_id, expected_revision)?;
+        let track_id = TrackId::from_str(track_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_TRACK_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let clip_id = ClipId::from_str(clip_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_CLIP_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+
+        let tracks = self.query(QueryEnvelope::timeline_tracks_v2(
+            project_id,
+            project_instance_id,
+        ))?;
+        ensure_visual_settings_snapshot(&tracks, project_id, project_instance_id, revision)?;
+        let track = tracks
+            .timeline_tracks_v2
+            .as_ref()
+            .and_then(|items| items.iter().find(|item| item.track_id == track_id))
+            .ok_or_else(|| ProjectBridgeError {
+                code: "TIMELINE_TRACK_NOT_FOUND".to_owned(),
+                message: "The selected video track no longer exists.".to_owned(),
+            })?;
+        if track.kind != TrackKind::Video {
+            return Err(unsupported_visual_settings());
+        }
+
+        let mut offset = 0;
+        loop {
+            let result = self.query(QueryEnvelope::timeline_clips_v2(
+                project_id,
+                project_instance_id,
+                track_id,
+                offset,
+                or_core::MAX_TIMELINE_CLIP_PAGE_SIZE,
+            ))?;
+            ensure_visual_settings_snapshot(&result, project_id, project_instance_id, revision)?;
+            let page: &TimelineClipPageV2 = result
+                .timeline_clip_page_v2
+                .as_ref()
+                .ok_or_else(unexpected_response_error)?;
+            if let Some(clip) = page.items.iter().find(|item| item.clip_id == clip_id) {
+                return Ok((project_id, project_instance_id, revision, clip.clone()));
+            }
+            let Some(next_offset) = page.next_offset else {
+                break;
+            };
+            if next_offset <= offset {
+                return Err(timeline_query_arguments_error());
+            }
+            offset = next_offset;
+        }
+        Err(ProjectBridgeError {
+            code: "TIMELINE_CLIP_NOT_FOUND".to_owned(),
+            message: "The selected video clip no longer exists.".to_owned(),
+        })
+    }
+
     fn command(
         &self,
         project_id: String,
@@ -1832,6 +1996,48 @@ fn timeline_clip_view(clip: &LegacyTimelineClipState) -> ProjectTimelineClipView
         timeline_start: rational_time_view(clip.timeline_start),
         source_start: rational_time_view(clip.source_range.start()),
         source_duration: rational_time_view(clip.source_range.duration()),
+    }
+}
+
+fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSettingsView {
+    ProjectTimelineVisualSettingsView {
+        x_milli_canvas: settings.transform.x_milli_canvas,
+        y_milli_canvas: settings.transform.y_milli_canvas,
+        scale_x_milli: settings.transform.scale_x_milli,
+        scale_y_milli: settings.transform.scale_y_milli,
+        rotation_milli_degrees: settings.transform.rotation_milli_degrees,
+        anchor_x_basis_points: settings.transform.anchor_x_basis_points,
+        anchor_y_basis_points: settings.transform.anchor_y_basis_points,
+        crop_left_basis_points: settings.crop.left_basis_points,
+        crop_top_basis_points: settings.crop.top_basis_points,
+        crop_right_basis_points: settings.crop.right_basis_points,
+        crop_bottom_basis_points: settings.crop.bottom_basis_points,
+        opacity_basis_points: settings.opacity.basis_points,
+    }
+}
+
+fn ensure_visual_settings_snapshot(
+    result: &QueryResult,
+    project_id: ProjectId,
+    project_instance_id: ProjectInstanceId,
+    revision: ProjectRevision,
+) -> Result<(), ProjectBridgeError> {
+    if result.summary.project_id != project_id
+        || result.summary.project_instance_id != project_instance_id
+        || result.summary.project_revision != revision
+    {
+        return Err(ProjectBridgeError {
+            code: "REVISION_CONFLICT".to_owned(),
+            message: "The project changed while video settings were being read.".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn unsupported_visual_settings() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
+        message: "Video transform settings are only available for video clips.".to_owned(),
     }
 }
 
