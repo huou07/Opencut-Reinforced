@@ -1,5 +1,5 @@
 use or_core::{MediaSourceRef, ProjectDocument, RationalTime, TimeRange};
-use or_media::{SnapshotQueue, SoftwareMediaDecoder};
+use or_media::{DecodeError, SnapshotQueue, SoftwareMediaDecoder};
 use or_runtime::{
     BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
 };
@@ -102,6 +102,18 @@ fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
 
     assert_eq!(frame.descriptor().timing().timestamp(), time(1, 4));
     assert_eq!(frame.pixels().len(), 16 * 16 * 4);
+}
+
+#[test]
+fn cancelled_software_video_seek_returns_before_opening_media() {
+    let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+
+    assert!(matches!(
+        decoder.decode_video_frame_at(time(1, 4), &cancellation),
+        Err(DecodeError::Cancelled)
+    ));
 }
 
 #[test]

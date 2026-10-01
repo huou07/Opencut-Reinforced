@@ -91,6 +91,12 @@ jobs:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
         run: cargo test --locked -p or_media --test software_decode
 
+      - name: Verify Phase 7 runtime hardening contracts
+        run: |
+          cargo test --locked -p or_runtime
+          cargo test --locked -p or_app_bridge
+          cargo test --locked -p or_core --test project_recovery
+
       - name: Verify deterministic audio clock and synchronization
         timeout-minutes: 10
         run: cargo test --locked -p or_audio
@@ -235,6 +241,7 @@ jobs:
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | shasum -a 512 --check
           xz --test "$archive"
+          tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
@@ -269,7 +276,11 @@ jobs:
             echo "Packaging modifications: copies shared libraries beside the desktop media probe and into the app Frameworks directory, and adds @loader_path runtime paths; preserved install prefix remains unchanged"
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled components: file protocol; Matroska demuxer; FFV1 and PCM S16LE decoders"
+            echo "Enabled protocols: file"
+            echo "Enabled demuxers: matroska"
+            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled encoders: none"
+            echo "Enabled muxers: none"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(clang --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -279,6 +290,18 @@ jobs:
             find "$prefix/lib" -maxdepth 1 \( -type f -o -type l \) \( -name 'libav*.dylib' -o -name 'libsw*.dylib' \) -exec basename {} \; | sort
           } > "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
           cat "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
+          tar -czf "$RUNNER_TEMP/ffmpeg-8.1.3-install.tar.gz" -C "$RUNNER_TEMP" ffmpeg-8.1.3-install
+
+      - name: Verify Phase 7 runtime hardening contracts
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          DYLD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+        run: |
+          cargo test --locked -p or_runtime
+          cargo test --locked -p or_media
+          cargo test --locked -p or_app_bridge
+          cargo test --locked -p or_core --test project_recovery
 
       - name: Build the production media packaging probe
         env:
@@ -339,11 +362,12 @@ jobs:
         if: always() && steps.ffmpeg-build.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ffmpeg-8.1.3-macos-${{ runner.arch }}
+          name: ffmpeg-8.1.3-macos
           path: |
             ${{ runner.temp }}/ffmpeg-8.1.3.tar.xz
-            ${{ runner.temp }}/ffmpeg-8.1.3-install
+            ${{ runner.temp }}/ffmpeg-8.1.3-install.tar.gz
             ${{ runner.temp }}/FFMPEG-BUILD-INFO.txt
+            ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
           if-no-files-found: error
           retention-days: 14
 
@@ -448,6 +472,7 @@ jobs:
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
+          tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
@@ -486,7 +511,11 @@ jobs:
             echo 'Packaging modifications: copied shared libraries have ELF RUNPATH set to $ORIGIN; preserved install prefix remains unchanged'
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled components: file protocol; Matroska demuxer; FFV1 and PCM S16LE decoders"
+            echo "Enabled protocols: file"
+            echo "Enabled demuxers: matroska"
+            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled encoders: none"
+            echo "Enabled muxers: none"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(cc --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -495,6 +524,7 @@ jobs:
             find "$prefix/lib" -maxdepth 1 \( -type f -o -type l \) \( -name 'libav*.so*' -o -name 'libsw*.so*' \) -exec basename {} \; | sort
           } > "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
           cat "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
+          tar -czf "$RUNNER_TEMP/ffmpeg-8.1.3-install.tar.gz" -C "$RUNNER_TEMP" ffmpeg-8.1.3-install
 
       - name: Build the production media packaging probe
         env:
@@ -510,6 +540,17 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build linux --debug
+
+      - name: Verify Phase 7 runtime hardening contracts
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+        run: |
+          cargo test --locked -p or_runtime
+          cargo test --locked -p or_media
+          cargo test --locked -p or_app_bridge
+          cargo test --locked -p or_core --test project_recovery
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
         run: |
@@ -550,11 +591,12 @@ jobs:
         if: always() && steps.ffmpeg-build.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ffmpeg-8.1.3-linux-${{ runner.arch }}
+          name: ffmpeg-8.1.3-linux
           path: |
             ${{ runner.temp }}/ffmpeg-8.1.3.tar.xz
-            ${{ runner.temp }}/ffmpeg-8.1.3-install
+            ${{ runner.temp }}/ffmpeg-8.1.3-install.tar.gz
             ${{ runner.temp }}/FFMPEG-BUILD-INFO.txt
+            ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
           if-no-files-found: error
           retention-days: 14
 
@@ -638,6 +680,7 @@ jobs:
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
+          tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$temp/FFmpeg-COPYING.LGPLv2.1"
           tar -xJf "$archive" -C "$temp"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
@@ -686,7 +729,11 @@ jobs:
             echo "Packaging modifications: exposes MSVC import-library aliases and copies DLLs beside the desktop media probe; preserved install prefix remains otherwise unchanged"
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled components: file protocol; Matroska demuxer; FFV1 and PCM S16LE decoders"
+            echo "Enabled protocols: file"
+            echo "Enabled demuxers: matroska"
+            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled encoders: none"
+            echo "Enabled muxers: none"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Packaging modifications: versionless MSVC import-library aliases are copied for Rust linking; upstream import libraries and DLLs are retained"
             echo "MSVC import library names exposed to Rust: avcodec.lib, avformat.lib, avutil.lib, swresample.lib, swscale.lib"
@@ -698,6 +745,7 @@ jobs:
             (cd "$prefix/bin" && printf '%s\n' avcodec*.dll avformat*.dll avutil*.dll swresample*.dll swscale*.dll | sort)
           } > "$temp/FFMPEG-BUILD-INFO.txt"
           cat "$temp/FFMPEG-BUILD-INFO.txt"
+          tar -czf "$temp/ffmpeg-8.1.3-install.tar.gz" -C "$temp" ffmpeg-8.1.3-install
 
       - name: Build the production media packaging probe
         shell: msys2 {0}
@@ -714,6 +762,22 @@ jobs:
       - name: Expose clang64 DLLs to Flutter's native-assets hook
         shell: msys2 {0}
         run: echo "$LIBCLANG_PATH" >> "$GITHUB_PATH"
+
+      - name: Verify Phase 7 runtime hardening contracts
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          prefix="$(cygpath -u "$FFMPEG_INSTALL_PREFIX")"
+          msvc_linker_dir="$(cygpath -u "$VCToolsInstallDir")"
+          msvc_linker_dir="${msvc_linker_dir%/}/bin/Hostx64/x64"
+          export PATH="$msvc_linker_dir:$FFMPEG_INSTALL_PREFIX/bin:$PATH"
+          test "$(command -v link.exe)" = "$msvc_linker_dir/link.exe"
+          export FFMPEG_DIR="$FFMPEG_INSTALL_PREFIX"
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
+          cargo test --locked -p or_runtime
+          cargo test --locked -p or_media
+          cargo test --locked -p or_app_bridge
+          cargo test --locked -p or_core --test project_recovery
 
       - name: Build Windows app with Rust bridge and texture adapter
         working-directory: apps/or_app
@@ -757,8 +821,9 @@ jobs:
           name: ffmpeg-8.1.3-windows-x64
           path: |
             ${{ runner.temp }}/ffmpeg-8.1.3.tar.xz
-            ${{ runner.temp }}/ffmpeg-8.1.3-install
+            ${{ runner.temp }}/ffmpeg-8.1.3-install.tar.gz
             ${{ runner.temp }}/FFMPEG-BUILD-INFO.txt
+            ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
           if-no-files-found: error
           retention-days: 14
 

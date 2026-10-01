@@ -25,6 +25,7 @@ jobs:
       should_publish: ${{ steps.prepare.outputs.should_publish }}
       tag: ${{ steps.prepare.outputs.tag }}
       short_sha: ${{ steps.prepare.outputs.short_sha }}
+      platform_run_id: ${{ steps.prepare.outputs.platform_run_id }}
     steps:
       - name: Require main
         shell: bash
@@ -68,17 +69,21 @@ jobs:
           gh api \
             --method GET \
             -F "head_sha=${GITHUB_SHA}" \
+            -F "branch=main" \
+            -F "event=push" \
             -F per_page=100 \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/platform-verification.yml/runs" \
             > "$runs_file"
 
-          if ! jq -e --arg sha "$GITHUB_SHA" \
-            'any(.workflow_runs[]?; .head_sha == $sha and .status == "completed" and .conclusion == "success")' \
-            "$runs_file" > /dev/null; then
+          platform_run_id="$(jq -r --arg sha "$GITHUB_SHA" \
+            '[.workflow_runs[]? | select(.head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and .conclusion == "success")][0].id // empty' \
+            "$runs_file")"
+          if [[ -z "$platform_run_id" ]]; then
             echo "::error::Developer Preview requires a completed successful Platform verification run for this exact commit (${GITHUB_SHA})."
             exit 1
           fi
 
+          echo "platform_run_id=${platform_run_id}" >> "$GITHUB_OUTPUT"
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
 
   build-macos:
@@ -86,7 +91,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_publish == 'true'
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out verified source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,17 +112,96 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
+      - name: Download the verified macOS FFmpeg build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-macos
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-verification
+
+      - name: Restore the verified FFmpeg build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/ffmpeg-verification"
+          prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
+          cp "$artifact/ffmpeg-8.1.3.tar.xz" "$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          cp "$artifact/FFmpeg-COPYING.LGPLv2.1" "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $RUNNER_TEMP/ffmpeg-8.1.3.tar.xz" | shasum -a 512 --check
+          xz --test "$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          tar -xzf "$artifact/ffmpeg-8.1.3-install.tar.gz" -C "$RUNNER_TEMP"
+          python3 - "$prefix" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          prefix = sys.argv[1]
+          for path in (Path(prefix) / "lib/pkgconfig").glob("*.pc"):
+              text = path.read_text(encoding="utf-8")
+              text, count = re.subn(r"(?m)^prefix=.*$", f"prefix={prefix}", text, count=1)
+              if count != 1:
+                  raise SystemExit(f"Missing prefix in {path}")
+              path.write_text(text, encoding="utf-8")
+          PY
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
+          mkdir -p "$HOME/.cargo"
+          cat > "$HOME/.cargo/config.toml" <<EOF
+          [env]
+          FFMPEG_DIR = { value = "$prefix", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
+          EOF
+          echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
+
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
         run: flutter pub get
 
-      - name: Build unsigned macOS debug app
+      - name: Build macOS debug app without production signing
         working-directory: apps/or_app
         env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
           FLUTTER_XCODE_CODE_SIGNING_IDENTITY: ""
         run: flutter build macos --debug
+
+      - name: Package FFmpeg runtime libraries and LGPL notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+          bridge="$app/Contents/Frameworks/or_app_bridge.framework/Versions/A/or_app_bridge"
+          runtime_dir="$(dirname "$bridge")"
+          frameworks="$app/Contents/Frameworks"
+          notices="$app/Contents/Resources/ThirdPartyNotices/FFmpeg"
+          test -f "$bridge"
+          mkdir -p "$frameworks" "$notices"
+          for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib libswresample*.dylib libswscale*.dylib; do
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$frameworks/"
+          done
+          if ! otool -l "$bridge" | grep -Fq '@loader_path'; then
+            install_name_tool -add_rpath @loader_path "$bridge"
+          fi
+          for library in "$runtime_dir"/libav*.dylib "$runtime_dir"/libsw*.dylib; do
+            if [ -L "$library" ]; then continue; fi
+            if ! otool -l "$library" | grep -Fq '@loader_path'; then
+              install_name_tool -add_rpath @loader_path "$library"
+            fi
+          done
+          cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$notices/COPYING.LGPLv2.1"
+          cat > "$notices/FFmpeg-NOTICE.txt" <<'EOF'
+          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
+          The corresponding FFmpeg source archive and exact build configuration
+          are distributed as Developer Preview release assets. FFmpeg libraries
+          are separate files in Contents/Frameworks and may be replaced with a
+          compatible LGPL-compliant build under the applicable license terms.
+          EOF
+          codesign --force --deep --sign - --timestamp=none "$app"
 
       - name: Package complete app bundle
         shell: bash
@@ -154,7 +238,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_publish == 'true'
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out verified source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -167,6 +251,20 @@ jobs:
         with:
           toolchain: 1.98.0
 
+      - name: Set up MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Set up MSYS2 FFmpeg build tools
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: CLANG64
+          path-type: inherit
+          update: true
+          install: make pkgconf
+          pacboy: clang:p
+
       - name: Install Flutter 3.47.5
         shell: pwsh
         run: |
@@ -175,13 +273,97 @@ jobs:
           "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
 
+      - name: Download the verified Windows FFmpeg build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-windows-x64
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-verification
+
+      - name: Restore the verified FFmpeg build environment
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          temp="$(cygpath -u "$RUNNER_TEMP")"
+          artifact="$temp/ffmpeg-verification"
+          prefix="$temp/ffmpeg-8.1.3-install"
+          prefix_win="$(cygpath -am "$prefix")"
+          archive="$temp/ffmpeg-8.1.3.tar.xz"
+          cp "$artifact/ffmpeg-8.1.3.tar.xz" "$archive"
+          cp "$artifact/FFmpeg-COPYING.LGPLv2.1" "$temp/FFmpeg-COPYING.LGPLv2.1"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
+          xz --test "$archive"
+          tar -xzf "$artifact/ffmpeg-8.1.3-install.tar.gz" -C "$temp"
+          python3 - "$prefix/lib/pkgconfig" "$prefix_win" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          pkgconfig_dir, prefix = sys.argv[1:]
+          for path in Path(pkgconfig_dir).glob("*.pc"):
+              text = path.read_text(encoding="utf-8")
+              text, count = re.subn(r"(?m)^prefix=.*$", f"prefix={prefix}", text, count=1)
+              if count != 1:
+                  raise SystemExit(f"Missing prefix in {path}")
+              path.write_text(text, encoding="utf-8")
+          PY
+          libclang_path="$(cygpath -am /clang64/bin)"
+          workspace="$(cygpath -u "$GITHUB_WORKSPACE")"
+          mkdir -p "$workspace/.cargo"
+          cat > "$workspace/.cargo/config.toml" <<EOF
+          [env]
+          FFMPEG_DIR = { value = "$prefix_win", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix_win/lib/pkgconfig", force = true }
+          LIBCLANG_PATH = { value = "$libclang_path", force = true }
+          EOF
+          echo "FFMPEG_INSTALL_PREFIX=$prefix_win" >> "$GITHUB_ENV"
+          echo "LIBCLANG_PATH=$libclang_path" >> "$GITHUB_ENV"
+          echo "INCLUDE=$prefix_win/include;$INCLUDE" >> "$GITHUB_ENV"
+          echo "LIB=$prefix_win/lib;$prefix_win/bin;$LIB" >> "$GITHUB_ENV"
+          echo "$prefix_win/bin" >> "$GITHUB_PATH"
+          echo "$libclang_path" >> "$GITHUB_PATH"
+
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
         run: flutter pub get
 
       - name: Build Windows x64 debug app
         working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build windows --debug
+
+      - name: Package FFmpeg runtime DLLs and LGPL notices
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps/or_app/build/windows/x64/runner/Debug'
+          if (-not (Test-Path -LiteralPath $bundle -PathType Container)) { throw 'Windows app bundle directory not found' }
+          $bridge = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'apps/or_app/build/windows') -Filter '*or_app_bridge*.dll' -Recurse | Select-Object -First 1
+          if ($null -eq $bridge) { throw 'Packaged or_app_bridge DLL not found' }
+          $destinations = @($bridge.Directory.FullName)
+          if ($destinations[0] -ne $bundle) { $destinations += $bundle }
+          foreach ($pattern in @('avcodec*.dll', 'avformat*.dll', 'avutil*.dll', 'swresample*.dll', 'swscale*.dll')) {
+            $libraries = Get-ChildItem -Path (Join-Path $env:FFMPEG_INSTALL_PREFIX 'bin') -Filter $pattern -File
+            if ($libraries.Count -eq 0) { throw "FFmpeg runtime library missing: $pattern" }
+            foreach ($destination in $destinations) {
+              Copy-Item -Path $libraries.FullName -Destination $destination -Force
+            }
+          }
+          $notices = Join-Path $bundle 'licenses/FFmpeg'
+          New-Item -ItemType Directory -Force -Path $notices | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1') (Join-Path $notices 'COPYING.LGPLv2.1')
+          @'
+          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
+          The corresponding FFmpeg source archive and exact build configuration
+          are distributed as Developer Preview release assets. FFmpeg DLLs are
+          separate files beside the application and may be replaced with a
+          compatible LGPL-compliant build under the applicable license terms.
+          '@ | Set-Content -LiteralPath (Join-Path $notices 'FFmpeg-NOTICE.txt') -Encoding utf8
+          $env:PATH = "$($destinations -join ';');$env:SystemRoot\System32;$env:SystemRoot"
+          $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
+          [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
 
       - name: Package complete Debug output directory
         shell: pwsh
@@ -206,7 +388,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out verified source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -217,7 +399,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev libgtk-3-dev liblzma-dev patchelf
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -232,13 +414,96 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
+      - name: Download the verified Linux FFmpeg build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-linux
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-verification
+
+      - name: Restore the verified FFmpeg build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/ffmpeg-verification"
+          prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
+          cp "$artifact/ffmpeg-8.1.3.tar.xz" "$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          cp "$artifact/FFmpeg-COPYING.LGPLv2.1" "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $RUNNER_TEMP/ffmpeg-8.1.3.tar.xz" | sha512sum --check
+          xz --test "$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          tar -xzf "$artifact/ffmpeg-8.1.3-install.tar.gz" -C "$RUNNER_TEMP"
+          python3 - "$prefix" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          prefix = sys.argv[1]
+          for path in (Path(prefix) / "lib/pkgconfig").glob("*.pc"):
+              text = path.read_text(encoding="utf-8")
+              text, count = re.subn(r"(?m)^prefix=.*$", f"prefix={prefix}", text, count=1)
+              if count != 1:
+                  raise SystemExit(f"Missing prefix in {path}")
+              path.write_text(text, encoding="utf-8")
+          PY
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
+          mkdir -p "$HOME/.cargo"
+          cat > "$HOME/.cargo/config.toml" <<EOF
+          [build]
+          rustflags = ["-C", "link-arg=-Wl,-rpath,\$ORIGIN"]
+
+          [env]
+          FFMPEG_DIR = { value = "$prefix", force = true }
+          PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
+          EOF
+          echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo 'RUSTFLAGS=-C link-arg=-Wl,-rpath,$ORIGIN' >> "$GITHUB_ENV"
+
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
         run: flutter pub get
 
       - name: Build Linux x64 debug app
         working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: flutter build linux --debug
+
+      - name: Package FFmpeg runtime libraries and LGPL notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/debug/bundle"
+          bridge="$(find "$bundle" -type f -name '*or_app_bridge*.so' -print -quit)"
+          test -n "$bridge"
+          runtime_dir="$(dirname "$bridge")"
+          for pattern in libavcodec.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+          done
+          for library in "$runtime_dir"/libav*.so* "$runtime_dir"/libsw*.so*; do
+            if [ -L "$library" ]; then continue; fi
+            patchelf --set-rpath '$ORIGIN' "$library"
+          done
+          notices="$bundle/licenses/FFmpeg"
+          mkdir -p "$notices"
+          cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$notices/COPYING.LGPLv2.1"
+          cat > "$notices/FFmpeg-NOTICE.txt" <<'EOF'
+          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
+          The corresponding FFmpeg source archive and exact build configuration
+          are distributed as Developer Preview release assets. FFmpeg shared
+          libraries are separate files beside the Rust bridge and may be replaced
+          with a compatible LGPL-compliant build under the applicable license terms.
+          EOF
+          env -u LD_LIBRARY_PATH python3 - "$bridge" <<'PY'
+          import ctypes
+          import sys
+
+          ctypes.CDLL(sys.argv[1])
+          PY
 
       - name: Package complete Linux bundle
         shell: bash
@@ -515,6 +780,30 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/release-assets
 
+      - name: Download verified macOS FFmpeg provenance
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-macos
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-provenance/macos
+
+      - name: Download verified Linux FFmpeg provenance
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-linux
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-provenance/linux
+
+      - name: Download verified Windows FFmpeg provenance
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ffmpeg-8.1.3-windows-x64
+          run-id: ${{ needs.prepare.outputs.platform_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ffmpeg-provenance/windows-x64
+
       - name: Create build information and checksums
         shell: bash
         run: |
@@ -542,6 +831,48 @@ jobs:
             exit 1
           fi
 
+          provenance="$RUNNER_TEMP/ffmpeg-provenance"
+          for target in macos linux windows-x64; do
+            dir="$provenance/$target"
+            for file in ffmpeg-8.1.3.tar.xz FFMPEG-BUILD-INFO.txt FFmpeg-COPYING.LGPLv2.1; do
+              if [[ ! -s "$dir/$file" ]]; then
+                echo "::error::Verified $target FFmpeg provenance is missing: $file"
+                exit 1
+              fi
+            done
+          done
+          cmp "$provenance/macos/ffmpeg-8.1.3.tar.xz" "$provenance/linux/ffmpeg-8.1.3.tar.xz"
+          cmp "$provenance/macos/ffmpeg-8.1.3.tar.xz" "$provenance/windows-x64/ffmpeg-8.1.3.tar.xz"
+          cmp "$provenance/macos/FFmpeg-COPYING.LGPLv2.1" "$provenance/linux/FFmpeg-COPYING.LGPLv2.1"
+          cmp "$provenance/macos/FFmpeg-COPYING.LGPLv2.1" "$provenance/windows-x64/FFmpeg-COPYING.LGPLv2.1"
+          cp "$provenance/macos/ffmpeg-8.1.3.tar.xz" "$assets/ffmpeg-8.1.3-source.tar.xz"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $assets/ffmpeg-8.1.3-source.tar.xz" | sha512sum --check
+          xz --test "$assets/ffmpeg-8.1.3-source.tar.xz"
+          {
+            echo "FFmpeg release: 8.1.3"
+            echo "Rust binding: ffmpeg-the-third 6.0.0"
+            for target in macos linux windows-x64; do
+              echo
+              echo "=== Verified $target build ==="
+              cat "$provenance/$target/FFMPEG-BUILD-INFO.txt"
+            done
+          } > "$assets/FFMPEG-BUILD-INFO.txt"
+
+          mac_entries="$(unzip -Z1 "$assets/opencut-reinforced-macos-debug.zip")"
+          windows_entries="$(unzip -Z1 "$assets/opencut-reinforced-windows-x64-debug.zip")"
+          linux_entries="$(tar -tzf "$assets/opencut-reinforced-linux-x64-debug.tar.gz")"
+          for library in avcodec avformat avutil swresample swscale; do
+            grep -Eq "(^|/)lib${library}\\.[0-9]+\\.dylib$" <<< "$mac_entries"
+            grep -Eiq "(^|/)${library}(-[0-9]+)?\\.dll$" <<< "$windows_entries"
+            grep -Eq "(^|/)lib${library}\\.so(\\.[0-9]+)*$" <<< "$linux_entries"
+          done
+          grep -Fq 'ThirdPartyNotices/FFmpeg/COPYING.LGPLv2.1' <<< "$mac_entries"
+          grep -Fq 'ThirdPartyNotices/FFmpeg/FFmpeg-NOTICE.txt' <<< "$mac_entries"
+          grep -Fq 'licenses/FFmpeg/COPYING.LGPLv2.1' <<< "$windows_entries"
+          grep -Fq 'licenses/FFmpeg/FFmpeg-NOTICE.txt' <<< "$windows_entries"
+          grep -Fq 'licenses/FFmpeg/COPYING.LGPLv2.1' <<< "$linux_entries"
+          grep -Fq 'licenses/FFmpeg/FFmpeg-NOTICE.txt' <<< "$linux_entries"
+
           cat > "$assets/BUILD-INFO.txt" <<EOF
           Opencut Reinforced Developer Preview
 
@@ -552,10 +883,10 @@ jobs:
           Build classification: DEBUG / DEVELOPER
           Flutter version: 3.47.5 (revision 6a19cca56475dbfba1478ee68d7bd0c2ef891da1)
           Rust version: 1.98.0
-          Signing: no production signing; Android uses the standard debug build key
+          Signing: macOS uses an ad-hoc debug signature after FFmpeg packaging; no production signing or notarization. Android uses the standard debug build key.
 
           Supported artifacts produced:
-          - opencut-reinforced-macos-debug.zip (unsigned, not notarized)
+          - opencut-reinforced-macos-debug.zip (ad-hoc signed, not notarized)
           - opencut-reinforced-windows-x64-debug.zip (unsigned)
           - opencut-reinforced-linux-x64-debug.tar.gz (unsigned)
           - opencut-reinforced-android-debug.apk (debug signing only)
@@ -563,12 +894,27 @@ jobs:
           - opencut-reinforced-cli-windows-x64.zip (unsigned)
           - opencut-reinforced-cli-linux-x64.tar.gz (unsigned)
 
-          Warning: Pre-MVP developer build; not a stable release and not yet a functional video editor.
+          Release assets: seven application/CLI packages, FFmpeg build provenance, the matching FFmpeg source archive, and SHA256SUMS.txt (eleven assets total).
+          SHA256SUMS.txt covers every other release asset; a checksum manifest cannot contain its own checksum.
+          The three desktop application archives contain the matching FFmpeg 8.1.3 shared runtime libraries and LGPL notices.
+
+          Warning: Pre-MVP developer build; not a stable release or a performance benchmark.
           EOF
 
           cd "$assets"
-          sha256sum "${files[@]}" > SHA256SUMS.txt
+          checksummed_files=(
+            "${files[@]}"
+            BUILD-INFO.txt
+            FFMPEG-BUILD-INFO.txt
+            ffmpeg-8.1.3-source.tar.xz
+          )
+          sha256sum "${checksummed_files[@]}" > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
+          file_count="$(find "$assets" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')"
+          if [[ "$file_count" != "11" ]]; then
+            echo "::error::Expected exactly eleven Developer Preview assets, found $file_count files."
+            exit 1
+          fi
 
           cat > "$RUNNER_TEMP/RELEASE-NOTES.md" <<'EOF'
           # Opencut Reinforced Developer Preview
@@ -612,7 +958,7 @@ jobs:
           - The desktop Media panel can show cached PNG thumbnails for video media and a combined waveform preview for audio-only media.
           - Bounded background generation uses a disposable cache and bounded source fingerprint for cache invalidation; preview artifacts do not enter the project file.
           - Media import requires a system-provided `ffprobe`; preview generation requires a system-provided `ffmpeg`.
-          - FFmpeg is not linked or bundled. These are library images only; playback, rendering, export, and proxy playback remain unavailable.
+          - Library images remain read-only cache artifacts. Playback uses the separate linked software decoder path introduced in Phase 7.
 
           **PHASE 5E — PERSISTENT CACHE INDEX AND AUTOMATIC EVICTION**
 
@@ -647,14 +993,22 @@ jobs:
           - A temporary cyan guide can show the resolved boundary; stale project/session/revision results and attached CLI invalidation are rejected without retry.
           - The semantic CLI exposes read-only headless and attached `or timeline snap` inspection without saving, dirtying, or incrementing revision.
 
-          Still unavailable: media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, markers, playback, decode/render, and export.
+          **PHASE 7 — DESKTOP VIDEO PREVIEW AND PLAYBACK**
+
+          - Desktop users can seek to exact timeline times, play, pause, scrub, and step frames on the explicitly configured sequence frame lattice.
+          - Play and frame step require an explicit sequence frame rate. Seek remains exact and available when no rate is configured.
+          - Playback uses linked FFmpeg 8.1.3 software decoding and bounded native pixel-buffer presentation on macOS, Windows, and Linux. No hardware decode or shared GPU-surface path is enabled.
+          - Desktop application packages include their matching FFmpeg shared libraries and LGPL notices; the release also includes the matching source archive and per-platform build information.
+          - Android builds remain available, but linked FFmpeg and viewer playback are not enabled on Android.
+
+          Still unavailable: media-to-timeline drag insertion, track reorder, multi-select, linked clips, timeline zoom, transforms, crop, opacity, text/captions, effects, transitions, export, and audio device output.
 
           OR remains a pre-MVP project, not a usable video editor.
 
           Core foundation:
           - Typed Rust bridge
           - Project identity, revision, and exact-time foundation
-          - ProjectDocument with `.orproj` v3 encoding and v1/v2 migration
+          - ProjectDocument with `.orproj` v5 encoding and v1–v4 migration
           - Bounded .orproj file loading and atomic save
           - Command and query contracts
           - Transactions
@@ -681,16 +1035,15 @@ jobs:
           Not implemented:
           - Media-to-timeline drag insertion
           - Track reorder, multi-select, and linked clips
-          - Timeline zoom and playhead/scrubbing
-          - Persistent markers
-          - Playback
-          - Media decoding or rendering
+          - Timeline zoom
+          - Transforms, crop, and opacity
+          - Text, manual captions, effects, and transitions
+          - Audio device output
           - Export
-          - FFmpeg library linking or bundling
           - Autosave scheduling and filesystem watching
           - Android Storage Access Framework integration
 
-          These are debug developer builds for testing only, with no production signing. Desktop application and CLI builds are unsigned, macOS application builds are not notarized, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
+          These are debug developer builds for testing only, with no production signing. The macOS app has only an ad-hoc signature and is not notarized; CLI builds are unsigned, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
           EOF
 
           sed "s/@SOURCE_COMMIT@/${GITHUB_SHA}/" "$RUNNER_TEMP/RELEASE-NOTES.md" > "$RUNNER_TEMP/RELEASE-NOTES.tmp"
@@ -711,6 +1064,8 @@ jobs:
             "$assets/opencut-reinforced-cli-linux-x64.tar.gz" \
             "$assets/SHA256SUMS.txt" \
             "$assets/BUILD-INFO.txt" \
+            "$assets/FFMPEG-BUILD-INFO.txt" \
+            "$assets/ffmpeg-8.1.3-source.tar.xz" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Opencut Reinforced Developer Preview $SHORT_SHA" \
             --notes-file "$RUNNER_TEMP/RELEASE-NOTES.md" \
@@ -726,9 +1081,9 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${DEVELOPER_TAG}" > "$release_json"
 
           if ! jq -e --arg tag "$DEVELOPER_TAG" \
-            '.tag_name == $tag and .prerelease == true and (.assets | length == 9)' \
+            '.tag_name == $tag and .prerelease == true and (.assets | length == 11)' \
             "$release_json" > /dev/null; then
-            echo "::error::Published release is not the expected nine-asset prerelease."
+            echo "::error::Published release is not the expected eleven-asset prerelease."
             exit 1
           fi
 
@@ -742,6 +1097,8 @@ jobs:
             opencut-reinforced-cli-linux-x64.tar.gz
             SHA256SUMS.txt
             BUILD-INFO.txt
+            FFMPEG-BUILD-INFO.txt
+            ffmpeg-8.1.3-source.tar.xz
           )
           for asset in "${expected_assets[@]}"; do
             if ! jq -e --arg name "$asset" '.assets | any(.[]; .name == $name and .size > 0)' "$release_json" > /dev/null; then

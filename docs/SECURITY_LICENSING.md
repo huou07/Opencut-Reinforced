@@ -106,9 +106,9 @@ generated fixture; this does not select the product codec set.
 For each release, distribute the exact corresponding FFmpeg source and
 configuration, local patch diff, license notices, and a source download
 location; retain FFmpeg's library names and allow replacement of the dynamic
-libraries. The future Developer Preview asset contract contains
+libraries. The Developer Preview asset contract contains
 `FFMPEG-BUILD-INFO.txt` and `ffmpeg-8.1.3-source.tar.xz`; `SHA256SUMS.txt`
-covers every release asset. Build info records FFmpeg version, source identity,
+covers the other ten release assets. Build info records FFmpeg version, source identity,
 exact configure arguments, enabled libraries, enabled decoders/encoders/
 muxers/demuxers/protocols, compiler/toolchain identity, patch status, license
 posture, source URL, and runtime library names for each packaged target.

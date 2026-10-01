@@ -30,7 +30,7 @@ for checkpoint-specific tests, dependency gates, and stop conditions.
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Phase 7B adds the headless `or_render` wgpu spine, deterministic synthetic offscreen rendering, readback normalization, and a handle-only viewer contract. Phase 7C establishes linked software decode; visible playback and export remain future Phase 7/8 work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
+Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Phase 7B adds the headless `or_render` wgpu spine, deterministic synthetic offscreen rendering, readback normalization, and a handle-only viewer contract. Phase 7C establishes linked software decode; 7F0 locks exact sequence timing, 7F1 proves desktop FFmpeg packaging and texture adapters, 7F delivers desktop video preview and transport, and 7G adds deterministic runtime budgets. The 7H checkpoint hardens cross-platform conformance and the first Developer Preview gate. Hardware decode remains unapproved; transforms and export remain later roadmap work. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
 
 ## Contents
 
@@ -349,7 +349,7 @@ Media probe backend is unavailable.
 This Developer Preview currently requires a system-provided ffprobe.
 ```
 
-New/Open and media-file path integration remain unavailable on Android pending SAF support. CI builds each target, runs Flutter widget and lifecycle tests, and exercises native macOS project lifecycle, offline-media, timeline-edit, and preview transport behavior.
+New/Open and media-file path integration remain unavailable on Android pending SAF support. CI builds each target and runs Flutter widget tests. Hosted macOS, Linux, and Windows jobs run the Phase 7 runtime, software decode, recovery, and stale-output conformance suites; native Flutter lifecycle, offline-media, timeline-edit, and preview transport integration runs on macOS.
 
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
@@ -383,6 +383,17 @@ Timeline/render evaluation should publish a stable read view such as `RenderSnap
 Per-frame playback/render work is runtime execution over committed state. It must not dispatch project-edit commands, open Project transactions, or increment `ProjectRevision`. The native adapter selects a platform-appropriate synchronization primitive and a small bounded in-flight depth; the latest-frame mailbox replaces obsolete preview work. 7F1 proves platform adapter builds and 7G owns bounded queue tuning against repeatable target-hardware evidence.
 
 A frame carries explicit dimensions, pixel or texture format, color information, and timing metadata. The desktop preview path uses software-decoded RGBA layers lowered to wgpu output and the approved native pixel-buffer adapter; platform-specific interop remains optional.
+
+Phase 7 native capability matrix:
+
+| Platform | Decode and runtime package | Viewer presentation | Hardware path |
+| --- | --- | --- | --- |
+| macOS | FFmpeg 8.1.3 software decode; app-local dynamic `.dylib` libraries | Bounded BGRA8888 premultiplied Flutter pixel-buffer texture | No hardware decode or shared GPU surface approved |
+| Windows | FFmpeg 8.1.3 software decode; app-local `.dll` libraries | Bounded BGRA8888 premultiplied Flutter pixel-buffer texture | No hardware decode or shared GPU surface approved |
+| Linux | FFmpeg 8.1.3 software decode; app-local `.so` libraries | Bounded BGRA8888 premultiplied Flutter pixel-buffer texture | No hardware decode or shared GPU surface approved |
+| Android | No linked FFmpeg or Phase 7 viewer decode | Viewer playback unavailable | Separate Phase 9 package and device gates |
+
+The desktop preview uses the same software fallback on all three supported desktop systems. CI checks the runtime, software decode, cancellation, lease lifetime, stale-snapshot, fallback, and recovery contracts on those hosts. The software decode suite asserts a pre-cancelled exact seek returns `DecodeError::Cancelled` before opening media. Native Flutter integration currently exercises lifecycle, offline media, and exact preview transport on macOS.
 
 ### Phase 7F0 playback timing contract
 

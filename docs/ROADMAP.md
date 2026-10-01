@@ -2,7 +2,7 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is the next planned phase; later phases depend on implementation capacity, platform evidence, and licensing or security review.
+No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is IN PROGRESS; checkpoint 7H is the current hardening and Developer Preview gate and awaits supervisor evidence. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
 
 ## Phases
 
@@ -258,7 +258,7 @@ Phase 6E2B — Persistent marker UI and Snap V2 GUI integration — DONE:
 Phase 6 completion is recorded after 6E2B. Media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, playhead/scrubbing, playback, decode, rendering, and export remain outside this phase.
 
 ### Phase 7 — Preview and playback
-**Status: PLANNED**
+**Status: IN PROGRESS — 7H AWAITING SUPERVISOR EVIDENCE**
 
 Locked contract: [PHASE_7.md](execution/phases/PHASE_7.md).
 
@@ -267,7 +267,7 @@ Locked contract: [PHASE_7.md](execution/phases/PHASE_7.md).
 - **7B:** wgpu render spine and synthetic/offscreen foundation.
 - **7C:** linked media runtime, FFmpeg-gated software decode, seek, audio, and
   bounded queues.
-- **7D:** measured hardware decode and native-frame interop with fallback.
+- **7D:** evaluate hardware decode and native-frame interop; keep software fallback authoritative. No hardware path is currently approved.
 - **7E:** `or_audio`, master clock, bounded buffers, and A/V synchronization.
 - **7F0:** explicit sequence-rate persistence, exact frame lattice, and shared
   viewer transport/lease contract.
@@ -415,4 +415,4 @@ through 8F in the machine plan.
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is DONE through 6E2B. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B adds the marker UI, bridge/gateway integration, and GUI Snap V2. Media-to-timeline drag insertion, track reorder, multi-select, zoom, playhead/scrubbing, playback, decode, rendering, and export remain future work until the linked Phase 7/8 checkpoints. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](execution/README.md).
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is DONE through 6E2B. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B adds the marker UI, bridge/gateway integration, and GUI Snap V2. Media-to-timeline drag insertion, track reorder, multi-select, zoom, transforms, and export remain future work. Phase 7 now provides desktop video preview and playback through the software path; no hardware decode path is approved. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](execution/README.md).
