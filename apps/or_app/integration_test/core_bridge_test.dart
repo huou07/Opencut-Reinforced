@@ -292,7 +292,7 @@ void main() {
           '$projectPath; native bridge error: '
           '${gateway.lastError ?? "none recorded"}',
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilProjectPanelsLoaded(tester);
 
     final session = gateway.activeSession;
     final errorMessage = tester
@@ -1193,6 +1193,18 @@ Future<void> _renameProject(WidgetTester tester, String name) async {
         .data,
     name,
   );
+}
+
+Future<void> _pumpUntilProjectPanelsLoaded(WidgetTester tester) async {
+  final noMedia = find.text('No media imported');
+  final noTracks = find.text('No timeline tracks');
+  for (var attempt = 0; attempt < 300; attempt++) {
+    if (tester.any(noMedia) && tester.any(noTracks)) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  fail('The native project workspace did not finish loading its empty panels.');
 }
 
 class _NativeProjectPicker implements ProjectFilePicker {
