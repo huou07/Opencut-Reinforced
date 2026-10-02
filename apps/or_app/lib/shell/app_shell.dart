@@ -2538,7 +2538,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _copyDescriptorPath() async {
     final path = _activeProject?.descriptorPath;
-    if (path == null) return;
+    if (path == null || path.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: path));
     if (mounted) _showUnavailable('Local CLI descriptor path copied.');
   }

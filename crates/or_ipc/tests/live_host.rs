@@ -461,6 +461,42 @@ fn direct_access_and_attached_ipc_share_one_session_history_save_and_events() {
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
+fn in_process_host_keeps_the_shared_command_path_without_an_ipc_descriptor() {
+    struct UnusedExportHandler;
+
+    impl ExportRequestHandler for UnusedExportHandler {
+        fn handle_export_request(
+            &self,
+            _session: &or_core::ProjectSession,
+            _request: ExportRequest,
+        ) -> ExportResponse {
+            ExportResponse::failure("UNUSED_TEST_HANDLER", "export is unused in this test")
+        }
+    }
+
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path(), "A").unwrap();
+    let mut host =
+        LiveProjectHost::in_process_with_export_handler(session, Arc::new(UnusedExportHandler));
+
+    assert_eq!(host.descriptor_path(), None);
+    let initial = host.describe().unwrap();
+    assert!(matches!(
+        host.handle_application_request(command(&initial, "project.rename", Some("B")))
+            .unwrap(),
+        ApplicationResponse::Command(_)
+    ));
+    let changed = host.describe().unwrap();
+    assert_eq!(changed.summary.name, "B");
+    assert_eq!(changed.summary.project_revision, ProjectRevision::new(1));
+    assert!(host.is_dirty().unwrap());
+
+    host.save().unwrap();
+    host.shutdown(false).unwrap();
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
 fn dirty_host_refuses_implicit_shutdown_and_explicit_discard_keeps_disk_unchanged() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();

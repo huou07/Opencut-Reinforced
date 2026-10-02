@@ -11,6 +11,7 @@ import 'package:or_app/design/or_spacing.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 
 void main() {
@@ -102,6 +103,45 @@ void main() {
     expect(find.text('core.capabilities'), findsOneWidget);
     expect(find.text('Hardcoded Flutter diagnostics'), findsNothing);
   });
+
+  testWidgets(
+    'settings shows local CLI details only when a descriptor exists',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      ProjectReadModel project(String descriptorPath) => ProjectReadModel(
+        projectId: 'project-id',
+        projectInstanceId: 'project-instance-id',
+        revision: BigInt.zero,
+        name: 'Preview project',
+        dirty: false,
+        descriptorPath: descriptorPath,
+      );
+      Widget settings(ProjectReadModel project) => MaterialApp(
+        home: Scaffold(
+          body: SettingsScreen(
+            gateway: _FakeCoreGateway(),
+            project: project,
+            onCopyDescriptor: () {},
+            onOpenEditorPreview: () {},
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(settings(project('/tmp/or-session.json')));
+      await tester.tap(find.byKey(const ValueKey('settings-section-advanced')));
+      await tester.pumpAndSettle();
+      expect(find.text('Local CLI session'), findsOneWidget);
+      expect(find.text('/tmp/or-session.json'), findsOneWidget);
+
+      await tester.pumpWidget(settings(project('')));
+      await tester.pumpAndSettle();
+      expect(find.text('Local CLI session'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('local-cli-descriptor-path')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('new project asks for a name and opens the created workspace', (
     tester,

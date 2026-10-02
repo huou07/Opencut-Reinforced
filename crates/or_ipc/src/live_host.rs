@@ -103,17 +103,35 @@ impl LiveProjectHost {
         Self::start_with_handler(session, descriptor_path, Some(handler))
     }
 
+    /// Creates the same Rust-owned host without starting a local IPC server.
+    pub fn in_process_with_export_handler(
+        session: ProjectFileSession,
+        handler: Arc<dyn ExportRequestHandler>,
+    ) -> Self {
+        Self::in_process_with_handler(session, Some(handler))
+    }
+
     fn start_with_handler(
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
         handler: Option<Arc<dyn ExportRequestHandler>>,
     ) -> Result<Self, LiveProjectHostError> {
-        let shared = shared_host_state(session, handler);
-        let server = LocalIpcServer::start_shared(Arc::clone(&shared), descriptor_path)?;
-        Ok(Self {
-            shared,
-            server: Some(server),
-        })
+        let mut host = Self::in_process_with_handler(session, handler);
+        host.server = Some(LocalIpcServer::start_shared(
+            Arc::clone(&host.shared),
+            descriptor_path,
+        )?);
+        Ok(host)
+    }
+
+    fn in_process_with_handler(
+        session: ProjectFileSession,
+        handler: Option<Arc<dyn ExportRequestHandler>>,
+    ) -> Self {
+        Self {
+            shared: shared_host_state(session, handler),
+            server: None,
+        }
     }
 
     pub fn describe(&self) -> Result<QueryResult, LiveProjectHostError> {
@@ -167,11 +185,10 @@ impl LiveProjectHost {
         Ok(self.lock_open()?.session.is_dirty())
     }
 
-    pub fn descriptor_path(&self) -> Result<PathBuf, LiveProjectHostError> {
+    pub fn descriptor_path(&self) -> Option<PathBuf> {
         self.server
             .as_ref()
             .map(|server| server.descriptor_path().to_path_buf())
-            .ok_or(LiveProjectHostError::SessionClosing)
     }
 
     pub fn subscribe_events(

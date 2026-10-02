@@ -654,6 +654,10 @@ hardening commit itself must pass both workflows.
 
 ## Phase 9B Android media and render surface coverage
 
+- `LiveProjectHost::in_process_with_export_handler` is covered headlessly: it
+  dispatches commands through the shared Rust project session, keeps dirty/save
+  behavior, and exposes no IPC descriptor. A Flutter widget regression
+  keeps the Settings CLI details visible only when a descriptor is present.
 - Android `or_app_bridge` links the existing `or_media` software FFmpeg
   decoder and shared `or_render` wgpu composition for all supported ABIs.
   SAF descriptors are duplicated into a bounded runtime-only registry (64
@@ -668,6 +672,8 @@ hardening commit itself must pass both workflows.
 - Hosted API 36 x86_64 SwiftShader integration decodes the existing tiny FFV1
   Matroska fixture through the Android software FFmpeg path, presents its frame
   to a Flutter surface, and verifies the project revision stays unchanged. The
+  Android Rust project host follows the shared in-process command/state path
+  without starting the unsupported desktop IPC transport. The
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
   compile target matches the app's JVM 17 target. Physical MediaCodec and

@@ -444,6 +444,9 @@ fn start_project_host(
 ) -> Result<ProjectHostHandle, ProjectBridgeError> {
     let preview_runtime = Arc::new(PreviewRuntime::new());
     let export_handler: Arc<dyn ExportRequestHandler> = preview_runtime.clone();
+    #[cfg(target_os = "android")]
+    let host = LiveProjectHost::in_process_with_export_handler(session, export_handler);
+    #[cfg(not(target_os = "android"))]
     let host = LiveProjectHost::start_with_export_handler(session, None, export_handler)
         .map_err(host_error)?;
     Ok(ProjectHostHandle {
@@ -2242,7 +2245,7 @@ impl ProjectHostHandle {
         Ok(view_from_query(
             &result,
             self.host.is_dirty()?,
-            self.host.descriptor_path()?,
+            self.host.descriptor_path(),
         ))
     }
 }
@@ -2932,7 +2935,7 @@ fn unexpected_response_error() -> ProjectBridgeError {
 fn view_from_query(
     result: &QueryResult,
     dirty: bool,
-    descriptor_path: std::path::PathBuf,
+    descriptor_path: Option<std::path::PathBuf>,
 ) -> ProjectView {
     ProjectView {
         project_id: result.summary.project_id.to_string(),
@@ -2940,7 +2943,8 @@ fn view_from_query(
         revision: result.summary.project_revision.value(),
         name: result.summary.name.clone(),
         dirty,
-        descriptor_path: descriptor_path.to_string_lossy().into_owned(),
+        descriptor_path: descriptor_path
+            .map_or_else(String::new, |path| path.to_string_lossy().into_owned()),
     }
 }
 

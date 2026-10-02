@@ -200,7 +200,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-        if (widget.project != null) ...[
+        if (widget.project != null &&
+            widget.project!.descriptorPath.isNotEmpty) ...[
           const SizedBox(height: OrSpacing.x4),
           OrPanel(
             title: 'Local CLI session',
