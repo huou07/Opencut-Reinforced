@@ -1067,8 +1067,11 @@ jobs:
         run: |
           set -euo pipefail
           avd_name=or-api36-x86_64
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           printf 'no\n' | avdmanager create avd --force --name "$avd_name" \
             --package 'system-images;android-36;google_apis;x86_64'
+          test -f "$ANDROID_AVD_HOME/$avd_name.ini"
           avd_list="$(avdmanager list avd -c)"
           if ! grep -Fxq "$avd_name" <<< "$avd_list"; then
             echo "Expected Android AVD '$avd_name' was not created; available AVDs:" >&2
