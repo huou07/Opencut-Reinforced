@@ -278,7 +278,7 @@ void main() {
       'Native Project',
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
-    await tester.pumpAndSettle();
+    await tester.pump();
     final creationCompleted = await tester.runAsync(
       () => creation
           .then((_) => true)
@@ -292,6 +292,7 @@ void main() {
           '$projectPath; native bridge error: '
           '${gateway.lastError ?? "none recorded"}',
     );
+    await tester.pumpAndSettle();
 
     final session = gateway.activeSession;
     final errorMessage = tester

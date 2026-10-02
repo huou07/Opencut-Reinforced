@@ -20,6 +20,8 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val workPending = AtomicBoolean(false)
+    private val pendingFrameResults = mutableListOf<MethodChannel.Result>()
+    private var frameRequestedWhilePending = false
     private val attached = AtomicBoolean(false)
     private val surfaceAvailable = AtomicBoolean(false)
     private var channel: MethodChannel? = null
@@ -148,10 +150,21 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var producerContext: android.content.Context? = null
 
     private fun scheduleFrame(result: MethodChannel.Result?) {
-        if (!attached.get() || !workPending.compareAndSet(false, true)) {
+        if (!attached.get()) {
             result?.success(false)
             return
         }
+
+        result?.let(pendingFrameResults::add)
+        if (!workPending.compareAndSet(false, true)) {
+            frameRequestedWhilePending = true
+            return
+        }
+
+        presentScheduledFrame(allowFollowUp = true)
+    }
+
+    private fun presentScheduledFrame(allowFollowUp: Boolean) {
         try {
             worker.execute {
                 val presented = try {
@@ -160,14 +173,29 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     false
                 }
                 mainHandler.post {
-                    workPending.set(false)
-                    if (attached.get()) result?.success(presented)
+                    if (!attached.get()) {
+                        frameRequestedWhilePending = false
+                        pendingFrameResults.clear()
+                        workPending.set(false)
+                    } else if (!presented && allowFollowUp && frameRequestedWhilePending) {
+                        frameRequestedWhilePending = false
+                        presentScheduledFrame(allowFollowUp = false)
+                    } else {
+                        completeFrameResults(presented)
+                    }
                 }
             }
         } catch (_: RuntimeException) {
-            workPending.set(false)
-            result?.success(false)
+            completeFrameResults(false)
         }
+    }
+
+    private fun completeFrameResults(presented: Boolean) {
+        frameRequestedWhilePending = false
+        workPending.set(false)
+        val results = pendingFrameResults.toList()
+        pendingFrameResults.clear()
+        results.forEach { it.success(presented) }
     }
 
     private fun presentLatestFrame(): Boolean {

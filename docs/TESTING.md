@@ -114,7 +114,7 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 
 - Widget tests inject fake project gateways and file pickers. They cover desktop create/open, cancellation, exact project-name preservation, revision-zero creation, close and switch Save/Discard/Cancel decisions, save failures, stale-revision refresh without retry, event-sequence invalidation, recovery candidate/stale/conflict/invalid handling, Android's unavailable New/Open state, keyboard shortcuts, and exit cancellation.
 - The macOS native integration test uses the generated Rust bridge to create and open a real `.orproj`, check revision and runtime identity, rename/undo/redo/save through the Flutter workspace, inspect the Advanced / Developer descriptor surface, verify descriptor cleanup, and reopen with the persistent project ID but a fresh runtime instance ID.
-- The native lifecycle test captures project-creation completion before the UI action and awaits the Rust bridge operation through `WidgetTester.runAsync`, with a bounded timeout that includes bridge-error diagnostics.
+- The native lifecycle test captures project-creation completion before the UI action, pumps once after confirmation, and awaits the Rust bridge operation through `WidgetTester.runAsync` before `pumpAndSettle`. This lets native work finish while workspace loading indicators are active; the bounded wait includes bridge-error diagnostics.
 - `crates/or_cli/tests/semantic_cli.rs` launches the actual `or` executable against a `LiveProjectHost`. Direct host commands model the bridge path while attached CLI commands query and mutate the same host. It verifies GUI-style rename → CLI summary, CLI rename and undo → direct summary, direct redo → CLI summary, shared identity/history/revision/dirty state, explicit save, and ordered change/save events.
 - The `LiveProjectHost` tests separately exercise direct access and `LocalIpcClient` access to the same session, revision-conflict behavior, dirty shutdown protection, and endpoint cleanup on Unix and Windows transports.
 - The native UI test does not spawn an external CLI process from the sandboxed application. Process-level CLI parity is exercised by the Rust integration test outside the app sandbox.
@@ -667,12 +667,16 @@ hardening commit itself must pass both workflows.
 - The Android viewer uses Flutter `SurfaceProducer`, one coalesced presenter
   task, one reusable `ARGB_8888` bitmap, a 1920×1080 / 16 MiB transfer bound,
   and the existing three-lease viewer mailbox. The Rust frame lease is released
-  after the copy and surface post. Android export and native audio output remain
-  unavailable in this checkpoint.
+  after the copy and surface post. Concurrent frame requests share the pending
+  presentation result; one follow-up is scheduled when an overlapping request
+  arrives before a frame is available. The result remains false unless a frame
+  is copied to and posted on the Android surface. Android export and native
+  audio output remain unavailable in this checkpoint.
 - Hosted API 36 x86_64 SwiftShader integration decodes the existing tiny FFV1
   Matroska fixture through the Android software FFmpeg path, presents its frame
-  to a Flutter surface, and verifies the project revision stays unchanged. The
-  Android Rust project host follows the shared in-process command/state path
+  to a Flutter surface, checks concurrent presentation requests, and verifies
+  the project revision stays unchanged. The Android Rust project host follows
+  the shared in-process command/state path
   without starting the unsupported desktop IPC transport. The
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java

@@ -93,14 +93,21 @@ void main() {
         (await gateway.summary(session)).revision == initial.revision;
     expect(revisionUnchanged, isTrue);
 
-    final presented = await const MethodChannel('or_viewer_texture')
-        .invokeMethod<bool>('frameAvailable');
-    expect(presented, isTrue);
+    const presentationChannel = MethodChannel('or_viewer_texture');
+    final presentationResults = await Future.wait([
+      presentationChannel.invokeMethod<bool>('frameAvailable'),
+      presentationChannel.invokeMethod<bool>('frameAvailable'),
+    ]);
+    final surfacePresented = presentationResults.every(
+      (result) => result == true,
+    );
+    expect(presentationResults, everyElement(isTrue));
+    expect(surfacePresented, isTrue);
     debugPrint(
       'ANDROID_PREVIEW_TELEMETRY frameSequence=${preview.frameSequence} '
       'dimensions=${preview.width}x${preview.height} '
       'previewError=${preview.errorCode ?? 'none'} '
-      'surfacePresented=$presented revisionUnchanged=$revisionUnchanged',
+      'surfacePresented=$surfacePresented revisionUnchanged=$revisionUnchanged',
     );
     expect(tester.takeException(), isNull);
   });
