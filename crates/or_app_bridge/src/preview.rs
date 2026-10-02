@@ -33,14 +33,20 @@ impl fmt::Display for PreviewError {
 
 impl Error for PreviewError {}
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+))]
 mod desktop {
     use super::{PreviewError, PreviewSnapshot};
     use crate::viewer_texture;
     use or_audio::{
-        AudioClockMessage, AudioProducer, AvSynchronizer, DesktopAudioOutput,
-        DesktopAudioOutputError, VideoSyncAction, process_audio_clip,
+        AudioClockMessage, AudioProducer, AvSynchronizer, VideoSyncAction, process_audio_clip,
     };
+    #[cfg(not(target_os = "android"))]
+    use or_audio::{DesktopAudioOutput, DesktopAudioOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
         EffectReference, ExportRequest, ExportResponse, JobCancelOutcome, JobContext, JobFailure,
@@ -88,6 +94,17 @@ mod desktop {
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
+
+    fn media_decoder(
+        source: &MediaSourceRef,
+        budgets: RuntimeBudgets,
+    ) -> Result<SoftwareMediaDecoder, or_media::DecodeError> {
+        #[cfg(target_os = "android")]
+        if let Some(capability) = crate::android_media_io::capability_for(source) {
+            return SoftwareMediaDecoder::new_with_seekable_io(capability, budgets);
+        }
+        SoftwareMediaDecoder::new(source, budgets)
+    }
 
     pub struct PreviewRuntime {
         state: Mutex<SessionState>,
@@ -780,7 +797,7 @@ mod desktop {
                     .source_start
                     .checked_add(offset)
                     .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-                let decoder = match SoftwareMediaDecoder::new(&clip.source, self.budgets.clone()) {
+                let decoder = match media_decoder(&clip.source, self.budgets.clone()) {
                     Ok(decoder) => decoder,
                     Err(error) => {
                         decode_error.get_or_insert_with(|| error.to_string());
@@ -1013,7 +1030,18 @@ mod desktop {
             session: &ProjectSession,
             request: ExportRequest,
         ) -> ExportResponse {
-            PreviewRuntime::handle_export_request(self, session, request)
+            #[cfg(target_os = "android")]
+            {
+                let _ = (session, request);
+                ExportResponse::failure(
+                    "EXPORT_UNAVAILABLE",
+                    "Android export is not available in this checkpoint.",
+                )
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                PreviewRuntime::handle_export_request(self, session, request)
+            }
         }
     }
 
@@ -1647,6 +1675,7 @@ mod desktop {
         (sample * if sample < 0.0 { 32_768.0 } else { 32_767.0 }).round() as i16
     }
 
+    #[cfg(not(target_os = "android"))]
     struct AudioPlayback {
         output: DesktopAudioOutput,
         cancellation: CancellationToken,
@@ -1654,6 +1683,10 @@ mod desktop {
         error: Arc<Mutex<Option<String>>>,
     }
 
+    #[cfg(target_os = "android")]
+    struct AudioPlayback;
+
+    #[cfg(not(target_os = "android"))]
     impl AudioPlayback {
         fn start(
             program: Arc<PreviewProgram>,
@@ -1735,6 +1768,33 @@ mod desktop {
         }
     }
 
+    #[cfg(target_os = "android")]
+    impl AudioPlayback {
+        fn start(
+            _program: Arc<PreviewProgram>,
+            _origin: RationalTime,
+            _budgets: RuntimeBudgets,
+        ) -> Result<Self, PreviewError> {
+            Err(PreviewError::new(
+                "AUDIO_OUTPUT_UNAVAILABLE",
+                "Android preview advances on the bounded monotonic video clock.",
+            ))
+        }
+
+        fn clock(&self) -> AudioClockMessage {
+            unreachable!("Android preview does not create an audio clock")
+        }
+
+        fn failed(&self) -> bool {
+            false
+        }
+
+        fn error(&self) -> Option<String> {
+            None
+        }
+    }
+
+    #[cfg(not(target_os = "android"))]
     impl Drop for AudioPlayback {
         fn drop(&mut self) {
             self.cancellation.cancel();
@@ -1744,6 +1804,7 @@ mod desktop {
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     fn audio_output_error(error: DesktopAudioOutputError) -> PreviewError {
         PreviewError::new("AUDIO_OUTPUT_UNAVAILABLE", error.to_string())
     }
@@ -1894,7 +1955,7 @@ mod desktop {
             let snapshot = RenderSnapshot::new(key.project_id, key.revision, range);
             let queue = SnapshotQueue::new(snapshot, AUDIO_DECODE_QUEUE_CAPACITY)
                 .map_err(|error| error.to_string())?;
-            let decoder = match SoftwareMediaDecoder::new(&clip.source, budgets.clone()) {
+            let decoder = match media_decoder(&clip.source, budgets.clone()) {
                 Ok(decoder) => decoder,
                 Err(decode_error) => {
                     set_audio_error(error, &decode_error.to_string());
@@ -2043,7 +2104,12 @@ mod desktop {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+)))]
 mod desktop {
     use super::{PreviewError, PreviewSnapshot};
     use or_core::{ExportRequest, ExportResponse, ProjectSession, RationalTime};
@@ -2060,7 +2126,7 @@ mod desktop {
         fn unavailable() -> PreviewError {
             PreviewError {
                 code: "PREVIEW_UNAVAILABLE".to_owned(),
-                message: "video preview is currently supported on desktop only".to_owned(),
+                message: "video preview is not available on this platform".to_owned(),
             }
         }
 

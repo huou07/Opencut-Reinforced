@@ -7,5 +7,6 @@ environment:
   sdk: ^3.13.4
 
 dependencies:
+  code_assets: ^1.2.1
   flutter_rust_bridge: '>=2.13.0 <2.13.1'
   flutter_rust_bridge_hooks: '>=2.13.0 <2.13.1'

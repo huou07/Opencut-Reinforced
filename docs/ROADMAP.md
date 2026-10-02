@@ -332,6 +332,14 @@ x86_64 emulator gate), 9A (typed SAF source and app-private durability/I/O),
 
 Use the same project and core model with mobile-native UI, Android storage integration, and resource-aware editing, playback, and export.
 
+9B evaluates Android playback through the shared FFmpeg software decoder and
+offscreen wgpu render path, then copies the bounded pixel buffer into a reusable
+Android bitmap presented by Flutter `SurfaceProducer`. MediaCodec decode or
+encode, HardwareBuffer interop, and zero-copy presentation are not selected for
+this checkpoint. Hosted API 36 x86_64 SwiftShader coverage records the queue
+budgets, cancellation behavior, and preview fallback errors; physical
+`ANDROID_HARDWARE_MEDIA` coverage remains `UNVERIFIED`.
+
 ### Phase 10 — Captions, transcript, and AI assist
 **Status: PLANNED**
 

@@ -16,6 +16,9 @@ flutter:
     platforms:
       linux:
         pluginClass: OrViewerTexturePlugin
+      android:
+        package: dev.opencut.viewertexture
+        pluginClass: OrViewerTexturePlugin
       macos:
         pluginClass: OrViewerTexturePlugin
       windows:

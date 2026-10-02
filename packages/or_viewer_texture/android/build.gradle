@@ -1,0 +1,25 @@
+group 'dev.opencut.viewertexture'
+version '1.0'
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace 'dev.opencut.viewertexture'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 21
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+        }
+    }
+}

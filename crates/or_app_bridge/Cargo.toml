@@ -14,7 +14,7 @@ or_core = { path = "../or_core" }
 or_ipc = { path = "../or_ipc" }
 or_runtime = { path = "../or_runtime" }
 
-[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android"))'.dependencies]
 or_audio = { path = "../or_audio" }
 or_media = { path = "../or_media" }
 or_render = { path = "../or_render" }

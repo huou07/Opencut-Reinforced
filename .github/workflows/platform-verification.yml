@@ -166,8 +166,8 @@ jobs:
             exit 1
           fi
           android_tree="$(cargo tree --locked -p or_app_bridge --target aarch64-linux-android --edges normal)"
-          if grep -E 'or_media|ffmpeg' <<< "$android_tree"; then
-            echo 'Unexpected FFmpeg dependency in Android or_app_bridge'
+          if ! grep -E 'or_media|or_render|ffmpeg-the-third' <<< "$android_tree"; then
+            echo 'Android or_app_bridge must link the software preview and render path'
             exit 1
           fi
 
@@ -888,10 +888,6 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
 
-      - name: Resolve Flutter dependencies
-        working-directory: apps/or_app
-        run: flutter pub get
-
       - name: Build and cross-link LGPL-only FFmpeg 8.1.3 for Android
         id: android-ffmpeg-build
         timeout-minutes: 75
@@ -1029,19 +1025,25 @@ jobs:
             cd "$RUNNER_TEMP"
           done
 
-      - name: Verify Android bridge remains FFmpeg-independent
+      - name: Verify Android bridge links the bounded software preview
         run: |
           set -euo pipefail
           for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
             android_tree="$(cargo tree --locked -p or_app_bridge --target "$target" --edges normal)"
-            if grep -E 'or_media|ffmpeg' <<< "$android_tree"; then
-              echo "Unexpected FFmpeg dependency in Android or_app_bridge for $target"
+            if ! grep -E 'or_media|or_render|ffmpeg-the-third' <<< "$android_tree"; then
+              echo "Android software preview dependency missing from or_app_bridge for $target"
               exit 1
             fi
           done
 
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
       - name: Build debug APK with FFmpeg shared libraries for all ABIs
         working-directory: apps/or_app
+        env:
+          OR_ANDROID_FFMPEG_INSTALL_ROOT: ${{ runner.temp }}/android-ffmpeg/install
         run: flutter build apk --debug --target-platform android-arm,android-arm64,android-x64
 
       - name: Verify Android APK contains FFmpeg libraries for all ABIs
@@ -1053,6 +1055,8 @@ jobs:
           apk_entries="$(unzip -Z1 "$apk")"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             prefix="$RUNNER_TEMP/android-ffmpeg/install/$abi"
+            grep -Fxq "lib/$abi/libor_viewer_texture_jni.so" <<< "$apk_entries"
+            grep -Fxq "lib/$abi/libor_app_bridge.so" <<< "$apk_entries"
             for library in avcodec avformat avutil swresample swscale; do
               shared="$prefix/lib/lib$library.so"
               soname="$("$toolchain/bin/llvm-readelf" -d "$shared" | sed -n 's/.*Library soname: \[\([^]]*\)\].*/\1/p')"
@@ -1135,6 +1139,19 @@ jobs:
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
+          {
+            echo 'Device API level: '"$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo 'Emulator ABI: '"$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+            echo 'GPU path: Android API 36 x86_64 emulator with SwiftShader (-gpu swiftshader_indirect)'
+            echo 'Presentation path: Rust bounded RGBA lease -> reusable Android Bitmap -> Flutter SurfaceProducer'
+            echo 'Queue budgets: render 4 frames / 256 MiB; audio 256 frames / 32 MiB; decode 16 frames / 256 MiB; viewer 3 outstanding leases'
+            echo 'Presenter bound: one coalesced worker, 64 SAF sources, frame <=1920x1080 and <=16 MiB'
+            echo 'Cancellation: Rust preview generation invalidation; stale frames dropped before presentation'
+            echo 'Fallback telemetry: integration log records frame sequence, dimensions, preview error, surface result, and revision stability'
+            echo 'ANDROID_HARDWARE_MEDIA=UNVERIFIED (no physical device, MediaCodec, or HardwareBuffer run)'
+          } > "$RUNNER_TEMP/android-render-matrix.txt"
+          cat "$RUNNER_TEMP/android-render-matrix.txt"
+          cat "$RUNNER_TEMP/android-render-matrix.txt" >> "$GITHUB_STEP_SUMMARY"
 
           apk="$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
           runtime_dir="$RUNNER_TEMP/android-apk-ffmpeg-x86_64"
@@ -1155,6 +1172,14 @@ jobs:
             --target=integration_test/native_bridge_diagnostics_test.dart \
             -d emulator-5554 --no-dds \
             "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
+          adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            /data/local/tmp/or-android-preview-tiny.mkv
+          adb shell run-as io.github.huou07.or_app cp \
+            /data/local/tmp/or-android-preview-tiny.mkv \
+            cache/or-android-preview-tiny.mkv
+          flutter drive --driver=test_driver/integration_test.dart \
+            --target=integration_test/android_preview_surface_test.dart \
+            -d emulator-5554 --no-dds
 
       - name: Preserve Android FFmpeg source and build provenance
         if: always() && steps.android-ffmpeg-build.outcome == 'success'
@@ -1166,5 +1191,7 @@ jobs:
             ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
             ${{ runner.temp }}/android-ffmpeg/**
             ${{ runner.temp }}/android-ffmpeg-build-info/**
+            ${{ runner.temp }}/android-render-matrix.txt
+            ${{ runner.temp }}/android-emulator.log
           if-no-files-found: error
           retention-days: 14

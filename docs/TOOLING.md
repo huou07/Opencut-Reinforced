@@ -54,7 +54,7 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `macOS native build and bridge smoke`: project-storage, recovery, real Unix IPC and shared-host/attached-CLI parity tests, macOS app build, CLI bootstrap capture, and native Flutter bridge/project-lifecycle integration tests.
 - `Linux native build`: Linux app build.
 - `Windows native build`: project-storage and recovery tests, real named-pipe IPC and attached-CLI shared-host parity tests, owner-only endpoint ACL tests, and the Windows app build.
-- `Android APK build`: FFmpeg 8.1.3 shared-library builds and Rust cross-link probes for `arm64-v8a`, `armeabi-v7a`, and `x86_64`; APK package checks for all three ABIs; and x86_64 emulator FFmpeg runtime plus Flutter/Rust bridge integration coverage.
+- `Android APK build`: FFmpeg 8.1.3 shared-library builds and Rust cross-links for `arm64-v8a`, `armeabi-v7a`, and `x86_64`; APK checks for FFmpeg, Rust bridge, and Android texture JNI libraries on all three ABIs; and API 36 x86_64 SwiftShader emulator coverage for FFmpeg loading, Flutter/Rust bridge loading, and software preview presentation through Flutter `SurfaceProducer`. Physical MediaCodec and HardwareBuffer coverage is reported as `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit and includes four app packages, three desktop CLI packages, checksums, and build information.
 
 The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify

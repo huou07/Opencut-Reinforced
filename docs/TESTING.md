@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; native macOS Flutter bridge, project lifecycle, and offline-media integration tests; and Android x86_64 emulator checks. The Flutter static and widget job has a bounded 40-minute timeout: run 36897619300 spent 17m29s installing FFmpeg development libraries and hit the previous 20-minute job timeout before widget tests could run. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. The macOS, Linux, and Windows desktop jobs independently build that official FFmpeg release from a SHA-512-verified upstream archive using its LGPL 2.1-or-later defaults, without enabling GPL, version3, or nonfree options. Each job records the compiler/toolchain, source tag and archive identity, configure arguments, components, license posture, patch status, and runtime library names; it preserves the source archive and installed shared libraries as a hosted artifact. Desktop Flutter builds compile the texture adapter and FFmpeg-independent bridge with `PKG_CONFIG_PATH` empty. A separate probe that calls production `or_media` is staged beside the bridge with FFmpeg libraries; it checks binding ABI majors and the LGPL license with ambient runtime search paths cleared. The macOS bridge integration tests run after the libraries are packaged. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI cross-builds and cross-links the production FFmpeg probe against the approved shared profile for all three ABIs, verifies those runtime libraries in the APK, runs the x86_64 probe with libraries extracted from the APK, and runs the dedicated `apps/or_app/integration_test/native_bridge_diagnostics_test.dart` through `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/native_bridge_diagnostics_test.dart -d emulator-5554 --no-dds "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"` with the CLI bootstrap snapshot as the Flutter/Rust bridge-loading proof. The emulator step keeps its 30-minute timeout, bounds `adb wait-for-device` to 120 seconds, and prints the captured emulator log if the device never appears. It does not run IPC or the project-storage integration test on Android.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; native macOS Flutter bridge, project lifecycle, and offline-media integration tests; and Android x86_64 emulator checks. The Flutter static and widget job has a bounded 40-minute timeout: run 36897619300 spent 17m29s installing FFmpeg development libraries and hit the previous 20-minute job timeout before widget tests could run. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. The macOS, Linux, and Windows desktop jobs independently build that official FFmpeg release from a SHA-512-verified upstream archive using its LGPL 2.1-or-later defaults, without enabling GPL, version3, or nonfree options. Each job records the compiler/toolchain, source tag and archive identity, configure arguments, components, license posture, patch status, and runtime library names; it preserves the source archive and installed shared libraries as a hosted artifact. Desktop Flutter builds compile the texture adapter and FFmpeg-independent bridge with `PKG_CONFIG_PATH` empty. A separate probe that calls production `or_media` is staged beside the bridge with FFmpeg libraries; it checks binding ABI majors and the LGPL license with ambient runtime search paths cleared. The macOS bridge integration tests run after the libraries are packaged. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI cross-builds the production FFmpeg probe and software preview bridge against the approved shared profile for all three ABIs, verifies the viewer JNI and FFmpeg libraries in the APK, runs the x86_64 probe with libraries extracted from the APK, and drives the bridge diagnostics plus `apps/or_app/integration_test/android_preview_surface_test.dart` on API 36 x86_64 SwiftShader. It records the API/GPU path, queue budgets, cancellation and fallback telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`. The emulator step keeps its 30-minute timeout, bounds `adb wait-for-device` to 120 seconds, and preserves the emulator log. It does not run IPC or the project-storage integration test on Android.
 
 ## CI-first verification status
 
@@ -232,7 +232,8 @@ render/audio/decode budgets enforce independent in-flight and byte limits with
 release-on-drop; and the centralized capability registry prefers only stable
 available hardware while reporting software fallback or a deliberate
 hardware-only failure. No full-rate frame is copied through Dart, and no
-platform/native runtime is launched locally.
+platform/native runtime is launched locally. Phase 9B adds hosted Android
+surface presentation coverage; local native Flutter runtime remains prohibited.
 
 The workspace dependency gate is also covered by source review: `or_runtime`
 depends only on `or_core`, uses the workspace MSRV Rust 1.89 and MIT license,
@@ -263,21 +264,21 @@ clear command, revision/history behavior, no-op preservation, transaction
 rejection, and generic `ApplicationRequest` dispatch. Schema-v5 codec, clean
 migration/save, storage, and recovery tests retain the explicit unset rate for
 v1–v4 projects. Headless/attached CLI and hosted IPC-v1 tests cover the same
-command/query path. The viewer texture contract remains handle-only; this
-checkpoint adds no native viewer runtime, so local native Flutter runtime
-verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+command/query path. The Phase 7 viewer contract remains handle-only; Phase 9B
+adds Android surface presentation behind that contract. Local native Flutter
+runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 7F1 media and texture packaging gate
 
 `or_runtime` tests the bounded viewer mailbox, RGBA-to-premultiplied-BGRA
 conversion, stale generation rejection, and the three-lease in-flight bound.
-`or_app_bridge` exposes the small native C ABI used by the desktop adapters.
-7F adds the `or_media` dependency only for desktop targets; the Android app
-bridge remains independent of FFmpeg. Phase 9A0 separately builds and packages
-the FFmpeg shared libraries for Android without enabling that dependency in
-the bridge. The Flutter package registers a pixel-buffer texture adapter on
-macOS, Linux, and Windows. macOS and Windows use their platform release
-callback to keep frame leases alive until Flutter releases the pixel buffer.
+`or_app_bridge` exposes the small native C ABI used by the viewer adapters.
+7F initially added the `or_media` dependency only for desktop targets. Phase
+9A0 built and packaged Android FFmpeg shared libraries, and 9B enables that
+approved decoder in the Android bridge. The Flutter package registers a
+pixel-buffer texture adapter on macOS, Linux, Windows, and Android. Android
+copies bounded software pixels to a reusable bitmap and `SurfaceProducer`;
+desktop adapters retain their platform release callbacks.
 CI grants the ephemeral runner read/write access to `/dev/kvm` for hosted
 x86_64 emulator verification.
 Linux converts the leased BGRA pixels into a bounded native-owned RGBA ring and
@@ -622,8 +623,10 @@ hardening commit itself must pass both workflows.
   of typed project content and persistent markers.
 - `or_app_bridge` uses the same timeline loader and render resources for
   preview and export, including bundled-font text, visual settings, effects,
-  transitions, and audio mixing. Rust and Flutter unit/widget checks are local;
-  native Flutter runtime execution remains
+  transitions, and audio mixing. Android preview uses software FFmpeg decode,
+  offscreen wgpu composition, and a bounded pixel copy into a reusable bitmap
+  presented through Flutter `SurfaceProducer`. Rust and Flutter unit/widget
+  checks are local; native Flutter runtime execution remains
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 9A Android SAF and project/media I/O coverage
@@ -644,6 +647,27 @@ hardening commit itself must pass both workflows.
 - Hosted Android CI builds the APK and runs the x86_64 native bridge smoke
   path. Local Android build/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Phase 9B Android media and render surface coverage
+
+- Android `or_app_bridge` links the existing `or_media` software FFmpeg
+  decoder and shared `or_render` wgpu composition for all supported ABIs.
+  SAF descriptors are duplicated into a bounded runtime-only registry (64
+  sources); source URIs remain project identities and are never converted to
+  filesystem paths. FFmpeg seek/decode cancellation and Rust generation
+  invalidation remain active.
+- The Android viewer uses Flutter `SurfaceProducer`, one coalesced presenter
+  task, one reusable `ARGB_8888` bitmap, a 1920×1080 / 16 MiB transfer bound,
+  and the existing three-lease viewer mailbox. The Rust frame lease is released
+  after the copy and surface post. Android export and native audio output remain
+  unavailable in this checkpoint.
+- Hosted API 36 x86_64 SwiftShader integration decodes the existing tiny FFV1
+  Matroska fixture through the Android software FFmpeg path, presents its frame
+  to a Flutter surface, and verifies the project revision stays unchanged. The
+  job records renderer path, queue budgets, cancellation and preview error
+  telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; physical MediaCodec and
+  HardwareBuffer coverage is not claimed. Local Android build/runtime
+  verification is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers
 

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:or_app_bridge/or_app_bridge.dart' as rust;
+import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import 'project_gateway.dart';
 
@@ -49,11 +52,30 @@ class RustProjectGateway implements ProjectGateway {
     ProjectRationalTime position,
   ) async {
     try {
+      if (Platform.isAndroid) await _registerAndroidMediaSources(session);
       return _preview(
         await _host(session).previewSeek(position: _rustTime(position)),
       );
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  Future<void> _registerAndroidMediaSources(
+    ProjectSessionHandle session,
+  ) async {
+    final page = await _host(session)
+        .listMediaPage(offset: BigInt.zero, limit: BigInt.from(64));
+    final sources = page.items
+        .map((item) => item.sourceUri)
+        .where((uri) => uri.startsWith('content://'))
+        .toList(growable: false);
+    final registered = await OrViewerTexture.setMediaSources(sources);
+    if (sources.isNotEmpty && !registered) {
+      throw const ProjectGatewayException(
+        'MEDIA_SOURCE_UNAVAILABLE',
+        'A selected Android media source could not be opened for preview.',
+      );
     }
   }
 
@@ -954,6 +976,7 @@ class RustProjectGateway implements ProjectGateway {
     if (!result.succeeded) {
       throw ProjectGatewayException(result.errorCode, result.message);
     }
+    if (Platform.isAndroid) await OrViewerTexture.clearMediaSources();
   }
 
   @override
