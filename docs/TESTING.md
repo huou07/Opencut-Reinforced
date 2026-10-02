@@ -671,8 +671,12 @@ hardening commit itself must pass both workflows.
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
   compile target matches the app's JVM 17 target. Physical MediaCodec and
-  HardwareBuffer coverage is not claimed. Local Android build/runtime
-  verification is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+  HardwareBuffer coverage is not claimed. If the API 36 emulator goes ADB
+  offline before an integration test starts and Flutter reports a disposed VM
+  service, CI keeps the emulator/logcat/driver logs, boots a clean AVD once, and
+  reruns the FFmpeg probe and both integration tests. Test failures and failures
+  after a test starts do not retry. Local Android build/runtime verification is
+  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers
 
