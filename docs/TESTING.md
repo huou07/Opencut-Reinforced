@@ -669,7 +669,8 @@ hardening commit itself must pass both workflows.
   Matroska fixture through the Android software FFmpeg path, presents its frame
   to a Flutter surface, and verifies the project revision stays unchanged. The
   job records renderer path, queue budgets, cancellation and preview error
-  telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; physical MediaCodec and
+  telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
+  compile target matches the app's JVM 17 target. Physical MediaCodec and
   HardwareBuffer coverage is not claimed. Local Android build/runtime
   verification is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
