@@ -65,7 +65,7 @@ jobject acquire_latest(JNIEnv* env, jobject) {
     return nullptr;
   }
 
-  auto* byte_count = static_cast<jlong>(frame.width * frame.height * 4);
+  auto byte_count = static_cast<jlong>(frame.width * frame.height * 4);
   jobject pixels = env->NewDirectByteBuffer(
       const_cast<uint8_t*>(frame.pixels), byte_count);
   if (pixels == nullptr) {
