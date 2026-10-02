@@ -71,14 +71,14 @@
     "8D": "DONE",
     "8E": "DONE",
     "8F": "DONE",
-    "9A": "NEXT",
+    "9A": "DONE",
     "9A0": "DONE",
-    "9B": "PLANNED",
+    "9B": "NEXT",
     "9C": "PLANNED",
     "9D": "PLANNED",
     "9E": "PLANNED"
   },
-  "current_next": "9A",
+  "current_next": "9B",
   "last_updated": "2026-10-02",
   "phase_status": {
     "10": "PLANNED",
@@ -98,7 +98,7 @@
   "schema_version": 1,
   "verified_contract_versions": {
     "ipc_protocol": 1,
-    "project_schema": 6,
+    "project_schema": 7,
     "recovery_schema": 1
   }
 }

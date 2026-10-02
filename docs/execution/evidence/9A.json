@@ -1,0 +1,82 @@
+{
+  "checkpoint_id": "9A",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 7,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "required": false
+  },
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "21bb1542f5849bfda21d6a47e19c51ddd7f96154",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36971741762",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36971741762,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "21bb1542f5849bfda21d6a47e19c51ddd7f96154",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/36971741724",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 36971741724,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "21bb1542f5849bfda21d6a47e19c51ddd7f96154",
+  "implementation_subject": "feat(android): add SAF project storage boundary",
+  "schema_version": 1,
+  "verified_at_utc": "2026-10-02T06:21:01Z"
+}
