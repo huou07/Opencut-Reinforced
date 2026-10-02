@@ -18,10 +18,18 @@ void main() {
   testWidgets('Android publishes a bounded Rust preview to a Flutter surface', (
     tester,
   ) async {
+    // Flutter drive installs between targets; app data outlives the cache.
     final fixture = File(
-      '${Directory.systemTemp.path}/or-android-preview-tiny.mkv',
+      '${Directory.systemTemp.parent.path}/files/or-android-preview-tiny.mkv',
     );
-    expect(fixture.existsSync(), isTrue);
+    addTearDown(() {
+      if (fixture.existsSync()) fixture.deleteSync();
+    });
+    expect(
+      fixture.existsSync(),
+      isTrue,
+      reason: 'Expected CI to stage the preview fixture at ${fixture.path}.',
+    );
     final directory = Directory.systemTemp.createTempSync(
       'or-android-preview-',
     );

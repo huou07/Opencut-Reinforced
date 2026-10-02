@@ -1245,7 +1245,7 @@ jobs:
               /data/local/tmp/or-android-preview-tiny.mkv || return $?
             adb shell run-as io.github.huou07.or_app cp \
               /data/local/tmp/or-android-preview-tiny.mkv \
-              cache/or-android-preview-tiny.mkv || return $?
+              files/or-android-preview-tiny.mkv || return $?
             run_flutter_driver \
               integration_test/android_preview_surface_test.dart \
               'Android publishes a bounded Rust preview to a Flutter surface'
