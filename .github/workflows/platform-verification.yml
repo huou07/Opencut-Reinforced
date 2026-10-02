@@ -1239,6 +1239,7 @@ jobs:
             run_flutter_driver \
               integration_test/native_bridge_diagnostics_test.dart \
               'native bridge diagnostics match the CLI snapshot' \
+              --keep-app-running \
               "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON" || return $?
             adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
               /data/local/tmp/or-android-preview-tiny.mkv || return $?

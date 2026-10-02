@@ -675,8 +675,11 @@ hardening commit itself must pass both workflows.
   offline before an integration test starts and Flutter reports a disposed VM
   service, CI keeps the emulator/logcat/driver logs, boots a clean AVD once, and
   reruns the FFmpeg probe and both integration tests. Test failures and failures
-  after a test starts do not retry. Local Android build/runtime verification is
-  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+  after a test starts do not retry. Flutter 3.47.5's `flutter drive` uninstalls
+  the app after a successful run by default, so the bridge diagnostics run uses
+  `--keep-app-running` until CI stages the preview fixture with `run-as`; the
+  preview run then performs normal driver cleanup. Local Android build/runtime
+  verification is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers
 
