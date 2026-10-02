@@ -197,7 +197,7 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - Timeline unit tests cover UUIDv4 `TrackId` and `ClipId` parsing/serde, Video/Audio-only kinds, empty default state, track and clip bounds, globally unique IDs, media existence and kind compatibility, nonnegative starts, positive duration, checked end arithmetic, known source-duration bounds, unknown-duration acceptance, ordered clips, same-track overlap rejection, adjacency, allowed cross-track overlap, and valid reuse of one media item across tracks.
 - Strict project codec tests cover v5 round trips for empty and populated timelines, markers, and exact sequence rates; v1–v4 migrations set the rate to `null` and preserve identity, revision, media, and timeline state. V5 requires the nullable rate field and rejects malformed or extra rational fields.
 - `ProjectFileSession` tests verify v1–v4 opens remain clean and do not rewrite source bytes; explicit save writes v5 without a conversion-only revision change. Storage tests retain bounded-load and atomic-save regressions.
-- Recovery tests retain the v1 envelope and cover v1–v5 nested snapshots, including the exact sequence rate, inspection/apply, timeline preservation, and revision integrity.
+- Recovery tests retain the v1 envelope and cover legacy v1–v5 nested snapshots, including the exact sequence rate, inspection/apply, timeline preservation, and revision integrity; the Phase 9A coverage below adds current schema-v7 snapshots.
 - Application/bridge tests verify referenced `media.remove` returns stable `MEDIA_IN_USE` without changing project, revision, undo history, or redo history; existing unreferenced removal behavior remains covered. Query regressions assert `project.summary`, `media.list`, and `media.get` do not expose timeline fields. Phase 6B extends the catalogs while preserving the existing IPC v1 route and project/media command contracts.
 - Phase 6B application tests in `crates/or_core/src/application.rs` cover track add/remove ordering and limits, clip insert ordering/range/media checks/overlap/adjacency, project-wide clip IDs and clip limits, same-kind and cross-kind moves, move no-op and redo preservation, delete and `MEDIA_IN_USE`, bounded read-only queries, strict arguments, transaction rejection, stale preconditions, undo/redo chains, redo invalidation, history conflicts, and revision overflow.
 - Phase 6D application tests in `crates/or_core/src/application.rs` cover absolute exact trim, earlier extension, known source bounds, no-op history preservation, split partitioning and project-wide ID uniqueness, capacity-before-mutation, track-local ripple shifts and gap preservation, compact public ChangeSets, history conflicts, strict arguments, transaction rejection, and revision overflow. `crates/or_core/tests/project_storage.rs` verifies advanced timeline edits and sequence settings save/reopen exactly as schema v5 without persisting history. It also verifies saving after undo persists the current canonical state and revision.
@@ -520,10 +520,10 @@ hardening commit itself must pass both workflows.
 ## Phase 8A typed project model and timeline contract coverage
 
 - Timeline model tests cover Video, Audio, Text, and Caption tracks; Media, Text, and Caption clip content; stable IDs; exact starts and positive exact durations; media source-range preservation; bounded text and typed clip settings; per-kind track-state rules; solo evaluation by medium; and locked-track mutation rejection.
-- Strict project codec tests cover schema-v6 round trips, unknown-field and closed-enum rejection, typed setting bounds, and v5-to-v6 migration with stable media/clip identity, exact source duration, default state/settings, and preserved project revision. Earlier v1–v4 migration and clean-open behavior remain covered.
+- Strict project codec tests cover schema-v7 round trips, unknown-field and closed-enum rejection, typed setting bounds, SAF source validation, and v5-to-v7 migration with stable media/clip identity, exact source duration, default state/settings, and preserved project revision. The v6 decoder remains covered as a legacy input; earlier v1–v4 migration and clean-open behavior remain covered.
 - Application tests cover typed insert/update commands, typed v2 track/clip queries, exact duration-based move/trim/split/ripple behavior, validation atomicity, persistent track state, undo/redo, and unchanged IPC protocol v1 dispatch.
-- `crates/or_cli/tests/semantic_cli.rs` covers text and caption insertion, all four track kinds, persistent track-state changes, typed query output, schema-v6 persistence, and the shared application path.
-- Recovery tests verify that the recovery sidecar remains schema v1, preserves typed text content in a nested schema-v6 snapshot, and inspects/applies/reloads it without changing project identity or revision. Legacy nested snapshots still save as schema v6.
+- `crates/or_cli/tests/semantic_cli.rs` covers text and caption insertion, all four track kinds, persistent track-state changes, typed query output, schema-v7 persistence, and the shared application path.
+- Recovery tests verify that the recovery sidecar remains schema v1, preserves typed text content in a nested schema-v7 snapshot, and inspects/applies/reloads it without changing project identity or revision. Legacy nested snapshots still load and save as schema v7.
 - `crates/or_ipc/tests/live_host.rs` exercises typed timeline commands and queries through the existing generic IPC v1 route. The original 8A Flutter bridge view was media-only; the 8D bridge now exposes media, text, and caption clip content without changing IPC or project schema contracts.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
@@ -549,7 +549,7 @@ hardening commit itself must pass both workflows.
 ## Phase 8C video transform foundation coverage
 
 - `or_core` verifies exact visual-setting updates, range rejection without
-  project/history mutation, undo/redo, and schema-v6 encode/decode. `or_render`
+  project/history mutation, undo/redo, and schema-v7 encode/decode. `or_render`
   checks crop, opacity, translation, scale, rotation, and anchor behavior
   through wgpu readback when a headless adapter is available.
 - Flutter widget coverage selects a video clip, edits transform values through
@@ -624,6 +624,25 @@ hardening commit itself must pass both workflows.
   preview and export, including bundled-font text, visual settings, effects,
   transitions, and audio mixing. Rust and Flutter unit/widget checks are local;
   native Flutter runtime execution remains
+  `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+## Phase 9A Android SAF and project/media I/O coverage
+
+- `or_core` tests strict `FileUri` and `AndroidSafDocumentUri` identities,
+  preserves the existing `local_file` serialization, rejects malformed and
+  oversized SAF URIs, and verifies schema-v7 SAF sources round-trip without
+  opening media or producing a filesystem path. Schema v1–v6 remain accepted;
+  schema v6 rejects the new source kind.
+- `or_media/tests/software_decode.rs` exercises seekable descriptor-backed
+  FFmpeg input while retaining the descriptor for the decoder lifetime. The
+  runtime capability carries no project data and does not materialize media.
+- `apps/or_app/test/project_file_picker_test.dart` checks the SAF working-copy
+  path and document URI remain separate, and that provider conflicts surface
+  as safe application errors. A widget regression verifies that failed provider
+  sync keeps the local session open and that clean close retries synchronization.
+  Flutter widget and analysis checks cover the updated picker contract.
+- Hosted Android CI builds the APK and runs the x86_64 native bridge smoke
+  path. Local Android build/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers

@@ -1204,6 +1204,12 @@ class _NativeProjectPicker implements ProjectFilePicker {
   bool get isSupported => true;
 
   @override
+  bool get supportsMediaImport => true;
+
+  @override
+  bool get supportsExport => true;
+
+  @override
   Future<String?> openProjectPath() async => openPath;
 
   @override
@@ -1215,6 +1221,10 @@ class _NativeProjectPicker implements ProjectFilePicker {
 
   @override
   Future<String?> saveExportPath({required String suggestedName}) async => null;
+
+  @override
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
+      null;
 }
 
 Uint8List _silentWave({required int sampleRate, required int frames}) {

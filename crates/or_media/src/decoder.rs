@@ -19,8 +19,10 @@ use or_runtime::{
     FrameLeaseError, FramePixelFormat, RenderSnapshot, RuntimeBudgets,
 };
 #[cfg(not(windows))]
-use std::io::{self, ErrorKind};
-use std::{error::Error, fmt, path::PathBuf};
+use std::io::ErrorKind;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
+use std::{error::Error, fmt, fs::File, io, path::PathBuf, sync::Arc};
 
 const OUTPUT_AUDIO_RATE: u32 = 48_000;
 const OUTPUT_AUDIO_CHANNELS: usize = 2;
@@ -56,6 +58,39 @@ pub struct AudioChunk {
     _budget: BudgetLease,
 }
 
+/// Opaque, runtime-only seekable media access backed by an already-open file
+/// descriptor. The descriptor is kept alive while FFmpeg reads its private
+/// `/proc/self/fd` or `/dev/fd` capability path; the source URI is never mapped
+/// to a filesystem path.
+#[cfg(unix)]
+#[derive(Clone)]
+pub struct SeekableMediaIoCapability {
+    _file: Arc<File>,
+    ffmpeg_path: PathBuf,
+}
+
+#[cfg(unix)]
+impl SeekableMediaIoCapability {
+    /// Takes ownership of an open descriptor after confirming it supports seek.
+    /// Android SAF adapters should pass a duplicated descriptor so this value
+    /// owns its lifetime independently of the provider callback.
+    pub fn from_file(mut file: File) -> Result<Self, io::Error> {
+        use io::{Seek, SeekFrom};
+
+        let position = file.stream_position()?;
+        file.seek(SeekFrom::End(0))?;
+        file.seek(SeekFrom::Start(position))?;
+        #[cfg(target_os = "macos")]
+        let ffmpeg_path = PathBuf::from(format!("/dev/fd/{}", file.as_raw_fd()));
+        #[cfg(not(target_os = "macos"))]
+        let ffmpeg_path = PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
+        Ok(Self {
+            _file: Arc::new(file),
+            ffmpeg_path,
+        })
+    }
+}
+
 impl AudioChunk {
     pub const fn timestamp(&self) -> RationalTime {
         self.timestamp
@@ -78,10 +113,12 @@ impl AudioChunk {
     }
 }
 
-/// FFmpeg-backed software demux and decode for a validated local media source.
+/// FFmpeg-backed software demux and decode for local files or owned seekable I/O.
 #[derive(Clone)]
 pub struct SoftwareMediaDecoder {
     path: PathBuf,
+    #[cfg(unix)]
+    _media_io: Option<SeekableMediaIoCapability>,
     budgets: RuntimeBudgets,
 }
 
@@ -90,6 +127,23 @@ impl SoftwareMediaDecoder {
         ffmpeg::init().map_err(DecodeError::Ffmpeg)?;
         Ok(Self {
             path: source.to_file_path().map_err(DecodeError::SourceUri)?,
+            #[cfg(unix)]
+            _media_io: None,
+            budgets,
+        })
+    }
+
+    /// Creates a decoder from transient seekable provider I/O without
+    /// materializing the media into an app-private file.
+    #[cfg(unix)]
+    pub fn new_with_seekable_io(
+        capability: SeekableMediaIoCapability,
+        budgets: RuntimeBudgets,
+    ) -> Result<Self, DecodeError> {
+        ffmpeg::init().map_err(DecodeError::Ffmpeg)?;
+        Ok(Self {
+            path: capability.ffmpeg_path.clone(),
+            _media_io: Some(capability),
             budgets,
         })
     }

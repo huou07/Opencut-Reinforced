@@ -37,7 +37,7 @@ class OrApp extends StatelessWidget {
         gateway: gateway,
         projectGateway: projectGateway ?? const RustProjectGateway(),
         projectFilePicker:
-            projectFilePicker ?? const FileSelectorProjectPicker(),
+            projectFilePicker ?? createDefaultProjectFilePicker(),
       ),
     );
   }

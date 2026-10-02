@@ -1,4 +1,6 @@
 use or_core::{MediaSourceRef, ProjectDocument, RationalTime, TimeRange};
+#[cfg(unix)]
+use or_media::SeekableMediaIoCapability;
 use or_media::{DecodeError, SnapshotQueue, SoftwareMediaDecoder};
 use or_runtime::{
     BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
@@ -88,6 +90,27 @@ fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
     assert_eq!(budgets.decode().bytes_in_use(), 0);
     assert_eq!(budgets.decode().metrics().in_flight, 0);
     assert_eq!(budgets.decode().metrics().peak_bytes, 1024);
+}
+
+#[cfg(unix)]
+#[test]
+fn software_decoder_uses_transient_seekable_io_for_a_saf_source() {
+    let source = MediaSourceRef::android_saf_document_uri(
+        "content://com.android.providers.media.documents/document/video%3A42",
+    )
+    .unwrap();
+    assert!(source.to_file_path().is_err());
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FIXTURE);
+    let capability =
+        SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
+    let decoder = SoftwareMediaDecoder::new_with_seekable_io(capability, budgets()).unwrap();
+    let frame = decoder
+        .decode_video_frame_at(time(1, 4), &CancellationToken::new())
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(frame.descriptor().timing().timestamp(), time(1, 4));
+    assert_eq!(frame.pixels().len(), 16 * 16 * 4);
 }
 
 #[test]

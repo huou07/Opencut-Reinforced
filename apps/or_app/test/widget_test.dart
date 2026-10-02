@@ -1378,6 +1378,35 @@ void main() {
     expect(find.text('No recent projects yet'), findsOneWidget);
   });
 
+  testWidgets('clean close retries a failed SAF synchronization', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/retry-sync.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Retry sync');
+    await _renameActiveProject(tester, 'Saved locally');
+    picker.syncFailureMessage =
+        'The external project could not be synchronized.';
+
+    await tester.tap(find.byKey(const ValueKey('workspace-save')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastSession!.view.dirty, isFalse);
+    expect(picker.syncCalls, 2);
+
+    await tester.tap(find.byKey(const ValueKey('workspace-close')));
+    await tester.pumpAndSettle();
+    expect(gateway.closeCalls, 0);
+    expect(picker.syncCalls, 3);
+
+    picker.syncFailureMessage = null;
+    await tester.tap(find.byKey(const ValueKey('workspace-close')));
+    await tester.pumpAndSettle();
+    expect(gateway.closeCalls, 1);
+    expect(picker.syncCalls, 4);
+  });
+
   testWidgets('revision conflict refreshes once and does not retry rename', (
     tester,
   ) async {
@@ -2585,7 +2614,7 @@ void main() {
     expect(find.byKey(const ValueKey('project-notice')), findsNothing);
   });
 
-  testWidgets('Android lifecycle remains unavailable without calling picker', (
+  testWidgets('unsupported platform lifecycle shows storage unavailable', (
     tester,
   ) async {
     _setViewport(tester, const Size(390, 844));
@@ -2596,9 +2625,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-new-project')));
     await tester.pumpAndSettle();
     expect(
-      find.text(
-        'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.',
-      ),
+      find.text('Project storage is not available on this platform.'),
       findsOneWidget,
     );
     await tester.tap(find.byKey(const ValueKey('home-open-project')));
@@ -2909,13 +2936,21 @@ class _FakeProjectPicker implements ProjectFilePicker {
   String? mediaPath;
   String? savePath;
   String? exportPath;
+  String? syncFailureMessage;
   int openCalls = 0;
   int mediaOpenCalls = 0;
   int saveCalls = 0;
   int exportPathCalls = 0;
+  int syncCalls = 0;
 
   @override
   bool get isSupported => supported;
+
+  @override
+  bool get supportsMediaImport => supported;
+
+  @override
+  bool get supportsExport => supported;
 
   @override
   Future<String?> openProjectPath() async {
@@ -2939,6 +2974,14 @@ class _FakeProjectPicker implements ProjectFilePicker {
   Future<String?> saveExportPath({required String suggestedName}) async {
     exportPathCalls++;
     return exportPath;
+  }
+
+  @override
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
+    syncCalls++;
+    final failure = syncFailureMessage;
+    if (failure != null) throw ProjectSafStorageException(failure);
+    return null;
   }
 }
 

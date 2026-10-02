@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for MediaId {
     }
 }
 
-/// A validated file URI for a local project media source.
+/// A validated `file:` URI for a local project media source.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct MediaSourceUri(String);
@@ -112,6 +112,56 @@ impl MediaSourceUri {
     }
 }
 
+/// A validated Android Storage Access Framework document URI.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct AndroidSafDocumentUri(String);
+
+impl AndroidSafDocumentUri {
+    pub fn parse(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
+        let uri = uri.as_ref();
+        if uri.len() > MAX_MEDIA_SOURCE_URI_BYTES {
+            return Err(MediaSourceUriError::TooLong);
+        }
+        let parsed = Url::parse(uri).map_err(|_| MediaSourceUriError::InvalidSafDocumentUri)?;
+        let has_document_id = parsed.path_segments().is_some_and(|segments| {
+            segments
+                .collect::<Vec<_>>()
+                .windows(2)
+                .any(|parts| parts[0] == "document" && !parts[1].is_empty())
+        });
+        if uri != parsed.as_str()
+            || !has_valid_percent_escapes(uri)
+            || parsed.scheme() != "content"
+            || parsed.cannot_be_a_base()
+            || parsed.host_str().is_none_or(str::is_empty)
+            || parsed.username() != ""
+            || parsed.password().is_some()
+            || parsed.port().is_some()
+            || !has_document_id
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            return Err(MediaSourceUriError::InvalidSafDocumentUri);
+        }
+        Ok(Self(uri.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for AndroidSafDocumentUri {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let uri = String::deserialize(deserializer)?;
+        Self::parse(uri).map_err(serde::de::Error::custom)
+    }
+}
+
 fn has_valid_percent_escapes(value: &str) -> bool {
     let bytes = value.as_bytes();
     let mut index = 0;
@@ -145,23 +195,35 @@ impl<'de> Deserialize<'de> for MediaSourceUri {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MediaSourceRef {
-    LocalFile { uri: MediaSourceUri },
+    #[serde(rename = "local_file")]
+    FileUri {
+        uri: MediaSourceUri,
+    },
+    AndroidSafDocumentUri {
+        uri: AndroidSafDocumentUri,
+    },
 }
 
 impl MediaSourceRef {
     pub fn local_file(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
-        MediaSourceUri::parse(uri).map(|uri| Self::LocalFile { uri })
+        MediaSourceUri::parse(uri).map(|uri| Self::FileUri { uri })
+    }
+
+    pub fn android_saf_document_uri(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
+        AndroidSafDocumentUri::parse(uri).map(|uri| Self::AndroidSafDocumentUri { uri })
     }
 
     pub fn uri(&self) -> &str {
         match self {
-            Self::LocalFile { uri } => uri.as_str(),
+            Self::FileUri { uri } => uri.as_str(),
+            Self::AndroidSafDocumentUri { uri } => uri.as_str(),
         }
     }
 
     pub fn to_file_path(&self) -> Result<std::path::PathBuf, MediaSourceUriError> {
         match self {
-            Self::LocalFile { uri } => uri.to_file_path(),
+            Self::FileUri { uri } => uri.to_file_path(),
+            Self::AndroidSafDocumentUri { .. } => Err(MediaSourceUriError::NotLocalFile),
         }
     }
 }
@@ -169,14 +231,18 @@ impl MediaSourceRef {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaSourceUriError {
     Invalid,
+    InvalidSafDocumentUri,
     TooLong,
+    NotLocalFile,
 }
 
 impl fmt::Display for MediaSourceUriError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Invalid => "media source must be a valid local file URI",
+            Self::InvalidSafDocumentUri => "media source must be a valid Android SAF document URI",
             Self::TooLong => "media source URI exceeds the configured byte limit",
+            Self::NotLocalFile => "Android SAF media sources do not have filesystem paths",
         })
     }
 }
@@ -728,12 +794,12 @@ pub(crate) enum DecimalDurationError {
 #[cfg(test)]
 mod tests {
     use super::{
-        AudioStreamMetadata, DecimalDurationError, MAX_MEDIA_CHANNEL_LAYOUT_BYTES,
-        MAX_MEDIA_CODEC_NAME_BYTES, MAX_MEDIA_CODEC_TYPE_BYTES, MAX_MEDIA_FORMAT_NAME_BYTES,
-        MAX_MEDIA_FORMAT_NAMES, MAX_MEDIA_PIXEL_FORMAT_BYTES, MAX_MEDIA_SOURCE_URI_BYTES,
-        MAX_MEDIA_STREAMS, MediaId, MediaMetadata, MediaSourceRef, MediaSourceUri,
-        MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata, VideoStreamMetadata,
-        parse_decimal_duration,
+        AndroidSafDocumentUri, AudioStreamMetadata, DecimalDurationError,
+        MAX_MEDIA_CHANNEL_LAYOUT_BYTES, MAX_MEDIA_CODEC_NAME_BYTES, MAX_MEDIA_CODEC_TYPE_BYTES,
+        MAX_MEDIA_FORMAT_NAME_BYTES, MAX_MEDIA_FORMAT_NAMES, MAX_MEDIA_PIXEL_FORMAT_BYTES,
+        MAX_MEDIA_SOURCE_URI_BYTES, MAX_MEDIA_STREAMS, MediaId, MediaMetadata, MediaSourceRef,
+        MediaSourceUri, MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata,
+        VideoStreamMetadata, parse_decimal_duration,
     };
     use crate::{RationalRate, RationalTime};
     use std::{num::NonZeroU32, str::FromStr};
@@ -766,6 +832,11 @@ mod tests {
     fn source_uri_accepts_local_file_uris_and_rejects_other_or_unbounded_sources() {
         let source = MediaSourceRef::local_file("file:///tmp/a%20clip.mkv").unwrap();
         assert_eq!(source.uri(), "file:///tmp/a%20clip.mkv");
+        assert_eq!(
+            serde_json::to_value(source).unwrap()["kind"],
+            "local_file",
+            "the v2-v6 file source spelling remains unchanged"
+        );
         for uri in [
             "https://example.com/video.mkv",
             "file://remote.example/video.mkv",
@@ -782,6 +853,51 @@ mod tests {
         let long = format!("file:///{}", "a".repeat(MAX_MEDIA_SOURCE_URI_BYTES));
         assert_eq!(
             MediaSourceUri::parse(long),
+            Err(MediaSourceUriError::TooLong)
+        );
+    }
+
+    #[test]
+    fn saf_document_uris_are_strict_persistent_identities_without_filesystem_paths() {
+        let uri = "content://com.android.providers.media.documents/document/video%3A42";
+        let source = MediaSourceRef::android_saf_document_uri(uri).unwrap();
+        assert_eq!(source.uri(), uri);
+        assert_eq!(
+            serde_json::to_value(&source).unwrap(),
+            serde_json::json!({"kind":"android_saf_document_uri", "uri":uri})
+        );
+        assert_eq!(
+            serde_json::from_value::<MediaSourceRef>(serde_json::to_value(&source).unwrap())
+                .unwrap(),
+            source
+        );
+        assert_eq!(
+            source.to_file_path(),
+            Err(MediaSourceUriError::NotLocalFile)
+        );
+
+        for uri in [
+            "file:///tmp/a.mkv",
+            "content://provider",
+            "content://provider/not-a-document/42",
+            "content://provider/document/",
+            "content://user@provider/document/a",
+            "content://provider/document/a?download=1",
+            "content://provider/document/a#fragment",
+            "content://provider/document/%ZZ",
+        ] {
+            assert_eq!(
+                AndroidSafDocumentUri::parse(uri),
+                Err(MediaSourceUriError::InvalidSafDocumentUri),
+                "{uri}"
+            );
+        }
+        let long = format!(
+            "content://provider/document/{}",
+            "a".repeat(MAX_MEDIA_SOURCE_URI_BYTES)
+        );
+        assert_eq!(
+            AndroidSafDocumentUri::parse(long),
             Err(MediaSourceUriError::TooLong)
         );
     }

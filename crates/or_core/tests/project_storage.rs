@@ -310,7 +310,7 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
-fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v6() {
+fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v7() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let seeded = project_with_timeline_media();
@@ -397,7 +397,7 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v6() {
 
     session.save().unwrap();
     let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 6);
+    assert_eq!(encoded["schema_version"], 7);
     for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
         assert!(!encoded.to_string().contains(runtime_state));
     }
@@ -582,7 +582,7 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 6")
+            .contains("\"schema_version\": 7")
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {

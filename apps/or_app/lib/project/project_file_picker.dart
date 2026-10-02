@@ -1,13 +1,29 @@
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart';
 
 abstract interface class ProjectFilePicker {
   bool get isSupported;
+  bool get supportsMediaImport;
+  bool get supportsExport;
   Future<String?> openProjectPath();
   Future<String?> openMediaPath();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({required String suggestedName});
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path);
+}
+
+class ProjectFileSyncResult {
+  const ProjectFileSyncResult({required this.verified});
+
+  final bool verified;
+}
+
+class ProjectSafStorageException implements Exception {
+  const ProjectSafStorageException(this.message);
+
+  final String message;
 }
 
 class FileSelectorProjectPicker implements ProjectFilePicker {
@@ -25,6 +41,12 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   @override
   bool get isSupported =>
       Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+
+  @override
+  bool get supportsMediaImport => isSupported;
+
+  @override
+  bool get supportsExport => isSupported;
 
   @override
   Future<String?> openProjectPath() async {
@@ -59,4 +81,115 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
     );
     return location?.path;
   }
+
+  @override
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
+      null;
 }
+
+class AndroidSafProjectPicker implements ProjectFilePicker {
+  AndroidSafProjectPicker({MethodChannel? channel})
+    : _channel = channel ?? _channelInstance;
+
+  static const _channelInstance = MethodChannel(
+    'io.github.huou07.or_app/saf_storage',
+  );
+
+  final MethodChannel _channel;
+  final Map<String, String> _documentUrisByWorkingPath = {};
+
+  @override
+  bool get isSupported => Platform.isAndroid;
+
+  @override
+  bool get supportsMediaImport => false;
+
+  @override
+  bool get supportsExport => false;
+
+  @override
+  Future<String?> openProjectPath() => _selectProject('openProject');
+
+  @override
+  Future<String?> saveProjectPath({required String suggestedName}) =>
+      _selectProject('createProject', {'suggestedName': suggestedName});
+
+  Future<String?> _selectProject(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        method,
+        arguments,
+      );
+      if (response == null) return null;
+      final path = response['workingPath'];
+      final documentUri = response['documentUri'];
+      if (path is! String || documentUri is! String) {
+        throw const ProjectSafStorageException(
+          'The selected project location is invalid.',
+        );
+      }
+      final uri = Uri.tryParse(documentUri);
+      if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+        throw const ProjectSafStorageException(
+          'The selected project location is invalid.',
+        );
+      }
+      _documentUrisByWorkingPath[path] = documentUri;
+      return path;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android project storage is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<String?> openMediaPath() async => null;
+
+  @override
+  Future<String?> saveExportPath({required String suggestedName}) async => null;
+
+  @override
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
+    final documentUri = _documentUrisByWorkingPath[path];
+    if (documentUri == null) return null;
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'synchronizeProject',
+        {'workingPath': path, 'documentUri': documentUri},
+      );
+      if (response?['verified'] case final bool verified) {
+        return ProjectFileSyncResult(verified: verified);
+      }
+      throw const ProjectSafStorageException(
+        'The external project could not be synchronized.',
+      );
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android project storage is unavailable.',
+      );
+    }
+  }
+
+  static ProjectSafStorageException _storageError(
+    String code,
+  ) => ProjectSafStorageException(switch (code) {
+    'PROJECT_NOT_EMPTY' => 'The selected document is not empty. Choose an empty document to create a project.',
+    'PROJECT_ALREADY_MANAGED' => 'This document already has a project copy on this device. Open the project instead.',
+    'EXTERNAL_PROJECT_CHANGED' =>
+      'The external project changed outside OR. Its changes were preserved.',
+    'PROJECT_SYNC_FAILED' => 'The project is saved on this device, but could not be synchronized to the selected document.',
+    _ => 'The selected project could not be opened or synchronized.',
+  });
+}
+
+ProjectFilePicker createDefaultProjectFilePicker() => Platform.isAndroid
+    ? AndroidSafProjectPicker()
+    : const FileSelectorProjectPicker();

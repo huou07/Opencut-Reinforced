@@ -36,11 +36,12 @@ pub use jobs::{
     JobManagerConfig, JobManagerConfigError, JobProgress, JobSnapshot, JobState, JobSubmitError,
 };
 pub use media::{
-    AudioStreamMetadata, MAX_MEDIA_CHANNEL_LAYOUT_BYTES, MAX_MEDIA_CODEC_NAME_BYTES,
-    MAX_MEDIA_CODEC_TYPE_BYTES, MAX_MEDIA_FORMAT_NAME_BYTES, MAX_MEDIA_FORMAT_NAMES,
-    MAX_MEDIA_PIXEL_FORMAT_BYTES, MAX_MEDIA_SOURCE_URI_BYTES, MAX_MEDIA_STREAMS, MediaId,
-    MediaItem, MediaMetadata, MediaMetadataValidationError, MediaSourceRef, MediaSourceUri,
-    MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata, VideoStreamMetadata,
+    AndroidSafDocumentUri, AudioStreamMetadata, MAX_MEDIA_CHANNEL_LAYOUT_BYTES,
+    MAX_MEDIA_CODEC_NAME_BYTES, MAX_MEDIA_CODEC_TYPE_BYTES, MAX_MEDIA_FORMAT_NAME_BYTES,
+    MAX_MEDIA_FORMAT_NAMES, MAX_MEDIA_PIXEL_FORMAT_BYTES, MAX_MEDIA_SOURCE_URI_BYTES,
+    MAX_MEDIA_STREAMS, MediaId, MediaItem, MediaMetadata, MediaMetadataValidationError,
+    MediaSourceRef, MediaSourceUri, MediaSourceUriError, MediaStreamMetadata, OtherStreamMetadata,
+    VideoStreamMetadata,
 };
 pub use media_artifacts::{
     MediaArtifactErrorCode, MediaArtifactEvent, MediaArtifactEventState,

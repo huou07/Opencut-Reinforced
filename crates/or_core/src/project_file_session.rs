@@ -355,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn create_new_writes_a_v6_project_with_fresh_identity_and_empty_history() {
+    fn create_new_writes_a_v7_project_with_fresh_identity_and_empty_history() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
 
@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v6_without_revision_change() {
+    fn opening_v1_migrates_in_memory_and_explicit_save_writes_v7_without_revision_change() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let legacy = format!(
@@ -403,7 +403,7 @@ mod tests {
         session.save().unwrap();
         let saved = std::fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 6);
+        assert_eq!(encoded["schema_version"], 7);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
             serde_json::Value::Null
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_v2_with_media_stays_clean_until_explicit_v6_save() {
+    fn opening_v2_with_media_stays_clean_until_explicit_v7_save() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let item = MediaItem::new(
@@ -449,13 +449,13 @@ mod tests {
 
         let saved = fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 6);
+        assert_eq!(encoded["schema_version"], 7);
         assert_eq!(encoded["project"]["revision"], 11);
         assert!(!session.is_dirty());
     }
 
     #[test]
-    fn opening_v3_with_timeline_stays_clean_until_explicit_v6_save() {
+    fn opening_v3_with_timeline_stays_clean_until_explicit_v7_save() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let legacy = serde_json::to_string(&json!({
@@ -486,13 +486,13 @@ mod tests {
 
         let saved = fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 6);
+        assert_eq!(encoded["schema_version"], 7);
         assert_eq!(encoded["project"]["revision"], 17);
         assert!(!session.is_dirty());
     }
 
     #[test]
-    fn opening_v4_stays_clean_until_explicit_v6_save_with_unset_rate() {
+    fn opening_v4_stays_clean_until_explicit_v7_save_with_unset_rate() {
         let directory = TestDirectory::new();
         let path = directory.project_path();
         let legacy = serde_json::to_string(&json!({
@@ -523,7 +523,7 @@ mod tests {
 
         session.save().unwrap();
         let encoded: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 6);
+        assert_eq!(encoded["schema_version"], 7);
         assert_eq!(encoded["project"]["revision"], 23);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],

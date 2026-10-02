@@ -2,6 +2,8 @@ mod decoder;
 mod encoder;
 mod snapshot_queue;
 
+#[cfg(unix)]
+pub use decoder::SeekableMediaIoCapability;
 pub use decoder::{AudioChunk, DecodeError, SoftwareMediaDecoder, VideoFrame};
 pub use encoder::{ExportEncodeError, MatroskaFfv1PcmS16leWriter};
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};

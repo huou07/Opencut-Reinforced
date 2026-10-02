@@ -20,8 +20,6 @@ import 'app_navigation.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
 
-const _androidProjectAccessMessage =
-    'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
 const _timelineMarkerPageSize = 100;
@@ -191,7 +189,7 @@ class _AppShellState extends State<AppShell> {
                         onExport:
                             editor &&
                                 _activeSession != null &&
-                                widget.projectFilePicker.isSupported &&
+                                widget.projectFilePicker.supportsExport &&
                                 !(_exportJob?.isActive ?? false)
                             ? _startExport
                             : null,
@@ -295,7 +293,9 @@ class _AppShellState extends State<AppShell> {
               timelineLoadingMoreMarkers: _timelineLoadingMoreMarkers,
               timelineLoading: _timelineLoading,
               timelineLoadError: _timelineLoadError,
-              onImportMedia: _importMedia,
+              onImportMedia: widget.projectFilePicker.supportsMediaImport
+                  ? _importMedia
+                  : null,
               onLoadMoreMedia: _loadMoreMedia,
               onRefreshMedia: _refreshMediaLibrary,
               onRemoveMedia: _removeMedia,
@@ -401,9 +401,16 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       final session = await widget.projectGateway.createProject(path, name);
-      await _startProject(session, path, notice: resolvedRecovery.notice);
+      final syncNotice = await _syncNotice(path);
+      await _startProject(
+        session,
+        path,
+        notice: _combineNotices(resolvedRecovery.notice, syncNotice),
+      );
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
     } catch (_) {
       _showUnavailable('The new project could not be created.');
     } finally {
@@ -438,6 +445,8 @@ class _AppShellState extends State<AppShell> {
       await _startProject(session, path, notice: resolvedRecovery.notice);
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
     } catch (_) {
       _showUnavailable('The selected project could not be opened.');
     } finally {
@@ -447,7 +456,7 @@ class _AppShellState extends State<AppShell> {
 
   bool _checkFileLifecycleAvailable() {
     if (widget.projectFilePicker.isSupported) return true;
-    _showUnavailable(_androidProjectAccessMessage);
+    _showUnavailable('Project storage is not available on this platform.');
     return false;
   }
 
@@ -532,13 +541,18 @@ class _AppShellState extends State<AppShell> {
       );
       return const _RecoveryPreparation(proceed: false);
     }
+    final syncNotice = preparation.mutation == _RecoveryMutation.apply
+        ? await _syncNotice(path)
+        : null;
     return _RecoveryPreparation(
       proceed: true,
-      notice:
-          preparation.mutation == _RecoveryMutation.apply &&
-              result.message.contains('cleanup is pending')
-          ? result.message
-          : preparation.notice,
+      notice: _combineNotices(
+        preparation.mutation == _RecoveryMutation.apply &&
+                result.message.contains('cleanup is pending')
+            ? result.message
+            : preparation.notice,
+        syncNotice,
+      ),
     );
   }
 
@@ -658,6 +672,8 @@ class _AppShellState extends State<AppShell> {
       setState(() => _activeProject = current);
     }
     if (!current.dirty) {
+      final path = _activeProjectPath;
+      if (path != null && !await _syncBeforeClose(path)) return false;
       if (beforeClose != null && !await beforeClose()) return false;
       await widget.projectGateway.close(session, discardUnsaved: false);
       _clearActiveProject(session);
@@ -686,6 +702,8 @@ class _AppShellState extends State<AppShell> {
       }
       final saved = result.view ?? await widget.projectGateway.summary(session);
       if (mounted) setState(() => _activeProject = saved);
+      final path = _activeProjectPath;
+      if (path != null && !await _syncBeforeClose(path)) return false;
     }
     if (beforeClose != null && !await beforeClose()) return false;
     await widget.projectGateway.close(
@@ -902,14 +920,67 @@ class _AppShellState extends State<AppShell> {
     if (session == null) return;
     final current = _activeProject;
     if (current == null) return;
-    await _runProjectAction(
+    final updated = await _runProjectAction(
       (session, _) => widget.projectGateway.save(session),
     );
+    if (updated == null || !mounted) return;
+    final path = _activeProjectPath;
+    if (path == null) return;
+    final notice = await _syncNotice(path);
+    if (!mounted) return;
+    setState(() => _projectNotice = notice);
+    if (notice != null) {
+      _showUnavailable(notice);
+    }
+  }
+
+  Future<bool> _syncBeforeClose(String path) async {
+    try {
+      final result = await widget.projectFilePicker.synchronizeProjectPath(
+        path,
+      );
+      if (result?.verified == false) {
+        _showUnavailable(
+          'The project was saved, but the external document did not support readback verification.',
+        );
+      }
+      return true;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return false;
+    } catch (_) {
+      _showUnavailable(
+        'The project is saved on this device, but could not be synchronized to the selected document.',
+      );
+      return false;
+    }
+  }
+
+  Future<String?> _syncNotice(String path) async {
+    try {
+      final result = await widget.projectFilePicker.synchronizeProjectPath(
+        path,
+      );
+      if (result?.verified == false) {
+        return 'The project was saved, but the external document did not support readback verification.';
+      }
+      return null;
+    } on ProjectSafStorageException catch (error) {
+      return error.message;
+    } catch (_) {
+      return 'The project is saved on this device, but could not be synchronized to the selected document.';
+    }
+  }
+
+  static String? _combineNotices(String? first, String? second) {
+    if (first == null || first.isEmpty) return second;
+    if (second == null || second.isEmpty) return first;
+    return '$first\n$second';
   }
 
   Future<void> _startExport() async {
     final session = _activeSession;
-    if (session == null || !widget.projectFilePicker.isSupported) return;
+    if (session == null || !widget.projectFilePicker.supportsExport) return;
     try {
       final current = await widget.projectGateway.summary(session);
       if (!mounted || !identical(session, _activeSession)) return;

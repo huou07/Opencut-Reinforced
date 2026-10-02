@@ -20,7 +20,11 @@ impl MediaImportError {
             Self::SourceNotFound => "SOURCE_NOT_FOUND",
             Self::SourceUnavailable => "SOURCE_UNAVAILABLE",
             Self::Probe(error) => error.code_str(),
-            Self::InvalidSourceUri(MediaSourceUriError::Invalid) => "INVALID_SOURCE_URI",
+            Self::InvalidSourceUri(
+                MediaSourceUriError::Invalid
+                | MediaSourceUriError::InvalidSafDocumentUri
+                | MediaSourceUriError::NotLocalFile,
+            ) => "INVALID_SOURCE_URI",
             Self::InvalidSourceUri(MediaSourceUriError::TooLong) => "SOURCE_URI_TOO_LONG",
             Self::InvalidMetadata(_) => "INVALID_MEDIA_METADATA",
         }
@@ -31,9 +35,11 @@ impl MediaImportError {
             Self::SourceNotFound => "media source path was not found",
             Self::SourceUnavailable => "media source path could not be resolved",
             Self::Probe(error) => error.message(),
-            Self::InvalidSourceUri(MediaSourceUriError::Invalid) => {
-                "media source could not be represented as a local file URI"
-            }
+            Self::InvalidSourceUri(
+                MediaSourceUriError::Invalid
+                | MediaSourceUriError::InvalidSafDocumentUri
+                | MediaSourceUriError::NotLocalFile,
+            ) => "media source could not be represented as a local file URI",
             Self::InvalidSourceUri(MediaSourceUriError::TooLong) => {
                 "media source URI exceeds the configured byte limit"
             }
@@ -79,7 +85,7 @@ pub fn prepare_media_import(path: &Path) -> Result<MediaItem, MediaImportError> 
     let metadata = probe_media_file(&canonical_path).map_err(MediaImportError::Probe)?;
     let source_uri = MediaSourceUri::from_canonical_path(&canonical_path)
         .map_err(MediaImportError::InvalidSourceUri)?;
-    let source = MediaSourceRef::LocalFile { uri: source_uri };
+    let source = MediaSourceRef::FileUri { uri: source_uri };
     MediaItem::new(MediaId::generate(), source, metadata).map_err(MediaImportError::InvalidMetadata)
 }
 
