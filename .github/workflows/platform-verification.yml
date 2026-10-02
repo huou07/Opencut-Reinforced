@@ -1273,20 +1273,23 @@ jobs:
             local log="$RUNNER_TEMP/android-driver-attempt-${attempt}-$target_file.log"
             local guest_log="$RUNNER_TEMP/android-driver-attempt-${attempt}-$target_file-guest.log"
             local driver_status=0
-            local guest_log_status=0
+            local guest_log_pid
             cd "$GITHUB_WORKSPACE/apps/or_app"
+            if ! adb -s "$android_device_id" logcat -b main -d -t 1 -s flutter:I \
+              >/dev/null 2>&1; then
+              echo 'Cannot attach guest Flutter log capture before driver launch.' >&2
+              return 1
+            fi
+            adb -s "$android_device_id" logcat -b main -v brief -s flutter:I \
+              > "$guest_log" 2>&1 &
+            guest_log_pid=$!
             flutter drive --driver=test_driver/integration_test.dart \
               --target="$target" -d "$android_device_id" --no-dds "$@" 2>&1 | tee "$log" || driver_status=$?
+            kill "$guest_log_pid" 2>/dev/null || true
+            wait "$guest_log_pid" 2>/dev/null || true
             if [[ "$driver_status" == 0 ]]; then return 0; fi
-            timeout 10s adb -s "$android_device_id" logcat -b all -d -t 1000 \
-              > "$guest_log" 2>&1 || guest_log_status=$?
-            if [[ "$guest_log_status" != 0 ]]; then
-              echo 'Could not read guest Flutter progress after driver failure; refusing to classify it as a pre-test disconnect.' >&2
-              return "$driver_status"
-            fi
             {
-              echo
-              echo 'Post-failure guest logcat:'
+              echo 'Guest Flutter log captured during driver run:'
               cat "$guest_log"
               echo
               echo 'Post-failure ADB device list:'

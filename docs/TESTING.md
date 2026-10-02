@@ -681,9 +681,9 @@ hardening commit itself must pass both workflows.
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
   compile target matches the app's JVM 17 target. Physical MediaCodec and
-  HardwareBuffer coverage is not claimed. After a failed `flutter drive`, CI
-  captures guest logcat progress and the ADB device snapshot before classifying
-  the failure. The retry classifier accepts only the exact disposed VM service
+  HardwareBuffer coverage is not claimed. CI verifies and streams guest Flutter
+  logcat before each `flutter drive`, then captures the ADB device snapshot on
+  failure. The retry classifier accepts only the exact disposed VM service
   signature, no expected-test marker in either log, and configured
   `emulator-5554` offline. An unreadable guest logcat, online emulator, missing
   offline snapshot, or app-side Flutter marker showing the test started does
