@@ -279,6 +279,10 @@ approved decoder in the Android bridge. The Flutter package registers a
 pixel-buffer texture adapter on macOS, Linux, Windows, and Android. Android
 copies bounded software pixels to a reusable bitmap and `SurfaceProducer`;
 desktop adapters retain their platform release callbacks.
+The Android bridge build-hook environment test checks that each ABI selects
+its matching staged FFmpeg prefix and passes the cross-compilation settings to
+Cargo. Hosted Android verification checks all three resulting libraries in
+the APK and runs its x86_64 software-preview bridge path.
 CI grants the ephemeral runner read/write access to `/dev/kvm` for hosted
 x86_64 emulator verification.
 Linux converts the leased BGRA pixels into a bounded native-owned RGBA ring and

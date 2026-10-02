@@ -67,6 +67,13 @@ function-like `max` macro from Windows headers. Its callback follows Flutter
 `user_data` parameter. Plugin registration creates its `unique_ptr` inside the
 class method so the private constructor remains encapsulated.
 
+Flutter Native Assets hooks filter the parent process environment. Android
+bridge builds therefore receive the per-ABI FFmpeg install root through
+`hooks.user_defines.or_app_bridge.android_ffmpeg_install_root` in
+`apps/or_app/pubspec.yaml`; hosted verification links that path to the staged
+runner install before building the APK. The hook forwards `FFMPEG_DIR`,
+`PKG_CONFIG_PATH`, and `PKG_CONFIG_ALLOW_CROSS` to Cargo for each Android ABI.
+
 The execution supervisor treats these workflows as evidence gates, not merely
 status badges. It uses the GitHub REST API with Python's standard library to
 match exact `head_sha`, `main` branch, push event, completed status, successful

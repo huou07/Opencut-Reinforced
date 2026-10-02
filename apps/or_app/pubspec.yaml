@@ -15,6 +15,11 @@ dependencies:
   or_viewer_texture:
     path: ../../packages/or_viewer_texture
 
+hooks:
+  user_defines:
+    or_app_bridge:
+      android_ffmpeg_install_root: android/.ffmpeg-install
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

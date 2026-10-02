@@ -1040,10 +1040,20 @@ jobs:
         working-directory: apps/or_app
         run: flutter pub get
 
+      - name: Expose staged Android FFmpeg libraries to the build hook
+        working-directory: apps/or_app
+        run: |
+          set -euo pipefail
+          install_link=android/.ffmpeg-install
+          test ! -e "$install_link" && test ! -L "$install_link"
+          ln -s "$RUNNER_TEMP/android-ffmpeg/install" "$install_link"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            test -f "$install_link/$abi/lib/pkgconfig/libavcodec.pc"
+            test -f "$install_link/$abi/include/libavcodec/avcodec.h"
+          done
+
       - name: Build debug APK with FFmpeg shared libraries for all ABIs
         working-directory: apps/or_app
-        env:
-          OR_ANDROID_FFMPEG_INSTALL_ROOT: ${{ runner.temp }}/android-ffmpeg/install
         run: flutter build apk --debug --target-platform android-arm,android-arm64,android-x64
 
       - name: Verify Android APK contains FFmpeg libraries for all ABIs

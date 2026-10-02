@@ -5,11 +5,29 @@ import 'package:flutter_rust_bridge_hooks/flutter_rust_bridge_hooks.dart';
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
+    final targetTriple = _rustTargetTriple(input.config.code);
+    final ffmpegInstallRoot = targetTriple == null
+        ? null
+        : input.userDefines.path('android_ffmpeg_install_root');
+    if (targetTriple != null) {
+      if (ffmpegInstallRoot == null ||
+          !await Directory.fromUri(ffmpegInstallRoot).exists()) {
+        throw StateError(
+          'Android bridge builds require the staged FFmpeg install at '
+          'apps/or_app/android/.ffmpeg-install.',
+        );
+      }
+      output.dependencies.add(ffmpegInstallRoot);
+    }
+
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../crates/or_app_bridge',
       extraCargoEnvironmentVariables: {
         ..._macOsCargoEnvironment(),
-        ..._targetCargoEnvironment(_rustTargetTriple(input.config.code)),
+        ..._targetCargoEnvironment(
+          targetTriple,
+          ffmpegInstallRoot?.toFilePath(),
+        ),
       },
     ).run(input: input, output: output);
   });
@@ -25,18 +43,18 @@ String? _rustTargetTriple(CodeConfig code) {
   };
 }
 
-Map<String, String> _targetCargoEnvironment(String? targetTriple) {
-  const androidTargets = {
-    'aarch64-linux-android': ('arm64-v8a', 'aarch64-linux-android'),
-    'armv7-linux-androideabi': ('armeabi-v7a', 'armv7a-linux-androideabi'),
-    'x86_64-linux-android': ('x86_64', 'x86_64-linux-android'),
-  };
+Map<String, String> _targetCargoEnvironment(
+  String? targetTriple,
+  String? installRoot,
+) {
   if (targetTriple == null) return const {};
-  final target = androidTargets[targetTriple];
-  final installRoot = Platform.environment['OR_ANDROID_FFMPEG_INSTALL_ROOT'];
+  if (installRoot == null) {
+    throw StateError('Android bridge builds require a staged FFmpeg install.');
+  }
+
   final androidHome = Platform.environment['ANDROID_HOME'];
-  if (target == null || installRoot == null || androidHome == null) {
-    return const {};
+  if (androidHome == null) {
+    throw StateError('Android bridge builds require ANDROID_HOME.');
   }
   final host = Platform.isLinux
       ? 'linux-x86_64'
@@ -45,7 +63,33 @@ Map<String, String> _targetCargoEnvironment(String? targetTriple) {
       : Platform.isWindows
       ? 'windows-x86_64'
       : null;
-  if (host == null) return const {};
+  if (host == null) {
+    throw UnsupportedError('Unsupported host for Android bridge builds.');
+  }
+
+  return androidCargoEnvironment(
+    targetTriple: targetTriple,
+    installRoot: installRoot,
+    androidHome: androidHome,
+    host: host,
+  );
+}
+
+Map<String, String> androidCargoEnvironment({
+  required String targetTriple,
+  required String installRoot,
+  required String androidHome,
+  required String host,
+}) {
+  const androidTargets = {
+    'aarch64-linux-android': ('arm64-v8a', 'aarch64-linux-android'),
+    'armv7-linux-androideabi': ('armeabi-v7a', 'armv7a-linux-androideabi'),
+    'x86_64-linux-android': ('x86_64', 'x86_64-linux-android'),
+  };
+  final target = androidTargets[targetTriple];
+  if (target == null) {
+    throw ArgumentError.value(targetTriple, 'targetTriple');
+  }
 
   final toolchain =
       '$androidHome/ndk/28.2.13676358/toolchains/llvm/prebuilt/$host';
