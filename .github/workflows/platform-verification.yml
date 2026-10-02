@@ -1062,6 +1062,34 @@ jobs:
             done
           done
 
+      - name: Capture Android CLI bootstrap data
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          commands = {
+              "app_info": ["version", "--json"],
+              "health": ["health", "--json"],
+              "capabilities": ["capabilities", "--json"],
+          }
+          snapshot = {}
+          for key, arguments in commands.items():
+              output = subprocess.check_output(
+                  ["cargo", "run", "--quiet", "-p", "or_cli", "--", *arguments],
+                  text=True,
+              )
+              snapshot[key] = json.loads(output)
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as file:
+              file.write(
+                  "OR_CLI_BOOTSTRAP_JSON="
+                  + json.dumps(snapshot, separators=(",", ":"))
+                  + "\n"
+              )
+          PY
+
       - name: Verify FFmpeg runtime and Flutter Rust bridge on x86_64 emulator
         timeout-minutes: 30
         run: |
@@ -1124,7 +1152,8 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/apps/or_app"
           flutter test integration_test/core_bridge_test.dart -d emulator-5554 \
-            --plain-name "Rust project bridge stores editable titles and manual captions"
+            --plain-name "native bridge diagnostics match the CLI snapshot" \
+            "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
 
       - name: Preserve Android FFmpeg source and build provenance
         if: always() && steps.android-ffmpeg-build.outcome == 'success'
