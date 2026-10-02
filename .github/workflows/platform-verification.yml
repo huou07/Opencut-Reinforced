@@ -937,7 +937,10 @@ jobs:
 
             clang="$toolchain/bin/${clang_prefix}21-clang"
             clangxx="$toolchain/bin/${clang_prefix}21-clang++"
-            cc_env="CC_${rust_target//-/_}"
+            target_suffix="${rust_target//-/_}"
+            cc_env="CC_$target_suffix"
+            ar_env="AR_$target_suffix"
+            bindgen_env="BINDGEN_EXTRA_CLANG_ARGS_$target_suffix"
             prefix="$build_root/install/$abi"
             probe_dir="$build_root/probes/$abi"
             jni_dir="$jni_root/$abi"
@@ -975,6 +978,8 @@ jobs:
             done
 
             env "$linker_env=$clang" "$cc_env=$clang" \
+              "$ar_env=$toolchain/bin/llvm-ar" \
+              "$bindgen_env=--target=$rust_target --sysroot=$toolchain/sysroot" \
               FFMPEG_DIR="$prefix" \
               PKG_CONFIG_PATH="$pkg_config_path" \
               PKG_CONFIG_ALLOW_CROSS=1 \
