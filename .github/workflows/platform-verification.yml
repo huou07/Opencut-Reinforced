@@ -1152,6 +1152,7 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/apps/or_app"
           flutter test integration_test/core_bridge_test.dart -d emulator-5554 \
+            --no-dds \
             --plain-name "native bridge diagnostics match the CLI snapshot" \
             "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
 
