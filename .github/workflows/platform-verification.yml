@@ -1200,6 +1200,21 @@ jobs:
               ' "$log" \
               && ! grep -Fq "$expected_test_name" "$log"
           }
+          is_pre_driver_android_disconnect() {
+            local log="$1"
+            awk -v device="$android_device_id" '
+              $0 == "Pre-driver ADB device list:" { in_snapshot = 1; offline = 0; next }
+              in_snapshot && $1 == device && $2 == "offline" { offline = 1 }
+              END { exit !offline }
+            ' "$log"
+          }
+          append_pre_driver_adb_snapshot() {
+            local log="$1"
+            {
+              echo 'Pre-driver ADB device list:'
+              adb devices -l || true
+            } >> "$log" 2>&1
+          }
           verify_android_disconnect_classifier() {
             local log="$RUNNER_TEMP/android-disconnect-classifier-check.log"
             local expected_test_name='expected test name'
@@ -1262,6 +1277,35 @@ jobs:
               echo 'Android offline classifier accepted a failure without VM service disposal.' >&2
               return 1
             fi
+            printf '%s\n' \
+              'Pre-driver ADB device list:' \
+              'List of devices attached' \
+              "$android_device_id offline transport_id:1" > "$log"
+            if ! is_pre_driver_android_disconnect "$log"; then
+              echo 'Pre-driver classifier rejected the configured offline emulator.' >&2
+              return 1
+            fi
+            printf '%s\n' \
+              'Pre-driver ADB device list:' \
+              'List of devices attached' \
+              'emulator-5556 offline transport_id:1' > "$log"
+            if is_pre_driver_android_disconnect "$log"; then
+              echo 'Pre-driver classifier accepted a different offline emulator.' >&2
+              return 1
+            fi
+            printf '%s\n' \
+              'Pre-driver ADB device list:' \
+              'List of devices attached' \
+              "$android_device_id device product:sdk_gphone64_x86_64" > "$log"
+            if is_pre_driver_android_disconnect "$log"; then
+              echo 'Pre-driver classifier accepted an online emulator.' >&2
+              return 1
+            fi
+            printf '%s\n' "$android_device_id offline transport_id:1" > "$log"
+            if is_pre_driver_android_disconnect "$log"; then
+              echo 'Pre-driver classifier accepted offline text without a device snapshot.' >&2
+              return 1
+            fi
             rm -f "$log"
           }
           verify_android_disconnect_classifier
@@ -1274,15 +1318,58 @@ jobs:
             local guest_log="$RUNNER_TEMP/android-driver-attempt-${attempt}-$target_file-guest.log"
             local driver_status=0
             local guest_log_pid
+            local guest_log_ready=0
+            local readiness_marker="OR_CI_LOGCAT_READY_${attempt}_${target_file//[^[:alnum:]]/_}"
             cd "$GITHUB_WORKSPACE/apps/or_app"
-            if ! adb -s "$android_device_id" logcat -b main -d -t 1 -s flutter:I \
+            : > "$log"
+            if ! timeout 10s adb -s "$android_device_id" logcat -b main -d -t 1 -s flutter:I \
               >/dev/null 2>&1; then
-              echo 'Cannot attach guest Flutter log capture before driver launch.' >&2
+              echo 'Cannot attach guest Flutter log capture before driver launch.' >> "$log"
+              append_pre_driver_adb_snapshot "$log"
+              if is_pre_driver_android_disconnect "$log"; then
+                echo 'Android ADB disconnected before the Flutter driver was launched.' >&2
+                return 75
+              fi
+              echo 'Guest Flutter logcat is unavailable while the configured emulator is online.' >&2
               return 1
             fi
             adb -s "$android_device_id" logcat -b main -v brief -s flutter:I \
               > "$guest_log" 2>&1 &
             guest_log_pid=$!
+            if ! timeout 10s adb -s "$android_device_id" shell log -t flutter "$readiness_marker" \
+              >/dev/null 2>&1; then
+              kill "$guest_log_pid" 2>/dev/null || true
+              wait "$guest_log_pid" 2>/dev/null || true
+              echo 'Could not emit the guest Flutter logcat readiness marker.' >> "$log"
+              cat "$guest_log" >> "$log"
+              append_pre_driver_adb_snapshot "$log"
+              if is_pre_driver_android_disconnect "$log"; then
+                echo 'Android ADB disconnected before the Flutter driver was launched.' >&2
+                return 75
+              fi
+              echo 'Guest Flutter logcat readiness failed while the configured emulator is online.' >&2
+              return 1
+            fi
+            for _ in $(seq 1 100); do
+              if grep -Fq "$readiness_marker" "$guest_log"; then
+                guest_log_ready=1
+                break
+              fi
+              sleep 0.1
+            done
+            if [[ "$guest_log_ready" != 1 ]]; then
+              kill "$guest_log_pid" 2>/dev/null || true
+              wait "$guest_log_pid" 2>/dev/null || true
+              echo 'Guest Flutter logcat did not capture its readiness marker.' >> "$log"
+              cat "$guest_log" >> "$log"
+              append_pre_driver_adb_snapshot "$log"
+              if is_pre_driver_android_disconnect "$log"; then
+                echo 'Android ADB disconnected before the Flutter driver was launched.' >&2
+                return 75
+              fi
+              echo 'Guest Flutter logcat readiness failed while the configured emulator is online.' >&2
+              return 1
+            fi
             flutter drive --driver=test_driver/integration_test.dart \
               --target="$target" -d "$android_device_id" --no-dds "$@" 2>&1 | tee "$log" || driver_status=$?
             kill "$guest_log_pid" 2>/dev/null || true
@@ -1334,30 +1421,32 @@ jobs:
             cat "$diagnostics"
           }
           attempt=1
-          if run_android_runtime_suite; then
-            :
-          else
-            suite_status=$?
+          while true; do
+            if run_android_runtime_suite; then
+              if [[ "$attempt" -gt 1 ]]; then
+                echo "Android clean-AVD full-suite retry $attempt passed the FFmpeg runtime probe, Flutter Rust bridge diagnostics, and preview surface test." >> "$GITHUB_STEP_SUMMARY"
+              fi
+              break
+            else
+              suite_status=$?
+            fi
             collect_android_diagnostics
             if [[ "$suite_status" != 75 ]]; then exit "$suite_status"; fi
-            echo 'Android emulator disconnected before an integration test started; restarting a clean API 36 AVD and rerunning every Android runtime check.'
-            echo 'Android emulator disconnected before an integration test started; a clean API 36 AVD was booted and the complete FFmpeg and integration suite was rerun.' >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$attempt" -ge 3 ]]; then
+              echo 'Android emulator exhausted two clean-AVD retries after pre-test disconnects.' >&2
+              exit "$suite_status"
+            fi
+            echo "Android emulator disconnected before an integration test started on attempt $attempt; restarting a clean API 36 AVD and rerunning every Android runtime check."
+            echo "Android emulator disconnected before an integration test started on attempt $attempt; a clean API 36 AVD was booted and the complete FFmpeg and integration suite was rerun." >> "$GITHUB_STEP_SUMMARY"
             kill "$emulator_pid" 2>/dev/null || true
             wait "$emulator_pid" 2>/dev/null || true
             emulator_pid=
             adb kill-server || true
             sleep 2
             adb start-server
-            attempt=2
+            attempt=$((attempt + 1))
             start_android_emulator true
-            if run_android_runtime_suite; then
-              echo 'Android emulator recovery rerun passed the FFmpeg runtime probe, Flutter Rust bridge diagnostics, and preview surface test.' >> "$GITHUB_STEP_SUMMARY"
-            else
-              suite_status=$?
-              collect_android_diagnostics
-              exit "$suite_status"
-            fi
-          fi
+          done
 
       - name: Preserve Android FFmpeg source and build provenance
         if: always() && steps.android-ffmpeg-build.outcome == 'success'

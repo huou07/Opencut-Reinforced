@@ -682,15 +682,19 @@ hardening commit itself must pass both workflows.
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
   compile target matches the app's JVM 17 target. Physical MediaCodec and
-  HardwareBuffer coverage is not claimed. CI verifies and streams guest Flutter
-  logcat before each `flutter drive`, then captures the ADB device snapshot on
-  failure. The retry classifier accepts only the exact disposed VM service
-  signature, no expected-test marker in either log, and configured
-  `emulator-5554` offline. An unreadable guest logcat, online emulator, missing
-  offline snapshot, or app-side Flutter marker showing the test started does
-  not retry; a synthetic guard covers the app-side marker. CI keeps the
-  emulator/logcat/driver logs, boots a clean AVD once, and reruns the FFmpeg
-  probe and both integration tests. Flutter 3.47.5's
+  HardwareBuffer coverage is not claimed. CI verifies the guest Flutter logcat
+  stream before each `flutter drive` by emitting and observing a readiness
+  marker, then captures the ADB device snapshot on failure. If that pre-driver
+  check fails while the configured emulator is offline, CI can safely restart
+  because no test has been launched. After driver launch, the retry classifier
+  accepts only the exact disposed VM service signature, no expected-test marker
+  in either log, and configured `emulator-5554` offline. An unreadable guest
+  logcat while the emulator is online, an online emulator, a missing offline
+  snapshot, or an app-side Flutter marker showing the test started does not
+  retry; synthetic guards cover both classifiers and the app-side marker. CI
+  keeps the emulator/logcat/driver logs and permits at most two clean-AVD
+  retries, each rerunning the FFmpeg probe and both integration tests. Exhausting
+  that budget fails the job. Flutter 3.47.5's
   `flutter drive` uninstalls the app after a successful run by default, and each
   new drive invocation stops and installs the target APK. The bridge diagnostics
   run uses `--keep-app-running` until CI stages the preview fixture with
