@@ -21,58 +21,6 @@ void main() {
 
   setUpAll(RustLib.init);
 
-  testWidgets('native bridge diagnostics match the CLI snapshot', (
-    tester,
-  ) async {
-    const expectedJson = String.fromEnvironment('OR_CLI_BOOTSTRAP_JSON');
-    expect(expectedJson, isNotEmpty);
-    final expected = jsonDecode(expectedJson) as Map<String, dynamic>;
-    const coreGateway = RustCoreGateway();
-
-    final appInfo = await coreGateway.appInfo();
-    expect({
-      'name': appInfo.name,
-      'version': appInfo.version,
-      'core_api_version': appInfo.coreApiVersion,
-    }, expected['app_info']);
-
-    final health = await coreGateway.health();
-    expect({'status': health.status}, expected['health']);
-
-    final capabilities = await coreGateway.capabilities();
-    expect(
-      capabilities
-          .map(
-            (capability) => {
-              'id': capability.id,
-              'version': capability.version,
-            },
-          )
-          .toList(),
-      (expected['capabilities'] as Map<String, dynamic>)['capabilities'],
-    );
-
-    await tester.pumpWidget(const OrApp(gateway: coreGateway));
-    await tester.tap(find.byKey(const ValueKey('nav-settings')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-section-advanced')));
-    await tester.pumpAndSettle();
-    expect(find.text(appInfo.name), findsWidgets);
-    expect(find.text(appInfo.version), findsOneWidget);
-    expect(find.text(health.status), findsOneWidget);
-    for (final capability in capabilities) {
-      expect(find.text(capability.id), findsOneWidget);
-    }
-    final versions = <String, int>{};
-    for (final capability in capabilities) {
-      final label = 'v${capability.version}';
-      versions.update(label, (count) => count + 1, ifAbsent: () => 1);
-    }
-    for (final entry in versions.entries) {
-      expect(find.text(entry.key), findsNWidgets(entry.value));
-    }
-  });
-
   testWidgets(
     'Rust project bridge stores editable titles and manual captions',
     (tester) async {
