@@ -278,6 +278,8 @@ the FFmpeg shared libraries for Android without enabling that dependency in
 the bridge. The Flutter package registers a pixel-buffer texture adapter on
 macOS, Linux, and Windows. macOS and Windows use their platform release
 callback to keep frame leases alive until Flutter releases the pixel buffer.
+CI grants the ephemeral runner read/write access to `/dev/kvm` for hosted
+x86_64 emulator verification.
 Linux converts the leased BGRA pixels into a bounded native-owned RGBA ring and
 releases the source lease when the synchronous copy completes; the owned
 buffers stay available to Flutter through the next render tick and are freed
