@@ -72,7 +72,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "textureId" -> result.success(producer?.id)
+            "textureId" -> result.success(producer?.id())
             "frameAvailable" -> scheduleFrame(result)
             "setMediaSources" -> setMediaSources(call, result)
             "clearMediaSources" -> {
