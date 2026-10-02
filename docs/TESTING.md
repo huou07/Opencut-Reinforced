@@ -671,17 +671,19 @@ hardening commit itself must pass both workflows.
   job records renderer path, queue budgets, cancellation and preview error
   telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
   compile target matches the app's JVM 17 target. Physical MediaCodec and
-  HardwareBuffer coverage is not claimed. If the API 36 emulator goes ADB
-  offline before an integration test starts and Flutter reports a disposed VM
-  service, CI keeps the emulator/logcat/driver logs, boots a clean AVD once, and
-  reruns the FFmpeg probe and both integration tests. Test failures and failures
-  after a test starts do not retry. Flutter 3.47.5's `flutter drive` uninstalls
-  the app after a successful run by default, and each new drive invocation
-  stops and installs the target APK. The bridge diagnostics run uses
-  `--keep-app-running` until CI stages the preview fixture with `run-as` into
-  the app's persistent `files/` directory; the preview test reads it from there
-  and deletes it during teardown. The cache directory is not used for this
-  cross-invocation handoff. Local Android build/runtime verification is
+  HardwareBuffer coverage is not claimed. After a failed `flutter drive`, CI
+  appends `adb devices -l` to that driver's log. The retry classifier accepts
+  only the exact disposed VM service signature before the expected test name,
+  with the post-failure snapshot showing configured `emulator-5554` offline.
+  An online emulator, missing offline snapshot, or failure after a test starts
+  does not retry. CI keeps the emulator/logcat/driver logs, boots a clean AVD
+  once, and reruns the FFmpeg probe and both integration tests. Flutter 3.47.5's
+  `flutter drive` uninstalls the app after a successful run by default, and each
+  new drive invocation stops and installs the target APK. The bridge diagnostics
+  run uses `--keep-app-running` until CI stages the preview fixture with
+  `run-as` into the app's persistent `files/` directory; the preview test reads
+  it from there and deletes it during teardown. The cache directory is not used
+  for this cross-invocation handoff. Local Android build/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Future verification layers

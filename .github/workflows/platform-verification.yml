@@ -1109,6 +1109,7 @@ jobs:
         run: |
           set -euo pipefail
           avd_name=or-api36-x86_64
+          android_device_id=emulator-5554
           export ANDROID_AVD_HOME="$HOME/.android/avd"
           mkdir -p "$ANDROID_AVD_HOME"
           printf 'no\n' | avdmanager create avd --force --name "$avd_name" \
@@ -1192,25 +1193,61 @@ jobs:
             local log="$1"
             local expected_test_name="$2"
             grep -Fq 'getIsolate: (-32000) Service connection disposed' "$log" \
-              && grep -Fq 'adb: device offline' "$log" \
+              && awk -v device="$android_device_id" '
+                $0 == "Post-failure ADB device list:" { in_snapshot = 1; offline = 0; next }
+                in_snapshot && $1 == device && $2 == "offline" { offline = 1 }
+                END { exit !offline }
+              ' "$log" \
               && ! grep -Fq "$expected_test_name" "$log"
           }
           verify_android_disconnect_classifier() {
             local log="$RUNNER_TEMP/android-disconnect-classifier-check.log"
+            local expected_test_name='expected test name'
             printf '%s\n' \
               'getIsolate: (-32000) Service connection disposed' \
-              'adb: device offline' > "$log"
-            if ! is_retryable_android_disconnect "$log" 'expected test name'; then
+              'Post-failure ADB device list:' \
+              'List of devices attached' \
+              "$android_device_id offline transport_id:1" > "$log"
+            if ! is_retryable_android_disconnect "$log" "$expected_test_name"; then
               echo 'Android offline classifier rejected its pre-test disconnect case.' >&2
               return 1
             fi
-            printf '%s\n' 'expected test name' >> "$log"
-            if is_retryable_android_disconnect "$log" 'expected test name'; then
+            printf '%s\n' "$expected_test_name" >> "$log"
+            if is_retryable_android_disconnect "$log" "$expected_test_name"; then
               echo 'Android offline classifier accepted a failure after test start.' >&2
               return 1
             fi
-            printf '%s\n' 'adb: device offline' > "$log"
-            if is_retryable_android_disconnect "$log" 'expected test name'; then
+            printf '%s\n' \
+              'getIsolate: (-32000) Service connection disposed' \
+              'Post-failure ADB device list:' \
+              'List of devices attached' \
+              "$android_device_id device product:sdk_gphone64_x86_64" > "$log"
+            if is_retryable_android_disconnect "$log" "$expected_test_name"; then
+              echo 'Android offline classifier accepted a disposed service while the emulator was online.' >&2
+              return 1
+            fi
+            printf '%s\n' \
+              'getIsolate: (-32000) Service connection disposed' \
+              "$android_device_id offline transport_id:1" \
+              'adb: device offline' > "$log"
+            if is_retryable_android_disconnect "$log" "$expected_test_name"; then
+              echo 'Android offline classifier accepted driver-log text without a post-failure ADB snapshot.' >&2
+              return 1
+            fi
+            printf '%s\n' \
+              'getIsolate: (-32000) Service connection disposed' \
+              'Post-failure ADB device list:' \
+              'List of devices attached' \
+              'emulator-5556 offline transport_id:1' > "$log"
+            if is_retryable_android_disconnect "$log" "$expected_test_name"; then
+              echo 'Android offline classifier accepted a different emulator being offline.' >&2
+              return 1
+            fi
+            printf '%s\n' \
+              'Post-failure ADB device list:' \
+              'List of devices attached' \
+              "$android_device_id offline transport_id:1" > "$log"
+            if is_retryable_android_disconnect "$log" "$expected_test_name"; then
               echo 'Android offline classifier accepted a failure without VM service disposal.' >&2
               return 1
             fi
@@ -1226,8 +1263,13 @@ jobs:
             local driver_status=0
             cd "$GITHUB_WORKSPACE/apps/or_app"
             flutter drive --driver=test_driver/integration_test.dart \
-              --target="$target" -d emulator-5554 --no-dds "$@" 2>&1 | tee "$log" || driver_status=$?
+              --target="$target" -d "$android_device_id" --no-dds "$@" 2>&1 | tee "$log" || driver_status=$?
             if [[ "$driver_status" == 0 ]]; then return 0; fi
+            {
+              echo
+              echo 'Post-failure ADB device list:'
+              adb devices -l || true
+            } >> "$log" 2>&1
             if is_retryable_android_disconnect "$log" "$expected_test_name"; then
               echo "Android ADB disconnected before '$expected_test_name' started." >&2
               return 75
@@ -1260,7 +1302,7 @@ jobs:
               echo 'Emulator process:'
               ps -p "$emulator_pid" -o pid=,stat=,args= || true
               echo 'Guest logcat (last 1000 lines if the guest is reachable):'
-              timeout 10s adb -s emulator-5554 logcat -b all -d -t 1000 || true
+              timeout 10s adb -s "$android_device_id" logcat -b all -d -t 1000 || true
               echo 'Emulator process log (last 300 lines):'
               tail -n 300 "$RUNNER_TEMP/android-emulator.log" || true
             } > "$diagnostics" 2>&1
