@@ -361,7 +361,7 @@ void main() {
 
     picker.openPath = projectPath;
     await tester.tap(find.byKey(const ValueKey('home-open-project')));
-    await tester.pumpAndSettle();
+    await _pumpUntilProjectPanelsLoaded(tester);
     final reopened = await gateway.summary(gateway.activeSession!);
     expect(reopened.projectId, initial.projectId);
     expect(reopened.projectInstanceId, isNot(initial.projectInstanceId));
@@ -416,7 +416,7 @@ void main() {
       'Preview Project',
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
-    await tester.pumpAndSettle();
+    await _pumpUntilProjectPanelsLoaded(tester);
 
     final session = gateway.activeSession!;
     expect(await OrViewerTexture.textureId(), isNotNull);
