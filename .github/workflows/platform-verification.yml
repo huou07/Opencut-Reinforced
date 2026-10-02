@@ -1073,7 +1073,11 @@ jobs:
             -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/android-emulator.log" 2>&1 &
           emulator_pid=$!
           trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-          adb wait-for-device
+          if ! timeout 120s adb wait-for-device; then
+            echo 'Android emulator did not appear within 120 seconds; emulator log follows:' >&2
+            cat "$RUNNER_TEMP/android-emulator.log" || true
+            exit 1
+          fi
           booted=0
           for attempt in $(seq 1 120); do
             if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then

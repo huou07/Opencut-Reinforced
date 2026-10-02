@@ -722,15 +722,20 @@ mod tests {
                 })
                 .unwrap()
         };
-        wait_until(|| state_of(&manager, id) == JobState::Running);
-        assert_eq!(
-            manager.snapshot(id).unwrap().progress,
-            Some(JobProgress {
-                completed: 10,
-                total: 10
-            })
-        );
+        let expected_progress = Some(JobProgress {
+            completed: 10,
+            total: 10,
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let progress = loop {
+            let progress = manager.snapshot(id).and_then(|snapshot| snapshot.progress);
+            if progress == expected_progress || Instant::now() >= deadline {
+                break progress;
+            }
+            std::thread::yield_now();
+        };
         gate.release();
+        assert_eq!(progress, expected_progress);
         wait_until(|| state_of(&manager, id) == JobState::Succeeded);
         manager.shutdown();
     }
