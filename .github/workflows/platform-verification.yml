@@ -1069,7 +1069,7 @@ jobs:
           avd_name=or-api36-x86_64
           printf 'no\n' | avdmanager create avd --force --name "$avd_name" \
             --package 'system-images;android-36;google_apis;x86_64' --device pixel_2
-          emulator -avd "$avd_name" -no-window -no-audio -no-boot-anim \
+          "$ANDROID_HOME/emulator/emulator" -avd "$avd_name" -no-window -no-audio -no-boot-anim \
             -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/android-emulator.log" 2>&1 &
           emulator_pid=$!
           trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
