@@ -17,7 +17,7 @@ architecture by improvising around a blocked gate.
 2. This architecture branch is based directly on authoritative main
    `915a4a8b951643e475683e4cdf56996118ec7d1e`. The implementation branch starts
    from the reviewed architecture commit descended from that main, after the
-   separate amendment task authorizes M0–M5. Use a new descriptive branch such
+   separate build authorization binds the disabled M0–M5 scope. Use a new descriptive branch such
    as `codex/model-orchestrator-v2`; never run the prototype as a trusted
    implementation controller.
 3. Export V1 runtime facts read-only for operator inspection if needed. Never
@@ -51,7 +51,7 @@ Use simple functions and small records, not speculative plugin/adapter factories
 
 | Phase | Files to add/change | Purpose and exit gate |
 | --- | --- | --- |
-| M0: adoption contract and schema | `AGENTS.md`; `docs/execution/ARCHITECTURE_INVARIANTS.md`; `docs/execution/AGENT_EXECUTION.md`; `docs/execution/architecture-policy.json`; `docs/execution/AMENDMENT_BASELINE.json`; `docs/execution/EVIDENCE_POLICY.json`; `docs/execution/PHASE_SPEC_TEMPLATE.md`; `docs/execution/automation/V2_CONTRACT.json`; `docs/execution/automation/MODEL_POLICY.json`; `docs/execution/automation/PROTOCOL_SCHEMAS.json`; `docs/execution/automation/SANDBOX_POLICY.json`; `docs/execution/automation/TASK_TEMPLATES.json`; `docs/execution/automation/CHECKS.json`; `scripts/model_orchestrator/__init__.py`; `scripts/model_orchestrator/contracts.py`; `scripts/model_orchestrator/tests/__init__.py`; `scripts/model_orchestrator/tests/test_contracts.py`; `scripts/check_execution_plan.py`; `scripts/check_architecture_policy.py`; `scripts/test_execution_infra.py` | Apply exactly the proposed separate amendment on the implementation branch, disabled. Formal strict record schemas, complete authority manifest and root resolution; legacy/current validators still pass. No worker dispatch. M0 adoption marker is a proposal until final adopted release. CP01–05, 33. |
+| M0: adoption contract and schema | `AGENTS.md`; `docs/execution/ARCHITECTURE_INVARIANTS.md`; `docs/execution/AGENT_EXECUTION.md`; `docs/execution/architecture-policy.json`; `docs/execution/AMENDMENT_BASELINE.json`; `docs/execution/EVIDENCE_POLICY.json`; `docs/execution/PHASE_SPEC_TEMPLATE.md`; `docs/execution/automation/V2_CONTRACT.json`; `docs/execution/automation/MODEL_POLICY.json`; `docs/execution/automation/PROTOCOL_SCHEMAS.json`; `docs/execution/automation/SANDBOX_POLICY.json`; `docs/execution/automation/TASK_TEMPLATES.json`; `docs/execution/automation/CHECKS.json`; `scripts/model_orchestrator/__init__.py`; `scripts/model_orchestrator/contracts.py`; `scripts/model_orchestrator/tests/__init__.py`; `scripts/model_orchestrator/tests/test_contracts.py`; `scripts/check_execution_plan.py`; `scripts/check_architecture_policy.py`; `scripts/test_execution_infra.py` | Apply exactly the proposed separate amendment on the implementation branch, disabled. Formal strict record schemas, complete authority manifest and root resolution; legacy/current validators still pass. No worker dispatch. M0 build authorization is distinct from the proposed operational adoption marker; no active authority before final external adoption. CP01–05, 33. |
 | M1: state and isolation | `scripts/model_orchestrator/store.py`; `scripts/model_orchestrator/sandbox.py`; `scripts/model_orchestrator/tests/test_isolation_and_state.py`; `docs/TOOLING.md` | Durable single-snapshot transactions, separate locks/epochs, independent clone/container ownership and effective config overlays. Missing runtime blocks. CP06–11, 27–29, 34. |
 | M2: guards and verification | `scripts/model_orchestrator/guards.py`; `scripts/model_orchestrator/verification.py`; `scripts/model_orchestrator/tests/test_verification.py` | Trusted quarantine import, all-commit path guards, floor detection, real required-check execution and acceptance readiness receipts. No review/promotion until test PASS. CP12–18, 30. |
 | M3: model lifecycle | `scripts/model_orchestrator/adapters.py`; `scripts/model_orchestrator/orchestrator.py`; `scripts/model_orchestrator/__main__.py`; `scripts/model_orchestrator/tests/test_lifecycle.py`; `.opencode/agents/model-dispatcher.md`; `.opencode/agents/orch-worker.md`; `.opencode/agents/orch-reviewer.md` | One CLI path for admission/claims/recovery/review/escalation. Strict versioned transport, role/cost/effort enrollment, pause/attempt ledger, no-tools published Desktop snapshot. CP19–26, 31–32, 35. |
@@ -204,7 +204,7 @@ is a bounded implementation instruction, not permission to choose a phase:
 
 ```text
 Implement only authorized phase <M0..M5> of model orchestrator V2.
-Architecture authority: <reviewed architecture SHA>; adopted/control-amendment
+Architecture authority: <reviewed architecture SHA>; disabled-build architecture-task
 authorization: <controller-provided record>. Base: <exact SHA>. Branch and
 workspace: <isolated controller-created locator>.
 
@@ -245,3 +245,13 @@ Those facts are not available from a prototype PASS report and were deliberately
 not fabricated here. Missing inputs cause explicit blocked admission. Product
 contracts requiring new scope/budgets beyond the locked specifications need a
 separate architecture task. This candidate is frozen and stops at architecture.
+
+## M0-R2 correction and independent audit gate
+
+README §19 is normative for design authority, disabled build authorization and
+operational adoption. Build/test work precedes operational adoption; M5 fixture
+certification does not invoke the OR product or require an active V2 release.
+The M0-R2 candidate must independently pass CP01–05/33 contract boundaries and
+all lifecycle, real-Git authority, nested task and receipt negative matrices.
+These M0 results do not certify later OS/CLI/hosted boundaries. An independent
+subsequent audit decides admission to M1; this correction stops at M0-R2.

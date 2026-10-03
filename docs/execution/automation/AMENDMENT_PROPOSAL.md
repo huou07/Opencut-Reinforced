@@ -255,3 +255,15 @@ PLAN, STATE, all existing phases, product code and existing evidence stay byte-f
 unchanged in adoption. Task-specific numerical criteria for later product work
 are approved task-template inputs; if locked product contracts must change,
 that is a separate plan amendment, not this adoption task.
+
+## 6. Build permission precedes operational adoption (M0-R2)
+
+The explicit correction task authorizes building the disabled M0-R2 candidate
+on its exact branch. Future M phases require separately scoped build permission.
+This is BUILD_AUTHORIZED_DISABLED, not AMENDMENT_ADOPTED or runtime authority.
+The final adoption marker is prepared and tested while disabled. External review
+and operator pinning follow complete implementation and pre-adoption certification
+of the exact final release; a candidate marker never grants its own authority.
+The corrected release lifecycle and semantic/Git closure requirements in README
+§19 supersede the old M0 adoption-before-implementation schema. No existing global
+invariant, historical evidence or product checkpoint is weakened or advanced.

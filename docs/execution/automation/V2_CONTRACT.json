@@ -102,5 +102,66 @@
     "agent_or_model_dispatch": false,
     "mutating_control_commands": false
   },
-  "acceptance_suite": "IMPLEMENTATION_PLAN.md CP01-CP48; all declared boundaries mandatory"
+  "acceptance_suite": "IMPLEMENTATION_PLAN.md CP01-CP48; all declared boundaries mandatory",
+  "release_lifecycle": {
+    "states": [
+      "ARCHITECTURE_FROZEN",
+      "AMENDMENT_PROPOSED",
+      "BUILD_AUTHORIZED_DISABLED",
+      "IMPLEMENTATION_M0",
+      "IMPLEMENTATION_M1",
+      "IMPLEMENTATION_M2",
+      "IMPLEMENTATION_M3",
+      "IMPLEMENTATION_M4",
+      "IMPLEMENTATION_M5",
+      "CERTIFICATION_CANDIDATE",
+      "OPERATIONAL_ADOPTION_PENDING",
+      "OPERATIONALLY_ADOPTED",
+      "CERTIFIED_ACTIVE"
+    ],
+    "build_grants_operational_authority": false,
+    "certification_before_operational_adoption": true,
+    "external_pin_required": true,
+    "full_auto_requires": "exact_release_external_adoption_complete_phases_cases_live_certification_qualified_models_no_blockers",
+    "normative_source": "README.md section 19",
+    "transitions": {
+      "ARCHITECTURE_FROZEN": [
+        "AMENDMENT_PROPOSED"
+      ],
+      "AMENDMENT_PROPOSED": [
+        "BUILD_AUTHORIZED_DISABLED"
+      ],
+      "BUILD_AUTHORIZED_DISABLED": [
+        "IMPLEMENTATION_M0"
+      ],
+      "IMPLEMENTATION_M0": [
+        "IMPLEMENTATION_M1"
+      ],
+      "IMPLEMENTATION_M1": [
+        "IMPLEMENTATION_M2"
+      ],
+      "IMPLEMENTATION_M2": [
+        "IMPLEMENTATION_M3"
+      ],
+      "IMPLEMENTATION_M3": [
+        "IMPLEMENTATION_M4"
+      ],
+      "IMPLEMENTATION_M4": [
+        "IMPLEMENTATION_M5"
+      ],
+      "IMPLEMENTATION_M5": [
+        "CERTIFICATION_CANDIDATE"
+      ],
+      "CERTIFICATION_CANDIDATE": [
+        "OPERATIONAL_ADOPTION_PENDING"
+      ],
+      "OPERATIONAL_ADOPTION_PENDING": [
+        "OPERATIONALLY_ADOPTED"
+      ],
+      "OPERATIONALLY_ADOPTED": [
+        "CERTIFIED_ACTIVE"
+      ],
+      "CERTIFIED_ACTIVE": []
+    }
+  }
 }

@@ -62,3 +62,12 @@ Runtime certification, model enrollment, and checkpoint-specific measurement
 bounds remain activation gates with explicit fail-closed behavior, not decisions
 delegated to implementation workers. Changing a frozen design decision requires
 a separate architecture task.
+
+## M0-R2 corrective decision — 2026-10-03
+
+Separate design authority, scoped disabled-build authorization and externally
+pinned operational adoption. Implement/certify M0–M5 while disabled, then adopt
+the exact certified release after independent review. README §19 freezes the
+corrected lifecycle, full-tree Git authority, recursive task schemas and bound
+receipt semantics. Original architecture and invalid M0 history stay intact.
+This correction authorizes no M1 or product execution and is itself a candidate.

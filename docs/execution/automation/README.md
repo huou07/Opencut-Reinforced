@@ -256,8 +256,7 @@ absence of worker write capability establishes ownership.
 ## 7. Task and admission contract
 
 One task targets exactly the resolved NEXT checkpoint. Control-plane
-implementation phases use a separate architecture-task kind authorized by the
-adopted amendment, and cannot impersonate product checkpoint tasks.
+implementation phases use a separate architecture-task kind authorized by an explicit disabled-build architecture task, and cannot impersonate product checkpoint tasks.
 
 Preparation deterministically validates plan/state, exact base/remote identity,
 verified schema versions, allowance intersection, evidence bindings, environment
@@ -825,3 +824,120 @@ models, pinned CLI conformance, approved journey/harness or quantitative budgets
 are explicit activation/task-admission blockers. They do not permit a cheaper
 worker to make architecture choices or weaken quality. This freeze authorizes
 no product implementation, no 9B completion, no 9B1 start, and no CI waiting.
+
+## 19. Corrected build and operational lifecycle (M0-R2)
+
+This correction preserves the original architecture history. Three independent
+facts must never be collapsed into one ADOPTED state:
+
+1. **Design authority:** the reviewed architecture SHA specifies what to build.
+   A frozen design alone grants neither implementation nor runtime permission.
+2. **Build authorization:** an explicit operator architecture-task authorization
+   binds the corrected design SHA, exact base/branch, phase allowlist and gates.
+   BUILD_AUTHORIZED_DISABLED permits only bounded M0–M5 implementation and
+   certification in disposable fixtures while V2 remains disabled. It grants no
+   OR product promotion, authoritative supervisor handoff, main replacement,
+   checkpoint work or roadmap autonomy. An authorization for M0 does not grant M1.
+3. **Operational adoption:** after all phases and CP01–CP48 pass at their required
+   boundaries, independent review and release preparation, the operator separately
+   pins the exact certified release. Only that external adoption establishes live
+   authority. The candidate cannot create this fact by setting its own fields.
+
+The release lifecycle is distinct from the per-task operational state machine:
+
+```text
+ARCHITECTURE_FROZEN -> AMENDMENT_PROPOSED -> BUILD_AUTHORIZED_DISABLED
+  -> IMPLEMENTATION_M0 -> IMPLEMENTATION_M1 -> IMPLEMENTATION_M2
+  -> IMPLEMENTATION_M3 -> IMPLEMENTATION_M4 -> IMPLEMENTATION_M5
+  -> CERTIFICATION_CANDIDATE -> OPERATIONAL_ADOPTION_PENDING
+  -> OPERATIONALLY_ADOPTED -> CERTIFIED_ACTIVE
+```
+
+Build progress is an ordered prefix; no skipped/reordered phase. Pre-adoption
+certification binds the final immutable release SHA, all required case receipts,
+actual live isolation/CLI/hosted evidence and independent review. It can be
+performed while disabled and never requires prior live V2 authority. Prepared
+adoption metadata may be part of that disabled final release; operator pinning
+is external and must identify the same certified bytes. Any code/policy change
+invalidates certification. No self-referential commit hash is stored in its tree.
+
+Full-auto is false throughout building, certification candidacy and adoption
+pending. CERTIFIED_ACTIVE additionally requires externally established adoption,
+complete M0–M5 and CP01–CP48 evidence for that exact release, live certification,
+qualified required models, no blocking limitation, and clean authority binding.
+Runtime facts come from controller-owned receipts/bootstrap; record labels are
+not proof. Missing external facts refuse validation, never infer approval.
+This predicate is eligibility only; starting product work still requires an
+explicit operator task. This correction authorizes M0-R2, not M1.
+
+### M0 Git authority and closure contract
+
+Authority roots must be explicit repository roots, with the approved GitHub
+repository identity and operator-pinned anchor, release and base commits. Exact
+object type must be commit: reject tag/blob/tree IDs rather than peeling them.
+Reject shallow history, replace refs, grafts, alternates, symlink roots and
+unexpected Git-directory indirection. Scrub Git environment/config and execute
+only trusted Git without hooks, filters or candidate imports.
+
+For disabled build fixtures, base must be an ancestor of the candidate release;
+for operational authority, the adopted release must be an ancestor of the exact
+product base and frozen control blobs must agree. Both must descend from the
+operator-pinned repository anchor. Remote URL is a consistency check, not a
+cryptographic identity proof; the externally pinned anchor establishes lineage.
+Production pins come from operator bootstrap, never candidate arguments.
+
+Build the authority manifest from the **entire pinned Git tree** using Git modes,
+blob OIDs and SHA-256 bytes. Freezing all tracked baseline inputs is simpler and
+safer than maintaining an incomplete hand-picked closure. Compare an explicitly
+supplied inventory to the complete tree and reject any omission/addition. Include
+absence of known root configuration names. Symlinks/submodules and unsupported
+modes fail closed. Require a clean materialization at the release: dirty,
+untracked, mode-changed or mixed-revision checkout fails before loading. The
+working filesystem never supplies authoritative manifest bytes.
+
+The full-tree snapshot does not make product source a protected edit path.
+Authorization surfaces are all scripts, execution/ADR documents, workflow and
+OpenCode configuration, repository/design/UX/product/dependency contracts and
+version-source files. Product code is immutable **baseline input**, inspected
+as untrusted candidate changes under the task's actual allowlist. All external
+executables, image/config overlays, harnesses and environment profiles referenced
+by tasks must be separately digest-pinned; unknown external inputs forbid admission.
+A closure test removes every manifest entry in turn and proves refusal.
+
+### M0 nested task and receipt contract
+
+Strict schemas recursively validate every nested record: exact keys, bounded
+length/number, restricted IDs, normalized relative paths, unique identifiers,
+no bool-as-number, non-finite values or implicit unbounded default. Commands are
+nonempty argv arrays with nonempty string arguments and a relative cwd; explicit
+allowlisted environment, harness/environment digests, case inventory, expected
+exit-code set, finite resource limits, timeout and maximum retry count are frozen
+command data. Check IDs/cases and acceptance inventories must agree exactly.
+
+Every task preserves a separately supplied frozen template/measurement floor.
+Validate positive CPU, memory, PID, disk, output, wall/time and finite model/tool
+budgets. Retries and at most two speculative repairs have explicit bounded
+budgets. Performance applicability cannot be chosen by a worker: applicable
+paths need numeric budgets, baseline/method/duration/sample and ownership bounds;
+N/A requires a frozen authorization digest and rationale. Waiver fields are
+forbidden. Real production acceptance binds boundary, environment, package,
+permission, persistence, evidence classes and the actual journey case inventory.
+Required case/test removal, mock/host substitution, scope reduction and changes
+to timeout/retry/performance/permission floors fail frozen-template comparison.
+
+Verification receipts require a frozen task/check and exact controller attempt
+context: candidate SHA, authority/task/command/environment digest, stage nonce,
+sequence and lease epoch. A receipt validates nothing without these independent
+bindings. PASS requires expected exit, no timeout/signal/missing executable,
+every required case executed and passed, zero failed/skipped required cases,
+consistent disjoint result sets and no unknown/duplicate IDs. Empty case inventory
+is allowed only when explicitly frozen empty. Nonzero success is allowed only
+in the command's frozen expected-exit set. Measurements must satisfy task bounds.
+Test PASS remains supporting evidence and never establishes product acceptance.
+
+Legacy completion validity derives from Git ancestry: the controller reads the
+actual evidence blob at its historical commit and validates existing evidence
+rules. No caller boolean can declare legacy. Post-adoption records require the
+nested bound receipt and production-class evidence; artifact/model text is not
+completion. All other candidate/review/promotion/completion nested objects have
+strict shapes and semantic/context bindings, not opaque object dictionaries.
