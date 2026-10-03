@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "document_kind": "frozen_sandbox_policy",
+  "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+  "source_specification": "docs/execution/automation/README.md",
+  "runtime": {
+    "initial_profile": "disposable_linux_container",
+    "linux_engine": "rootless_docker_engine",
+    "macos_engine": "verified_docker_linux_vm",
+    "host_controller_platforms": ["linux", "macos"],
+    "unsupported_host_platforms": ["windows_native", "network_filesystem"],
+    "unsupported_isolation_result": "ISOLATION_UNAVAILABLE",
+    "missing_runtime_result": "ISOLATION_UNAVAILABLE"
+  },
+  "required_effective_settings": {
+    "non_root_user": true,
+    "privileged": false,
+    "added_capabilities": [],
+    "host_pid_namespace": false,
+    "host_network_namespace": false,
+    "devices": [],
+    "container_socket_mount": false,
+    "host_home_or_ssh_agent_mount": false,
+    "host_controller_or_common_git_mount": false,
+    "reusable_host_tool_cache": false,
+    "control_credentials_mount": false,
+    "root_filesystem_read_only": true,
+    "writable_mounts": ["candidate", "bounded_scratch"],
+    "default_unbounded_limits": false
+  },
+  "required_limits": [
+    "cpu", "memory", "pid", "disk_output", "wall_time"
+  ],
+  "model_credential_scope": {
+    "task_scoped_provider_credential_allowed": true,
+    "inference_only": true,
+    "github_write_token": false,
+    "controller_authorization_key": false,
+    "application_secrets": false,
+    "unrelated_provider_accounts": false,
+    "excluded_from_logs_and_receipts": true
+  },
+  "role_tool_policy": {
+    "ROUTER_TRIAGE": {"shell": false, "tools": false, "subagents": false, "model_dispatch": false},
+    "IMPLEMENTATION": {"bounded_build_tools_in_sandbox": true, "controller_lease_acquisition": false},
+    "INVESTIGATION_REVIEW": {"shell": false, "tools_execute_candidate_code": false, "candidate_mutation": false},
+    "ARCHITECTURE": {"shell": false, "tools_execute_candidate_code": false, "implementation": false}
+  },
+  "interruption": {
+    "kill_entire_container": true,
+    "verify_no_stage_instance_remains": true,
+    "persist_before_lease_release": ["container_id", "host_boot_identity", "owner_nonce", "stage", "lease_epoch"],
+    "lost_controller_proves_worker_dead": false
+  }
+}

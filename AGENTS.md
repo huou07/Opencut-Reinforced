@@ -153,6 +153,29 @@ discriminating test, and an explanation of why the patch fixes the cause.
 Retries and timeouts alone are not a root-cause repair. Record measurements
 for realtime performance or resource claims.
 
+## Model orchestrator V2 (proposed, disabled)
+
+ADR 0009 and `docs/execution/automation/` freeze a candidate control-plane
+design for isolated multi-model development. It is **proposed, not adopted**:
+the architecture freeze alone confers no execution authority and no full-auto
+eligibility.
+
+- `docs/execution/automation/PROTOCOL_SCHEMAS.json` defines the adoption
+  lifecycle and distinguishes ARCHITECTURE_FROZEN, AMENDMENT_PROPOSED,
+  BUILD_AUTHORIZED_DISABLED, disabled implementation progress, pre-adoption
+  certification and externally pinned operational adoption.
+- Activation requires the separate control-plane amendment, every M0–M5
+  implementation phase, and the full CP01–CP48 acceptance suite; until all of
+  those hold, `full_auto_eligible` is false and `scripts/model_orchestrator/`
+  must not dispatch product workers. Explicitly authorized disabled fixture
+  certification never grants production authority.
+- Adoption changes only the exact control inventory. It may not change
+  `PLAN.json`, `STATE.json`, product source, contract versions, or existing
+  evidence, and it requires an externally operator-pinned release SHA.
+- V1 history (`control/model-orchestrator-v1`) and the preserved
+  `wip/9b-candidate-beaef` product candidate are audit inputs only. Neither
+  confers V2 authority or may be imported implicitly.
+
 ## Minimal implementation rule
 
 Prefer the smallest correct implementation.

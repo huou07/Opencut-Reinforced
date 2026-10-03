@@ -1,0 +1,2199 @@
+{
+  "schema_version": 2,
+  "document_kind": "frozen_protocol_schemas",
+  "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+  "source_specification": "docs/execution/automation/README.md",
+  "id_pattern": "^[A-Za-z0-9_-]{1,64}$",
+  "sha_pattern": "^[0-9a-f]{40}$",
+  "digest_pattern": "^[0-9a-f]{64}$",
+  "adoption_lifecycle": {
+    "states": [
+      "ARCHITECTURE_FROZEN",
+      "AMENDMENT_PROPOSED",
+      "BUILD_AUTHORIZED_DISABLED",
+      "IMPLEMENTATION_M0",
+      "IMPLEMENTATION_M1",
+      "IMPLEMENTATION_M2",
+      "IMPLEMENTATION_M3",
+      "IMPLEMENTATION_M4",
+      "IMPLEMENTATION_M5",
+      "CERTIFICATION_CANDIDATE",
+      "OPERATIONAL_ADOPTION_PENDING",
+      "OPERATIONALLY_ADOPTED",
+      "CERTIFIED_ACTIVE"
+    ],
+    "transitions": {
+      "ARCHITECTURE_FROZEN": [
+        "AMENDMENT_PROPOSED"
+      ],
+      "AMENDMENT_PROPOSED": [
+        "BUILD_AUTHORIZED_DISABLED"
+      ],
+      "BUILD_AUTHORIZED_DISABLED": [
+        "IMPLEMENTATION_M0"
+      ],
+      "IMPLEMENTATION_M0": [
+        "IMPLEMENTATION_M1"
+      ],
+      "IMPLEMENTATION_M1": [
+        "IMPLEMENTATION_M2"
+      ],
+      "IMPLEMENTATION_M2": [
+        "IMPLEMENTATION_M3"
+      ],
+      "IMPLEMENTATION_M3": [
+        "IMPLEMENTATION_M4"
+      ],
+      "IMPLEMENTATION_M4": [
+        "IMPLEMENTATION_M5"
+      ],
+      "IMPLEMENTATION_M5": [
+        "CERTIFICATION_CANDIDATE"
+      ],
+      "CERTIFICATION_CANDIDATE": [
+        "OPERATIONAL_ADOPTION_PENDING"
+      ],
+      "OPERATIONAL_ADOPTION_PENDING": [
+        "OPERATIONALLY_ADOPTED"
+      ],
+      "OPERATIONALLY_ADOPTED": [
+        "CERTIFIED_ACTIVE"
+      ],
+      "CERTIFIED_ACTIVE": []
+    },
+    "architecture_freeze_confers_authority": false,
+    "build_grants_operational_authority": false,
+    "certification_before_operational_adoption": true,
+    "full_auto_requires_certification": true
+  },
+  "record_types": {
+    "task_contract": "admission",
+    "candidate_receipt": "verification",
+    "verification_receipt": "verification",
+    "review_report": "review",
+    "promotion_authorization": "promotion",
+    "remote_promotion_receipt": "promotion",
+    "control_plane_receipt": "completion",
+    "adoption_record": "adoption",
+    "control_amendment_marker": "adoption"
+  },
+  "records": {
+    "task_contract": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "task_kind": {
+          "type": "enum",
+          "values": [
+            "product_checkpoint",
+            "control_plane_phase"
+          ]
+        },
+        "repository": {
+          "type": "enum",
+          "values": [
+            "huou07/Opencut-Reinforced"
+          ]
+        },
+        "checkpoint_id": {
+          "type": "id"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "candidate_branch": {
+          "type": "string"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "template_digest": {
+          "type": "digest"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "out_of_scope": {
+          "type": "list",
+          "items": {
+            "type": "string",
+            "max_length": 4096
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "allowed_paths": {
+          "type": "list",
+          "items": {
+            "type": "path"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "forbidden_paths": {
+          "type": "list",
+          "items": {
+            "type": "path"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "required_documentation": {
+          "type": "list",
+          "items": {
+            "type": "path"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "required_tests": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "invariant_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "project_schema_effect": {
+          "type": "string"
+        },
+        "recovery_schema_effect": {
+          "type": "string"
+        },
+        "ipc_effect": {
+          "type": "string"
+        },
+        "user_action": {
+          "type": "string"
+        },
+        "observable_outcome": {
+          "type": "string"
+        },
+        "production_boundary": {
+          "type": "string"
+        },
+        "error_cases": {
+          "type": "string_list"
+        },
+        "persistence_expectation": {
+          "type": "string"
+        },
+        "permission_expectation": {
+          "type": "string"
+        },
+        "required_check_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "check_argv": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "id"
+              },
+              "argv": {
+                "type": "list",
+                "items": {
+                  "type": "string",
+                  "max_length": 4096
+                },
+                "min_items": 1,
+                "unique": false,
+                "max_items": 4096
+              },
+              "cwd": {
+                "type": "path",
+                "root_allowed": true
+              },
+              "environment": {
+                "type": "object",
+                "fields": {
+                  "LANG": {
+                    "type": "string",
+                    "max_length": 4096
+                  },
+                  "LC_ALL": {
+                    "type": "string",
+                    "max_length": 4096
+                  },
+                  "TZ": {
+                    "type": "string",
+                    "max_length": 4096
+                  },
+                  "CI": {
+                    "type": "string",
+                    "max_length": 4096
+                  },
+                  "RUST_LOG": {
+                    "type": "string",
+                    "max_length": 4096
+                  },
+                  "RUST_BACKTRACE": {
+                    "type": "string",
+                    "max_length": 4096
+                  }
+                },
+                "required": []
+              },
+              "environment_digest": {
+                "type": "digest"
+              },
+              "harness_digest": {
+                "type": "digest"
+              },
+              "required_cases": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "expected_exit_codes": {
+                "type": "list",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "min_items": 1,
+                "unique": true,
+                "max_items": 4096
+              },
+              "timeout_seconds": {
+                "type": "number",
+                "minimum": 1e-06,
+                "maximum": 1125899906842624
+              },
+              "retry_budget": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "resource_limits": {
+                "type": "object",
+                "fields": {
+                  "cpu": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 64
+                  },
+                  "memory_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1125899906842624
+                  },
+                  "pids": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  "disk_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1125899906842624
+                  },
+                  "output_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1125899906842624
+                  },
+                  "wall_seconds": {
+                    "type": "number",
+                    "minimum": 1e-06,
+                    "maximum": 1125899906842624
+                  }
+                },
+                "required": [
+                  "cpu",
+                  "memory_bytes",
+                  "pids",
+                  "disk_bytes",
+                  "output_bytes",
+                  "wall_seconds"
+                ]
+              },
+              "allow_empty_cases": {
+                "type": "boolean"
+              },
+              "required_metrics": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "unique": true,
+                "max_items": 4096
+              }
+            },
+            "required": [
+              "id",
+              "argv",
+              "cwd",
+              "environment",
+              "environment_digest",
+              "harness_digest",
+              "required_cases",
+              "expected_exit_codes",
+              "timeout_seconds",
+              "retry_budget",
+              "resource_limits",
+              "allow_empty_cases",
+              "required_metrics"
+            ]
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "harness_digest": {
+          "type": "digest"
+        },
+        "case_inventory": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "execution_boundary": {
+          "type": "enum",
+          "values": [
+            "controller_verifier",
+            "hosted",
+            "local_readonly"
+          ]
+        },
+        "expected_result": {
+          "type": "string"
+        },
+        "resource_limits": {
+          "type": "object",
+          "fields": {
+            "cpu": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 64
+            },
+            "memory_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "pids": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "disk_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "output_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "wall_seconds": {
+              "type": "number",
+              "minimum": 1e-06,
+              "maximum": 1125899906842624
+            }
+          },
+          "required": [
+            "cpu",
+            "memory_bytes",
+            "pids",
+            "disk_bytes",
+            "output_bytes",
+            "wall_seconds"
+          ]
+        },
+        "evidence_classes": {
+          "type": "string_list"
+        },
+        "acceptance_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "performance_applicability": {
+          "type": "enum",
+          "values": [
+            "applicable",
+            "not_applicable"
+          ]
+        },
+        "performance_budgets": {
+          "type": "object",
+          "fields": {
+            "applicability": {
+              "type": "enum",
+              "values": [
+                "applicable",
+                "not_applicable"
+              ]
+            },
+            "authorization_digest": {
+              "type": "digest"
+            },
+            "rationale": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "baseline_digest": {
+              "type": "digest"
+            },
+            "method_digest": {
+              "type": "digest"
+            },
+            "duration_seconds": {
+              "type": "number",
+              "minimum": 1e-06,
+              "maximum": 1125899906842624
+            },
+            "sample_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "bounds": {
+              "type": "list",
+              "items": {
+                "type": "object",
+                "fields": {
+                  "metric": {
+                    "type": "id"
+                  },
+                  "maximum": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1125899906842624
+                  },
+                  "baseline_maximum": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1125899906842624
+                  }
+                },
+                "required": [
+                  "metric",
+                  "maximum",
+                  "baseline_maximum"
+                ]
+              },
+              "min_items": 1,
+              "unique": true,
+              "max_items": 4096
+            },
+            "ownership_constraints": {
+              "type": "list",
+              "items": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "min_items": 1,
+              "unique": true,
+              "max_items": 4096
+            }
+          },
+          "required": [
+            "applicability",
+            "authorization_digest",
+            "rationale"
+          ]
+        },
+        "role_enrollment_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "budget": {
+          "type": "object",
+          "fields": {
+            "tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "cost_microusd": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1125899906842624
+            },
+            "wall_seconds": {
+              "type": "number",
+              "minimum": 1e-06,
+              "maximum": 1125899906842624
+            },
+            "tool_calls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "speculative_corrections": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "causal_repairs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "tokens",
+            "cost_microusd",
+            "wall_seconds",
+            "tool_calls",
+            "speculative_corrections",
+            "causal_repairs"
+          ]
+        },
+        "stop_conditions": {
+          "type": "list",
+          "items": {
+            "type": "string",
+            "max_length": 4096
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "resume_stage": {
+          "type": "enum",
+          "values": [
+            "NONE",
+            "CLAIMED",
+            "IMPLEMENTING",
+            "CANDIDATE",
+            "LOCAL_VERIFY",
+            "REVIEWING"
+          ]
+        },
+        "repair_episode_id": {
+          "type": "nullable_id"
+        },
+        "repair_failure_sha": {
+          "type": "nullable_sha"
+        },
+        "causal_hypothesis": {
+          "type": "nullable_string"
+        },
+        "acceptance_requirements": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "class_id": {
+                "type": "enum",
+                "values": [
+                  "STATIC",
+                  "UNIT",
+                  "INTEGRATION",
+                  "NATIVE_RUNTIME",
+                  "PACKAGED_RUNTIME",
+                  "USER_JOURNEY",
+                  "CLEAN_ENVIRONMENT",
+                  "PERSISTENCE_RELAUNCH",
+                  "PERFORMANCE",
+                  "RESOURCE_STRESS",
+                  "CROSS_PLATFORM"
+                ]
+              },
+              "case_ids": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 1,
+                "unique": true,
+                "max_items": 4096
+              },
+              "production_boundary": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "environment_digest": {
+                "type": "digest"
+              },
+              "package_digest": {
+                "type": "digest"
+              },
+              "permission_digest": {
+                "type": "digest"
+              },
+              "persistence_expectation": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "harness_digest": {
+                "type": "digest"
+              }
+            },
+            "required": [
+              "class_id",
+              "case_ids",
+              "production_boundary",
+              "environment_digest",
+              "package_digest",
+              "permission_digest",
+              "persistence_expectation",
+              "harness_digest"
+            ]
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "task_kind",
+        "repository",
+        "checkpoint_id",
+        "base_sha",
+        "candidate_branch",
+        "authority_digest",
+        "template_digest",
+        "goal",
+        "out_of_scope",
+        "allowed_paths",
+        "forbidden_paths",
+        "required_documentation",
+        "required_tests",
+        "invariant_ids",
+        "project_schema_effect",
+        "recovery_schema_effect",
+        "ipc_effect",
+        "user_action",
+        "observable_outcome",
+        "production_boundary",
+        "error_cases",
+        "persistence_expectation",
+        "permission_expectation",
+        "required_check_ids",
+        "check_argv",
+        "harness_digest",
+        "case_inventory",
+        "execution_boundary",
+        "expected_result",
+        "resource_limits",
+        "evidence_classes",
+        "acceptance_cases",
+        "performance_applicability",
+        "performance_budgets",
+        "role_enrollment_ids",
+        "budget",
+        "stop_conditions",
+        "resume_stage",
+        "acceptance_requirements"
+      ]
+    },
+    "candidate_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "candidate_sha": {
+          "type": "sha"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "tree_digest": {
+          "type": "digest"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "clean_product_tree": {
+          "type": "boolean"
+        },
+        "guard_receipt_digest": {
+          "type": "digest"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "task_contract_digest": {
+          "type": "digest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "candidate_sha",
+        "base_sha",
+        "tree_digest",
+        "imported",
+        "clean_product_tree",
+        "guard_receipt_digest",
+        "authority_digest",
+        "task_contract_digest"
+      ]
+    },
+    "verification_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "candidate_sha": {
+          "type": "sha"
+        },
+        "check_id": {
+          "type": "id"
+        },
+        "command_digest": {
+          "type": "digest"
+        },
+        "exit_code": {
+          "type": "nullable_integer"
+        },
+        "outcome": {
+          "type": "enum",
+          "values": [
+            "PASS",
+            "FAIL",
+            "LOCAL ENVIRONMENT BLOCKED",
+            "NOT RUN"
+          ]
+        },
+        "executed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "skipped_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "artifact_digest": {
+          "type": "nullable_digest"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "task_contract_digest": {
+          "type": "digest"
+        },
+        "environment_digest": {
+          "type": "digest"
+        },
+        "lease_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "stage_nonce": {
+          "type": "id"
+        },
+        "signal": {
+          "type": "nullable_integer"
+        },
+        "timed_out": {
+          "type": "boolean"
+        },
+        "executable_found": {
+          "type": "boolean"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1125899906842624
+        },
+        "passed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "failed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "measurements": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "metric": {
+                "type": "id"
+              },
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1125899906842624
+              }
+            },
+            "required": [
+              "metric",
+              "value"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "candidate_sha",
+        "check_id",
+        "command_digest",
+        "exit_code",
+        "outcome",
+        "executed_cases",
+        "skipped_cases",
+        "artifact_digest",
+        "authority_digest",
+        "task_contract_digest",
+        "environment_digest",
+        "lease_epoch",
+        "sequence",
+        "stage_nonce",
+        "signal",
+        "timed_out",
+        "executable_found",
+        "duration_seconds",
+        "passed_cases",
+        "failed_cases",
+        "measurements"
+      ]
+    },
+    "review_report": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "task_contract_digest": {
+          "type": "digest"
+        },
+        "candidate_sha": {
+          "type": "sha"
+        },
+        "verdict": {
+          "type": "enum",
+          "values": [
+            "PASS",
+            "DEFECT_FOUND",
+            "BLOCKED",
+            "INCONCLUSIVE"
+          ]
+        },
+        "coverage": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "findings": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "id"
+              },
+              "severity": {
+                "type": "enum",
+                "values": [
+                  "BLOCKING",
+                  "NONBLOCKING"
+                ]
+              },
+              "classification": {
+                "type": "enum",
+                "values": [
+                  "PROVEN",
+                  "SUPPORTED",
+                  "PLAUSIBLE",
+                  "UNKNOWN"
+                ]
+              },
+              "citation": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "claim": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "competing_hypotheses": {
+                "type": "list",
+                "items": {
+                  "type": "string",
+                  "max_length": 4096
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "discriminating_check": {
+                "type": "string",
+                "max_length": 4096
+              }
+            },
+            "required": [
+              "id",
+              "severity",
+              "classification",
+              "citation",
+              "claim",
+              "competing_hypotheses",
+              "discriminating_check"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "quality_flag_dispositions": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "id"
+              },
+              "disposition": {
+                "type": "enum",
+                "values": [
+                  "NOT_LOWERING",
+                  "DEFECT",
+                  "AMENDMENT_REQUIRED"
+                ]
+              },
+              "evidence_digest": {
+                "type": "digest"
+              }
+            },
+            "required": [
+              "id",
+              "disposition",
+              "evidence_digest"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "unresolved_questions": {
+          "type": "string_list"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "task_contract_digest",
+        "candidate_sha",
+        "verdict",
+        "coverage",
+        "findings",
+        "quality_flag_dispositions",
+        "unresolved_questions"
+      ]
+    },
+    "promotion_authorization": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "checkpoint_id": {
+          "type": "id"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "candidate_sha": {
+          "type": "sha"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "template_digest": {
+          "type": "digest"
+        },
+        "candidate_receipt_digest": {
+          "type": "digest"
+        },
+        "verification_receipt_digests": {
+          "type": "list",
+          "items": {
+            "type": "digest"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "reviewer_receipt_digest": {
+          "type": "digest"
+        },
+        "pending_hosted_classes": {
+          "type": "string_list"
+        },
+        "lease_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "issuance_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "checkpoint_id",
+        "base_sha",
+        "candidate_sha",
+        "authority_digest",
+        "template_digest",
+        "candidate_receipt_digest",
+        "verification_receipt_digests",
+        "reviewer_receipt_digest",
+        "pending_hosted_classes",
+        "lease_epoch",
+        "issuance_sequence"
+      ]
+    },
+    "remote_promotion_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "authorization_digest": {
+          "type": "digest"
+        },
+        "destination_ref": {
+          "type": "string"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "candidate_sha": {
+          "type": "sha"
+        },
+        "observed_remote_sha": {
+          "type": "sha"
+        },
+        "intent_nonce": {
+          "type": "id"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "authorization_digest",
+        "destination_ref",
+        "base_sha",
+        "candidate_sha",
+        "observed_remote_sha",
+        "intent_nonce"
+      ]
+    },
+    "control_plane_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "checkpoint_id": {
+          "type": "id"
+        },
+        "task_contract_digest": {
+          "type": "digest"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "adoption_manifest_digest": {
+          "type": "digest"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "promoted_implementation_sha": {
+          "type": "sha"
+        },
+        "promotion_authorization_digest": {
+          "type": "digest"
+        },
+        "remote_promotion_receipt_digest": {
+          "type": "digest"
+        },
+        "guard_receipt_digest": {
+          "type": "digest"
+        },
+        "verification_receipt_digests": {
+          "type": "list",
+          "items": {
+            "type": "digest"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "reviewer_receipt_digest": {
+          "type": "digest"
+        },
+        "acceptance_contract_digest": {
+          "type": "digest"
+        },
+        "production_acceptance_receipts": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "class_id": {
+                "type": "enum",
+                "values": [
+                  "STATIC",
+                  "UNIT",
+                  "INTEGRATION",
+                  "NATIVE_RUNTIME",
+                  "PACKAGED_RUNTIME",
+                  "USER_JOURNEY",
+                  "CLEAN_ENVIRONMENT",
+                  "PERSISTENCE_RELAUNCH",
+                  "PERFORMANCE",
+                  "RESOURCE_STRESS",
+                  "CROSS_PLATFORM"
+                ]
+              },
+              "case_ids": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 1,
+                "unique": true,
+                "max_items": 4096
+              },
+              "run_id": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1125899906842624
+              },
+              "job_id": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1125899906842624
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1125899906842624
+              },
+              "step": {
+                "type": "string",
+                "max_length": 4096
+              },
+              "artifact_digest": {
+                "type": "digest"
+              },
+              "authority_digest": {
+                "type": "digest"
+              },
+              "harness_digest": {
+                "type": "digest"
+              },
+              "package_digest": {
+                "type": "digest"
+              },
+              "environment_digest": {
+                "type": "digest"
+              },
+              "permission_digest": {
+                "type": "digest"
+              },
+              "executed_cases": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "passed_cases": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "failed_cases": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "skipped_cases": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "measurements": {
+                "type": "list",
+                "items": {
+                  "type": "object",
+                  "fields": {
+                    "metric": {
+                      "type": "id"
+                    },
+                    "value": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1125899906842624
+                    }
+                  },
+                  "required": [
+                    "metric",
+                    "value"
+                  ]
+                },
+                "min_items": 0,
+                "unique": true,
+                "max_items": 4096
+              },
+              "result": {
+                "type": "enum",
+                "values": [
+                  "PASS",
+                  "FAIL"
+                ]
+              }
+            },
+            "required": [
+              "class_id",
+              "case_ids",
+              "run_id",
+              "job_id",
+              "attempt",
+              "step",
+              "artifact_digest",
+              "authority_digest",
+              "harness_digest",
+              "package_digest",
+              "environment_digest",
+              "permission_digest",
+              "executed_cases",
+              "passed_cases",
+              "failed_cases",
+              "skipped_cases",
+              "measurements",
+              "result"
+            ]
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "checkpoint_id",
+        "task_contract_digest",
+        "authority_digest",
+        "adoption_manifest_digest",
+        "base_sha",
+        "promoted_implementation_sha",
+        "promotion_authorization_digest",
+        "remote_promotion_receipt_digest",
+        "guard_receipt_digest",
+        "verification_receipt_digests",
+        "reviewer_receipt_digest",
+        "acceptance_contract_digest",
+        "production_acceptance_receipts"
+      ]
+    },
+    "adoption_record": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "authority_kind": {
+          "type": "enum",
+          "values": [
+            "V2_DESIGN_CANDIDATE",
+            "V2_FROZEN_CONTROL_RELEASE"
+          ]
+        },
+        "architecture_frozen": {
+          "type": "boolean"
+        },
+        "architecture_spec_sha": {
+          "type": "nullable_sha"
+        },
+        "parent_sha": {
+          "type": "nullable_sha"
+        },
+        "adopted_release_sha": {
+          "type": "nullable_sha"
+        },
+        "implementation_phase": {
+          "type": "enum",
+          "values": [
+            "NONE",
+            "M0",
+            "M1",
+            "M2",
+            "M3",
+            "M4",
+            "M5"
+          ]
+        },
+        "completed_phases": {
+          "type": "list",
+          "items": {
+            "type": "enum",
+            "values": [
+              "M0",
+              "M1",
+              "M2",
+              "M3",
+              "M4",
+              "M5"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "acceptance_cases_passed": {
+          "type": "list",
+          "items": {
+            "type": "enum",
+            "values": [
+              "CP01",
+              "CP02",
+              "CP03",
+              "CP04",
+              "CP05",
+              "CP06",
+              "CP07",
+              "CP08",
+              "CP09",
+              "CP10",
+              "CP11",
+              "CP12",
+              "CP13",
+              "CP14",
+              "CP15",
+              "CP16",
+              "CP17",
+              "CP18",
+              "CP19",
+              "CP20",
+              "CP21",
+              "CP22",
+              "CP23",
+              "CP24",
+              "CP25",
+              "CP26",
+              "CP27",
+              "CP28",
+              "CP29",
+              "CP30",
+              "CP31",
+              "CP32",
+              "CP33",
+              "CP34",
+              "CP35",
+              "CP36",
+              "CP37",
+              "CP38",
+              "CP39",
+              "CP40",
+              "CP41",
+              "CP42",
+              "CP43",
+              "CP44",
+              "CP45",
+              "CP46",
+              "CP47",
+              "CP48"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "certification": {
+          "type": "enum",
+          "values": [
+            "NONE",
+            "CANDIDATE",
+            "CERTIFIED_ACTIVE"
+          ]
+        },
+        "full_auto_eligible": {
+          "type": "boolean"
+        },
+        "changed_paths": {
+          "type": "string_list"
+        },
+        "plan_digest": {
+          "type": "nullable_digest"
+        },
+        "state_digest": {
+          "type": "nullable_digest"
+        },
+        "build_authorization_digest": {
+          "type": "nullable_digest"
+        },
+        "operational_adoption": {
+          "type": "enum",
+          "values": [
+            "PENDING",
+            "ADOPTED"
+          ]
+        },
+        "certified_release_sha": {
+          "type": "nullable_sha"
+        },
+        "live_certification_digest": {
+          "type": "nullable_digest"
+        },
+        "independent_review_digest": {
+          "type": "nullable_digest"
+        },
+        "qualified_models_digest": {
+          "type": "nullable_digest"
+        },
+        "blocking_limitations": {
+          "type": "list",
+          "items": {
+            "type": "string",
+            "max_length": 4096
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "authority_kind",
+        "architecture_frozen",
+        "architecture_spec_sha",
+        "parent_sha",
+        "adopted_release_sha",
+        "implementation_phase",
+        "completed_phases",
+        "acceptance_cases_passed",
+        "certification",
+        "full_auto_eligible",
+        "changed_paths",
+        "plan_digest",
+        "state_digest",
+        "build_authorization_digest",
+        "operational_adoption",
+        "certified_release_sha",
+        "live_certification_digest",
+        "independent_review_digest",
+        "qualified_models_digest",
+        "blocking_limitations"
+      ]
+    },
+    "control_amendment_marker": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "kind": {
+          "type": "enum",
+          "values": [
+            "model-orchestrator-v2-adoption"
+          ]
+        },
+        "checkpoint_id": {
+          "type": "id"
+        },
+        "parent_sha": {
+          "type": "sha"
+        },
+        "architecture_spec_sha": {
+          "type": "sha"
+        },
+        "authority_manifest_digest": {
+          "type": "digest"
+        },
+        "changed_paths": {
+          "type": "path_list"
+        },
+        "legacy_quality_amendment": {
+          "type": "object",
+          "fields": {
+            "marker_sha": {
+              "type": "sha"
+            },
+            "prior_implementation_sha": {
+              "type": "sha"
+            },
+            "prior_failed_run_id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            }
+          },
+          "required": [
+            "marker_sha",
+            "prior_implementation_sha",
+            "prior_failed_run_id"
+          ]
+        },
+        "state_digest": {
+          "type": "digest"
+        },
+        "plan_digest": {
+          "type": "digest"
+        },
+        "verified_contract_versions": {
+          "type": "object",
+          "fields": {
+            "project_schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "recovery_schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "ipc_protocol": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            }
+          },
+          "required": [
+            "project_schema",
+            "recovery_schema",
+            "ipc_protocol"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "checkpoint_id",
+        "parent_sha",
+        "architecture_spec_sha",
+        "authority_manifest_digest",
+        "changed_paths",
+        "legacy_quality_amendment",
+        "state_digest",
+        "plan_digest",
+        "verified_contract_versions"
+      ]
+    }
+  },
+  "nested_records": {
+    "resource_limits": {
+      "type": "object",
+      "fields": {
+        "cpu": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 64
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "pids": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "disk_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "wall_seconds": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 1125899906842624
+        }
+      },
+      "required": [
+        "cpu",
+        "memory_bytes",
+        "pids",
+        "disk_bytes",
+        "output_bytes",
+        "wall_seconds"
+      ]
+    },
+    "required_check": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "id"
+        },
+        "argv": {
+          "type": "list",
+          "items": {
+            "type": "string",
+            "max_length": 4096
+          },
+          "min_items": 1,
+          "unique": false,
+          "max_items": 4096
+        },
+        "cwd": {
+          "type": "path",
+          "root_allowed": true
+        },
+        "environment": {
+          "type": "object",
+          "fields": {
+            "LANG": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "LC_ALL": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "TZ": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "CI": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "RUST_LOG": {
+              "type": "string",
+              "max_length": 4096
+            },
+            "RUST_BACKTRACE": {
+              "type": "string",
+              "max_length": 4096
+            }
+          },
+          "required": []
+        },
+        "environment_digest": {
+          "type": "digest"
+        },
+        "harness_digest": {
+          "type": "digest"
+        },
+        "required_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "expected_exit_codes": {
+          "type": "list",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "timeout_seconds": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 1125899906842624
+        },
+        "retry_budget": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "resource_limits": {
+          "type": "object",
+          "fields": {
+            "cpu": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 64
+            },
+            "memory_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "pids": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "disk_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "output_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1125899906842624
+            },
+            "wall_seconds": {
+              "type": "number",
+              "minimum": 1e-06,
+              "maximum": 1125899906842624
+            }
+          },
+          "required": [
+            "cpu",
+            "memory_bytes",
+            "pids",
+            "disk_bytes",
+            "output_bytes",
+            "wall_seconds"
+          ]
+        },
+        "allow_empty_cases": {
+          "type": "boolean"
+        },
+        "required_metrics": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "id",
+        "argv",
+        "cwd",
+        "environment",
+        "environment_digest",
+        "harness_digest",
+        "required_cases",
+        "expected_exit_codes",
+        "timeout_seconds",
+        "retry_budget",
+        "resource_limits",
+        "allow_empty_cases",
+        "required_metrics"
+      ]
+    },
+    "performance_contract": {
+      "type": "object",
+      "fields": {
+        "applicability": {
+          "type": "enum",
+          "values": [
+            "applicable",
+            "not_applicable"
+          ]
+        },
+        "authorization_digest": {
+          "type": "digest"
+        },
+        "rationale": {
+          "type": "string",
+          "max_length": 4096
+        },
+        "baseline_digest": {
+          "type": "digest"
+        },
+        "method_digest": {
+          "type": "digest"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 1125899906842624
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "bounds": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "metric": {
+                "type": "id"
+              },
+              "maximum": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1125899906842624
+              },
+              "baseline_maximum": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1125899906842624
+              }
+            },
+            "required": [
+              "metric",
+              "maximum",
+              "baseline_maximum"
+            ]
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "ownership_constraints": {
+          "type": "list",
+          "items": {
+            "type": "string",
+            "max_length": 4096
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        }
+      },
+      "required": [
+        "applicability",
+        "authorization_digest",
+        "rationale"
+      ]
+    },
+    "acceptance_requirement": {
+      "type": "object",
+      "fields": {
+        "class_id": {
+          "type": "enum",
+          "values": [
+            "STATIC",
+            "UNIT",
+            "INTEGRATION",
+            "NATIVE_RUNTIME",
+            "PACKAGED_RUNTIME",
+            "USER_JOURNEY",
+            "CLEAN_ENVIRONMENT",
+            "PERSISTENCE_RELAUNCH",
+            "PERFORMANCE",
+            "RESOURCE_STRESS",
+            "CROSS_PLATFORM"
+          ]
+        },
+        "case_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "production_boundary": {
+          "type": "string",
+          "max_length": 4096
+        },
+        "environment_digest": {
+          "type": "digest"
+        },
+        "package_digest": {
+          "type": "digest"
+        },
+        "permission_digest": {
+          "type": "digest"
+        },
+        "persistence_expectation": {
+          "type": "string",
+          "max_length": 4096
+        },
+        "harness_digest": {
+          "type": "digest"
+        }
+      },
+      "required": [
+        "class_id",
+        "case_ids",
+        "production_boundary",
+        "environment_digest",
+        "package_digest",
+        "permission_digest",
+        "persistence_expectation",
+        "harness_digest"
+      ]
+    },
+    "production_receipt": {
+      "type": "object",
+      "fields": {
+        "class_id": {
+          "type": "enum",
+          "values": [
+            "STATIC",
+            "UNIT",
+            "INTEGRATION",
+            "NATIVE_RUNTIME",
+            "PACKAGED_RUNTIME",
+            "USER_JOURNEY",
+            "CLEAN_ENVIRONMENT",
+            "PERSISTENCE_RELAUNCH",
+            "PERFORMANCE",
+            "RESOURCE_STRESS",
+            "CROSS_PLATFORM"
+          ]
+        },
+        "case_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "unique": true,
+          "max_items": 4096
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "job_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "step": {
+          "type": "string",
+          "max_length": 4096
+        },
+        "artifact_digest": {
+          "type": "digest"
+        },
+        "authority_digest": {
+          "type": "digest"
+        },
+        "harness_digest": {
+          "type": "digest"
+        },
+        "package_digest": {
+          "type": "digest"
+        },
+        "environment_digest": {
+          "type": "digest"
+        },
+        "permission_digest": {
+          "type": "digest"
+        },
+        "executed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "passed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "failed_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "skipped_cases": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "measurements": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "metric": {
+                "type": "id"
+              },
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1125899906842624
+              }
+            },
+            "required": [
+              "metric",
+              "value"
+            ]
+          },
+          "min_items": 0,
+          "unique": true,
+          "max_items": 4096
+        },
+        "result": {
+          "type": "enum",
+          "values": [
+            "PASS",
+            "FAIL"
+          ]
+        }
+      },
+      "required": [
+        "class_id",
+        "case_ids",
+        "run_id",
+        "job_id",
+        "attempt",
+        "step",
+        "artifact_digest",
+        "authority_digest",
+        "harness_digest",
+        "package_digest",
+        "environment_digest",
+        "permission_digest",
+        "executed_cases",
+        "passed_cases",
+        "failed_cases",
+        "skipped_cases",
+        "measurements",
+        "result"
+      ]
+    }
+  }
+}

@@ -223,3 +223,17 @@ No agent or CLI/provider API exposes stored plaintext credentials.
 
 Platform and runtime dependencies must not be added to `or_core` merely for
 convenience.
+
+## Proposed additions — not active
+
+The separately authorized control-plane adoption amendment proposes three
+product-acceptance invariants: `INV-PRODUCT-VALUE`, `INV-NO-SATISFICE`, and
+`INV-PERF-CORRECTNESS`. Their exact text and the adoption mechanism are frozen
+in `docs/execution/automation/AMENDMENT_PROPOSAL.md`, and the proposal lifecycle
+state is `AMENDMENT_PROPOSED` in `docs/execution/automation/V2_CONTRACT.json`.
+
+They are **not** active and must not be cited as accepted invariants until a
+separately reviewed adoption commit transitions the lifecycle to
+`OPERATIONALLY_ADOPTED`. Listing them here records the proposal without activating
+it, and their wording is intentionally not duplicated into the active sections
+above.

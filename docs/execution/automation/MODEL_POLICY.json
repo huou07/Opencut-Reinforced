@@ -2,6 +2,12 @@
   "schema_version": 2,
   "document_kind": "frozen_candidate_role_policy",
   "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+  "adoption": {
+    "lifecycle_state": "AMENDMENT_PROPOSED",
+    "enrollment_manifest_digest": null,
+    "certified_models": [],
+    "note": "Enrollment is an explicit operator adoption step; no model is certified by this freeze."
+  },
   "objective": "minimum_expected_total_cost_to_reliable_product_acceptance",
   "enrollment_required": true,
   "unknown_family_is_independent": false,

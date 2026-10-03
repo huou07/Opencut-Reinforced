@@ -281,6 +281,57 @@ preview status/tag/source/release/assets when applicable, evidence path, exact
 state transition, state commit, state-commit hygiene run, Git alignment, and
 the next checkpoint/phase/spec. The runner cannot fabricate this report.
 
+## V2 control plane (proposed, disabled)
+
+ADR 0009 defines a task-bound controller that moves work through admitted
+tasks, isolated candidates, controller-executed verification, independent
+review, durable promotion, and the existing supervisor. It is **not active**:
+
+- the adoption lifecycle state is `AMENDMENT_PROPOSED` and `full_auto_eligible`
+  is false in `docs/execution/automation/V2_CONTRACT.json`;
+- the task, candidate, verification, review, promotion, and completion receipt
+  schemas are frozen in
+  `docs/execution/automation/PROTOCOL_SCHEMAS.json` and validated by
+  `scripts/model_orchestrator/contracts.py`;
+- a schema-2 completion created under an adopted release must carry a nested
+  `control_plane_receipt`; historical schema-1/2 records remain valid at their
+  boundary and a caller cannot re-declare itself legacy;
+- unrestricted `--runner`, receipt-less `--resume-sha`, and receipt-less
+  `--repair-resume-from` remain available only until the separate adoption
+  amendment disables them for activated V2.
+
+An explicit bounded build authorization permits disabled fixture work before
+operational adoption; it permits no product autonomy. No worker, model, router,
+or Desktop process may treat this section as operational authority to run, and V1 prototype history is not V2 authority.
+
+### M0-R2 candidate contract verification
+
+The corrected design distinguishes disabled build permission from final
+operational adoption. M0 implements contract validation only: no worker, store,
+sandbox, promotion or supervisor entrypoint exists. Its manifest covers every
+pinned Git tree entry plus known absent configuration names; Git modes/object
+bytes, repository-anchor ancestry and clean materialization are validated.
+Absent optional OpenCode/Rust toolchain configuration is pinned as absent; it
+must not become an invented required repository file or appear after freezing.
+Product source remains baseline input rather than a protected edit allowance.
+
+Task and receipt validators require separately supplied frozen template/attempt
+bindings. Recursively checked resources, argv/environment, acceptance and
+performance floors cannot be changed by an output record. Test PASS, case
+completion and product acceptance remain separate facts. Historical evidence
+comes from actual Git blobs/ancestry and the existing evidence verifier, never
+a caller legacy flag. Missing controller context refuses validation.
+
+M0-owned regression groups are GitAuthorityMatrixTests (CP01/02/04),
+TaskMatrixTests and ReceiptMatrixTests (CP03), CompletionBoundaryTests (CP05),
+and LifecycleMatrixTests/ControlAmendmentMarkerTests (CP33). Run them with:
+`python3 scripts/model_orchestrator/tests/test_contracts.py -v`, then the
+existing infrastructure, plan/policy, hygiene, JSON and Python syntax checks.
+They verify M0 contract boundaries, not future container/CLI/hosted certification.
+An independent subsequent audit must approve M1 admission. Docker unavailability
+is `M1_ISOLATION_ENVIRONMENT_UNAVAILABLE`, not a reason to relax isolation.
+Git object reads follow the [Git object manual](https://git-scm.com/docs/git-cat-file).
+
 ## Failure behavior
 
 If implementation CI fails, the checkpoint remains `NEXT`, no completion

@@ -10,14 +10,21 @@
   "implementation_plan": "docs/execution/automation/IMPLEMENTATION_PLAN.md",
   "completion_owner": "existing_agent_supervisor",
   "evidence_policy_source": "docs/execution/EVIDENCE_POLICY.json",
-  "outer_evidence_versions_retained": [1, 2],
+  "outer_evidence_versions_retained": [
+    1,
+    2
+  ],
   "runtime_store": "<trusted-common-git-dir>/opencut-automation-v2",
   "runtime_authority": "controller_owned_single_snapshot_and_immutable_receipts",
   "candidate_storage": "independent_clone_without_shared_git_directory",
   "worker_boundary": "verified_disposable_linux_container",
   "unsupported_isolation_result": "ISOLATION_UNAVAILABLE",
   "pause_policy": "next_stage_atomic_claim",
-  "lock_order": ["task_lease", "integration_lock_when_required", "runtime_state_lock"],
+  "lock_order": [
+    "task_lease",
+    "integration_lock_when_required",
+    "runtime_state_lock"
+  ],
   "limits": {
     "active_product_implementation_tasks": 1,
     "writers_per_task": 1,
@@ -43,52 +50,155 @@
     "supervisor_task_id_optional": false
   },
   "states": {
-    "PLANNED_TASK": ["READY", "DIAGNOSTIC"],
-    "READY": ["CLAIMED", "DIAGNOSTIC"],
-    "CLAIMED": ["IMPLEMENTING", "INTERRUPTED"],
-    "IMPLEMENTING": ["INTERRUPTED", "CANDIDATE"],
-    "INTERRUPTED": ["CLAIMED", "CANDIDATE", "DIAGNOSTIC"],
-    "CANDIDATE": ["LOCAL_VERIFY", "REJECTED"],
-    "LOCAL_VERIFY": ["LOCAL_VERIFY", "REVIEWING", "REVIEW_PENDING", "REJECTED"],
-    "REVIEWING": ["REVIEW_PENDING", "REJECTED", "PROMOTION_READY", "DIAGNOSTIC"],
-    "REVIEW_PENDING": ["REVIEWING", "DIAGNOSTIC"],
-    "REJECTED": ["DIAGNOSTIC"],
-    "PROMOTION_READY": ["PROMOTING", "DIAGNOSTIC"],
-    "PROMOTING": ["REMOTE_PROMOTED", "PROMOTION_READY", "DIAGNOSTIC"],
-    "REMOTE_PROMOTED": ["LOCAL_SYNC_PENDING", "PROMOTED", "DIAGNOSTIC"],
-    "LOCAL_SYNC_PENDING": ["PROMOTED", "DIAGNOSTIC"],
-    "PROMOTED": ["SUPERVISOR_READY", "DIAGNOSTIC"],
-    "SUPERVISOR_READY": ["HOSTED_VERIFY", "DIAGNOSTIC"],
-    "HOSTED_VERIFY": ["ACCEPTED", "DIAGNOSTIC"],
+    "PLANNED_TASK": [
+      "READY",
+      "DIAGNOSTIC"
+    ],
+    "READY": [
+      "CLAIMED",
+      "DIAGNOSTIC"
+    ],
+    "CLAIMED": [
+      "IMPLEMENTING",
+      "INTERRUPTED"
+    ],
+    "IMPLEMENTING": [
+      "INTERRUPTED",
+      "CANDIDATE"
+    ],
+    "INTERRUPTED": [
+      "CLAIMED",
+      "CANDIDATE",
+      "DIAGNOSTIC"
+    ],
+    "CANDIDATE": [
+      "LOCAL_VERIFY",
+      "REJECTED"
+    ],
+    "LOCAL_VERIFY": [
+      "LOCAL_VERIFY",
+      "REVIEWING",
+      "REVIEW_PENDING",
+      "REJECTED"
+    ],
+    "REVIEWING": [
+      "REVIEW_PENDING",
+      "REJECTED",
+      "PROMOTION_READY",
+      "DIAGNOSTIC"
+    ],
+    "REVIEW_PENDING": [
+      "REVIEWING",
+      "DIAGNOSTIC"
+    ],
+    "REJECTED": [
+      "DIAGNOSTIC"
+    ],
+    "PROMOTION_READY": [
+      "PROMOTING",
+      "DIAGNOSTIC"
+    ],
+    "PROMOTING": [
+      "REMOTE_PROMOTED",
+      "PROMOTION_READY",
+      "DIAGNOSTIC"
+    ],
+    "REMOTE_PROMOTED": [
+      "LOCAL_SYNC_PENDING",
+      "PROMOTED",
+      "DIAGNOSTIC"
+    ],
+    "LOCAL_SYNC_PENDING": [
+      "PROMOTED",
+      "DIAGNOSTIC"
+    ],
+    "PROMOTED": [
+      "SUPERVISOR_READY",
+      "DIAGNOSTIC"
+    ],
+    "SUPERVISOR_READY": [
+      "HOSTED_VERIFY",
+      "DIAGNOSTIC"
+    ],
+    "HOSTED_VERIFY": [
+      "ACCEPTED",
+      "DIAGNOSTIC"
+    ],
     "ACCEPTED": [],
-    "DIAGNOSTIC": ["READY", "ESCALATED", "SUPERVISOR_READY"],
-    "ESCALATED": ["ESCALATION_DEFERRED_QUOTA", "DIAGNOSTIC"],
-    "ESCALATION_DEFERRED_QUOTA": ["ESCALATED"]
+    "DIAGNOSTIC": [
+      "READY",
+      "ESCALATED",
+      "SUPERVISOR_READY"
+    ],
+    "ESCALATED": [
+      "ESCALATION_DEFERRED_QUOTA",
+      "DIAGNOSTIC"
+    ],
+    "ESCALATION_DEFERRED_QUOTA": [
+      "ESCALATED"
+    ]
   },
   "transition_semantics": "README sections 13-16; receipt and claim preconditions mandatory",
   "review": {
-    "verdicts": ["PASS", "DEFECT_FOUND", "BLOCKED", "INCONCLUSIVE"],
-    "classifications": ["PROVEN", "SUPPORTED", "PLAUSIBLE", "UNKNOWN"],
-    "finding_severity": ["BLOCKING", "NONBLOCKING"],
-    "quality_dispositions": ["NOT_LOWERING", "DEFECT", "AMENDMENT_REQUIRED"],
+    "verdicts": [
+      "PASS",
+      "DEFECT_FOUND",
+      "BLOCKED",
+      "INCONCLUSIVE"
+    ],
+    "classifications": [
+      "PROVEN",
+      "SUPPORTED",
+      "PLAUSIBLE",
+      "UNKNOWN"
+    ],
+    "finding_severity": [
+      "BLOCKING",
+      "NONBLOCKING"
+    ],
+    "quality_dispositions": [
+      "NOT_LOWERING",
+      "DEFECT",
+      "AMENDMENT_REQUIRED"
+    ],
     "required_fields": [
-      "schema_version", "task_id", "task_contract_digest", "candidate_sha",
-      "verdict", "coverage", "findings", "quality_flag_dispositions", "unresolved_questions"
+      "schema_version",
+      "task_id",
+      "task_contract_digest",
+      "candidate_sha",
+      "verdict",
+      "coverage",
+      "findings",
+      "quality_flag_dispositions",
+      "unresolved_questions"
     ],
     "model_pass_is_product_acceptance": false
   },
   "escalation": {
     "triggers": [
-      "architecture_contradiction", "security_trust_boundary", "repeated_causal_repair_failure",
-      "platform_semantics_conflict", "persistence_schema_ownership", "licensing_packaging",
-      "evidence_contract_impossible", "difficult_root_cause"
+      "architecture_contradiction",
+      "security_trust_boundary",
+      "repeated_causal_repair_failure",
+      "platform_semantics_conflict",
+      "persistence_schema_ownership",
+      "licensing_packaging",
+      "evidence_contract_impossible",
+      "difficult_root_cause"
     ],
     "forbidden_uses": [
-      "formatting", "build_execution", "test_execution", "ci_polling", "waiting",
-      "mechanical_fixes", "routine_implementation"
+      "formatting",
+      "build_execution",
+      "test_execution",
+      "ci_polling",
+      "waiting",
+      "mechanical_fixes",
+      "routine_implementation"
     ],
     "dispositions": [
-      "WITHIN_CONTRACT", "AMENDMENT_REQUIRED", "NEEDS_DISCRIMINATING_EVIDENCE", "DEFER"
+      "WITHIN_CONTRACT",
+      "AMENDMENT_REQUIRED",
+      "NEEDS_DISCRIMINATING_EVIDENCE",
+      "DEFER"
     ],
     "quota_result": "ESCALATION_DEFERRED_QUOTA",
     "quota_is_repository_failure": false,
@@ -163,5 +273,14 @@
       ],
       "CERTIFIED_ACTIVE": []
     }
+  },
+  "adoption": {
+    "lifecycle_state": "AMENDMENT_PROPOSED",
+    "design_authority_sha": "8f41e0b5f03a9da0797ad5ddf6a65da40f447d09",
+    "build_authorization": "EXPLICIT_PHASE_SCOPED_OPERATOR_TASK",
+    "operational_adoption": "PENDING",
+    "adopted_release_sha": null,
+    "certification": "NONE",
+    "full_auto_eligible": false
   }
 }
