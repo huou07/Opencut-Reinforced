@@ -75,7 +75,10 @@
     "remote_promotion_receipt": "promotion",
     "control_plane_receipt": "completion",
     "adoption_record": "adoption",
-    "control_amendment_marker": "adoption"
+    "control_amendment_marker": "adoption",
+    "build_authorization": "external_provenance",
+    "certification_bundle": "external_provenance",
+    "operational_adoption_pin": "external_provenance"
   },
   "records": {
     "task_contract": {
@@ -1580,6 +1583,30 @@
           "min_items": 0,
           "unique": true,
           "max_items": 4096
+        },
+        "lifecycle_state": {
+          "type": "enum",
+          "values": [
+            "ARCHITECTURE_FROZEN",
+            "AMENDMENT_PROPOSED",
+            "BUILD_AUTHORIZED_DISABLED",
+            "IMPLEMENTATION_M0",
+            "IMPLEMENTATION_M1",
+            "IMPLEMENTATION_M2",
+            "IMPLEMENTATION_M3",
+            "IMPLEMENTATION_M4",
+            "IMPLEMENTATION_M5",
+            "CERTIFICATION_CANDIDATE",
+            "OPERATIONAL_ADOPTION_PENDING",
+            "OPERATIONALLY_ADOPTED",
+            "CERTIFIED_ACTIVE"
+          ]
+        },
+        "amendment_proposed": {
+          "type": "boolean"
+        },
+        "adoption_requested": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1603,7 +1630,10 @@
         "live_certification_digest",
         "independent_review_digest",
         "qualified_models_digest",
-        "blocking_limitations"
+        "blocking_limitations",
+        "lifecycle_state",
+        "amendment_proposed",
+        "adoption_requested"
       ]
     },
     "control_amendment_marker": {
@@ -1699,6 +1729,523 @@
         "state_digest",
         "plan_digest",
         "verified_contract_versions"
+      ]
+    },
+    "build_authorization": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "const": "huou07/Opencut-Reinforced"
+        },
+        "architecture_spec_sha": {
+          "type": "sha"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "release_sha": {
+          "type": "sha"
+        },
+        "candidate_branch": {
+          "type": "path"
+        },
+        "authorization_id": {
+          "type": "id"
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "nonce": {
+          "type": "id"
+        },
+        "sandbox_digest": {
+          "type": "digest"
+        },
+        "authority_manifest_digest": {
+          "type": "digest"
+        },
+        "checks_digest": {
+          "type": "digest"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "DISABLED_BUILD_ONLY"
+        },
+        "authorized_phases": {
+          "type": "list",
+          "items": {
+            "type": "enum",
+            "values": [
+              "M0",
+              "M1",
+              "M2",
+              "M3",
+              "M4",
+              "M5"
+            ]
+          },
+          "min_items": 1,
+          "max_items": 6,
+          "unique": true
+        },
+        "completed_phases": {
+          "type": "list",
+          "items": {
+            "type": "enum",
+            "values": [
+              "M0",
+              "M1",
+              "M2",
+              "M3",
+              "M4",
+              "M5"
+            ]
+          },
+          "min_items": 0,
+          "max_items": 6,
+          "unique": true
+        },
+        "phase_evidence": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "phase": {
+                "type": "enum",
+                "values": [
+                  "M0",
+                  "M1",
+                  "M2",
+                  "M3",
+                  "M4",
+                  "M5"
+                ]
+              },
+              "case_ids": {
+                "type": "list",
+                "items": {
+                  "type": "id"
+                },
+                "min_items": 1,
+                "max_items": 48,
+                "unique": true
+              },
+              "receipt_id": {
+                "type": "id"
+              },
+              "receipt_digest": {
+                "type": "digest"
+              }
+            },
+            "required": [
+              "phase",
+              "case_ids",
+              "receipt_id",
+              "receipt_digest"
+            ]
+          },
+          "min_items": 0,
+          "max_items": 6,
+          "unique": true
+        },
+        "allowed_paths": {
+          "type": "list",
+          "items": {
+            "type": "path"
+          },
+          "min_items": 1,
+          "max_items": 512,
+          "unique": true
+        },
+        "required_gates": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "max_items": 128,
+          "unique": true
+        },
+        "scope_digest": {
+          "type": "digest"
+        },
+        "required_case_ids": {
+          "type": "list",
+          "items": {
+            "type": "id"
+          },
+          "min_items": 1,
+          "max_items": 48,
+          "unique": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "repository",
+        "architecture_spec_sha",
+        "base_sha",
+        "release_sha",
+        "candidate_branch",
+        "authorization_id",
+        "task_id",
+        "sequence",
+        "nonce",
+        "sandbox_digest",
+        "authority_manifest_digest",
+        "checks_digest",
+        "purpose",
+        "authorized_phases",
+        "completed_phases",
+        "phase_evidence",
+        "allowed_paths",
+        "required_gates",
+        "scope_digest",
+        "required_case_ids"
+      ]
+    },
+    "certification_bundle": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "const": "huou07/Opencut-Reinforced"
+        },
+        "architecture_spec_sha": {
+          "type": "sha"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "release_sha": {
+          "type": "sha"
+        },
+        "candidate_branch": {
+          "type": "path"
+        },
+        "authorization_id": {
+          "type": "id"
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "nonce": {
+          "type": "id"
+        },
+        "sandbox_digest": {
+          "type": "digest"
+        },
+        "authority_manifest_digest": {
+          "type": "digest"
+        },
+        "checks_digest": {
+          "type": "digest"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "PRE_ADOPTION_CERTIFICATION"
+        },
+        "completed_phases": {
+          "type": "list",
+          "items": {
+            "type": "enum",
+            "values": [
+              "M0",
+              "M1",
+              "M2",
+              "M3",
+              "M4",
+              "M5"
+            ]
+          },
+          "min_items": 6,
+          "max_items": 6,
+          "unique": true
+        },
+        "case_receipts": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "case_id": {
+                "type": "id"
+              },
+              "phase": {
+                "type": "enum",
+                "values": [
+                  "M0",
+                  "M1",
+                  "M2",
+                  "M3",
+                  "M4",
+                  "M5"
+                ]
+              },
+              "receipt_id": {
+                "type": "id"
+              },
+              "receipt_digest": {
+                "type": "digest"
+              },
+              "result": {
+                "type": "enum",
+                "values": [
+                  "PASS",
+                  "FAIL"
+                ]
+              }
+            },
+            "required": [
+              "case_id",
+              "phase",
+              "receipt_id",
+              "receipt_digest",
+              "result"
+            ]
+          },
+          "min_items": 48,
+          "max_items": 48,
+          "unique": true
+        },
+        "live_certification": {
+          "type": "object",
+          "fields": {
+            "evidence_id": {
+              "type": "id"
+            },
+            "digest": {
+              "type": "digest"
+            },
+            "release_sha": {
+              "type": "sha"
+            },
+            "result": {
+              "type": "enum",
+              "values": [
+                "PASS",
+                "FAIL"
+              ]
+            }
+          },
+          "required": [
+            "evidence_id",
+            "digest",
+            "release_sha",
+            "result"
+          ]
+        },
+        "independent_review": {
+          "type": "object",
+          "fields": {
+            "evidence_id": {
+              "type": "id"
+            },
+            "digest": {
+              "type": "digest"
+            },
+            "release_sha": {
+              "type": "sha"
+            },
+            "result": {
+              "type": "enum",
+              "values": [
+                "PASS",
+                "FAIL"
+              ]
+            }
+          },
+          "required": [
+            "evidence_id",
+            "digest",
+            "release_sha",
+            "result"
+          ]
+        },
+        "qualified_models": {
+          "type": "object",
+          "fields": {
+            "evidence_id": {
+              "type": "id"
+            },
+            "digest": {
+              "type": "digest"
+            },
+            "release_sha": {
+              "type": "sha"
+            },
+            "result": {
+              "type": "enum",
+              "values": [
+                "PASS",
+                "FAIL"
+              ]
+            },
+            "required_models_available": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "evidence_id",
+            "digest",
+            "release_sha",
+            "result",
+            "required_models_available"
+          ]
+        },
+        "blocking_limitations": {
+          "type": "list",
+          "items": {
+            "type": "string"
+          },
+          "min_items": 0,
+          "max_items": 128,
+          "unique": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "repository",
+        "architecture_spec_sha",
+        "base_sha",
+        "release_sha",
+        "candidate_branch",
+        "authorization_id",
+        "task_id",
+        "sequence",
+        "nonce",
+        "sandbox_digest",
+        "authority_manifest_digest",
+        "checks_digest",
+        "purpose",
+        "completed_phases",
+        "case_receipts",
+        "live_certification",
+        "independent_review",
+        "qualified_models",
+        "blocking_limitations"
+      ]
+    },
+    "operational_adoption_pin": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "const": "huou07/Opencut-Reinforced"
+        },
+        "architecture_spec_sha": {
+          "type": "sha"
+        },
+        "base_sha": {
+          "type": "sha"
+        },
+        "release_sha": {
+          "type": "sha"
+        },
+        "candidate_branch": {
+          "type": "path"
+        },
+        "authorization_id": {
+          "type": "id"
+        },
+        "task_id": {
+          "type": "id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "nonce": {
+          "type": "id"
+        },
+        "sandbox_digest": {
+          "type": "digest"
+        },
+        "authority_manifest_digest": {
+          "type": "digest"
+        },
+        "checks_digest": {
+          "type": "digest"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "OPERATOR_OPERATIONAL_ADOPTION"
+        },
+        "authority_kind": {
+          "type": "string",
+          "const": "V2_FROZEN_CONTROL_RELEASE"
+        },
+        "certified_release_sha": {
+          "type": "sha"
+        },
+        "certification_digest": {
+          "type": "digest"
+        },
+        "live_certification_digest": {
+          "type": "digest"
+        },
+        "independent_review_digest": {
+          "type": "digest"
+        },
+        "qualified_models_digest": {
+          "type": "digest"
+        },
+        "parent_sha": {
+          "type": "sha"
+        },
+        "plan_digest": {
+          "type": "digest"
+        },
+        "state_digest": {
+          "type": "digest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "repository",
+        "architecture_spec_sha",
+        "base_sha",
+        "release_sha",
+        "candidate_branch",
+        "authorization_id",
+        "task_id",
+        "sequence",
+        "nonce",
+        "sandbox_digest",
+        "authority_manifest_digest",
+        "checks_digest",
+        "purpose",
+        "authority_kind",
+        "certified_release_sha",
+        "certification_digest",
+        "live_certification_digest",
+        "independent_review_digest",
+        "qualified_models_digest",
+        "parent_sha",
+        "plan_digest",
+        "state_digest"
       ]
     }
   },
@@ -2195,5 +2742,12 @@
         "result"
       ]
     }
+  },
+  "authority_provenance": {
+    "record_source": "independent_controller_git_repository",
+    "pin_source": "operator_controller_bootstrap_only",
+    "raw_mapping_confers_authority": false,
+    "lifecycle_derivation": "derive_release_lifecycle_state",
+    "case_ownership_source": "docs/execution/automation/CHECKS.json"
   }
 }

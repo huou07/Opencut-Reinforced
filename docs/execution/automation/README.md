@@ -941,3 +941,68 @@ rules. No caller boolean can declare legacy. Post-adoption records require the
 nested bound receipt and production-class evidence; artifact/model text is not
 completion. All other candidate/review/promotion/completion nested objects have
 strict shapes and semantic/context bindings, not opaque object dictionaries.
+
+### M0-R3 machine closure of §19
+
+`derive_release_lifecycle_state` is the single deterministic derivation for
+release records. `V2_CONTRACT.adoption` is a complete strict `adoption_record`;
+its serialized state and eligibility must equal that derivation. Proposal intent
+(`amendment_proposed`) and adoption request intent (`adoption_requested`) grant
+no permission. Architecture freeze, authorization, ordered phase progress,
+certification and actual operator adoption determine the state. Unknown labels,
+contradictory labels, skipped phases and premature certification refuse.
+
+Three strict external provenance records implement the existing boundary:
+
+- `build_authorization`: DISABLED_BUILD_ONLY; exact repository, architecture,
+  base/release, branch, task/authorization identity, sequence/nonce, sandbox,
+  full manifest and CHECKS digests; explicitly bounded phases, allowed control
+  paths, required gates/cases and scope digest. Required cases equal the pinned
+  CHECKS inventory for the explicitly authorized phases. Prior phases require ordered
+  controller phase evidence covering their owned cases. M0 permission grants no
+  M1 permission, product execution, promotion, supervisor authority or full-auto.
+- `certification_bundle`: PRE_ADOPTION_CERTIFICATION for the same immutable
+  release, all phases and CP01–CP48 with case/phase/receipt identities and
+  digests; live, independent-review and qualified-model evidence identities,
+  results and release bindings; no blockers. This is a disabled certification
+  candidate, never an adoption or activation grant.
+- `operational_adoption_pin`: OPERATOR_OPERATIONAL_ADOPTION of exactly the
+  certified release, certification/review/model identities, full Git manifest,
+  repository and operator authorization identity, parent and PLAN/STATE digests.
+  Adoption and active eligibility require this independently established pin.
+
+`load_release_authority` accepts typed `ControllerBootstrap`/`RecordPin` inputs
+from trusted operator/host bootstrap only. It reads the exact approved records
+from Git objects in a separate independent controller repository. It verifies
+repository/anchor/architecture lineage, exact commit/blob digests, current
+source revision, sequence/nonce, scope, phase evidence and clean candidate Git
+materialization. A candidate root cannot be its own controller source. The
+candidate cannot select bootstrap paths, approved commits, digests or identities.
+Git authors, record labels and remote URLs alone never establish operator consent.
+
+The loader produces an immutable `ValidatedReleaseAuthority` snapshot. Final
+lifecycle/source validators accept that exact type, refuse ordinary mappings,
+and refuse stale/dirty source revisions. Generic schema validation cannot mint
+it. `validate_authority_source` accepts only the exact adopted SHA matching the
+validated Git release and operator pin, rather than excluding a few known bad
+references. Protocol schemas also remain bound to the loaded release.
+
+This defines a host API trust boundary, not a Python sandbox: code already
+executing arbitrarily inside the trusted host interpreter can bypass Python
+privacy. Later runtime must own/protect bootstrap and controller records, deny
+workers access to that interpreter/root, and refresh authority before actions.
+M0 does not implement those runtime mechanisms or collect live certification.
+Positive certification/adoption tests use explicitly pinned fixture attestations;
+they certify no installed controller, model, sandbox or product release.
+
+Phase/case ownership comes from the pinned `CHECKS.json`, never from the worker.
+Passed cases must belong to the current or controller-verified completed phases;
+certification requires the exact complete suite. Historical completion evidence
+continues to use the unchanged Git-blob/ancestry boundary and evidence verifier.
+
+R3 regression commands are `python3 scripts/model_orchestrator/tests/test_contracts.py -v`
+and `python3 scripts/model_orchestrator/tests/test_contracts.py --probe-repository <exact-candidate-commit>`.
+The latter clones the actual repository independently, verifies architecture and
+candidate commit ancestry, then exercises clean loading, optional configuration
+absence, dirty/untracked/mode refusal, every manifest omission and foreign
+repository refusal. It reports the exact manifest count and candidate SHA.

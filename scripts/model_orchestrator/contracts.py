@@ -26,6 +26,7 @@ import re
 import math
 import os
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -441,13 +442,15 @@ def validate_verification_receipt(record: Any, schemas: Mapping[str, Any], *, ta
     return record
 
 
-def validate_record(record: Any, record_name: str, schemas: Mapping[str, Any], *, context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def validate_record(record: Any, record_name: str, schemas: Mapping[str, Any], *, context: Mapping[str, Any] | ValidatedReleaseAuthority | None = None) -> dict[str, Any]:
     if record_name == 'task_contract':
         return validate_task_contract(record, schemas, frozen_template=context)
     if record_name == 'adoption_record':
         return validate_adoption_record(record, schemas, external=context)
     if record_name == 'control_amendment_marker':
         return validate_control_amendment_marker(record, schemas)
+    if record_name in ('build_authorization', 'certification_bundle', 'operational_adoption_pin'):
+        raise ContractError('external authority records require the Git pin loader')
     record = _shape(record, record_name, schemas)
     if record_name == 'verification_receipt':
         if context is None:
@@ -479,66 +482,237 @@ def validate_control_plane_receipt(record: Any, schemas: Mapping[str, Any], *, c
     return validate_record(record, 'control_plane_receipt', schemas, context=context)
 
 
+@dataclass(frozen=True)
+class RecordPin:
+    """Exact controller Git blob identity selected by operator bootstrap."""
+    path: str
+    digest: str
+
+
+@dataclass(frozen=True)
+class ControllerBootstrap:
+    """Trusted host input, never deserialized from a candidate/model record.
+
+    M0 defines the pin contract; later runtime owns and protects its source.
+    A pin is approval supplied out of band, not approval inferred from Git authors.
+    """
+    source_sha: str
+    anchor_sha: str
+    base_sha: str
+    release_sha: str
+    candidate_branch: str
+    authorization_id: str
+    task_id: str
+    sequence: int
+    nonce: str
+    sandbox_digest: str
+    build: RecordPin
+    certification: RecordPin | None = None
+    adoption: RecordPin | None = None
+
+
+_PROVENANCE_SEAL = object()
+
+
+@dataclass(frozen=True, init=False)
+class ValidatedReleaseAuthority:
+    """Immutable validated snapshot; ordinary mappings cannot construct it.
+
+    This is a host API type barrier, not a sandbox for arbitrary Python execution.
+    Only load_release_authority reads operator-pinned records and mints snapshots.
+    """
+    payload_json: str
+    candidate_root: str
+    controller_root: str
+    source_sha: str
+
+    def __init__(self, payload: Mapping[str, Any], candidate_root: Path, controller_root: Path, source_sha: str, *, _seal: object = None):
+        if _seal is not _PROVENANCE_SEAL:
+            raise ContractError('validated provenance requires the Git pin loader')
+        object.__setattr__(self, 'payload_json', canonical_json(payload))
+        object.__setattr__(self, 'candidate_root', str(candidate_root))
+        object.__setattr__(self, 'controller_root', str(controller_root))
+        object.__setattr__(self, 'source_sha', source_sha)
+
+
+def _release_authority(external: Any) -> dict[str, Any]:
+    if type(external) is not ValidatedReleaseAuthority:
+        raise ContractError('validated external Git provenance required; raw mappings confer no authority')
+    payload = load_json_strict(external.payload_json)
+    for root, sha in ((Path(external.controller_root), external.source_sha), (Path(external.candidate_root), payload['git']['release_oid'])):
+        _authority_repo(root, payload['git']['anchor_oid'])
+        if _git(root, 'rev-parse', 'HEAD').decode().strip() != sha or _git(root, 'status', '--porcelain=v1', '--untracked-files=all').strip():
+            raise ContractError('stale or dirty provenance materialization')
+    _verify_materialization(Path(external.candidate_root), payload['git']['manifest'])
+    return payload
+
+
+def load_release_authority(candidate_root: Path, controller_root: Path, *, bootstrap: ControllerBootstrap) -> ValidatedReleaseAuthority:
+    """Read independent controller records at externally approved exact pins.
+
+    No worker can supply bootstrap or controller_root. Later host bootstrap must
+    enforce that ownership; this contract neither implements runtime ownership
+    nor treats a well-shaped candidate file as operator approval.
+    """
+    if type(bootstrap) is not ControllerBootstrap:
+        raise ContractError('controller-owned typed bootstrap required')
+    candidate = _authority_repo(candidate_root, bootstrap.anchor_sha)
+    controller = _authority_repo(controller_root, bootstrap.anchor_sha)
+    if candidate == controller or candidate in controller.parents or controller in candidate.parents:
+        raise ContractError('candidate cannot serve as its own controller provenance')
+    for root in (candidate, controller):
+        _commit(root, ARCHITECTURE_SPEC_SHA)
+        _ancestor(root, bootstrap.anchor_sha, ARCHITECTURE_SPEC_SHA)
+        _ancestor(root, ARCHITECTURE_SPEC_SHA, bootstrap.release_sha if root == candidate else bootstrap.source_sha)
+    _commit(controller, bootstrap.source_sha)
+    if _git(controller, 'rev-parse', 'HEAD').decode().strip() != bootstrap.source_sha or _git(controller, 'status', '--porcelain=v1', '--untracked-files=all').strip():
+        raise ContractError('stale or dirty controller provenance')
+    git = load_authority_manifest(candidate, release_oid=bootstrap.release_sha, base_oid=bootstrap.base_sha, anchor_oid=bootstrap.anchor_sha, purpose='BUILD_AUTHORIZED_DISABLED', sandbox_digest=bootstrap.sandbox_digest, contract_versions=dict(project_schema=7, recovery_schema=1, ipc_protocol=1))
+    schemas = load_json_strict(_git(candidate, 'show', bootstrap.release_sha + ':' + PROTOCOL_SCHEMAS_PATH).decode())
+    validate_protocol_schemas(schemas)
+    checks = load_json_strict(_git(candidate, 'show', bootstrap.release_sha + ':' + CHECKS_PATH).decode())
+    ownership = {item['id']: item['phase'] for item in checks['acceptance_cases']}
+    if len(checks['acceptance_cases']) != 48 or set(ownership) != set(ACCEPTANCE_CASE_IDS) or set(ownership.values()) != set(IMPLEMENTATION_PHASES) or {case for case, phase in ownership.items() if phase == 'M0'} != set(M0_OWNED_CASES):
+        raise ContractError('invalid frozen phase/case ownership')
+    expected = dict(repository=REPOSITORY_IDENTITY, architecture_spec_sha=ARCHITECTURE_SPEC_SHA, base_sha=bootstrap.base_sha, release_sha=bootstrap.release_sha, candidate_branch=bootstrap.candidate_branch, authorization_id=bootstrap.authorization_id, task_id=bootstrap.task_id, sequence=bootstrap.sequence, nonce=bootstrap.nonce, sandbox_digest=bootstrap.sandbox_digest, authority_manifest_digest=canonical_digest(git['manifest']), checks_digest=canonical_digest(checks))
+    def read(pin: RecordPin | None, name: str) -> dict[str, Any] | None:
+        if pin is None:
+            return None
+        if type(pin) is not RecordPin:
+            raise ContractError('typed exact record pin required')
+        _validate_relative_path(pin.path, 'controller record path')
+        _value(pin.digest, {'type': 'digest'}, 'controller record digest')
+        record = load_json_strict(_git(controller, 'show', bootstrap.source_sha + ':' + pin.path).decode())
+        _shape(record, name, schemas)
+        if canonical_digest(record) != pin.digest:
+            raise ContractError('external record pin differs from Git blob')
+        _bind(record, expected, expected)
+        return record
+    build = read(bootstrap.build, 'build_authorization')
+    if build is None:
+        raise ContractError('build authorization provenance missing')
+    scope = {key: build[key] for key in ('authorized_phases', 'allowed_paths', 'required_gates', 'required_case_ids')}
+    if build['scope_digest'] != canonical_digest(scope) or validate_adoption_diff(build['allowed_paths']):
+        raise ContractError('disabled build scope/gates mismatch')
+    if set(build['required_case_ids']) != {case for case, owner in ownership.items() if owner in build['authorized_phases']}:
+        raise ContractError('build authorization omits or substitutes phase-owned required cases')
+    indices = [IMPLEMENTATION_PHASES.index(phase) for phase in build['authorized_phases']]
+    if indices != list(range(indices[0], indices[-1]+1)):
+        raise ContractError('build phase scope must be explicit ordered contiguous bounds')
+    progress = build['completed_phases']
+    if len(progress) < indices[0] or len(progress) > indices[-1]+1:
+        raise ContractError('authorized phase scope lacks prerequisite progress evidence')
+    if progress != list(IMPLEMENTATION_PHASES[:len(progress)]) or [e['phase'] for e in build['phase_evidence']] != progress:
+        raise ContractError('build progress lacks ordered controller phase evidence')
+    for evidence in build['phase_evidence']:
+        if set(evidence['case_ids']) != {case for case, phase in ownership.items() if phase == evidence['phase']}:
+            raise ContractError('completed phase evidence omits owned cases')
+    certification = read(bootstrap.certification, 'certification_bundle')
+    if certification is not None:
+        receipts = certification['case_receipts']
+        _unique([r['case_id'] for r in receipts], 'certification cases')
+        if certification['completed_phases'] != list(IMPLEMENTATION_PHASES) or progress != list(IMPLEMENTATION_PHASES) or set(r['case_id'] for r in receipts) != set(ACCEPTANCE_CASE_IDS) or certification['blocking_limitations']:
+            raise ContractError('certification requires full phase/case evidence without blockers')
+        if any(r['result'] != 'PASS' or r['phase'] != ownership[r['case_id']] for r in receipts):
+            raise ContractError('certification case failed or phase ownership differs')
+        for name in ('live_certification', 'independent_review', 'qualified_models'):
+            evidence = certification[name]
+            if evidence['result'] != 'PASS' or evidence['release_sha'] != bootstrap.release_sha:
+                raise ContractError('certification evidence failed or wrong release')
+        if certification['qualified_models']['required_models_available'] is not True:
+            raise ContractError('required model qualification unavailable')
+    adoption = read(bootstrap.adoption, 'operational_adoption_pin')
+    if adoption is not None:
+        if certification is None:
+            raise ContractError('operator adoption requires certification provenance')
+        expected_adoption = dict(certified_release_sha=bootstrap.release_sha, certification_digest=canonical_digest(certification), parent_sha=bootstrap.base_sha, plan_digest=hashlib.sha256(_git(candidate, 'show', bootstrap.base_sha + ':docs/execution/PLAN.json')).hexdigest(), state_digest=hashlib.sha256(_git(candidate, 'show', bootstrap.base_sha + ':docs/execution/STATE.json')).hexdigest())
+        expected_adoption.update({name + '_digest': certification[name]['digest'] for name in ('live_certification', 'independent_review', 'qualified_models')})
+        _bind(adoption, expected_adoption, expected_adoption)
+    payload = dict(git=git, schemas=schemas, ownership=ownership, build=build, certification=certification, adoption=adoption)
+    return ValidatedReleaseAuthority(payload, candidate, controller, bootstrap.source_sha, _seal=_PROVENANCE_SEAL)
+
+
 def proposal_record(*, architecture_frozen: bool = True, **changes: Any) -> dict[str, Any]:
-    record = dict(schema_version=1, authority_kind='V2_DESIGN_CANDIDATE', architecture_frozen=architecture_frozen, architecture_spec_sha=ARCHITECTURE_SPEC_SHA if architecture_frozen else None, build_authorization_digest=None, operational_adoption='PENDING', parent_sha=None, adopted_release_sha=None, implementation_phase='NONE', completed_phases=[], acceptance_cases_passed=[], certification='NONE', certified_release_sha=None, live_certification_digest=None, independent_review_digest=None, qualified_models_digest=None, blocking_limitations=[], full_auto_eligible=False, changed_paths=[], plan_digest=None, state_digest=None)
+    record = dict(schema_version=1, authority_kind='V2_DESIGN_CANDIDATE', architecture_frozen=architecture_frozen, architecture_spec_sha=ARCHITECTURE_SPEC_SHA if architecture_frozen else None, build_authorization_digest=None, operational_adoption='PENDING', parent_sha=None, adopted_release_sha=None, implementation_phase='NONE', completed_phases=[], acceptance_cases_passed=[], certification='NONE', certified_release_sha=None, live_certification_digest=None, independent_review_digest=None, qualified_models_digest=None, blocking_limitations=[], full_auto_eligible=False, changed_paths=[], plan_digest=None, state_digest=None, amendment_proposed=True, adoption_requested=False, lifecycle_state='AMENDMENT_PROPOSED')
     record.update(changes)
     return record
 
 
-def validate_adoption_record(record: Any, schemas: Mapping[str, Any], *, external: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def derive_release_lifecycle_state(record: Any, schemas: Mapping[str, Any], *, external: ValidatedReleaseAuthority | None = None) -> str:
+    """One deterministic derivation. Serialized state/eligibility are checked later."""
     record = _shape(record, 'adoption_record', schemas)
-    if record['architecture_frozen'] and record['architecture_spec_sha'] != ARCHITECTURE_SPEC_SHA:
-        raise ContractError('wrong frozen design SHA')
+    if record['architecture_frozen'] is not True or record['architecture_spec_sha'] != ARCHITECTURE_SPEC_SHA:
+        raise ContractError('release lifecycle requires the exact frozen architecture')
     if validate_adoption_diff(record['changed_paths']):
         raise ContractError('adoption changed forbidden product/control paths')
-    progress = record['completed_phases']
+    progress, phase = record['completed_phases'], record['implementation_phase']
     if progress != list(IMPLEMENTATION_PHASES[:len(progress)]):
         raise ContractError('implementation progress must be ordered prefix')
-    phase = record['implementation_phase']
-    building = phase != 'NONE' or progress or record['certification'] != 'NONE'
-    if building:
-        if not record['architecture_frozen'] or record['build_authorization_digest'] is None:
-            raise ContractError('implementation requires explicit build authorization')
-        _bind(record, external, ['architecture_spec_sha', 'build_authorization_digest'])
-        if phase not in external.get('authorized_phases', []):
-            raise ContractError('phase outside disabled build authorization')
-        index = IMPLEMENTATION_PHASES.index(phase)
-        if len(progress) not in (index, index+1):
-            raise ContractError('phase inconsistent with progress')
+    if phase == 'NONE' and progress:
+        raise ContractError('completed implementation cannot rewind to the initial build state')
+    authorized = record['build_authorization_digest'] is not None
+    facts = _release_authority(external) if external is not None else None
+    if facts is not None and canonical_digest(schemas) != canonical_digest(facts['schemas']):
+        raise ContractError('protocol differs from pinned authority')
+    if authorized:
+        if facts is None or not record['amendment_proposed'] or record['build_authorization_digest'] != canonical_digest(facts['build']):
+            raise ContractError('implementation requires exact validated build provenance')
+        if progress != facts['build']['completed_phases']:
+            raise ContractError('progress differs from controller phase evidence')
+        if phase != 'NONE' and (phase not in facts['build']['authorized_phases'] or len(progress) not in (IMPLEMENTATION_PHASES.index(phase), IMPLEMENTATION_PHASES.index(phase)+1)):
+            raise ContractError('phase outside build permission or inconsistent with progress')
+        owned = {case for case, owner in facts['ownership'].items() if owner in progress or owner == phase}
+        if not set(record['acceptance_cases_passed']) <= owned:
+            raise ContractError('acceptance case claimed before its owning phase')
+    elif phase != 'NONE' or progress or record['acceptance_cases_passed'] or record['certification'] != 'NONE':
+        raise ContractError('implementation/certification requires build authorization')
     certified = record['certification'] != 'NONE'
+    certification = facts['certification'] if facts else None
     if certified:
-        if phase != 'M5' or progress != list(IMPLEMENTATION_PHASES) or set(record['acceptance_cases_passed']) != set(ACCEPTANCE_CASE_IDS):
-            raise ContractError('certification requires all phases/cases')
-        for key in ('certified_release_sha', 'live_certification_digest', 'independent_review_digest', 'qualified_models_digest'):
-            if record[key] is None:
-                raise ContractError('certification evidence missing: ' + key)
-        _bind(record, external, ['certified_release_sha', 'live_certification_digest', 'independent_review_digest', 'qualified_models_digest', 'completed_phases', 'acceptance_cases_passed', 'blocking_limitations'])
-        if external.get('live_certification_result') != 'PASS' or external.get('independent_review_result') != 'PASS' or external.get('required_models_available') is not True or external.get('case_results') != dict.fromkeys(ACCEPTANCE_CASE_IDS, 'PASS'):
-            raise ContractError('external live/review/model/case results incomplete or failed')
-        if record['blocking_limitations']:
-            raise ContractError('certification has blocking limitations')
+        if not authorized or certification is None or phase != 'M5' or progress != list(IMPLEMENTATION_PHASES) or set(record['acceptance_cases_passed']) != set(ACCEPTANCE_CASE_IDS):
+            raise ContractError('certification requires complete validated phase/case evidence')
+        expected = dict(certified_release_sha=certification['release_sha'], blocking_limitations=certification['blocking_limitations'])
+        expected.update({name + '_digest': certification[name]['digest'] for name in ('live_certification', 'independent_review', 'qualified_models')})
+        _bind(record, expected, expected)
+    elif any(record[k] is not None for k in ('certified_release_sha', 'live_certification_digest', 'independent_review_digest', 'qualified_models_digest')):
+        raise ContractError('uncertified release cannot claim certification identities')
     adopted = record['operational_adoption'] == 'ADOPTED'
     if adopted:
-        if not certified or record['adopted_release_sha'] != record['certified_release_sha'] or record['adopted_release_sha'] is None:
-            raise ContractError('operational adoption requires exact certified release')
-        if record['authority_kind'] != 'V2_FROZEN_CONTROL_RELEASE':
-            raise ContractError('wrong operational authority kind')
-        _bind(record, external, ['adopted_release_sha', 'parent_sha', 'plan_digest', 'state_digest'])
-        if any(record[k] is None for k in ('parent_sha', 'plan_digest', 'state_digest')):
-            raise ContractError('adoption provenance missing')
-    elif record['adopted_release_sha'] is not None or record['authority_kind'] != 'V2_DESIGN_CANDIDATE':
-        raise ContractError('disabled candidate cannot claim runtime authority')
+        adoption = facts['adoption'] if facts else None
+        if not certified or adoption is None or record['authority_kind'] != 'V2_FROZEN_CONTROL_RELEASE':
+            raise ContractError('operational adoption requires exact validated operator pin')
+        expected = {key: adoption[key] for key in ('parent_sha', 'plan_digest', 'state_digest')}
+        expected['adopted_release_sha'] = adoption['certified_release_sha']
+        _bind(record, expected, expected)
+        if record['adopted_release_sha'] != record['certified_release_sha']:
+            raise ContractError('adopted release differs from certified release')
+    elif record['adopted_release_sha'] is not None or record['authority_kind'] != 'V2_DESIGN_CANDIDATE' or any(record[k] is not None for k in ('parent_sha', 'plan_digest', 'state_digest')):
+        raise ContractError('disabled candidate cannot claim runtime authority/provenance')
     if record['certification'] == 'CERTIFIED_ACTIVE' and not adopted:
         raise ContractError('active certification requires external operational adoption')
-    eligible = adopted and record['certification'] == 'CERTIFIED_ACTIVE'
-    if eligible and external.get('authority_binding_valid') is not True:
-        raise ContractError('active release requires externally verified clean authority binding')
-    if record['full_auto_eligible'] is not eligible:
-        raise ContractError('full-auto predicate mismatch')
+    if record['adoption_requested'] and not certified:
+        raise ContractError('adoption request precedes complete certification')
+    if record['blocking_limitations']:
+        raise ContractError('release has unresolved blocking limitations')
+    if adopted:
+        return 'CERTIFIED_ACTIVE' if record['certification'] == 'CERTIFIED_ACTIVE' else 'OPERATIONALLY_ADOPTED'
+    if certified:
+        return 'OPERATIONAL_ADOPTION_PENDING' if record['adoption_requested'] else 'CERTIFICATION_CANDIDATE'
+    if phase != 'NONE':
+        return 'IMPLEMENTATION_' + phase
+    if authorized:
+        return 'BUILD_AUTHORIZED_DISABLED'
+    return 'AMENDMENT_PROPOSED' if record['amendment_proposed'] else 'ARCHITECTURE_FROZEN'
+
+
+def validate_adoption_record(record: Any, schemas: Mapping[str, Any], *, external: ValidatedReleaseAuthority | None = None) -> dict[str, Any]:
+    state = derive_release_lifecycle_state(record, schemas, external=external)
+    if record['lifecycle_state'] != state or record['full_auto_eligible'] is not (state == 'CERTIFIED_ACTIVE'):
+        raise ContractError('serialized lifecycle/eligibility contradicts deterministic derivation')
     return record
 
 
-def full_auto_eligible(record: Mapping[str, Any], *, schemas: Mapping[str, Any] | None = None, external: Mapping[str, Any] | None = None) -> bool:
+def full_auto_eligible(record: Mapping[str, Any], *, schemas: Mapping[str, Any] | None = None, external: ValidatedReleaseAuthority | None = None) -> bool:
     if schemas is None or external is None:
         return False
     try:
@@ -650,6 +824,23 @@ def _authority_path(path: str) -> bool:
     return path in AUTHORITY_EXACT_PATHS or path.startswith(AUTHORITY_PREFIXES)
 
 
+def _verify_materialization(root: Path, manifest: list[dict[str, Any]]) -> None:
+    # Read filesystem only to reject drift hidden by assume-unchanged/index flags.
+    for entry in manifest:
+        path = root / entry['path']
+        if entry['mode'] == 'absent':
+            if path.exists() or path.is_symlink():
+                raise ContractError('absent frozen config appeared')
+            continue
+        for parent in (path, *path.parents):
+            if parent == root:
+                break
+            if parent.is_symlink():
+                raise ContractError('authority symlink escape')
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256'] or bool(path.stat().st_mode & 0o111) != (entry['mode'] == '100755'):
+            raise ContractError('working file differs from pinned release: ' + entry['path'])
+
+
 def load_authority_manifest(repo_root: Path, *, release_oid: str, base_oid: str, sandbox_digest: str, contract_versions: Mapping[str, Any], anchor_oid: str = TRUSTED_DESIGN_BASE, purpose: str, relative_paths: Iterable[str] | None = None) -> dict[str, Any]:
     root = _authority_repo(repo_root, anchor_oid)
     for oid in (release_oid, base_oid):
@@ -667,20 +858,7 @@ def load_authority_manifest(repo_root: Path, *, release_oid: str, base_oid: str,
     base_manifest = build_manifest(root, base_oid, _base_input=True)
     if not {e['path'] for e in base_manifest if _authority_path(e['path']) and e['mode'] != 'absent'} <= {e['path'] for e in manifest if e['mode'] != 'absent'}:
         raise ContractError('baseline authority surface removed from release')
-    # Read filesystem only to reject drift hidden by assume-unchanged/index flags.
-    for entry in manifest:
-        path = root / entry['path']
-        if entry['mode'] == 'absent':
-            if path.exists() or path.is_symlink():
-                raise ContractError('absent frozen config appeared')
-            continue
-        for parent in (path, *path.parents):
-            if parent == root:
-                break
-            if parent.is_symlink():
-                raise ContractError('authority symlink escape')
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256'] or bool(path.stat().st_mode & 0o111) != (entry['mode'] == '100755'):
-            raise ContractError('working file differs from pinned release: ' + entry['path'])
+    _verify_materialization(root, manifest)
     if purpose == 'OPERATIONAL':
         base_entries = {e['path']: e for e in base_manifest}
         for entry in manifest:
@@ -732,9 +910,12 @@ def validate_control_amendment_marker(marker: Any, schemas: Mapping[str, Any], *
     return marker
 
 
-def validate_authority_source(authority_kind: Any, reference: str | None = None) -> None:
-    if authority_kind != 'V2_FROZEN_CONTROL_RELEASE' or reference in (V1_BRANCH, AUDITED_PROTOTYPE_SHA, f'refs/heads/{V1_BRANCH}'):
-        raise ContractError('V1/candidate is not operational authority')
+def validate_authority_source(authority_kind: Any, reference: str | None = None, *, external: ValidatedReleaseAuthority | None = None) -> None:
+    facts = _release_authority(external)
+    _value(reference, {'type': 'sha'}, 'operational authority reference')
+    adoption = facts['adoption']
+    if authority_kind != 'V2_FROZEN_CONTROL_RELEASE' or adoption is None or reference != adoption['certified_release_sha'] or reference != facts['git']['release_oid']:
+        raise ContractError('exact positively verified operational adoption/Git authority required')
 
 
 def validate_completion_evidence(record: Any, schemas: Mapping[str, Any], *, repo_root: Path, revision: str, evidence_path: str, adoption_sha: str, anchor_oid: str = TRUSTED_DESIGN_BASE, receipt_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -784,10 +965,13 @@ def validate_v2_contract_documents(repo_root: Path) -> None:
         if type(document.get('schema_version')) is not int or document['schema_version'] != 2 or document.get('activation') != ACTIVATION_DISABLED:
             raise ContractError('candidate contract version/activation differs')
     adoption = contract['adoption']
-    if adoption.get('operational_adoption') != 'PENDING' or adoption.get('full_auto_eligible') is not False or adoption.get('certification') != 'NONE' or adoption.get('adopted_release_sha') is not None or adoption.get('design_authority_sha') != ARCHITECTURE_SPEC_SHA:
+    validate_adoption_record(adoption, schemas)
+    if adoption['lifecycle_state'] != 'AMENDMENT_PROPOSED' or adoption != proposal_record():
         raise ContractError('M0 must remain proposed/disabled and uncertified')
     if contract['release_lifecycle']['states'] != schemas['adoption_lifecycle']['states'] or contract['release_lifecycle']['transitions'] != schemas['adoption_lifecycle']['transitions']:
         raise ContractError('documents disagree about release lifecycle')
+    if contract.get('authority_provenance') != schemas.get('authority_provenance') or schemas.get('authority_provenance', {}).get('raw_mapping_confers_authority') is not False:
+        raise ContractError('documents disagree about external provenance authority')
     if any(p.get('enrolled_models') for p in model['role_policy'].values()) or model['unknown_family_is_independent'] is not False or model['free_suffix_is_qualification'] is not False:
         raise ContractError('M0 may not enroll/qualify models')
     if templates['model_authored_goal_allowed'] is not False or templates['measurement_floor'] != 'exact_external_frozen_template_comparison':

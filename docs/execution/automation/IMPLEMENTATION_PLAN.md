@@ -255,3 +255,14 @@ The M0-R2 candidate must independently pass CP01–05/33 contract boundaries and
 all lifecycle, real-Git authority, nested task and receipt negative matrices.
 These M0 results do not certify later OS/CLI/hosted boundaries. An independent
 subsequent audit decides admission to M1; this correction stops at M0-R2.
+
+### M0-R3 closure gate
+
+R3 is a corrective successor of R2, preserving its published history. It closes
+CP01–05/33 contracts only: deterministic lifecycle derivation, independent
+Git-pinned build/certification/adoption provenance, positive exact authority
+references and pinned CHECKS phase/case ownership. README §19 specifies the
+host bootstrap boundary. Synthetic pinned attestations are contract examples,
+not M5 certification. The focused and existing infrastructure suites plus the
+clean actual-candidate authority probe must pass; independent review decides
+M1 admission. R3 itself authorizes no M1, product execution or full-auto.

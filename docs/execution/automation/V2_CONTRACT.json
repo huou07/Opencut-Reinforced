@@ -275,12 +275,36 @@
     }
   },
   "adoption": {
-    "lifecycle_state": "AMENDMENT_PROPOSED",
-    "design_authority_sha": "8f41e0b5f03a9da0797ad5ddf6a65da40f447d09",
-    "build_authorization": "EXPLICIT_PHASE_SCOPED_OPERATOR_TASK",
+    "schema_version": 1,
+    "authority_kind": "V2_DESIGN_CANDIDATE",
+    "architecture_frozen": true,
+    "architecture_spec_sha": "8f41e0b5f03a9da0797ad5ddf6a65da40f447d09",
+    "build_authorization_digest": null,
     "operational_adoption": "PENDING",
+    "parent_sha": null,
     "adopted_release_sha": null,
+    "implementation_phase": "NONE",
+    "completed_phases": [],
+    "acceptance_cases_passed": [],
     "certification": "NONE",
-    "full_auto_eligible": false
+    "certified_release_sha": null,
+    "live_certification_digest": null,
+    "independent_review_digest": null,
+    "qualified_models_digest": null,
+    "blocking_limitations": [],
+    "full_auto_eligible": false,
+    "changed_paths": [],
+    "plan_digest": null,
+    "state_digest": null,
+    "lifecycle_state": "AMENDMENT_PROPOSED",
+    "amendment_proposed": true,
+    "adoption_requested": false
+  },
+  "authority_provenance": {
+    "record_source": "independent_controller_git_repository",
+    "pin_source": "operator_controller_bootstrap_only",
+    "raw_mapping_confers_authority": false,
+    "lifecycle_derivation": "derive_release_lifecycle_state",
+    "case_ownership_source": "docs/execution/automation/CHECKS.json"
   }
 }

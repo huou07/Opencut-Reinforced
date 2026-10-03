@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""M0-R2 semantic matrices. Real Git fixtures; no runtime/model/product launch."""
+"""M0-R3 semantic matrices. Real Git fixtures; no runtime/model/product launch."""
 from __future__ import annotations
 import copy
+import hashlib
+from dataclasses import replace
 import json
 import os
 import subprocess
@@ -145,62 +147,200 @@ class ReceiptMatrixTests(unittest.TestCase):
             with self.assertRaises(c.ContractError):c.validate_record(bad,'review_report',SCHEMAS,context=report)
 
 
+class ProvenanceFixture:
+    """Real independent Git sources; externally approved pins are fixture-only."""
+    def __init__(self, parent):
+        self.candidate=Path(parent)/'candidate';self.controller=Path(parent)/'controller'
+        for root in (self.candidate,self.controller):
+            subprocess.run(['git','clone','-q','--no-hardlinks','--no-checkout',str(REPO_ROOT),str(root)],check=True)
+            self.git(root,'checkout','-q','454f1597a74de2703064487518bdbe7a12731bbc')
+            self.git(root,'remote','set-url','origin','https://github.com/'+c.REPOSITORY_IDENTITY+'.git')
+        for name in ('PROTOCOL_SCHEMAS.json','V2_CONTRACT.json'):
+            relative=c.AUTOMATION_DIR+'/'+name
+            (self.candidate/relative).write_bytes((REPO_ROOT/relative).read_bytes())
+        (self.candidate/'scripts/model_orchestrator/contracts.py').write_bytes((REPO_ROOT/'scripts/model_orchestrator/contracts.py').read_bytes())
+        self.release=self.commit(self.candidate,'fixture: R3 contract materialization')
+        self.git(self.controller,'fetch','-q',str(self.candidate),self.release)
+        self.git(self.controller,'checkout','-q',self.release)
+        self.ownership={case['id']:case['phase'] for case in json.loads((REPO_ROOT/c.CHECKS_PATH).read_text())['acceptance_cases']}
+        authority=c.load_authority_manifest(self.candidate,release_oid=self.release,base_oid=c.TRUSTED_DESIGN_BASE,purpose='BUILD_AUTHORIZED_DISABLED',sandbox_digest=DIGEST,contract_versions=dict(project_schema=7,recovery_schema=1,ipc_protocol=1))
+        self.manifest_digest=c.canonical_digest(authority['manifest'])
+        self.builds={};self.certification=None;self.adoption=None
+        for phase in (*c.IMPLEMENTATION_PHASES,'M5-full'):
+            index=5 if phase=='M5-full' else int(phase[1]);completed=list(c.IMPLEMENTATION_PHASES[:6 if phase=='M5-full' else index])
+            common=dict(schema_version=1,repository=c.REPOSITORY_IDENTITY,architecture_spec_sha=c.ARCHITECTURE_SPEC_SHA,base_sha=c.TRUSTED_DESIGN_BASE,release_sha=self.release,candidate_branch='control/fixture',authorization_id='auth-'+phase,task_id='task-'+phase,sequence=1,nonce='nonce-'+phase,sandbox_digest=DIGEST,authority_manifest_digest=self.manifest_digest,checks_digest=c.canonical_digest(json.loads((REPO_ROOT/c.CHECKS_PATH).read_text())))
+            build=dict(**common,purpose='DISABLED_BUILD_ONLY',authorized_phases=['M'+str(index)],completed_phases=completed,phase_evidence=[dict(phase=p,case_ids=[case for case,owner in self.ownership.items() if owner==p],receipt_id='phase-'+p,receipt_digest=DIGEST) for p in completed],allowed_paths=['scripts/model_orchestrator/contracts.py'],required_gates=['M0-contracts','execution-infra'])
+            build['required_case_ids']=[case for case,owner in self.ownership.items() if owner in build['authorized_phases']]
+            build['scope_digest']=c.canonical_digest({key:build[key] for key in ('authorized_phases','allowed_paths','required_gates','required_case_ids')});self.builds[phase]=build
+            self.write('build-'+phase,build)
+            if phase=='M5-full':
+                def evidence(name):return dict(evidence_id=name,digest=c.canonical_digest(name),release_sha=self.release,result='PASS')
+                self.certification=dict(**common,purpose='PRE_ADOPTION_CERTIFICATION',completed_phases=list(c.IMPLEMENTATION_PHASES),case_receipts=[dict(case_id=case,phase=owner,receipt_id='case-'+case,receipt_digest=c.canonical_digest(case),result='PASS') for case,owner in self.ownership.items()],live_certification=evidence('live'),independent_review=evidence('review'),qualified_models=dict(**evidence('models'),required_models_available=True),blocking_limitations=[])
+                self.write('certification',self.certification)
+                self.adoption=dict(**common,purpose='OPERATOR_OPERATIONAL_ADOPTION',authority_kind='V2_FROZEN_CONTROL_RELEASE',certified_release_sha=self.release,certification_digest=c.canonical_digest(self.certification),parent_sha=c.TRUSTED_DESIGN_BASE,plan_digest=hashlib.sha256(subprocess.check_output(['git','show',c.TRUSTED_DESIGN_BASE+':docs/execution/PLAN.json'],cwd=self.candidate)).hexdigest(),state_digest=hashlib.sha256(subprocess.check_output(['git','show',c.TRUSTED_DESIGN_BASE+':docs/execution/STATE.json'],cwd=self.candidate)).hexdigest())
+                self.adoption.update({name+'_digest':self.certification[name]['digest'] for name in ('live_certification','independent_review','qualified_models')});self.write('adoption',self.adoption)
+        self.source=self.commit(self.controller,'fixture: operator-pinned controller receipts')
+        self.authorities={phase:c.load_release_authority(self.candidate,self.controller,bootstrap=self.bootstrap(phase)) for phase in c.IMPLEMENTATION_PHASES}
+        self.certified=c.load_release_authority(self.candidate,self.controller,bootstrap=self.bootstrap('M5-full',certification=True))
+        self.adopted=c.load_release_authority(self.candidate,self.controller,bootstrap=self.bootstrap('M5-full',certification=True,adoption=True))
+    def git(self,root,*args):return subprocess.check_output(['git',*args],cwd=root,stderr=subprocess.DEVNULL).decode().strip()
+    def commit(self,root,message):
+        self.git(root,'add','-A');self.git(root,'-c','user.name=Contract Fixture','-c','user.email=fixture@example.invalid','commit','-qm',message);return self.git(root,'rev-parse','HEAD')
+    def write(self,name,record):
+        path=self.controller/('controller/'+name+'.json');path.parent.mkdir(exist_ok=True);path.write_text(json.dumps(record)+'\n')
+    def pin(self,name,record):return c.RecordPin('controller/'+name+'.json',c.canonical_digest(record))
+    def bootstrap(self,phase='M0',certification=False,adoption=False):
+        build=self.builds[phase]
+        return c.ControllerBootstrap(source_sha=self.source,anchor_sha=c.TRUSTED_DESIGN_BASE,base_sha=c.TRUSTED_DESIGN_BASE,release_sha=self.release,candidate_branch=build['candidate_branch'],authorization_id=build['authorization_id'],task_id=build['task_id'],sequence=1,nonce=build['nonce'],sandbox_digest=DIGEST,build=self.pin('build-'+phase,build),certification=self.pin('certification',self.certification) if certification else None,adoption=self.pin('adoption',self.adoption) if adoption else None)
+    def malformed(self,name,record,bootstrap):
+        self.write(name,record);sha=self.commit(self.controller,'fixture: malformed approved record')
+        pin=self.pin(name,record)
+        field='build' if name.startswith('build-') else name
+        try:return c.load_release_authority(self.candidate,self.controller,bootstrap=replace(bootstrap,source_sha=sha,**{field:pin}))
+        finally:self.git(self.controller,'checkout','-q',self.source)
+
+
 class LifecycleMatrixTests(unittest.TestCase):
-    """CP33: build permission and runtime authority never share ADOPTED."""
+    """CP33: deterministic lifecycle from independently Git-pinned provenance."""
+    @classmethod
+    def setUpClass(cls):
+        cls.temp=tempfile.TemporaryDirectory();cls.addClassCleanup(cls.temp.cleanup);cls.fixture=ProvenanceFixture(cls.temp.name)
     def build(self,phase='M0'):
-        record=c.proposal_record(build_authorization_digest=DIGEST,implementation_phase=phase,completed_phases=list(c.IMPLEMENTATION_PHASES[:int(phase[1])]))
-        external=dict(architecture_spec_sha=c.ARCHITECTURE_SPEC_SHA,build_authorization_digest=DIGEST,authorized_phases=list(c.IMPLEMENTATION_PHASES))
-        return record,external
-
-    def certified(self):
-        record,external=self.build('M5');record.update(completed_phases=list(c.IMPLEMENTATION_PHASES),acceptance_cases_passed=list(c.ACCEPTANCE_CASE_IDS),certification='CANDIDATE',certified_release_sha=SHA,live_certification_digest=DIGEST,independent_review_digest=DIGEST,qualified_models_digest=DIGEST)
-        external.update({k:copy.deepcopy(record[k]) for k in ('completed_phases','acceptance_cases_passed','certified_release_sha','live_certification_digest','independent_review_digest','qualified_models_digest','blocking_limitations')})
-        external.update(live_certification_result='PASS',independent_review_result='PASS',required_models_available=True,case_results=dict.fromkeys(c.ACCEPTANCE_CASE_IDS,'PASS'))
-        return record,external
-
+        authority=self.fixture.authorities[phase];build=json.loads(authority.payload_json)['build']
+        record=c.proposal_record(build_authorization_digest=c.canonical_digest(build),implementation_phase=phase,completed_phases=copy.deepcopy(build['completed_phases']),lifecycle_state='IMPLEMENTATION_'+phase)
+        return record,authority
+    def certified(self,adopted=False):
+        f=self.fixture;authority=f.adopted if adopted else f.certified
+        record=c.proposal_record(build_authorization_digest=c.canonical_digest(f.builds['M5-full']),implementation_phase='M5',completed_phases=list(c.IMPLEMENTATION_PHASES),acceptance_cases_passed=list(c.ACCEPTANCE_CASE_IDS),certification='CANDIDATE',certified_release_sha=f.release,lifecycle_state='CERTIFICATION_CANDIDATE')
+        record.update({name+'_digest':f.certification[name]['digest'] for name in ('live_certification','independent_review','qualified_models')})
+        if adopted:
+            record.update(operational_adoption='ADOPTED',authority_kind='V2_FROZEN_CONTROL_RELEASE',adopted_release_sha=f.release,certification='CERTIFIED_ACTIVE',full_auto_eligible=True,lifecycle_state='CERTIFIED_ACTIVE')
+            record.update({key:f.adoption[key] for key in ('parent_sha','plan_digest','state_digest')})
+        return record,authority
     def test_no_design_or_build_permission_means_no_implementation(self):
         for frozen in (False,True):
-            record=c.proposal_record(architecture_frozen=frozen,implementation_phase='M1')
-            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS)
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(c.proposal_record(architecture_frozen=frozen,implementation_phase='M1'),SCHEMAS)
         c.validate_adoption_record(c.proposal_record(),SCHEMAS)
-
+        self.assertFalse(c.full_auto_eligible(c.proposal_record(),schemas=SCHEMAS))
     def test_all_phases_allowed_disabled_without_adoption(self):
         for phase in c.IMPLEMENTATION_PHASES:
-            with self.subTest(phase=phase):
-                record,external=self.build(phase);c.validate_adoption_record(record,SCHEMAS,external=external)
-                self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=external))
-                with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS)
-        record,external=self.build('M1');external['authorized_phases']=['M0']
-        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=external)
-
+            record,authority=self.build(phase);c.validate_adoption_record(record,SCHEMAS,external=authority)
+            self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=authority))
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS)
+        record,authority=self.build();record.update(implementation_phase='M1',lifecycle_state='IMPLEMENTATION_M1')
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
     def test_pre_adoption_certification_not_active(self):
-        record,external=self.certified();c.validate_adoption_record(record,SCHEMAS,external=external)
-        self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=external))
-        record['full_auto_eligible']=True
-        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=external)
-
+        record,authority=self.certified();c.validate_adoption_record(record,SCHEMAS,external=authority)
+        self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=authority))
+        record.update(adoption_requested=True,lifecycle_state='OPERATIONAL_ADOPTION_PENDING');c.validate_adoption_record(record,SCHEMAS,external=authority)
+        record.update(certification='CERTIFIED_ACTIVE',lifecycle_state='CERTIFIED_ACTIVE',full_auto_eligible=True)
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
     def test_operational_adoption_requires_complete_external_evidence(self):
-        record,external=self.certified();record.update(operational_adoption='ADOPTED',authority_kind='V2_FROZEN_CONTROL_RELEASE',adopted_release_sha=SHA,parent_sha='b'*40,plan_digest=DIGEST,state_digest=DIGEST,certification='CERTIFIED_ACTIVE',full_auto_eligible=True)
-        external.update({k:record[k] for k in ('adopted_release_sha','parent_sha','plan_digest','state_digest')})
-        external['authority_binding_valid']=True
-        c.validate_adoption_record(record,SCHEMAS,external=external)
-        self.assertTrue(c.full_auto_eligible(record,schemas=SCHEMAS,external=external))
+        record,authority=self.certified(True);c.validate_adoption_record(record,SCHEMAS,external=authority)
+        self.assertTrue(c.full_auto_eligible(record,schemas=SCHEMAS,external=authority))
         self.assertFalse(c.full_auto_eligible(record))
         for key,value in [('completed_phases',['M0']),('acceptance_cases_passed',['CP01']),('live_certification_digest',None),('qualified_models_digest',None),('blocking_limitations',['missing isolation']),('adopted_release_sha','c'*40),('architecture_spec_sha',c.AUDITED_PROTOTYPE_SHA),('changed_paths',['docs/execution/STATE.json'])]:
             with self.subTest(key=key):
                 bad=copy.deepcopy(record);bad[key]=value
-                with self.assertRaises(c.ContractError):c.validate_adoption_record(bad,SCHEMAS,external=external)
-        self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external={}))
-        for key,value in [('required_models_available',False),('live_certification_result','SKIPPED'),('independent_review_result','UNKNOWN'),('case_results',{'CP01':'PASS'}),('authority_binding_valid',False),('authority_binding_valid',1)]:
-            bad=copy.deepcopy(external);bad[key]=value
-            self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=bad))
-
+                with self.assertRaises(c.ContractError):c.validate_adoption_record(bad,SCHEMAS,external=authority)
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=record)
+        raw=json.loads(authority.payload_json)
+        raw.update(required_models_available=True,live_certification_result='PASS',independent_review_result='PASS',authority_binding_valid=True,case_results=dict.fromkeys(c.ACCEPTANCE_CASE_IDS,'PASS'),authorized_phases=list(c.IMPLEMENTATION_PHASES))
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=raw)
+        self.assertFalse(c.full_auto_eligible(record,schemas=SCHEMAS,external=raw))
     def test_v1_and_wrong_control_adoption_scope_refused(self):
         for kind,ref in [('V1_PROTOTYPE',None),('V2_FROZEN_CONTROL_RELEASE',c.V1_BRANCH),('V2_FROZEN_CONTROL_RELEASE',c.AUDITED_PROTOTYPE_SHA)]:
             with self.assertRaises(c.ContractError):c.validate_authority_source(kind,ref)
         for path in ('docs/execution/STATE.json','docs/execution/PLAN.json','apps/or_app/lib/main.dart','crates/or_core/src/lib.rs','unknown.py'):
             self.assertEqual(c.validate_adoption_diff([path]),[path])
         self.assertEqual(c.validate_adoption_diff(['scripts/model_orchestrator/contracts.py']),[])
+    def test_lifecycle_negative_matrix_and_every_derived_stage(self):
+        record,authority=self.build()
+        for key,value in [('lifecycle_state','NOT_A_STATE'),('lifecycle_state','CERTIFIED_ACTIVE'),('lifecycle_state','IMPLEMENTATION_M4'),('architecture_frozen',False),('build_authorization_digest',None),('completed_phases',['M1']),('completed_phases',['M1','M0']),('certification','CANDIDATE')]:
+            with self.subTest(key=key,value=value):
+                bad=copy.deepcopy(record);bad[key]=value
+                with self.assertRaises(c.ContractError):c.validate_adoption_record(bad,SCHEMAS,external=authority)
+        proposal=c.proposal_record(amendment_proposed=False,lifecycle_state='ARCHITECTURE_FROZEN');c.validate_adoption_record(proposal,SCHEMAS)
+        prior,prior_authority=self.build('M1');prior.update(implementation_phase='NONE',lifecycle_state='BUILD_AUTHORIZED_DISABLED')
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(prior,SCHEMAS,external=prior_authority)
+        record.update(implementation_phase='NONE',lifecycle_state='BUILD_AUTHORIZED_DISABLED');c.validate_adoption_record(record,SCHEMAS,external=authority)
+        record,authority=self.certified(True);record.update(certification='CANDIDATE',full_auto_eligible=False,lifecycle_state='OPERATIONALLY_ADOPTED');c.validate_adoption_record(record,SCHEMAS,external=authority)
+    def test_acceptance_progress_negative_matrix(self):
+        for phase,cases in [('M0',['CP44']),('M1',list(c.ACCEPTANCE_CASE_IDS)),('M1',['CP19']),('M0',['CP01','CP01']),('M0',['UNKNOWN'])]:
+            record,authority=self.build(phase);record['acceptance_cases_passed']=cases
+            with self.subTest(phase=phase,cases=cases):
+                with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+        record,authority=self.certified();record['acceptance_cases_passed'].remove('CP44')
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+        record,authority=self.build('M3');record['completed_phases']=['M0','M1'];record['acceptance_cases_passed']=['CP19']
+        with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+        record,authority=self.build();record['acceptance_cases_passed']=['CP01','CP33'];c.validate_adoption_record(record,SCHEMAS,external=authority)
+    def test_positive_authority_source_and_all_negative_references(self):
+        f=self.fixture;c.validate_authority_source('V2_FROZEN_CONTROL_RELEASE',f.release,external=f.adopted)
+        for ref in ('arbitrary','control/branch','refs/heads/main','x'*40,c.V1_BRANCH,c.AUDITED_PROTOTYPE_SHA,c.ARCHITECTURE_SPEC_SHA,c.TRUSTED_DESIGN_BASE,'f'*40):
+            with self.subTest(reference=ref):
+                with self.assertRaises(c.ContractError):c.validate_authority_source('V2_FROZEN_CONTROL_RELEASE',ref,external=f.adopted)
+        for authority in (None,{},f.certified,f.authorities['M0']):
+            with self.assertRaises(c.ContractError):c.validate_authority_source('V2_FROZEN_CONTROL_RELEASE',f.release,external=authority)
+    def test_provenance_pin_binding_negative_matrix(self):
+        f=self.fixture;bootstrap=f.bootstrap()
+        changes=[dict(architecture_spec_sha=c.AUDITED_PROTOTYPE_SHA),dict(repository='wrong/repository'),dict(base_sha=c.ARCHITECTURE_SPEC_SHA),dict(release_sha=c.TRUSTED_DESIGN_BASE),dict(sequence=2),dict(nonce='old'),dict(candidate_branch='control/other'),dict(authorized_phases=['M1']),dict(scope_digest='b'*64),dict(allowed_paths=['docs/execution/STATE.json'])]
+        for change in changes:
+            with self.subTest(change=change):
+                bad=dict(f.builds['M0'],**change)
+                with self.assertRaises(c.ContractError):f.malformed('build-M0',bad,bootstrap)
+        bad=copy.deepcopy(f.builds['M0']);bad['required_case_ids']=['CP01'];bad['scope_digest']=c.canonical_digest({key:bad[key] for key in ('authorized_phases','allowed_paths','required_gates','required_case_ids')})
+        with self.assertRaises(c.ContractError):f.malformed('build-M0',bad,bootstrap)
+        with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.candidate,bootstrap=bootstrap)
+        with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.controller,bootstrap={})
+        with self.assertRaises(c.ContractError):c.ValidatedReleaseAuthority({},f.candidate,f.controller,f.source)
+        bad=replace(bootstrap,build=c.RecordPin(bootstrap.build.path,'b'*64))
+        with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.controller,bootstrap=bad)
+        with self.assertRaises(c.ContractError):c.validate_record(f.builds['M0'],'build_authorization',SCHEMAS,context=f.builds['M0'])
+        record,authority=self.build()
+        raw=dict(architecture_spec_sha=c.ARCHITECTURE_SPEC_SHA,build_authorization_digest=record['build_authorization_digest'],authorized_phases=['M0'])
+        for external in (raw,f.builds['M0'],record):
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=external)
+
+    def test_post_load_repository_identity_and_hidden_drift_refused(self):
+        f=self.fixture;record,authority=self.build()
+        f.git(f.controller,'remote','set-url','origin','https://github.com/wrong/repository.git')
+        try:
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+            with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.controller,bootstrap=f.bootstrap())
+        finally:f.git(f.controller,'remote','set-url','origin','https://github.com/'+c.REPOSITORY_IDENTITY+'.git')
+        path=f.candidate/'AGENTS.md';original=path.read_bytes()
+        f.git(f.candidate,'update-index','--assume-unchanged','AGENTS.md');path.write_text('hidden dirty candidate')
+        try:
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+        finally:
+            path.write_bytes(original);f.git(f.candidate,'update-index','--no-assume-unchanged','AGENTS.md')
+    def test_certification_and_operator_pin_negative_matrix(self):
+        f=self.fixture;bootstrap=f.bootstrap('M5-full',certification=True,adoption=True)
+        for field,value in [('certified_release_sha',c.ARCHITECTURE_SPEC_SHA),('certification_digest','b'*64),('independent_review_digest','b'*64),('authority_manifest_digest','b'*64),('parent_sha',c.ARCHITECTURE_SPEC_SHA),('state_digest','b'*64)]:
+            with self.subTest(field=field):
+                with self.assertRaises(c.ContractError):f.malformed('adoption',dict(f.adoption,**{field:value}),bootstrap)
+        changes=[('completed_phases',['M0']),('case_receipts',f.certification['case_receipts'][:-1]),('blocking_limitations',['isolation unavailable'])]
+        for field,value in changes:
+            with self.subTest(field=field):
+                with self.assertRaises(c.ContractError):f.malformed('certification',dict(f.certification,**{field:value}),bootstrap)
+        for name in ('live_certification','independent_review','qualified_models'):
+            bad=copy.deepcopy(f.certification);bad[name]['result']='FAIL'
+            with self.assertRaises(c.ContractError):f.malformed('certification',bad,bootstrap)
+        bad=copy.deepcopy(f.certification);bad['qualified_models']['required_models_available']=False
+        with self.assertRaises(c.ContractError):f.malformed('certification',bad,bootstrap)
+        bad=copy.deepcopy(f.certification);bad['case_receipts'][0]['phase']='M5'
+        with self.assertRaises(c.ContractError):f.malformed('certification',bad,bootstrap)
+        bad=copy.deepcopy(f.certification);bad['case_receipts'][1]=copy.deepcopy(bad['case_receipts'][0])
+        with self.assertRaises(c.ContractError):f.malformed('certification',bad,bootstrap)
+    def test_stale_controller_snapshot_refused(self):
+        f=self.fixture;(f.controller/'controller/new-sequence.txt').write_text('advanced controller sequence')
+        f.commit(f.controller,'fixture: later controller approval')
+        try:
+            record,authority=self.build()
+            with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
+            with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.controller,bootstrap=f.bootstrap())
+        finally:f.git(f.controller,'checkout','-q',f.source)
 
 
 class GitFixture:
@@ -349,6 +489,15 @@ class RepositoryConsistencyTests(unittest.TestCase):
         c.validate_v2_contract_documents(REPO_ROOT)
         files={p.name for p in (REPO_ROOT/'scripts/model_orchestrator').glob('*.py')}
         self.assertEqual(files,{'contracts.py','__init__.py'})
+    def test_serialized_document_lifecycle_is_semantically_bound(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);shutil.copytree(REPO_ROOT/c.AUTOMATION_DIR,root/c.AUTOMATION_DIR)
+            path=root/c.V2_CONTRACT_PATH;original=json.loads(path.read_text())
+            for label in ('UNKNOWN','CERTIFIED_ACTIVE','IMPLEMENTATION_M4','BUILD_AUTHORIZED_DISABLED'):
+                bad=copy.deepcopy(original);bad['adoption']['lifecycle_state']=label;path.write_text(json.dumps(bad))
+                with self.assertRaises(c.ContractError):c.validate_v2_contract_documents(root)
+
     def test_invalid_lifecycle_and_unknown_nested_schema(self):
         bad=copy.deepcopy(SCHEMAS);bad['adoption_lifecycle']['transitions']['AMENDMENT_PROPOSED']=['OPERATIONALLY_ADOPTED']
         with self.assertRaises(c.ContractError):c.validate_protocol_schemas(bad)
@@ -430,4 +579,49 @@ class ControlAmendmentMarkerTests(unittest.TestCase):
 
 
 
-if __name__=='__main__':unittest.main()
+def probe_repository_authority(revision):
+    """Actual repository in an independent clone; no runtime/product execution."""
+    c._authority_repo(REPO_ROOT,c.TRUSTED_DESIGN_BASE)
+    origin=c._git(REPO_ROOT,'config','--local','--get','remote.origin.url').decode().strip()
+    with tempfile.TemporaryDirectory(prefix='or-r3-authority-probe-') as directory:
+        root=Path(directory)/'repo'
+        subprocess.run(['git','clone','-q','--no-hardlinks','--no-checkout',str(REPO_ROOT),str(root)],check=True)
+        def git(*args):return subprocess.check_output(['git',*args],cwd=root,stderr=subprocess.DEVNULL).decode().strip()
+        git('remote','set-url','origin',origin)
+        git('checkout','-q','HEAD' if revision=='staged' else revision)
+        if revision=='staged':
+            names=subprocess.check_output(['git','diff','--cached','--name-only','-z'],cwd=REPO_ROOT).decode().split('\0')[:-1]
+            for name in names:
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(subprocess.check_output(['git','show',':'+name],cwd=REPO_ROOT));path.chmod((REPO_ROOT/name).stat().st_mode & 0o777)
+            git('add','-A');git('-c','user.name=Contract Fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture: staged R3 repository probe')
+            revision=git('rev-parse','HEAD')
+        c._commit(root,c.ARCHITECTURE_SPEC_SHA);c._commit(root,revision)
+        c._ancestor(root,c.ARCHITECTURE_SPEC_SHA,revision)
+        def load():return c.load_authority_manifest(root,release_oid=revision,base_oid=c.TRUSTED_DESIGN_BASE,purpose='BUILD_AUTHORIZED_DISABLED',sandbox_digest=c.canonical_digest({'diagnostic':'M0 probe, no isolation certification'}),contract_versions=dict(project_schema=7,recovery_schema=1,ipc_protocol=1))
+        def refuse(call):
+            try:call()
+            except c.ContractError:return
+            raise AssertionError('authority probe accepted forbidden input')
+        authority=load();paths=[e['path'] for e in authority['manifest']]
+        absent=[e['path'] for e in authority['manifest'] if e['mode']=='absent']
+        for name in c.CONFIG_PATHS:
+            if not git('ls-tree',revision,'--',name):assert name in absent
+        path=root/'AGENTS.md';original=path.read_bytes();mode=path.stat().st_mode & 0o777
+        try:
+            path.write_text('dirty probe');refuse(load);path.write_bytes(original)
+            untracked=root/'.authority-probe-untracked';untracked.write_text('untracked probe')
+            refuse(load);untracked.unlink()
+            path.chmod(mode ^ 0o111);refuse(load);path.chmod(mode)
+            for omitted in paths:
+                refuse(lambda:c.build_manifest(root,revision,[p for p in paths if p!=omitted]))
+            git('remote','set-url','origin','https://github.com/foreign/repository.git');refuse(load)
+        finally:
+            path.write_bytes(original);path.chmod(mode)
+        result=dict(repository=c.REPOSITORY_IDENTITY,anchor=c.TRUSTED_DESIGN_BASE,architecture_sha=c.ARCHITECTURE_SPEC_SHA,release_sha=revision,base_sha=c.TRUSTED_DESIGN_BASE,manifest_count=len(paths),optional_absent_configs=absent,results=dict(clean='PASS',dirty_refusal='PASS',untracked_refusal='PASS',executable_mode_refusal='PASS',every_manifest_omission_refusal='PASS',foreign_repository_refusal='PASS'),boundary='M0 headless Git contract diagnostic; no runtime certification')
+        print(json.dumps(result,indent=2));return result
+
+
+if __name__=='__main__':
+    if len(sys.argv)==3 and sys.argv[1]=='--probe-repository':probe_repository_authority(sys.argv[2])
+    else:unittest.main()
