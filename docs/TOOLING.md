@@ -223,8 +223,10 @@ credential environment is passed into the CLI subprocess.
 The operator-authorized storage preparation reserved a 48 GiB backing file,
 created ext4 on it, and mounted it through a loop block device at a dedicated
 candidate root. Its observed filesystem capacity is 50,407,821,312 bytes.
-The existing `_bounded_candidate_filesystem()` accepts this genuine block
-backing without a contract change. Standard `/etc/fstab` persistence uses
+`_bounded_candidate_filesystem()` verifies this genuine block backing. Candidate
+inputs are direct children of the volume root; controller-private
+`.or-v2-launch-views` copies remain on the same bounded filesystem. Standard
+`/etc/fstab` persistence uses
 `loop,nodev,nosuid,nofail,x-systemd.mount-timeout=30s`; if the mount is absent,
 the ordinary root directory fails the bounded-storage probe. The backing file
 is root-owned mode 0600, and its parent is mode 0700. The candidate parent is
@@ -245,18 +247,28 @@ CP28 durable pause with bounded-stage settlement. These were inert shell
 fixtures on a real container boundary, not product/model execution or fake
 Docker observations. Changing live CPU, memory or PID settings refused before
 start. Exact commands, container identities and host cleanup manifests remain
-in the operator's separate host-preparation evidence directory.
+in the operator's separate host-preparation evidence directory. The M1 live
+recheck ran against stage workspaces on the same 48 GiB ext4 volume.
 
-**CP07 remains failed and M1 remains NOT CERTIFIED.** A live filesystem probe
-read the inert hostile candidate `opencode.json`/`.opencode` contents: generated
-external role files are not mounted into `prepare_fixture_stage()`'s launch
-view. This correction only pins the rootless connection. Do not certify the
-unmounted files as an effective configuration boundary, or close the gap by
-editing candidate configuration. A subsequent M1 correction must mask all
-frozen discoverable surfaces, including absent names, in an external launch
-view and preserve candidate contents. OpenCode execution still refuses; pinned
-adapter/protocol/provider conformance belongs to M3/M5. No M2 authority follows
-from these observations.
+**CP07 filesystem/configuration boundary now passes on the Debian rootless
+profile.** Each stage gets a separate candidate copy on the bounded volume.
+Docker overlays that copy's `opencode.json`, `opencode.jsonc`, and complete
+`.opencode` tree, plus the controlled worker home, with an exact set of
+controller-owned read-only bind mounts. `HOME`, XDG locations, and the explicit
+config path point into that read-only home. This also prevents Docker from
+creating missing nested mount targets inside the supplied candidate. The
+controller validates the exact policy bytes, modes, directory contents, and
+effective Docker mount set before start; an unexpected or writable overlay
+refuses.
+
+Two actual rootless containers exercised hostile existing configuration and
+previously absent project/home paths. The worker saw the trusted policy, could
+not read candidate agents/plugins/MCP/LSP/formatter/tool content, overwrite or
+replace masks, create new project/home config, or escape through symlink/path
+tricks. The source-candidate path/mode/content manifest was unchanged after
+both runs. This certifies the M1 filesystem/configuration boundary, not actual
+OpenCode config-precedence or protocol/provider behavior. No pinned OpenCode
+adapter is launched here; that remains M3/M5 work. No M2 authority follows.
 
 Available-boundary observations for this M1 candidate (2026-10-03/04):
 
@@ -273,14 +285,17 @@ Available-boundary observations for this M1 candidate (2026-10-03/04):
   CP29 uses eight explicit fault points in real child processes plus a parent
   fsync failure. CP34 observes actual local APFS and process-lock semantics;
   unsupported-profile refusal is a deterministic fixture.
-- CP06 has no live acceptance result. CP07 role/config and CP08 effective-setting
-  negatives are fixtures; their positive container boundaries remain blocked.
-  CP10 persistence/unknown-liveness refusal passes deterministic/process checks,
-  while whole-container kill/reconciliation is a fixture and remains uncertified.
-  Live settlement of CP28's already claimed container stage is also blocked.
+- The Debian rootless host provides real-container CP06, CP07 filesystem/config,
+  CP08 profile, CP10 fresh-controller reconciliation, and CP28 live pause
+  observations. CP27 additionally used two real controller processes and one
+  actual container launch. The macOS Docker daemon remains unavailable; no
+  positive container result is attributed to macOS.
+- CP09 and CP11 use real independent Git repositories and preserve dirty files
+  and worker commits. The Linux M1 suite also reran CP29's child-process crash
+  boundaries and CP34 storage/lock checks. Deterministic fixtures remain
+  labeled separately and do not replace live container evidence.
 - The initial implementation observes bounded dedicated ext4/xfs candidate
   storage on Linux. Ordinary directories and macOS VM quota/profile observers
-  remain unavailable. OpenCode configuration artifacts are prepared separately,
-  but effective installed-CLI overlays have not been certified. These limitations
-  remain explicit refusals; later integration cannot treat this candidate as
-  certified merely because Docker becomes reachable.
+  remain unavailable. Effective filesystem overlays are now verified, while
+  installed OpenCode adapter conformance remains untested and unavailable until
+  its later phase.

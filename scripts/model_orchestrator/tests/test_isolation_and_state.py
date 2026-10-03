@@ -391,8 +391,14 @@ class DockerFixture:
             value=lambda key:next(item.split('=',1)[1] for item in args if item.startswith('--'+key+'='))
             labels={args[index+1].split('=',1)[0]:args[index+1].split('=',1)[1] for index,item in enumerate(args) if item=='--label'}
             image=next(item for item in args if item.startswith('sha256:'));image_index=args.index(image)
-            mount=value('mount');source=mount.split(',src=')[1].split(',dst=')[0]
-            self.instance=dict(Id='a'*64,Image=image,Config=dict(User='10001:10001',Labels=labels,WorkingDir='/candidate',Entrypoint=[value('entrypoint')],Cmd=args[image_index+1:],Env=['HOME=/scratch','TMPDIR=/scratch','GIT_CONFIG_NOSYSTEM=1','GIT_CONFIG_GLOBAL=/dev/null']),HostConfig=dict(ReadonlyRootfs=True,Privileged=False,CapAdd=None,CapDrop=['ALL'],SecurityOpt=['no-new-privileges:true'],NetworkMode='none',PidMode='',IpcMode='none',UTSMode='',UsernsMode='',CgroupnsMode='private',Devices=[],DeviceRequests=[],DeviceCgroupRules=[],VolumesFrom=[],Links=[],ExtraHosts=[],Memory=int(value('memory')),MemorySwap=int(value('memory-swap')),NanoCpus=int(value('cpus'))*1000000000,PidsLimit=int(value('pids-limit')),RestartPolicy=dict(Name='no',MaximumRetryCount=0),LogConfig=dict(Type='none',Config={}),Tmpfs={'/scratch':value('tmpfs').split(':',1)[1]},Ulimits=[dict(Name='nofile',Soft=256,Hard=256),dict(Name='fsize',Soft=1048576,Hard=1048576)]),Mounts=[dict(Type='bind',Source=source,Destination='/candidate',RW=True,Propagation='rprivate')],State=dict(Status='created',Running=False,Paused=False,Restarting=False,Pid=0))
+            mounts=[]
+            for item in (arg.split('=',1)[1] for arg in args if arg.startswith('--mount=')):
+                fields=item.split(',');options=dict(field.split('=',1) for field in fields if '=' in field)
+                mounts.append(dict(Type=options['type'],Source=options['src'],Destination=options['dst'],
+                                   RW='readonly' not in fields,Propagation=options.get('bind-propagation','rprivate')))
+            env=[arg.split('=',1)[1] for arg in args if arg.startswith('--env=')]
+            env.append('PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
+            self.instance=dict(Id='a'*64,Image=image,Config=dict(User='10001:10001',Labels=labels,WorkingDir='/candidate',Entrypoint=[value('entrypoint')],Cmd=args[image_index+1:],Env=env),HostConfig=dict(ReadonlyRootfs=True,Privileged=False,CapAdd=None,CapDrop=['ALL'],SecurityOpt=['no-new-privileges:true'],NetworkMode='none',PidMode='',IpcMode='none',UTSMode='',UsernsMode='',CgroupnsMode='private',Devices=[],DeviceRequests=[],DeviceCgroupRules=[],VolumesFrom=[],Links=[],ExtraHosts=[],Memory=int(value('memory')),MemorySwap=int(value('memory-swap')),NanoCpus=int(value('cpus'))*1000000000,PidsLimit=int(value('pids-limit')),RestartPolicy=dict(Name='no',MaximumRetryCount=0),LogConfig=dict(Type='none',Config={}),Tmpfs={'/scratch':value('tmpfs').split(':',1)[1]},Ulimits=[dict(Name='nofile',Soft=256,Hard=256),dict(Name='fsize',Soft=1048576,Hard=1048576)]),Mounts=mounts,State=dict(Status='created',Running=False,Paused=False,Restarting=False,Pid=0))
             if self.mutate:self.mutate(self.instance)
             return 'a'*64
         if args[0]=='inspect':return c.canonical_json([self.instance])
@@ -411,11 +417,12 @@ class SandboxFixtureTests(GitIsolationTests):
     test_CP11_dirty_diagnostics_and_clean_commit_survive_sanitized_export=None
     test_role_config_overlay_is_external_and_candidate_preserved=None
     test_rootless_connection_is_explicit_and_does_not_depend_on_context=None
-    def prepare(self,transport=None):
+    def prepare(self,transport=None,role='IMPLEMENTATION'):
         transport=transport or DockerFixture()
         runtime=b.ContainerSandbox(transport,boot_identity='boot',host_platform='linux',fixture_only=True)
         persisted=[]
-        identity=runtime.prepare_fixture_stage(candidate=self.candidate,image='sha256:'+'b'*64,role='IMPLEMENTATION',limits=b.Limits(1,2**30,64,2**30,2**20,2**20,60),command=('/bin/sh','-c','exit 0'),owner_nonce='owner',task_id='task',stage_id='stage',stage_nonce='nonce',lease_epoch=1,persist=persisted.append)
+        overlays=b.write_role_overlays(self.root/('stage-overlay-'+str(len(list(self.root.glob('stage-overlay-*'))))),role)
+        identity=runtime.prepare_fixture_stage(candidate=self.candidate,image='sha256:'+'b'*64,role=role,limits=b.Limits(1,2**30,64,2**30,2**20,2**20,60),command=('/bin/sh','-c','exit 0'),owner_nonce='owner',task_id='task',stage_id='stage',stage_nonce='nonce',lease_epoch=1,persist=persisted.append,overlays=overlays)
         return runtime,transport,identity,persisted
     def test_CP08_missing_runtime_exact_classification_zero_creates_starts(self):
         transport=DockerFixture(missing=True)
@@ -425,6 +432,10 @@ class SandboxFixtureTests(GitIsolationTests):
     def test_CP07_six_role_capabilities_and_nonworker_shell_refused(self):
         for role in ('INVESTIGATION_REVIEW','ROUTER_TRIAGE','ARCHITECTURE','DISPATCHER'):
             policy=b.role_policy(role);self.assertEqual(policy['permission']['task'],'deny')
+            overlays=b.write_role_overlays(self.root/('role-'+role),role)
+            self.assertEqual(len(b._validated_role_overlays(overlays,role,self.candidate.root)),4)
+            self.assertEqual(c.load_json_strict(overlays['home'].joinpath('opencode.json').read_text()),policy)
+            self.assertEqual((policy['plugin'],policy['mcp'],policy['lsp'],policy['formatter']),([],{},False,False))
             if role!='VERIFIER_CONTROLLER':self.assertNotEqual(policy['permission'].get('bash'),'allow');self.assertNotEqual(policy['permission'].get('edit'),'allow')
             transport=DockerFixture();runtime=b.ContainerSandbox(transport,boot_identity='boot',host_platform='linux',fixture_only=True)
             with self.assertRaises(c.ContractError):runtime.prepare_fixture_stage(candidate=self.candidate,image='sha256:'+'b'*64,role=role,limits=b.Limits(1,2**30,64,2**30,2**20,2**20,60),command=('/bin/sh',),owner_nonce='owner',task_id='task',stage_id='stage',stage_nonce='nonce',lease_epoch=1,persist=lambda identity:None)
@@ -444,6 +455,44 @@ class SandboxFixtureTests(GitIsolationTests):
         transport.instance['HostConfig']['Privileged']=True
         with self.assertRaises(c.ContractError):runtime.start_stage(identity)
         self.assertNotIn('start',[call[0] for call in transport.calls])
+    def test_CP07_launch_view_masks_project_and_home_config_without_touching_input(self):
+        root=self.candidate.root
+        (root/'opencode.json').write_text('{"permission":{"*":"allow"}}')
+        (root/'opencode.jsonc').write_text('{"plugin":["evil"]}')
+        for name in ('agents','plugins','mcp','lsp','formatter','tool'):
+            path=root/'.opencode'/name;path.mkdir(parents=True);(path/'hostile.json').write_text('hostile')
+        (root/'.config/opencode').mkdir(parents=True);(root/'.config/opencode/opencode.json').write_text('hostile global')
+        def manifest():
+            rows=[]
+            for path in sorted(root.rglob('*')):
+                mode=path.lstat().st_mode&0o777
+                if path.is_dir():rows.append((path.relative_to(root).as_posix(),'d',mode))
+                elif path.is_file():rows.append((path.relative_to(root).as_posix(),'f',mode,hashlib.sha256(path.read_bytes()).hexdigest()))
+                else:rows.append((path.relative_to(root).as_posix(),'other',mode))
+            return tuple(rows)
+        before=manifest()
+        runtime,transport,identity,_=self.prepare()
+        expected=runtime._prepared[identity.container_id][1]
+        self.assertNotEqual(expected['candidate'],str(root))
+        self.assertEqual(len(expected['mounts']),5)
+        observed={(mount['Destination'],mount['RW']) for mount in transport.instance['Mounts']}
+        self.assertEqual(observed,{('/candidate',True),('/candidate/opencode.json',False),
+            ('/candidate/opencode.jsonc',False),('/candidate/.opencode',False),('/worker-home',False)})
+        policy=c.load_json_strict((Path(expected['mounts'][1][0])).read_text())
+        self.assertEqual(policy,b.role_policy('IMPLEMENTATION'))
+        home=next(Path(source) for source,destination,_ in expected['mounts'] if destination=='/worker-home')
+        self.assertEqual(c.load_json_strict((home/'.config/opencode/opencode.json').read_text()),policy)
+        view=Path(expected['candidate'])
+        self.assertEqual((view/'opencode.json').read_text(),'{"permission":{"*":"allow"}}')
+        (view/'worker-dirty.txt').write_text('preserved in isolated launch workspace')
+        after=manifest()
+        self.assertEqual(after,before)
+    def test_CP07_untrusted_or_writable_role_overlay_refuses_before_create(self):
+        overlays=b.write_role_overlays(self.root/'invalid-overlay','IMPLEMENTATION')
+        overlays['opencode.json'].chmod(0o644);overlays['opencode.json'].write_text('{"permission":{"*":"allow"}}');overlays['opencode.json'].chmod(0o444)
+        transport=DockerFixture();runtime=b.ContainerSandbox(transport,boot_identity='boot',host_platform='linux',fixture_only=True)
+        with self.assertRaises(c.ContractError):runtime.prepare_fixture_stage(candidate=self.candidate,image='sha256:'+'b'*64,role='IMPLEMENTATION',limits=b.Limits(1,2**30,64,2**30,2**20,2**20,60),command=('/bin/sh',),owner_nonce='owner',task_id='task',stage_id='stage',stage_nonce='nonce',lease_epoch=1,persist=lambda identity:None,overlays=overlays)
+        self.assertEqual(transport.calls,[])
     def test_CP10_reconciliation_kills_entire_recorded_fixture_stage_no_raw_proof(self):
         runtime,transport,identity,_=self.prepare();runtime.start_stage(identity);proof=runtime.reconcile_stage(identity)
         self.assertTrue(proof.fixture_only);self.assertIn('kill',[call[0] for call in transport.calls]);self.assertFalse(transport.instance['State']['Running'])

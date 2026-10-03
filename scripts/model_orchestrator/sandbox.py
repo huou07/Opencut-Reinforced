@@ -330,10 +330,109 @@ def write_role_overlays(destination: Path, role: str) -> dict[str, Path]:
     for name in ('opencode.json', 'opencode.jsonc'):
         (destination / name).write_text(policy, encoding='utf-8')
         (destination / name).chmod(0o444)
-    (destination / '.opencode').mkdir(mode=0o555)
-    (destination / 'home').mkdir(mode=0o555)
+    project_config = destination / '.opencode'
+    project_config.mkdir(mode=0o555)
+    home = destination / 'home'
+    (home / '.config' / 'opencode').mkdir(parents=True)
+    (home / '.local' / 'share' / 'opencode').mkdir(parents=True)
+    (home / '.local' / 'state' / 'opencode').mkdir(parents=True)
+    (home / 'opencode.json').write_text(policy, encoding='utf-8')
+    (home / '.config' / 'opencode' / 'opencode.json').write_text(policy, encoding='utf-8')
+    for path in (home / 'opencode.json', home / '.config' / 'opencode' / 'opencode.json'):
+        path.chmod(0o444)
+    for directory, dirs, _ in os.walk(home, topdown=False):
+        for name in dirs:
+            (Path(directory) / name).chmod(0o555)
+        Path(directory).chmod(0o555)
     destination.chmod(0o555)
     return {name: destination / name for name in ('opencode.json', 'opencode.jsonc', '.opencode', 'home')}
+
+
+def _validated_role_overlays(overlays: dict[str, Path], role: str, candidate: Path) -> list[tuple[Path, str]]:
+    """Accept only the exact controller-generated, immutable policy tree."""
+    names = ('opencode.json', 'opencode.jsonc', '.opencode', 'home')
+    _require(type(overlays) is dict and set(overlays) == set(names), 'complete role overlay set required')
+    root = _safe_path(Path(overlays['opencode.json']).parent)
+    _require(root not in candidate.parents and candidate not in root.parents,
+             'role overlays must be external to candidate')
+    _require(stat.S_IMODE(root.stat().st_mode) == 0o555, 'role overlay root must be immutable')
+    expected = {name: root / name for name in names}
+    for name in names:
+        _require(_safe_path(Path(overlays[name])) == expected[name], 'role overlay path differs')
+
+    policy = (canonical_json(role_policy(role)) + '\n').encode('utf-8')
+    for name in ('opencode.json', 'opencode.jsonc'):
+        path = expected[name]
+        item = path.lstat()
+        _require(stat.S_ISREG(item.st_mode) and item.st_nlink == 1 and stat.S_IMODE(item.st_mode) == 0o444
+                 and path.read_bytes() == policy, 'root role policy is not immutable/canonical')
+    project = expected['.opencode']
+    _require(project.is_dir() and not project.is_symlink() and stat.S_IMODE(project.stat().st_mode) == 0o555
+             and not any(project.iterdir()), 'project discovery mask is not empty/immutable')
+
+    home = expected['home']
+    expected_dirs = {home, home / '.config', home / '.config' / 'opencode', home / '.local',
+                     home / '.local' / 'share', home / '.local' / 'share' / 'opencode',
+                     home / '.local' / 'state', home / '.local' / 'state' / 'opencode'}
+    expected_files = {home / 'opencode.json', home / '.config' / 'opencode' / 'opencode.json'}
+    actual_dirs: set[Path] = set()
+    actual_files: set[Path] = set()
+    for directory, dirs, files in os.walk(home, followlinks=False):
+        base = Path(directory)
+        actual_dirs.add(base)
+        for name in dirs:
+            path = base / name
+            _require(not path.is_symlink(), 'home overlay symlink forbidden')
+            actual_dirs.add(path)
+        for name in files:
+            path = base / name
+            _require(not path.is_symlink(), 'home overlay symlink forbidden')
+            actual_files.add(path)
+    _require(actual_dirs == expected_dirs and actual_files == expected_files,
+             'home overlay contains unexpected discovery surface')
+    for path in expected_dirs:
+        _require(stat.S_IMODE(path.stat().st_mode) == 0o555, 'home overlay directory is writable')
+    for path in expected_files:
+        item = path.lstat()
+        _require(stat.S_ISREG(item.st_mode) and item.st_nlink == 1 and stat.S_IMODE(item.st_mode) == 0o444
+                 and path.read_bytes() == policy, 'home role policy is not immutable/canonical')
+    return [(expected[name], {'opencode.json': '/candidate/opencode.json',
+                              'opencode.jsonc': '/candidate/opencode.jsonc',
+                              '.opencode': '/candidate/.opencode',
+                              'home': '/worker-home'}[name]) for name in names]
+
+
+def _make_launch_view(candidate: Candidate, storage_root: Path, task_id: str, stage_id: str,
+                      role: str) -> Path:
+    """Copy into the same bounded filesystem so absent masks never touch input."""
+    storage_root = _safe_path(storage_root)
+    _require(candidate.root.parent == storage_root, 'candidate must be a direct child of bounded launch storage')
+    launch_root = storage_root / '.or-v2-launch-views'
+    if not launch_root.exists() and not launch_root.is_symlink():
+        launch_root.mkdir(mode=0o700)
+    item = launch_root.lstat()
+    _require(stat.S_ISDIR(item.st_mode) and item.st_uid == os.geteuid()
+             and stat.S_IMODE(item.st_mode) == 0o700, 'launch-view storage is not controller-private')
+    stage_root = Path(tempfile.mkdtemp(prefix=task_id + '-' + stage_id + '-', dir=launch_root))
+    view = stage_root / 'candidate'
+    shutil.copytree(candidate.root, view, copy_function=shutil.copy2, symlinks=True)
+    inspect_candidate(view)
+    source_device = candidate.root.stat().st_dev
+    for directory, dirs, files in os.walk(view, followlinks=False):
+        for name in dirs + files:
+            path = Path(directory) / name
+            entry = path.lstat()
+            _require(entry.st_dev == source_device and
+                     (stat.S_ISDIR(entry.st_mode) or stat.S_ISREG(entry.st_mode)) and
+                     (not stat.S_ISREG(entry.st_mode) or entry.st_nlink == 1),
+                     'copied launch view contains unsafe filesystem entry')
+    for directory, _, files in os.walk(view, topdown=False, followlinks=False):
+        base = Path(directory)
+        base.chmod(stat.S_IMODE(base.stat().st_mode) | (0o777 if role == 'IMPLEMENTATION' else 0o555))
+        for name in files:
+            path = base / name
+            path.chmod(stat.S_IMODE(path.stat().st_mode) | (0o666 if role == 'IMPLEMENTATION' else 0o444))
+    return view
 
 
 @dataclass(frozen=True)
@@ -433,12 +532,13 @@ def host_boot_identity() -> str:
     raise SandboxError('unsupported controller platform')
 
 
-def _bounded_candidate_filesystem(candidate: Path, byte_limit: int) -> tuple[int, int]:
+def _bounded_candidate_filesystem(candidate: Path, byte_limit: int) -> tuple[int, int, str]:
     """Independently observe an existing dedicated bounded Linux filesystem.
 
     No mount/install/sudo: ordinary directories, network storage, macOS host
-    binds and unspecified quota adapters are unavailable. Whole-filesystem
-    capacity is a hard bound, unlike polling du or trusting a caller boolean.
+    binds and unspecified quota adapters are unavailable. The input candidate
+    is a direct child; launch copies and their writable outputs share its whole-
+    filesystem hard bound, unlike polling du or trusting a caller boolean.
     """
     _require(os.uname().sysname == 'Linux', 'verified bounded VM volume adapter unavailable')
     try:
@@ -450,15 +550,16 @@ def _bounded_candidate_filesystem(candidate: Path, byte_limit: int) -> tuple[int
         mounts = document['filesystems']
         _require(len(mounts) == 1, 'ambiguous candidate filesystem')
         mount = mounts[0]
-        _require(Path(mount['target']).resolve() == candidate and mount['fsroot'] == '/',
-                 'candidate must own entire bounded mount')
+        mountpoint = Path(mount['target']).resolve()
+        _require(candidate.parent == mountpoint and candidate != mountpoint and mount['fsroot'] == '/',
+                 'candidate must be a direct child of its dedicated bounded mount')
         _require(mount['fstype'] in ('ext4', 'xfs') and str(mount['source']).startswith('/dev/'),
                  'unsupported quota backing')
         _require(stat.S_ISBLK(os.stat(mount['source']).st_mode), 'quota backing is not local block device')
         _require('rw' in mount['options'].split(','), 'candidate mount is not writable')
         usage = os.statvfs(candidate)
         _require(0 < usage.f_blocks * usage.f_frsize <= byte_limit, 'candidate capacity exceeds task bound')
-        return os.stat(candidate).st_dev, usage.f_blocks * usage.f_frsize
+        return os.stat(candidate).st_dev, usage.f_blocks * usage.f_frsize, str(mountpoint)
     except (OSError, KeyError, TypeError, UnicodeError, subprocess.SubprocessError) as exc:
         raise SandboxError('candidate disk quota observation unavailable') from exc
 
@@ -514,7 +615,8 @@ class ContainerSandbox:
     def prepare_fixture_stage(self, *, candidate: Candidate, image: str, role: str, limits: Limits,
                               command: tuple[str, ...], owner_nonce: str, stage_id: str,
                               lease_epoch: int, task_id: str, stage_nonce: str,
-                              persist: Callable[[StageIdentity], None]) -> StageIdentity:
+                              persist: Callable[[StageIdentity], None],
+                              overlays: dict[str, Path] | None = None) -> StageIdentity:
         _require(candidate.authority_digest == 'FIXTURE_ONLY', 'shell adapter is fixture-only')
         _require(role in ('IMPLEMENTATION', 'VERIFIER_CONTROLLER'), 'model observation roles deny shell/tools')
         _require(isinstance(command, tuple) and bool(command) and all(isinstance(x, str) and x and '\x00' not in x for x in command),
@@ -522,23 +624,33 @@ class ContainerSandbox:
         _require(_IMAGE.fullmatch(image) is not None, 'exact image content digest required')
         limits.validate()
         candidate.verify()
-        daemon = self._runtime(image)
-        quota = None if self.fixture_only else _bounded_candidate_filesystem(candidate.root, limits.candidate_bytes)
+        overlay_mounts = _validated_role_overlays(overlays, role, candidate.root) if overlays is not None else []
+        _require(bool(overlay_mounts), 'controller-owned role overlays required')
         nonce = stage_nonce
         provisional = StageIdentity('0' * 64, self.boot_identity, owner_nonce, stage_id,
                                     lease_epoch, nonce, 'FIXTURE_ONLY', role, task_id)
         provisional.validate()
+        daemon = self._runtime(image)
+        quota = None if self.fixture_only else _bounded_candidate_filesystem(candidate.root, limits.candidate_bytes)
+        storage_root = candidate.root.parent if quota is None else Path(quota[2])
+        launch_candidate = _make_launch_view(candidate, storage_root, task_id, stage_id, role)
         args = ['create', '--pull=never', '--read-only', '--user=10001:10001', '--cap-drop=ALL',
                 '--security-opt=no-new-privileges:true', '--network=none', '--ipc=none', '--cgroupns=private',
                 '--pids-limit=' + str(limits.pids), '--cpus=' + str(limits.cpu),
                 '--memory=' + str(limits.memory_bytes), '--memory-swap=' + str(limits.memory_bytes),
                 '--log-driver=none', '--restart=no', '--stop-timeout=1', '--init',
                 '--ulimit=nofile=256:256', '--ulimit=fsize=' + str(limits.output_bytes) + ':' + str(limits.output_bytes),
-                '--mount=type=bind,src=' + str(candidate.root) + ',dst=/candidate' +
+                '--mount=type=bind,src=' + str(launch_candidate) + ',dst=/candidate' +
                 (',readonly' if role == 'VERIFIER_CONTROLLER' else ''),
                 '--tmpfs=/scratch:rw,nosuid,nodev,noexec,size=' + str(limits.scratch_bytes) + ',mode=1777',
-                '--workdir=/candidate', '--env=HOME=/scratch', '--env=TMPDIR=/scratch',
+                '--workdir=/candidate', '--env=HOME=/worker-home', '--env=TMPDIR=/scratch',
+                '--env=XDG_CONFIG_HOME=/worker-home/.config',
+                '--env=XDG_DATA_HOME=/worker-home/.local/share',
+                '--env=XDG_STATE_HOME=/worker-home/.local/state',
+                '--env=OPENCODE_CONFIG=/worker-home/opencode.json',
                 '--env=GIT_CONFIG_NOSYSTEM=1', '--env=GIT_CONFIG_GLOBAL=/dev/null']
+        for source, destination in overlay_mounts:
+            args.append('--mount=type=bind,src=' + str(source) + ',dst=' + destination + ',readonly')
         for key, value in provisional.labels().items():
             args.extend(['--label', key + '=' + value])
         # A trusted image must contain GNU timeout at this exact path. It runs
@@ -550,7 +662,10 @@ class ContainerSandbox:
         identity = StageIdentity(container_id, self.boot_identity, owner_nonce, stage_id,
                                  lease_epoch, nonce, 'FIXTURE_ONLY', role, task_id)
         identity.validate()
-        expected = dict(image=image, candidate=str(candidate.root), limits=limits, daemon=daemon, quota=quota,
+        mounts = [(str(launch_candidate), '/candidate', role != 'VERIFIER_CONTROLLER')]
+        mounts.extend((str(source), destination, False) for source, destination in overlay_mounts)
+        expected = dict(image=image, candidate=str(launch_candidate), input_candidate=str(candidate.root),
+                        mounts=mounts, limits=limits, daemon=daemon, quota=quota,
                         command=bounded_command, candidate_handle=candidate)
         # Persist even if effective inspection fails. A crashed controller must
         # retain the instance locator; no local PID is accepted as death proof.
@@ -590,15 +705,25 @@ class ContainerSandbox:
         _require(config.get('WorkingDir') == '/candidate' and config.get('Entrypoint') == [expected['command'][0]]
                  and (config.get('Cmd') or []) == list(expected['command'][1:]), 'effective command differs')
         environment = config.get('Env', [])
-        required = ['HOME=/scratch', 'TMPDIR=/scratch', 'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null']
+        required = ['HOME=/worker-home', 'TMPDIR=/scratch', 'XDG_CONFIG_HOME=/worker-home/.config',
+                    'XDG_DATA_HOME=/worker-home/.local/share', 'XDG_STATE_HOME=/worker-home/.local/state',
+                    'OPENCODE_CONFIG=/worker-home/opencode.json',
+                    'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null']
         approved = required + ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin']
         _require(isinstance(environment, list) and len(environment) == len(set(environment))
                  and set(required) <= set(environment) <= set(approved), 'effective launch environment differs')
         mounts = instance.get('Mounts', [])
-        _require(len(mounts) == 1 and mounts[0].get('Type') == 'bind'
-                 and mounts[0].get('Source') == expected['candidate'] and mounts[0].get('Destination') == '/candidate'
-                 and mounts[0].get('RW') is (identity.role != 'VERIFIER_CONTROLLER')
-                 and mounts[0].get('Propagation') == 'rprivate', 'unexpected host mount')
+        _require(isinstance(mounts, list) and all(type(item) is dict for item in mounts),
+                 'malformed effective mount observation')
+        observed_mounts = [(item.get('Type'), item.get('Source'), item.get('Destination'), item.get('RW'),
+                            item.get('Propagation')) for item in mounts]
+        expected_mounts = [('bind', source, destination, writable, 'rprivate')
+                           for source, destination, writable in expected['mounts']]
+        _require(all(type(row[0]) is str and type(row[1]) is str and type(row[2]) is str
+                     and type(row[3]) is bool and type(row[4]) is str for row in observed_mounts)
+                 and len(observed_mounts) == len(expected_mounts)
+                 and sorted(observed_mounts) == sorted(expected_mounts),
+                 'effective candidate/config mount set differs')
         scratch = 'rw,nosuid,nodev,noexec,size=' + str(limits.scratch_bytes) + ',mode=1777'
         _require(host.get('Tmpfs') == {'/scratch': scratch}, 'scratch quota differs')
         ulimits = {item['Name']: (item['Soft'], item['Hard']) for item in host.get('Ulimits', [])}
@@ -614,7 +739,7 @@ class ContainerSandbox:
         expected['candidate_handle'].verify()
         _require(self._runtime(expected['image']) == expected['daemon'], 'daemon identity changed')
         if not self.fixture_only:
-            _require(_bounded_candidate_filesystem(Path(expected['candidate']), expected['limits'].candidate_bytes)
+            _require(_bounded_candidate_filesystem(Path(expected['input_candidate']), expected['limits'].candidate_bytes)
                      == expected['quota'], 'candidate quota backing changed')
         self.docker(['start', identity.container_id])
 
