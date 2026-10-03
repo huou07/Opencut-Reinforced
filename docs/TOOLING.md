@@ -203,6 +203,61 @@ disk bounds must also be verified. OpenCode remains unavailable unless its exact
 version and complete discoverable configuration surface can be pinned and
 observed; project permissions alone provide no OS isolation.
 
+### Separately authorized Linux host preparation and live checks
+
+Host administration requires a separate explicit operator task. It is not an
+automatic workaround available to the orchestrator. The 2026-10-04 host task
+used the installed `dockerd-rootless-setuptool.sh check --force` and
+`install --force` on Debian 13.6. The normal user's enabled systemd service and
+per-user linger retain the rootless engine across logouts. Rootful services
+remain intact, and the default Docker context remains rootful.
+
+For the rootless execution host, construct `DockerCLI` with the pinned CLI
+bytes and `endpoint="unix:///run/user/<controller-uid>/docker.sock"`. The
+endpoint accepts only the current user's standard rootless Unix socket;
+rootful, TCP and another user's endpoints refuse. This selects a connection,
+not authority: live daemon, rootless security options, cgroup v2, image and
+effective stage inspection remain mandatory. No Docker configuration or
+credential environment is passed into the CLI subprocess.
+
+The operator-authorized storage preparation reserved a 48 GiB backing file,
+created ext4 on it, and mounted it through a loop block device at a dedicated
+candidate root. Its observed filesystem capacity is 50,407,821,312 bytes.
+The existing `_bounded_candidate_filesystem()` accepts this genuine block
+backing without a contract change. Standard `/etc/fstab` persistence uses
+`loop,nodev,nosuid,nofail,x-systemd.mount-timeout=30s`; if the mount is absent,
+the ordinary root directory fails the bounded-storage probe. The backing file
+is root-owned mode 0600, and its parent is mode 0700. The candidate parent is
+controller-owned mode 0700; the disposable fixture tree uses the subordinate
+UID mapped to container user 10001. Do not repartition the root disk or treat
+an unbounded directory as an equivalent profile. To reverse preparation, first
+reconcile all stages, unmount the dedicated volume, remove only its fstab entry,
+and detach its loop device. Preserve candidate work before removing any backing
+file. The per-user Docker service and linger can be disabled independently of
+rootful Docker.
+
+Real Linux/rootless observations used Docker 29.7.2, cgroup v2/systemd, and
+`debian@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251`
+on amd64. Actual containers verified CP06 host-path/record isolation, CP08
+effective settings and kernel resource limits, CP27 one launch after real
+process contention, CP10 restart reconciliation after controller exit, and
+CP28 durable pause with bounded-stage settlement. These were inert shell
+fixtures on a real container boundary, not product/model execution or fake
+Docker observations. Changing live CPU, memory or PID settings refused before
+start. Exact commands, container identities and host cleanup manifests remain
+in the operator's separate host-preparation evidence directory.
+
+**CP07 remains failed and M1 remains NOT CERTIFIED.** A live filesystem probe
+read the inert hostile candidate `opencode.json`/`.opencode` contents: generated
+external role files are not mounted into `prepare_fixture_stage()`'s launch
+view. This correction only pins the rootless connection. Do not certify the
+unmounted files as an effective configuration boundary, or close the gap by
+editing candidate configuration. A subsequent M1 correction must mask all
+frozen discoverable surfaces, including absent names, in an external launch
+view and preserve candidate contents. OpenCode execution still refuses; pinned
+adapter/protocol/provider conformance belongs to M3/M5. No M2 authority follows
+from these observations.
+
 Available-boundary observations for this M1 candidate (2026-10-03/04):
 
 - OS: macOS 27.0.1, Darwin 27, arm64 (`sw_vers`, `uname -a`). Storage:

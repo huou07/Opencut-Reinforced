@@ -2,6 +2,7 @@
 """M1: real POSIX/process/Git checks, explicit injected crashes, no live PASS fiction."""
 from __future__ import annotations
 import copy
+import hashlib
 import multiprocessing
 import os
 import subprocess
@@ -363,6 +364,19 @@ class GitIsolationTests(unittest.TestCase):
         policy=c.load_json_strict(overlay['opencode.json'].read_text());self.assertEqual(policy['permission']['*'],'deny');self.assertEqual(policy['permission']['task'],'deny');self.assertEqual(policy['plugin'],[]);self.assertEqual(policy['mcp'],{})
         self.assertEqual(overlay['opencode.json'].stat().st_mode&0o222,0)
 
+    def test_rootless_connection_is_explicit_and_does_not_depend_on_context(self):
+        executable=self.root/'docker';executable.write_text('pinned fixture executable')
+        digest=hashlib.sha256(executable.read_bytes()).hexdigest()
+        endpoint='unix:///run/user/'+str(os.getuid())+'/docker.sock'
+        transport=b.DockerCLI(executable,digest,endpoint=endpoint)
+        with patch.object(subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'{}',b'')) as run:
+            self.assertEqual(transport(['info']),'{}')
+            self.assertEqual(run.call_args.args[0],[str(executable),'--host='+endpoint,'info'])
+            self.assertEqual(run.call_args.kwargs['env'],{'PATH':'/usr/bin:/bin'})
+        for wrong in (True,123,'unix:///var/run/docker.sock','tcp://127.0.0.1:2375',endpoint+'?x=1','unix:///run/user/'+str(os.getuid()+1)+'/docker.sock'):
+            with self.subTest(endpoint=wrong),self.assertRaises(c.ContractError):
+                b.DockerCLI(executable,digest,endpoint=wrong)
+
 
 class DockerFixture:
     """Injected inspect responses: NEVER evidence of actual container isolation."""
@@ -396,6 +410,7 @@ class SandboxFixtureTests(GitIsolationTests):
     test_shared_hardlink_symlink_git_storage_refuse=None
     test_CP11_dirty_diagnostics_and_clean_commit_survive_sanitized_export=None
     test_role_config_overlay_is_external_and_candidate_preserved=None
+    test_rootless_connection_is_explicit_and_does_not_depend_on_context=None
     def prepare(self,transport=None):
         transport=transport or DockerFixture()
         runtime=b.ContainerSandbox(transport,boot_identity='boot',host_platform='linux',fixture_only=True)

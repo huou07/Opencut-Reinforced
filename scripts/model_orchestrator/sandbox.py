@@ -391,17 +391,23 @@ def validate_termination(proof: TerminatedStageIdentity, identity: StageIdentity
 
 class DockerCLI:
     """Explicit trusted Docker CLI transport. Never called implicitly on import."""
-    def __init__(self, executable: Path, executable_sha256: str):
+    def __init__(self, executable: Path, executable_sha256: str, *, endpoint: str | None = None):
         executable = _safe_path(executable)
         _require(executable.is_file() and hashlib.sha256(executable.read_bytes()).hexdigest() == executable_sha256,
                  'Docker executable pin mismatch')
         self.executable = executable
         self.digest = executable_sha256
+        # Explicit connection prevents an unrelated default/rootful context from
+        # selecting the runtime. Actual daemon/profile verification still follows.
+        _require(endpoint is None or type(endpoint) is str and re.fullmatch(r'unix:///run/user/' + str(os.getuid()) +
+                 r'/docker\.sock', endpoint) is not None, 'per-user rootless socket required')
+        self.endpoint = endpoint
 
     def __call__(self, arguments: list[str]) -> str:
         _require(hashlib.sha256(self.executable.read_bytes()).hexdigest() == self.digest, 'Docker executable changed')
         try:
-            result = subprocess.run([str(self.executable), *arguments], env={'PATH': '/usr/bin:/bin'},
+            connection = ['--host=' + self.endpoint] if self.endpoint else []
+            result = subprocess.run([str(self.executable), *connection, *arguments], env={'PATH': '/usr/bin:/bin'},
                                     capture_output=True, timeout=30, check=True)
         except (OSError, subprocess.SubprocessError) as exc:
             raise SandboxError('Docker runtime/observation unavailable') from exc
