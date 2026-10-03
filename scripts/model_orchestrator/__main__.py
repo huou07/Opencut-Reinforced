@@ -163,15 +163,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_resume(args: argparse.Namespace) -> int:
     _ = args
-    outcome = _engine(_repo()).resume(
-        _active_task(_repo()))
-    print(json.dumps(outcome, indent=2, sort_keys=True))
-    return 0 if outcome.get("ok") else 2
-
-
-def _active_task(repo: str) -> str:
+    repo = _repo()
     with mem.LockedState(repo) as locked:
-        return locked.current().get("active_task", "")
+        task_id = locked.current().get("active_task", "")
+    if not task_id:
+        print("no active task")
+        return 2
+    result = _engine(repo).resume_cycle(task_id)
+    print(json.dumps({"state": result.state, "candidate": result.candidate_sha,
+                      "detail": result.detail, "failures": result.failures}, indent=2))
+    return 0 if result.state in ("PROMOTION_READY", "REVIEW_PENDING") else 2
 
 
 def cmd_pause(args: argparse.Namespace) -> int:
@@ -181,7 +182,18 @@ def cmd_pause(args: argparse.Namespace) -> int:
         current = locked.current()
         current["paused"] = True
         locked.write_current(current)
-    print("paused: dispatch disabled until resumed")
+    print("paused: no new worker starts; a legally claimed RUNNING worker is unaffected")
+    return 0
+
+
+def cmd_unpause(args: argparse.Namespace) -> int:
+    _ = args
+    repo = _repo()
+    with mem.LockedState(repo) as locked:
+        current = locked.current()
+        current["paused"] = False
+        locked.write_current(current)
+    print("unpaused: dispatch may be claimed again")
     return 0
 
 
@@ -207,7 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="model-orchestrator")
     parser.add_argument("--auto", action="store_true", help="opt-in single-cycle dispatch (manual by default)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "doctor", "models", "plan", "step", "run", "resume", "pause", "escalate", "explain"):
+    for name in ("status", "doctor", "models", "plan", "step", "run", "resume", "pause",
+                 "unpause", "escalate", "explain"):
         sub.add_parser(name)
     return parser
 
@@ -217,8 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {
         "status": cmd_status, "doctor": cmd_doctor, "models": cmd_models,
         "plan": cmd_plan, "step": cmd_step, "run": cmd_run,
-        "resume": cmd_resume, "pause": cmd_pause, "escalate": cmd_escalate,
-        "explain": cmd_explain,
+        "resume": cmd_resume, "pause": cmd_pause, "unpause": cmd_unpause,
+        "escalate": cmd_escalate, "explain": cmd_explain,
     }
     return handlers[args.command](args)
 

@@ -37,7 +37,7 @@ def git_common_dir(repo: str | Path) -> Path:
 
 def state_dir(repo: str | Path) -> Path:
     root = git_common_dir(repo) / STATE_DIR_NAME
-    for sub in ("", "tasks", "runs", "escalations"):
+    for sub in ("", "tasks", "runs", "escalations", "leases", "promotions"):
         (root / sub if sub else root).mkdir(parents=True, exist_ok=True)
     return root
 
@@ -134,6 +134,14 @@ class LockedState:
         value["schema_version"] = SCHEMA_VERSION
         _atomic_write_json(self.run_path(task_id), value)
 
+    def write_promotion(self, task_id: str, record: dict) -> None:
+        record = dict(record)
+        record["schema_version"] = SCHEMA_VERSION
+        _atomic_write_json(self.root / "promotions" / f"{task_id}.json", record)
+
+    def read_promotion(self, task_id: str) -> dict:
+        return read_json(self.root / "promotions" / f"{task_id}.json", {})
+
     def stats(self) -> dict:
         return read_json(self.root / "model-stats.json", {"schema_version": SCHEMA_VERSION, "entries": []})
 
@@ -143,3 +151,40 @@ class LockedState:
         entries.append(entry)
         stats["entries"] = entries[-500:]
         _atomic_write_json(self.root / "model-stats.json", stats)
+
+
+class TaskLease:
+    """Single-writer task lease, held across the ENTIRE bounded cycle.
+
+    Non-blocking flock on leases/<task_id>.lock: flock is authoritative on
+    this single-host V1 (PID metadata is informational only). OS process
+    death releases the lock naturally. Second claimant gets TimeoutError =>
+    TASK_BUSY, never a second worker.
+    """
+
+    def __init__(self, repo: str | Path, task_id: str) -> None:
+        import os
+
+        self.path = state_dir(repo) / "leases" / f"{task_id}.lock"
+        self.task_id = task_id
+        self._handle = open(self.path, "w", encoding="utf-8")
+        try:
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self._handle.close()
+            raise TimeoutError(f"task lease busy: {task_id}")
+        self._handle.write(f"pid={os.getpid()} task={task_id}\n")
+        self._handle.flush()
+
+    def release(self) -> None:
+        if self._handle is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
+                self._handle.close()
+            self._handle = None
+
+    def __enter__(self) -> "TaskLease":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.release()

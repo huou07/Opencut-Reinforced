@@ -7,13 +7,21 @@ permission:
   edit: deny
   bash:
     "*": deny
-    "git status *": allow
-    "git rev-parse *": allow
-    "git branch *": allow
+    "git status --short": allow
+    "git rev-parse HEAD": allow
+    "git rev-parse origin/main": allow
+    "git branch --show-current": allow
+    "git log": allow
     "git log *": allow
+    "git diff --stat": allow
     "git diff --stat *": allow
     "opencode models": allow
-    "python3 scripts/model_orchestrator/__main__.py *": allow
+    "python3 scripts/model_orchestrator/__main__.py status": allow
+    "python3 scripts/model_orchestrator/__main__.py doctor": allow
+    "python3 scripts/model_orchestrator/__main__.py models": allow
+    "python3 scripts/model_orchestrator/__main__.py plan": allow
+    "python3 scripts/model_orchestrator/__main__.py step": allow
+    "python3 scripts/model_orchestrator/__main__.py explain": allow
   task: deny
   external_directory: deny
 ---
@@ -46,6 +54,8 @@ workflow.
 - Mark any checkpoint DONE or claim completion evidence.
 - Spawn models or workers directly; only the deterministic orchestrator
   launches workers, one at a time.
+- Run `run`, `resume`, `pause`, `unpause`, or `escalate`: these mutate state
+  or dispatch workers and are denied by the permission block.
 
 ## Escalation visibility
 

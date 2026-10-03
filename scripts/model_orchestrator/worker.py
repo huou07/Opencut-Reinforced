@@ -150,9 +150,12 @@ class FakeWorkerAdapter(WorkerAdapter):
         self.behavior = behavior  # success | die | no-change | protected-edit | dirty
         self.files = files or {}
         self.commit = commit
+        self.received: dict = {}  # records what the engine actually passed
 
-    def launch(self, packet: dict, timeout_s: int) -> WorkerResult:
+    def launch(self, packet: dict, timeout_s: int, *, model: str = "",
+               policy_entry: dict | None = None, effort: str = "DEFAULT") -> WorkerResult:
         _ = timeout_s
+        self.received = {"model": model, "policy_entry": policy_entry or {}, "effort": effort}
         worktree = packet["worktree"]
         before = git_head(worktree)
         if self.behavior == "die":
@@ -218,42 +221,48 @@ class OpenCodeWorkerAdapter(WorkerAdapter):
         return None, "DEFAULT_PROVIDER"
 
     def build_command(self, packet: dict, model: str, policy_entry: dict,
-                      requested_effort: str, agent: str = WORKER_AGENT) -> list[str]:
+                      requested_effort: str, variant: str | None) -> list[str]:
         import json
 
-        variant, _ = self.reasoning_plan(policy_entry, requested_effort)
         message = (
             "You are an implementation worker. Follow ONLY this task packet; "
             "do not invent scope, do not advance checkpoints, do not spawn workers. "
             "Commit your result on the packet branch; a dirty worktree is rejected.\n"
             f"TASK_PACKET={json.dumps(packet, sort_keys=True)}"
         )
-        command = [self.opencode_bin, "run", "--agent", agent,
+        command = [self.opencode_bin, "run", "--agent", self.agent,
                    "--model", model, "--dir", packet["worktree"], "--format", "json"]
         if variant:
             command += ["--variant", variant]
         return command + [message]
 
-    def launch(self, packet: dict, timeout_s: int, model: str = "",
-               policy_entry: dict | None = None, requested_effort: str = "HIGH") -> WorkerResult:
+    def launch(self, packet: dict, timeout_s: int, *, model: str,
+               policy_entry: dict | None = None, effort: str = "DEFAULT") -> WorkerResult:
+        """The engine-passed `model` is authoritative; packet['model'] is only
+        requested/preferred audit metadata (see packets.MODEL_FIELD_SEMANTICS)."""
         policy_entry = policy_entry or {}
         before = git_head(packet["worktree"])
+        variant, effective = self.reasoning_plan(policy_entry, effort)
         try:
             proc = subprocess.run(
-                self.build_command(packet, model or packet["model"], policy_entry, requested_effort),
+                self.build_command(packet, model, policy_entry, effort, variant),
                 capture_output=True, text=True, timeout=timeout_s,
             )
         except subprocess.TimeoutExpired:
             return WorkerResult(status="INTERRUPTED", detail="worker exceeded timeout",
-                                changed_paths=git_dirty_paths(packet["worktree"]))
+                                changed_paths=git_dirty_paths(packet["worktree"]),
+                                report={"reasoning_effective": effective})
         except OSError as error:
             return WorkerResult(status="TOOL_ERROR", detail=str(error))
         if proc.returncode != 0:
             dirty = []
             with _suppress():
                 dirty = git_dirty_paths(packet["worktree"])
-            return WorkerResult(status="INTERRUPTED", detail=proc.stderr[-2000:], changed_paths=dirty)
-        return classify_worker_output(packet, before, packet["worktree"])
+            return WorkerResult(status="INTERRUPTED", detail=proc.stderr[-2000:], changed_paths=dirty,
+                                report={"reasoning_effective": effective})
+        result = classify_worker_output(packet, before, packet["worktree"])
+        result.report["reasoning_effective"] = effective
+        return result
 
 
 class _suppress:

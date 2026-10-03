@@ -14,9 +14,20 @@ from . import worker as worker_mod
 VERDICTS = ("PASS", "DEFECT_FOUND", "BLOCKED", "INCONCLUSIVE")
 
 
-def reviewer_candidates(role_policy: dict, discovered: list[dict], exclude_family: str) -> list[str]:
+def _available_ids(discovered: list) -> set[str]:
+    ids = set()
+    for entry in discovered:
+        if isinstance(entry, dict):
+            if entry.get("state") in ("AVAILABLE", "TEMPORARILY_FREE"):
+                ids.add(entry.get("model_id", ""))
+        elif getattr(entry, "state", "") in ("AVAILABLE", "TEMPORARILY_FREE"):
+            ids.add(getattr(entry, "model_id", ""))
+    return ids
+
+
+def reviewer_candidates(role_policy: dict, discovered: list, exclude_family: str) -> list[str]:
     preferred = role_policy.get("roles", {}).get("review", {}).get("preferred", [])
-    available = {m["model_id"] for m in discovered if m.get("state") in ("AVAILABLE", "TEMPORARILY_FREE")}
+    available = _available_ids(discovered)
     out = []
     for candidate in preferred:
         model_id = candidate.get("model")
@@ -89,19 +100,38 @@ class FakeReviewAdapter(ReviewAdapter):
 
 
 class OpenCodeReviewAdapter(ReviewAdapter):
-    """Real reviewer via `opencode run --agent orch-reviewer --model <id>`."""
+    """Real reviewer via `opencode run --agent orch-reviewer --model <id>`.
+
+    Uses the shared OpenCode event parser; --variant only when declared
+    supported (else DEFAULT_PROVIDER, no invented flag).
+    """
 
     name = "opencode-review"
 
-    def __init__(self, opencode_bin: str = "opencode", model: str = "") -> None:
+    def __init__(self, opencode_bin: str = "opencode", model: str = "",
+                 policy_entry: dict | None = None, effort: str = "DEFAULT") -> None:
         self.opencode_bin = opencode_bin
         self.model = model
+        self.policy_entry = policy_entry or {}
+        self.effort = effort
+
+    def build_command(self, worktree: str, prompt: str) -> list[str]:
+        from . import events, worker as worker_mod
+
+        variant, _ = worker_mod.OpenCodeWorkerAdapter.reasoning_plan(self.policy_entry, self.effort)
+        command = [self.opencode_bin, "run", "--agent", self.agent,
+                   "--model", self.model, "--dir", worktree, "--format", "json"]
+        if variant:
+            command += ["--variant", variant]
+        _ = events
+        return command + [prompt]
 
     def review(self, *, worktree: str, prompt: str, timeout_s: int) -> dict:
+        from . import events
+
         try:
             proc = subprocess.run(
-                [self.opencode_bin, "run", "--agent", self.agent,
-                 "--model", self.model, "--dir", worktree, "--format", "json", prompt],
+                self.build_command(worktree, prompt),
                 capture_output=True, text=True, timeout=timeout_s,
             )
         except (OSError, subprocess.SubprocessError) as error:
@@ -109,11 +139,13 @@ class OpenCodeReviewAdapter(ReviewAdapter):
         if proc.returncode != 0:
             return {"verdict": "INCONCLUSIVE", "findings": [proc.stderr[-1000:]], "tests_rerun": []}
         try:
-            report = json.loads(proc.stdout.strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            return {"verdict": "INCONCLUSIVE", "findings": ["unparseable reviewer output"], "tests_rerun": []}
-        if not isinstance(report, dict) or report.get("verdict") not in VERDICTS:
+            report = events.extract_json_object(proc.stdout)
+        except ValueError as error:
+            return {"verdict": "INCONCLUSIVE", "findings": [str(error)], "tests_rerun": []}
+        if report.get("verdict") not in VERDICTS:
             return {"verdict": "INCONCLUSIVE", "findings": ["reviewer verdict rejected"], "tests_rerun": []}
+        report.setdefault("findings", [])
+        report.setdefault("tests_rerun", [])
         return report
 
 

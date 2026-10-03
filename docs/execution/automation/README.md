@@ -8,23 +8,29 @@ contracts, exact SHA, tests, CI, evidence policy, and `agent_supervisor.py`.
 
 ```sh
 python3 scripts/model_orchestrator/__main__.py status    # task/run memory
-python3 scripts/model_orchestrator/__main__.py doctor    # policies + memory health
+python3 scripts/model_orchestrator/__main__.py doctor    # policies + memory + parity + dispatcher
 python3 scripts/model_orchestrator/__main__.py models    # discovered model IDs per role
 python3 scripts/model_orchestrator/__main__.py plan      # supervisor: current NEXT
 python3 scripts/model_orchestrator/__main__.py step      # deterministic next action
-python3 scripts/model_orchestrator/__main__.py run --auto   # opt-in worker dispatch
-python3 scripts/model_orchestrator/__main__.py resume    # resume interrupted task
-python3 scripts/model_orchestrator/__main__.py pause      # stop dispatching
+python3 scripts/model_orchestrator/__main__.py run --auto   # ONE bounded engine cycle
+python3 scripts/model_orchestrator/__main__.py resume    # real relaunch of interrupted task
+python3 scripts/model_orchestrator/__main__.py pause      # block new dispatch
+python3 scripts/model_orchestrator/__main__.py unpause    # re-allow dispatch
 python3 scripts/model_orchestrator/__main__.py escalate  # pending escalation state
 python3 scripts/model_orchestrator/__main__.py explain   # sources of truth
 ```
 
 Without `--auto`, `run` refuses to dispatch. With `--auto`, one bounded
-cycle executes: validate packet, select model, verify preconditions, launch
-exactly ONE worker, re-inspect git, run scope/protection/anti-gaming
-guards, execute ONE independent reviewer, persist, and stop at
-PROMOTION_READY or another explicit safe state. Promotion to main and
-supervisor handoff are separate explicit gates, never automatic. Nothing
+cycle executes: pause check, task-lease claim (second claimant gets
+TASK_BUSY), packet validation, runtime model selection, trusted-authority
+freeze, precondition check, exactly ONE worker launch, git re-inspection,
+scope/protection/anti-gaming guards against the FROZEN authority,
+ONE independent reviewer of a different family, persist, and stop at
+PROMOTION_READY or another explicit safe state. The selected model (never
+stale packet metadata) reaches the worker command; reasoning `--variant`
+is passed only when declared supported, else `DEFAULT_PROVIDER` is
+recorded. Promotion to main and supervisor handoff are separate explicit
+gates bound to the runtime authorization record — never automatic. Nothing
 here advances checkpoints; the supervisor (`--resume-sha <exact-SHA>`)
 still owns hosted verification, evidence, and STATE transitions.
 
@@ -48,9 +54,30 @@ after every run, so agent prose is never the boundary — git inspection is.
 
 State lives in `<git-common-dir>/opencut-automation/` (shared across
 worktrees, never committed). A dead worker leaves its run `RUNNING` with a
-dirty worktree; resume marks it `INTERRUPTED`, preserves every dirty file
-(no reset, no clean), reuses the same task packet, and continues that exact
-work on the same branch/worktree.
+dirty worktree; the next cycle (or explicit `resume`) marks it
+`INTERRUPTED`, preserves every dirty file (no reset, no clean), and
+`resume` relaunches exactly one worker on the SAME task/branch with an
+explicit resume context (existing HEAD, dirty paths, do-not-restart),
+then re-applies classification, guards, and review. `pause` blocks NEW
+dispatch only (checked before task claim); it never kills a legally
+claimed RUNNING worker. `unpause` re-allows dispatch. One task lease
+(`leases/<task>.lock`, flock-held across the whole cycle) guarantees a
+single writer; a second claimant receives TASK_BUSY.
+
+## Trust boundaries (enforced, not prose)
+
+- Protection truth is the frozen `scripts/agent_supervisor.py` predicate
+  from the trusted checkout — never candidate code. Freshness is
+  re-verified after the worker; drift fails closed (TRUSTED_POLICY_MISMATCH).
+- Protected-workflow authorization comes from trusted PLAN resolution
+  (`runner_allowed_protected_paths`); the packet snapshot is audit-only and
+  any mismatch fails closed (TASK_CONTRACT_MISMATCH).
+- Rename/copy changes check BOTH old and new paths.
+- Promotion reads its authorization record from runtime memory itself and
+  revalidates digests, trees, review, NEXT, and remote before a
+  fast-forward-only push; handoff additionally requires a PROMOTED record.
+- Model output is untrusted: worker success is git state, reviewer verdicts
+  are schema-validated event payloads, Jev is fixed-label advisory only.
 
 ## D. When a free model disappears
 

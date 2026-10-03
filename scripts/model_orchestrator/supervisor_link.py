@@ -1,20 +1,21 @@
 """Runner integration with the existing authoritative supervisor.
 
-The orchestrator produces implementation candidates (SHA + local results +
-reports). Authoritative verification and STATE transitions stay with
-scripts/agent_supervisor.py: this module only shells to `--resume-sha` for an
-already-promoted exact SHA, and only after verifying every local
-precondition itself: branch == main, clean worktree,
-HEAD == origin/main == SHA, expected checkpoint still NEXT.
-A candidate living only on a review branch is REFUSED before invoking the
-supervisor — never passed through. Supervisor validation stays intact as
-defense in depth.
+Handoff is tied to the promoted task authorization, not merely to a SHA
+that happens to equal HEAD/origin-main. Before constructing
+`agent_supervisor.py --resume-sha ...` the link verifies, from trusted
+runtime memory: task status PROMOTED or SUPERVISOR_READY, candidate ==
+promoted SHA, HEAD == origin/main == promoted SHA, clean worktree,
+expected checkpoint still NEXT, task checkpoint matches. Anything else is
+a structured refusal BEFORE invoking the supervisor. Supervisor validation
+stays intact as defense in depth.
 """
 from __future__ import annotations
 
 import json
 import subprocess
 from pathlib import Path
+
+from . import runtime_memory as mem
 
 
 def supervisor_resume_command(checkpoint: str, sha: str) -> list[str]:
@@ -42,11 +43,26 @@ def checkpoint_still_next(repo: str, checkpoint: str) -> bool:
     return state.get("checkpoints", {}).get(checkpoint) == "NEXT"
 
 
-def check_handoff(repo: str, checkpoint: str, sha: str) -> dict:
-    """Local preconditions. Returns {'ok': bool, 'refusals': [...]}."""
+def check_handoff(repo: str, checkpoint: str, sha: str, task_id: str | None = None) -> dict:
+    """Local preconditions + promoted-authorization binding.
+
+    Returns {'ok': bool, 'refusals': [...]}. Without a matching
+    PROMOTED/SUPERVISOR_READY authorization for task_id, a SHA that merely
+    equals HEAD/origin-main is still refused.
+    """
     refusals = []
     if not validate_sha(sha):
         return {"ok": False, "refusals": [f"invalid SHA: {sha!r}"]}
+    if task_id is not None:
+        with mem.LockedState(repo) as locked:
+            record = locked.read_promotion(task_id)
+            run = locked.read_run(task_id)
+        if run.get("status") not in ("PROMOTED", "SUPERVISOR_READY"):
+            refusals.append(f"refusing: no promoted authorization for task {task_id}")
+        elif record.get("candidate_sha") != sha:
+            refusals.append("refusing: SHA != promoted candidate SHA")
+        elif record.get("checkpoint") != checkpoint:
+            refusals.append("refusing: checkpoint != promoted checkpoint")
     if _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "main":
         refusals.append("refusing: not on branch main")
     if _git(repo, "status", "--porcelain").stdout.strip():
@@ -63,9 +79,9 @@ def check_handoff(repo: str, checkpoint: str, sha: str) -> dict:
 
 
 def handoff_to_supervisor(repo: str, checkpoint: str, sha: str,
-                          timeout_s: int = 7800, invoke=None) -> dict:
-    """Verify preconditions, then invoke the supervisor (or a fake in tests)."""
-    precheck = check_handoff(repo, checkpoint, sha)
+                          timeout_s: int = 7800, invoke=None, task_id: str | None = None) -> dict:
+    """Verify preconditions + authorization, then invoke the supervisor (or a fake in tests)."""
+    precheck = check_handoff(repo, checkpoint, sha, task_id=task_id)
     if not precheck["ok"]:
         return {"ok": False, "refused": True, "refusals": precheck["refusals"]}
     if invoke is not None:

@@ -54,6 +54,8 @@ class JevAdapter:
         import json as _json
         import subprocess as _sp
 
+        from . import events
+
         if not self.available or not self.model:
             raise RuntimeError("Jev unavailable")
         prompt = (
@@ -68,18 +70,7 @@ class JevAdapter:
         )
         if proc.returncode != 0:
             raise RuntimeError(f"Jev tool failure: {proc.stderr[-500:]}")
-        text = proc.stdout.strip().splitlines()
-        if not text:
-            raise ValueError("empty Jev output")
-        try:
-            parsed = _json.loads(text[-1])
-            label = parsed.get("label", "") if isinstance(parsed, dict) else str(parsed)
-        except ValueError:
-            label = text[-1].strip().strip('"')
-        label = str(label).strip()
-        if not validate_router_label(label):
-            raise ValueError(f"invalid Jev label: {label!r}")
-        return label
+        return events.extract_label(proc.stdout, ROUTER_LABELS)
 
     def advise(self, facts: dict, scripted: str | None = None) -> dict:
         if scripted is not None:

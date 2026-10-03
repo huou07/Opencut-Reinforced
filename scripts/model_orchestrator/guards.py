@@ -49,16 +49,57 @@ def is_protected_with(module, path: str) -> bool:
     return bool(module.is_protected_execution_path(path_scope.normalize(path)))
 
 
-def changed_paths(repo: str, base_sha: str, candidate_sha: str) -> list[str]:
+def changed_entries(repo: str, base_sha: str, candidate_sha: str) -> list[tuple[str, str | None, str]]:
+    """Unambiguous NUL-delimited rename/copy-aware change list.
+
+    Returns (status, old_path, new_path) with A/M/D/R/C parsed; for R/C
+    BOTH sides are recorded. A delete+add pair (no rename detected) also
+    surfaces both paths, so a protected deletion can never hide behind an
+    allowed addition.
+    """
     out = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_sha}..{candidate_sha}"],
+        ["git", "diff", "--name-status", "-z", "--find-renames", "--find-copies",
+         f"{base_sha}..{candidate_sha}"],
         cwd=repo,
         capture_output=True,
         text=True,
         check=True,
         timeout=60,
     ).stdout
-    return sorted(path_scope.normalize(p) for p in out.splitlines() if p.strip())
+    parts = out.split("\0")
+    entries: list[tuple[str, str | None, str]] = []
+    index = 0
+    while index < len(parts):
+        token = parts[index]
+        index += 1
+        if not token:
+            continue
+        status = token[0]
+        if status in ("R", "C"):
+            if index + 1 >= len(parts):
+                break
+            old, new = parts[index], parts[index + 1]
+            index += 2
+            if old and new:
+                entries.append((status, path_scope.normalize(old), path_scope.normalize(new)))
+        elif status in ("A", "M", "D", "T", "U"):
+            if index >= len(parts):
+                break
+            path = parts[index]
+            index += 1
+            if path:
+                entries.append((status, None, path_scope.normalize(path)))
+    return entries
+
+
+def changed_paths(repo: str, base_sha: str, candidate_sha: str) -> list[str]:
+    """Every path touched by the change: for renames/copies BOTH sides."""
+    paths: set[str] = set()
+    for status, old, new in changed_entries(repo, base_sha, candidate_sha):
+        if old:
+            paths.add(old)
+        paths.add(new)
+    return sorted(paths)
 
 
 def guard_protected_paths(

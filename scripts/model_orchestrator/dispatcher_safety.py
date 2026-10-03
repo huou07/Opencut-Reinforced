@@ -12,13 +12,41 @@ import fnmatch
 from pathlib import Path
 
 SAFE_DISPATCHER_BASH_ALLOWS = (
-    "git status *",
-    "git rev-parse *",
-    "git branch *",
-    "git log *",
-    "git diff --stat *",
+    "git status --short",
+    "git rev-parse HEAD",
+    "git rev-parse origin/main",
+    "git branch --show-current",
+    "git log",
+    "git log --oneline --decorate -8",
+    "git diff --stat",
+    "git diff --stat HEAD",
     "opencode models",
-    "python3 scripts/model_orchestrator/__main__.py *",
+    "python3 scripts/model_orchestrator/__main__.py status",
+    "python3 scripts/model_orchestrator/__main__.py doctor",
+    "python3 scripts/model_orchestrator/__main__.py models",
+    "python3 scripts/model_orchestrator/__main__.py plan",
+    "python3 scripts/model_orchestrator/__main__.py step",
+    "python3 scripts/model_orchestrator/__main__.py explain",
+)
+
+DANGEROUS_DISPATCHER_PROBES = (
+    "git branch evil",
+    "git branch -D evil",
+    "git push origin main",
+    "git commit -m x",
+    "git checkout main",
+    "git switch -c evil",
+    "git reset --hard",
+    "git restore .",
+    "git clean -fd",
+    "python3 scripts/model_orchestrator/__main__.py --auto run",
+    "python3 scripts/model_orchestrator/__main__.py run --auto",
+    "python3 scripts/model_orchestrator/__main__.py resume",
+    "python3 scripts/model_orchestrator/__main__.py pause",
+    "python3 scripts/model_orchestrator/__main__.py unpause",
+    "python3 scripts/model_orchestrator/__main__.py escalate",
+    "python3 scripts/agent_supervisor.py --goal checkpoint:9B",
+    "opencode run hello",
 )
 
 
@@ -105,10 +133,9 @@ def check_dispatcher(repo: str) -> list[str]:
     if bash_allows(bash, "rm -rf /") != "deny":
         problems.append("dispatcher: bash default not deny")
     for allowed in SAFE_DISPATCHER_BASH_ALLOWS:
-        if bash_allows(bash, allowed.rstrip(" *") + " x") != "allow" and bash_allows(bash, allowed) != "allow":
+        if bash_allows(bash, allowed) != "allow":
             problems.append(f"dispatcher: expected allowlist entry missing: {allowed}")
-    for probe in ("git push origin main", "python3 scripts/agent_supervisor.py --goal x",
-                  "opencode run hello", "git commit -m x"):
+    for probe in DANGEROUS_DISPATCHER_PROBES:
         if bash_allows(bash, probe) == "allow":
             problems.append(f"dispatcher: dangerous command allowed: {probe}")
     if problems:

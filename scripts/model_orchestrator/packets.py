@@ -1,4 +1,10 @@
-"""Task packets and escalation packets — machine-readable, schema-checked."""
+"""Task packets and escalation packets — machine-readable, schema-checked.
+
+MODEL FIELD SEMANTICS: packet["model"] is REQUESTED/preferred audit
+metadata only. Runtime policy selection is authoritative at dispatch time
+unless packet["model_locked"] names an exact model explicitly authorized by
+control policy. A stale packet must never bypass model fallback.
+"""
 from __future__ import annotations
 
 import copy
@@ -26,6 +32,8 @@ def build_task_packet(
     stop_conditions: list[str],
     max_repair_attempts: int = 2,
     attempt: int = 1,
+    model_locked: str | None = None,
+    plan_allowlist_snapshot: list[str] | None = None,
 ) -> dict:
     return {
         "task_id": task_id,
@@ -36,6 +44,8 @@ def build_task_packet(
         "worktree": worktree,
         "role": role,
         "model": model,
+        "model_locked": model_locked,
+        "plan_allowlist_snapshot": list(plan_allowlist_snapshot or []),
         "allowed_paths": list(allowed_paths),
         "forbidden_paths": list(forbidden_paths),
         "invariants": list(invariants),
