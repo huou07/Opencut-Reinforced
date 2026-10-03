@@ -19,9 +19,14 @@ python3 scripts/model_orchestrator/__main__.py escalate  # pending escalation st
 python3 scripts/model_orchestrator/__main__.py explain   # sources of truth
 ```
 
-Without `--auto`, `run` refuses to dispatch. Nothing here advances
-checkpoints; the supervisor (`--resume-sha <exact-SHA>`) still owns hosted
-verification, evidence, and STATE transitions.
+Without `--auto`, `run` refuses to dispatch. With `--auto`, one bounded
+cycle executes: validate packet, select model, verify preconditions, launch
+exactly ONE worker, re-inspect git, run scope/protection/anti-gaming
+guards, execute ONE independent reviewer, persist, and stop at
+PROMOTION_READY or another explicit safe state. Promotion to main and
+supervisor handoff are separate explicit gates, never automatic. Nothing
+here advances checkpoints; the supervisor (`--resume-sha <exact-SHA>`)
+still owns hosted verification, evidence, and STATE transitions.
 
 ## B. OpenCode Desktop dispatcher workflow
 
@@ -29,7 +34,15 @@ Open Desktop in the repository and ask `continue the current roadmap`. The
 `model-dispatcher` subagent (`.opencode/agents/model-dispatcher.md`,
 Nemotron 3 Ultra Free, HIGH) runs `status` then `step`, reports blockers and
 the next legal action, and stops. It cannot edit, commit, push, or advance
-state.
+state. Read-only operation is machine-enforced by its `permission:` block
+(`edit: deny`, `task: deny`, `external_directory: deny`, bash default-deny
+with an inspection-only allowlist) and verified by `doctor` via
+`dispatcher_safety.check_dispatcher`, which fails closed as
+`READ_ONLY_ENFORCEMENT_UNAVAILABLE` if the block is missing or weakened.
+Worker (`orch-worker`) and reviewer (`orch-reviewer`) agents likewise deny
+nested task spawning and external-directory access; the reviewer additionally
+denies edits. Scope and protection are always re-verified deterministically
+after every run, so agent prose is never the boundary — git inspection is.
 
 ## C. Resume after model interruption
 
@@ -52,6 +65,16 @@ Escalation state becomes `ESCALATION_DEFERRED_QUOTA`; the exact packet is
 preserved under `escalations/` and the task stops safely. This is deferred
 availability, not repository failure. Resume with `resume` when quota
 returns. Never probe in a loop, never substitute a weaker model.
+
+## Routing, Jev, and reasoning effort
+
+Jev is not installed here, so routing is deterministic; the adapter
+(`router.JevAdapter`) can invoke a configured Jev model through
+`opencode run` if one appears, accepts exactly one fixed label, and falls
+back on any failure. Advisory output never overrides hard safety rules.
+Reasoning effort is truthful: the policy `reasoning` value is recorded as
+requested, and `--variant` is passed only when the model entry declares
+support — otherwise `reasoning_effective = DEFAULT_PROVIDER`.
 
 ## F. Inspecting task/run state
 

@@ -38,20 +38,61 @@ def validate_router_label(label: str) -> bool:
 
 
 class JevAdapter:
-    """Advisory router. Fake-backed in tests; real calls go through opencode run."""
+    """Advisory router. Real path invokes the configured Jev model through
+    `opencode run` with structured facts only; output must be exactly one
+    allowed label. Any failure falls back to deterministic routing."""
 
-    def __init__(self, available: bool = False) -> None:
+    def __init__(self, available: bool = False, model: str | None = None,
+                 opencode_bin: str = "opencode", timeout_s: int = 120) -> None:
         self.available = available
+        self.model = model
+        self.opencode_bin = opencode_bin
+        self.timeout_s = timeout_s
+
+    def invoke(self, facts: dict) -> str:
+        """Real Jev call. Raises on any problem; caller falls back."""
+        import json as _json
+        import subprocess as _sp
+
+        if not self.available or not self.model:
+            raise RuntimeError("Jev unavailable")
+        prompt = (
+            "Classify these orchestration facts. Reply with EXACTLY one of: "
+            + ", ".join(ROUTER_LABELS) + ". No other text.\n"
+            f"FACTS={_json.dumps(facts, sort_keys=True)}"
+        )
+        proc = _sp.run(
+            [self.opencode_bin, "run", "--model", self.model,
+             "--format", "json", prompt],
+            capture_output=True, text=True, timeout=self.timeout_s,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"Jev tool failure: {proc.stderr[-500:]}")
+        text = proc.stdout.strip().splitlines()
+        if not text:
+            raise ValueError("empty Jev output")
+        try:
+            parsed = _json.loads(text[-1])
+            label = parsed.get("label", "") if isinstance(parsed, dict) else str(parsed)
+        except ValueError:
+            label = text[-1].strip().strip('"')
+        label = str(label).strip()
+        if not validate_router_label(label):
+            raise ValueError(f"invalid Jev label: {label!r}")
+        return label
 
     def advise(self, facts: dict, scripted: str | None = None) -> dict:
         if scripted is not None:
             label = scripted
-        elif not self.available:
+            if not validate_router_label(label):
+                return {"label": None, "used": False, "reason": f"invalid label: {label}"}
+            return {"label": label, "used": True, "reason": "advisory"}
+        if not self.available:
             return {"label": None, "used": False, "reason": "Jev unavailable; deterministic routing"}
-        else:  # pragma: no cover — real model call, never in tests
-            raise NotImplementedError("real Jev call dispatches via opencode run")
-        if not validate_router_label(label):
-            return {"label": None, "used": False, "reason": f"invalid label: {label}"}
+        try:
+            label = self.invoke(facts)
+        except Exception as error:  # noqa: BLE001 - any failure falls back
+            return {"label": None, "used": False, "reason": f"Jev failed, deterministic routing: {error}"}
         return {"label": label, "used": True, "reason": "advisory"}
 
 

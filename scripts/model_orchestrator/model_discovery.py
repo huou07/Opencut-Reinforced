@@ -44,8 +44,15 @@ def discover_opencode_models(timeout_s: int = 60) -> list[ModelInfo]:
     return infos
 
 
-def model_available(model_id: str, discovered: list[ModelInfo]) -> bool:
-    return any(m.model_id == model_id and m.state in ("AVAILABLE", "TEMPORARILY_FREE") for m in discovered)
+def _state_of(entry) -> tuple[str, str]:
+    if isinstance(entry, dict):
+        return entry.get("model_id", ""), entry.get("state", "")
+    return entry.model_id, entry.state
+
+
+def model_available(model_id: str, discovered: list) -> bool:
+    return any(mid == model_id and state in ("AVAILABLE", "TEMPORARILY_FREE")
+               for mid, state in (_state_of(m) for m in discovered))
 
 
 def select_for_role(role: str, policy: dict, discovered: list[ModelInfo]) -> tuple[str | None, str]:
@@ -60,8 +67,13 @@ def select_for_role(role: str, policy: dict, discovered: list[ModelInfo]) -> tup
 
 
 def model_family(model_id: str, policy: dict) -> str:
+    entry = policy_entry_for(model_id, policy)
+    return entry.get("family", "unknown") if entry else "unknown"
+
+
+def policy_entry_for(model_id: str, policy: dict) -> dict:
     for role in policy.get("roles", {}).values():
         for candidate in role.get("preferred", []):
             if candidate.get("model") == model_id:
-                return candidate.get("family", "unknown")
-    return "unknown"
+                return candidate
+    return {}

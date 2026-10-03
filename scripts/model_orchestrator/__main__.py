@@ -1,25 +1,36 @@
-"""model-orchestrator CLI: status doctor models plan step run resume pause escalate explain.
+"""model-orchestrator CLI — thin interface over the deterministic engine.
 
-Default behavior is safe/manual. `--auto` only enables the opt-in autonomous
-capability; this task builds and tests it without launching full-roadmap runs.
+status doctor models plan step run resume pause escalate explain.
+Default behavior is safe/manual. `--auto` only enables the opt-in
+single-cycle dispatch; the engine stops at PROMOTION_READY or another
+explicit safe state and never advances checkpoints or promotes to main.
+Unimplemented commands exit non-zero; success is never claimed for a no-op.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from model_orchestrator import model_discovery, policies, router  # noqa: E402
+from model_orchestrator import guards, model_discovery, orchestrator, policies  # noqa: E402
 from model_orchestrator import runtime_memory as mem  # noqa: E402
 
 
 def _repo() -> str:
-    from pathlib import Path as P
+    return str(Path(__file__).resolve().parent.parent.parent)
 
-    return str(P(__file__).resolve().parent.parent.parent)
+
+def _engine(repo: str) -> orchestrator.Orchestrator:
+    loaded = policies.load_policies(repo)
+    discovered = [
+        {"model_id": m.model_id, "state": m.state}
+        for m in model_discovery.discover_opencode_models()
+    ]
+    return orchestrator.Orchestrator(repo, loaded, loaded, discovered)
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -27,23 +38,56 @@ def cmd_status(args: argparse.Namespace) -> int:
     repo = _repo()
     with mem.LockedState(repo) as locked:
         current = locked.current()
-    print(json.dumps({"repo": repo, "current": current}, indent=2, sort_keys=True))
+        task_id = current.get("active_task")
+        run = locked.read_run(task_id) if task_id else {}
+    print(json.dumps({"repo": repo, "current": current, "run": run}, indent=2, sort_keys=True))
     return 0
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     _ = args
     repo = _repo()
-    problems = []
-    loaded = policies.load_policies(repo)
+    problems: list[str] = []
+    try:
+        loaded = policies.load_policies(repo)
+    except (OSError, ValueError) as error:
+        print("DOCTOR: problems found")
+        print(f" - tracked policies unreadable: {error}")
+        return 1
     problems.extend(policies.validate_policies(loaded))
     try:
         root = mem.state_dir(repo)
-    except Exception as error:  # noqa: BLE001
-        problems.append(f"runtime memory unavailable: {error}")
-    else:
         if not root.is_dir():
             problems.append(f"runtime memory missing: {root}")
+    except Exception as error:  # noqa: BLE001
+        problems.append(f"runtime memory unavailable: {error}")
+    # Protection parity: supervisor predicate must load and agree on samples.
+    try:
+        for sample, expected in (
+            ("docs/execution/STATE.json", True),
+            (".github/workflows/platform-verification.yml", True),
+            ("scripts/agent_supervisor.py", True),
+            ("crates/or_media/src/decoder.rs", False),
+        ):
+            if guards.is_supervisor_protected(repo, sample) != expected:
+                problems.append(f"protection parity failed for {sample}")
+    except Exception as error:  # noqa: BLE001
+        problems.append(f"supervisor predicate unavailable: {error}")
+    # Model configuration: discovery must execute (results may be UNAVAILABLE).
+    try:
+        discovered = model_discovery.discover_opencode_models()
+        if not discovered:
+            problems.append("model discovery returned nothing")
+    except Exception as error:  # noqa: BLE001
+        problems.append(f"model discovery broken: {error}")
+    # Dispatcher safety capability.
+    problems.extend(check_dispatcher(repo))
+    # Required executables.
+    for binary in ("git", "python3"):
+        try:
+            subprocess.run([binary, "--version"], capture_output=True, timeout=30, check=True)
+        except (OSError, subprocess.SubprocessError):
+            problems.append(f"required executable missing: {binary}")
     if problems:
         print("DOCTOR: problems found")
         for problem in problems:
@@ -53,27 +97,40 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_dispatcher(repo: str) -> list[str]:
+    """Machine-enforced read-only? Fail closed if not verifiable."""
+    from model_orchestrator import dispatcher_safety
+
+    return dispatcher_safety.check_dispatcher(repo)
+
+
 def cmd_models(args: argparse.Namespace) -> int:
     _ = args
     repo = _repo()
     loaded = policies.load_policies(repo)
     model_policy = loaded.get("MODEL_POLICY.json", {})
-    discovered = model_discovery.discover_opencode_models()
+    discovered = [
+        {"model_id": m.model_id, "state": m.state}
+        for m in model_discovery.discover_opencode_models()
+    ]
     rows = []
     for role, spec in model_policy.get("roles", {}).items():
         if role == "architecture":
-            rows.append({"role": role, "model": "codex-exec (configurable)", "state": "OPTIONAL"})
+            rows.append({"role": role, "model": "codex-exec (configurable)",
+                         "state": "OPTIONAL", "reasoning": spec.get("reasoning")})
             continue
         model_id, readiness = model_discovery.select_for_role(role, model_policy, discovered)
-        rows.append({"role": role, "model": model_id, "state": "READY" if readiness == "READY" else "UNAVAILABLE"})
+        rows.append({"role": role, "model": model_id,
+                     "state": "READY" if readiness == "READY" else "UNAVAILABLE",
+                     "reasoning_requested": spec.get("reasoning"),
+                     "reasoning_effective": "DEFAULT_PROVIDER"})
     print(json.dumps({"models": rows}, indent=2))
     return 0
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
+    _ = args
     repo = _repo()
-    import subprocess
-
     proc = subprocess.run(
         ["python3", "scripts/execution_plan.py", "status"],
         cwd=repo, capture_output=True, text=True, timeout=60,
@@ -84,40 +141,37 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 def cmd_step(args: argparse.Namespace) -> int:
     _ = args
-    repo = _repo()
-    with mem.LockedState(repo) as locked:
-        current = locked.current()
-    facts = {
-        "candidate_ready": bool(current.get("candidate_sha")),
-        "attempts_remaining": current.get("attempts_remaining", True),
-        "needs_architecture": current.get("escalation") == "ARCHITECTURE_ESCALATION",
-        "hosted_inconclusive": current.get("hosted_verdict") == "HOSTED_VERIFY_INCONCLUSIVE",
-        "evidence_ready": bool(current.get("evidence_ready")),
-        "harness_suspect": bool(current.get("harness_suspect")),
-    }
-    decision = router.route(facts, router.JevAdapter(available=False))
-    print(json.dumps({"facts": facts, "route": decision}, indent=2, sort_keys=True))
+    print(json.dumps(_engine(_repo()).next_action(), indent=2, sort_keys=True))
     return 0
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    print("--auto" if args.auto else "manual: refusing to launch workers without --auto opt-in")
-    return 0 if args.auto else 2
+    repo = _repo()
+    if not args.auto:
+        print("manual: refusing to launch workers without --auto opt-in")
+        return 2
+    with mem.LockedState(repo) as locked:
+        task_id = locked.current().get("active_task")
+    if not task_id:
+        print("no active task; create one before run --auto")
+        return 2
+    result = _engine(repo).run_cycle(task_id)
+    print(json.dumps({"state": result.state, "candidate": result.candidate_sha,
+                      "detail": result.detail, "failures": result.failures}, indent=2))
+    return 0
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
     _ = args
-    repo = _repo()
+    outcome = _engine(_repo()).resume(
+        _active_task(_repo()))
+    print(json.dumps(outcome, indent=2, sort_keys=True))
+    return 0 if outcome.get("ok") else 2
+
+
+def _active_task(repo: str) -> str:
     with mem.LockedState(repo) as locked:
-        current = locked.current()
-    task_id = current.get("active_task")
-    if not task_id:
-        print("no active task")
-        return 2
-    with mem.LockedState(repo) as locked:
-        run = locked.read_run(task_id)
-    print(json.dumps({"task_id": task_id, "run": run}, indent=2, sort_keys=True))
-    return 0
+        return locked.current().get("active_task", "")
 
 
 def cmd_pause(args: argparse.Namespace) -> int:
@@ -127,7 +181,7 @@ def cmd_pause(args: argparse.Namespace) -> int:
         current = locked.current()
         current["paused"] = True
         locked.write_current(current)
-    print("paused")
+    print("paused: dispatch disabled until resumed")
     return 0
 
 
@@ -136,7 +190,9 @@ def cmd_escalate(args: argparse.Namespace) -> int:
     repo = _repo()
     with mem.LockedState(repo) as locked:
         current = locked.current()
-    print(json.dumps({"escalation": current.get("escalation", "none")}, indent=2))
+    print(json.dumps({"escalation": current.get("escalation", "none"),
+                      "note": "escalation executes only when explicitly requested; "
+                              "quota exhaustion defers, never fails"}, indent=2))
     return 0
 
 
@@ -149,7 +205,7 @@ def cmd_explain(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="model-orchestrator")
-    parser.add_argument("--auto", action="store_true", help="opt-in autonomous capability (manual by default)")
+    parser.add_argument("--auto", action="store_true", help="opt-in single-cycle dispatch (manual by default)")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("status", "doctor", "models", "plan", "step", "run", "resume", "pause", "escalate", "explain"):
         sub.add_parser(name)
