@@ -376,11 +376,16 @@ jobs:
           adb install -r "$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
           stage_fixture() {
             adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" /data/local/tmp/or-android-preview-tiny.mkv
+            adb shell run-as io.github.huou07.or_app mkdir -p files
             adb shell run-as io.github.huou07.or_app cp /data/local/tmp/or-android-preview-tiny.mkv files/or-android-preview-tiny.mkv
           }
           run_case() {
             local case_name="$1" target="$2"
             local driver_status=0
+            if [[ "$(timeout 5s adb -s "$android_device_id" get-state 2>/dev/null || true)" != device ]]; then
+              echo "BLOCKED: $case_name was not launched because the previous control lost ADB." | tee "$RUNNER_TEMP/android-diagnostic-${case_name}-result.txt"
+              return 0
+            fi
             stage_fixture
             adb logcat -b all -c
             adb logcat -b all -v threadtime > "$RUNNER_TEMP/android-diagnostic-${case_name}-guest.log" 2>&1 &
@@ -389,6 +394,9 @@ jobs:
               while kill -0 "$emulator_pid" 2>/dev/null; do
                 date -u +%FT%TZ
                 ps -p "$emulator_pid" -o pid=,stat=,pcpu=,pmem=,rss=,args=
+                head -n 5 /proc/meminfo
+                cat /proc/pressure/memory
+                ps -eo pid,ppid,stat,pcpu,pmem,rss,comm --sort=-rss | head -n 10
                 timeout 3s adb devices -l
                 timeout 3s adb shell 'pidof io.github.huou07.or_app; cat /proc/loadavg; dumpsys activity processes | grep -E "or_app|ANR|crash"'
                 sleep 2
@@ -405,6 +413,8 @@ jobs:
               echo "DRIVER_EXIT=$driver_status"
               date -u +%FT%TZ
               timeout 5s adb devices -l || true
+              timeout 5s adb forward --list || true
+              timeout 5s adb shell getprop init.svc.adbd || true
               ps -p "$emulator_pid" -o pid=,stat=,pcpu=,pmem=,rss=,args= || true
               timeout 10s adb shell dumpsys activity exit-info io.github.huou07.or_app || true
               timeout 10s adb shell dumpsys meminfo io.github.huou07.or_app || true
@@ -417,7 +427,7 @@ jobs:
             cat "$RUNNER_TEMP/android-diagnostic-${case_name}-result.txt" >> "$GITHUB_STEP_SUMMARY"
           }
           run_case consolidated-first integration_test/android_lifecycle_diagnostic_test.dart
-          run_case consolidated-second integration_test/android_lifecycle_diagnostic_test.dart
+          run_case consolidated-second integration_test/android_lifecycle_diagnostic_restart_test.dart
           kill "$emulator_pid" 2>/dev/null || true
           wait "$emulator_pid" 2>/dev/null || true
           emulator_pid=
