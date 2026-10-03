@@ -64,6 +64,16 @@ verification, optional preview verification, evidence record, `STATE.json`
 transition, state/evidence commit, and the decision to launch a fresh runner.
 An LLM saying `DONE` is never repository-authoritative completion.
 
+The generated runner prompt names required evidence classes and states that
+passing existing tests with a smaller implementation is not the objective.
+It forbids substituting bridge calls for in-scope UI journeys, host tools for
+packaged dependencies, in-process checks for persistent reopen, disabled
+permissions for packaged permission behavior, or synthetic tests for failed
+acceptance. After two speculative fixes to one gate, the runner pauses for
+failure evidence, a falsifiable hypothesis, a discriminating test, and a
+causal repair explanation. Unit and bridge tests still support lower-level
+claims.
+
 A checkpoint introducing a native/system dependency must not be asked to prove
 hosted compatibility with CI infrastructure it is forbidden to establish. If
 a protected CI/build change is required, use a preceding architecture-gate
@@ -174,6 +184,22 @@ The policy boundary begins at 7A. Earlier completed checkpoints remain
 grandfathered and do not receive fabricated evidence. A `DONE` checkpoint at
 or after the boundary is invalid without its supervisor-generated evidence
 file.
+
+Quality evidence classes begin at 9B. `PLAN.json` declares required classes;
+`EVIDENCE_POLICY.json` binds each class to named hosted job steps. The
+supervisor queries those steps on the exact implementation SHA and writes
+schema-2 class proofs. A missing or unsuccessful step prevents completion.
+Historic schema-1 evidence remains unchanged. The 9B quality amendment is a
+control-plane-only baseline with explicit failed-run provenance and an exact
+changed-path allowlist; fresh 9B implementation commits are measured from it.
+The old failed 9B history is preserved, and ordinary protected-path checks
+continue after the amendment.
+The amendment marker must be introduced by that baseline commit; an inherited
+marker on a later 9B state commit is not a new trusted baseline. All retained
+state and verified schema versions are preserved. Proof-step bindings for 9B
+and 9B1 are part of this amendment. A later checkpoint without approved
+bindings fails preparation and completion; its bindings require a separate
+control-plane amendment before a feature runner can start.
 
 ## Resume
 

@@ -119,6 +119,53 @@ Runtime hardware capability discovery and provider selection are centralized.
 
 Generic domain and render evaluation must not contain scattered platform checks.
 
+## Product acceptance
+
+### INV-PRODUCT — Product journey completion
+
+A user-visible checkpoint is incomplete until its primary real user journey
+works end to end through the actual product boundary.
+
+### INV-PACKAGE — Packaged capability is self-contained
+
+Distributed artifacts may not depend on undocumented host executables, package
+managers, developer `PATH` values, build-machine environment variables, or
+richer host capabilities unless explicitly declared as product prerequisites.
+
+### INV-CAPABILITY — Tests use the shipped capability
+
+Tests may not use a capability richer than the packaged runtime and then claim
+the packaged product supports it.
+
+### INV-PARITY — Preview and export semantics agree
+
+Preview and export share canonical evaluated semantics, timing, canvas and
+output geometry policy, text geometry, transforms, effects, and source
+interpretation unless a difference is an explicit documented product contract.
+
+### INV-PERF — Realtime work reuses bounded state
+
+Realtime frame and audio-block paths do not repeatedly open containers,
+construct codecs, spawn processes, compile shaders, open databases, or acquire
+platform resources when reusable bounded runtime state is possible.
+
+### INV-UX — Actions have observable outcomes
+
+A user action does not silently no-op. Unsupported or unavailable behavior is
+disabled or produces actionable feedback.
+
+### INV-ACCEPT — Product acceptance has its own path
+
+Unit, synthetic, and bridge tests remain useful lower-level evidence. They do
+not substitute for a feasible real product acceptance path for a user-visible
+capability.
+
+### INV-VERIFY — Verification preserves fidelity
+
+A failing acceptance gate may not be weakened by replacing its environment or
+product path with a lower-fidelity harness. A diagnostic harness must be
+labelled as such and cannot satisfy higher-fidelity acceptance evidence.
+
 ## Jobs and cache
 
 ### INV-JOB-001 — Background work is bounded

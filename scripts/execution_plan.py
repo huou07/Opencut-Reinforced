@@ -18,6 +18,15 @@ STATE_PATH = REPO_ROOT / "docs" / "execution" / "STATE.json"
 ARCHITECTURE_POLICY_PATH = REPO_ROOT / "docs" / "execution" / "architecture-policy.json"
 VALID_CHECKPOINT_STATUSES = {"DONE", "NEXT", "PLANNED"}
 VALID_PHASE_STATUSES = {"DONE", "IN_PROGRESS", "PLANNED"}
+EVIDENCE_CLASSES = {
+    "STATIC", "UNIT", "INTEGRATION", "NATIVE_RUNTIME", "PACKAGED_RUNTIME",
+    "USER_JOURNEY", "CLEAN_ENVIRONMENT", "PERSISTENCE_RELAUNCH",
+    "PERFORMANCE", "RESOURCE_STRESS", "CROSS_PLATFORM",
+}
+HARDENING_EVIDENCE = {
+    "PACKAGED_RUNTIME", "CLEAN_ENVIRONMENT", "PERSISTENCE_RELAUNCH",
+    "PERFORMANCE", "RESOURCE_STRESS", "CROSS_PLATFORM",
+}
 CONTRACT_VERSION_SOURCES = {
     "project_schema": (
         "crates/or_core/src/project_document.rs",
@@ -256,6 +265,7 @@ def _checkpoint_map(
 ) -> dict[str, dict[str, Any]]:
     raw_checkpoints = _require_list(plan.get("checkpoints"), "plan.checkpoints")
     result: dict[str, dict[str, Any]] = {}
+    quality_v2 = plan.get("quality_contract_version") == 2
     required = {
         "id",
         "phase",
@@ -271,6 +281,8 @@ def _checkpoint_map(
         "dependency_change_policy",
         "next_checkpoint_relation",
     }
+    if quality_v2:
+        required |= {"evidence_contract_version", "required_evidence_classes"}
     for index, raw in enumerate(raw_checkpoints):
         checkpoint = _require_object(raw, f"plan.checkpoints[{index}]")
         missing = required - checkpoint.keys()
@@ -302,6 +314,22 @@ def _checkpoint_map(
         for field in ("user_visible", "developer_preview_required", "architecture_gate"):
             if not isinstance(checkpoint[field], bool):
                 raise PlanError(f"checkpoint {checkpoint_id}.{field} must be boolean")
+        if quality_v2:
+            version = checkpoint["evidence_contract_version"]
+            if isinstance(version, bool) or version not in (1, 2):
+                raise PlanError(f"checkpoint {checkpoint_id}.evidence_contract_version must be 1 or 2")
+            evidence_classes = _require_list(
+                checkpoint["required_evidence_classes"],
+                f"checkpoint {checkpoint_id}.required_evidence_classes",
+            )
+            if any(not isinstance(item, str) for item in evidence_classes):
+                raise PlanError(f"checkpoint {checkpoint_id} has invalid evidence classes")
+            if len(evidence_classes) != len(set(evidence_classes)) or not set(evidence_classes) <= EVIDENCE_CLASSES:
+                raise PlanError(f"checkpoint {checkpoint_id} has duplicate or unknown evidence classes")
+            if checkpoint["user_visible"] and not {"STATIC", "UNIT", "INTEGRATION", "USER_JOURNEY"} <= set(evidence_classes):
+                raise PlanError(f"checkpoint {checkpoint_id} lacks user journey acceptance classes")
+            if ("hardening" in checkpoint["title"].lower() or checkpoint_id in {"8F", "16G"}) and not HARDENING_EVIDENCE <= set(evidence_classes):
+                raise PlanError(f"checkpoint {checkpoint_id} lacks packaged hardening evidence classes")
         if "runner_allowed_protected_paths" in checkpoint:
             _validate_runner_allowed_protected_paths(
                 checkpoint_id,
@@ -728,6 +756,7 @@ def resolve_goal(
         "goal_complete_after_current": current_next == goal_members[-1],
         "next_checkpoint_relation": checkpoint["next_checkpoint_relation"],
         "runner_allowed_protected_paths": checkpoint.get("runner_allowed_protected_paths", []),
+        "required_evidence_classes": checkpoint.get("required_evidence_classes", []),
     }
 
 

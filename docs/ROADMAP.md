@@ -327,8 +327,9 @@ AI generation and community features are not MVP requirements. AI features may b
 Locked contract: [PHASE_9.md](execution/phases/PHASE_9.md). Checkpoints are
 9A0 (Android FFmpeg/shared-library, Rust cross-link, APK, bridge, and hosted
 x86_64 emulator gate), 9A (typed SAF source and app-private durability/I/O),
-9B (optional hardware/media surfaces with software fallback), 9C (mobile UX),
-9D (software correctness export), and 9E (resource/device hardening).
+9B (Android SAF software preview and render surface), 9B1 (packaged desktop
+media runtime and product acceptance hardening), 9C (mobile UX), 9D (software
+correctness export), and 9E (resource/device hardening).
 
 Use the same project and core model with mobile-native UI, Android storage integration, and resource-aware editing, playback, and export.
 

@@ -726,3 +726,21 @@ timings are not a hardware-performance authority.
 Phase 7's performance gate must keep those measurements separate from product
 correctness and must not justify a dependency, native path, or removed fallback
 without repeatable evidence.
+
+## Product acceptance evidence from 9B
+
+The execution policy now distinguishes static, unit, integration, native,
+packaged, user-journey, clean-environment, relaunch, performance, resource,
+and cross-platform evidence. The exact required classes for a checkpoint are
+in `docs/execution/PLAN.json`; named hosted job steps proving them are in
+`docs/execution/EVIDENCE_POLICY.json`. The supervisor records successful
+exact-SHA step proofs. A lower-level bridge or synthetic check is not a
+substitute for the required Android SAF journey or 9B1 packaged desktop
+journey.
+
+The earlier 9B Android retries remain failure provenance. Before another
+repair, reproduce or distinguish repeated Flutter-driver lifecycle effects,
+application/native or JNI failure, VM-service failure, emulator instability,
+and startup main-thread load. Skipped-frame warnings are measurements to
+investigate. Do not classify a disconnect as infrastructure based only on ADB
+being offline.

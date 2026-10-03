@@ -80,9 +80,86 @@ device API-level and GPU-matrix evidence, queue budgets, cancellation, and
 fallback telemetry. Missing physical-device coverage is reported as
 `ANDROID_HARDWARE_MEDIA = UNVERIFIED`.
 
+The required Android product journey uses an actual `content://` document
+provider source: source identity -> Android-owned FD -> duplicated bounded
+seekable capability -> FFmpeg software decode -> shared render path -> bounded
+pixel frame -> `SurfaceProducer`/Flutter texture presentation. Preview may not
+change project revision. Play works without a prior seek. Active sources are
+selected deterministically from the evaluated preview snapshot rather than
+the first 64 library entries; a project with more than 64 library entries
+still previews an active late source. Every FD registration result is checked,
+partial failure is retryable after permission recovery, and project switch or
+clear releases old descriptors. Missing, nonseekable, and revoked sources fail
+explicitly. Cancellation/generation invalidation drops stale work, and surface
+recreation or release does not leak frame leases or descriptors.
+
+Hosted acceptance must discriminate app/native/JNI crashes, main-thread load,
+Flutter-driver lifecycle, VM-service failure, and emulator instability before
+classifying a disconnect. One bounded app/emulator lifecycle may run all
+Android assertions when repeated driver install/start is proved causal; all
+existing assertions remain. Record startup skipped-frame measurements and
+bounded resource/lease observations. Required evidence classes are `STATIC`,
+`UNIT`, `INTEGRATION`, `NATIVE_RUNTIME`, `USER_JOURNEY`, `PERFORMANCE`, and
+`RESOURCE_STRESS`. A local-file fixture or bridge-only test is supporting
+evidence, not the SAF product journey. No fake path conversion, MediaCodec,
+HardwareBuffer, zero-copy, physical-device result, or Android export is in
+scope. The Android software fallback remains authoritative.
+
 Affected invariants: `INV-RT-001`, `INV-RT-002`, `INV-MEDIA-001`,
 `INV-MEDIA-002`, `INV-RENDER-001`, `INV-RENDER-002`, `INV-RENDER-003`,
-`INV-HW-001`, `INV-HW-002`, `INV-JOB-001`, `INV-DEP-001`.
+`INV-HW-001`, `INV-HW-002`, `INV-JOB-001`, `INV-DEP-001`, `INV-PRODUCT`,
+`INV-CAPABILITY`, `INV-PERF`, `INV-UX`, `INV-ACCEPT`, `INV-VERIFY`.
+
+## 9B1 — Product quality, packaged media runtime, and acceptance hardening
+
+After 9B is independently verified, make the packaged desktop application the
+authority for normal media import, thumbnails, waveforms, proxies, preview,
+save/reopen, and export. Remove mandatory system `ffprobe` and `ffmpeg` from
+those paths by using the packaged media runtime boundary, or use an explicitly
+packaged, signed, version-aligned helper only after a documented architecture
+and licensing review. Do not add FFmpeg directly to `or_core`. Define a
+real-world minimum import matrix; unsupported formats fail at import with
+accurate feedback. Codec additions require LGPL/GPL, patent, platform, and
+distribution review.
+
+Keep macOS security-scoped bookmarks and access tokens in application/runtime
+metadata, outside `ProjectDocument`. Use one deterministic evaluated canvas
+and output-geometry policy for preview and export, including mixed aspect
+ratios and text-only intervals. Reuse bounded decoder/container sessions by
+source and runtime generation; sequential playback decodes sequentially and
+only actual discontinuities seek. Preserve cancellation and memory bounds.
+Windows Save/Replace safely replaces an existing export target with staged,
+failure-safe behavior.
+
+The primary user journey starts with the real packaged app in a clean
+environment: create -> import legal supported media -> thumbnail/waveform
+where applicable -> timeline -> preview -> edit -> save -> exit -> relaunch ->
+reopen with resolved media -> export -> validate the output. A prebuilt
+`.orproj` is not a substitute for import. Strip developer `PATH` tools,
+`OR_FFMPEG_PATH`, `OR_FFPROBE_PATH`, loader overrides, and build-tree resource
+paths. Verify final macOS signed/ad-hoc entitlements after signing; `flutter
+--ci` is lower-level bridge evidence only. Verify Windows runtime DLL/VC++
+requirements and Linux library baseline in clean supported environments.
+
+The failure journey covers unsupported media, unavailable external files,
+revoked permission, missing packaged runtime, failed replace, and failed
+reopen with actionable feedback and no lost project. Acceptance records
+before/after playback and decoder performance plus bounded resources. Required
+evidence classes are `STATIC`, `UNIT`, `INTEGRATION`, `NATIVE_RUNTIME`,
+`PACKAGED_RUNTIME`, `USER_JOURNEY`, `CLEAN_ENVIRONMENT`,
+`PERSISTENCE_RELAUNCH`, `PERFORMANCE`, `RESOURCE_STRESS`, and
+`CROSS_PLATFORM`. A Developer Preview and hosted product acceptance are
+required. Project schema and recovery schema do not change; IPC does not
+change without a separately justified explicit contract amendment.
+
+9B1 may edit exactly `.github/workflows/platform-verification.yml` and
+`.github/workflows/developer-preview.yml` among protected paths. Android
+export, hardware acceleration, new project features, and 9C mobile UX are out
+of scope.
+
+Affected invariants: `INV-PRODUCT`, `INV-PACKAGE`, `INV-CAPABILITY`,
+`INV-PARITY`, `INV-PERF`, `INV-UX`, `INV-ACCEPT`, `INV-VERIFY`,
+`INV-PERSIST-002`, `INV-DEP-001`.
 
 ## 9C — Mobile editor UX
 

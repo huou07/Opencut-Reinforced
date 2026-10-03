@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "checkpoint_id": "9B",
+  "prior_implementation_sha": "5b6a496e5ebd27252677fc9b6bbcfd06423c7e1d",
+  "prior_failed_run_id": 37043830370,
+  "changed_paths": [
+    "AGENTS.md",
+    "docs/ROADMAP.md",
+    "docs/TESTING.md",
+    "docs/adr/0008-product-acceptance-and-execution-quality.md",
+    "docs/adr/README.md",
+    "docs/execution/AGENT_EXECUTION.md",
+    "docs/execution/AMENDMENT_BASELINE.json",
+    "docs/execution/ARCHITECTURE_INVARIANTS.md",
+    "docs/execution/EVIDENCE_POLICY.json",
+    "docs/execution/PHASE_SPEC_TEMPLATE.md",
+    "docs/execution/PLAN.json",
+    "docs/execution/README.md",
+    "docs/execution/STATE.json",
+    "docs/execution/architecture-policy.json",
+    "docs/execution/evidence/README.md",
+    "docs/execution/phases/PHASE_9.md",
+    "scripts/agent_supervisor.py",
+    "scripts/execution_evidence.py",
+    "scripts/execution_plan.py",
+    "scripts/test_execution_infra.py"
+  ]
+}

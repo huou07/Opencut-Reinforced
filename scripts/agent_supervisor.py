@@ -39,6 +39,21 @@ EXPLICIT_PROTECTED_PATHS = {
     "scripts/check_execution_plan.py",
     "scripts/check_architecture_policy.py",
     "scripts/test_execution_infra.py",
+    "docs/execution/AMENDMENT_BASELINE.json",
+}
+AMENDMENT_MARKER = "docs/execution/AMENDMENT_BASELINE.json"
+AMENDMENT_CONTROL_PATHS = EXPLICIT_PROTECTED_PATHS | {
+    "AGENTS.md",
+    "docs/INDEX.md",
+    "docs/ROADMAP.md",
+    "docs/TESTING.md",
+    "docs/adr/README.md",
+    "docs/adr/0008-product-acceptance-and-execution-quality.md",
+    "docs/execution/README.md",
+    "docs/execution/PHASE_SPEC_TEMPLATE.md",
+    "docs/execution/AGENT_EXECUTION.md",
+    "docs/execution/phases/PHASE_9.md",
+    "docs/execution/evidence/README.md",
 }
 PROTECTED_DIRECTORY_PREFIXES = (
     "docs/execution/phases/",
@@ -410,6 +425,17 @@ def checkpoint_prompt(repo_root: Path, resolution: dict[str, Any]) -> str:
         f"Locked specification: {resolution['spec_document']}\n"
         f"Next relation: {resolution['next_checkpoint_relation'] or 'none'}\n\n"
         "Implement exactly this checkpoint and no successor checkpoint.\n"
+        "You are not rewarded for the smallest implementation that makes existing tests green.\n"
+        "Prove the primary real user journey through the actual product boundary. "
+        "Unit and bridge tests remain useful lower-level evidence, but cannot replace product acceptance.\n"
+        "Do not replace a real UI journey with bridge-only calls when UI is in scope, "
+        "packaged dependencies with system-installed tools, persistent reopen with "
+        "in-process-only tests, platform permissions with disabled enforcement, or a "
+        "failed acceptance test with a synthetic equivalent.\n"
+        "After two speculative fixes to one failing gate, stop. Another repair needs exact "
+        "failure evidence, a falsifiable hypothesis, a discriminating reproduction, and a "
+        "causal explanation. No generic retry or timeout tuning.\n"
+        f"Required evidence classes: {', '.join(resolution.get('required_evidence_classes', []))}.\n"
         + protection
         + "Push implementation commits only; do not create a state/evidence "
         "completion commit. Do not claim DONE. The supervisor owns hosted verification and "
@@ -438,13 +464,25 @@ def _preflight_goal_data(repo_root: Path, goal: str) -> dict[str, Any]:
     counts = git_output(repo_root, "rev-list", "--left-right", "--count", "HEAD...origin/main")
     if counts.replace("\t", " ").split() != ["0", "0"]:
         raise SupervisorError(f"preflight requires ahead/behind 0/0, found {counts}")
-
     plan, state = execution_plan.load_plan_state(repo_root)
+    if state.get("current_next") == "9B" and plan.get("quality_contract_version") == 2:
+        if not (repo_root / AMENDMENT_MARKER).is_file():
+            raise SupervisorError("9B quality contract requires its amendment baseline marker")
+        _validate_amendment_baseline(
+            repo_root,
+            git_output(repo_root, "log", "-1", "--format=%H", "HEAD", "--", "docs/execution/STATE.json"),
+        )
     summary = execution_plan.validate_plan(plan, state, repo_root)
     policy = execution_plan.load_architecture_policy(repo_root)
     candidate = execution_plan.read_contract_versions(repo_root)
     execution_plan.validate_contract_transition(plan, state, policy, candidate)
     resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
+    evidence_policy = execution_evidence.load_policy(
+        repo_root / "docs/execution/EVIDENCE_POLICY.json"
+    )
+    execution_evidence.required_class_sources(
+        execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"]), evidence_policy
+    )
     remaining = [
         checkpoint_id
         for checkpoint_id in resolution["goal_checkpoint_ids"]
@@ -517,8 +555,21 @@ def _validate_candidate_transition(
 def prepare_goal(repo_root: Path, goal: str) -> str:
     ensure_start_state(repo_root)
     plan, state = execution_plan.load_plan_state(repo_root)
+    if state.get("current_next") == "9B" and plan.get("quality_contract_version") == 2:
+        if not (repo_root / AMENDMENT_MARKER).is_file():
+            raise SupervisorError("9B quality contract requires its amendment baseline marker")
+        _validate_amendment_baseline(
+            repo_root,
+            git_output(repo_root, "log", "-1", "--format=%H", "HEAD", "--", "docs/execution/STATE.json"),
+        )
     execution_plan.validate_plan(plan, state, repo_root)
     resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
+    evidence_policy = execution_evidence.load_policy(
+        repo_root / "docs/execution/EVIDENCE_POLICY.json"
+    )
+    execution_evidence.required_class_sources(
+        execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"]), evidence_policy
+    )
     return checkpoint_prompt(repo_root, resolution)
 
 
@@ -597,6 +648,12 @@ def verify_hosted_checkpoint(
         )
     else:
         preview = {"required": False}
+    class_proofs = (
+        execution_evidence.collect_evidence_class_proofs(
+            github_api, policy, checkpoint, gates
+        )
+        if checkpoint.get("evidence_contract_version") == 2 else None
+    )
     record = execution_evidence.build_evidence_record(
         checkpoint_id=str(checkpoint["id"]),
         implementation_sha=implementation_sha,
@@ -607,6 +664,7 @@ def verify_hosted_checkpoint(
             repo_root, implementation_sha
         ),
         implementation_origin_sha=implementation_origin_sha,
+        evidence_classes=class_proofs,
     )
     execution_evidence.validate_evidence_record(
         record,
@@ -734,6 +792,7 @@ def _resume_baseline(
         "--",
         "docs/execution/STATE.json",
     )
+    _validate_amendment_baseline(repo_root, baseline)
     try:
         subprocess.run(
             ["git", "merge-base", "--is-ancestor", baseline, resume_sha],
@@ -757,6 +816,63 @@ def _resume_baseline(
             + ", ".join(protected)
         )
     return baseline
+
+
+def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
+    """Trust this in-flight 9B amendment only if its commit changed control files."""
+
+    if not git_output(repo_root, "ls-tree", "--name-only", baseline, "--", AMENDMENT_MARKER):
+        return
+    new_state = _json_at_revision(repo_root, baseline, "docs/execution/STATE.json")
+    if new_state.get("current_next") != "9B":
+        return  # Later supervisor completions retain the provenance marker.
+    try:
+        parent = git_output(repo_root, "rev-parse", f"{baseline}^1")
+    except subprocess.CalledProcessError as exc:
+        raise SupervisorError("amendment baseline must have a prior implementation") from exc
+    introduced = git_output(
+        repo_root, "diff", "--name-only", f"{parent}..{baseline}", "--", AMENDMENT_MARKER
+    )
+    if introduced != AMENDMENT_MARKER:
+        raise SupervisorError("active 9B baseline must introduce the amendment marker")
+    marker = _json_at_revision(repo_root, baseline, AMENDMENT_MARKER)
+    if set(marker) != {"schema_version", "checkpoint_id", "prior_implementation_sha", "prior_failed_run_id", "changed_paths"}:
+        raise SupervisorError("amendment baseline marker has invalid fields")
+    if marker["schema_version"] != 1 or marker["checkpoint_id"] != "9B" or marker["prior_implementation_sha"] != parent:
+        raise SupervisorError("amendment baseline has the wrong prior implementation")
+    if marker["prior_failed_run_id"] != 37043830370:
+        raise SupervisorError("amendment baseline has the wrong failed-run provenance")
+    changed = set(git_output(repo_root, "diff", "--name-only", f"{parent}..{baseline}").splitlines())
+    if marker["changed_paths"] != sorted(changed) or not changed <= AMENDMENT_CONTROL_PATHS:
+        raise SupervisorError("amendment baseline contains non-control-plane changes")
+    old_state = _json_at_revision(repo_root, parent, "docs/execution/STATE.json")
+    if old_state.get("current_next") != "9B" or new_state.get("current_next") != "9B":
+        raise SupervisorError("amendment baseline changed the active checkpoint")
+    old_statuses = old_state.get("checkpoints", {})
+    new_statuses = new_state.get("checkpoints", {})
+    if not isinstance(old_statuses, dict) or not isinstance(new_statuses, dict):
+        raise SupervisorError("amendment baseline has invalid checkpoint state")
+    if new_statuses != {**old_statuses, "9B1": "PLANNED"} or old_statuses.get("9B") != "NEXT" or old_statuses.get("9C") != "PLANNED":
+        raise SupervisorError("amendment baseline did not preserve 9B NEXT and 9C PLANNED")
+    retained_fields = set(old_state) | set(new_state)
+    retained_fields -= {"checkpoints", "last_updated"}
+    if any(old_state.get(field) != new_state.get(field) for field in retained_fields):
+        raise SupervisorError("amendment baseline changed retained execution state")
+    old_plan = _json_at_revision(repo_root, parent, "docs/execution/PLAN.json")
+    new_plan = _json_at_revision(repo_root, baseline, "docs/execution/PLAN.json")
+    if execution_plan.checkpoint_for_id(old_plan, "9B")["next_checkpoint_relation"] != "9C" or execution_plan.checkpoint_for_id(new_plan, "9B")["next_checkpoint_relation"] != "9B1":
+        raise SupervisorError("amendment baseline has an invalid successor insertion")
+    if execution_plan.checkpoint_for_id(new_plan, "9B1")["next_checkpoint_relation"] != "9C" or execution_plan.checkpoint_for_id(new_plan, "9C")["prerequisite_checkpoint_ids"] != ["9B1"]:
+        raise SupervisorError("amendment baseline has an invalid 9B1 graph")
+    checkpoint = execution_plan.checkpoint_for_id(new_plan, "9B")
+    if new_plan.get("quality_contract_version") != 2 or checkpoint.get("evidence_contract_version") != 2:
+        raise SupervisorError("amendment baseline lacks the new quality contract")
+    for key in ("expected_project_schema_effect_category", "expected_ipc_effect_category"):
+        if checkpoint[key] != execution_plan.checkpoint_for_id(old_plan, "9B")[key]:
+            raise SupervisorError("amendment baseline changed the 9B model contract")
+    evidence_path = repo_root / "docs/execution/evidence/9B.json"
+    if evidence_path.exists() or "docs/execution/evidence/9B.json" in changed:
+        raise SupervisorError("amendment baseline created 9B completion evidence")
 
 
 def _git_file_bytes(repo_root: Path, revision: str, relative_path: str) -> bytes:

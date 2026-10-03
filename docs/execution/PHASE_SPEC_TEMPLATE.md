@@ -20,8 +20,16 @@ For every checkpoint, record:
 - affected invariant IDs
 - allowed product/schema/IPC/dependency categories
 - required tests and documentation
-- acceptance gate
+- primary user journey through the real product boundary
+- failure journey with explicit user-visible error or recovery behavior
+- packaged runtime and clean-environment assumptions
+- performance and bounded-resource expectations
+- required acceptance evidence classes and the hosted proof path for each
+- acceptance gate, including real UI and process relaunch where feasible
 - explicit out-of-scope items
+
+Synthetic, unit, and bridge checks support but do not replace the declared
+product journey. A lower-fidelity diagnostic harness is labelled as such.
 
 ## Stop conditions
 

@@ -79,6 +79,8 @@
     "scripts/check_execution_plan.py",
     "scripts/check_architecture_policy.py",
     "scripts/agent_supervisor.py",
-    "scripts/test_execution_infra.py"
+    "scripts/test_execution_infra.py",
+    "docs/execution/AMENDMENT_BASELINE.json",
+    "docs/adr/0008-product-acceptance-and-execution-quality.md"
   ]
 }

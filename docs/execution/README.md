@@ -61,6 +61,11 @@ checkpoint or phase status.
 An architecture/plan amendment does not advance product state, start a product
 checkpoint, publish a Developer Preview, or create future runtime crates.
 
+ADR 0008 adds product acceptance invariants, evidence classes, and the 9B1
+packaged-runtime hardening gate. `AMENDMENT_BASELINE.json` records the guarded
+in-flight 9B contract reset; it is not 9B completion evidence. Evidence
+classes and successful exact-SHA job-step proofs are enforced from 9B onward.
+
 The approved future motion direction is recorded in ADR 0007 and the Phase 11,
 14, and 16 contracts: canonical MotionScene is declarative, exact-time,
 seekable, AI-optional, and materialization-first; arbitrary web motion is only

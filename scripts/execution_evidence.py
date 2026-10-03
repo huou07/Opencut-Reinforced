@@ -24,6 +24,11 @@ POLICY_PATH = REPO_ROOT / "docs" / "execution" / "EVIDENCE_POLICY.json"
 DEFAULT_API_BASE = "https://api.github.com"
 DEFAULT_USER_AGENT = "opencut-reinforced-execution-supervisor"
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+EVIDENCE_CLASSES = {
+    "STATIC", "UNIT", "INTEGRATION", "NATIVE_RUNTIME", "PACKAGED_RUNTIME",
+    "USER_JOURNEY", "CLEAN_ENVIRONMENT", "PERSISTENCE_RELAUNCH",
+    "PERFORMANCE", "RESOURCE_STRESS", "CROSS_PLATFORM",
+}
 
 
 class EvidenceError(RuntimeError):
@@ -226,6 +231,37 @@ def validate_policy(policy: Mapping[str, Any]) -> None:
         "commit_subject_template": "chore(execution): complete {checkpoint_id} after verified CI",
     }:
         raise EvidenceError("state_transition policy is not the approved deterministic contract")
+
+    classes = _require_object(policy.get("evidence_classes"), "evidence_classes")
+    if classes.get("enforced_from_checkpoint") != "9B":
+        raise EvidenceError("evidence class enforcement must begin at 9B")
+    allowed = _require_list(classes.get("allowed"), "evidence_classes.allowed")
+    if any(not isinstance(item, str) for item in allowed) or len(allowed) != len(EVIDENCE_CLASSES) or set(allowed) != EVIDENCE_CLASSES:
+        raise EvidenceError("evidence_classes.allowed must contain the locked class taxonomy")
+    proof_map = _require_object(policy.get("evidence_class_proofs"), "evidence_class_proofs")
+    for checkpoint_id, raw_classes in proof_map.items():
+        _require_string(checkpoint_id, "evidence_class_proofs checkpoint")
+        class_map = _require_object(raw_classes, f"evidence_class_proofs.{checkpoint_id}")
+        for class_name, raw_sources in class_map.items():
+            if class_name not in EVIDENCE_CLASSES:
+                raise EvidenceError(f"unknown evidence class {class_name}")
+            sources = _require_list(raw_sources, f"evidence_class_proofs.{checkpoint_id}.{class_name}")
+            if not sources:
+                raise EvidenceError(f"evidence class {class_name} has no proof source")
+            seen: set[tuple[str, str, str]] = set()
+            for raw_source in sources:
+                source = _require_object(raw_source, f"{checkpoint_id}.{class_name} proof")
+                if set(source) != {"gate_id", "job_name", "step_name"}:
+                    raise EvidenceError(f"{checkpoint_id}.{class_name} proof has invalid fields")
+                gate_id = _require_string(source["gate_id"], "proof.gate_id")
+                job_name = _require_string(source["job_name"], "proof.job_name")
+                step_name = _require_string(source["step_name"], "proof.step_name")
+                if gate_id not in gates or job_name not in gates[gate_id]["required_jobs"]:
+                    raise EvidenceError(f"{checkpoint_id}.{class_name} proof is outside required jobs")
+                identity = (gate_id, job_name, step_name)
+                if identity in seen:
+                    raise EvidenceError(f"{checkpoint_id}.{class_name} has duplicate proof")
+                seen.add(identity)
 
 
 def parse_repository_identity(remote_url: str) -> tuple[str, str]:
@@ -863,6 +899,7 @@ def build_evidence_record(
     contract_versions: Mapping[str, Any],
     implementation_origin_sha: str | None = None,
     verified_at_utc: str | None = None,
+    evidence_classes: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     _require_sha(implementation_sha, "implementation_sha")
     _require_string(checkpoint_id, "checkpoint_id")
@@ -870,7 +907,7 @@ def build_evidence_record(
     timestamp = verified_at_utc or _datetime.datetime.now(_datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     versions = _validate_contract_versions(contract_versions, "contract_versions")
     record = {
-        "schema_version": 1,
+        "schema_version": 2 if evidence_classes is not None else 1,
         "checkpoint_id": checkpoint_id,
         "implementation_sha": implementation_sha,
         "implementation_subject": implementation_subject,
@@ -883,7 +920,71 @@ def build_evidence_record(
         record["implementation_origin_sha"] = _require_sha(
             implementation_origin_sha, "implementation_origin_sha"
         )
+    if evidence_classes is not None:
+        record["evidence_classes"] = [dict(proof) for proof in evidence_classes]
     return record
+
+
+def required_class_sources(
+    checkpoint: Mapping[str, Any], policy: Mapping[str, Any]
+) -> dict[str, list[dict[str, str]]]:
+    if checkpoint.get("evidence_contract_version") != 2:
+        return {}
+    checkpoint_id = _require_string(checkpoint.get("id"), "checkpoint.id")
+    required = _require_list(checkpoint.get("required_evidence_classes"), "required_evidence_classes")
+    sources = _require_object(
+        _require_object(policy.get("evidence_class_proofs"), "evidence_class_proofs").get(checkpoint_id),
+        f"evidence_class_proofs.{checkpoint_id}",
+    )
+    if set(sources) != set(required):
+        raise EvidenceError(f"checkpoint {checkpoint_id} evidence proof classes do not match PLAN.json")
+    return {name: sources[name] for name in required}
+
+
+def collect_evidence_class_proofs(
+    api: GitHubApi,
+    policy: Mapping[str, Any],
+    checkpoint: Mapping[str, Any],
+    gates: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Bind each required class to a successful named step in an exact-SHA gate."""
+
+    sources = required_class_sources(checkpoint, policy)
+    by_gate = {gate["gate_id"]: gate for gate in gates}
+    job_cache: dict[str, list[dict[str, Any]]] = {}
+    proofs: list[dict[str, Any]] = []
+    for class_name, bindings in sources.items():
+        for binding in bindings:
+            gate_id = binding["gate_id"]
+            gate = by_gate[gate_id]
+            if gate_id not in job_cache:
+                payload = api.get(_workflow_jobs_path(policy, gate["run_id"]))
+                raw_jobs = _require_list(
+                    _require_object(payload, f"{gate_id} jobs").get("jobs"), f"{gate_id} jobs.jobs"
+                )
+                job_cache[gate_id] = [_require_object(job, f"{gate_id} proof job") for job in raw_jobs]
+            matches = [job for job in job_cache[gate_id] if job.get("name") == binding["job_name"]]
+            if not matches:
+                raise EvidenceError(f"{class_name} proof job is missing: {binding['job_name']}")
+            job = max(matches, key=_run_sort_key)
+            if job.get("status") != "completed" or job.get("conclusion") != "success":
+                raise EvidenceError(f"{class_name} proof job did not succeed")
+            steps = _require_list(job.get("steps"), f"{class_name} proof steps")
+            named = [step for step in steps if isinstance(step, dict) and step.get("name") == binding["step_name"]]
+            if len(named) != 1 or named[0].get("status") != "completed" or named[0].get("conclusion") != "success":
+                raise EvidenceError(f"{class_name} proof step did not succeed: {binding['step_name']}")
+            proofs.append({
+                "class": class_name,
+                "gate_id": gate_id,
+                "run_id": gate["run_id"],
+                "job_name": binding["job_name"],
+                "job_id": _require_int(job.get("id"), "proof.job_id", 1),
+                "step_name": binding["step_name"],
+                "step_number": _require_int(named[0].get("number"), "proof.step_number", 1),
+                "status": "completed",
+                "conclusion": "success",
+            })
+    return proofs
 
 
 def _validate_contract_versions(value: Any, label: str) -> dict[str, int]:
@@ -918,8 +1019,9 @@ def validate_evidence_record(
 ) -> None:
     """Validate an offline supervisor-owned completion attestation."""
 
-    if record.get("schema_version") != 1:
-        raise EvidenceError("evidence record schema_version must be 1")
+    required_schema = checkpoint.get("evidence_contract_version", 1)
+    if record.get("schema_version") != required_schema:
+        raise EvidenceError(f"evidence record schema_version must be {required_schema}")
     if record.get("checkpoint_id") != checkpoint_id:
         raise EvidenceError("evidence record checkpoint_id does not match")
     implementation_sha = _require_sha(record.get("implementation_sha"), "implementation_sha")
@@ -970,6 +1072,37 @@ def validate_evidence_record(
         jobs = validate_required_jobs(gate.get("jobs"), policy_gate["required_jobs"])
         if jobs != gate.get("jobs"):
             raise EvidenceError(f"gate {gate_id}.jobs contains unexpected entries")
+
+    if required_schema == 2:
+        sources = required_class_sources(checkpoint, policy)
+        proofs = _require_list(record.get("evidence_classes"), "evidence_classes")
+        expected = [
+            (name, binding["gate_id"], binding["job_name"], binding["step_name"])
+            for name, bindings in sources.items()
+            for binding in bindings
+        ]
+        actual = []
+        for raw_proof in proofs:
+            proof = _require_object(raw_proof, "evidence class proof")
+            if set(proof) != {
+                "class", "gate_id", "run_id", "job_name", "job_id",
+                "step_name", "step_number", "status", "conclusion",
+            }:
+                raise EvidenceError("evidence class proof has invalid fields")
+            gate_id = _require_string(proof["gate_id"], "proof.gate_id")
+            if gate_id not in by_id or proof["run_id"] != by_id[gate_id]["run_id"]:
+                raise EvidenceError("evidence class proof has the wrong exact-SHA run")
+            if proof["job_name"] not in {job["name"] for job in by_id[gate_id]["jobs"]}:
+                raise EvidenceError("evidence class proof has an unverified job")
+            _require_int(proof["job_id"], "proof.job_id", 1)
+            _require_int(proof["step_number"], "proof.step_number", 1)
+            if proof["status"] != "completed" or proof["conclusion"] != "success":
+                raise EvidenceError("evidence class proof step did not succeed")
+            actual.append((proof["class"], gate_id, proof["job_name"], proof["step_name"]))
+        if actual != expected:
+            raise EvidenceError("evidence class proofs do not match PLAN.json and policy")
+    elif "evidence_classes" in record:
+        raise EvidenceError("legacy evidence must not claim new evidence classes")
 
     preview = _require_object(record.get("developer_preview"), "developer_preview")
     required = checkpoint.get("developer_preview_required") is True

@@ -18,3 +18,13 @@ supervisor writes an evidence record after independently verifying hosted
 evidence, and the record is committed together with the supervisor-owned
 state transition. Records must not contain tokens, credentials, machine-local
 paths, or runner prose.
+
+## Quality evidence from 9B
+
+From 9B onward, schema-2 records include `evidence_classes`. Every
+`required_evidence_classes` entry in `PLAN.json` must have the exact hosted
+workflow job and successful named step specified by `EVIDENCE_POLICY.json`.
+Each proof records its class, gate/run, job ID, step name/number, and success.
+The supervisor fetches those job steps for the exact implementation SHA.
+Historic schema-1 records are retained as issued and do not claim these new
+classes retroactively.

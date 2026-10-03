@@ -136,6 +136,23 @@ pushes the state/evidence-only completion commit. A model statement is not
 completion evidence. Use `scripts/agent_supervisor.py --resume-sha` only for
 an already-pushed exact SHA that still matches the current `NEXT` state.
 
+### Product acceptance and repair discipline
+
+The permanent `INV-PRODUCT`, `INV-PACKAGE`, `INV-CAPABILITY`, `INV-PARITY`,
+`INV-PERF`, `INV-UX`, `INV-ACCEPT`, and `INV-VERIFY` rules in
+`docs/execution/ARCHITECTURE_INVARIANTS.md` apply to every checkpoint. A green
+unit, bridge, or synthetic test cannot replace a feasible real product journey.
+Packaged capabilities must be tested with packaged dependencies and the
+permission model that users receive. Do not weaken a failed acceptance test
+or silently change its evidence class.
+
+After at most two speculative corrective attempts for the same subsystem or
+gate, stop and diagnose. Another repair commit requires exact failure
+evidence, a falsifiable root-cause hypothesis, a reproduction or
+discriminating test, and an explanation of why the patch fixes the cause.
+Retries and timeouts alone are not a root-cause repair. Record measurements
+for realtime performance or resource claims.
+
 ## Minimal implementation rule
 
 Prefer the smallest correct implementation.
