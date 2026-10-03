@@ -61,6 +61,13 @@ checkpoint or phase status.
 An architecture/plan amendment does not advance product state, start a product
 checkpoint, publish a Developer Preview, or create future runtime crates.
 
+[ADR 0009](../adr/0009-model-orchestrator-v2.md) and the
+[V2 automation specification](automation/README.md) freeze a candidate design
+for isolated multi-model development. They do not activate a controller,
+modify execution state, or supersede existing authority. The accompanying
+amendment proposal and implementation/acceptance plan define the separate
+adoption required before that system may run.
+
 ADR 0008 adds product acceptance invariants, evidence classes, and the 9B1
 packaged-runtime hardening gate. `AMENDMENT_BASELINE.json` records the guarded
 in-flight 9B contract reset; it is not 9B completion evidence. Evidence
