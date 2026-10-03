@@ -145,3 +145,87 @@ Review third-party agent tooling before installing it. Do not install additional
 
 - CodeGraph
 - Ponytail
+
+## Model orchestrator V2 — disabled M1 primitives
+
+M1 adds `scripts/model_orchestrator/store.py` and `sandbox.py` under the frozen
+V2 contract. These are controller primitives, not a product runner. They provide
+no M2 authorization, operational adoption, promotion, or full-auto eligibility.
+The product plan/state and schema versions remain unchanged.
+
+An operator explicitly initializes a separate trusted runtime using an M1-scoped
+`ValidatedReleaseAuthority` loaded from the M0-R3 independent Git pin loader.
+The pristine authority materialization remains separate from the mutable worker
+candidate. Read-only inspection creates nothing and refuses corrupt, missing,
+symlink-controlled, unsupported-version or drifted authority. Initial storage is
+local Linux/macOS POSIX storage with an observed supported mount type and a real
+child-process flock/atomic-replace/fsync probe; network and native Windows
+profiles refuse. This is not a claim of resilience to hardware that lies about
+fsync, or a substitute for worker isolation.
+
+`state.json` is the sole mutable authoritative snapshot. A transaction checks
+sequence/epoch under the state lock, exclusive-creates and fsyncs content-addressed
+objects, fsyncs their directory, writes/fsyncs a complete temporary snapshot,
+atomically replaces state, then fsyncs its parent directory. Unreferenced objects
+remain diagnostic only. Separate task and integration OS locks obey task →
+integration → state order. A stage claim re-reads state after acquiring the task
+lease, reserves one attempt/epoch/nonce, and persists identity before launch.
+Pause records a durable generation and prevents new claims; it does not cancel
+an already claimed stage. Controller death, PID reuse, boot mismatch or unknown
+container liveness never releases a recorded writer. Recovery preserves dirty
+work and worker commits; it never resets, cleans or silently re-freezes a task.
+
+Run the focused checks from the repository root:
+
+```sh
+python3 scripts/model_orchestrator/tests/test_isolation_and_state.py -v
+python3 scripts/model_orchestrator/tests/test_contracts.py -v
+python3 -m unittest scripts.test_execution_infra
+python3 scripts/check_execution_plan.py
+python3 scripts/check_architecture_policy.py
+bash scripts/check-repo.sh
+python3 -m compileall -q scripts/model_orchestrator
+git diff --check
+```
+
+The M1 suite labels actual process/filesystem/Git observations separately from
+injected transaction crashes and Docker fixtures. Fixtures validate refusal and
+inspection logic; they cannot certify container isolation. CP06 and container
+portions of CP07, CP08 and CP10 require an actual verified runtime/image/profile.
+CP09/CP11 cover real independent Git topology and interruption preservation;
+CP27/CP28/CP29/CP34 cover claims, pause, transaction crash boundaries and supported
+storage. A missing Docker daemon yields
+`M1_ISOLATION_ENVIRONMENT_UNAVAILABLE`, zero launches and incomplete M1
+certification. Do not install/start Docker as an agent workaround or substitute
+a host-process sandbox. A daemon alone is insufficient: image, effective
+configuration, namespaces/mounts, user, resource bounds and persistent candidate
+disk bounds must also be verified. OpenCode remains unavailable unless its exact
+version and complete discoverable configuration surface can be pinned and
+observed; project permissions alone provide no OS isolation.
+
+Available-boundary observations for this M1 candidate (2026-10-03/04):
+
+- OS: macOS 27.0.1, Darwin 27, arm64 (`sw_vers`, `uname -a`). Storage:
+  APFS (observed `/sbin/mount`; verified by real flock, replace and fsync probes).
+- `docker version`: client 29.7.2, API 1.55, context `desktop-linux`; server
+  unavailable at the configured local socket. No image or live container profile
+  was observed and zero workers were launched. This is
+  `M1_ISOLATION_ENVIRONMENT_UNAVAILABLE`, not a passing container result.
+- `python3 scripts/model_orchestrator/tests/test_isolation_and_state.py -v`:
+  CP09/CP11 use actual independent Git repositories, preserved dirty files and
+  commits, sanitized import, and a fresh controller process. CP27 uses two real
+  contending controller processes. CP28 observes durable pause/claim state.
+  CP29 uses eight explicit fault points in real child processes plus a parent
+  fsync failure. CP34 observes actual local APFS and process-lock semantics;
+  unsupported-profile refusal is a deterministic fixture.
+- CP06 has no live acceptance result. CP07 role/config and CP08 effective-setting
+  negatives are fixtures; their positive container boundaries remain blocked.
+  CP10 persistence/unknown-liveness refusal passes deterministic/process checks,
+  while whole-container kill/reconciliation is a fixture and remains uncertified.
+  Live settlement of CP28's already claimed container stage is also blocked.
+- The initial implementation observes bounded dedicated ext4/xfs candidate
+  storage on Linux. Ordinary directories and macOS VM quota/profile observers
+  remain unavailable. OpenCode configuration artifacts are prepared separately,
+  but effective installed-CLI overlays have not been certified. These limitations
+  remain explicit refusals; later integration cannot treat this candidate as
+  certified merely because Docker becomes reachable.
