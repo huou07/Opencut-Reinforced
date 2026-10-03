@@ -194,9 +194,13 @@ control-plane-only baseline with explicit failed-run provenance and an exact
 changed-path allowlist; fresh 9B implementation commits are measured from it.
 The old failed 9B history is preserved, and ordinary protected-path checks
 continue after the amendment.
-The amendment marker must be introduced by that baseline commit; an inherited
-marker on a later 9B state commit is not a new trusted baseline. All retained
-state and verified schema versions are preserved. Proof-step bindings for 9B
+The amendment marker must change in each trusted control-plane commit; an
+inherited marker on a later 9B state commit is not a new trusted baseline.
+A follow-up must directly follow a validated amendment, preserve the locked
+plan, and contain only its exact control-path allowlist. The supervisor uses
+the latest validated marker commit when it follows the state baseline, so
+fixture corrections need no fabricated state change. All retained state and
+verified schema versions are preserved. Proof-step bindings for 9B
 and 9B1 are part of this amendment. A later checkpoint without approved
 bindings fails preparation and completion; its bindings require a separate
 control-plane amendment before a feature runner can start.

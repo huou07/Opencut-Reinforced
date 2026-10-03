@@ -132,6 +132,13 @@ def seven_f_one_plan_state() -> tuple[dict[str, object], dict[str, object]]:
     return plan, roadmap_state_before(plan, "7F1", contract_versions(project=5))
 
 
+def nine_b_plan_state() -> tuple[dict[str, object], dict[str, object]]:
+    """Retain the amended in-flight 9B scenario after completion advances STATE."""
+
+    plan, _current = execution_plan.load_plan_state(REPO_ROOT)
+    return plan, roadmap_state_before(plan, "9B", contract_versions(project=7))
+
+
 def git_blob_from_main(revision: str, relative_path: str) -> bytes:
     return subprocess.run(
         ["git", "show", f"{revision}:{relative_path}"],
@@ -884,7 +891,7 @@ class ContractVersionTests(unittest.TestCase):
             )
 
     def test_current_9b_retains_verified_schema_seven(self) -> None:
-        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        plan, state = nine_b_plan_state()
         self.assertEqual(state["current_next"], "9B")
         self.assertEqual(state["verified_contract_versions"], contract_versions(project=7))
         self.assertEqual(
@@ -946,8 +953,15 @@ class ContractVersionTests(unittest.TestCase):
 
 
 class QualityEvidenceTests(unittest.TestCase):
+    def test_9b_fixtures_survive_the_legitimate_9b1_state_transition(self) -> None:
+        plan, _ = execution_plan.load_plan_state(REPO_ROOT)
+        later = roadmap_state_before(plan, "9B1", contract_versions())
+        with mock.patch.object(execution_plan, "load_plan_state", return_value=(plan, later)):
+            self.test_generated_prompt_preserves_quality_requirements()
+            self.test_9b1_graph_and_evidence_classes_are_locked()
+
     def test_generated_prompt_preserves_quality_requirements(self) -> None:
-        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        plan, state = nine_b_plan_state()
         resolution = execution_plan.resolve_goal(plan, state, "checkpoint:9B", REPO_ROOT)
         prompt = agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution)
         for requirement in (
@@ -960,7 +974,7 @@ class QualityEvidenceTests(unittest.TestCase):
             self.assertIn(requirement, prompt)
 
     def test_9b1_graph_and_evidence_classes_are_locked(self) -> None:
-        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        plan, state = nine_b_plan_state()
         self.assertEqual(state["current_next"], "9B")
         self.assertEqual(state["checkpoints"]["9B1"], "PLANNED")
         self.assertEqual(execution_plan.checkpoint_for_id(plan, "9B")["next_checkpoint_relation"], "9B1")
@@ -1013,6 +1027,7 @@ class QualityEvidenceTests(unittest.TestCase):
             execution_evidence.validate_evidence_record(record, checkpoint_id="9B", checkpoint=checkpoint_spec, policy=policy)
 
     def test_in_flight_amendment_baseline_excludes_product_commits(self) -> None:
+        plan, state = nine_b_plan_state()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
@@ -1026,24 +1041,39 @@ class QualityEvidenceTests(unittest.TestCase):
             marker = {"schema_version": 1, "checkpoint_id": "9B", "prior_implementation_sha": parent,
                       "prior_failed_run_id": 37043830370, "changed_paths": changed}
             amendment = commit_test_files(root, {
-                "docs/execution/PLAN.json": (REPO_ROOT / "docs/execution/PLAN.json").read_bytes(),
-                "docs/execution/STATE.json": (REPO_ROOT / "docs/execution/STATE.json").read_bytes(),
+                "docs/execution/PLAN.json": json.dumps(plan),
+                "docs/execution/STATE.json": json.dumps(state),
                 agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
             }, "chore(execution): amend 9B quality baseline")
             agent_supervisor._validate_amendment_baseline(root, amendment)
             subprocess.run(["git", "checkout", "-q", parent], cwd=root, check=True)
-            altered_state = json.loads((REPO_ROOT / "docs/execution/STATE.json").read_text())
+            altered_state = json.loads(json.dumps(state))
             altered_state["verified_contract_versions"]["project_schema"] = 8
             bad_versions = commit_test_files(root, {
-                "docs/execution/PLAN.json": (REPO_ROOT / "docs/execution/PLAN.json").read_bytes(),
+                "docs/execution/PLAN.json": json.dumps(plan),
                 "docs/execution/STATE.json": json.dumps(altered_state),
                 agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
             }, "untrusted schema advance")
             with self.assertRaisesRegex(agent_supervisor.SupervisorError, "retained execution state"):
                 agent_supervisor._validate_amendment_baseline(root, bad_versions)
             subprocess.run(["git", "checkout", "-q", amendment], cwd=root, check=True)
+            marker["prior_implementation_sha"] = amendment
+            marker["changed_paths"] = sorted((agent_supervisor.AMENDMENT_MARKER, "scripts/test_execution_infra.py"))
+            amendment = commit_test_files(root, {
+                agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
+                "scripts/test_execution_infra.py": "# Historical fixture correction\n",
+            }, "chore(execution): correct fixtures under the trusted baseline")
+            agent_supervisor._validate_amendment_baseline(root, amendment)
             implementation = commit_test_files(root, {"apps/or_app/lib/fix.dart": "fix\n"}, "fix(android): SAF preview")
             self.assertEqual(agent_supervisor._resume_baseline(root, implementation), amendment)
+            marker["prior_implementation_sha"] = implementation
+            untrusted_followup = commit_test_files(root, {
+                agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
+                "scripts/test_execution_infra.py": "# Cannot trust intervening product work\n",
+            }, "untrusted follow-up after product commit")
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, "must introduce"):
+                agent_supervisor._validate_amendment_baseline(root, untrusted_followup)
+            subprocess.run(["git", "checkout", "-q", implementation], cwd=root, check=True)
             state = json.loads((root / "docs/execution/STATE.json").read_text())
             state["last_updated"] = "2026-10-04"
             inherited = commit_test_files(root, {"docs/execution/STATE.json": json.dumps(state)}, "untrusted later state baseline")
@@ -1985,7 +2015,10 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()
             },
         }
-        with mock.patch.object(agent_supervisor, "ensure_start_state"):
+        with (
+            mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(execution_plan, "load_plan_state", return_value=nine_b_plan_state()),
+        ):
             prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:9B")
         after = {
             plan_path: plan_path.read_bytes(),
@@ -1998,7 +2031,6 @@ class SupervisorBoundaryTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertIn("Checkpoint: 9B", prompt)
         self.assertTrue((evidence_dir / "9A.json").is_file())
-        self.assertFalse((evidence_dir / "9B.json").exists())
 
     def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:
         output = StringIO()

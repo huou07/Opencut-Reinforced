@@ -98,3 +98,12 @@ packaged desktop import, preview, persistence, export, performance, and clean
 environment behavior. Hardware Android acceleration remains optional. This
 ADR authorizes no product implementation, schema increment, or completion
 evidence by itself.
+
+The amendment's follow-up removes execution tests' dependence on live 9B
+`NEXT` state. Historical scenarios reconstruct their own state, and a
+regression test repeats the 9B quality checks with live 9B1 `NEXT`. The trusted
+baseline may be a contiguous series of control-only commits: each updates its
+marker, follows a validated amendment directly, and preserves the locked
+plan, execution statuses, and versions. Product commits cannot enter that
+series. The original failed implementation and run remain in the first
+marker and the immutable Git history.

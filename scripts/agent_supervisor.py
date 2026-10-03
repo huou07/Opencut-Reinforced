@@ -470,7 +470,7 @@ def _preflight_goal_data(repo_root: Path, goal: str) -> dict[str, Any]:
             raise SupervisorError("9B quality contract requires its amendment baseline marker")
         _validate_amendment_baseline(
             repo_root,
-            git_output(repo_root, "log", "-1", "--format=%H", "HEAD", "--", "docs/execution/STATE.json"),
+            _control_baseline(repo_root, "HEAD"),
         )
     summary = execution_plan.validate_plan(plan, state, repo_root)
     policy = execution_plan.load_architecture_policy(repo_root)
@@ -560,7 +560,7 @@ def prepare_goal(repo_root: Path, goal: str) -> str:
             raise SupervisorError("9B quality contract requires its amendment baseline marker")
         _validate_amendment_baseline(
             repo_root,
-            git_output(repo_root, "log", "-1", "--format=%H", "HEAD", "--", "docs/execution/STATE.json"),
+            _control_baseline(repo_root, "HEAD"),
         )
     execution_plan.validate_plan(plan, state, repo_root)
     resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
@@ -783,15 +783,7 @@ def _resume_baseline(
     # Exclude the resume commit when locating the prior state baseline so a
     # forbidden STATE.json edit in that implementation commit remains visible
     # in the protected-path diff below.
-    baseline = git_output(
-        repo_root,
-        "log",
-        "-1",
-        "--format=%H",
-        f"{resume_sha}^",
-        "--",
-        "docs/execution/STATE.json",
-    )
+    baseline = _control_baseline(repo_root, f"{resume_sha}^")
     _validate_amendment_baseline(repo_root, baseline)
     try:
         subprocess.run(
@@ -815,6 +807,14 @@ def _resume_baseline(
             "resume implementation changed protected execution-control files: "
             + ", ".join(protected)
         )
+    return baseline
+
+
+def _control_baseline(repo_root: Path, revision: str) -> str:
+    baseline = git_output(repo_root, "log", "-1", "--format=%H", revision, "--", "docs/execution/STATE.json")
+    marker = git_output(repo_root, "log", "-1", "--format=%H", revision, "--", AMENDMENT_MARKER)
+    if marker and git_output(repo_root, "merge-base", baseline, marker) == baseline:
+        return marker
     return baseline
 
 
@@ -860,7 +860,13 @@ def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
         raise SupervisorError("amendment baseline changed retained execution state")
     old_plan = _json_at_revision(repo_root, parent, "docs/execution/PLAN.json")
     new_plan = _json_at_revision(repo_root, baseline, "docs/execution/PLAN.json")
-    if execution_plan.checkpoint_for_id(old_plan, "9B")["next_checkpoint_relation"] != "9C" or execution_plan.checkpoint_for_id(new_plan, "9B")["next_checkpoint_relation"] != "9B1":
+    if git_output(repo_root, "ls-tree", "--name-only", parent, "--", AMENDMENT_MARKER):
+        _validate_amendment_baseline(repo_root, parent)
+        if old_plan != new_plan:
+            raise SupervisorError("follow-up amendment changed the locked checkpoint graph")
+    elif execution_plan.checkpoint_for_id(old_plan, "9B")["next_checkpoint_relation"] != "9C":
+        raise SupervisorError("amendment baseline has an invalid successor insertion")
+    if execution_plan.checkpoint_for_id(new_plan, "9B")["next_checkpoint_relation"] != "9B1":
         raise SupervisorError("amendment baseline has an invalid successor insertion")
     if execution_plan.checkpoint_for_id(new_plan, "9B1")["next_checkpoint_relation"] != "9C" or execution_plan.checkpoint_for_id(new_plan, "9C")["prerequisite_checkpoint_ids"] != ["9B1"]:
         raise SupervisorError("amendment baseline has an invalid 9B1 graph")
