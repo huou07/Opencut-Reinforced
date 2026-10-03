@@ -1,8 +1,10 @@
 # Development Workflow
 
-## Status
-
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` storage, recovery, local IPC, and semantic CLI operations. Phase 4UI-1 provides the Flutter visual shell; Phase 4UI-2 connects desktop create/open/save, explicit recovery, dirty-state guards, and Flutter-hosted IPC to one Rust live project host. Phase 5A adds typed media/job identities, structured metadata, a bounded read-only local probe, and CLI inspection. Phase 5B adds the persistent media library, v1-to-v2 migration, prepared import, shared media commands/query, headless and attached CLI operations, and desktop Flutter integration. Phase 5C adds a bounded background Job Manager and a disposable thumbnail/waveform CacheStore. Phase 5D adds bounded source-fingerprint v1, system-`ffmpeg` thumbnail/waveform PNG generation through the Job Manager and CacheStore, typed bridge requests and artifact events, and read-only desktop Media-panel preview consumption. Phase 5E adds a persistent disposable SQLite index and sequence-based LRU eviction under cache pressure. Cache/jobs/index metadata do not mutate canonical project state or increment `ProjectRevision`. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6A adds the timeline domain and `.orproj` v3 persistence, including v1/v2 migrations and the `MEDIA_IN_USE` removal guard. Phase 6B adds shared track/clip commands, bounded queries, session-local undo/redo, and headless/attached CLI parity. Phase 6C connects those commands and bounded read models to real project track/clip visualization and exact-time dialogs. Phase 6D adds exact trim, split, and track-local ripple-delete commands, compact history recipes, CLI parity, typed bridge methods, and Flutter action dialogs. Phase 6E1 adds pointer move/trim editing, a fixed-threshold canonical snap query, same-kind lane targeting, nearest-ms gesture quantization, stale-result guards, and read-only headless/attached snap inspection. Phase 6E2A adds persistent global markers, schema-v4 migration, marker commands/history/query, marker-aware Snap V2, and headless/attached CLI parity while deliberately leaving Flutter on Snap V1 for that foundation checkpoint. Phase 6E2B adds typed marker bridge/gateway reads, marker UI, canonical marker commands, and Flutter Snap V2 integration with stale guards. Phase 6 is DONE through 6E2B. Phase 7C adds linked software demux/decode and bounded snapshot output queues; 7F0 defines the explicit sequence-rate persistence and exact frame lattice plus the shared viewer transport contract. The 7F implementation connects desktop viewer preview, exact seek/scrubbing, frame-step, play/pause, playhead/ruler, and explicit frame-rate controls to Rust runtime work; native integration verification runs only in hosted CI. Hardware decode and audio-device output remain future work. Phase 8B connects typed track-state commands, bounded single-clip selection and duplicate through the existing insert command, dedicated-handle media-to-timeline drag insertion, and view-only timeline zoom with horizontal scrolling. The 8C implementation adds Inspector editing for typed transform, crop, and opacity values and applies them in preview rendering. Track reorder, multi-select, and linked clips remain future work. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+Current checkpoint and phase status come only from
+[STATE.json](execution/STATE.json), inspected with the execution tools below.
+Implementation and coverage history remain in the locked phase specifications,
+Git history, test sources, and [historical evidence](execution/evidence/README.md).
+This workflow describes durable development rules, not a second status ledger.
 
 ## Execution-plan-first workflow
 
@@ -132,3 +134,43 @@ Create an Architecture Decision Record for a significant, difficult-to-reverse c
 - the canonical MotionScene contract or an isolated procedural execution boundary
 
 An ADR should record context, decision, alternatives, tradeoffs, and consequences. Do not create ADRs for routine implementation details.
+
+## Task context and tool policy
+
+Resolve task → resolve documentation → execute → deterministic verification →
+independent review when required → clean hosted CI when required → supervisor
+evidence. Resolve [task-scoped bundles](DOCUMENTATION.md) before reading broad
+reference documents. Routing supplies context, never execution permission.
+Vanilla Codex/OpenCode executors, V2, Git, rootless Docker, native verification,
+CodeGraph, and GitHub Actions are sufficient; no overlapping agent framework,
+router model, debate loop, recursive reviewer, or hidden background worker is
+required. Use parallel work only for genuinely independent work.
+
+Future model selection uses the cheapest sufficiently capable model at the
+fixed quality floor, considering risk and expected total cost including rework.
+Ordinary implementation can use free/cheap capability; difficult investigation
+may escalate; security, architecture, or diagnosed repeated failure may need
+stronger reasoning. Catalog names and prices are not permanent rules. This
+policy implements no M3 routing. Future telemetry uses real tasks only: selected
+model, task class, first verification result, corrective attempts, blocking
+review findings, escalation, and approximate tokens/cost when available. No
+standalone model benchmark or telemetry runtime is introduced.
+
+Before adding a development tool, check existing mechanisms, narrow purpose
+versus framework overlap, measured real-task cost/error benefit, added
+prompts/hooks/config discovery, expanded worker authority, and whether V2 can
+sandbox and verify it. Popularity is not evidence. Alibaba OpenCodeReview is a
+future non-authoritative sensor candidate only; it is not adopted here.
+
+The interactive/control host owns UI, architecture/review, and necessary
+platform-specific interaction. A verified Linux execution host owns isolated
+rootless workers and long-running headless build/test loops. GitHub Actions
+owns clean authoritative platform/native/release verification. Physical machine
+names confer no trust. Prefer Linux for generic compute and Apple hardware
+only for work that requires it. Existing evidence requirements still apply.
+
+The repair rule in [AGENTS.md](../AGENTS.md#product-acceptance-and-repair-discipline)
+remains mandatory: after at most two speculative attempts stop speculative
+patching; require actual failure evidence, a falsifiable cause, a discriminating
+reproduction/test, and an explanation connecting the fix to the cause. Retries,
+timeout increases, model switches, and random patches are not diagnosis.

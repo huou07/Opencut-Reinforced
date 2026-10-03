@@ -365,18 +365,20 @@ Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. 
 
 ## Document routing
 
-Read the relevant source of truth for the task:
+Always read this file. Resolve the checkpoint contract and relevant documentation
+with `python3 scripts/execution_plan.py context <checkpoint-id>`; use repeatable
+`--features <key>` for explicitly scoped feature bundles. For separately
+authorized non-checkpoint work use `python3 scripts/execution_plan.py docs
+--features <key>`. `--docs-text` emits canonical excerpts with source locations.
+Unknown bundle keys refuse; routing never grants checkpoint/phase authority.
 
-- UI: DESIGN.md, docs/UX_ACCEPTANCE.md, and the relevant section of docs/PRODUCT.md.
-- Product scope: docs/PRODUCT.md and docs/ROADMAP.md.
-- Architecture: docs/ARCHITECTURE.md and docs/TECHNICAL_PLAN.md.
-- Feature implementation: docs/DEVELOPMENT_WORKFLOW.md.
-- Testing: docs/TESTING.md.
-- Security and licensing: docs/SECURITY_LICENSING.md.
-- Release: docs/RELEASE.md.
-- Contributors: README.md, CONTRIBUTING.md, and docs/DEVELOPMENT_WORKFLOW.md.
-
-Do not guess project architecture when the repository documents the answer. The HTML prototype is a product and UX reference only, not production architecture.
+[docs/DOC_ROUTING.json](docs/DOC_ROUTING.json) defines CORE, FEATURE, and
+ON_DEMAND selection. [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) explains the
+authority map and budgets. Do not automatically read full technical/testing
+plans, roadmap, PLAN, all ADRs, or evidence. Follow links on demand when the task
+requires the detailed contract, trust boundary, or historical evidence.
+UI tasks include `ui` (DESIGN and UX authority); release tasks use `release`;
+control-plane tasks use `model-orchestrator` plus the authorized phase bundle.
 
 ## Tooling
 

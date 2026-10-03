@@ -1,0 +1,457 @@
+{
+  "schema_version": 1,
+  "core": [
+    "agents",
+    "acceptance"
+  ],
+  "documents": {
+    "agents": {
+      "path": "AGENTS.md"
+    },
+    "acceptance": {
+      "path": "docs/execution/ARCHITECTURE_INVARIANTS.md",
+      "heading": "Product acceptance"
+    },
+    "preview": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "10. Preview rendering and frame model"
+    },
+    "viewer-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 7F preview transport coverage"
+    },
+    "timing-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 7F0 timing and viewer contract coverage"
+    },
+    "media": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "11. Media and render graph"
+    },
+    "runtime-invariants": {
+      "path": "docs/execution/ARCHITECTURE_INVARIANTS.md",
+      "heading": "Runtime and time"
+    },
+    "decode-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Current Phase 7D evaluation coverage"
+    },
+    "design": {
+      "path": "DESIGN.md"
+    },
+    "ux": {
+      "path": "docs/UX_ACCEPTANCE.md"
+    },
+    "ui-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Flutter and UX"
+    },
+    "release": {
+      "path": "docs/RELEASE.md"
+    },
+    "ci-policy": {
+      "path": "docs/TESTING.md",
+      "heading": "CI-first verification status"
+    },
+    "fixtures": {
+      "path": "docs/TESTING.md",
+      "heading": "Fixtures and results"
+    },
+    "hosted-tooling": {
+      "path": "docs/TOOLING.md",
+      "heading": "Hosted platform verification"
+    },
+    "verification-tooling": {
+      "path": "docs/TOOLING.md",
+      "heading": "Verification model"
+    },
+    "project-format": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "3. Native project format"
+    },
+    "storage-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Current Phase 4E1 coverage"
+    },
+    "recovery-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Current Phase 4E2 coverage"
+    },
+    "timeline-domain": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 6A timeline domain and persistence"
+    },
+    "timeline-commands": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 6B basic track and clip operations"
+    },
+    "pointer": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 6E1 pointer editing and clip-edge snapping"
+    },
+    "markers": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 6E2A persistent marker foundation"
+    },
+    "trim": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 6D trim, split, and ripple editing"
+    },
+    "timeline-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 6A, 6B, 6C, 6D, and 6E1 coverage"
+    },
+    "commands": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "4. Command system"
+    },
+    "queries": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "5. Query system"
+    },
+    "history": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "6. History and transactions"
+    },
+    "ipc": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "8. Local IPC"
+    },
+    "command-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Serialization and command contracts"
+    },
+    "jobs": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "13. Background jobs and cache"
+    },
+    "library-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Current Phase 5B coverage"
+    },
+    "artifact-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 5D coverage"
+    },
+    "render": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "Phase 7B render foundation"
+    },
+    "render-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Current Phase 7B coverage"
+    },
+    "audio-text": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "12. Audio and text"
+    },
+    "audio-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 8E basic audio and effects coverage"
+    },
+    "export": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "19. Export and interchange"
+    },
+    "export-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 8F export, autosave, and Desktop MVP hardening"
+    },
+    "saf-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 9A Android SAF and project/media I/O coverage"
+    },
+    "bridge": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "9. Flutter and Rust bridge"
+    },
+    "storage-invariants": {
+      "path": "docs/execution/ARCHITECTURE_INVARIANTS.md",
+      "heading": "Persistence, IPC, security, and dependencies"
+    },
+    "android-media-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Phase 9B Android media and render surface coverage"
+    },
+    "ai": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "14. AI providers and local inference"
+    },
+    "models": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "15. Model management and secrets"
+    },
+    "editplan": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "16. EditPlan and automation recipes"
+    },
+    "ai-invariants": {
+      "path": "docs/execution/ARCHITECTURE_INVARIANTS.md",
+      "heading": "AI"
+    },
+    "model-licenses": {
+      "path": "docs/SECURITY_LICENSING.md",
+      "heading": "AI code and model weights"
+    },
+    "motion": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "17. Templates, themes, MotionScene, and community"
+    },
+    "motion-rationale": {
+      "path": "docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md"
+    },
+    "security": {
+      "path": "docs/TECHNICAL_PLAN.md",
+      "heading": "21. Security"
+    },
+    "secrets": {
+      "path": "docs/SECURITY_LICENSING.md",
+      "heading": "Secrets"
+    },
+    "untrusted": {
+      "path": "docs/SECURITY_LICENSING.md",
+      "heading": "Untrusted inputs and data boundaries"
+    },
+    "workflow": {
+      "path": "docs/DEVELOPMENT_WORKFLOW.md"
+    },
+    "execution-tests": {
+      "path": "docs/TESTING.md",
+      "heading": "Execution-plan infrastructure"
+    },
+    "orchestrator-guide": {
+      "path": "docs/features/model-orchestrator/README.md"
+    },
+    "v2-boundary": {
+      "path": "docs/execution/automation/README.md",
+      "heading": "1. Objective and non-negotiable boundary"
+    },
+    "v2-lifecycle": {
+      "path": "docs/execution/automation/README.md",
+      "heading": "19. Corrected build and operational lifecycle (M0-R2)"
+    },
+    "v2-plan": {
+      "path": "docs/execution/automation/IMPLEMENTATION_PLAN.md",
+      "heading": "Exact future file inventory"
+    },
+    "v2-isolation": {
+      "path": "docs/execution/automation/README.md",
+      "heading": "5. Worker and verifier isolation"
+    },
+    "v2-state": {
+      "path": "docs/execution/automation/README.md",
+      "heading": "13. State machine and illegal states"
+    },
+    "v2-locks": {
+      "path": "docs/execution/automation/README.md",
+      "heading": "14. Locks, fencing, pause, and attempts"
+    },
+    "sandbox-policy": {
+      "path": "docs/execution/automation/SANDBOX_POLICY.json"
+    },
+    "m1-tooling": {
+      "path": "docs/TOOLING.md",
+      "heading": "Model orchestrator V2 \u2014 disabled M1 primitives"
+    }
+  },
+  "features": {
+    "viewer": [
+      "preview",
+      "viewer-tests",
+      "timing-tests"
+    ],
+    "media-runtime": [
+      "media",
+      "runtime-invariants",
+      "decode-tests"
+    ],
+    "ui": [
+      "design",
+      "ux",
+      "ui-tests"
+    ],
+    "release": [
+      "release",
+      "ci-policy",
+      "fixtures",
+      "hosted-tooling",
+      "verification-tooling"
+    ],
+    "projects": [
+      "project-format",
+      "storage-tests",
+      "recovery-tests"
+    ],
+    "timeline": [
+      "timeline-domain",
+      "timeline-commands",
+      "pointer",
+      "markers",
+      "trim",
+      "timeline-tests"
+    ],
+    "commands": [
+      "commands",
+      "queries",
+      "history",
+      "ipc",
+      "command-tests"
+    ],
+    "media-library": [
+      "jobs",
+      "library-tests",
+      "artifact-tests"
+    ],
+    "rendering": [
+      "render",
+      "render-tests"
+    ],
+    "audio": [
+      "audio-text",
+      "audio-tests"
+    ],
+    "export": [
+      "export",
+      "export-tests"
+    ],
+    "android-storage": [
+      "saf-tests",
+      "bridge",
+      "storage-invariants"
+    ],
+    "android-media": [
+      "android-media-tests",
+      "hosted-tooling"
+    ],
+    "ai": [
+      "ai",
+      "models",
+      "editplan",
+      "ai-invariants",
+      "model-licenses"
+    ],
+    "motion": [
+      "motion",
+      "motion-rationale"
+    ],
+    "security": [
+      "security",
+      "secrets",
+      "untrusted"
+    ],
+    "workflow": [
+      "workflow",
+      "execution-tests"
+    ],
+    "model-orchestrator": [
+      "orchestrator-guide",
+      "v2-boundary",
+      "v2-lifecycle",
+      "v2-plan"
+    ],
+    "model-orchestrator-m1": [
+      "v2-isolation",
+      "v2-state",
+      "v2-locks",
+      "sandbox-policy",
+      "m1-tooling"
+    ]
+  },
+  "phase_features": {
+    "6": [
+      "timeline",
+      "commands"
+    ],
+    "7": [
+      "viewer",
+      "media-runtime"
+    ],
+    "8": [
+      "timeline",
+      "ui"
+    ],
+    "9": [
+      "android-storage"
+    ],
+    "10": [
+      "ai"
+    ],
+    "11": [
+      "motion"
+    ],
+    "12": [
+      "audio",
+      "ai"
+    ],
+    "13": [
+      "audio",
+      "rendering"
+    ],
+    "14": [
+      "ai"
+    ],
+    "15": [
+      "motion"
+    ],
+    "16": [
+      "security"
+    ]
+  },
+  "checkpoint_features": {
+    "7A": [
+      "media-runtime"
+    ],
+    "7B": [
+      "rendering"
+    ],
+    "7C0": [
+      "media-runtime"
+    ],
+    "7C": [
+      "media-runtime"
+    ],
+    "7E": [
+      "audio"
+    ],
+    "8E": [
+      "audio"
+    ],
+    "8F": [
+      "export",
+      "release"
+    ],
+    "9B": [
+      "android-media",
+      "media-runtime"
+    ],
+    "9B1": [
+      "release",
+      "media-runtime"
+    ],
+    "9C": [
+      "ui"
+    ],
+    "9D": [
+      "export"
+    ]
+  },
+  "on_demand": [
+    "docs/features/README.md",
+    "docs/DOCUMENTATION.md",
+    "docs/reference/DOCUMENTATION_AUDIT.md",
+    "docs/INDEX.md",
+    "docs/ROADMAP.md",
+    "docs/adr/README.md",
+    "docs/execution/evidence/README.md",
+    "docs/execution/automation/PROTOCOL_SCHEMAS.json",
+    "docs/execution/automation/V2_CONTRACT.json",
+    "docs/execution/automation/CHECKS.json",
+    "docs/execution/automation/TASK_TEMPLATES.json",
+    "docs/execution/automation/MODEL_POLICY.json"
+  ],
+  "budgets": {
+    "core": 20000,
+    "feature": 30000,
+    "context": 50000
+  }
+}

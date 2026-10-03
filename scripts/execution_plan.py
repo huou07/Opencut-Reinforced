@@ -780,8 +780,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         json_output = True
         arguments.remove("--json")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("status", "next", "context", "goal", "check"))
+    parser.add_argument("command", choices=("status", "next", "context", "goal", "check", "docs"))
     parser.add_argument("value", nargs="?")
+    parser.add_argument("--features", action="append", default=[], help="exact documentation bundle key (repeatable)")
+    parser.add_argument("--docs-text", action="store_true", help="emit selected canonical excerpts")
     args = parser.parse_args(arguments)
     try:
         plan, state = load_plan_state()
@@ -804,10 +806,32 @@ def main(argv: Iterable[str] | None = None) -> int:
             if not args.value:
                 raise PlanError("context requires a checkpoint id")
             result = _checkpoint_context(plan, state, args.value)
+        elif args.command == "docs":
+            if args.value:
+                raise PlanError("docs uses exact --features keys, not a positional task description")
+            result = {}
         else:
             if not args.value:
                 raise PlanError(f"{args.command} requires a goal")
             result = resolve_goal(plan, state, args.value, REPO_ROOT)
+        if args.command in ("context", "docs"):
+            try:
+                from .document_routing import load, resolve, summary, RoutingError
+            except ImportError:
+                from document_routing import load, resolve, summary, RoutingError
+            try:
+                bundle = resolve(REPO_ROOT, load(REPO_ROOT), args.features, result.get("checkpoint"))
+            except RoutingError as exc:
+                raise PlanError(str(exc)) from exc
+            result["documentation"] = summary(bundle)
+            if args.docs_text:
+                for file in bundle["files"]:
+                    for excerpt in file["excerpts"]:
+                        print(f"\n--- {file['path']}:{excerpt['start_line']}-{excerpt['end_line']} ---")
+                        print(excerpt["text"], end="")
+                return 0
+        elif args.features or args.docs_text:
+            raise PlanError("documentation options require context or docs")
         if json_output:
             print(_text(result))
         elif isinstance(result, dict):
@@ -832,6 +856,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 checkpoint = result["checkpoint"]
                 print(f"{checkpoint['id']} — {checkpoint['title']}")
                 print(_text(checkpoint))
+                print(_text(result["documentation"]))
+            elif args.command == "docs":
+                print(_text(result["documentation"]))
             else:
                 print("execution plan valid")
         return 0

@@ -17,11 +17,11 @@ This map points to the current source of truth. Read the documents relevant to y
 | Document | Purpose |
 | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | Full product vision, feature scope, and maturity labels |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Canonical high-level architecture and current implementation status |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | High-level architecture reference; execution status comes from STATE.json |
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
 | [ROADMAP.md](ROADMAP.md) | Phased plan, dependencies, and MVP boundary |
-| [TESTING.md](TESTING.md) | Current bootstrap checks, planned verification layers, and reporting rules |
+| [TESTING.md](TESTING.md) | Canonical testing sections, historical coverage, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
 | [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |
 | [TOOLING.md](TOOLING.md) | Local development baseline, hosted platform verification, optional tools, and repository safeguards |
@@ -30,10 +30,13 @@ This map points to the current source of truth. Read the documents relevant to y
 | [adr/README.md](adr/README.md) | Architecture decision records |
 | [execution/automation/README.md](execution/automation/README.md) | Frozen V2 model-orchestration candidate: trust, verification, recovery, and adoption requirements; not activated |
 
-## Suggested task routing
+## Deterministic task routing
 
-- **UI work:** AGENTS.md, DESIGN.md, UX_ACCEPTANCE.md, and the relevant PRODUCT.md section.
-- **Rust or domain work:** AGENTS.md, ARCHITECTURE.md, TECHNICAL_PLAN.md, and DEVELOPMENT_WORKFLOW.md.
-- **AI work:** AGENTS.md, ARCHITECTURE.md, TECHNICAL_PLAN.md, and SECURITY_LICENSING.md.
-- **Release work:** AGENTS.md, RELEASE.md, TESTING.md, and TOOLING.md.
-- **Contributors:** README.md, CONTRIBUTING.md, and DEVELOPMENT_WORKFLOW.md.
+Use [DOC_ROUTING.json](DOC_ROUTING.json) through the existing execution resolver:
+`python3 scripts/execution_plan.py context <checkpoint-id>` or
+`python3 scripts/execution_plan.py docs --features <key> --docs-text`.
+See [DOCUMENTATION.md](DOCUMENTATION.md) for the authority map, feature keys,
+section selection, guidance budgets, and on-demand references. Full engineering
+references above are available for investigation, not always-loaded context.
+[The audit](reference/DOCUMENTATION_AUDIT.md) records legacy duplication and
+frozen documents retained rather than relocated.

@@ -2,7 +2,7 @@
 
 ## Status and maturity labels
 
-This is the complete planned product scope, not a list of implemented features. The repository is in pre-MVP planning; the HTML prototype simulates selected workflows. Labels describe intended roadmap placement:
+This is the complete planned product scope, not a list of implemented features. The HTML prototype simulates selected workflows; implementation status comes from STATE and supervisor evidence, not these maturity labels. Labels describe intended roadmap placement:
 
 - **MVP FOUNDATION** — required for the initial usable editor or a product-wide foundation.
 - **PLANNED** — intended after or alongside MVP, with no claim that it exists.

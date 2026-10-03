@@ -2,37 +2,21 @@
 
 A free and open-source cross-platform video editor designed around one structured editing core shared by the human interface, CLI automation, and AI agents.
 
-## Status
+## Execution and implementation evidence
 
-**Pre-MVP.** The current checkpoint and allowed execution order are defined by
-[docs/execution/STATE.json](docs/execution/STATE.json) and
-[PLAN.json](docs/execution/PLAN.json). The desktop app creates and opens real
-projects, hosts one Rust-owned session shared with Flutter and authenticated
-local IPC, and supports project lifecycle, recovery, media workflows, timeline
-editing, and persistent markers. The core now defines `.orproj` schema v5 with
-an explicit nullable sequence frame rate, exact frame-lattice timing, and the
-shared viewer transport contract. The product viewer and playback controls are
-not implemented; the editor is not yet a usable video editor.
+Current checkpoint status is maintained only in
+[STATE.json](docs/execution/STATE.json); [PLAN.json](docs/execution/PLAN.json)
+selects the execution order. Inspect it with
+`python3 scripts/execution_plan.py status`. Planned capability descriptions
+below do not establish implementation or completion.
 
-The Rust core and CLI provide the shared project, media, timeline, history,
-recovery, cache, proxy-foundation, and command/query paths. CLI operations
-include sequence settings and exact rate set/clear in addition to project,
-media, marker, and clip operations. Project loading does not open or probe
-referenced media. `ffprobe` and `ffmpeg` remain external system executables.
-Android builds, but project New/Open remains unavailable until Storage Access
-Framework support is implemented. There is no autosave or export.
-
-Stable application releases: none. Debug Developer Preview prereleases are
-available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases)
-for native shell, project lifecycle, CLI, and architecture evaluation. The
-interactive HTML prototype remains a frozen product and UX reference, not the
-final application or its production architecture.
-
-The machine-readable architecture and execution authority is
-[docs/execution/README.md](docs/execution/README.md), with the immutable
-checkpoint graph in [PLAN.json](docs/execution/PLAN.json) and mutable progress
-in [STATE.json](docs/execution/STATE.json). This README does not override the
-checkpoint state or locked specifications.
+For an exact implemented checkpoint, consult its
+[locked specification](docs/execution/phases) and
+[supervisor evidence](docs/execution/evidence/README.md), then the source at
+that evidence's commit. [Task documentation routing](docs/DOCUMENTATION.md)
+selects the relevant contract and feature sections without requiring the full
+architecture/testing history. The HTML prototype remains a frozen product and
+UX reference, not production implementation.
 
 ## Vision
 

@@ -164,6 +164,14 @@ if ! python3 scripts/check_architecture_policy.py; then
   failed=1
 fi
 
+if ! python3 scripts/check_document_routing.py; then
+  failed=1
+fi
+
+if ! python3 -m unittest scripts.test_document_routing; then
+  failed=1
+fi
+
 if (( failed != 0 )); then
   printf 'Repository hygiene checks failed.\n' >&2
   exit 1
