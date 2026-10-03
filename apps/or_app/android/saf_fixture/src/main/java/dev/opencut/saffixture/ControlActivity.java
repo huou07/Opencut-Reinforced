@@ -1,0 +1,68 @@
+package dev.opencut.saffixture;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Process;
+import android.provider.DocumentsContract;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.json.JSONObject;
+
+/** Explicit fixture setup/revocation, retaining Android's actual URI permission checks. */
+public final class ControlActivity extends Activity {
+    static final String OR_PACKAGE = "io.github.huou07.or_app";
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        new Thread(() -> {
+            try {
+                String operation = getIntent().getStringExtra("operation");
+                Uri uri = Uri.parse(getIntent().getStringExtra("uri") == null
+                    ? DocumentsContract.buildDocumentUri(FixtureDocumentsProvider.AUTHORITY, "good").toString()
+                    : getIntent().getStringExtra("uri"));
+                if (!FixtureDocumentsProvider.AUTHORITY.equals(uri.getAuthority())) throw new IllegalArgumentException("Fixture URI required");
+                switch (operation == null ? "status" : operation) {
+                    case "seedProject":
+                        File media = new File(getFilesDir(), "tiny.mkv");
+                        try (InputStream input = getAssets().open("tiny.mkv"); FileOutputStream output = new FileOutputStream(media)) {
+                            byte[] buffer = new byte[4096];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                        }
+                        String project = getIntent().getStringExtra("projectJson");
+                        if (project == null || project.getBytes(StandardCharsets.UTF_8).length > 65536) throw new IllegalArgumentException("Bounded fixture project required");
+                        try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "acceptance.orproj"))) { output.write(project.getBytes(StandardCharsets.UTF_8)); }
+                        for (String id : new String[]{"good", "late65", "missing", "pipe", "blocked"}) {
+                            grantUriPermission(OR_PACKAGE, DocumentsContract.buildDocumentUri(FixtureDocumentsProvider.AUTHORITY, id), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        }
+                        break;
+                    case "grant": grantUriPermission(OR_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); break;
+                    case "revoke": revokeUriPermission(OR_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); break;
+                    case "recoverMissing": FixtureDocumentsProvider.missingRecovered = true; break;
+                    case "resetMissing": FixtureDocumentsProvider.missingRecovered = false; break;
+                    case "armBlocked":
+                        FixtureDocumentsProvider.entered = new CountDownLatch(1);
+                        FixtureDocumentsProvider.release = new CountDownLatch(1);
+                        FixtureDocumentsProvider.blockNextOpen = true;
+                        break;
+                    case "awaitBlocked":
+                        if (!FixtureDocumentsProvider.entered.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("No blocked provider open");
+                        break;
+                    case "releaseBlocked": FixtureDocumentsProvider.release.countDown(); break;
+                    case "status": break;
+                    default: throw new IllegalArgumentException("Unknown fixture operation");
+                }
+                JSONObject result = new JSONObject().put("providerUid", Process.myUid())
+                    .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length());
+                runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });
+            } catch (Exception error) {
+                runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });
+            }
+        }, "fixture-control").start();
+    }
+}

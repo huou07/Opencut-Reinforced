@@ -3,24 +3,24 @@ import 'package:flutter/services.dart';
 abstract final class OrViewerTexture {
   static const _channel = MethodChannel('or_viewer_texture');
 
-  static Future<bool> setMediaSources(List<String> sources) async {
-    try {
-      return await _channel.invokeMethod<bool>('setMediaSources', sources) ??
-          false;
-    } on MissingPluginException {
-      return false;
-    } on PlatformException {
-      return false;
-    }
-  }
+  static Future<bool> setMediaSources(
+    List<String> sources, {
+    BigInt? generation,
+    String? owner,
+  }) async =>
+      await _channel.invokeMethod<bool>('setMediaSources', {
+        'sources': sources,
+        if (generation != null) 'generation': generation.toInt(),
+        if (owner != null) 'owner': owner,
+      }) ??
+      false;
 
   static Future<void> clearMediaSources() async {
-    try {
-      await _channel.invokeMethod<bool>('clearMediaSources');
-    } on MissingPluginException {
-      // The native media adapter is not registered on this platform.
-    } on PlatformException {
-      // The native media adapter is optional outside Android.
+    if (await _channel.invokeMethod<bool>('clearMediaSources') != true) {
+      throw PlatformException(
+        code: 'MEDIA_SOURCE_UNAVAILABLE',
+        message: 'Android media descriptors could not be released.',
+      );
     }
   }
 

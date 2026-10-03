@@ -113,3 +113,27 @@ pub extern "C" fn or_viewer_release_frame(release_context: *mut c_void) {
         drop(unsafe { Box::from_raw(release_context.cast::<ViewerFrameLease>()) });
     }
 }
+
+/// The acquired lease retains its own generation after the mailbox advances.
+#[unsafe(no_mangle)]
+pub extern "C" fn or_viewer_frame_generation(release_context: *const c_void) -> u64 {
+    if release_context.is_null() {
+        return 0;
+    }
+    unsafe { &*release_context.cast::<ViewerFrameLease>() }.generation()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn or_viewer_current_generation() -> u64 {
+    adapter().resource_snapshot().0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn or_viewer_in_flight_frames() -> usize {
+    adapter().resource_snapshot().1
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn or_viewer_latest_frame_bytes() -> usize {
+    adapter().resource_snapshot().2
+}

@@ -824,6 +824,22 @@ FFmpeg I/O; copy only to a bounded, cancellable, disposable materialization
 when a provider is non-seekable or a component requires a local file. 9D uses
 the same storage boundary and the mandatory software FFV1/PCM S16LE profile.
 
+The 9B Android preview adapter prepares an exact shared render request before
+binding its evaluated active SAF video sources. The request carries cancellation
+and generation identity; completion checks project identity, instance and
+revision before decoding and again before publication. Timer ticks apply
+bounded backpressure while source registration or completion is pending, while
+explicit seeks cancel older work and serialize completion. The native adapter
+checks every FD registration, rolls back partial sets, revalidates grants on
+cached sets, and releases duplicated capabilities on project close/switch.
+Software decode uses the packaged FFmpeg profile and shared render path; the
+bounded BGRA lease is copied to one reusable bitmap and presented through
+Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
+both copy and drawing, including cleanup/recreation/release. Hardware and
+Android audio output remain unavailable/unverified as explicitly reported by
+the existing capability paths. See TOOLING.md and TESTING.md for the hosted
+real DocumentsUI/editor journey and measured diagnostic limits.
+
 Visible Flutter strings and accessibility labels use a localization-capable resource boundary when production UI work begins. Do not scatter user-facing English strings through domain/business logic. Human-readable errors may be localized at the presentation boundary; command IDs, JSON field names, and machine-readable error codes remain stable technical identifiers. Do not select a localization package or generate localization files in this planning phase.
 
 ## 21. Security

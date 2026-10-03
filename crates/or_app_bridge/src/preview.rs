@@ -33,6 +33,19 @@ impl fmt::Display for PreviewError {
 
 impl Error for PreviewError {}
 
+pub(crate) enum PreviewPreparationAction {
+    Seek(or_core::RationalTime),
+    Step(or_runtime::PreviewFrameStep),
+    Play,
+    Tick,
+}
+
+pub(crate) struct PreviewPreparation {
+    pub request_id: Option<u64>,
+    pub sources: Vec<String>,
+    pub snapshot: PreviewSnapshot,
+}
+
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -40,7 +53,7 @@ impl Error for PreviewError {}
     target_os = "android"
 ))]
 mod desktop {
-    use super::{PreviewError, PreviewSnapshot};
+    use super::{PreviewError, PreviewPreparation, PreviewPreparationAction, PreviewSnapshot};
     use crate::viewer_texture;
     use or_audio::{
         AudioClockMessage, AudioProducer, AvSynchronizer, VideoSyncAction, process_audio_clip,
@@ -113,6 +126,34 @@ mod desktop {
         generation: AtomicU64,
         render_resources: Arc<RenderResources>,
         export_jobs: JobManager,
+        pending: Mutex<Option<PreparedFrame>>,
+        preparation_sequence: AtomicU64,
+        preparation_lock: Mutex<()>,
+        closed: AtomicBool,
+        completing_prepared: AtomicBool,
+        completion_lock: Mutex<()>,
+    }
+
+    #[derive(Clone, Copy)]
+    enum RenderMode {
+        Immediate,
+        Prepare(u64),
+    }
+
+    struct PreparedFrame {
+        operation: u64,
+        program: Arc<PreviewProgram>,
+        request: PreviewFrameRequest,
+        generation: u64,
+        cancellation: CancellationToken,
+        sources: Vec<String>,
+    }
+
+    struct PreparedCompletion<'a>(&'a AtomicBool);
+    impl Drop for PreparedCompletion<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
     }
 
     impl PreviewRuntime {
@@ -135,6 +176,12 @@ mod desktop {
                 export_jobs: JobManager::new(
                     JobManagerConfig::new(1, 1, 32).expect("valid bounded export jobs"),
                 ),
+                pending: Mutex::new(None),
+                preparation_sequence: AtomicU64::new(0),
+                preparation_lock: Mutex::new(()),
+                closed: AtomicBool::new(false),
+                completing_prepared: AtomicBool::new(false),
+                completion_lock: Mutex::new(()),
             }
         }
 
@@ -364,6 +411,15 @@ mod desktop {
             host: &LiveProjectHost,
             time: RationalTime,
         ) -> Result<PreviewSnapshot, PreviewError> {
+            self.seek_with_mode(host, time, RenderMode::Immediate)
+        }
+
+        fn seek_with_mode(
+            &self,
+            host: &LiveProjectHost,
+            time: RationalTime,
+            mode: RenderMode,
+        ) -> Result<PreviewSnapshot, PreviewError> {
             if time.is_negative() {
                 return Err(PreviewError::new(
                     "NEGATIVE_PREVIEW_TIME",
@@ -391,7 +447,14 @@ mod desktop {
                 )
             };
             drop(stopped_audio);
-            self.render_request(host, program, request, external_generation, cancellation);
+            self.dispatch_request(
+                host,
+                program,
+                request,
+                external_generation,
+                cancellation,
+                mode,
+            )?;
             Ok(self.snapshot())
         }
 
@@ -399,6 +462,15 @@ mod desktop {
             &self,
             host: &LiveProjectHost,
             direction: PreviewFrameStep,
+        ) -> Result<PreviewSnapshot, PreviewError> {
+            self.step_with_mode(host, direction, RenderMode::Immediate)
+        }
+
+        fn step_with_mode(
+            &self,
+            host: &LiveProjectHost,
+            direction: PreviewFrameStep,
+            mode: RenderMode,
         ) -> Result<PreviewSnapshot, PreviewError> {
             let program = self.ensure_program(host)?;
             let (action, stopped_audio) = {
@@ -418,7 +490,14 @@ mod desktop {
             };
             drop(stopped_audio);
             if let Some((request, external_generation, cancellation)) = action {
-                self.render_request(host, program, request, external_generation, cancellation);
+                self.dispatch_request(
+                    host,
+                    program,
+                    request,
+                    external_generation,
+                    cancellation,
+                    mode,
+                )?;
             }
             Ok(self.snapshot())
         }
@@ -505,6 +584,14 @@ mod desktop {
         }
 
         pub fn tick(&self, host: &LiveProjectHost) -> Result<PreviewSnapshot, PreviewError> {
+            self.tick_with_mode(host, RenderMode::Immediate)
+        }
+
+        fn tick_with_mode(
+            &self,
+            host: &LiveProjectHost,
+            mode: RenderMode,
+        ) -> Result<PreviewSnapshot, PreviewError> {
             let program = self.ensure_program(host)?;
             let (action, audio_clock, stopped_audio) = {
                 let mut state = lock(&self.state);
@@ -574,7 +661,7 @@ mod desktop {
                         return Ok(self.snapshot());
                     }
                 }
-                self.render_request(host, program, request, generation, cancellation);
+                self.dispatch_request(host, program, request, generation, cancellation, mode)?;
             }
             Ok(self.snapshot())
         }
@@ -644,6 +731,7 @@ mod desktop {
         }
 
         fn invalidate(&self) -> Result<(u64, CancellationToken), PreviewError> {
+            lock(&self.pending).take();
             let generation = viewer_texture::next_generation().ok_or_else(|| {
                 PreviewError::new(
                     "PREVIEW_GENERATION_OVERFLOW",
@@ -662,6 +750,175 @@ mod desktop {
             }
             self.generation.store(generation, Ordering::SeqCst);
             Ok((generation, next))
+        }
+
+        /// Android binds only the sources required by this exact shared preview
+        /// request. One pending request owns no native media handles or pixels.
+        pub fn prepare(
+            &self,
+            host: &LiveProjectHost,
+            action: PreviewPreparationAction,
+        ) -> Result<PreviewPreparation, PreviewError> {
+            let _prepare = lock(&self.preparation_lock);
+            if self.closed.load(Ordering::SeqCst) {
+                return Err(stale_preparation());
+            }
+            // A timer tick cannot supersede a frame still opening or decoding.
+            // The next completed tick chooses the newest due transport frame.
+            if matches!(action, PreviewPreparationAction::Tick)
+                && (self.completing_prepared.load(Ordering::SeqCst)
+                    || lock(&self.pending).is_some())
+            {
+                return Ok(PreviewPreparation {
+                    request_id: None,
+                    sources: Vec::new(),
+                    snapshot: self.snapshot(),
+                });
+            }
+            let operation = self.preparation_sequence.fetch_add(1, Ordering::SeqCst) + 1;
+            let mode = RenderMode::Prepare(operation);
+            lock(&self.pending).take();
+            let snapshot = match action {
+                PreviewPreparationAction::Seek(time) => self.seek_with_mode(host, time, mode)?,
+                PreviewPreparationAction::Step(direction) => {
+                    self.step_with_mode(host, direction, mode)?
+                }
+                PreviewPreparationAction::Play => {
+                    self.play(host)?;
+                    self.tick_with_mode(host, mode)?
+                }
+                PreviewPreparationAction::Tick => self.tick_with_mode(host, mode)?,
+            };
+            if self.preparation_sequence.load(Ordering::SeqCst) != operation {
+                return Err(stale_preparation());
+            }
+            let pending = lock(&self.pending);
+            Ok(PreviewPreparation {
+                request_id: pending
+                    .as_ref()
+                    .filter(|frame| frame.operation == operation)
+                    .map(|frame| frame.generation),
+                sources: pending
+                    .as_ref()
+                    .filter(|frame| frame.operation == operation)
+                    .map_or_else(Vec::new, |frame| frame.sources.clone()),
+                snapshot,
+            })
+        }
+
+        pub fn complete_prepared(
+            &self,
+            host: &LiveProjectHost,
+            request_id: u64,
+        ) -> Result<PreviewSnapshot, PreviewError> {
+            let _serial = lock(&self.completion_lock);
+            self.completing_prepared.store(true, Ordering::SeqCst);
+            let _completion = PreparedCompletion(&self.completing_prepared);
+            let frame = {
+                let mut pending = lock(&self.pending);
+                if !pending
+                    .as_ref()
+                    .is_some_and(|frame| frame.generation == request_id)
+                {
+                    return Err(stale_preparation());
+                }
+                pending.take().expect("checked pending request")
+            };
+            if self.closed.load(Ordering::SeqCst)
+                || !self.request_is_current(frame.request, frame.generation, &frame.cancellation)
+            {
+                return Err(stale_preparation());
+            }
+            let current = host
+                .describe()
+                .map_err(|error| PreviewError::new("PREVIEW_QUERY_FAILED", error.to_string()))?
+                .summary;
+            if current.project_id != frame.program.key.project_id
+                || current.project_instance_id != frame.program.key.project_instance_id
+                || current.project_revision != frame.program.key.revision
+            {
+                return Err(stale_preparation());
+            }
+            self.render_request(
+                host,
+                frame.program,
+                frame.request,
+                frame.generation,
+                frame.cancellation,
+            );
+            Ok(self.snapshot())
+        }
+
+        pub fn abort_prepared(&self, request_id: u64) -> Result<(), PreviewError> {
+            let _prepare = lock(&self.preparation_lock);
+            if self.generation.load(Ordering::SeqCst) == request_id {
+                self.cancel()?;
+            }
+            Ok(())
+        }
+
+        pub fn shutdown(&self) -> Result<(), PreviewError> {
+            let _prepare = lock(&self.preparation_lock);
+            self.closed.store(true, Ordering::SeqCst);
+            self.cancel()?;
+            // Cancellation invalidates publication first. Drain any decoder
+            // holding a cloned capability before the platform clears its FDs.
+            let _render = lock(&self.render_lock);
+            let mut state = lock(&self.state);
+            state.program = None;
+            state.key = None;
+            Ok(())
+        }
+
+        fn cancel(&self) -> Result<(), PreviewError> {
+            self.invalidate()?;
+            let mut state = lock(&self.state);
+            state
+                .transport
+                .pause(Instant::now())
+                .map_err(transport_error)?;
+            let audio = state.audio_playback.take();
+            drop(state);
+            drop(audio);
+            Ok(())
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn dispatch_request(
+            &self,
+            host: &LiveProjectHost,
+            program: Arc<PreviewProgram>,
+            request: PreviewFrameRequest,
+            generation: u64,
+            cancellation: CancellationToken,
+            mode: RenderMode,
+        ) -> Result<(), PreviewError> {
+            match mode {
+                RenderMode::Immediate => {
+                    self.render_request(host, program, request, generation, cancellation)
+                }
+                RenderMode::Prepare(operation) => {
+                    if self.closed.load(Ordering::SeqCst) {
+                        return Err(stale_preparation());
+                    }
+                    let sources = program.active_saf_sources(request.time)?;
+                    // Superseding a prepared tick also cancels already decoding
+                    // work; transport timing remains the original exact request.
+                    let (generation, cancellation) = self.invalidate()?;
+                    if self.preparation_sequence.load(Ordering::SeqCst) != operation {
+                        return Err(stale_preparation());
+                    }
+                    *lock(&self.pending) = Some(PreparedFrame {
+                        operation,
+                        program,
+                        request,
+                        generation,
+                        cancellation,
+                        sources,
+                    });
+                }
+            }
+            Ok(())
         }
 
         fn render_request(
@@ -1112,6 +1369,40 @@ mod desktop {
         video_clips: Vec<VideoClip>,
         text_clips: Vec<TextClip>,
         audio_clips: Vec<AudioClip>,
+    }
+
+    impl PreviewProgram {
+        fn active_saf_sources(&self, time: RationalTime) -> Result<Vec<String>, PreviewError> {
+            let mut sources = self
+                .video_clips
+                .iter()
+                .filter(|clip| {
+                    clip.timeline_start
+                        .checked_add(clip.duration)
+                        .is_ok_and(|end| time >= clip.timeline_start && time < end)
+                })
+                .filter_map(|clip| match &clip.source {
+                    MediaSourceRef::AndroidSafDocumentUri { uri } => Some(uri.as_str().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            sources.sort_unstable();
+            sources.dedup();
+            if sources.len() > 64 {
+                return Err(PreviewError::new(
+                    "MEDIA_SOURCE_BUDGET_EXCEEDED",
+                    "This preview frame requires more than 64 Android media sources.",
+                ));
+            }
+            Ok(sources)
+        }
+    }
+
+    fn stale_preparation() -> PreviewError {
+        PreviewError::new(
+            "STALE_PREVIEW_REQUEST",
+            "A newer preview request replaced this frame.",
+        )
     }
 
     struct VideoClip {
@@ -2102,6 +2393,325 @@ mod desktop {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+
+    #[cfg(test)]
+    mod android_preparation_tests {
+        use super::*;
+        use or_core::{ProjectFileSession, decode_project, save_project_file_atomic};
+        use std::{
+            fs,
+            path::PathBuf,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+        static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+        fn late_source_project() -> or_core::ProjectDocument {
+            let media = (1..=65).map(|index| format!(r#"{{"id":"{index:08x}-2222-4222-8222-222222222222","source":{{"kind":"android_saf_document_uri","uri":"content://dev.opencut.fixture/document/clip-{index:02}"}},"metadata":{{"format_names":["matroska"],"duration":{{"numerator":1,"denominator":1}},"file_size_bytes":1024,"streams":[{{"kind":"video","metadata":{{"index":0,"codec_name":"ffv1","width":16,"height":16,"pixel_format":"bgra","average_frame_rate":{{"numerator":4,"denominator":1}},"duration":{{"numerator":1,"denominator":1}}}}}}]}}}}"#)).collect::<Vec<_>>().join(",");
+            let project = decode_project(&format!(r#"{{"format":"opencut-reinforced-project","schema_version":7,"project":{{"id":"01234567-89ab-4def-8123-456789abcdef","revision":0,"name":"Late SAF source","media":[{media}],"timeline":{{"tracks":[],"markers":[],"sequence_frame_rate":{{"numerator":4,"denominator":1}}}}}}}}"#)).unwrap();
+            let mut session = ProjectSession::open(project);
+            let track = or_core::TrackId::generate();
+            session
+                .execute_command(or_core::CommandEnvelope::add_timeline_track(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    session.project_revision(),
+                    track,
+                    TrackKind::Video,
+                ))
+                .unwrap();
+            session
+                .execute_command(or_core::CommandEnvelope::insert_timeline_clip(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    session.project_revision(),
+                    or_core::ClipId::generate(),
+                    track,
+                    session.project().media_items()[64].id(),
+                    RationalTime::ZERO,
+                    TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 1).unwrap()).unwrap(),
+                ))
+                .unwrap();
+            session.project().clone()
+        }
+
+        #[test]
+        fn evaluated_late_library_source_is_active_and_half_open() {
+            let project = late_source_project();
+            assert_eq!(project.media_items().len(), 65);
+            let session = ProjectSession::open(project);
+            let mut program = load_program_from_session(&session).unwrap();
+            assert_eq!(
+                program.active_saf_sources(RationalTime::ZERO).unwrap(),
+                ["content://dev.opencut.fixture/document/clip-65"]
+            );
+            assert!(
+                program
+                    .active_saf_sources(RationalTime::new(1, 1).unwrap())
+                    .unwrap()
+                    .is_empty()
+            );
+            let mut second = load_program_from_session(&session)
+                .unwrap()
+                .video_clips
+                .remove(0);
+            second.source = MediaSourceRef::android_saf_document_uri(
+                "content://dev.opencut.fixture/document/aaa",
+            )
+            .unwrap();
+            program.video_clips.push(second);
+            program
+                .video_clips
+                .extend(load_program_from_session(&session).unwrap().video_clips);
+            assert_eq!(
+                program.active_saf_sources(RationalTime::ZERO).unwrap(),
+                [
+                    "content://dev.opencut.fixture/document/aaa",
+                    "content://dev.opencut.fixture/document/clip-65"
+                ]
+            );
+            assert_eq!(session.project_revision().value(), 2);
+        }
+
+        #[test]
+        fn source_budget_counts_simultaneously_active_sources() {
+            let session = ProjectSession::open(late_source_project());
+            let mut program = load_program_from_session(&session).unwrap();
+            for index in 0..64 {
+                let mut clip = load_program_from_session(&session)
+                    .unwrap()
+                    .video_clips
+                    .remove(0);
+                clip.source = MediaSourceRef::android_saf_document_uri(format!(
+                    "content://dev.opencut.fixture/document/extra-{index}"
+                ))
+                .unwrap();
+                program.video_clips.push(clip);
+            }
+            assert_eq!(
+                program
+                    .active_saf_sources(RationalTime::ZERO)
+                    .unwrap_err()
+                    .code,
+                "MEDIA_SOURCE_BUDGET_EXCEEDED"
+            );
+            assert!(
+                program
+                    .active_saf_sources(RationalTime::new(1, 1).unwrap())
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+
+        struct TempProject(PathBuf);
+        impl Drop for TempProject {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+
+        fn test_host() -> (TempProject, Arc<PreviewRuntime>, LiveProjectHost) {
+            let directory = TempProject(std::env::temp_dir().join(format!(
+                    "or-preview-preparation-{}-{}",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                )));
+            fs::create_dir(&directory.0).unwrap();
+            let path = directory.0.join("late.orproj");
+            save_project_file_atomic(&path, &late_source_project()).unwrap();
+            let runtime = Arc::new(PreviewRuntime::new());
+            let handler: Arc<dyn ExportRequestHandler> = runtime.clone();
+            let host = LiveProjectHost::in_process_with_export_handler(
+                ProjectFileSession::open(path).unwrap(),
+                handler,
+            );
+            (directory, runtime, host)
+        }
+
+        #[test]
+        fn ticks_do_not_cancel_slow_binding_or_completion() {
+            let _test = lock(&TEST_LOCK);
+            let (_directory, runtime, mut host) = test_host();
+            let first = runtime
+                .prepare(&host, PreviewPreparationAction::Play)
+                .unwrap()
+                .request_id
+                .unwrap();
+            let cancellation = lock(&runtime.cancellation).clone();
+            for _ in 0..100 {
+                assert!(
+                    runtime
+                        .prepare(&host, PreviewPreparationAction::Tick)
+                        .unwrap()
+                        .request_id
+                        .is_none()
+                );
+                assert_eq!(lock(&runtime.pending).as_ref().unwrap().generation, first);
+                assert!(!cancellation.is_cancelled());
+            }
+            let frame = lock(&runtime.pending).take().unwrap();
+            runtime.completing_prepared.store(true, Ordering::SeqCst);
+            for _ in 0..100 {
+                assert!(
+                    runtime
+                        .prepare(&host, PreviewPreparationAction::Tick)
+                        .unwrap()
+                        .request_id
+                        .is_none()
+                );
+                assert_eq!(runtime.generation.load(Ordering::SeqCst), first);
+                assert!(!cancellation.is_cancelled());
+            }
+            drop(frame);
+            runtime.completing_prepared.store(false, Ordering::SeqCst);
+            runtime.shutdown().unwrap();
+            host.shutdown(false).unwrap();
+        }
+
+        #[test]
+        fn current_seek_waits_for_old_completion_and_rejects_edit_during_binding() {
+            let _test = lock(&TEST_LOCK);
+            let (_directory, runtime, mut host) = test_host();
+            runtime
+                .prepare(&host, PreviewPreparationAction::Play)
+                .unwrap();
+            let draining = lock(&runtime.completion_lock);
+            runtime.completing_prepared.store(true, Ordering::SeqCst);
+            let seek = runtime
+                .prepare(
+                    &host,
+                    PreviewPreparationAction::Seek(RationalTime::new(1, 4).unwrap()),
+                )
+                .unwrap()
+                .request_id
+                .unwrap();
+            let summary = host.describe().unwrap().summary;
+            let changed = host
+                .handle_application_request(ApplicationRequest::Command(
+                    or_core::CommandEnvelope::set_timeline_sequence_frame_rate(
+                        summary.project_id,
+                        summary.project_instance_id,
+                        summary.project_revision,
+                        Some(RationalRate::new(24, 1).unwrap()),
+                    ),
+                ))
+                .unwrap();
+            assert!(matches!(changed, ApplicationResponse::Command(_)));
+            thread::scope(|scope| {
+                let (started_send, started_receive) = mpsc::channel();
+                let (done_send, done_receive) = mpsc::channel();
+                let runtime = &runtime;
+                let host = &host;
+                scope.spawn(move || {
+                    started_send.send(()).unwrap();
+                    done_send
+                        .send(runtime.complete_prepared(host, seek))
+                        .unwrap();
+                });
+                started_receive.recv().unwrap();
+                assert!(
+                    matches!(
+                        done_receive.recv_timeout(Duration::from_millis(100)),
+                        Err(mpsc::RecvTimeoutError::Timeout)
+                    ),
+                    "a current seek waits instead of being rejected by the old completion flag"
+                );
+                assert_eq!(lock(&runtime.pending).as_ref().unwrap().generation, seek);
+                drop(draining);
+                assert_eq!(
+                    done_receive.recv().unwrap().unwrap_err().code,
+                    "STALE_PREVIEW_REQUEST",
+                    "canonical edit prevents old-program rendering"
+                );
+            });
+            assert!(lock(&runtime.pending).is_none());
+            assert_eq!(runtime.snapshot().playback.frame_sequence, 0);
+            runtime.shutdown().unwrap();
+            host.shutdown(true).unwrap();
+        }
+
+        #[test]
+        fn play_prepares_without_seek_and_replaced_or_closed_requests_cannot_render() {
+            let _test = lock(&TEST_LOCK);
+            let directory = TempProject(std::env::temp_dir().join(format!(
+                    "or-preview-preparation-{}-{}",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                )));
+            fs::create_dir(&directory.0).unwrap();
+            let path = directory.0.join("late.orproj");
+            save_project_file_atomic(&path, &late_source_project()).unwrap();
+            let runtime = Arc::new(PreviewRuntime::new());
+            let handler: Arc<dyn ExportRequestHandler> = runtime.clone();
+            let mut host = LiveProjectHost::in_process_with_export_handler(
+                ProjectFileSession::open(path).unwrap(),
+                handler,
+            );
+            let play = runtime
+                .prepare(&host, PreviewPreparationAction::Play)
+                .unwrap();
+            assert!(play.snapshot.playback.playing);
+            assert_eq!(
+                play.sources,
+                ["content://dev.opencut.fixture/document/clip-65"]
+            );
+            let old = play
+                .request_id
+                .expect("play has a first frame without prior seek");
+            let seek = runtime
+                .prepare(
+                    &host,
+                    PreviewPreparationAction::Seek(RationalTime::new(1, 4).unwrap()),
+                )
+                .unwrap();
+            assert_eq!(
+                seek.snapshot.playback.position,
+                RationalTime::new(1, 4).unwrap()
+            );
+            assert_eq!(
+                runtime.complete_prepared(&host, old).unwrap_err().code,
+                "STALE_PREVIEW_REQUEST"
+            );
+            assert_eq!(
+                lock(&runtime.pending).as_ref().unwrap().generation,
+                seek.request_id.unwrap()
+            );
+            runtime.abort_prepared(seek.request_id.unwrap()).unwrap();
+            assert!(lock(&runtime.pending).is_none());
+            assert!(!runtime.snapshot().playback.playing);
+            let recovered = runtime
+                .prepare(&host, PreviewPreparationAction::Seek(RationalTime::ZERO))
+                .unwrap();
+            assert!(
+                recovered.request_id.is_some(),
+                "failed registration is retryable"
+            );
+            runtime.shutdown().unwrap();
+            assert!(lock(&runtime.pending).is_none());
+            assert_eq!(
+                runtime
+                    .complete_prepared(&host, recovered.request_id.unwrap())
+                    .unwrap_err()
+                    .code,
+                "STALE_PREVIEW_REQUEST"
+            );
+            assert_eq!(
+                runtime
+                    .prepare(&host, PreviewPreparationAction::Play)
+                    .err()
+                    .unwrap()
+                    .code,
+                "STALE_PREVIEW_REQUEST"
+            );
+            assert_eq!(host.describe().unwrap().summary.project_revision.value(), 2);
+            host.shutdown(false).unwrap();
+        }
+    }
 }
 
 #[cfg(not(any(
@@ -2111,7 +2721,7 @@ mod desktop {
     target_os = "android"
 )))]
 mod desktop {
-    use super::{PreviewError, PreviewSnapshot};
+    use super::{PreviewError, PreviewPreparation, PreviewPreparationAction, PreviewSnapshot};
     use or_core::{ExportRequest, ExportResponse, ProjectSession, RationalTime};
     use or_ipc::{ExportRequestHandler, LiveProjectHost};
     use or_runtime::PreviewFrameStep;
@@ -2155,6 +2765,26 @@ mod desktop {
         }
         pub fn tick(&self, _host: &LiveProjectHost) -> Result<PreviewSnapshot, PreviewError> {
             Err(Self::unavailable())
+        }
+        pub fn prepare(
+            &self,
+            _host: &LiveProjectHost,
+            _action: PreviewPreparationAction,
+        ) -> Result<PreviewPreparation, PreviewError> {
+            Err(Self::unavailable())
+        }
+        pub fn complete_prepared(
+            &self,
+            _host: &LiveProjectHost,
+            _request_id: u64,
+        ) -> Result<PreviewSnapshot, PreviewError> {
+            Err(Self::unavailable())
+        }
+        pub fn abort_prepared(&self, _request_id: u64) -> Result<(), PreviewError> {
+            Err(Self::unavailable())
+        }
+        pub fn shutdown(&self) -> Result<(), PreviewError> {
+            Ok(())
         }
     }
 

@@ -94,6 +94,13 @@ void main() {
     expect(revisionUnchanged, isTrue);
 
     const presentationChannel = MethodChannel('or_viewer_texture');
+    final initialResources = await presentationChannel
+        .invokeMapMethod<String, num>('resourceSnapshot');
+    expect(
+      initialResources!['surfaceRestorations'],
+      0,
+      reason: 'Initial creation must present without a restoration callback.',
+    );
     final presentationResults = await Future.wait([
       presentationChannel.invokeMethod<bool>('frameAvailable'),
       presentationChannel.invokeMethod<bool>('frameAvailable'),
@@ -103,6 +110,12 @@ void main() {
     );
     expect(presentationResults, everyElement(isTrue));
     expect(surfacePresented, isTrue);
+    final resources = await presentationChannel.invokeMapMethod<String, num>(
+      'resourceSnapshot',
+    );
+    expect(resources!['inFlightLeases'], 0);
+    expect(resources['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
+    debugPrint('ANDROID_PREVIEW_RESOURCES ${jsonEncode(resources)}');
     debugPrint(
       'ANDROID_PREVIEW_TELEMETRY frameSequence=${preview.frameSequence} '
       'dimensions=${preview.width}x${preview.height} '

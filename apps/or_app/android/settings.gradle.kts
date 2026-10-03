@@ -24,3 +24,6 @@ plugins {
 }
 
 include(":app")
+if (providers.gradleProperty("orSafFixture").orNull == "true") {
+    include(":saf_fixture")
+}

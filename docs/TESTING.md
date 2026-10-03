@@ -27,7 +27,7 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
-GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; native macOS Flutter bridge, project lifecycle, and offline-media integration tests; and Android x86_64 emulator checks. The Flutter static and widget job has a bounded 40-minute timeout: run 36897619300 spent 17m29s installing FFmpeg development libraries and hit the previous 20-minute job timeout before widget tests could run. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. The macOS, Linux, and Windows desktop jobs independently build that official FFmpeg release from a SHA-512-verified upstream archive using its LGPL 2.1-or-later defaults, without enabling GPL, version3, or nonfree options. Each job records the compiler/toolchain, source tag and archive identity, configure arguments, components, license posture, patch status, and runtime library names; it preserves the source archive and installed shared libraries as a hosted artifact. Desktop Flutter builds compile the texture adapter and FFmpeg-independent bridge with `PKG_CONFIG_PATH` empty. A separate probe that calls production `or_media` is staged beside the bridge with FFmpeg libraries; it checks binding ABI majors and the LGPL license with ambient runtime search paths cleared. The macOS bridge integration tests run after the libraries are packaged. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI cross-builds the production FFmpeg probe and software preview bridge against the approved shared profile for all three ABIs, verifies the viewer JNI and FFmpeg libraries in the APK, runs the x86_64 probe with libraries extracted from the APK, and drives the bridge diagnostics plus `apps/or_app/integration_test/android_preview_surface_test.dart` on API 36 x86_64 SwiftShader. It records the API/GPU path, queue budgets, cancellation and fallback telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`. The emulator step keeps its 30-minute timeout, bounds `adb wait-for-device` to 120 seconds, and preserves the emulator log. It does not run IPC or the project-storage integration test on Android.
+GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; native macOS Flutter bridge, project lifecycle, and offline-media integration tests; and Android x86_64 emulator checks. The Flutter static and widget job has a bounded 40-minute timeout: run 36897619300 spent 17m29s installing FFmpeg development libraries and hit the previous 20-minute job timeout before widget tests could run. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. The macOS, Linux, and Windows desktop jobs independently build that official FFmpeg release from a SHA-512-verified upstream archive using its LGPL 2.1-or-later defaults, without enabling GPL, version3, or nonfree options. Each job records the compiler/toolchain, source tag and archive identity, configure arguments, components, license posture, patch status, and runtime library names; it preserves the source archive and installed shared libraries as a hosted artifact. Desktop Flutter builds compile the texture adapter and FFmpeg-independent bridge with `PKG_CONFIG_PATH` empty. A separate probe that calls production `or_media` is staged beside the bridge with FFmpeg libraries; it checks binding ABI majors and the LGPL license with ambient runtime search paths cleared. The macOS bridge integration tests run after the libraries are packaged. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI cross-builds the production FFmpeg probe and software preview bridge against the approved shared profile for all three ABIs, verifies the viewer JNI and FFmpeg libraries in the APK, runs the x86_64 probe with libraries extracted from the APK, and drives the bridge diagnostics, `apps/or_app/integration_test/android_preview_surface_test.dart`, and the separate-provider SAF/editor journey in `apps/or_app/integration_test/android_saf_preview_test.dart` on API 36 x86_64 SwiftShader. It records the API/GPU path, queue budgets, cancellation and fallback telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`. The emulator step keeps its 30-minute timeout, bounds `adb wait-for-device` to 120 seconds, and preserves the emulator log. It does not run IPC or the project-storage integration test on Android.
 
 ## CI-first verification status
 
@@ -664,44 +664,119 @@ hardening commit itself must pass both workflows.
   SAF descriptors are duplicated into a bounded runtime-only registry (64
   sources); source URIs remain project identities and are never converted to
   filesystem paths. FFmpeg seek/decode cancellation and Rust generation
-  invalidation remain active.
+  invalidation remain active. Android prepares an exact preview request before
+  binding its evaluated active sources, then completes that same request.
+  Inactive library items consume no descriptor slots, including when the active
+  source appears after item 64. Play prepares its first frame without requiring
+  a preceding seek. Timer ticks apply backpressure while registration or
+  completion is pending; explicit seek, edit, close, and newer generations
+  invalidate stale work. Publication still checks canonical project identity,
+  runtime instance, and revision.
+- Headless `android_preparation_tests` cover the late active source,
+  deterministic deduplication and half-open activity intervals, simultaneous
+  source bounds, Play without seek, replacement/abort/close, slow binding and
+  completion, and an edit during registration. The viewer resource test holds
+  an actual lease across generation invalidation and checks its release.
+  These are unit evidence, not Android surface or permission acceptance.
+- Native registration checks every duplicated FD result, revalidates Android
+  URI grants even for a cached source set, and caches only a fully successful
+  transaction. Partial failure clears acquired descriptors and remains
+  retryable. A binding epoch cancels opens superseded by project clear or
+  switch; clearing is ordered behind the cancelled open on the same worker.
+  Project close invalidates publication and drains decoding before platform
+  descriptor clear. A Linux unit regression checks the actual duplicated OS
+  descriptor stays alive only while a decoder capability owns it.
 - The Android viewer uses Flutter `SurfaceProducer`, one coalesced presenter
   task, one reusable `ARGB_8888` bitmap, a 1920×1080 / 16 MiB transfer bound,
   and the existing three-lease viewer mailbox. The Rust frame lease is released
-  after the copy and surface post. Concurrent frame requests share the pending
-  presentation result; one follow-up is scheduled when an overlapping request
-  arrives before a frame is available. The result remains false unless a frame
-  is copied to and posted on the Android surface. Android export and native
-  audio output remain unavailable in this checkpoint.
-- Hosted API 36 x86_64 SwiftShader integration decodes the existing tiny FFV1
-  Matroska fixture through the Android software FFmpeg path, presents its frame
-  to a Flutter surface, checks concurrent presentation requests, and verifies
-  the project revision stays unchanged. The Android Rust project host follows
-  the shared in-process command/state path
-  without starting the unsupported desktop IPC transport. The
-  job records renderer path, queue budgets, cancellation and preview error
-  telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`; the texture plugin's Java
-  compile target matches the app's JVM 17 target. Physical MediaCodec and
-  HardwareBuffer coverage is not claimed. CI verifies the guest Flutter logcat
-  stream before each `flutter drive` by emitting and observing a readiness
-  marker, then captures the ADB device snapshot on failure. If that pre-driver
-  check fails while the configured emulator is offline, CI can safely restart
-  because no test has been launched. After driver launch, the retry classifier
-  accepts only the exact disposed VM service signature, no expected-test marker
-  in either log, and configured `emulator-5554` offline. An unreadable guest
-  logcat while the emulator is online, an online emulator, a missing offline
-  snapshot, or an app-side Flutter marker showing the test started does not
-  retry; synthetic guards cover both classifiers and the app-side marker. CI
-  keeps the emulator/logcat/driver logs and permits at most two clean-AVD
-  retries, each rerunning the FFmpeg probe and both integration tests. Exhausting
-  that budget fails the job. Flutter 3.47.5's
-  `flutter drive` uninstalls the app after a successful run by default, and each
-  new drive invocation stops and installs the target APK. The bridge diagnostics
-  run uses `--keep-app-running` until CI stages the preview fixture with
-  `run-as` into the app's persistent `files/` directory; the preview test reads
-  it from there and deletes it during teardown. The cache directory is not used
-  for this cross-invocation handoff. Local Android build/runtime verification is
+  after the worker copies its pixels. The bitmap remains exclusively owned
+  until the main-thread surface draw finishes. Initial creation uses the
+  surface directly; availability callbacks describe later restoration and
+  cleanup. Surface access, recreation, release, and drawing share main-thread
+  ordering, with epoch and generation checks before drawing. Waiting frame
+  results and queued worker operations are each capped at eight. Concurrent
+  frame requests share a pending result, with at most one follow-up copy. A
+  successful presentation result requires a surface post; screenshots below
+  additionally verify visible composition. Android export and native audio
+  output remain unavailable in this checkpoint.
+- The existing API 36 x86_64 SwiftShader bridge/surface acceptance retains the
+  local-file FFV1 Matroska decode, concurrent presentation, dimensions, explicit
+  error, and unchanged-revision assertions. It is lower-level integration
+  evidence alongside the SAF user journey. The Android project host uses the
+  shared in-process command/state path without desktop IPC. Bridge diagnostics
+  and surface tests retain separate application lifecycles. Generic clean-AVD
+  retries cannot classify or suppress a failed driver invocation.
+- `apps/or_app/integration_test/android_saf_preview_test.dart` uses a separate
+  fixture APK/UID with a `MANAGE_DOCUMENTS`-protected document provider and real
+  read grants. Its primary journey opens the fixture project through native
+  DocumentsUI, uses the real editor Play/seek controls, and checks red pixels
+  inside the composed Flutter Texture bounds. The media stays a `content://`
+  identity through provider FD acquisition, duplication, software decode,
+  shared rendering, and surface presentation. Fixture setup and revocation
+  controls do not replace the app picker, gateway, renderer, or viewer.
+- The same acceptance checks permission revocation/regrant and recovery, a
+  fresh real gateway session whose first preview action is Play, an active
+  source beyond the first 64 library items, partial registration followed by
+  recovery, missing and nonseekable sources, provider-blocked open versus clear,
+  and canonical edit/generation invalidation during registration. Resource
+  stress checks actual `/proc/self/fd` links to provider media as well as native
+  duplicated-FD and outstanding-frame-lease counts, surface recreation/release,
+  the bitmap bound, and operation/presentation queue bounds. Registry emptiness
+  alone is insufficient evidence that all owned descriptors have closed.
+  Repeated same-source seeks also require unchanged provider-open and native
+  registration counters, proving the cached capability is reused.
+- `apps/or_app/test_driver/android_saf_preview.dart` saves `report.json` and
+  three composed screenshots under `OR_ANDROID_ACCEPTANCE_OUTPUT`. Preserve
+  these with the API/ABI/GPU path, approved FFmpeg configuration, main draw
+  timings, frame/resource counters, driver log, and guest log. Hosted timing
+  observations do not establish target-device FPS or a performance speedup.
+  Software fallback is authoritative; `ANDROID_HARDWARE_MEDIA=UNVERIFIED`
+  remains explicit. No physical MediaCodec, HardwareBuffer, or zero-copy
+  acceptance is claimed. Local native execution remains
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+
+### 9B repair diagnostic provenance
+
+The following runs precede the final repair and are not completion evidence:
+
+| Exact revision / hosted run | Control and observed result | Causal limit |
+| --- | --- | --- |
+| `915a4a8b951643e475683e4cdf56996118ec7d1e` / [37100447806](https://github.com/huou07/Opencut-Reinforced/actions/runs/37100447806) | Diagnostics passed; the later original surface test passed decode/dimension/error/revision checks, then returned `[false, false]` for presentation. Other five platform jobs passed. | No VM/ADB disconnect occurred in this control. It directly reproduces the surface defect. |
+| Diagnostic branch `c662151e02e4af322f22db18f7f36f972a10c2cb` / [37101265973](https://github.com/huou07/Opencut-Reinforced/actions/runs/37101265973) | First combined target on a fresh AVD lost the VM service before any test ran; ADB was offline at 06:13:09 UTC. The distinct second target was blocked. | Repeated driver lifecycles are not required to reproduce the disconnect; consolidating lifecycles is not a proved repair. |
+| Same diagnostic revision/run, fresh original-surface control | Original surface test reached its presentation assertion and returned `[false, false]`, with no VM/ADB disconnect. | Confirms presentation can fail independently of driver attachment. |
+| Diagnostic branch `8d2254bada8ace21c0879f9fc5e01a2e0b350b3c` / [37105050451](https://github.com/huou07/Opencut-Reinforced/actions/runs/37105050451), job `111151804362` | Reader UID 65534 read 32 bytes directly from an inherited descriptor to UID 1001's private `0600` file; reopening `/proc/self/fd/0` failed with errno 13 (`EACCES`). | Proves an owned provider FD must be read directly. It is a headless permission discriminator, not Android product acceptance or a diagnosis of VM/ADB loss. |
+
+The surface cause is independently reproducible in pinned Flutter 3.47.5:
+`SurfaceProducer.setCallback` stores the callback without issuing an initial
+availability notification; `getSurface` lazily creates the initial surface.
+Waiting for that notification before calling `getSurface` prevented OR's first
+presentation. See the pinned
+[FlutterRenderer source](https://github.com/flutter/flutter/blob/3.47.5/engine/src/flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java)
+and the official
+[surface plugin lifecycle contract](https://docs.flutter.dev/release/breaking-changes/android-surface-plugins).
+
+The original owned-I/O decoder passed a descriptor path to FFmpeg's file
+protocol, reopening the inode rather than consuming the granted descriptor.
+The separate-UID diagnostic confirms that this loses the provider capability;
+the [Linux descriptor contract](https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html)
+also distinguishes reading an existing FD from permission to reopen its inode.
+
+The disconnect cause remains unresolved. In the corrected diagnostic, guest
+low-memory kills of Bluetooth/setup processes occurred at 06:12:39 UTC,
+before OR startup. OR's VM service listened at 06:13:04; captured startup
+warnings reported 37 and 139 skipped frames. No OR fatal signal, Java fatal
+exception, or ANR appears in the captured window, but the loss of log transport
+prevents ruling out a later failure. The emulator host process remained alive
+at the failure snapshot, with RSS 3,353,448 KiB. The host-health collector
+produced only one earlier sample, so it cannot establish pressure during the
+disconnect. The isolated original-surface control reported 144 startup and
+65 test-time skipped frames. The `915a4a8` control reported 160/37 frames
+before its diagnostics test and 85 during it, then 105/33 frames before the
+surface test and 66 during it. These debug/emulator observations require
+investigation and do not establish a product performance regression or an
+infrastructure root cause. Full guest/driver/emulator logs remain diagnostic
+artifacts of run 37101265973. If the final authoritative Android gate fails,
+stop for diagnostic review; do not add another speculative repair or retry.
 
 ## Future verification layers
 

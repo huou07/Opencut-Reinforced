@@ -7,4 +7,5 @@ class AndroidViewerFrame(
     val width: Int,
     val height: Int,
     val releaseContext: Long,
+    val generation: Long,
 )

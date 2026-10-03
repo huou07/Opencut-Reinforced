@@ -161,3 +161,72 @@ fn software_audio_seek_resamples_and_clips_to_the_exact_requested_range() {
     }
     assert_eq!(sample_frames, 12_000);
 }
+
+#[cfg(unix)]
+#[test]
+fn granted_private_file_decodes_without_reopening_and_clones_have_independent_cursors() {
+    use std::{
+        fs::{File, Permissions},
+        io::Read,
+        os::unix::fs::PermissionsExt,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "or-granted-private-{}-{stamp}.mkv",
+        std::process::id()
+    ));
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FIXTURE);
+    std::fs::copy(fixture, &path).unwrap();
+    let file = File::open(&path).unwrap();
+    let raw_fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+    std::fs::set_permissions(&path, Permissions::from_mode(0o000)).unwrap();
+    // Normal unprivileged CI cannot reopen this inode. The existing grant can
+    // still read it; this matches provider-owned private Android media.
+    assert!(
+        File::open(&path).is_err(),
+        "Run this permission guard without root privileges"
+    );
+    #[cfg(target_os = "linux")]
+    assert!(File::open(format!("/proc/self/fd/{raw_fd}")).is_err());
+    #[cfg(not(target_os = "linux"))]
+    let _ = raw_fd;
+    let mut direct = &file;
+    let mut header = [0; 4];
+    direct.read_exact(&mut header).unwrap();
+    assert_eq!(header, [0x1a, 0x45, 0xdf, 0xa3]);
+    let capability = SeekableMediaIoCapability::from_file(file).unwrap();
+    let first = SoftwareMediaDecoder::new_with_seekable_io(capability.clone(), budgets()).unwrap();
+    let second = SoftwareMediaDecoder::new_with_seekable_io(capability, budgets()).unwrap();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            for _ in 0..8 {
+                let frame = first
+                    .decode_video_frame_at(time(1, 4), &CancellationToken::new())
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(frame.descriptor().timing().timestamp(), time(1, 4));
+                assert_eq!(frame.pixels().len(), 1024);
+            }
+        });
+        scope.spawn(|| {
+            for _ in 0..8 {
+                let frame = second
+                    .decode_video_frame_at(time(3, 4), &CancellationToken::new())
+                    .unwrap()
+                    .unwrap();
+                // tiny.mkv carries frames only through 1/4, so a later target
+                // correctly resolves to the greatest frame at or before it;
+                // the file-path decoder agrees (see scratch parity probe).
+                assert_eq!(frame.descriptor().timing().timestamp(), time(1, 4));
+                assert_eq!(frame.pixels().len(), 1024);
+            }
+        });
+    });
+    drop(first);
+    drop(second);
+    std::fs::remove_file(path).unwrap();
+}

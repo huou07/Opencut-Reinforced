@@ -1,5 +1,7 @@
 mod decoder;
 mod encoder;
+#[cfg(unix)]
+mod seekable_io;
 mod snapshot_queue;
 
 #[cfg(unix)]

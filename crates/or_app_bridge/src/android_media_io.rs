@@ -66,11 +66,16 @@ pub extern "C" fn or_media_clear_seekable_fds() {
     lock_registry().clear();
 }
 
+#[cfg_attr(target_os = "android", unsafe(no_mangle))]
+pub extern "C" fn or_media_seekable_fd_count() -> usize {
+    lock_registry().len()
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::{
         AndroidSafDocumentUri, File, MediaSourceRef, capability_for, lock_registry,
-        or_media_clear_seekable_fds, or_media_register_seekable_fd,
+        or_media_clear_seekable_fds, or_media_register_seekable_fd, or_media_seekable_fd_count,
     };
     use std::{
         ffi::CString,
@@ -129,6 +134,7 @@ mod tests {
 
         or_media_clear_seekable_fds();
         assert!(capability_for(&source).is_none());
+        assert_eq!(or_media_seekable_fd_count(), 0);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -145,6 +151,44 @@ mod tests {
         ));
         assert!(capability_for(&source).is_none());
         assert!(lock_registry().is_empty());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn clear_and_final_capability_drop_close_the_actual_duplicate_fd() {
+        let _test = lock_tests();
+        or_media_clear_seekable_fds();
+        let (path, file) = media_file();
+        let (uri, source) = uri("content://com.example.provider/document/release");
+        let count = || {
+            std::fs::read_dir("/proc/self/fd")
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| std::fs::read_link(entry.path()).is_ok_and(|target| target == path))
+                .count()
+        };
+        assert_eq!(count(), 1);
+        assert!(or_media_register_seekable_fd(
+            uri.as_ptr(),
+            file.as_raw_fd()
+        ));
+        assert_eq!(count(), 2);
+        let capability = capability_for(&source).unwrap();
+        drop(file);
+        or_media_clear_seekable_fds();
+        assert_eq!(or_media_seekable_fd_count(), 0);
+        assert_eq!(
+            count(),
+            1,
+            "A decoder capability owns the live duplicate after clear"
+        );
+        drop(capability);
+        assert_eq!(
+            count(),
+            0,
+            "The last capability must close the OS descriptor"
+        );
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]
@@ -169,6 +213,7 @@ mod tests {
             file.as_raw_fd()
         ));
         assert_eq!(lock_registry().len(), 64);
+        assert_eq!(or_media_seekable_fd_count(), 64);
         or_media_clear_seekable_fds();
         std::fs::remove_file(path).unwrap();
     }

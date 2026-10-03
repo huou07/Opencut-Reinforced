@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 import 'package:or_app_bridge/or_app_bridge.dart' as rust;
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
@@ -52,7 +54,13 @@ class RustProjectGateway implements ProjectGateway {
     ProjectRationalTime position,
   ) async {
     try {
-      if (Platform.isAndroid) await _registerAndroidMediaSources(session);
+      if (Platform.isAndroid) {
+        return await _androidPreview(
+          session,
+          rust.PreviewPreparationActionView.seek,
+          position: _rustTime(position),
+        );
+      }
       return _preview(
         await _host(session).previewSeek(position: _rustTime(position)),
       );
@@ -61,27 +69,64 @@ class RustProjectGateway implements ProjectGateway {
     }
   }
 
-  Future<void> _registerAndroidMediaSources(
+  Future<ProjectPreviewState> _androidPreview(
     ProjectSessionHandle session,
-  ) async {
-    final page = await _host(session)
-        .listMediaPage(offset: BigInt.zero, limit: BigInt.from(64));
-    final sources = page.items
-        .map((item) => item.sourceUri)
-        .where((uri) => uri.startsWith('content://'))
-        .toList(growable: false);
-    final registered = await OrViewerTexture.setMediaSources(sources);
-    if (sources.isNotEmpty && !registered) {
-      throw const ProjectGatewayException(
-        'MEDIA_SOURCE_UNAVAILABLE',
-        'A selected Android media source could not be opened for preview.',
+    rust.PreviewPreparationActionView action, {
+    rust.RationalTimeView? position,
+  }) async {
+    final host = _host(session);
+    final prepared = await host.previewPrepare(
+      action: action,
+      position: position,
+    );
+    final requestId = prepared.requestId;
+    if (requestId == null) return _preview(prepared.state);
+    try {
+      final registered = await OrViewerTexture.setMediaSources(
+        prepared.sources,
+        generation: requestId,
+        owner: (await host.summary()).projectInstanceId,
       );
+      if (!registered) {
+        throw const ProjectGatewayException(
+          'MEDIA_SOURCE_REGISTRATION_FAILED',
+          'An Android media source could not be registered. Select it again and retry preview.',
+        );
+      }
+      return _preview(await host.previewCompletePrepared(requestId: requestId));
+    } catch (error) {
+      // A concurrently closed host has already cancelled and released its work.
+      try {
+        await host.previewAbortPrepared(requestId: requestId);
+      } on rust.ProjectBridgeError catch (abortError) {
+        if (abortError.code != 'PROJECT_CLOSED') rethrow;
+      }
+      if (error is PlatformException) {
+        throw ProjectGatewayException(
+          error.code,
+          error.message ??
+              'Android media access is unavailable. Select the source again.',
+        );
+      }
+      if (error is MissingPluginException) {
+        throw const ProjectGatewayException(
+          'MEDIA_SOURCE_UNAVAILABLE',
+          'Android media access is unavailable. Restart the application.',
+        );
+      }
+      rethrow;
     }
   }
 
   @override
   Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) async {
     try {
+      if (Platform.isAndroid) {
+        return await _androidPreview(
+          session,
+          rust.PreviewPreparationActionView.play,
+        );
+      }
       return _preview(await _host(session).previewPlay());
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
@@ -103,6 +148,14 @@ class RustProjectGateway implements ProjectGateway {
     ProjectPreviewFrameStep direction,
   ) async {
     try {
+      if (Platform.isAndroid) {
+        return await _androidPreview(
+          session,
+          direction == ProjectPreviewFrameStep.previous
+              ? rust.PreviewPreparationActionView.stepPrevious
+              : rust.PreviewPreparationActionView.stepNext,
+        );
+      }
       return _preview(
         await _host(session).previewStep(
           direction: switch (direction) {
@@ -120,6 +173,12 @@ class RustProjectGateway implements ProjectGateway {
   @override
   Future<ProjectPreviewState> previewTick(ProjectSessionHandle session) async {
     try {
+      if (Platform.isAndroid) {
+        return await _androidPreview(
+          session,
+          rust.PreviewPreparationActionView.tick,
+        );
+      }
       return _preview(await _host(session).previewTick());
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
@@ -976,7 +1035,16 @@ class RustProjectGateway implements ProjectGateway {
     if (!result.succeeded) {
       throw ProjectGatewayException(result.errorCode, result.message);
     }
-    if (Platform.isAndroid) await OrViewerTexture.clearMediaSources();
+    if (Platform.isAndroid) {
+      try {
+        await OrViewerTexture.clearMediaSources();
+      } on PlatformException catch (error) {
+        throw ProjectGatewayException(
+          error.code,
+          error.message ?? 'Android media descriptors could not be released.',
+        );
+      }
+    }
   }
 
   @override

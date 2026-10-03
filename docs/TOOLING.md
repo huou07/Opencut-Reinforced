@@ -145,3 +145,68 @@ Review third-party agent tooling before installing it. Do not install additional
 
 - CodeGraph
 - Ponytail
+
+### Android 9B preview repair and hosted proof
+
+The Android software path retains `content://` media identities. A preview
+request first evaluates the shared Rust program at its exact time, returns the
+sorted/deduplicated active video sources (at most 64 simultaneously active
+sources), binds checked provider descriptors, and completes only that request.
+An unused library entry consumes no active-source budget. Cached bindings
+revalidate Android read permission without reopening the provider every frame.
+A partial open/register failure clears the entire set; recovery can retry the
+same sources. Project close cancels and drains decoding before clearing the
+platform's duplicated descriptors. Android audio continues to return its
+explicit unavailable result; this repair does not claim an audio output path.
+
+Initial `SurfaceProducer` creation is usable immediately. The pinned
+[Flutter 3.47.5 engine source](https://github.com/flutter/flutter/blob/3.47.5/engine/src/flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java)
+(revision `6a19cca56475dbfba1478ee68d7bd0c2ef891da1`) creates the producer at
+lines 225–240, initializes `notifiedDestroy=false` around line 491, and only
+assigns its callback at lines 819–821. `getSurface` obtains the active reader
+lazily at lines 868–874. Restoration at lines 128–141 invokes availability only
+for a producer previously notified of destruction. OR's previous false initial
+availability flag prevented reaching `getSurface`. The unchanged product
+control [run 37100447806](https://github.com/huou07/Opencut-Reinforced/actions/runs/37100447806)
+reproduced `[false, false]` presentation after successful decode, without a
+VM/ADB disconnect. The initial-surface regression guard requires presentation
+with zero restoration callbacks. The official
+[plugin migration contract](https://github.com/flutter/website/blob/main/sites/docs/src/content/release/breaking-changes/android-surface-plugins.md)
+requires cleanup before invalidation, so copying runs on the worker and surface
+access/drawing/cleanup run in main-thread order. One pending slot retains bitmap
+ownership until drawing completes; epoch and generation checks reject stale
+copies and queued draws. Neither thread waits for the other in a latch cycle.
+
+The presenter exposes actual lease/descriptor counts, bitmap bytes, queue
+peaks, draw microseconds, frames, stale drops and surface events. Bounds are one
+copied pending frame, eight pending presentation callers, eight queued worker
+operations (one slot reserved for descriptor clear), three Rust viewer leases,
+and an at-most 1920×1080/16 MiB leased frame. These are boundedness checks;
+SwiftShader/debug startup and draw measurements do not establish target-device
+frame rate or a speedup.
+
+`Android APK build` retains the named runtime/bridge proof step and adds
+`Verify Android SAF preview user journey and resource bounds`. It builds a
+separate `saf_fixture` APK only with `-PorSafFixture=true`, then uses native
+DocumentsUI and real editor controls against its separate-UID, permission-
+enforced provider. The helper provider is absent from OR's APK. The debug-only
+fixture control bridge prepares/revokes fixture grants; it cannot return a
+picker result or render a frame. Composed screenshots, the asserted report,
+actual `/proc/self/fd` provider links, native leases, and collector logs are
+preserved in the Android FFmpeg artifact. The proof retains distinct driver
+lifecycles: diagnostic bootstrap, existing local-file surface assertions, and
+the real SAF user journey. Generic clean-AVD retries and the old offline
+classifier are removed because the diagnostic did not prove their cause.
+
+The corrected diagnostic [run 37101265973](https://github.com/huou07/Opencut-Reinforced/actions/runs/37101265973)
+failed before tests in its first app lifecycle, while a fresh original-surface
+control reached the independent presentation defect. Native/JNI crash,
+main-thread pressure, VM service failure and emulator instability remain
+unresolved explanations for the VM/ADB loss. The first host sampler had only
+one earlier sample (possible pipeline/ADB timeout termination), so an alive
+emulator and no captured fatal/ANR cannot classify that disconnect. The final
+collector preserves failed samples, consumes complete process listings and
+captures all logcat buffers. Diagnostic collection success is not product
+acceptance. Hosted verification for the final implementation SHA remains the
+supervisor's gate; local native execution is disallowed, and optional hardware
+media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.

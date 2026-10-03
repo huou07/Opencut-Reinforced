@@ -38,6 +38,15 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            try {
+                val fixture = Class.forName("io.github.huou07.or_app.SafFixtureControl")
+                    .getDeclaredConstructor().newInstance() as io.flutter.embedding.engine.plugins.FlutterPlugin
+                flutterEngine.plugins.add(fixture)
+            } catch (_: ClassNotFoundException) {
+                // The acceptance setup bridge is absent from release builds.
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SAF_CHANNEL)
             .setMethodCallHandler(::handleSafCall)
     }

@@ -201,6 +201,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PreviewFrameStepView dco_decode_preview_frame_step_view(dynamic raw);
 
   @protected
+  PreviewPreparationActionView dco_decode_preview_preparation_action_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectActionResult dco_decode_project_action_result(dynamic raw);
 
   @protected
@@ -217,6 +222,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectMediaPageView dco_decode_project_media_page_view(dynamic raw);
+
+  @protected
+  ProjectPreviewPreparationView dco_decode_project_preview_preparation_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectPreviewStateView dco_decode_project_preview_state_view(dynamic raw);
@@ -547,6 +557,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PreviewPreparationActionView sse_decode_preview_preparation_action_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectActionResult sse_decode_project_action_result(
     SseDeserializer deserializer,
   );
@@ -573,6 +588,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectMediaPageView sse_decode_project_media_page_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectPreviewPreparationView sse_decode_project_preview_preparation_view(
     SseDeserializer deserializer,
   );
 
@@ -967,6 +987,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_preview_preparation_action_view(
+    PreviewPreparationActionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_action_result(
     ProjectActionResult self,
     SseSerializer serializer,
@@ -999,6 +1025,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_media_page_view(
     ProjectMediaPageView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_preview_preparation_view(
+    ProjectPreviewPreparationView self,
     SseSerializer serializer,
   );
 

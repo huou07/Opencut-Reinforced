@@ -11,6 +11,8 @@ export 'src/rust/api/project.dart'
         MediaArtifactRequestStateView,
         MediaArtifactRequestView,
         PreviewFrameStepView,
+        PreviewPreparationActionView,
+        ProjectPreviewPreparationView,
         ProjectHostEventView,
         ProjectHostHandle,
         ProjectExportJobView,

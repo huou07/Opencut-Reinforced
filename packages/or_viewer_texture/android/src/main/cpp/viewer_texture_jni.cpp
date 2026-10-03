@@ -22,12 +22,20 @@ using OrViewerAcquireLatest = bool (*)(OrViewerPixelBuffer*);
 using OrViewerReleaseFrame = void (*)(void*);
 using OrMediaRegisterSeekableFd = bool (*)(const char*, int32_t);
 using OrMediaClearSeekableFds = void (*)();
+using OrViewerFrameGeneration = uint64_t (*)(const void*);
+using OrViewerCurrentGeneration = uint64_t (*)();
+using OrResourceCount = size_t (*)();
 
 struct BridgeApi {
   OrViewerAcquireLatest acquire_latest = nullptr;
   OrViewerReleaseFrame release_frame = nullptr;
   OrMediaRegisterSeekableFd register_media_fd = nullptr;
   OrMediaClearSeekableFds clear_media_fds = nullptr;
+  OrViewerFrameGeneration frame_generation = nullptr;
+  OrViewerCurrentGeneration current_generation = nullptr;
+  OrResourceCount in_flight_frames = nullptr;
+  OrResourceCount latest_frame_bytes = nullptr;
+  OrResourceCount media_fd_count = nullptr;
 };
 
 bool resolve_api(BridgeApi* api) {
@@ -46,7 +54,15 @@ bool resolve_api(BridgeApi* api) {
       dlsym(bridge, "or_media_register_seekable_fd"));
   api->clear_media_fds = reinterpret_cast<OrMediaClearSeekableFds>(
       dlsym(bridge, "or_media_clear_seekable_fds"));
-  return api->acquire_latest != nullptr && api->release_frame != nullptr;
+  api->frame_generation = reinterpret_cast<OrViewerFrameGeneration>(dlsym(bridge, "or_viewer_frame_generation"));
+  api->current_generation = reinterpret_cast<OrViewerCurrentGeneration>(dlsym(bridge, "or_viewer_current_generation"));
+  api->in_flight_frames = reinterpret_cast<OrResourceCount>(dlsym(bridge, "or_viewer_in_flight_frames"));
+  api->latest_frame_bytes = reinterpret_cast<OrResourceCount>(dlsym(bridge, "or_viewer_latest_frame_bytes"));
+  api->media_fd_count = reinterpret_cast<OrResourceCount>(dlsym(bridge, "or_media_seekable_fd_count"));
+  return api->acquire_latest != nullptr && api->release_frame != nullptr &&
+      api->register_media_fd != nullptr && api->clear_media_fds != nullptr &&
+      api->frame_generation != nullptr && api->current_generation != nullptr &&
+      api->in_flight_frames != nullptr && api->latest_frame_bytes != nullptr && api->media_fd_count != nullptr;
 }
 
 jobject acquire_latest(JNIEnv* env, jobject) {
@@ -79,7 +95,7 @@ jobject acquire_latest(JNIEnv* env, jobject) {
     return nullptr;
   }
   jmethodID constructor = env->GetMethodID(
-      frame_class, "<init>", "(Ljava/nio/ByteBuffer;IIJ)V");
+      frame_class, "<init>", "(Ljava/nio/ByteBuffer;IIJJ)V");
   if (constructor == nullptr) {
     api.release_frame(frame.release_context);
     return nullptr;
@@ -87,7 +103,8 @@ jobject acquire_latest(JNIEnv* env, jobject) {
   jobject result = env->NewObject(
       frame_class, constructor, pixels, static_cast<jint>(frame.width),
       static_cast<jint>(frame.height),
-      static_cast<jlong>(reinterpret_cast<uintptr_t>(frame.release_context)));
+      static_cast<jlong>(reinterpret_cast<uintptr_t>(frame.release_context)),
+      static_cast<jlong>(api.frame_generation(frame.release_context)));
   env->DeleteLocalRef(pixels);
   env->DeleteLocalRef(frame_class);
   if (result == nullptr) api.release_frame(frame.release_context);
@@ -113,11 +130,13 @@ jboolean register_media_fd(JNIEnv* env, jobject, jstring uri, jint fd) {
   return registered ? JNI_TRUE : JNI_FALSE;
 }
 
-void clear_media_fds(JNIEnv*, jobject) {
+jboolean clear_media_fds(JNIEnv*, jobject) {
   BridgeApi api;
   if (resolve_api(&api) && api.clear_media_fds != nullptr) {
     api.clear_media_fds();
+    return JNI_TRUE;
   }
+  return JNI_FALSE;
 }
 
 }  // namespace
@@ -140,8 +159,20 @@ Java_dev_opencut_viewertexture_OrViewerTexturePlugin_nativeRegisterMediaFd(
   return register_media_fd(env, object, uri, fd);
 }
 
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_opencut_viewertexture_OrViewerTexturePlugin_nativeClearMediaFds(
     JNIEnv* env, jobject object) {
-  clear_media_fds(env, object);
+  return clear_media_fds(env, object);
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_opencut_viewertexture_OrViewerTexturePlugin_nativeResourceSnapshot(JNIEnv* env, jobject) {
+  BridgeApi api;
+  if (!resolve_api(&api)) return nullptr;
+  jlong values[] = {static_cast<jlong>(api.current_generation()),
+      static_cast<jlong>(api.in_flight_frames()), static_cast<jlong>(api.latest_frame_bytes()),
+      static_cast<jlong>(api.media_fd_count())};
+  jlongArray result = env->NewLongArray(4);
+  if (result != nullptr) env->SetLongArrayRegion(result, 0, 4, values);
+  return result;
 }

@@ -20,9 +20,9 @@ use or_runtime::{
 };
 #[cfg(not(windows))]
 use std::io::ErrorKind;
+use std::{error::Error, fmt, io, path::PathBuf};
 #[cfg(unix)]
-use std::os::fd::AsRawFd;
-use std::{error::Error, fmt, fs::File, io, path::PathBuf, sync::Arc};
+use std::{fs::File, sync::Arc};
 
 const OUTPUT_AUDIO_RATE: u32 = 48_000;
 const OUTPUT_AUDIO_CHANNELS: usize = 2;
@@ -59,14 +59,13 @@ pub struct AudioChunk {
 }
 
 /// Opaque, runtime-only seekable media access backed by an already-open file
-/// descriptor. The descriptor is kept alive while FFmpeg reads its private
-/// `/proc/self/fd` or `/dev/fd` capability path; the source URI is never mapped
-/// to a filesystem path.
+/// descriptor. FFmpeg reads it directly through custom AVIO; no inode is
+/// reopened and the source URI is never mapped to a filesystem path.
 #[cfg(unix)]
 #[derive(Clone)]
 pub struct SeekableMediaIoCapability {
-    _file: Arc<File>,
-    ffmpeg_path: PathBuf,
+    file: Arc<File>,
+    length: i64,
 }
 
 #[cfg(unix)]
@@ -78,15 +77,16 @@ impl SeekableMediaIoCapability {
         use io::{Seek, SeekFrom};
 
         let position = file.stream_position()?;
-        file.seek(SeekFrom::End(0))?;
+        let length = i64::try_from(file.seek(SeekFrom::End(0))?).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "seekable source length exceeds i64",
+            )
+        })?;
         file.seek(SeekFrom::Start(position))?;
-        #[cfg(target_os = "macos")]
-        let ffmpeg_path = PathBuf::from(format!("/dev/fd/{}", file.as_raw_fd()));
-        #[cfg(not(target_os = "macos"))]
-        let ffmpeg_path = PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
         Ok(Self {
-            _file: Arc::new(file),
-            ffmpeg_path,
+            file: Arc::new(file),
+            length,
         })
     }
 }
@@ -122,6 +122,24 @@ pub struct SoftwareMediaDecoder {
     budgets: RuntimeBudgets,
 }
 
+// Field order closes the format context before its custom AVIO owner.
+struct MediaInput {
+    input: format::context::Input,
+    #[cfg(unix)]
+    _io: Option<crate::seekable_io::CapabilityIo>,
+}
+impl std::ops::Deref for MediaInput {
+    type Target = format::context::Input;
+    fn deref(&self) -> &Self::Target {
+        &self.input
+    }
+}
+impl std::ops::DerefMut for MediaInput {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.input
+    }
+}
+
 impl SoftwareMediaDecoder {
     pub fn new(source: &MediaSourceRef, budgets: RuntimeBudgets) -> Result<Self, DecodeError> {
         ffmpeg::init().map_err(DecodeError::Ffmpeg)?;
@@ -142,9 +160,41 @@ impl SoftwareMediaDecoder {
     ) -> Result<Self, DecodeError> {
         ffmpeg::init().map_err(DecodeError::Ffmpeg)?;
         Ok(Self {
-            path: capability.ffmpeg_path.clone(),
+            path: PathBuf::new(),
             _media_io: Some(capability),
             budgets,
+        })
+    }
+
+    fn open_input(
+        &self,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<MediaInput, DecodeError> {
+        #[cfg(not(unix))]
+        let _ = cancellation;
+        #[cfg(unix)]
+        if let Some(capability) = &self._media_io {
+            let (input, io) = crate::seekable_io::CapabilityIo::open(
+                Arc::clone(&capability.file),
+                capability.length,
+                cancellation,
+            )
+            .map_err(|error| {
+                if cancellation.is_cancelled() {
+                    DecodeError::Cancelled
+                } else {
+                    DecodeError::Ffmpeg(error)
+                }
+            })?;
+            return Ok(MediaInput {
+                input,
+                _io: Some(io),
+            });
+        }
+        Ok(MediaInput {
+            input: format::input(&self.path).map_err(DecodeError::Ffmpeg)?,
+            #[cfg(unix)]
+            _io: None,
         })
     }
 
@@ -159,7 +209,7 @@ impl SoftwareMediaDecoder {
         check_request(snapshot, queue, cancellation)?;
         let range = snapshot.requested_range();
         validate_range(range)?;
-        let mut input = format::input(&self.path).map_err(DecodeError::Ffmpeg)?;
+        let mut input = self.open_input(cancellation)?;
         let (stream_index, time_base, context) = {
             let stream = input
                 .streams()
@@ -214,7 +264,7 @@ impl SoftwareMediaDecoder {
         }
         let range = TimeRange::new(source_time, RationalTime::ZERO).map_err(DecodeError::Time)?;
         validate_range(range)?;
-        let mut input = format::input(&self.path).map_err(DecodeError::Ffmpeg)?;
+        let mut input = self.open_input(cancellation)?;
         let (stream_index, time_base, context) = {
             let stream = input
                 .streams()
@@ -277,7 +327,7 @@ impl SoftwareMediaDecoder {
         check_request(snapshot, queue, cancellation)?;
         let range = snapshot.requested_range();
         validate_range(range)?;
-        let mut input = format::input(&self.path).map_err(DecodeError::Ffmpeg)?;
+        let mut input = self.open_input(cancellation)?;
         let (stream_index, time_base, context) = {
             let stream = input
                 .streams()

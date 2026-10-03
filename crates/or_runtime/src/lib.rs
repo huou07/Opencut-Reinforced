@@ -764,7 +764,21 @@ impl ViewerTextureAdapter {
         Some(ViewerFrameLease {
             frame,
             state: Arc::clone(&self.state),
+            generation: state.generation.expect("published frame has a generation"),
         })
+    }
+
+    pub fn resource_snapshot(&self) -> (u64, usize, usize) {
+        let state = lock(&self.state);
+        (
+            state.generation.unwrap_or(0),
+            state.in_flight,
+            state
+                .latest
+                .as_ref()
+                .and_then(FrameLease::software_bytes)
+                .map_or(0, <[u8]>::len),
+        )
     }
 }
 
@@ -772,9 +786,13 @@ impl ViewerTextureAdapter {
 pub struct ViewerFrameLease {
     frame: FrameLease,
     state: Arc<Mutex<ViewerFrameState>>,
+    generation: u64,
 }
 
 impl ViewerFrameLease {
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
     pub const fn descriptor(&self) -> &FrameDescriptor {
         self.frame.descriptor()
     }
@@ -1386,6 +1404,23 @@ mod tests {
 
     fn time(numerator: i64, denominator: u32) -> RationalTime {
         RationalTime::new(numerator, denominator).unwrap()
+    }
+
+    #[test]
+    fn viewer_resource_snapshot_tracks_real_leases_across_invalidation() {
+        let adapter = ViewerTextureAdapter::default();
+        adapter
+            .publish_rgba(7, 1, 1, RationalTime::ZERO, &[255, 0, 0, 255])
+            .unwrap();
+        let lease = adapter.acquire_latest().unwrap();
+        assert_eq!(lease.generation(), 7);
+        assert_eq!(adapter.resource_snapshot(), (7, 1, 4));
+        assert!(adapter.advance_generation(8));
+        assert_eq!(adapter.resource_snapshot(), (8, 1, 0));
+        assert_eq!(lease.pixels(), [0, 0, 255, 255]);
+        assert_eq!(lease.generation(), 7);
+        drop(lease);
+        assert_eq!(adapter.resource_snapshot(), (8, 0, 0));
     }
 
     #[test]

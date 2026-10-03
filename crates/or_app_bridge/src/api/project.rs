@@ -1,5 +1,5 @@
 use crate::frb_generated::StreamSink;
-use crate::preview::{PreviewError, PreviewRuntime, PreviewSnapshot};
+use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
@@ -96,6 +96,22 @@ pub struct ProjectTimelineSequenceSettingsView {
 pub enum PreviewFrameStepView {
     Previous,
     Next,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PreviewPreparationActionView {
+    Seek,
+    Play,
+    StepPrevious,
+    StepNext,
+    Tick,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectPreviewPreparationView {
+    pub request_id: Option<u64>,
+    pub sources: Vec<String>,
+    pub state: ProjectPreviewStateView,
 }
 
 #[derive(Clone, Debug)]
@@ -1007,6 +1023,61 @@ impl ProjectHostHandle {
         self.preview_runtime
             .tick(&self.host)
             .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_prepare(
+        &self,
+        action: PreviewPreparationActionView,
+        position: Option<RationalTimeView>,
+    ) -> Result<ProjectPreviewPreparationView, ProjectBridgeError> {
+        let action = match action {
+            PreviewPreparationActionView::Seek => {
+                let position = position.ok_or_else(|| ProjectBridgeError {
+                    code: "INVALID_PREVIEW_TIME".to_owned(),
+                    message: "Seek requires a preview position.".to_owned(),
+                })?;
+                PreviewPreparationAction::Seek(
+                    RationalTime::new(position.numerator, position.denominator).map_err(
+                        |error| ProjectBridgeError {
+                            code: "INVALID_PREVIEW_TIME".to_owned(),
+                            message: error.to_string(),
+                        },
+                    )?,
+                )
+            }
+            PreviewPreparationActionView::Play => PreviewPreparationAction::Play,
+            PreviewPreparationActionView::StepPrevious => {
+                PreviewPreparationAction::Step(or_runtime::PreviewFrameStep::Previous)
+            }
+            PreviewPreparationActionView::StepNext => {
+                PreviewPreparationAction::Step(or_runtime::PreviewFrameStep::Next)
+            }
+            PreviewPreparationActionView::Tick => PreviewPreparationAction::Tick,
+        };
+        self.preview_runtime
+            .prepare(&self.host, action)
+            .map(|prepared| ProjectPreviewPreparationView {
+                request_id: prepared.request_id,
+                sources: prepared.sources,
+                state: preview_state_view(prepared.snapshot),
+            })
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_complete_prepared(
+        &self,
+        request_id: u64,
+    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        self.preview_runtime
+            .complete_prepared(&self.host, request_id)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_abort_prepared(&self, request_id: u64) -> Result<(), ProjectBridgeError> {
+        self.preview_runtime
+            .abort_prepared(request_id)
             .map_err(preview_bridge_error)
     }
 
@@ -1985,8 +2056,17 @@ impl ProjectHostHandle {
     pub fn close(&mut self, discard_unsaved: bool) -> ProjectActionResult {
         match self.host.shutdown(discard_unsaved) {
             Ok(()) => {
+                let preview_shutdown = self.preview_runtime.shutdown();
                 if let Some(service) = self.media_artifact_service.take() {
                     service.shutdown();
+                }
+                if let Err(error) = preview_shutdown {
+                    return ProjectActionResult {
+                        succeeded: false,
+                        error_code: error.code.to_owned(),
+                        message: error.message,
+                        view: None,
+                    };
                 }
                 ProjectActionResult {
                     succeeded: true,
