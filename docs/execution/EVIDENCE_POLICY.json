@@ -1,6 +1,18 @@
 {
   "schema_version": 1,
   "enforced_from_checkpoint": "7A",
+  "orchestration_v2": {
+    "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+    "adoption_lifecycle_state": "AMENDMENT_PROPOSED",
+    "mode": "mandatory_task_bound",
+    "control_plane_receipt_required_for_new_completions": true,
+    "outer_evidence_versions_retained": [1, 2],
+    "nested_receipt_version": 1,
+    "adoption_identity": null,
+    "acceptance_harness_digest_sources": [],
+    "legacy_boundary": "immutable_git_ancestry_never_caller_flag",
+    "note": "Disabled until the separate adopted control release. Existing classes, bindings, workflows, and historic records are unchanged."
+  },
   "repository": {
     "owner": "huou07",
     "name": "Opencut-Reinforced",

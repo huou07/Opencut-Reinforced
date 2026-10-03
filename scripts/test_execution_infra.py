@@ -24,6 +24,7 @@ import agent_supervisor  # noqa: E402
 import check_architecture_policy  # noqa: E402
 import execution_evidence  # noqa: E402
 import execution_plan  # noqa: E402
+import model_orchestrator.contracts as orchestrator_contracts  # noqa: E402
 
 
 def checkpoint(checkpoint_id: str, prerequisites: list[str], next_id: str | None) -> dict[str, object]:
@@ -2838,6 +2839,71 @@ class SupervisorTests(unittest.TestCase):
             agent_supervisor.SupervisorError, "do not match the exact candidate source"
         ):
             agent_supervisor.assert_state_advanced_once(before, after, plan)
+
+
+class ModelOrchestratorAdoptionTests(unittest.TestCase):
+    """V2 adoption is proposed and disabled; authorization and adoption fail closed."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.schemas = orchestrator_contracts.load_protocol_schemas(REPO_ROOT)
+
+    def test_repository_v2_contract_is_proposed_and_disabled(self) -> None:
+        contract = execution_plan.load_json(
+            REPO_ROOT / orchestrator_contracts.V2_CONTRACT_PATH
+        )
+        self.assertEqual(contract["activation"], orchestrator_contracts.ACTIVATION_DISABLED)
+        self.assertEqual(contract["adoption"]["lifecycle_state"], "AMENDMENT_PROPOSED")
+        self.assertFalse(contract["adoption"]["full_auto_eligible"])
+        self.assertIsNone(contract["adoption"]["adopted_release_sha"])
+        orchestrator_contracts.validate_v2_contract_documents(REPO_ROOT)
+
+    def test_architecture_freeze_cannot_self_enable_full_auto(self) -> None:
+        record = orchestrator_contracts.proposal_record()
+        record["full_auto_eligible"] = True
+        with self.assertRaises(orchestrator_contracts.ContractError):
+            orchestrator_contracts.validate_adoption_record(record, self.schemas)
+
+    def test_self_appointed_adoption_marker_is_refused(self) -> None:
+        with self.assertRaises(orchestrator_contracts.ContractError):
+            orchestrator_contracts.validate_adoption_provenance(
+                architecture_spec_sha=orchestrator_contracts.ARCHITECTURE_SPEC_SHA,
+                external_release_sha="a" * 40,
+                marker_contains_own_sha=True,
+            )
+
+    def test_v1_authorization_is_not_v2_authority(self) -> None:
+        with self.assertRaises(orchestrator_contracts.ContractError):
+            orchestrator_contracts.validate_authority_source(
+                "V2_FROZEN_CONTROL_RELEASE", orchestrator_contracts.V1_BRANCH
+            )
+        with self.assertRaises(orchestrator_contracts.ContractError):
+            orchestrator_contracts.validate_authority_source("V1_PROTOTYPE")
+
+    def test_new_v2_completion_requires_control_plane_receipt(self) -> None:
+        with self.assertRaises(orchestrator_contracts.ContractError):
+            orchestrator_contracts.validate_completion_evidence(
+                {"schema_version": 2, "checkpoint_id": "9B"},
+                self.schemas,
+                control_release_active=True,
+            )
+        legacy = {"schema_version": 1, "checkpoint_id": "9B"}
+        orchestrator_contracts.validate_completion_evidence(
+            legacy, self.schemas, control_release_active=False
+        )
+
+    def test_v2_adoption_may_not_advance_product_state(self) -> None:
+        # The adoption inventory forbids PLAN/STATE even inside the control subset.
+        violations = orchestrator_contracts.validate_adoption_diff(
+            ["docs/execution/STATE.json", "AGENTS.md"]
+        )
+        self.assertEqual(violations, ["docs/execution/STATE.json"])
+
+    def test_architecture_policy_checker_passes_with_v2_contract(self) -> None:
+        buffer = StringIO()
+        with redirect_stdout(buffer):
+            result = check_architecture_policy.main()
+        self.assertEqual(result, 0, buffer.getvalue())
 
 
 if __name__ == "__main__":

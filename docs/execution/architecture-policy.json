@@ -81,6 +81,24 @@
     "scripts/agent_supervisor.py",
     "scripts/test_execution_infra.py",
     "docs/execution/AMENDMENT_BASELINE.json",
-    "docs/adr/0008-product-acceptance-and-execution-quality.md"
-  ]
+    "docs/adr/0008-product-acceptance-and-execution-quality.md",
+    "docs/adr/0009-model-orchestrator-v2.md",
+    "docs/execution/automation/V2_CONTRACT.json",
+    "docs/execution/automation/MODEL_POLICY.json",
+    "docs/execution/automation/PROTOCOL_SCHEMAS.json",
+    "docs/execution/automation/SANDBOX_POLICY.json",
+    "docs/execution/automation/TASK_TEMPLATES.json",
+    "docs/execution/automation/CHECKS.json",
+    "scripts/model_orchestrator/__init__.py",
+    "scripts/model_orchestrator/contracts.py",
+    "scripts/model_orchestrator/tests/__init__.py",
+    "scripts/model_orchestrator/tests/test_contracts.py"
+  ],
+  "model_orchestrator_v2": {
+    "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+    "lifecycle_state": "AMENDMENT_PROPOSED",
+    "adoption_required_before_activation": true,
+    "architecture_freeze_confers_authority": false,
+    "full_auto_eligible": false
+  }
 }

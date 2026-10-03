@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "document_kind": "frozen_task_templates",
+  "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+  "source_specification": "docs/execution/automation/README.md",
+  "model_authored_goal_allowed": false,
+  "free_form_command_allowed": false,
+  "physical_workspace_path_in_contract": false,
+  "field_groups": {
+    "identity": [
+      "schema_version", "task_id", "task_kind", "repository", "checkpoint_id",
+      "base_sha", "candidate_branch", "authority_digest", "template_digest"
+    ],
+    "scope": [
+      "goal", "out_of_scope", "allowed_paths", "forbidden_paths",
+      "required_documentation", "required_tests", "invariant_ids"
+    ],
+    "contracts": [
+      "project_schema_effect", "recovery_schema_effect", "ipc_effect"
+    ],
+    "real_product_goal": [
+      "user_action", "observable_outcome", "production_boundary",
+      "error_cases", "persistence_expectation", "permission_expectation"
+    ],
+    "verification": [
+      "required_check_ids", "check_argv", "harness_digest", "case_inventory",
+      "execution_boundary", "expected_result", "resource_limits"
+    ],
+    "acceptance": [
+      "evidence_classes", "acceptance_cases"
+    ],
+    "performance": [
+      "performance_applicability", "performance_budgets"
+    ],
+    "execution": [
+      "role_enrollment_ids", "budget", "stop_conditions"
+    ],
+    "repair_resume": [
+      "resume_stage", "repair_episode_id", "repair_failure_sha", "causal_hypothesis"
+    ]
+  },
+  "templates": {
+    "product_checkpoint": {
+      "task_kind": "product_checkpoint",
+      "targets": "resolved_next_checkpoint",
+      "protected_permission": "intersection_of_explicit_scope_and_trusted_plan_allowance",
+      "evidence_classes": "all_plan_bindings",
+      "performance_waiver": "forbidden"
+    },
+    "control_plane_phase": {
+      "task_kind": "control_plane_phase",
+      "targets": "exact_authorized_m0_m5_phase",
+      "impersonates_product_checkpoint": false,
+      "evidence_classes": "phase_specific_control_plane_acceptance"
+    }
+  },
+  "forbidden_scope": [
+    "docs/execution/PLAN.json",
+    "docs/execution/STATE.json",
+    "docs/execution/phases/**",
+    "docs/execution/evidence/**",
+    "docs/adr/0001-control-and-realtime-planes.md",
+    "docs/adr/0002-wgpu-render-spine-and-native-interop.md",
+    "docs/adr/0003-frame-memory-domain-and-ownership.md",
+    "docs/adr/0004-runtime-capabilities-and-provider-selection.md",
+    "docs/adr/0005-ai-provider-boundary.md",
+    "docs/adr/0006-autonomous-agent-execution-contract.md",
+    "docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md",
+    "docs/adr/0008-product-acceptance-and-execution-quality.md",
+    "DESIGN.md",
+    "docs/UX_ACCEPTANCE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/TECHNICAL_PLAN.md",
+    "docs/PRODUCT.md",
+    "docs/ROADMAP.md",
+    "docs/SECURITY_LICENSING.md",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "crates/**",
+    "apps/**",
+    "packages/**",
+    "assets/**",
+    "prototype/**"
+  ]
+}

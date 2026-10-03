@@ -1,0 +1,285 @@
+{
+  "schema_version": 2,
+  "document_kind": "frozen_protocol_schemas",
+  "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
+  "source_specification": "docs/execution/automation/README.md",
+  "id_pattern": "^[A-Za-z0-9_-]{1,64}$",
+  "sha_pattern": "^[0-9a-f]{40}$",
+  "digest_pattern": "^[0-9a-f]{64}$",
+  "adoption_lifecycle": {
+    "states": [
+      "ARCHITECTURE_FROZEN",
+      "AMENDMENT_PROPOSED",
+      "AMENDMENT_ADOPTED",
+      "IMPLEMENTATION_PHASE",
+      "CERTIFIED"
+    ],
+    "transitions": {
+      "ARCHITECTURE_FROZEN": ["AMENDMENT_PROPOSED"],
+      "AMENDMENT_PROPOSED": ["AMENDMENT_ADOPTED"],
+      "AMENDMENT_ADOPTED": ["IMPLEMENTATION_PHASE", "CERTIFIED"],
+      "IMPLEMENTATION_PHASE": ["CERTIFIED"],
+      "CERTIFIED": []
+    },
+    "amendment_states": ["PROPOSED", "ADOPTED"],
+    "implementation_phases": ["NONE", "M0", "M1", "M2", "M3", "M4", "M5"],
+    "certification_states": ["NONE", "CERTIFIED"],
+    "full_auto_gates": [
+      "amendment_adopted",
+      "all_implementation_phases_complete",
+      "control_plane_acceptance_suite_passed",
+      "certified"
+    ],
+    "full_auto_requires_certification": true,
+    "architecture_freeze_confers_authority": false
+  },
+  "record_types": {
+    "task_contract": "admission",
+    "candidate_receipt": "verification",
+    "verification_receipt": "verification",
+    "review_report": "review",
+    "promotion_authorization": "promotion",
+    "remote_promotion_receipt": "promotion",
+    "control_plane_receipt": "completion",
+    "adoption_record": "adoption",
+    "control_amendment_marker": "adoption"
+  },
+  "records": {
+    "task_contract": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "task_kind": {"type": "enum", "values": ["product_checkpoint", "control_plane_phase"]},
+        "repository": {"type": "string"},
+        "checkpoint_id": {"type": "id"},
+        "base_sha": {"type": "sha"},
+        "candidate_branch": {"type": "string"},
+        "authority_digest": {"type": "digest"},
+        "template_digest": {"type": "digest"},
+        "goal": {"type": "string"},
+        "out_of_scope": {"type": "string_list"},
+        "allowed_paths": {"type": "path_list"},
+        "forbidden_paths": {"type": "string_list"},
+        "required_documentation": {"type": "string_list"},
+        "required_tests": {"type": "string_list"},
+        "invariant_ids": {"type": "string_list"},
+        "project_schema_effect": {"type": "string"},
+        "recovery_schema_effect": {"type": "string"},
+        "ipc_effect": {"type": "string"},
+        "user_action": {"type": "string"},
+        "observable_outcome": {"type": "string"},
+        "production_boundary": {"type": "string"},
+        "error_cases": {"type": "string_list"},
+        "persistence_expectation": {"type": "string"},
+        "permission_expectation": {"type": "string"},
+        "required_check_ids": {"type": "string_list"},
+        "check_argv": {"type": "object_list"},
+        "harness_digest": {"type": "digest"},
+        "case_inventory": {"type": "string_list"},
+        "execution_boundary": {"type": "enum", "values": ["controller_verifier", "hosted", "local_readonly"]},
+        "expected_result": {"type": "string"},
+        "resource_limits": {"type": "object"},
+        "evidence_classes": {"type": "string_list"},
+        "acceptance_cases": {"type": "string_list"},
+        "performance_applicability": {"type": "enum", "values": ["applicable", "not_applicable"]},
+        "performance_budgets": {"type": "object"},
+        "role_enrollment_ids": {"type": "string_list"},
+        "budget": {"type": "object"},
+        "stop_conditions": {"type": "string_list"},
+        "resume_stage": {"type": "enum", "values": ["NONE", "CLAIMED", "IMPLEMENTING", "CANDIDATE", "LOCAL_VERIFY", "REVIEWING"]},
+        "repair_episode_id": {"type": "nullable_id"},
+        "repair_failure_sha": {"type": "nullable_sha"},
+        "causal_hypothesis": {"type": "nullable_string"}
+      },
+      "required": [
+        "schema_version", "task_id", "task_kind", "repository", "checkpoint_id",
+        "base_sha", "candidate_branch", "authority_digest", "template_digest",
+        "goal", "out_of_scope", "allowed_paths", "forbidden_paths",
+        "required_documentation", "required_tests", "invariant_ids",
+        "project_schema_effect", "recovery_schema_effect", "ipc_effect",
+        "user_action", "observable_outcome", "production_boundary", "error_cases",
+        "persistence_expectation", "permission_expectation",
+        "required_check_ids", "check_argv", "harness_digest", "case_inventory",
+        "execution_boundary", "expected_result", "resource_limits",
+        "evidence_classes", "acceptance_cases", "performance_applicability",
+        "performance_budgets", "role_enrollment_ids", "budget",
+        "stop_conditions", "resume_stage"
+      ]
+    },
+    "candidate_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "candidate_sha": {"type": "sha"},
+        "base_sha": {"type": "sha"},
+        "tree_digest": {"type": "digest"},
+        "imported": {"type": "boolean"},
+        "clean_product_tree": {"type": "boolean"},
+        "guard_receipt_digest": {"type": "digest"}
+      },
+      "required": [
+        "schema_version", "task_id", "candidate_sha", "base_sha",
+        "tree_digest", "imported", "clean_product_tree", "guard_receipt_digest"
+      ]
+    },
+    "verification_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "candidate_sha": {"type": "sha"},
+        "check_id": {"type": "id"},
+        "command_digest": {"type": "digest"},
+        "exit_code": {"type": "integer"},
+        "outcome": {"type": "enum", "values": ["PASS", "FAIL", "LOCAL ENVIRONMENT BLOCKED", "NOT RUN"]},
+        "executed_cases": {"type": "string_list"},
+        "skipped_cases": {"type": "string_list"},
+        "artifact_digest": {"type": "nullable_digest"}
+      },
+      "required": [
+        "schema_version", "task_id", "candidate_sha", "check_id",
+        "command_digest", "exit_code", "outcome", "executed_cases",
+        "skipped_cases", "artifact_digest"
+      ]
+    },
+    "review_report": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "task_contract_digest": {"type": "digest"},
+        "candidate_sha": {"type": "sha"},
+        "verdict": {"type": "enum", "values": ["PASS", "DEFECT_FOUND", "BLOCKED", "INCONCLUSIVE"]},
+        "coverage": {"type": "string_list"},
+        "findings": {"type": "object_list"},
+        "quality_flag_dispositions": {"type": "object_list"},
+        "unresolved_questions": {"type": "string_list"}
+      },
+      "required": [
+        "schema_version", "task_id", "task_contract_digest", "candidate_sha",
+        "verdict", "coverage", "findings", "quality_flag_dispositions",
+        "unresolved_questions"
+      ]
+    },
+    "promotion_authorization": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "checkpoint_id": {"type": "id"},
+        "base_sha": {"type": "sha"},
+        "candidate_sha": {"type": "sha"},
+        "authority_digest": {"type": "digest"},
+        "template_digest": {"type": "digest"},
+        "candidate_receipt_digest": {"type": "digest"},
+        "verification_receipt_digests": {"type": "string_list"},
+        "reviewer_receipt_digest": {"type": "digest"},
+        "pending_hosted_classes": {"type": "string_list"},
+        "lease_epoch": {"type": "integer"},
+        "issuance_sequence": {"type": "integer"}
+      },
+      "required": [
+        "schema_version", "task_id", "checkpoint_id", "base_sha", "candidate_sha",
+        "authority_digest", "template_digest", "candidate_receipt_digest",
+        "verification_receipt_digests", "reviewer_receipt_digest",
+        "pending_hosted_classes", "lease_epoch", "issuance_sequence"
+      ]
+    },
+    "remote_promotion_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "authorization_digest": {"type": "digest"},
+        "destination_ref": {"type": "string"},
+        "base_sha": {"type": "sha"},
+        "candidate_sha": {"type": "sha"},
+        "observed_remote_sha": {"type": "sha"},
+        "intent_nonce": {"type": "id"}
+      },
+      "required": [
+        "schema_version", "task_id", "authorization_digest", "destination_ref",
+        "base_sha", "candidate_sha", "observed_remote_sha", "intent_nonce"
+      ]
+    },
+    "control_plane_receipt": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "task_id": {"type": "id"},
+        "checkpoint_id": {"type": "id"},
+        "task_contract_digest": {"type": "digest"},
+        "authority_digest": {"type": "digest"},
+        "adoption_manifest_digest": {"type": "digest"},
+        "base_sha": {"type": "sha"},
+        "promoted_implementation_sha": {"type": "sha"},
+        "promotion_authorization_digest": {"type": "digest"},
+        "remote_promotion_receipt_digest": {"type": "digest"},
+        "guard_receipt_digest": {"type": "digest"},
+        "verification_receipt_digests": {"type": "string_list"},
+        "reviewer_receipt_digest": {"type": "digest"},
+        "acceptance_contract_digest": {"type": "digest"},
+        "production_acceptance_receipts": {"type": "object_list"}
+      },
+      "required": [
+        "schema_version", "task_id", "checkpoint_id", "task_contract_digest",
+        "authority_digest", "adoption_manifest_digest", "base_sha",
+        "promoted_implementation_sha", "promotion_authorization_digest",
+        "remote_promotion_receipt_digest", "guard_receipt_digest",
+        "verification_receipt_digests", "reviewer_receipt_digest",
+        "acceptance_contract_digest", "production_acceptance_receipts"
+      ]
+    },
+    "adoption_record": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 1},
+        "authority_kind": {"type": "enum", "values": ["V2_FROZEN_CONTROL_RELEASE", "V1_PROTOTYPE", "UNKNOWN"]},
+        "architecture_frozen": {"type": "boolean"},
+        "architecture_spec_sha": {"type": "nullable_sha"},
+        "amendment_state": {"type": "enum", "values": ["PROPOSED", "ADOPTED"]},
+        "parent_sha": {"type": "nullable_sha"},
+        "adopted_release_sha": {"type": "nullable_sha"},
+        "implementation_phase": {"type": "enum", "values": ["NONE", "M0", "M1", "M2", "M3", "M4", "M5"]},
+        "completed_phases": {"type": "string_list"},
+        "acceptance_cases_passed": {"type": "string_list"},
+        "certification": {"type": "enum", "values": ["NONE", "CERTIFIED"]},
+        "full_auto_eligible": {"type": "boolean"},
+        "changed_paths": {"type": "string_list"},
+        "plan_digest": {"type": "nullable_digest"},
+        "state_digest": {"type": "nullable_digest"}
+      },
+      "required": [
+        "schema_version", "authority_kind", "architecture_frozen",
+        "architecture_spec_sha", "amendment_state", "parent_sha",
+        "adopted_release_sha", "implementation_phase", "completed_phases",
+        "acceptance_cases_passed", "certification", "full_auto_eligible",
+        "changed_paths", "plan_digest", "state_digest"
+      ]
+    },
+    "control_amendment_marker": {
+      "version": 1,
+      "fields": {
+        "schema_version": {"type": "integer", "const": 2},
+        "kind": {"type": "enum", "values": ["model-orchestrator-v2-adoption"]},
+        "checkpoint_id": {"type": "id"},
+        "parent_sha": {"type": "sha"},
+        "architecture_spec_sha": {"type": "sha"},
+        "authority_manifest_digest": {"type": "digest"},
+        "changed_paths": {"type": "path_list"},
+        "legacy_quality_amendment": {"type": "object"},
+        "state_digest": {"type": "digest"},
+        "plan_digest": {"type": "digest"},
+        "verified_contract_versions": {"type": "object"}
+      },
+      "required": [
+        "schema_version", "kind", "checkpoint_id", "parent_sha",
+        "architecture_spec_sha", "authority_manifest_digest", "changed_paths",
+        "legacy_quality_amendment", "state_digest", "plan_digest",
+        "verified_contract_versions"
+      ]
+    }
+  }
+}

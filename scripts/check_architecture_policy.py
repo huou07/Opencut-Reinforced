@@ -13,6 +13,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import execution_plan  # noqa: E402
+import model_orchestrator.contracts as orchestrator_contracts  # noqa: E402
 
 
 POLICY_PATH = REPO_ROOT / "docs" / "execution" / "architecture-policy.json"
@@ -100,6 +101,19 @@ def main() -> int:
         execution_plan.validate_plan(plan, state, REPO_ROOT)
         versions = execution_plan.read_contract_versions(REPO_ROOT)
         execution_plan.validate_contract_transition(plan, state, policy, versions)
+
+        enforcement = policy.get("model_orchestrator_v2")
+        if (
+            not isinstance(enforcement, dict)
+            or enforcement.get("activation") != orchestrator_contracts.ACTIVATION_DISABLED
+            or enforcement.get("full_auto_eligible") is not False
+            or enforcement.get("architecture_freeze_confers_authority") is not False
+        ):
+            failures.append(
+                "architecture policy model_orchestrator_v2 must stay disabled and fail closed"
+            )
+        else:
+            orchestrator_contracts.validate_v2_contract_documents(REPO_ROOT)
     except (execution_plan.PlanError, OSError, ValueError) as exc:
         failures.append(str(exc))
 

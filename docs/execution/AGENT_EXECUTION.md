@@ -281,6 +281,28 @@ preview status/tag/source/release/assets when applicable, evidence path, exact
 state transition, state commit, state-commit hygiene run, Git alignment, and
 the next checkpoint/phase/spec. The runner cannot fabricate this report.
 
+## V2 control plane (proposed, disabled)
+
+ADR 0009 defines a task-bound controller that moves work through admitted
+tasks, isolated candidates, controller-executed verification, independent
+review, durable promotion, and the existing supervisor. It is **not active**:
+
+- the adoption lifecycle state is `AMENDMENT_PROPOSED` and `full_auto_eligible`
+  is false in `docs/execution/automation/V2_CONTRACT.json`;
+- the task, candidate, verification, review, promotion, and completion receipt
+  schemas are frozen in
+  `docs/execution/automation/PROTOCOL_SCHEMAS.json` and validated by
+  `scripts/model_orchestrator/contracts.py`;
+- a schema-2 completion created under an adopted release must carry a nested
+  `control_plane_receipt`; historical schema-1/2 records remain valid at their
+  boundary and a caller cannot re-declare itself legacy;
+- unrestricted `--runner`, receipt-less `--resume-sha`, and receipt-less
+  `--repair-resume-from` remain available only until the separate adoption
+  amendment disables them for activated V2.
+
+No worker, model, router, or Desktop process may treat this section as
+authority to run, and V1 prototype history is not V2 authority.
+
 ## Failure behavior
 
 If implementation CI fails, the checkpoint remains `NEXT`, no completion

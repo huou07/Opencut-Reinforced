@@ -31,6 +31,21 @@ For every checkpoint, record:
 Synthetic, unit, and bridge checks support but do not replace the declared
 product journey. A lower-fidelity diagnostic harness is labelled as such.
 
+## Acceptance floor
+
+State the production boundary explicitly: the real user action, the shipped
+artifact or runtime that must provide it, and the supported environment,
+permission, persistence, and resource conditions. State the measurement floor
+that must not be weakened: the required tests/cases, evidence classes, packaged
+dependency and permission boundaries, supported scope, and any numeric bound.
+
+State the performance applicability decision. If the checkpoint touches a
+realtime, media, render, input, export, or persistence path, declare measurable
+budgets, the comparison baseline, the fixture and measurement method, and the
+supported workload/device matrix. `N/A` requires an explicit trusted rationale;
+it may not waive a realtime obligation. Unit, synthetic, and bridge checks
+support but never replace the declared product and negative journeys.
+
 ## Stop conditions
 
 List repository contradictions, missing prerequisites, dependency/license

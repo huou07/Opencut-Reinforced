@@ -4,6 +4,24 @@
   "activation": "DISABLED_PENDING_SEPARATE_ADOPTION",
   "decision": "CLEAN_REIMPLEMENTATION",
   "trusted_design_base": "915a4a8b951643e475683e4cdf56996118ec7d1e",
+  "adoption": {
+    "lifecycle_state": "AMENDMENT_PROPOSED",
+    "architecture_spec_sha": "c7d46dfdadb01f2088273daae4fc5edf9870a2b2",
+    "adopted_release_sha": null,
+    "implementation_phase": "M0",
+    "completed_phases": [],
+    "acceptance_cases_passed": [],
+    "certification": "NONE",
+    "full_auto_eligible": false,
+    "full_auto_gates": [
+      "amendment_adopted",
+      "all_implementation_phases_complete",
+      "control_plane_acceptance_suite_passed",
+      "certified"
+    ],
+    "architecture_freeze_confers_authority": false,
+    "m0_owned_cases": ["CP01", "CP02", "CP03", "CP04", "CP05", "CP33"]
+  },
   "audited_prototype": "19c94f9677e0ff55ef37fb88b31824435d28e514",
   "specification": "docs/execution/automation/README.md",
   "amendment": "docs/execution/automation/AMENDMENT_PROPOSAL.md",
