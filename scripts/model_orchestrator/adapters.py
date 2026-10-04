@@ -703,10 +703,13 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
     if type(instance) is dict:
         exit_code = instance.get('State', {}).get('ExitCode')
         _require(instance.get('State', {}).get('Running') is False, 'worker container still running')
-    try:
-        box.docker(['kill', container_id])
-    except AdapterError:
-        pass
+    running = bool(instance) and bool(instance.get('State', {}).get('Running'))
+    if instance is None or running:
+        try:
+            box.docker(['kill', container_id])
+        except Exception:
+            pass  # Best effort only: attach already returned, and the later
+            # controller reconciliation independently proves whole-container death.
     truncated = len(output) > limits.output_bytes + 4096
     return WorkerStageResult(container_id=container_id, exit_code=exit_code, timed_out=timed_out,
                              transcript=output[:limits.output_bytes + 4096], truncated=truncated,
