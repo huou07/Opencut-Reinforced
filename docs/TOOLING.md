@@ -432,3 +432,39 @@ filesystem capacity, source manifests and preserved result locators. Fixture
 inputs are explicitly disposed only after preservation and acceptance; evidence
 and useful result artifacts remain available. This is disabled M1 acceptance,
 never product execution or M2 authorization.
+
+### M5 live acceptance on the verified Debian rootless host
+
+M5 runs the remaining acceptance with `OR_V2_LIVE=1` and explicit pinned
+inputs; every live case skips as blocked availability without them. The live
+worker image derives from the pinned Debian image with the pinned OpenCode
+Linux binary and installed Git; its Dockerfile, file hashes, and exact image
+digest belong in the live evidence. The worker container mounts the candidate
+writable with explicit inference egress while the reviewer mounts immutable
+inputs read-only without shell; both receive a task-scoped inference
+credential through a dedicated read-only mount that is deleted afterward and
+never enters receipts, logs, or the repository. The credential file is
+readable only during the run window on the single-operator host.
+
+```sh
+OR_V2_LIVE=1 \
+OR_V2_VOLUME=/srv/opencut-v2/candidate \
+OR_V2_IMAGE=sha256:<pinned-worker-image> \
+OR_V2_OPENCODE_BIN=<pinned-linux-opencode> \
+OR_V2_OPENCODE_SHA=<pinned-sha256> \
+OR_V2_OPENCODE_VERSION=<pinned-version> \
+OR_V2_DOCKER=/usr/bin/docker \
+OR_V2_DOCKER_SHA=<pinned-sha256> \
+OR_V2_ENDPOINT=unix:///run/user/1000/docker.sock \
+OR_V2_WORKER_MODEL=<enrolled-worker-model> \
+OR_V2_WORKER_FAMILY=<worker-family> \
+OR_V2_REVIEWER_MODEL=<enrolled-reviewer-model> \
+OR_V2_REVIEWER_FAMILY=<reviewer-family> \
+OR_V2_CRED_DIR=<credential-staging> \
+OR_V2_BARE=<live-bare-remote> \
+OR_V2_OUTPUT=/absolute/new/evidence-directory \
+python3 scripts/model_orchestrator/tests/test_live_acceptance.py -v
+```
+
+Live results (exact versions, digests, commands, cases, and receipts) are
+recorded below after execution; placeholders are never committed.

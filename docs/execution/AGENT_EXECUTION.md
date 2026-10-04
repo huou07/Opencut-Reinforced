@@ -304,6 +304,19 @@ An explicit bounded build authorization permits disabled fixture work before
 operational adoption; it permits no product autonomy. No worker, model, router,
 or Desktop process may treat this section as operational authority to run, and V1 prototype history is not V2 authority.
 
+### M5 live acceptance boundary
+
+M5 executes the remaining acceptance on explicit live inputs only:
+`OR_V2_LIVE=1` plus pinned tool, volume, image, model, credential, and output
+paths. The live worker and reviewer run in certified rootless containers on
+the verified Debian host with task-scoped inference credentials that are
+deleted afterward; the worker mounts the candidate writable with explicit
+inference egress while the reviewer mounts immutable inputs read-only without
+shell. The hosted harness runs the fixture suites on GitHub Actions and the
+collector binds run, job, and artifact provenance. Absent live inputs, every
+live case skips as blocked availability. Live runs never touch product main,
+PLAN, STATE, or completion evidence.
+
 ### M0-R2 candidate contract verification
 
 The corrected design distinguishes disabled build permission from final

@@ -1,0 +1,129 @@
+name: Control-plane acceptance
+
+# Disabled-build control-plane acceptance. Runs the fixture-mode V2 suites
+# (no live containers, models, or product suites) and publishes a bound
+# receipt artifact. Live OpenCode/Codex/container acceptance runs on the
+# verified Debian rootless host, never here.
+on:
+  push:
+    branches:
+      - control/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: control-plane-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture-acceptance:
+    name: Fixture acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record head SHA
+        run: |
+          git rev-parse HEAD > head-sha.txt
+          test "$(cat head-sha.txt)" = "${{ github.sha }}"
+
+      - name: Run V2 contract suite
+        run: python3 scripts/model_orchestrator/tests/test_contracts.py
+
+      - name: Run V2 isolation and state suite
+        run: python3 scripts/model_orchestrator/tests/test_isolation_and_state.py
+
+      - name: Run V2 verification suite
+        run: python3 scripts/model_orchestrator/tests/test_verification.py
+
+      - name: Run V2 promotion and handoff suite
+        run: python3 scripts/model_orchestrator/tests/test_promotion_and_handoff.py
+
+      - name: Run execution infrastructure suite
+        run: python3 -m unittest scripts.test_execution_infra
+
+      - name: Run control checks
+        run: |
+          python3 scripts/check_execution_plan.py
+          python3 scripts/check_architecture_policy.py
+          python3 scripts/check_document_routing.py
+          python3 -m unittest scripts.test_document_routing
+          python3 -m compileall -q scripts
+          git diff --check
+          bash scripts/check-repo.sh
+
+      - name: Write acceptance receipt
+        run: |
+          python3 - <<'EOF'
+          import hashlib
+          import json
+          from pathlib import Path
+          head = Path("head-sha.txt").read_text().strip()
+          suites = ["test_contracts", "test_isolation_and_state", "test_verification",
+                    "test_promotion_and_handoff", "test_execution_infra", "control-checks"]
+          receipt = {"schema_version": 1, "head_sha": head,
+                     "workflow": ".github/workflows/control-plane-acceptance.yml",
+                     "boundary": "hosted-fixture",
+                     "suites": [{"id": name, "result": "PASS"} for name in suites]}
+          receipt["receipt_digest"] = hashlib.sha256(
+              json.dumps(receipt, sort_keys=True).encode()).hexdigest()
+          Path("acceptance-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          EOF
+          test "$(python3 -c "import json; print(json.load(open('acceptance-receipt.json'))['head_sha'])")" = "${{ github.sha }}"
+
+      - name: Upload acceptance receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acceptance-receipt-${{ github.sha }}
+          path: acceptance-receipt.json
+          retention-days: 90
+
+  collect-receipts:
+    name: Collect receipts
+    needs: [fixture-acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download acceptance receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: acceptance-receipt-${{ github.sha }}
+          path: receipts
+
+      - name: Validate and seal collector receipt
+        run: |
+          python3 - <<'EOF'
+          import hashlib
+          import json
+          from pathlib import Path
+          names = [p.name for p in Path("receipts").iterdir()]
+          assert names == ["acceptance-receipt.json"], names
+          receipt = json.loads(Path("receipts/acceptance-receipt.json").read_text())
+          assert receipt["head_sha"] == "${{ github.sha }}", receipt
+          assert receipt["workflow"] == ".github/workflows/control-plane-acceptance.yml"
+          assert all(suite["result"] == "PASS" for suite in receipt["suites"]), receipt
+          assert receipt["receipt_digest"] == hashlib.sha256(
+              json.dumps({k: v for k, v in receipt.items() if k != "receipt_digest"},
+                         sort_keys=True).encode()).hexdigest()
+          collector = {"schema_version": 1, "head_sha": receipt["head_sha"],
+                       "run_id": "${{ github.run_id }}", "run_attempt": "${{ github.run_attempt }}",
+                       "source_receipt_digest": receipt["receipt_digest"],
+                       "suites": receipt["suites"]}
+          collector["collector_digest"] = hashlib.sha256(
+              json.dumps(collector, sort_keys=True).encode()).hexdigest()
+          Path("collector-receipt.json").write_text(json.dumps(collector, indent=2) + "\n")
+          EOF
+
+      - name: Upload collector receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: collector-receipt-${{ github.sha }}
+          path: collector-receipt.json
+          retention-days: 90

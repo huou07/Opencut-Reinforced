@@ -606,13 +606,15 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
 
     No receipt, seal, or authority is minted here. The orchestrator binds the
     store launch record, reconciles through the sandbox, and parses results.
-    `network` is an explicit capability: 'none' always, or 'bridge' only for
-    the IMPLEMENTATION worker with inference egress recorded by the caller.
+    `network` is an explicit capability: 'none' always, or 'bridge' for model
+    roles that require inference egress (IMPLEMENTATION worker and
+    INVESTIGATION_REVIEW reviewer), recorded by the caller. Reviewer egress
+    never grants shell, candidate writes, or credentials beyond inference.
     """
     from . import sandbox as b
     _require(hasattr(box, 'docker') and hasattr(box, 'verify_effective'), 'trusted container sandbox required')
     _require(role in ('IMPLEMENTATION', 'INVESTIGATION_REVIEW'), 'unsupported worker role')
-    _require(network == 'none' or (network == 'bridge' and role == 'IMPLEMENTATION'), 'network is an explicit worker-only inference capability')
+    _require(network == 'none' or (network == 'bridge' and role in ('IMPLEMENTATION', 'INVESTIGATION_REVIEW')), 'network is an explicit model-inference capability')
     _require(type(container_binary) is str and container_binary.startswith('/') and ' ' not in container_binary, 'invalid container model binary path')
     _require(type(timeout_seconds) is int and 1 <= timeout_seconds <= 3600, 'invalid stage timeout')
     _require(type(name) is None or (type(name) is str and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', name) is not None), 'invalid container name')

@@ -7,6 +7,21 @@ boundaries where declared; helper or fake-adapter success cannot replace them.
 This is a frozen architecture candidate, not implemented test coverage or an
 activated change to product evidence policy.
 
+## Control-plane acceptance split
+
+Fixture-mode V2 suites (`test_contracts`, `test_isolation_and_state`,
+`test_verification`, `test_promotion_and_handoff`, `test_execution_infra`)
+run on GitHub Actions through
+[.github/workflows/control-plane-acceptance.yml](../.github/workflows/control-plane-acceptance.yml),
+which publishes bound receipt artifacts and a separate collector receipt.
+`test_lifecycle.py` additionally requires an installed pinned OpenCode binary
+and runs on development machines; `test_live_acceptance.py` runs its static
+checks everywhere but executes live OpenCode/Codex/container cases only with
+`OR_V2_LIVE=1` plus explicit pinned tool, volume, image, model, credential,
+and output inputs on the verified Debian rootless host. Skipped live cases
+are blocked availability, never passes. Product suites never run in the
+control-plane workflow and control-plane suites never gate product CI.
+
 ## Status
 
 Implementation status and versions are obtained only through [STATE](execution/STATE.json),
