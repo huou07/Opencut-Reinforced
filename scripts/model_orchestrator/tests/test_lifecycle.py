@@ -263,15 +263,15 @@ class EventStreamTests(unittest.TestCase):
     def test_final_text_honored_and_earlier_text_ignored(self):
         data = self.stream('{"type":"reasoning","sessionID":"ses_1","timestamp":1,"text":"hmm"}',
                            '{"type":"tool.execute","sessionID":"ses_1","timestamp":2}',
-                           '{"type":"text","sessionID":"ses_1","timestamp":3,"text":"{\\"verdict\\":1}"}')
+                           '{"type":"text","sessionID":"ses_1","timestamp":3,"part":{"type":"text","text":"{\\"verdict\\":1}"}}')
         parsed = a.parse_event_stream(data, limits=self.limits, event_contract=a.OPENCODE_EVENT_CONTRACT)
         self.assertEqual((parsed.session_id, parsed.final_payload, parsed.error), ('ses_1', '{"verdict":1}', None))
 
     def test_negative_matrix(self):
-        good = '{"type":"text","sessionID":"ses_1","text":"done"}'
+        good = '{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"done"}}'
         cases = [
-            self.stream('{"type":"text","sessionID":"ses_1","text":"a"}', '{"type":"text","sessionID":"ses_1","text":"b"}'),
-            self.stream('{"type":"text","sessionID":"ses_1","text":"a"}', '{"type":"text","sessionID":"ses_2","text":"b"}'),
+            self.stream('{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"a"}}', '{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"b"}}'),
+            self.stream('{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"a"}}', '{"type":"text","sessionID":"ses_2","part":{"type":"text","text":"b"}}'),
             self.stream('{"type":"text","sessionID":"ses_1","text":"a"}').rstrip(b'\n'),
             self.stream('{"type":"text","text":"a"}'),
             self.stream('{"type":"text","sessionID":"ses_1"}'),
@@ -671,7 +671,7 @@ class WorkerWiringTests(unittest.TestCase):
             runtime.register_candidate(task['task_id'], candidate)
             fake = FakeDocker(directory)
             fake.export_env(self)
-            fake.transcript.write_bytes(b'{"type":"text","sessionID":"ses_w","timestamp":1,"text":"changed files"}\n')
+            fake.transcript.write_bytes(b'{"type":"text","sessionID":"ses_w","timestamp":1,"part":{"type":"text","text":"changed files"}}\n')
             box = fake.box()
             with runtime.lock('task', task['task_id']):
                 stage = runtime.claim(task['task_id'], digest, owner_nonce='owner', boot_identity='boot',
@@ -769,8 +769,8 @@ class ReviewerWiringTests(unittest.TestCase):
     """Reviewer transport and strict parsing; guard vetoes stop review."""
     def report_event(self, task, candidate_sha):
         report = passing_report(task, candidate_sha)
-        return ('{"type":"reasoning","sessionID":"ses_r","timestamp":1,"text":"checking"}\n'
-                + '{"type":"text","sessionID":"ses_r","timestamp":2,"text":' + json.dumps(json.dumps(report)) + '}\n').encode()
+        return ('{"type":"reasoning","sessionID":"ses_r","timestamp":1}\n'
+                + '{"type":"text","sessionID":"ses_r","timestamp":2,"part":{"type":"text","text":' + json.dumps(json.dumps(report)) + '}}\n').encode()
 
     def test_reviewer_launch_parses_strict_report(self):
         fixture, authority, task = m3_task()

@@ -34,9 +34,10 @@ OPENCODE_VERSION = '1.18.31'
 OPENCODE_SHA256 = '16c960ba77421da11b53e785f359b73f328a86118b48feb4af143db5d9afb198'
 CODEX_VERSION = 'codex-cli 0.158.0'
 
-# Provisional success shapes: only error envelopes are live-observed in M3.
-# M5 live certification confirms or revises these; any CLI replacement or
-# unlisted event version renders the adapter unavailable until reverified.
+# Live-certified envelope (M5): every event carries top-level type/sessionID
+# with an optional timestamp; text content lives at part.text; error events
+# carry a top-level error object. Any CLI replacement or unlisted event
+# version renders the adapter unavailable until reverified.
 OPENCODE_EVENT_CONTRACT = {
     'format': 'opencode-json-1',
     'required_envelope': ('type', 'sessionID'),
@@ -252,8 +253,10 @@ def parse_event_stream(data: bytes, *, limits: StreamLimits, event_contract: Map
     finals = []
     for event in events:
         if event['type'] in final_types:
-            _require(type(event.get('text')) is str and event['text'], 'final text event carries no content', PROTOCOL_ERROR)
-            finals.append(event['text'])
+            part = event.get('part')
+            _require(type(part) is dict and type(part.get('text')) is str and part['text'],
+                     'final text event carries no content', PROTOCOL_ERROR)
+            finals.append(part['text'])
     _require(len(finals) <= 1, 'ambiguous final payload', PROTOCOL_ERROR)
     return ParsedStream(events=tuple(events), session_id=session, error=error, final_payload=finals[0] if finals else None)
 

@@ -571,13 +571,19 @@ class LiveWorkerTests(unittest.TestCase):
                                           task['authority_digest'], 'IMPLEMENTATION', stage['task_id'])
             record = runtime.launch_record(stage)
             worker_limits = b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 1 << 20, 600)
+            # Live invocations use the default agent: project agent files are
+            # masked by the config boundary, so naming one only produces a
+            # fallback warning. Role enforcement comes from overlays, mounts,
+            # network, and post-hoc verification, not the agent label.
             worker_result = live.launch_with_credential(
                 box=box, candidate=candidate, view=view, role='IMPLEMENTATION',
-                container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent='orch-worker',
+                container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent=None,
                 enrollment=worker_enrollment, image=live.image, network='bridge', limits=worker_limits,
                 overlay_mounts=mounts, labels=provisional.labels(), name=record['container_name'],
                 timeout_seconds=600)
+            (live.output / 'worker-transcript.bin').write_bytes(worker_result.transcript)
             self.assertFalse(worker_result.timed_out)
+            self.assertEqual(worker_result.exit_code, 0)
             stage = runtime.bind_container(stage, worker_result.container_id)
             proof = box.reconcile_launch(runtime, stage)
             preserved = w.preserve_launch(runtime, stage, proof)
@@ -629,7 +635,6 @@ class LiveWorkerTests(unittest.TestCase):
         remote_receipts = [d for d in runtime.inspect()['object_digests']
                            if s._object(s._read(runtime.root / 'objects' / (d + '.json')))['payload'].get('kind') == 'remote-promotion']
         self.assertEqual(len(remote_receipts), 1)
-        (live.output / 'worker-transcript.bin').write_bytes(worker_result.transcript)
         evidence = {'task_id': task['task_id'], 'candidate_head': guard['head'], 'base_sha': task['base_sha'],
                     'marker': marker, 'task': task,
                     'worker': {'model_id': worker_enrollment['model_id'], 'family': worker_enrollment['family'],
@@ -677,7 +682,7 @@ class LiveWorkerTests(unittest.TestCase):
                                       task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id'])
         result = live.launch_with_credential(
             box=box, candidate=review_candidate, view=view, role='INVESTIGATION_REVIEW',
-            container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent='orch-reviewer',
+            container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent=None,
             enrollment=enrollment, image=live.image, network='bridge', limits=b.Limits(1, 1 << 29, 64, 52 << 30,
                                                                                        1 << 30, 1 << 20, 600),
             overlay_mounts=mounts, labels=provisional.labels(), name='or-v2-live-review-' + nonce,
