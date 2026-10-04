@@ -470,8 +470,9 @@ def run_reviewer(*, authority: c.ValidatedReleaseAuthority, floor: g.Floor, guar
         mounts = a.model_mounts(overlays=overlays, role='INVESTIGATION_REVIEW', candidate=base / 'input',
                                 stage_root=view.parent, credential_dir=credential_dir,
                                 provider_id=enrollment['provider_id'])
-        nonce = 'review-' + guard['head'][:12]
-        provisional = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'review', 1, nonce,
+        nonce = 'review-' + (review_claim['attempt_digest'][:24] if review_claim else guard['head'][:12])
+        review_epoch = review_claim['lease_epoch'] if review_claim else 1
+        provisional = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'review', review_epoch, nonce,
                                       task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id'])
         result = a.launch_model_stage(box=box, candidate=review_candidate, view=view, role='INVESTIGATION_REVIEW',
                                       container_binary=container_binary, message_parts=[prompt], agent=agent,
