@@ -231,6 +231,15 @@ If documentation genuinely does not apply, state that in the task report.
 
 Keep documentation synchronized with implementation.
 
+Global and active narrative documents must not maintain mutable implementation
+truth independently: capability availability/maturity, current schema/protocol
+versions, phase/checkpoint status, and release/runtime availability belong to
+STATE → locked specification → supervisor evidence → implementation SHA/source.
+Entrypoints remain timeless. Explicit baseline history and frozen historical
+contracts may retain old observations; every routed historical excerpt must keep
+its provenance notice. Preserve historical regression guards without turning
+those lists into current-status inventories. See [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+
 ## Test rule
 
 Every substantive implementation change must update or add relevant automated tests when behavior is added or changed.

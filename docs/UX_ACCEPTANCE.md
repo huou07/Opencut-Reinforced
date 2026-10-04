@@ -2,13 +2,19 @@
 
 ## Purpose
 
-This checklist separates the frozen HTML prototype reference from behavior
-verified in the production-direction Flutter application and behavior required
-by future execution checkpoints. Do not move an item into **PRODUCTION
-IMPLEMENTED** without an automated or hosted acceptance check. Before changing
-a related area, inspect the applicable section and re-run affected checks.
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
+This checklist preserves prototype references and historical regression guards,
+and defines acceptance expectations. Current implementation and coverage come
+from STATE → locked specification → supervisor evidence → implementation
+SHA/test source. Do not maintain new current-status labels here. Before changing
+a related area, preserve applicable guards and rerun the affected checks.
 
 ## PROTOTYPE REFERENCE
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The frozen prototype is a UX/product reference only. Its simulated state is
 not production architecture or implementation evidence.
@@ -44,8 +50,12 @@ frame stepping, or mobile playback-like behavior is implemented in production.
 
 ## PRODUCTION IMPLEMENTED
 
-The following behavior is implemented and covered by the current Rust/Flutter
-headless or widget-level checks:
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
+This historical guard list retains its old heading for references, not as a
+current implementation classification. Current coverage must be checked in the
+exact test source and evidence; preserve applicable verified behavior.
 
 ### Project and shell
 
@@ -147,6 +157,9 @@ headless or widget-level checks:
   and command model and does not remove core workflows.
 
 ## PRODUCTION REQUIRED FUTURE
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 These items are required by the execution plan but are not production claims
 today.

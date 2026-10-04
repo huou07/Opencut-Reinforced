@@ -104,6 +104,10 @@ class RoutingTests(unittest.TestCase):
             with self.subTest(claim=claim):
                 (self.root / 'AGENTS.md').write_text(claim)
                 self.assertTrue(routing.narrative_errors(self.root))
+        (self.root / 'AGENTS.md').write_text('Safety rules')
+        (self.root / 'docs/RELEASE.md').write_text('export is not implemented')
+        self.assertTrue(routing.narrative_errors(self.root))
+        (self.root / 'docs/RELEASE.md').unlink()
         (self.root / 'AGENTS.md').write_text('Consult STATE and evidence for capabilities.')
         self.assertEqual(routing.narrative_errors(self.root), [])
 
@@ -112,6 +116,8 @@ class RoutingTests(unittest.TestCase):
         self.assertTrue(routing.narrative_errors(self.root))
         (self.root / 'README.md').unlink()
         (self.root / 'docs/TESTING.md').write_text('# Tests\n## Coverage\nUnbound snapshot\n')
+        self.assertTrue(routing.narrative_errors(self.root))
+        (self.root / 'docs/TESTING.md').write_text('# Tests\n## Status\nUnbound snapshot\n')
         self.assertTrue(routing.narrative_errors(self.root))
 
     def test_budgets_warn_without_truncation(self):

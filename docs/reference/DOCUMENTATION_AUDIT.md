@@ -232,3 +232,18 @@ No frozen contract, phase, ADR, evidence, PLAN or STATE was rewritten. The narro
 observed-pattern guards and README outline cannot prove arbitrary prose correct;
 human semantic review remains mandatory. Historical notes can disagree with
 each other and current evidence and are expressly marked as such.
+The three retained Status sections are restricted to the exact authority-lookup
+paragraph; they cannot serve as an unchecked escape from provenance validation.
+
+The scope closure also inspected every routed narrative and remaining root
+entrypoints. RELEASE independently claimed pre-MVP maturity, Phase 7 current
+work, missing export/autosave/Android SAF, schema-v2 and a current preview
+capability inventory. Those inventories and availability claims are removed;
+release truth comes from exact artifacts, policy, evidence and source. SECURITY's
+no-stable-release claim is replaced by package/source lookup. SECURITY_LICENSING
+retains its dependency inventory, schema-v2/absence-of-autosave/SAF descriptions
+only as explicit baseline history. UX_ACCEPTANCE's PRODUCTION IMPLEMENTED list
+and coverage assertions remain preserved historical guard records, with baseline
+notices in routed context; existing required UX guards are not removed or weakened.
+CONTRIBUTING, DESIGN and feature guides describe rules, approved design, planned
+scope and lookup paths rather than a mutable implementation inventory.

@@ -211,9 +211,11 @@ def check_links(root):
 
 # Policy is structural; patterns cover observed regressions, not arbitrary English.
 ENTRYPOINTS = ('README.md', 'AGENTS.md', 'docs/INDEX.md', 'docs/DOCUMENTATION.md',
-               'docs/DEVELOPMENT_WORKFLOW.md', 'docs/PRODUCT.md')
+               'docs/DEVELOPMENT_WORKFLOW.md', 'docs/PRODUCT.md', 'docs/RELEASE.md', 'SECURITY.md')
 README_HEADINGS = ('Execution and implementation evidence', 'Vision', 'Architecture direction',
                    'Product direction', 'Platforms', 'Design and documentation', 'Contributing', 'License')
+STATUS_LOOKUP = ('Implementation status and versions are obtained only through [STATE](execution/STATE.json),\n'
+                 'the locked checkpoint specification, supervisor evidence, and the implementation SHA/source.')
 STALE_CLAIMS = re.compile(r'(?:export|viewer)(?: support)? (?:is |are )?not implemented|'
                          r'Android SAF is unavailable|current (?:project|\.orproj) schema (?:is )?(?:v|version )?\d+', re.I)
 
@@ -231,13 +233,20 @@ def narrative_errors(root):
             titles = tuple(title for _, level, title in _headings(text.splitlines()) if level == 2)
             if titles != README_HEADINGS:
                 errors.append('README must retain timeless entrypoint outline; no implementation inventory')
-    for name in ('ARCHITECTURE', 'TECHNICAL_PLAN', 'TESTING', 'TOOLING'):
+    for name in ('ARCHITECTURE', 'TECHNICAL_PLAN', 'TESTING', 'TOOLING', 'SECURITY_LICENSING', 'UX_ACCEPTANCE'):
         path = root / ('docs/' + name + '.md')
         if not path.exists():
             continue
         lines = path.read_text().splitlines(keepends=True)
         for index, level, title in _headings(lines):
-            if level == 2 and title != 'Status' and not any('Historical implementation/coverage notes retained from Git baseline' in line for line in lines[index+1:index+4]):
+            historical = any('Historical implementation/coverage notes retained from Git baseline' in line
+                             for line in lines[index+1:index+4])
+            if level == 2 and title == 'Status' and not historical:
+                _, (start, end) = section(root, {'path': str(path.relative_to(root)), 'heading': title})
+                if ''.join(lines[start+1:end]).strip() != STATUS_LOOKUP:
+                    errors.append('status section must contain only authority lookup: ' + str(path.relative_to(root)))
+                continue
+            if level == 2 and not historical:
                 errors.append('missing historical section provenance: ' + str(path.relative_to(root)) + ': ' + title)
     return errors
 

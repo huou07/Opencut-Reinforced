@@ -110,12 +110,14 @@ re-certifies a new release nor authorizes M2.
 
 No global or active narrative maintains current mutable implementation truth.
 README is a timeless entrypoint with a fixed purpose/direction/platform/navigation
-outline, never a capability inventory. AGENTS, INDEX, DOCUMENTATION and workflow
+outline, never a capability inventory. RELEASE and SECURITY direct availability
+and supported-version questions to exact package/source evidence. AGENTS, INDEX, DOCUMENTATION and workflow
 text contain rules and lookup paths. PRODUCT labels specify intended scope.
 Current facts follow STATE → locked specification → supervisor evidence →
 implementation SHA/source; version constants and verified state own versions.
 
-ARCHITECTURE, TECHNICAL_PLAN, TESTING and TOOLING retain explicitly baseline-bound
+ARCHITECTURE, TECHNICAL_PLAN, TESTING, TOOLING, SECURITY_LICENSING and
+UX_ACCEPTANCE retain explicitly baseline-bound
 historical implementation/coverage notes at their original paths. Each selected
 section carries the historical notice so excerpt routing cannot drop provenance.
 Frozen contracts, ADRs and evidence remain historical/on demand and unmoved.
