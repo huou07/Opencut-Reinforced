@@ -646,13 +646,13 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
     mounts = [(str(view), '/candidate', role == 'IMPLEMENTATION')]
     for entry in overlay_mounts:
         _require(type(entry) is tuple and len(entry) in (2, 3), 'invalid overlay mount entry', PROTOCOL_ERROR)
-        source, destination = entry[0], entry[1]
+        source, destination = str(entry[0]), entry[1]
         writable = bool(entry[2]) if len(entry) == 3 else False
-        _require(type(source) is str and type(destination) is str and destination.startswith('/'),
+        _require(type(entry[1]) is str and destination.startswith('/'),
                  'invalid overlay mount paths', PROTOCOL_ERROR)
         _require(not writable or role in ('IMPLEMENTATION', 'INVESTIGATION_REVIEW'),
                  'writable mounts are an explicit model-role capability', PROTOCOL_ERROR)
-        mounts.append((str(source), destination, writable))
+        mounts.append((source, destination, writable))
     expected = dict(image=image, mounts=mounts, limits=limits, command=bounded,
                     environment=['HOME=/worker-home', 'TMPDIR=/scratch',
                                  'XDG_CONFIG_HOME=/worker-home/.config', 'XDG_DATA_HOME=/worker-home/.local/share',
