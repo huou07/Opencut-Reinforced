@@ -266,3 +266,38 @@ host bootstrap boundary. Synthetic pinned attestations are contract examples,
 not M5 certification. The focused and existing infrastructure suites plus the
 clean actual-candidate authority probe must pass; independent review decides
 M1 admission. R3 itself authorizes no M1, product execution or full-auto.
+
+## M3 admission amendment: phase-aware shared control primitives
+
+Reproduced contradiction: `scripts/model_orchestrator/store.py` (`_task`
+requires `checkpoint_id == M1`; `_authority` requires `M1` in the authorized
+phases with an `M0` prefix), `scripts/model_orchestrator/sandbox.py`
+(`_authority` requires `M1` build authorization/prerequisite semantics), and
+`scripts/model_orchestrator/guards.py` (`Floor.verify` requires an authorized
+`M2` with an `M0,M1` prefix and `checkpoint_id == M2`) prevent M3 admission:
+an M1 task is refused by the M2 floor, an M2 task is refused by the store, and
+an M3 task is refused by both, although the frozen design expects one
+immutable task packet moving through shared primitives. The admission
+semantics are corrected in README §19 (phase-aware shared control primitives);
+this section grants the minimum implementation permission.
+
+The amendment authorizes exactly:
+
+- `docs/execution/automation/README.md`, `docs/execution/automation/IMPLEMENTATION_PLAN.md`
+  (this amendment text; no other design-document change);
+- `scripts/model_orchestrator/contracts.py` (one shared phase-admission helper
+  next to the validated build authority);
+- `scripts/model_orchestrator/store.py`, `scripts/model_orchestrator/sandbox.py`,
+  `scripts/model_orchestrator/guards.py` (phase-aware correction of the shared
+  admission checks only; no new capability, transition, or authority);
+- `scripts/model_orchestrator/tests/test_contracts.py`,
+  `scripts/model_orchestrator/tests/test_isolation_and_state.py`,
+  `scripts/model_orchestrator/tests/test_verification.py` (regression and the
+  permanent negative admission matrix where the correction requires it; the M2
+  module-inventory exception is extended so each phase commit may list exactly
+  the modules that phase's own allowlist lands, e.g. M3's `adapters.py`,
+  `orchestrator.py`, `__main__.py` and M4's `promotion.py`, `push_guard.py`).
+
+It is not permission to redesign V2, weaken task/authority binding, modify
+product PLAN/STATE, or self-authorize runtime. Later M3/M4/M5 work reuses the
+shared primitives under the amended rule and adds only its own phase files.

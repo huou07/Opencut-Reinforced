@@ -1002,6 +1002,56 @@ continues to use the unchanged Git-blob/ancestry boundary and evidence verifier.
 
 R3 regression commands are `python3 scripts/model_orchestrator/tests/test_contracts.py -v`
 and `python3 scripts/model_orchestrator/tests/test_contracts.py --probe-repository <exact-candidate-commit>`.
+
+### Phase-aware shared control primitives (M3 admission amendment)
+
+The M1 and M2 disabled-build primitives hardcoded the phase that introduced
+them: `store.py` admits only a checkpoint `M1` task, `sandbox.py` requires
+`M1` in the authorized phases with an `M0` prefix, and `guards.py`
+`Floor.verify()` requires an `M2` task with an `M0,M1` prefix. An M3 task
+therefore cannot move through the shared store/sandbox/guard primitives even
+under an exact externally authorized M3 build. Rewriting the packet
+checkpoint, treating an M3 task as M1/M2, substituting authority, duplicating
+the primitives, or monkeypatching admission in tests would bypass the
+immutability and authorization contracts, so the contradiction is resolved
+here as architecture, not by an executor workaround.
+
+Shared infrastructure distinguishes its implementation ownership phase from
+the phase of the task currently being executed. `store.py` was implemented in
+M1; that never meant the store may only hold M1 tasks. The same holds for
+`sandbox.py` (M1) and `guards.py` (M2). One coherent phase-aware admission
+rule governs reuse, owned by `contracts.py` next to the validated build
+authority:
+
+1. A disabled control-plane task keeps `task_kind == control_plane_phase`.
+2. Its `checkpoint_id` must be a valid implementation phase `M0..M5` and must
+   be explicitly present in the validated external build authorization's
+   `authorized_phases`.
+3. `completed_phases` must be the exact ordered prefix immediately preceding
+   the currently executing phase
+   (`executing = IMPLEMENTATION_PHASES[len(completed_phases)]`); a future,
+   skipped, reordered, duplicated, or replayed phase refuses. Worker-controlled
+   data never determines the executing phase; it derives from
+   controller/operator-trusted external build provenance only.
+4. A shared primitive additionally requires only its own prerequisite
+   capability: sandbox use requires the M1 capability, guard/floor use
+   requires the M2 capability, expressed as `executing >= capability` in
+   canonical phase order. It must not require the current authorized phase to
+   equal the phase that introduced the primitive. This is capability reuse,
+   not authority widening.
+5. Exact task binding remains required: task ID, base SHA, candidate branch,
+   authority digest, and `allowed_paths` as a subset of the authorized scope.
+   Required gates/cases come from the authorized build. A product_checkpoint
+   task, a raw mapping presented as `ValidatedReleaseAuthority`, a task
+   rewritten to another phase, or any binding mismatch refuses.
+
+This permits correcting the shared admission checks in `contracts.py`,
+`store.py`, `sandbox.py`, and `guards.py` and their regression tests when a
+later disabled-build phase depends on them. It grants no blanket module
+exception, and it changes no lifecycle ordering, task packet identity,
+phase/case ownership, schema versions, product PLAN/STATE, evidence, or
+adoption authority. New build-authorization provenance remains external;
+build certificates for later phases carry their own ordered phase evidence.
 The latter clones the actual repository independently, verifies architecture and
 candidate commit ancestry, then exercises clean loading, optional configuration
 absence, dirty/untracked/mode refusal, every manifest omission and foreign
