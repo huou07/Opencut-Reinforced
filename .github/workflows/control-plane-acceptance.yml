@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 60
     env:
       PYTHONPATH: scripts
+      PYTHONDONTWRITEBYTECODE: "1"
       OR_V2_OPENCODE_BIN: /tmp/opencode/opencode
       OR_V2_OPENCODE_SHA: f9dab32248695e9ebd56b16a1921798fd85112cf5a69c7dfd0cabc1e17be4a11
       OR_V2_OPENCODE_VERSION: 1.18.31
