@@ -322,6 +322,38 @@ def floor_changes(floor, root, old, new, paths):
     return veto,flags
 
 
+def private_record(root, name):
+    """Hashes bind facts only after the controller-private boundary is proven."""
+    root = b._safe_path(root)
+    entry = root.stat()
+    require(stat.S_ISDIR(entry.st_mode) and entry.st_uid == os.geteuid() and
+            stat.S_IMODE(entry.st_mode) == 0o700, 'controller-private quarantine required')
+    path = root / name
+    s._nofollow(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as stream:
+        entry = os.fstat(stream.fileno())
+        require(stat.S_ISREG(entry.st_mode) and entry.st_uid == os.geteuid() and
+                entry.st_nlink == 1 and stat.S_IMODE(entry.st_mode) == 0o600,
+                'controller-private regular record required')
+        data = stream.read(MAX_BYTES + 1)
+    require(len(data) <= MAX_BYTES, 'controller record bound exceeded')
+    return c.load_json_strict(data.decode())
+
+
+def guarded_records(root):
+    record = private_record(root, 'guard.json')
+    reservation = private_record(root, 'reservation.json')
+    entry = root.stat()
+    identity = [entry.st_dev, entry.st_ino]
+    require(record['directory_identity'] == reservation['directory_identity'] == identity,
+            'quarantine reservation directory differs')
+    require(all(record[key] == reservation[key] for key in
+                ('nonce', 'task_id', 'floor_digest', 'base', 'head', 'source',
+                 'source_device', 'source_inode')), 'guard reservation binding differs')
+    return record, reservation
+
+
 @dataclass(frozen=True, init=False)
 class Guarded:
     floor: Floor
@@ -337,7 +369,7 @@ class Guarded:
     def record(self):return c.load_json_strict(self.record_json)
 
     def verify(self):
-        self.floor.verify();record=c.load_json_strict((self.root/'guard.json').read_text())
+        self.floor.verify();record,_=guarded_records(self.root)
         require(c.canonical_json(record)==self.record_json,'guard record drift')
         require(record['floor_digest']==self.floor.digest and
                 w.manifest(self.root/'candidate')==record['manifest'],'candidate changed after guard')
@@ -349,12 +381,11 @@ class Guarded:
 def restore_guarded(floor,destination):
     """Reload controller-private facts for a new process; no worker JSON input."""
     destination=b._safe_path(destination);floor.verify()
-    record=c.load_json_strict((destination/'guard.json').read_text())
-    reservation=c.load_json_strict((destination/'reservation.json').read_text())
+    record,reservation=guarded_records(destination)
     require(record['nonce']==reservation['nonce'] and record['floor_digest']==floor.digest and
             record['task_id']==floor.task['task_id'] and record['base']==floor.task['base_sha'],
             'foreign/stale guard reservation')
-    receipt=c.load_json_strict((destination/'candidate-receipt.json').read_text())
+    receipt=private_record(destination,'candidate-receipt.json')
     require(receipt['guard_receipt_digest']==c.canonical_digest(record),'incomplete guard handoff')
     c.validate_record(receipt,'candidate_receipt',floor.verify()['schemas'],context=dict(
         task_id=floor.task['task_id'],candidate_sha=record['head'],base_sha=record['base'],
@@ -437,7 +468,7 @@ def inspect_preserved(store, stage, floor, destination, *, fault=None):
 
 def cleanup_quarantine(floor, destination):
     """Only exact failed/unconsumed import; original useful M1 work is retained."""
-    destination=b._safe_path(destination);record=c.load_json_strict((destination/'reservation.json').read_text())
+    destination=b._safe_path(destination);record=private_record(destination,'reservation.json')
     floor.verify();require(record['floor_digest']==floor.digest,'foreign quarantine')
     entry=destination.stat();require([entry.st_dev,entry.st_ino]==record['directory_identity'],'quarantine directory replaced')
     require(not (destination/'guard.json').exists(),'guarded handoff remains useful; explicit retention required')

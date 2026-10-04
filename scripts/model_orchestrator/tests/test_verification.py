@@ -318,10 +318,52 @@ class GitGuardsTests(unittest.TestCase):
         def fault(point):
             if point=='reserved':raise RuntimeError('injected controller interruption')
         with self.assertRaises(RuntimeError):self.f.inspect(self.candidate,dest.name,fault=fault)
-        before=w.manifest(self.candidate.root);g.cleanup_quarantine(self.f.floor,dest)
+        before=w.manifest(self.candidate.root);dest.chmod(0o777)
+        with self.assertRaises(c.ContractError):g.cleanup_quarantine(self.f.floor,dest)
+        self.assertTrue(dest.exists());dest.chmod(0o700)
+        g.cleanup_quarantine(self.f.floor,dest)
         self.assertFalse(dest.exists());self.assertEqual(w.manifest(self.candidate.root),before)
         result=self.inspect();self.assertEqual(g.restore_guarded(self.f.floor,result.root).record,result.record)
         with self.assertRaises(c.ContractError):g.cleanup_quarantine(self.f.floor,result.root)
+
+    def test_CP17_copied_writable_handoff_and_rehashed_relocation_refused(self):
+        self.change();result=self.inspect()
+        destination=self.f.parent/('relocated-'+self.n)
+        shutil.copytree(result.root,destination)
+        record=json.loads((destination/'guard.json').read_text())
+        entry=destination.stat();record['directory_identity']=[entry.st_dev,entry.st_ino]
+        g.write_json(destination/'guard.json',record)
+        receipt=json.loads((destination/'candidate-receipt.json').read_text())
+        receipt['guard_receipt_digest']=c.canonical_digest(record)
+        g.write_json(destination/'candidate-receipt.json',receipt)
+        destination.chmod(0o777)
+        with self.assertRaises(c.ContractError):g.restore_guarded(self.f.floor,destination)
+        destination.chmod(0o700)
+        with self.assertRaises(c.ContractError):g.restore_guarded(self.f.floor,destination)
+        self.assertEqual(g.restore_guarded(self.f.floor,result.root).record,result.record)
+
+    def test_CP17_writable_hardlinked_symlink_and_fifo_records_refused(self):
+        self.change();result=self.inspect()
+        for name in ('guard.json','reservation.json','candidate-receipt.json'):
+            path=result.root/name;original=path.read_bytes()
+            path.chmod(0o666)
+            with self.subTest(name=name),self.assertRaises(c.ContractError):
+                g.restore_guarded(self.f.floor,result.root)
+            path.chmod(0o600)
+            link=result.root/(name+'.link');os.link(path,link)
+            with self.assertRaises(c.ContractError):g.restore_guarded(self.f.floor,result.root)
+            link.unlink()
+            path.rename(link);path.symlink_to(link)
+            with self.assertRaises(c.ContractError):g.restore_guarded(self.f.floor,result.root)
+            path.unlink();link.rename(path)
+            path.unlink();os.mkfifo(path,0o600)
+            with self.assertRaises(c.ContractError):g.restore_guarded(self.f.floor,result.root)
+            path.unlink();path.write_bytes(original);path.chmod(0o600)
+        self.assertEqual(g.restore_guarded(self.f.floor,result.root).record,result.record)
+        result.root.chmod(0o777)
+        try:
+            with self.assertRaises(c.ContractError):result.verify()
+        finally:result.root.chmod(0o700)
 
 
 @unittest.skipUnless(LIVE,'required real Linux/rootless cases run with OR_M2_LIVE=1; no local fixture substitutes')
