@@ -9,6 +9,9 @@ activated change to product evidence policy.
 
 ## Control-plane acceptance split
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Fixture-mode V2 suites (`test_contracts`, `test_isolation_and_state`,
 `test_verification`, `test_promotion_and_handoff`, `test_execution_infra`)
 run on GitHub Actions through
