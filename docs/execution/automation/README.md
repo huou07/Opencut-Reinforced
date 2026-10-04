@@ -480,7 +480,7 @@ Missing/discontinued/auth/quota-limited models are availability outcomes.
 | --- | --- |
 | ROUTER_TRIAGE | Optional one fixed label from facts; no tools; LOW requested; advisory only |
 | MECHANICAL | Narrow deterministic editing within immutable task; LOW/default according to certified need |
-| IMPLEMENTATION | Bounded product implementation; HIGH requested where supported |
+| IMPLEMENTATION | Bounded implementation; lowest qualified effort at the task-class floor (ordinary implementation MEDIUM; security/authority HIGH) |
 | INVESTIGATION_REVIEW | Evidence-based root cause or independent candidate review; HIGH requested |
 | ARCHITECTURE | Exceptional decision/contract only; HIGH requested; no implementation/wait/build/poll |
 
@@ -509,6 +509,59 @@ outcome, tokens/cost when available (unknown remains null). Keep denominators
 and rejected attempts; do not tune policy from success-only samples. Policy
 changes require a new adopted release or approved configuration version; runtime
 stats cannot self-authorize model/safety changes.
+
+The shared CLI loads enrollment against the **durable admitted task** before
+claiming a worker or reviewer stage. `--enrollment-digest` is an optional checksum,
+not authority: its canonical record digest must already be present in the task's
+`role_enrollment_ids`, and `operator_adoption_identity` must match the executing
+external build authorization. The loader returns an immutable controller
+capability bound to the exact task and authority. Raw catalog records or model
+JSON cannot enter selection or transport. The transport additionally compares
+`adapter_certification_digest` to the actual pinned binary/runtime identity.
+
+Each pinned enrollment carries explicit role/task-class qualification evidence:
+qualified reasoning efforts, quality result, scope compliance, tool correctness,
+and evidence digest. Availability records contain `state`, `quota_remaining`,
+and `quota_scarce`; an external availability map can veto, but cannot grant,
+eligibility. Pricing records contain `kind` (`free`, `prepaid`, `metered`, or
+`unknown`), per-effort expected monetary `effort_cost_microusd`, expected retry
+cost, and operator `budget_pressure_microusd`. These are externally approved
+observations, not controller scraping, billing, or automatic learning. Unknown
+pricing is non-rankable; no missing price is interpreted as zero.
+
+Selection enforces both the task monetary budget and any enrolled cost ceiling.
+Expected effective operator cost sums effort cost, retry cost, and approved
+budget pressure. Already-paid available capacity can therefore outrank metered
+usage; exhausted quota cannot. Paid or scarce-quota models use the lowest
+qualified supported effort meeting the floor. Genuinely free models prefer the
+highest qualified effort only when quota is not scarce. Supported efforts are
+NONE, LOW, MEDIUM, HIGH, XHIGH, and MAX, with an opaque DEFAULT provider setting
+that never proves a higher reasoning floor. `--task-class` and
+`--required-reasoning` constrain selection further; review always retains at
+least HIGH. A provider variant or absent confirmation is recorded honestly,
+never fabricated as effective HIGH/MAX. Future provider/qualification/cost
+changes require new explicit pinned observations, not marketing-name branches.
+
+The actual claim path atomically publishes an attempt object with its worker
+lease. Review claims publish their own episode without changing that lease;
+initial execution permits at most two speculative corrections, then one pinned
+independent causal diagnosis/repair. Stage names and process restarts cannot
+reset an episode. Pause publication and promotion dispatch share the state lock.
+
+Live acceptance invokes the same `claim_stage`, `run_worker`,
+`import_and_verify`, and `run_reviewer` used by the CLI. Verification consumes
+the preserved worker output. Runtime HOME is writable on the bounded volume;
+policy/config and provider credential shadows remain immutable. Runtime file
+limits are separate from bounded stdout/stderr so SQLite WAL does not inherit
+the smaller transcript limit. Quality flags remain blocking until an exact
+independent schema-bound disposition; a reviewer cannot waive failed checks.
+
+Hosted evidence uses exact Git source/case inventories and downloaded receipt
+contents sealed in a separate job with no checkout or package execution.
+Independent final review receives the exact release source and live/controller
+facts readonly, with a fresh session and no execution/nested-agent tools.
+Every lifecycle claim in a PASS must cite existing source and evidence lines.
+All of these receipts remain supporting facts, never product adoption.
 
 ## 12. Reviewer and structured transport contracts
 

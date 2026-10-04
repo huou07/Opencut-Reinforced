@@ -24,23 +24,45 @@ from model_orchestrator import contracts as c, adapters as a, orchestrator as o
 from model_orchestrator import store as s, sandbox as b, workspace as w, guards as g
 from model_orchestrator.tests.test_contracts import shared_provenance, valid_task, SCHEMAS
 
-OPENCODE_BIN = Path('/opt/homebrew/bin/opencode')
+OPENCODE_BIN = Path(os.environ.get('OR_V2_OPENCODE_BIN', '/opt/homebrew/bin/opencode'))
 _BINARY = None
 
 
 def opencode_binary():
     global _BINARY
     if _BINARY is None:
-        _BINARY = a.OpenCodeBinary(OPENCODE_BIN, a.OPENCODE_SHA256, a.OPENCODE_VERSION)
+        _BINARY = a.OpenCodeBinary(OPENCODE_BIN,
+                                   os.environ.get('OR_V2_OPENCODE_SHA', a.OPENCODE_SHA256),
+                                   os.environ.get('OR_V2_OPENCODE_VERSION', a.OPENCODE_VERSION))
     return _BINARY
 
 
+def seal_enrollment(record):
+    """Fault-injection enrollment under real independent Git authority; no production certification."""
+    _, authority, task = m3_task()
+    record = dict(record)
+    record.pop('reasoning_requested', None)
+    record['operator_adoption_identity'] = c._release_authority(authority)['build']['authorization_id']
+    digest = c.canonical_digest(record)
+    task['role_enrollment_ids'] = [digest]
+    return a.load_enrollment(record, authority=authority, task=task, expected_digest=digest)
+
+
 def make_enrollment(model_id, family, roles, reasoning=('LOW', 'HIGH'), qualify=None, variants=None, price=0):
-    return {'provider_id': model_id.split('/')[0], 'model_id': model_id, 'family': family,
-            'allowed_roles': list(roles), 'reasoning_capabilities': list(reasoning),
-            'task_class_qualification': {r: True for r in (qualify if qualify is not None else roles)},
-            'adapter_certification_digest': opencode_binary().certification_digest(),
-            'budget': {'cost_microusd': price}, 'variants': dict(variants or {})}
+    qualified_roles = qualify if qualify is not None else roles
+    return seal_enrollment({
+        'provider_id': model_id.split('/')[0], 'model_id': model_id, 'family': family,
+        'allowed_roles': list(roles), 'reasoning_capabilities': list(reasoning),
+        'task_class_qualification': {r: True for r in qualified_roles},
+        'adapter_certification_digest': opencode_binary().certification_digest(),
+        'budget': {}, 'variants': dict(variants or {}),
+        'qualification_evidence': [dict(role=r, task_class=r, reasoning_efforts=list(reasoning),
+              quality_passed=True, scope_compliance=True, tool_use_correct=True,
+              evidence_digest=c.canonical_digest(['fault-injection-only', model_id, r])) for r in qualified_roles],
+        'availability_observation': dict(state='available', quota_remaining=100, quota_scarce=False),
+        'pricing_observation': dict(kind='free' if price == 0 else 'metered',
+              effort_cost_microusd={r: price for r in reasoning}, retry_cost_microusd=0,
+              budget_pressure_microusd=0)})
 
 
 def worker_enrollment(**kw):
@@ -90,7 +112,7 @@ class SelectionTests(unittest.TestCase):
                                  locked_model=self.worker['model_id'])
         self.assertEqual(chosen['model_id'], self.worker['model_id'])
         with self.assertRaises(o.OrchestratorError) as ctx:
-            o.select_worker(valid_task(), [self.worker], availability={}, locked_model=self.worker['model_id'])
+            o.select_worker(valid_task(), [self.worker], availability={self.worker['model_id']: 'unavailable'}, locked_model=self.worker['model_id'])
         self.assertEqual(ctx.exception.code, 'UNAVAILABLE')
         with self.assertRaises(a.AdapterError):
             a.select_model('IMPLEMENTATION', [self.worker], task_budget={}, required_reasoning='HIGH',
@@ -122,7 +144,7 @@ class SelectionTests(unittest.TestCase):
         enrollment = worker_enrollment(model_id='no-such-provider/no-such-model', family='probe-unavailable')
         with tempfile.TemporaryDirectory() as home:
             adapter = a.OpenCodeAdapter(self.binary, role='IMPLEMENTATION',
-                                        enrollment=dict(enrollment, reasoning_requested='HIGH'),
+                                        enrollment=enrollment.with_reasoning('HIGH'),
                                         workdir=Path(home), limits=a.StreamLimits(1 << 20, 64, 120),
                                         env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'LANG': 'C', 'HOME': home})
             self.assertNotIn('--variant', adapter.build_argv(['hi'], agent='orch-worker'))
@@ -145,25 +167,155 @@ class SelectionTests(unittest.TestCase):
     def test_pinned_variant_reaches_argv(self):
         enrollment = worker_enrollment(variants={'HIGH': 'max'})
         adapter = a.OpenCodeAdapter(self.binary, role='IMPLEMENTATION',
-                                    enrollment=dict(enrollment, reasoning_requested='HIGH'),
+                                    enrollment=enrollment.with_reasoning('HIGH'),
                                     workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120))
         argv = adapter.build_argv(['hi'])
         self.assertEqual(argv[argv.index('--variant') + 1], 'max')
         self.assertEqual((adapter.requested, adapter.sent, adapter.confirmed), ('HIGH', 'max', 'UNCONFIRMED'))
 
 
+class RoutingObservationTests(unittest.TestCase):
+    """Real pinned authority plus deterministic provider observations, no inference."""
+    def enrollment(self, *, model='fixture/model', price=5, efforts=('LOW', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX'), **updates):
+        record = dict(make_enrollment(model, 'family-' + model.split('/')[-1], ['IMPLEMENTATION'],
+                                      reasoning=efforts, price=price))
+        record.update(updates)
+        return seal_enrollment(record)
+
+    def choose(self, enrollments, *, floor='LOW', budget=100, **kw):
+        return a.select_model('IMPLEMENTATION', enrollments, task_budget={'cost_microusd': budget},
+                              required_reasoning=floor, **kw)
+
+    def test_unknown_price_and_missing_price_never_mean_free(self):
+        unknown = self.enrollment(pricing_observation=dict(kind='unknown', effort_cost_microusd={},
+                         retry_cost_microusd=0, budget_pressure_microusd=0))
+        paid = self.enrollment(model='fixture/paid')
+        self.assertEqual(self.choose([unknown, paid])['model_id'], paid['model_id'])
+        with self.assertRaises(a.AdapterError):
+            self.choose([unknown])
+        raw = dict(paid)
+        del raw['pricing_observation']
+        with self.assertRaises(a.AdapterError):
+            seal_enrollment(raw)
+
+    def test_over_budget_and_locked_over_budget_refuse(self):
+        paid = self.enrollment(price=101)
+        for lock in (None, paid['model_id']):
+            with self.subTest(lock=lock), self.assertRaises(a.AdapterError) as ctx:
+                self.choose([paid], locked_model=lock)
+            self.assertEqual(ctx.exception.code, a.MODEL_UNAVAILABLE)
+
+    def test_free_qualified_prefers_highest_effort_and_unqualified_cannot_win(self):
+        free = self.enrollment(model='fixture/free', price=0)
+        paid = self.enrollment(model='fixture/paid')
+        selected = self.choose([paid, free])
+        self.assertEqual((selected['model_id'], selected['reasoning_requested']), ('fixture/free', 'MAX'))
+        raw = dict(free)
+        raw['qualification_evidence'][0]['quality_passed'] = False
+        unqualified = seal_enrollment(raw)
+        self.assertEqual(self.choose([unqualified, paid])['model_id'], paid['model_id'])
+
+    def test_unavailable_and_exhausted_quota_are_not_selectable(self):
+        other = self.enrollment(model='fixture/other', price=10)
+        for state, quota in (('unavailable', 100), ('quota_exhausted', 0), ('rate_limited', 100), ('available', 0)):
+            cheap = self.enrollment(price=0, availability_observation=dict(state=state, quota_remaining=quota, quota_scarce=False))
+            with self.subTest(state=state, quota=quota):
+                self.assertEqual(self.choose([cheap, other])['model_id'], other['model_id'])
+        cheap = self.enrollment(price=0, availability_observation=dict(state='unavailable', quota_remaining=100, quota_scarce=False))
+        with self.assertRaises(a.AdapterError):
+            self.choose([cheap], availability={cheap['model_id']: 'available'})
+
+    def test_prepaid_capacity_and_changed_pressure_change_ranking(self):
+        metered = self.enrollment(model='fixture/metered', price=3)
+        prepaid = self.enrollment(model='fixture/prepaid', pricing_observation=dict(kind='prepaid',
+                     effort_cost_microusd={e: 0 for e in ('LOW', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX')},
+                     retry_cost_microusd=0, budget_pressure_microusd=0))
+        self.assertEqual(self.choose([metered, prepaid])['model_id'], prepaid['model_id'])
+        raw = dict(prepaid)
+        raw['pricing_observation']['budget_pressure_microusd'] = 20
+        pressured = seal_enrollment(raw)
+        self.assertEqual(self.choose([metered, pressured])['model_id'], metered['model_id'])
+        self.assertNotEqual(pressured.enrollment_digest, prepaid.enrollment_digest)
+
+    def test_paid_uses_lowest_sufficient_effort_and_free_scarce_quota_does_too(self):
+        paid = self.enrollment()
+        for floor in ('LOW', 'MEDIUM', 'HIGH', 'XHIGH'):
+            with self.subTest(floor=floor):
+                self.assertEqual(self.choose([paid], floor=floor)['reasoning_requested'], floor)
+        free = self.enrollment(price=0, availability_observation=dict(state='available', quota_remaining=5, quota_scarce=True))
+        self.assertEqual(self.choose([free], floor='MEDIUM')['reasoning_requested'], 'MEDIUM')
+
+    def test_unsupported_effort_and_wrong_task_class_are_unavailable(self):
+        low = self.enrollment(efforts=('LOW', 'MEDIUM'))
+        with self.assertRaises(a.AdapterError):
+            self.choose([low], floor='HIGH')
+        with self.assertRaises(a.AdapterError):
+            self.choose([low], task_class='security')
+        with self.assertRaises(a.AdapterError):
+            low.with_reasoning('MAX')
+        wrong = dict(low)
+        wrong['variants'] = {'MAX': 'max'}
+        with self.assertRaises(a.AdapterError):
+            seal_enrollment(wrong)
+
+    def test_retry_and_pressure_cost_count_toward_budget(self):
+        raw = dict(self.enrollment(price=5))
+        raw['pricing_observation'].update(retry_cost_microusd=8, budget_pressure_microusd=2)
+        enrolled = seal_enrollment(raw)
+        with self.assertRaises(a.AdapterError):
+            self.choose([enrolled], budget=14)
+        self.assertEqual(self.choose([enrolled], budget=15)['model_id'], enrolled['model_id'])
+
+    def test_task_class_quality_evidence_not_marketing_or_other_class(self):
+        raw = dict(self.enrollment(price=0))
+        raw['qualification_evidence'][0].update(task_class='mechanical', reasoning_efforts=['LOW', 'MEDIUM'])
+        mechanical = seal_enrollment(raw)
+        self.assertEqual(self.choose([mechanical], task_class='mechanical')['reasoning_requested'], 'MEDIUM')
+        with self.assertRaises(a.AdapterError):
+            self.choose([mechanical])
+
+    def test_raw_dict_modified_digest_or_operator_identity_refuse(self):
+        enrolled = self.enrollment()
+        with self.assertRaises(a.AdapterError):
+            self.choose([dict(enrolled)])
+        fixture, authority, task = m3_task()
+        digest = enrolled.enrollment_digest
+        task['role_enrollment_ids'] = [digest]
+        changed = dict(enrolled)
+        changed['pricing_observation']['effort_cost_microusd']['LOW'] = 0
+        with self.assertRaises(a.AdapterError):
+            a.load_enrollment(changed, authority=authority, task=task, expected_digest=digest)
+        with self.assertRaises(a.AdapterError):
+            a.load_enrollment(dict(enrolled), authority=authority, task=task, expected_digest='f' * 64)
+        changed = dict(enrolled)
+        changed['operator_adoption_identity'] = 'candidate-self-approved'
+        task['role_enrollment_ids'] = [c.canonical_digest(changed)]
+        with self.assertRaises(a.AdapterError):
+            a.load_enrollment(changed, authority=authority, task=task, expected_digest=c.canonical_digest(changed))
+        with self.assertRaises(a.AdapterError):
+            a.ValidatedEnrollment(dict(enrolled), task_contract_digest='a' * 64, authority_digest='b' * 64)
+
+    def test_runtime_certification_digest_mismatch_refuses(self):
+        raw = dict(self.enrollment(efforts=('HIGH',)))
+        raw['adapter_certification_digest'] = '0' * 64
+        enrolled = seal_enrollment(raw).with_reasoning('HIGH')
+        with self.assertRaises(a.AdapterError):
+            a.OpenCodeAdapter(opencode_binary(), role='IMPLEMENTATION', enrollment=enrolled,
+                              workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120))
+
+
 class EffortTests(unittest.TestCase):
     """CP20: requested/sent/confirmed recorded honestly; unsupported effort blocks."""
     def test_reviewer_defaults_never_claim_high(self):
         adapter = a.OpenCodeAdapter(opencode_binary(), role='INVESTIGATION_REVIEW',
-                                    enrollment=dict(reviewer_enrollment(), reasoning_requested='HIGH'),
+                                    enrollment=reviewer_enrollment().with_reasoning('HIGH'),
                                     workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120))
         self.assertEqual((adapter.requested, adapter.sent, adapter.confirmed), ('HIGH', None, 'DEFAULT_PROVIDER'))
 
     def test_required_confirmed_effort_blocks_when_unsupplied(self):
         with self.assertRaises(a.AdapterError) as ctx:
             a.OpenCodeAdapter(opencode_binary(), role='INVESTIGATION_REVIEW',
-                              enrollment=dict(reviewer_enrollment(), reasoning_requested='HIGH'),
+                              enrollment=reviewer_enrollment().with_reasoning('HIGH'),
                               workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120),
                               require_confirmed_effort=True)
         self.assertEqual(ctx.exception.code, a.EFFORT_PENDING)
@@ -252,7 +404,7 @@ class EventStreamTests(unittest.TestCase):
     def test_real_error_event_shape_parses(self):
         with tempfile.TemporaryDirectory() as home:
             adapter = a.OpenCodeAdapter(opencode_binary(), role='IMPLEMENTATION',
-                                        enrollment=dict(worker_enrollment(model_id='no-such-provider/no-such-model-2', family='probe2'), reasoning_requested='HIGH'),
+                                        enrollment=worker_enrollment(model_id='no-such-provider/no-such-model-2', family='probe2').with_reasoning('HIGH'),
                                         workdir=Path(home), limits=self.limits,
                                         env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'LANG': 'C', 'HOME': home})
             observation = adapter.run(['probe'], timeout_seconds=60)
@@ -361,7 +513,7 @@ class DisconnectTests(unittest.TestCase):
 
 class CodexQuotaTests(unittest.TestCase):
     """CP26: quota defers with identical facts; malformed/auth/tool errors never become contracts."""
-    FAKE = '#!/usr/bin/env python3\nimport os,sys,json\nif "--version" in sys.argv:\n    print("codex-cli 0.158.0")\n    sys.exit(0)\nscenario=os.environ.get("OR_V2_FAKE_CODEX","decision")\nif scenario=="quota":\n    sys.stderr.write("codex: rate limited: quota exhausted for codex-cli 0.158.0, retry later\\n")\n    sys.exit(1)\nif scenario=="auth":\n    sys.stderr.write("codex: not logged in\\n")\n    sys.exit(1)\nif scenario=="garbage":\n    print("not json at all")\n    sys.exit(0)\ndecision={"schema_version":1,"packet_digest":os.environ.get("OR_V2_FAKE_PACKET_DIGEST","PACKET"),"disposition":"NEEDS_DISCRIMINATING_EVIDENCE","decision":"collect stacks","constraints":["read-only"],"required_verification":["stacks"],"stop_conditions":["no prod writes"],"cited_facts":[{"fact":"exit 23","classification":"PROVEN"}]}\nopen(os.environ["OR_V2_FAKE_LAST_MESSAGE"],"w").write(json.dumps(decision))\nprint("{\\"type\\":\\"done\\"}")\n'
+    FAKE = '#!/usr/bin/env python3\nimport os,sys,json\nif "--version" in sys.argv:\n    print("codex-cli 0.158.0")\n    sys.exit(0)\nscenario=os.environ.get("OR_V2_FAKE_CODEX","decision")\nif scenario=="quota":\n    sys.stderr.write("codex: rate limited: quota exhausted for codex-cli 0.158.0, retry later\\n")\n    sys.exit(1)\nif scenario=="auth":\n    sys.stderr.write("codex: not logged in\\n")\n    sys.exit(1)\nif scenario=="garbage":\n    print("not json at all")\n    sys.exit(0)\ndecision={"schema_version":1,"packet_digest":os.environ.get("OR_V2_FAKE_PACKET_DIGEST","PACKET"),"disposition":"NEEDS_DISCRIMINATING_EVIDENCE","decision":"collect stacks","constraints":["read-only"],"required_verification":["stacks"],"stop_conditions":["no prod writes"],"cited_facts":[{"fact":"exit 23","classification":"PROVEN"}]}\nopen(os.environ["OR_V2_FAKE_LAST_MESSAGE"],"w").write(json.dumps(decision))\nprint(json.dumps({"type":"thread.started","thread_id":"fixture-only"}))\nprint(json.dumps({"type":"turn.started"}))\nprint(json.dumps({"type":"item.completed","item":{"type":"agent_message","text":json.dumps(decision)}}))\nprint(json.dumps({"type":"turn.completed","usage":{}}))\n'
 
     @classmethod
     def setUpClass(cls):
@@ -372,11 +524,13 @@ class CodexQuotaTests(unittest.TestCase):
         cls.exe.chmod(0o755)
         cls.digest = hashlib.sha256(cls.exe.read_bytes()).hexdigest()
         cls.schema = Path(cls.temp.name) / 'decision.schema.json'
-        cls.schema.write_text('{"type":"object"}')
+        cls.schema.write_text(c.canonical_json(a.architecture_decision_schema()))
         cls.outdir = Path(cls.temp.name) / 'out'
         cls.outdir.mkdir()
 
     def adapter(self, signatures=(), scenario='decision', packet_digest='PACKET'):
+        for name in ('codex-last-message.json', 'codex-events.jsonl', 'codex-stderr.txt'):
+            (self.outdir / name).unlink(missing_ok=True)
         binary = a.CodexBinary(self.exe, self.digest, 'codex-cli 0.158.0')
         return a.CodexAdapter(binary, model_id='fixture/architect', workdir=Path('/candidate'),
                               decision_schema_path=self.schema, quota_signatures=list(signatures),
@@ -661,7 +815,11 @@ class WorkerWiringTests(unittest.TestCase):
     """Launch wiring through the real adapter path; fixture proofs cannot settle."""
     def test_worker_launch_wiring_and_fixture_boundary(self):
         fixture, authority, task = m3_task()
-        enrollment = worker_enrollment()
+        original = worker_enrollment()
+        record = c.load_json_strict(original.payload_json)
+        task['role_enrollment_ids'] = [c.canonical_digest(record)]
+        enrollment = a.load_enrollment(record, authority=authority, task=task,
+                                       expected_digest=c.canonical_digest(record))
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory).resolve()
             runtime = s.RuntimeStore(parent / 'runtime', authority)
@@ -678,7 +836,7 @@ class WorkerWiringTests(unittest.TestCase):
                                       stage_id='stage', stage_nonce='nonce')
                 with self.assertRaises(c.ContractError):
                     o.run_worker(store=runtime, stage=stage, box=box, candidate=candidate, task=task,
-                                 enrollment=dict(enrollment, reasoning_requested='HIGH'), binary=opencode_binary(),
+                                 enrollment=enrollment.with_reasoning('HIGH'), binary=opencode_binary(),
                                  agent='orch-worker', prompt='implement the task', image='sha256:' + 'b' * 64,
                                  limits=fake_limits(), network='none', container_binary='/usr/local/bin/opencode',
                                  storage_root=parent, timeout_seconds=60)
@@ -700,7 +858,11 @@ class WorkerWiringTests(unittest.TestCase):
 
     def test_transcript_capture_and_bridge_profile(self):
         fixture, authority, task = m3_task()
-        enrollment = worker_enrollment()
+        original = worker_enrollment()
+        record = c.load_json_strict(original.payload_json)
+        task['role_enrollment_ids'] = [c.canonical_digest(record)]
+        enrollment = a.load_enrollment(record, authority=authority, task=task,
+                                       expected_digest=c.canonical_digest(record))
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory).resolve()
             candidate = b.create_candidate(fixture.candidate, parent / 'worker', c.TRUSTED_DESIGN_BASE, authority=authority)
@@ -712,7 +874,7 @@ class WorkerWiringTests(unittest.TestCase):
             overlays = b.write_role_overlays(parent / 'overlays', 'IMPLEMENTATION')
             mounts = b._validated_role_overlays(overlays, 'IMPLEMENTATION', candidate.root)
             adapter = a.OpenCodeAdapter(opencode_binary(), role='IMPLEMENTATION',
-                                        enrollment=dict(enrollment, reasoning_requested='HIGH'),
+                                        enrollment=enrollment.with_reasoning('HIGH'),
                                         workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120))
             labels = b.StageIdentity('0' * 64, 'boot', 'owner', 'stage', 1, 'nonce',
                                      task['authority_digest'], 'IMPLEMENTATION', task['task_id']).labels()
@@ -784,7 +946,7 @@ class ReviewerWiringTests(unittest.TestCase):
             box = fake.box()
             enrollment = reviewer_enrollment()
             adapter = a.OpenCodeAdapter(opencode_binary(), role='INVESTIGATION_REVIEW',
-                                        enrollment=dict(enrollment, reasoning_requested='HIGH'),
+                                        enrollment=enrollment.with_reasoning('HIGH'),
                                         workdir=Path('/candidate'), limits=a.StreamLimits(1 << 20, 64, 120))
             view = a.build_worker_view(candidate, parent, task['task_id'], 'review', 'INVESTIGATION_REVIEW')
             overlays = b.write_role_overlays(parent / 'overlays', 'INVESTIGATION_REVIEW')
@@ -998,6 +1160,35 @@ class CLIExitTests(unittest.TestCase):
             code, payload = cli(*base, 'snapshot', '--plan-checkpoint', 'M3', '--next-action', 'LAUNCH',
                                 '--health', 'ok', '--task-id', task['task_id'])
             self.assertEqual((code, payload['status'], payload['snapshot']['operational_stage']), (0, 'OK', 'CLAIMED'))
+
+    def test_launch_enrollment_pin_and_budget_checked_before_claim(self):
+        """Actual CLI re-reads the immutable admitted task; file/checksum cannot grant enrollment."""
+        for defect in ('not_enrolled', 'mutated_price', 'wrong_operator', 'wrong_pin', 'over_budget'):
+            with self.subTest(defect=defect), tempfile.TemporaryDirectory() as directory:
+                base, task = self.context(directory)
+                parent = Path(directory).resolve()
+                record = dict(worker_enrollment(price=5 if defect == 'over_budget' else 0))
+                enrolled_digest = c.canonical_digest(record)
+                task['role_enrollment_ids'] = [enrolled_digest] if defect != 'not_enrolled' else ['fixture']
+                (parent / 'task.json').write_text(json.dumps(task))
+                code, payload = cli(*base, 'admit', '--task', str(parent / 'task.json'), '--template', str(parent / 'task.json'))
+                self.assertEqual(code, 0, payload)
+                if defect == 'mutated_price':
+                    record['pricing_observation']['retry_cost_microusd'] = 1
+                if defect == 'wrong_operator':
+                    record['operator_adoption_identity'] = 'candidate-issued'
+                enrollment_path = parent / 'enrollment.json'
+                enrollment_path.write_text(json.dumps(record))
+                requested_pin = 'f' * 64 if defect == 'wrong_pin' else c.canonical_digest(record)
+                code, payload = cli(*base, 'claim', '--task-id', task['task_id'], '--owner', 'owner',
+                                    '--boot', 'boot', '--stage-id', 'stage', '--stage-nonce', 'nonce', '--launch',
+                                    '--enrollment', str(enrollment_path), '--enrollment-digest', requested_pin,
+                                    '--availability', json.dumps({record['model_id']: 'available'}))
+                expected = (3, 'UNAVAILABLE') if defect == 'over_budget' else (2, 'REFUSED')
+                self.assertEqual((code, payload['status']), expected, payload)
+                state = json.loads((parent / 'runtime/state.json').read_text())
+                self.assertEqual(state['tasks'][task['task_id']]['status'], 'READY')
+                self.assertIsNone(state['tasks'][task['task_id']]['stage'])
 
     def test_snapshot_missing_runtime_is_absent_and_pure(self):
         with tempfile.TemporaryDirectory() as directory:

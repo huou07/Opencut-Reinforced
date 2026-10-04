@@ -29,7 +29,9 @@ PROTOCOL_ERROR = 'PROTOCOL_ERROR'
 REVIEW_PENDING = 'REVIEW_PENDING'
 
 KNOWN_ROLES = ('ROUTER_TRIAGE', 'MECHANICAL', 'IMPLEMENTATION', 'INVESTIGATION_REVIEW', 'ARCHITECTURE')
-REASONING_LEVELS = ('LOW', 'DEFAULT', 'HIGH')
+REASONING_LEVELS = ('NONE', 'LOW', 'DEFAULT', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX')
+# DEFAULT is an opaque provider setting, never evidence for a higher floor.
+EFFORT_RANK = {effort: rank for rank, effort in enumerate(('DEFAULT', 'NONE', 'LOW', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX'))}
 OPENCODE_VERSION = '1.18.31'
 OPENCODE_SHA256 = '16c960ba77421da11b53e785f359b73f328a86118b48feb4af143db5d9afb198'
 CODEX_VERSION = 'codex-cli 0.158.0'
@@ -125,8 +127,10 @@ class CodexBinary:
     path: Path
     sha256: str
     version: str
+    host_sha256: str | None
 
     def __init__(self, path: Path, sha256: str, version: str):
+        _require(version == CODEX_VERSION, 'Codex adapter requires the live-certified CLI version')
         path = Path(path).absolute()
         resolved = path.resolve()
         _require(resolved.is_file() and not resolved.is_symlink(), 'Codex executable must resolve to a pinned regular file')
@@ -141,16 +145,65 @@ class CodexBinary:
         object.__setattr__(self, 'path', resolved)
         object.__setattr__(self, 'sha256', digest)
         object.__setattr__(self, 'version', observed)
+        host = resolved.with_name('codex-code-mode-host')
+        object.__setattr__(self, 'host_sha256', hashlib.sha256(host.read_bytes()).hexdigest()
+                           if host.is_file() and not host.is_symlink() else None)
+
+
+_ENROLLMENT_SEAL = object()
+
+
+@dataclass(frozen=True, init=False)
+class ValidatedEnrollment(Mapping):
+    """Immutable host-pinned enrollment; raw catalog/model mappings confer no trust."""
+    payload_json: str
+    enrollment_digest: str
+    task_contract_digest: str
+    authority_digest: str
+    reasoning_requested: str | None
+
+    def __init__(self, record, *, task_contract_digest, authority_digest,
+                 reasoning_requested=None, _seal=None):
+        _require(_seal is _ENROLLMENT_SEAL, 'enrollment requires the controller pin loader')
+        object.__setattr__(self, 'payload_json', c.canonical_json(record))
+        object.__setattr__(self, 'enrollment_digest', c.canonical_digest(record))
+        object.__setattr__(self, 'task_contract_digest', task_contract_digest)
+        object.__setattr__(self, 'authority_digest', authority_digest)
+        object.__setattr__(self, 'reasoning_requested', reasoning_requested)
+
+    def __getitem__(self, key):
+        if key == 'reasoning_requested' and self.reasoning_requested is not None:
+            return self.reasoning_requested
+        return c.load_json_strict(self.payload_json)[key]
+
+    def __iter__(self):
+        return iter((*c.load_json_strict(self.payload_json),
+                     *(('reasoning_requested',) if self.reasoning_requested is not None else ())))
+
+    def __len__(self):
+        return len(c.load_json_strict(self.payload_json)) + (self.reasoning_requested is not None)
+
+    def with_reasoning(self, effort):
+        _require(effort in self['reasoning_capabilities'], 'unsupported requested reasoning effort', EFFORT_PENDING)
+        return ValidatedEnrollment(c.load_json_strict(self.payload_json),
+                                   task_contract_digest=self.task_contract_digest,
+                                   authority_digest=self.authority_digest,
+                                   reasoning_requested=effort, _seal=_ENROLLMENT_SEAL)
 
 
 def validate_enrollment(record: Any) -> dict[str, Any]:
-    """Explicit controller enrollment: qualification is per-role data, never a suffix."""
+    """Validate data only; qualification/price authority requires load_enrollment."""
+    if type(record) is ValidatedEnrollment:
+        record = dict(record)
     _require(type(record) is dict, 'enrollment must be an explicit record')
     required = ('provider_id', 'model_id', 'family', 'allowed_roles', 'reasoning_capabilities',
-                'task_class_qualification', 'adapter_certification_digest', 'budget')
+                'task_class_qualification', 'adapter_certification_digest', 'budget',
+                'qualification_evidence', 'availability_observation', 'pricing_observation',
+                'operator_adoption_identity')
     _require(all(key in record for key in required), 'enrollment missing required fields')
     _require(type(record['provider_id']) is str and record['provider_id'] and '/' not in record['provider_id'], 'invalid provider id')
-    _require(type(record['model_id']) is str and '/' in record['model_id'] and ' ' not in record['model_id'], 'invalid model id')
+    _require(type(record['model_id']) is str and record['model_id'].startswith(record['provider_id'] + '/')
+             and ' ' not in record['model_id'], 'model/provider binding differs')
     _require(type(record['family']) is str and record['family'] and record['family'] != 'unknown', 'unknown family is not independent')
     _require(type(record['allowed_roles']) is list and bool(record['allowed_roles']) and set(record['allowed_roles']) <= set(KNOWN_ROLES), 'invalid allowed roles')
     _require(type(record['reasoning_capabilities']) is list and bool(record['reasoning_capabilities']) and set(record['reasoning_capabilities']) <= set(REASONING_LEVELS), 'invalid reasoning capabilities')
@@ -162,40 +215,106 @@ def validate_enrollment(record: Any) -> dict[str, Any]:
     variants = record.get('variants', {})
     _require(type(variants) is dict and set(variants) <= set(record['reasoning_capabilities'])
              and all(type(v) is str and v for v in variants.values()), 'invalid effort variants')
+    _require(type(record['operator_adoption_identity']) is str and record['operator_adoption_identity'], 'operator enrollment approval identity required')
+    evidence = record['qualification_evidence']
+    _require(type(evidence) is list and bool(evidence), 'task-class evidence required')
+    for item in evidence:
+        _require(type(item) is dict and set(item) == {'role', 'task_class', 'reasoning_efforts',
+                 'quality_passed', 'scope_compliance', 'tool_use_correct', 'evidence_digest'}, 'invalid qualification evidence fields')
+        _require(item['role'] in record['allowed_roles'] and type(item['task_class']) is str and item['task_class'], 'invalid qualification role/task class')
+        _require(type(item['reasoning_efforts']) is list and bool(item['reasoning_efforts'])
+                 and set(item['reasoning_efforts']) <= set(record['reasoning_capabilities']), 'unsupported qualification effort')
+        _require(all(type(item[k]) is bool for k in ('quality_passed', 'scope_compliance', 'tool_use_correct')), 'invalid qualification results')
+        _require(type(item['evidence_digest']) is str and re.fullmatch(r'[0-9a-f]{64}', item['evidence_digest']) is not None, 'invalid qualification evidence digest')
+    available = record['availability_observation']
+    _require(type(available) is dict and set(available) == {'state', 'quota_remaining', 'quota_scarce'}, 'invalid availability observation fields')
+    _require(available['state'] in ('available', 'unavailable', 'quota_exhausted', 'rate_limited'), 'unknown availability')
+    _require(available['quota_remaining'] is None or type(available['quota_remaining']) is int and available['quota_remaining'] >= 0, 'invalid remaining quota')
+    _require(type(available['quota_scarce']) is bool, 'invalid scarce-quota observation')
+    price = record['pricing_observation']
+    _require(type(price) is dict and set(price) == {'kind', 'effort_cost_microusd', 'retry_cost_microusd', 'budget_pressure_microusd'}, 'invalid pricing observation fields')
+    _require(price['kind'] in ('free', 'prepaid', 'metered', 'unknown'), 'unknown pricing kind')
+    costs = price['effort_cost_microusd']
+    _require(type(costs) is dict and set(costs) <= set(record['reasoning_capabilities'])
+             and all(type(value) is int and value >= 0 for value in costs.values()), 'invalid effort cost')
+    _require(all(type(price[k]) is int and price[k] >= 0 for k in ('retry_cost_microusd', 'budget_pressure_microusd')), 'invalid effective cost')
+    _require(price['kind'] not in ('free', 'prepaid') or all(value == 0 for value in costs.values()), 'free/prepaid observation has marginal monetary charge')
+    _require(price['kind'] != 'unknown' or not costs, 'unknown pricing cannot claim zero cost')
     return record
+
+
+def load_enrollment(record: Any, *, authority: c.ValidatedReleaseAuthority,
+                    task: Mapping[str, Any], expected_digest: str) -> ValidatedEnrollment:
+    """Host pin must belong to the admitted immutable task, never candidate approval."""
+    payload = c.validate_phase_admission(authority, task, capability='M3')
+    record = validate_enrollment(record)
+    _require(record['operator_adoption_identity'] == payload['build']['authorization_id'],
+             'enrollment approval differs from executing operator authorization', PROTOCOL_ERROR)
+    _require('reasoning_requested' not in record, 'pin base enrollment before selecting effort')
+    _require(c.canonical_digest(record) == expected_digest
+             and expected_digest in task.get('role_enrollment_ids', []), 'enrollment differs from operator-pinned task', PROTOCOL_ERROR)
+    return ValidatedEnrollment(record, task_contract_digest=c.canonical_digest(task),
+                               authority_digest=task['authority_digest'], _seal=_ENROLLMENT_SEAL)
 
 
 def select_model(role: str, enrollments: Sequence[Mapping[str, Any]], *, task_budget: Mapping[str, Any],
                  required_reasoning: str = 'LOW', exclude_families: Sequence[str] = (),
-                 locked_model: str | None = None, availability: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """Cheapest qualified enrolled model; absence or lock mismatch is unavailable, never substituted."""
+                 locked_model: str | None = None, availability: Mapping[str, str] | None = None,
+                 task_class: str | None = None) -> ValidatedEnrollment:
+    """Deterministic cheapest sufficient model/effort from exact trusted observations."""
     _require(role in KNOWN_ROLES, 'unknown role')
     _require(required_reasoning in REASONING_LEVELS, 'unknown reasoning requirement')
-    _require(type(enrollments) is list and all(type(e) is dict for e in enrollments), 'enrollment records required; listings confer nothing')
-    qualified = []
-    for raw in enrollments:
-        record = validate_enrollment(raw)
+    _require(type(task_budget) is dict and type(task_budget.get('cost_microusd')) is int
+             and task_budget['cost_microusd'] >= 0, 'explicit task monetary budget required')
+    _require(type(enrollments) is list and all(type(e) is ValidatedEnrollment for e in enrollments),
+             'controller-pinned enrollment records required; listings confer nothing')
+    _require(availability is None or type(availability) is dict and all(
+             type(key) is str and value in ('available', 'unavailable', 'quota_exhausted', 'rate_limited')
+             for key, value in availability.items()), 'invalid external availability veto', PROTOCOL_ERROR)
+    _require(task_class is None or type(task_class) is str and bool(task_class), 'invalid task class', PROTOCOL_ERROR)
+    task_class = task_class or role
+    choices = []
+    for enrolled in enrollments:
+        record = validate_enrollment(enrolled)
+        if locked_model is not None and record['model_id'] != locked_model:
+            continue
         if role not in record['allowed_roles'] or record['task_class_qualification'].get(role) is not True:
             continue
         if record['family'] in set(exclude_families):
             continue
-        if required_reasoning not in record['reasoning_capabilities']:
+        observed = record['availability_observation']
+        # External availability can remove eligibility, never grant it.
+        if observed['state'] != 'available' or observed['quota_remaining'] == 0:
             continue
-        state = (availability or {}).get(record['model_id'], 'unavailable')
-        if state != 'available':
+        if availability is not None and availability.get(record['model_id'], 'available') != 'available':
             continue
-        qualified.append(record)
-    if locked_model is not None:
-        match = [record for record in qualified if record['model_id'] == locked_model]
-        _require(bool(match), 'locked model is not enrolled, qualified, and available for this role; no substitution', MODEL_UNAVAILABLE)
-        return dict(match[0], reasoning_requested=required_reasoning)
-    _require(bool(qualified), 'no qualified available enrolled model for this role', MODEL_UNAVAILABLE)
-    def cost(record: Mapping[str, Any]) -> tuple:
-        budget = record['budget']
-        price = budget.get('cost_microusd', 0)
-        _require(type(price) is int and price >= 0, 'invalid enrollment price')
-        return (price, record['model_id'])
-    return dict(sorted(qualified, key=cost)[0], reasoning_requested=required_reasoning)
+        price = record['pricing_observation']
+        if price['kind'] == 'unknown':
+            continue
+        qualified_efforts = set()
+        for evidence in record['qualification_evidence']:
+            if evidence['role'] == role and evidence['task_class'] == task_class and all(
+                    evidence[k] is True for k in ('quality_passed', 'scope_compliance', 'tool_use_correct')):
+                qualified_efforts.update(evidence['reasoning_efforts'])
+        efforts = [effort for effort in qualified_efforts
+                   if EFFORT_RANK[effort] >= EFFORT_RANK[required_reasoning]
+                   and effort in price['effort_cost_microusd']]
+        if not efforts:
+            continue
+        prefer_high = price['kind'] == 'free' and not observed['quota_scarce']
+        effort = sorted(efforts, key=lambda e: EFFORT_RANK[e], reverse=prefer_high)[0]
+        effective = (price['effort_cost_microusd'][effort] + price['retry_cost_microusd']
+                     + price['budget_pressure_microusd'])
+        if effective > task_budget['cost_microusd']:
+            continue
+        ceiling = record['budget'].get('cost_microusd')
+        if ceiling is not None:
+            _require(type(ceiling) is int and ceiling >= 0, 'invalid enrollment cost ceiling')
+            if effective > ceiling:
+                continue
+        choices.append((effective, record['model_id'], enrolled.with_reasoning(effort)))
+    _require(bool(choices), 'no qualified available enrolled model/effort within task budget; no substitution', MODEL_UNAVAILABLE)
+    return min(choices, key=lambda choice: choice[:2])[2]
 
 
 @dataclass(frozen=True)
@@ -288,7 +407,10 @@ class OpenCodeAdapter:
                  require_confirmed_effort: bool = False):
         _require(type(binary) is OpenCodeBinary, 'pinned OpenCode binary required')
         _require(role in KNOWN_ROLES, 'unknown role')
+        _require(type(enrollment) is ValidatedEnrollment, 'controller-pinned enrollment required')
         self.enrollment = validate_enrollment(enrollment)
+        _require(self.enrollment['adapter_certification_digest'] == binary.certification_digest(),
+                 'enrollment certification differs from actual pinned OpenCode runtime')
         _require(role in self.enrollment['allowed_roles'] and self.enrollment['task_class_qualification'].get(role) is True,
                  'enrollment does not qualify this role')
         _require(self.enrollment.get('reasoning_requested') in self.enrollment['reasoning_capabilities'],
@@ -302,8 +424,8 @@ class OpenCodeAdapter:
             self.confirmed = 'DEFAULT_PROVIDER'
         else:
             self.confirmed = 'UNCONFIRMED'
-        if require_confirmed_effort and self.requested == 'HIGH' and self.confirmed != self.sent:
-            raise AdapterError('task requires confirmed HIGH effort the adapter cannot supply; stage stays pending', EFFORT_PENDING)
+        if require_confirmed_effort and self.confirmed != self.sent:
+            raise AdapterError('task requires confirmed ' + self.requested + ' effort the adapter cannot supply; stage stays pending', EFFORT_PENDING)
         self.binary, self.role, self.limits = binary, role, limits
         self.workdir = Path(workdir)
         _require(self.workdir.is_absolute(), 'adapter workdir must be absolute')
@@ -409,16 +531,67 @@ class EscalationDeferred:
     packet: dict
 
 
+# Pinned 0.158 surfaces verified by CP46; absent flags require recertification.
+CODEX_DISABLED_FEATURES = ('shell_tool', 'unified_exec', 'multi_agent', 'apps', 'hooks',
+                           'plugins', 'remote_plugin', 'browser_use', 'browser_use_external',
+                           'computer_use', 'image_generation', 'view_image', 'goals',
+                           'code_mode', 'code_mode_only', 'workspace_dependencies', 'skill_search',
+                           'tool_suggest', 'shell_snapshot', 'sleep_tool', 'memories')
+
+
+def architecture_decision_schema():
+    """Exact structural output contract, including closed nested cited-fact objects."""
+    strings = {'type': 'array', 'items': {'type': 'string'}}
+    properties = {
+        'schema_version': {'type': 'integer', 'enum': [1]},
+        'packet_digest': {'type': 'string'},
+        'disposition': {'type': 'string', 'enum': list(DECISION_DISPOSITIONS)},
+        'decision': {'type': 'string'},
+        'constraints': strings, 'required_verification': strings, 'stop_conditions': strings,
+        'cited_facts': {'type': 'array', 'items': {'type': 'object',
+            'properties': {'fact': {'type': 'string'}, 'classification': {'type': 'string',
+                'enum': ['PROVEN', 'SUPPORTED', 'PLAUSIBLE', 'UNKNOWN']}},
+            'required': ['fact', 'classification'], 'additionalProperties': False}},
+    }
+    return {'type': 'object', 'properties': properties,
+            'required': list(properties), 'additionalProperties': False}
+
+
+def validate_codex_readonly_stream(data: bytes) -> None:
+    """Any model tool item, unknown event, or incomplete turn refuses certification."""
+    _require(type(data) is bytes and len(data) <= 4 << 20 and data.endswith(b'\n'),
+             'invalid Codex event stream', PROTOCOL_ERROR)
+    completed = False
+    for line in data.splitlines():
+        try:
+            event = c.load_json_strict(line.decode('utf-8'))
+        except (c.ContractError, UnicodeError) as exc:
+            raise AdapterError('invalid Codex event JSON', PROTOCOL_ERROR) from exc
+        _require(type(event) is dict and event.get('type') in (
+                 'thread.started', 'turn.started', 'item.started', 'item.updated', 'item.completed', 'turn.completed'),
+                 'unknown/error Codex event', PROTOCOL_ERROR)
+        if event['type'].startswith('item.'):
+            item = event.get('item')
+            _require(type(item) is dict and item.get('type') in ('agent_message', 'reasoning'),
+                     'Codex read-only decision attempted a tool or nested launch', PROTOCOL_ERROR)
+        if event['type'] == 'turn.completed':
+            _require(not completed, 'multiple Codex terminal turns', PROTOCOL_ERROR)
+            completed = True
+    _require(completed, 'Codex decision stream has no terminal completion', PROTOCOL_ERROR)
+
+
 class CodexAdapter:
     """Read-only architecture transport. Quota defers with identical facts; anything else is a tool error."""
     def __init__(self, binary: CodexBinary, *, model_id: str, workdir: Path, decision_schema_path: Path,
                  quota_signatures: Sequence[Mapping[str, Any]] = (), env: Mapping[str, str] | None = None):
         _require(type(binary) is CodexBinary, 'pinned Codex binary required')
-        _require(type(model_id) is str and '/' in model_id and ' ' not in model_id, 'invalid Codex model id')
+        _require(type(model_id) is str and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}', model_id) is not None, 'invalid Codex model id')
         self.workdir = Path(workdir)
         _require(self.workdir.is_absolute(), 'adapter workdir must be absolute')
         schema_path = Path(decision_schema_path)
-        _require(schema_path.is_file(), 'strict decision schema file required')
+        _require(schema_path.is_absolute() and schema_path.is_file() and not schema_path.is_symlink(), 'strict decision schema file required')
+        _require(c.load_json_strict(schema_path.read_text()) == architecture_decision_schema(),
+                 'decision schema differs from strict architecture decision contract', PROTOCOL_ERROR)
         for signature in quota_signatures:
             _require(type(signature) is dict and type(signature.get('version')) is str
                      and type(signature.get('stderr_contains')) is str and signature['stderr_contains'], 'invalid quota signature')
@@ -430,10 +603,15 @@ class CodexAdapter:
     def build_argv(self, prompt: str, last_message_path: Path) -> list[str]:
         _require(type(prompt) is str and prompt and len(prompt) <= 65536, 'bounded explicit architecture prompt required', PROTOCOL_ERROR)
         _require(isinstance(last_message_path, Path) and last_message_path.is_absolute(), 'controller-owned last-message path required', PROTOCOL_ERROR)
-        return [str(self.binary.path), 'exec', '--json', '--sandbox', 'read-only',
-                '--ignore-user-config', '--ignore-rules', '--ephemeral',
-                '-C', str(self.workdir), '--output-schema', str(self.decision_schema_path),
+        argv = [str(self.binary.path), 'exec', '--json', '--sandbox', 'read-only',
+                '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
+                '-c', 'web_search="disabled"', '-c', 'model_reasoning_effort="low"',
+                '-c', 'features.code_mode_host=true']
+        for feature in CODEX_DISABLED_FEATURES:
+            argv.extend(['--disable', feature])
+        return [*argv, '-C', str(self.workdir), '--output-schema', str(self.decision_schema_path),
                 '-o', str(last_message_path), '-m', self.model_id, prompt]
+
 
     def run_architecture(self, prompt: str, *, packet: Mapping[str, Any], output_dir: Path,
                          timeout_seconds: int = 600) -> tuple[dict, EscalationDeferred | None]:
@@ -449,6 +627,11 @@ class CodexAdapter:
         _require(output_dir.is_absolute() and output_dir.is_dir() and not output_dir.is_symlink(), 'controller-owned output directory required')
         last_message = output_dir / 'codex-last-message.json'
         _require(not last_message.exists(), 'decision artifact must not pre-exist')
+        _require(hashlib.sha256(self.binary.path.read_bytes()).hexdigest() == self.binary.sha256,
+                 'Codex runtime changed after certification')
+        if self.binary.host_sha256 is not None:
+            _require(hashlib.sha256(self.binary.path.with_name('codex-code-mode-host').read_bytes()).hexdigest()
+                     == self.binary.host_sha256, 'Codex runtime host changed after certification')
         argv = self.build_argv(prompt, last_message)
         try:
             proc = subprocess.run(argv, env=self.env, capture_output=True, timeout=timeout_seconds)
@@ -456,12 +639,19 @@ class CodexAdapter:
             raise AdapterError('architecture transport timed out', TRANSPORT_ERROR) from exc
         except OSError as exc:
             raise AdapterError('architecture transport launch failed: ' + str(exc), TRANSPORT_ERROR) from exc
+        for name, data in (('codex-events.jsonl', proc.stdout), ('codex-stderr.txt', proc.stderr)):
+            _require(len(data) <= 4 << 20, 'Codex transcript bound exceeded', PROTOCOL_ERROR)
+            target = output_dir / name
+            _require(not target.exists(), 'Codex evidence artifact must not pre-exist', PROTOCOL_ERROR)
+            with target.open('xb') as stream:
+                stream.write(data)
         if proc.returncode != 0:
             stderr = proc.stderr.decode('utf-8', 'replace')
             for signature in self.quota_signatures:
                 if signature.get('version') == self.binary.version and signature['stderr_contains'] in stderr:
                     raise AdapterError('Codex quota exhausted; packet preserved', QUOTA_DEFERRED)
             raise AdapterError('Codex transport error; not a decision and not quota', TRANSPORT_ERROR)
+        validate_codex_readonly_stream(proc.stdout)
         try:
             raw = last_message.read_bytes()
         except OSError as exc:
@@ -613,11 +803,114 @@ def build_worker_view(candidate: Any, storage_root: Path, task_id: str, stage_id
     return view
 
 
+def model_mounts(*, overlays, role, candidate, stage_root, credential_dir, provider_id):
+    """Shared live profile: bounded writable runtime, immutable policy/credential shadows."""
+    from . import sandbox as b
+    import json
+    validated = b._validated_role_overlays(overlays, role, candidate)
+    stage_root = b._safe_path(Path(stage_root))
+    _require(stage_root.is_dir() and stage_root.stat().st_uid == os.geteuid()
+             and stage_root.stat().st_mode & 0o777 == 0o700, 'private model stage root required')
+    mask = stage_root / 'config-mask'
+    mask.mkdir(mode=0o700)
+    project = mask / '.opencode'
+    project.mkdir(mode=0o755)
+    (project / '.gitignore').write_bytes(b'')
+    (project / '.gitignore').chmod(0o444)
+    project.chmod(0o555)
+    mask.chmod(0o555)
+    home = stage_root / 'runtime-home'
+    home.mkdir(mode=0o777)
+    home.chmod(0o777)
+    for sub in ('.local/share/opencode', '.config/opencode'):
+        node = home
+        for part in Path(sub).parts:
+            node = node / part
+            node.mkdir(mode=0o777, exist_ok=True)
+            node.chmod(0o777)
+    frozen_home = Path(overlays['home'])
+    mounts = [(source, target) for source, target in validated
+              if target not in ('/candidate/.opencode', '/worker-home')]
+    mounts.extend([(project, '/candidate/.opencode'), (home, '/worker-home', True),
+                   (frozen_home / 'opencode.json', '/worker-home/opencode.json'),
+                   (frozen_home / '.config/opencode/opencode.json',
+                    '/worker-home/.config/opencode/opencode.json')])
+    if credential_dir is not None:
+        credential = b._safe_path(Path(credential_dir)) / 'opencode/auth.json'
+        item = credential.lstat()
+        import stat
+        _require(stat.S_ISREG(item.st_mode) and item.st_nlink == 1 and item.st_size <= 65536,
+                 'regular bounded inference credential required')
+        raw = json.loads(credential.read_text())
+        _require(set(raw) == {provider_id} and set(raw[provider_id]) == {'type', 'key'}
+                 and raw[provider_id]['type'] == 'api' and type(raw[provider_id]['key']) is str
+                 and bool(raw[provider_id]['key']), 'credential must match exactly the selected provider')
+        mounts.append((credential, '/worker-home/.local/share/opencode/auth.json'))
+    return mounts
+
+
+def erase_runtime_home(box, stage_root, image):
+    """Erase only the controller-created disposable model runtime after stage death."""
+    from . import sandbox as b
+    stage_root = b._safe_path(Path(stage_root))
+    home = stage_root / 'runtime-home'
+    _require(stage_root.stat().st_uid == os.geteuid() and stage_root.stat().st_mode & 0o777 == 0o700
+             and home.is_dir() and not home.is_symlink(), 'private runtime cleanup locator differs')
+    if not box.fixture_only:
+        box.docker(['run', '--rm', '--pull=never', '--network=none', '--read-only',
+                    '--user=10001:10001', '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
+                    '--pids-limit=32', '--memory=268435456', '--log-driver=none',
+                    '--mount=type=bind,src=' + str(home) + ',dst=/runtime',
+                    '--entrypoint=/bin/sh', image, '-ec',
+                    'find /runtime -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'])
+
+
+def _bounded_capture(proc, *, stdout_limit, stderr_limit, timeout_seconds, kill):
+    """Drain both pipes with fixed memory bounds; overflow kills the whole stage."""
+    import selectors
+    selector = selectors.DefaultSelector()
+    buffers = {proc.stdout: bytearray(), proc.stderr: bytearray()}
+    bounds = {proc.stdout: stdout_limit, proc.stderr: stderr_limit}
+    for pipe in buffers:
+        selector.register(pipe, selectors.EVENT_READ)
+    deadline = time.monotonic() + timeout_seconds
+    timed_out = truncated = False
+    killed = False
+    try:
+        while selector.get_map():
+            if time.monotonic() >= deadline and not killed:
+                timed_out = True
+                kill()
+                killed = True
+                deadline = time.monotonic() + 5
+            if killed and time.monotonic() >= deadline:
+                break
+            for key, _ in selector.select(0.2):
+                chunk = os.read(key.fileobj.fileno(), 65536)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                buf = buffers[key.fileobj]
+                room = bounds[key.fileobj] - len(buf)
+                buf.extend(chunk[:max(0, room)])
+                if len(chunk) > room and not killed:
+                    truncated = True
+                    kill()
+                    killed = True
+                    deadline = time.monotonic() + 5
+        proc.wait(timeout=5)
+    finally:
+        selector.close()
+        for pipe in buffers:
+            pipe.close()
+    return bytes(buffers[proc.stdout]), bytes(buffers[proc.stderr]), timed_out, truncated
+
+
 def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, container_binary: str,
                        message_parts: Sequence[str], agent: str | None, adapter: OpenCodeAdapter,
                        image: str, network: str, limits: Any, overlay_mounts: Sequence[tuple],
                        labels: Mapping[str, str], name: str | None = None,
-                       timeout_seconds: int = 600, workdir: str = '/candidate') -> WorkerStageResult:
+                       timeout_seconds: int = 600, workdir: str = '/candidate', on_created=None) -> WorkerStageResult:
     """Run the pinned model command in an isolated container; return observations only.
 
     No receipt, seal, or authority is minted here. The orchestrator binds the
@@ -636,6 +929,13 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
     _require(type(name) is None or (type(name) is str and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', name) is not None), 'invalid container name')
     _require(type(labels) is dict and labels and all(type(k) is str and type(v) is str for k, v in labels.items()), 'stage ownership labels required')
     limits.validate()
+    if not box.fixture_only:
+        b._bounded_candidate_filesystem(candidate.root if role == 'IMPLEMENTATION' else candidate.root.parent, limits.candidate_bytes)
+        observed = box.docker(['run', '--rm', '--pull=never', '--network=none', '--read-only',
+                               '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
+                               '--entrypoint=/usr/bin/sha256sum', image, container_binary]).split()[0]
+        _require(observed == adapter.binary.sha256, 'image model executable differs from certified binary')
+    file_bytes = max(limits.scratch_bytes, limits.output_bytes)
     view = b._safe_path(Path(view))
     inner = [container_binary, 'run', '--format', 'json', '--model', adapter.enrollment['model_id']]
     if adapter.sent is not None:
@@ -654,10 +954,11 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
         writable = bool(entry[2]) if len(entry) == 3 else False
         _require(type(entry[1]) is str and destination.startswith('/'),
                  'invalid overlay mount paths', PROTOCOL_ERROR)
-        _require(not writable or role in ('IMPLEMENTATION', 'INVESTIGATION_REVIEW'),
-                 'writable mounts are an explicit model-role capability', PROTOCOL_ERROR)
+        _require(not writable or (destination == '/worker-home'
+                 and Path(source).parent == view.parent and Path(source).name == 'runtime-home'),
+                 'only stage-private runtime home may be writable', PROTOCOL_ERROR)
         mounts.append((source, destination, writable))
-    expected = dict(image=image, mounts=mounts, limits=limits, command=bounded,
+    expected = dict(image=image, mounts=mounts, limits=limits, file_bytes=file_bytes, network=network, command=bounded,
                     environment=['HOME=/worker-home', 'TMPDIR=/scratch',
                                  'XDG_CONFIG_HOME=/worker-home/.config', 'XDG_DATA_HOME=/worker-home/.local/share',
                                  'XDG_STATE_HOME=/worker-home/.local/state', 'OPENCODE_CONFIG=/worker-home/opencode.json',
@@ -667,7 +968,7 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
             '--pids-limit=' + str(limits.pids), '--cpus=' + str(limits.cpu),
             '--memory=' + str(limits.memory_bytes), '--memory-swap=' + str(limits.memory_bytes),
             '--log-driver=none', '--restart=no', '--stop-timeout=1', '--init',
-            '--ulimit=nofile=256:256', '--ulimit=fsize=' + str(limits.output_bytes) + ':' + str(limits.output_bytes),
+            '--ulimit=nofile=256:256', '--ulimit=fsize=' + str(file_bytes) + ':' + str(file_bytes),
             '--mount=type=bind,src=' + str(view) + ',dst=/candidate' + ('' if role == 'IMPLEMENTATION' else ',readonly'),
             '--tmpfs=/scratch:rw,nosuid,nodev,noexec,size=' + str(limits.scratch_bytes) + ',mode=1777',
             '--workdir=' + workdir]
@@ -683,10 +984,9 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
     container_id = box.docker(args).strip()
     _require(re.fullmatch(r'[0-9a-f]{64}', container_id) is not None, 'invalid worker container identity')
     identity = _stage_identity(container_id, labels, role)
-    if network == 'none':
-        box.verify_effective(identity, expected)
-    else:
-        _verify_bridge_effective(box, identity, expected)
+    if on_created is not None:
+        on_created(container_id)
+    _verify_bridge_effective(box, identity, expected)
     effective_digest = c.canonical_digest({'image': image, 'mounts': mounts, 'command': list(bounded),
                                            'environment': expected['environment'], 'labels': dict(labels),
                                            'network': network})
@@ -695,20 +995,17 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
     proc = subprocess_module.Popen(_attach_argv(box, container_id),
                                    env={'PATH': '/usr/bin:/bin', 'LANG': 'C'},
                                    stdout=subprocess_module.PIPE, stderr=subprocess_module.PIPE, start_new_session=True)
-    try:
-        output, errors = proc.communicate(timeout=timeout_seconds + 30)
-        timed_out = False
-    except subprocess_module.TimeoutExpired:
+    def kill_stage():
         try:
             box.docker(['kill', container_id])
-        except AdapterError:
-            pass
-        try:
-            os.killpg(proc.pid, 9)
-        except (OSError, ProcessLookupError):
-            pass
-        output, errors = proc.communicate()
-        timed_out = True
+        finally:
+            try:
+                os.killpg(proc.pid, 9)
+            except OSError:
+                pass
+    output, errors, timed_out, truncated = _bounded_capture(
+        proc, stdout_limit=limits.output_bytes + 4096, stderr_limit=65536,
+        timeout_seconds=timeout_seconds + 30, kill=kill_stage)
     elapsed = time.monotonic() - started
     instance = box._inspect(identity) if hasattr(box, '_inspect') else None
     exit_code = None
@@ -722,7 +1019,6 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
         except Exception:
             pass  # Best effort only: attach already returned, and the later
             # controller reconciliation independently proves whole-container death.
-    truncated = len(output) > limits.output_bytes + 4096
     return WorkerStageResult(container_id=container_id, exit_code=exit_code, timed_out=timed_out,
                              transcript=output[:limits.output_bytes + 4096],
                              transcript_stderr=errors[:65536], truncated=truncated,
@@ -743,7 +1039,7 @@ def _verify_bridge_effective(box: Any, identity: Any, expected: Mapping[str, Any
     _require(host.get('ReadonlyRootfs') is True and host.get('Privileged') is False, 'writable root or privileged container')
     _require(not host.get('CapAdd') and host.get('CapDrop') == ['ALL'], 'capability policy differs')
     _require(host.get('SecurityOpt') == ['no-new-privileges:true'], 'privilege escalation possible')
-    _require(host.get('NetworkMode') == 'bridge' and host.get('PidMode', '') == ''
+    _require(host.get('NetworkMode') == expected.get('network', 'bridge') and host.get('PidMode', '') == ''
              and host.get('IpcMode') == 'none' and host.get('UTSMode', '') == ''
              and host.get('UsernsMode', '') == '' and host.get('CgroupnsMode') == 'private', 'namespace policy differs')
     for name in ('Devices', 'DeviceRequests', 'DeviceCgroupRules', 'VolumesFrom', 'Links', 'ExtraHosts'):
@@ -768,7 +1064,7 @@ def _verify_bridge_effective(box: Any, identity: Any, expected: Mapping[str, Any
     scratch = 'rw,nosuid,nodev,noexec,size=' + str(limits.scratch_bytes) + ',mode=1777'
     _require(host.get('Tmpfs') == {'/scratch': scratch}, 'scratch quota differs')
     ulimits = {item['Name']: (item['Soft'], item['Hard']) for item in host.get('Ulimits', [])}
-    _require(ulimits == {'nofile': (256, 256), 'fsize': (limits.output_bytes, limits.output_bytes)}, 'output/FD bounds differ')
+    _require(ulimits == {'nofile': (256, 256), 'fsize': (expected.get('file_bytes', limits.output_bytes), expected.get('file_bytes', limits.output_bytes))}, 'output/FD bounds differ')
     if expected.get('created_only', True):
         _require(instance.get('State', {}).get('Status') == 'created' and not instance['State'].get('Running'),
                  'stage executed before verification')
