@@ -574,6 +574,18 @@ class CompletionBoundaryTests(unittest.TestCase):
 
 
 class RepositoryConsistencyTests(unittest.TestCase):
+    def test_m1_workspace_inventory_is_exactly_bounded(self):
+        paths=['scripts/model_orchestrator/workspace.py',
+               'scripts/model_orchestrator/tests/test_live_workspace_recovery.py']
+        self.assertEqual(c.validate_adoption_diff(paths),[])
+        for path in ('scripts/model_orchestrator/other_workspace.py',
+                     'scripts/model_orchestrator/tests/other_workspace.py',
+                     'docs/execution/STATE.json','apps/or_app/lib/main.dart'):
+            self.assertEqual(c.validate_adoption_diff([path]),[path])
+        plan=(REPO_ROOT/'docs/execution/automation/IMPLEMENTATION_PLAN.md').read_text()
+        row=next(line for line in plan.splitlines() if line.startswith('| M1:'))
+        for path in paths:self.assertIn('`'+path+'`',row)
+
     def test_required_authority_surfaces_exist_in_actual_repository(self):
         # Minimal fixtures must not invent files the real release does not have.
         tracked=set(subprocess.check_output(['git','ls-files','-z'],cwd=REPO_ROOT).decode().split('\0'))

@@ -1119,3 +1119,34 @@ The latter clones the actual repository independently, verifies architecture and
 candidate commit ancestry, then exercises clean loading, optional configuration
 absence, dirty/untracked/mode refusal, every manifest omission and foreign
 repository refusal. It reports the exact manifest count and candidate SHA.
+
+### Workspace inventory reconciliation and external release revalidation
+
+The separately operator-authorized reconciliation adds exactly
+`scripts/model_orchestrator/workspace.py` and
+`scripts/model_orchestrator/tests/test_live_workspace_recovery.py` to M1's
+inventory and the adoption allowlist. They implement and verify the existing
+CP07 × CP10 × CP11 launch-workspace ownership/recovery boundary. No other
+path or product permission is added.
+
+An independent host may durably record recovered original operator consent
+and verify an already-built immutable release under a new explicit operator
+reconciliation/certification authorization. New controller IDs, sequence,
+nonce and creation time describe this current verification/bootstrap context;
+they must not purport to be historical execution identities or backdated
+approval. Ordered M0–M5 evidence identifies the existing implementation
+ancestry and each phase's owned, actually measured acceptance observations.
+This records verified implementation progress; it does not replay completed
+implementation tasks or dispatch product workers.
+
+Controller-side case/phase receipt reconstruction may summarize immutable
+measured facts, with exact source locations, receipt/transcript identities,
+digests and release bindings. Supporting fixture measurements are never
+operator authority, and synthetic fixture authorizations/placeholder receipts
+must not be imported. A prior observation may be reused only with an explicit
+byte-equivalence proof for its complete code/harness/policy/tool dependency
+closure; its original release identity remains unchanged. The controller must
+revalidate changed dependencies and observe the new release binding. Hosted
+collection and independent whole-source review bind the new exact SHA. All
+records remain external and require the existing typed bootstrap/pin loader;
+raw mappings, timestamps and reports confer no authority.
