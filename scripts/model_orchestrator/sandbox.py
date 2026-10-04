@@ -527,6 +527,9 @@ class DockerCLI:
             connection = ['--host=' + self.endpoint] if self.endpoint else []
             result = subprocess.run([str(self.executable), *connection, *arguments], env={'PATH': '/usr/bin:/bin'},
                                     capture_output=True, timeout=30, check=True)
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or b'')[:300].decode('utf-8', 'replace')
+            raise SandboxError('Docker runtime refused ' + (arguments[0] if arguments else '?') + ': ' + detail) from exc
         except (OSError, subprocess.SubprocessError) as exc:
             raise SandboxError('Docker runtime/observation unavailable') from exc
         _require(len(result.stdout) <= 4 << 20, 'Docker observation bound exceeded')
