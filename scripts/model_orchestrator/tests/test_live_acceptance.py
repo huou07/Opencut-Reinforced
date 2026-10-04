@@ -518,7 +518,10 @@ class LiveWorkerTests(unittest.TestCase):
         self.assertNotEqual(worker_enrollment['family'], reviewer_enrollment['family'])
         marker = '# LIVE_PROBE_%s' % live.nonce
         prompt = ('Append exactly one line to the end of file scripts/model_orchestrator/contracts.py '
-                  'in the candidate: `%s`. Change no other file. Do not print the line back; '
+                  'in the candidate: `%s`. Change no other file. Then commit exactly that change with '
+                  '`git -c user.name="V2 Worker" -c user.email="worker@example.invalid" add '
+                  'scripts/model_orchestrator/contracts.py && git -c user.name="V2 Worker" '
+                  '-c user.email="worker@example.invalid" commit -m "live probe"`. Do not print the line back; '
                   'the controller verifies the file independently.' % marker)
         with runtime.lock('task', task['task_id']):
             stage = runtime.claim(task['task_id'], task_digest, owner_nonce='live-owner',
