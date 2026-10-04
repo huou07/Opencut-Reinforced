@@ -582,10 +582,10 @@ class RepositoryConsistencyTests(unittest.TestCase):
     def test_corrected_documents_and_disabled_runtime_surface(self):
         c.validate_v2_contract_documents(REPO_ROOT)
         files={p.name for p in (REPO_ROOT/'scripts/model_orchestrator').glob('*.py')}
-        # Exact disabled M4 inventory; M5 modules remain forbidden.
+        # Exact disabled M0–M5 inventory; hosted observations confer no authority.
         self.assertEqual(files,{'contracts.py','__init__.py','store.py','sandbox.py','workspace.py',
                                 'guards.py','verification.py','adapters.py','orchestrator.py','__main__.py',
-                                'promotion.py','push_guard.py'})
+                                'promotion.py','push_guard.py','hosted.py'})
     def test_serialized_document_lifecycle_is_semantically_bound(self):
         import shutil
         with tempfile.TemporaryDirectory() as directory:
