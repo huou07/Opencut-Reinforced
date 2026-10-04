@@ -2,44 +2,14 @@
 
 ## Status
 
-This is the canonical high-level architecture. It documents the implemented
-project/application, Flutter shell, media, and timeline foundations alongside
-planned components. The
-Flutter application creates and opens real projects, owns one Rust live host
-shared with local IPC, presents explicit recovery and dirty-state workflows,
-and provides desktop media-library import/list/remove plus read-only generated
-thumbnail and waveform previews. `.orproj` schema v7 persists validated media references, metadata, canonical
-ordered timeline state, global point markers, one nullable sequence frame rate,
-typed media/text/caption clips, and persistent track state while loading v1–v6. Schema v7 adds strict local-file and Android SAF source identities. Phase
-5D–5F provide bounded fingerprints, disposable indexed cache, and core-only
-file-backed proxies.
-Phase 6 provides canonical tracks, clips, exact editing, persistent markers,
-marker-aware snapping, CLI parity, and the corresponding Flutter UI without a
-second editable UI state. Phase 7A adds the dependency-free `or_runtime`
-contract for immutable render-snapshot identity, exact-time frame metadata and
-leases, bounded cancellation-aware queues, separate render/audio/decode
-budgets, and centralized capability selection with software fallback. 7B adds
-the headless `or_render` wgpu spine, 7C adds linked software decode, 7E adds the
-audio clock, and the shared 7F0 contract defines explicit sequence timing
-and viewer presentation. The 7F implementation connects a desktop preview
-runtime to the product viewer and transport controls; hosted verification is
-required before the checkpoint can advance. For authoritative current checkpoint and phase status,
-see [docs/execution/STATE.json](execution/STATE.json); this document does not
-copy mutable `NEXT` state. Planned and future components below do not imply
-implemented code. See [ROADMAP.md](ROADMAP.md) and
-[TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for human-readable design detail.
+Implementation status and versions are obtained only through [STATE](execution/STATE.json),
+the locked checkpoint specification, supervisor evidence, and the implementation SHA/source.
 
-## Implemented today
-
-The repository contains a minimal Rust workspace with `or_core`, `or_ipc`, `or_runtime`, `or_render`, a semantic `or` CLI, and the native Flutter application at `apps/or_app`. `or_core` provides application info, health, and capability discovery; Phase 4A values for project identity, runtime project-instance identity, project revision, exact rational time and rate, and time ranges; a `ProjectDocument` with strict `.orproj` v1–v7 decoding, v7 encoding, and bounded filesystem load/atomic-save APIs; a separate snapshot recovery checkpoint format with bounded read, ancestry inspection, and explicit apply/discard APIs; a `ProjectSession` with static command/query catalogs, versioned envelopes, rename-only transaction groups, media/timeline/marker/sequence-setting commands, bounded media/timeline/marker/sequence-settings queries, Snap V1/V2 resolution, and session-local undo/redo; and Phase 5A typed `MediaId`/`JobId`, validated control-plane media metadata, and a synchronous read-only `probe_media_file(&Path)` API. The probe uses an external `ffprobe` executable and does not create a `MediaId` or touch project state. Prepared import canonicalizes and probes one selected local file outside the live-host lock, then adds its `MediaItem` through `media.add`. `ProjectSession` dispatches the transport-independent `ApplicationRequest` to implemented command, query, and transaction paths. `ProjectFileSession` owns one project path, live session, exact last-saved document, dirty state, recovery policy, and external-change-checked save. Phase 5C adds a standard-library bounded `JobManager` and disposable thumbnail/waveform `CacheStore`; Phase 5D adds bounded source-fingerprint v1 and generated PNG previews through `MediaArtifactService`; Phase 5E adds a lazy SQLite index (`cache-index.sqlite3`, schema v1) and persistent sequence-based LRU eviction; Phase 5F adds `ProxyGenerate` and file-backed Matroska proxy artifacts. Jobs, artifacts, and index metadata do not mutate canonical project state or affect `ProjectRevision`. Phase 7F0 adds exact sequence-frame timing, a persisted optional sequence rate, and the application/CLI/IPC setting boundary. Phase 8A adds typed media/text/caption clips, four track kinds, persistent track and clip settings, and typed v2 timeline reads while preserving IPC v1. The 7F implementation connects desktop preview to the software FFmpeg decoder, wgpu renderer, native external texture, and typed bridge transport state; frame bytes stay outside Dart. The 8A typed timeline contract is exposed through Rust application, CLI, and IPC paths; the existing Flutter timeline continues to use its media-only bridge view in this checkpoint.
-
-The semantic CLI uses that same dispatch. Headless commands open `ProjectFileSession`; changed operations save through its existing atomic, exact-base-checked path. Attached commands use the `or_ipc` client and an explicit endpoint descriptor. `LiveProjectHost` owns one shared `ProjectFileSession` behind a short-lived control-plane lock. A Rust-owned opaque `ProjectHostHandle` gives Flutter direct typed access, while the desktop local IPC worker receives the same shared state; neither client has a second editable project model. Android uses that same in-process host and command/query path without starting a local IPC worker, whose transport remains unsupported there. The application host emits ordered invalidation events, and Flutter refreshes Rust read models after events rather than trusting event payloads. `or_ipc` v1 uses bounded framed JSON, per-server authentication, Unix-domain sockets on macOS/Linux, and Windows named pipes with remote clients rejected. Its `Describe`, generic `Application`, `Save`, and guarded `Shutdown` requests do not accept arbitrary file paths or shell commands. The CLI can attach to either the Flutter host or the developer/headless `or session serve` host. Flutter uses generated typed bindings from `flutter_rust_bridge` 2.13 through the `crates/or_app_bridge` adapter and `packages/or_app_bridge` Dart package.
-
-Production Flutter implements the Focused Monochrome shell and real desktop project workflows. The native `file_selector` picker chooses project and one media file at import; Rust validates and reads or writes project data. The UI supports create/open, project summary, rename, undo/redo, explicit save, close, recovery inspection/apply/discard, dirty close/switch/exit guards, desktop Advanced / Developer descriptor access, and a desktop Media panel with bounded listing, Load more, import, confirmed removal, generated video thumbnails, and audio-only waveform previews. Real project workspaces also present canonical track order and clip blocks from bounded Rust queries. Video/Audio tracks can be added, empty tracks removed, and clips inserted, moved, trimmed, split, explicitly deleted, or ripple-deleted through exact-rational action dialogs. Phase 6E1 adds pointer body moves, start/end trim handles, same-kind lane targeting, a default-on non-persisted Snap toggle, and a cyan drop-time guide. Pointer gestures retain canonical exact start/end values, quantize only the raw pointer delta to the nearest millisecond, and commit through the existing move/trim commands after Rust resolves a snap; the timeline remains canonical only after the command and refresh. Trim shows only the selected edge, current timeline timing, and timeline edge; split accepts an exact interior timeline point and leaves right-clip ID generation to Rust. Ripple delete confirms that only later clips on the selected track move. Flutter stores only disposable read pages, gesture-local ghosts, and dialog/selection state, never optimistic clip geometry. All canonical edits use existing command envelopes through the same Rust host; ordered project invalidation events refresh the current revision, including edits made by an attached CLI. Clip pages are limited to 100 and loaded on demand, while Flutter requests Snap V2 and `timeline.snap` itself scans the full canonical clip timeline and markers. Phase 6E2B adds the marker read model, marker ruler, marker dialogs, marker pointer interaction, and visual markers. Artifact requests use a separate ordered event stream and affect only presentation state. Import requires system-provided `ffprobe`; library thumbnail/waveform generation uses system-provided `ffmpeg`. Desktop preview uses the linked FFmpeg 8.1.3 software runtime and wgpu rendering, while Flutter receives exact transport state and the native adapter presents the external texture. Android project create/open now use SAF and an app-private managed working copy with explicit provider synchronization; Android media import/export remain unavailable. Android project preview runs through the shared Rust host in-process, uses the approved software FFmpeg decoder, and does not require local IPC; the descriptor field is empty when a host has no IPC endpoint. The non-project Editor Shell Preview remains a layout preview. Playback requires an explicit project sequence rate; seek and scrubbing keep the requested exact rational time.
-
-GitHub Actions checks Rust and Flutter code, runs project-storage, recovery, real local IPC, shared-host plus attached-CLI media parity tests on macOS and Windows, runs the complete Rust workspace and generated-media real-`ffprobe` plus real-`ffmpeg` artifact integrations on Linux, builds the macOS, Windows, Linux, and Android targets, and runs native Flutter bridge, project lifecycle, offline-media persistence, and timeline edit/history/save/reopen tests on macOS. Cache and file-backed proxy API tests run on Linux, macOS, and Windows; Linux also runs real Proxy V1 FFmpeg/ffprobe coverage. The current `.orproj` schema is v7 and accepts files up to 64 MiB; the strict decoder loads v1 with empty media/timeline/markers, v2 with existing media and empty timeline/markers, v3 with existing media/tracks/clips and empty markers, and v4 and v5 with their existing project state. V1–v4 migrate to an unset sequence rate; v5 preserves its nullable sequence rate while media clips migrate to typed content with exact duration and default settings. V6 strictly validates typed content, persistent track state, and bounded clip settings; v7 adds the strict `FileUri` / `AndroidSafDocumentUri` media source union. Clean opens do not rewrite older files. The next explicit save writes v7 without incrementing revision for schema conversion alone. New-project creation uses a race-safe no-clobber install. Recovery uses a separate bounded sidecar containing the exact saved base and a newer `ProjectDocument` snapshot; its v1 envelope accepts nested v1–v7 project snapshots. Inspection is read-only, and load never applies a checkpoint automatically. `ProjectFileSession` checks recovery before opening/saving and compares the exact on-disk document with its saved base before replacement. Applying a recovery candidate revalidates the saved base and atomically saves the snapshot without incrementing its revision. A conflict does not select a winner. Session history remains in-memory. Android SAF writes follow the atomic app-private save and use provider baseline checks plus readback when available; provider writes do not claim atomic replacement. There is no general command/query registry framework; the static catalogs contain only the implemented operations. The schema-v1 cache index covers disposable thumbnail, waveform, and proxy artifacts under one global budget; proxy artifacts are file-backed and are never read wholly into memory. The preview service does not alter the frozen HTML prototype, `.orproj` schema, IPC protocol version, or canonical project state. Prototype behavior is simulated in browser-side code and is not evidence of production architecture. The Phase 7A `or_runtime` contract is Rust-only and is not connected to Flutter playback; 7F0 fixes the shared viewer resource, lease, synchronization, and bounded pixel-buffer-fallback contract without implementing viewer UI.
 
 ## Planned full target architecture
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
     Flutter GUI
         | typed bridge and events
@@ -93,6 +63,9 @@ Render workers consume a stable, versioned evaluated view of project/timeline st
 Only the command/application execution path may mutate canonical Project state. Phase 4D implements `project.rename`, `history.undo`, `history.redo`, and atomic groups containing one or more `project.rename` calls. Phase 5B adds non-transactional `media.add` and `media.remove`. Commands require matching `ProjectId`, `ProjectInstanceId`, and expected `ProjectRevision`; a stale request is rejected for re-query and revalidation. Each successful media command increments revision once, while failed commands and reads do not. Each changed forward operation creates one `ChangeSet` and one session-local history entry; media history stores the exact item and original insertion index instead of full `ProjectDocument` snapshots. Undo/redo are new canonical mutations and increment revision. GUI, CLI, agents, renderers, decoders, jobs, and AI workers must not write canonical project state directly. This command path is for project edits, never a per-frame playback or render execution path.
 
 ## Planned boundaries
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 ### Presentation and feature integration
 
@@ -198,6 +171,9 @@ OS secure storage is the intended home for provider credentials. The application
 
 ## Future directions
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Local and optional cloud AI providers, declarative templates, themes, and
 MotionScenes, a GitHub-first static community registry, and sandboxed plugins
 are future extensions. Early community distribution does not require an
@@ -214,6 +190,9 @@ explicit, isolated, bounded WebMotion sidecar gate; it is not canonical project
 data or the default renderer.
 
 ## Architecture execution lock
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The machine-readable authority is [docs/execution/README.md](execution/README.md),
 with permanent invariants in [ARCHITECTURE_INVARIANTS.md](execution/ARCHITECTURE_INVARIANTS.md),

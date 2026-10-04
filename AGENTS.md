@@ -112,7 +112,7 @@ The execution source-of-truth order is:
 5. `docs/ARCHITECTURE.md` for human-readable architecture.
 6. `docs/TECHNICAL_PLAN.md` for detailed subsystem design.
 7. `docs/PRODUCT.md` for product capability scope.
-8. `docs/ROADMAP.md` for human-readable roadmap status.
+8. `docs/ROADMAP.md` for historical/human-readable roadmap context.
 9. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
 
 Feature agents may not edit the locked checkpoint specification or permanent
@@ -152,6 +152,32 @@ evidence, a falsifiable root-cause hypothesis, a reproduction or
 discriminating test, and an explanation of why the patch fixes the cause.
 Retries and timeouts alone are not a root-cause repair. Record measurements
 for realtime performance or resource claims.
+
+### Execution discipline
+
+Difficulty, length, complexity, inconvenience, computational expense within
+authorized limits, or estimates of hours/days/weeks do not justify reducing,
+deferring, abandoning, or moving an authorized task to future user sessions.
+Attempt the complete authorized scope now and continue until achieved or a
+concrete legitimate blocker is observed. Execution decisions are based on
+observed blockers and evidence, not speculative human-duration estimates.
+
+Decompose only for dependencies, atomic/reviewable commits, crash recovery,
+isolation, independent verification, genuine parallelism, or bounded destructive
+operations—not intimidation, an easier foundation, or a preference to ask the
+user to continue later.
+
+Existing checkpoint boundaries and explicit token/cost/resource/security limits
+still apply. Fail closed for missing authority; genuinely unavailable
+credentials, resources, hardware, tools, quota or platforms; destructive work
+beyond authorization; proven frozen-architecture contradictions; security,
+legal or safety boundaries; or required evidence impossible in the authorized
+environment. Difficulty is never a blocker or permission to invent work limits.
+
+For every new persistent/mutable object or state boundary, verify its
+interaction with existing invariants, including ownership, durable identity,
+lifecycle, crash behavior, recovery, isolation, cleanup conditions and authority
+semantics. Local acceptance alone is insufficient.
 
 ## Model orchestrator V2 (proposed, disabled)
 
@@ -230,6 +256,15 @@ Do not create meaningless documentation churn.
 If documentation genuinely does not apply, state that in the task report.
 
 Keep documentation synchronized with implementation.
+
+Global and active narrative documents must not maintain mutable implementation
+truth independently: capability availability/maturity, current schema/protocol
+versions, phase/checkpoint status, and release/runtime availability belong to
+STATE → locked specification → supervisor evidence → implementation SHA/source.
+Entrypoints remain timeless. Explicit baseline history and frozen historical
+contracts may retain old observations; every routed historical excerpt must keep
+its provenance notice. Preserve historical regression guards without turning
+those lists into current-status inventories. See [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ## Test rule
 
@@ -365,18 +400,20 @@ Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. 
 
 ## Document routing
 
-Read the relevant source of truth for the task:
+Always read this file. Resolve the checkpoint contract and relevant documentation
+with `python3 scripts/execution_plan.py context <checkpoint-id>`; use repeatable
+`--features <key>` for explicitly scoped feature bundles. For separately
+authorized non-checkpoint work use `python3 scripts/execution_plan.py docs
+--features <key>`. `--docs-text` emits canonical excerpts with source locations.
+Unknown bundle keys refuse; routing never grants checkpoint/phase authority.
 
-- UI: DESIGN.md, docs/UX_ACCEPTANCE.md, and the relevant section of docs/PRODUCT.md.
-- Product scope: docs/PRODUCT.md and docs/ROADMAP.md.
-- Architecture: docs/ARCHITECTURE.md and docs/TECHNICAL_PLAN.md.
-- Feature implementation: docs/DEVELOPMENT_WORKFLOW.md.
-- Testing: docs/TESTING.md.
-- Security and licensing: docs/SECURITY_LICENSING.md.
-- Release: docs/RELEASE.md.
-- Contributors: README.md, CONTRIBUTING.md, and docs/DEVELOPMENT_WORKFLOW.md.
-
-Do not guess project architecture when the repository documents the answer. The HTML prototype is a product and UX reference only, not production architecture.
+[docs/DOC_ROUTING.json](docs/DOC_ROUTING.json) defines CORE, FEATURE, and
+ON_DEMAND selection. [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) explains the
+authority map and budgets. Do not automatically read full technical/testing
+plans, roadmap, PLAN, all ADRs, or evidence. Follow links on demand when the task
+requires the detailed contract, trust boundary, or historical evidence.
+UI tasks include `ui` (DESIGN and UX authority); release tasks use `release`;
+control-plane tasks use `model-orchestrator` plus the authorized phase bundle.
 
 ## Tooling
 

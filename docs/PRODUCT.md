@@ -1,8 +1,8 @@
 # Opencut Reinforced Product Vision
 
-## Status and maturity labels
+## Product scope labels
 
-This is the complete planned product scope, not a list of implemented features. The repository is in pre-MVP planning; the HTML prototype simulates selected workflows. Labels describe intended roadmap placement:
+This is the complete planned product scope, not a list of implemented features. The HTML prototype simulates selected workflows; implementation status comes from STATE and supervisor evidence, not these maturity labels. Labels describe intended roadmap placement:
 
 - **MVP FOUNDATION** — required for the initial usable editor or a product-wide foundation.
 - **PLANNED** — intended after or alongside MVP, with no claim that it exists.
@@ -101,7 +101,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Text
 
-**MVP FOUNDATION:** add and edit basic title clips and manual captions on their timeline tracks. The editor exposes exact duration plus bundled-font size, weight, alignment, and color controls. Preview text uses the bundled Inter 4.1 baseline through cosmic-text 0.19.0, independent of host-installed fonts; the 8F exporter will use the same typed content and renderer semantics.
+**MVP FOUNDATION:** add and edit basic title clips and manual captions on their timeline tracks. The editor exposes exact duration plus bundled-font size, weight, alignment, and color controls. Preview and export must share typed content and renderer semantics with pinned bundled fonts, independent of host-installed fonts.
 
 **PLANNED:** body text, lower thirds, credits, callouts; font, weight, size, alignment, letter spacing, line height, fill, stroke, shadow, and background controls; text templates, saved styles, font library, and in/out/loop animation.
 
@@ -123,7 +123,7 @@ The transcript and caption workflow includes searching, replacing, jumping from 
 
 ## Audio
 
-**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, track mute/solo, and clip fades. The Inspector exposes gain in dB, pan as a percentage, and exact rational fade durations. Desktop output uses cpal 0.18.1 through `or_audio`; the callback consumes bounded prepared 48 kHz stereo f32 buffers and does not mutate projects or take project locks. Devices without that format report output unavailable while video preview can use its monotonic clock.
+**MVP FOUNDATION:** basic project audio editing and playback, gain, pan, track mute/solo, and clip fades. The Inspector exposes gain in dB, pan as a percentage, and exact rational fade durations. The desktop audio callback must consume bounded prepared buffers without project mutation or project locks. Devices without that format report output unavailable while video preview can use its monotonic clock.
 
 **PLANNED:** mixer; normalization and loudness controls; EQ; compressor; limiter; noise reduction; voice enhancement and isolation; automatic ducking; beat detection; music, sound-effect, and ambience libraries; audio stems.
 

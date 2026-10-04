@@ -2,6 +2,9 @@
 
 ## Execution lock and implementation order
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 The machine-readable architecture and execution authority is
 [docs/execution/README.md](execution/README.md), with the immutable graph in
 [PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json),
@@ -30,9 +33,13 @@ for checkpoint-specific tests, dependency gates, and stop conditions.
 
 ## Status
 
-Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semantic CLI commands, a Flutter shell, and typed `flutter_rust_bridge` 2.13 bindings for application info, health, and capabilities. Phase 4A–4F and 4UI-2 provide the project/application, persistence, recovery, IPC, CLI, and desktop live-host foundations. Phase 5A–5F provide typed media/jobs, external `ffprobe`, disposable previews, indexed cache, and core-only file-backed Proxy V1. Phase 6 provides canonical tracks and clips, exact trim/split/ripple editing, persistent markers, marker-aware snapping, CLI parity, and the corresponding Flutter UI. Phase 7A provides the standalone dependency-free `or_runtime` contracts for immutable snapshot identity, exact-time frame descriptors and leases, bounded cancellation/backpressure, render/audio/decode budgets, and centralized software-first capability selection. Phase 7B adds the headless `or_render` wgpu spine, deterministic synthetic offscreen rendering, readback normalization, and a handle-only viewer contract. Phase 7C establishes linked software decode; 7F0 locks exact sequence timing, 7F1 proves desktop FFmpeg packaging and texture adapters, 7F delivers desktop video preview and transport, and 7G adds deterministic runtime budgets. The 7H checkpoint hardens cross-platform conformance and the first Developer Preview gate. Checkpoint 8C adds bounded transform, crop, and opacity editing plus preview evaluation. The 8D implementation path adds typed title/manual-caption editing and bundled-font preview rendering. The 8E implementation adds a bounded cpal desktop output path, typed gain/pan/fades, and a closed visual effect/transition set evaluated in preview; 8F owns export parity and release hardening. Hardware decode remains unapproved. See [docs/execution/STATE.json](execution/STATE.json) for the mutable execution status, [ARCHITECTURE.md](ARCHITECTURE.md), and [ROADMAP.md](ROADMAP.md) for design and human roadmap context.
+Implementation status and versions are obtained only through [STATE](execution/STATE.json),
+the locked checkpoint specification, supervisor evidence, and the implementation SHA/source.
 
 ## Contents
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 1. [Architecture boundaries](#1-architecture-boundaries)
 2. [Time model](#2-time-model)
@@ -60,6 +67,9 @@ Phase 3 implemented the bootstrap subset: a Rust workspace and `or_core`, semant
 24. [Upstream references](#24-upstream-references)
 
 ## 1. Architecture boundaries
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Flutter is the presentation layer. Rust owns canonical project and editing state. A shared application layer exposes validated commands and read-only queries to the GUI, semantic CLI, and agent clients. Media, render, audio, jobs, and project storage connect through explicit interfaces.
 
@@ -100,11 +110,17 @@ The Phase 3 application-info capability query is a bootstrap capability concept 
 
 ## 2. Time model
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phase 4A implements `RationalTime` as exact seconds with a signed `i64` numerator and positive `u32` denominator. Fractions normalize to one canonical representation. `RationalRate` is exact units per second with positive, nonzero `u32` numerator and denominator. `RationalTime::from_units` converts integer frame or sample counts through the rate without floating point.
 
 Canonical time is never stored as `f32` or `f64`. Rational values remain exact: there is no implicit rounding. Any future conversion from exact time to integer frames, samples, or ticks must select an explicit rounding policy. `TimeRange` enforces nonnegative duration while allowing a negative start at this low-level layer. This is a foundational time layer, not full timeline behavior.
 
 ## 3. Native project format
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The original `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
 
@@ -238,6 +254,9 @@ Each real edit increments `ProjectRevision` once, reserves required storage befo
 
 ## 4. Command system
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phases 4C–4D establish a small static command catalog without a dynamic registry framework. The catalog includes `project.rename`, `history.undo`, `history.redo`, `media.add`, `media.remove`, `timeline.track.add`, `timeline.track.remove`, `timeline.clip.insert`, `timeline.clip.move`, `timeline.clip.delete`, `timeline.clip.trim`, `timeline.clip.split`, `timeline.clip.ripple_delete`, `timeline.marker.add`, `timeline.marker.move`, `timeline.marker.rename`, `timeline.marker.delete`, and `timeline.sequence.set_frame_rate`, all schema v1. Only `project.rename` is allowed inside a transaction; media and timeline commands are not. `CommandEnvelope` v1 has `command_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, `expected_project_revision`, and `arguments`. `TransactionEnvelope` v1 has a schema version, the same three project/session preconditions, and an ordered list of strict `CommandCall` values. The envelope uses `serde_json::Value` at the structured argument boundary; dispatch immediately decodes arguments into strict private typed structures. The transport-independent contracts are carried by the bounded, strict JSON protocol in `or_ipc` v1.
 
 The dispatcher checks command ID, schema version, project ID, project-instance ID, and expected revision before decoding arguments or mutating state; unknown envelope and argument fields are rejected. Rename preserves its supplied UTF-8 name exactly. Renaming to the same name succeeds as a no-op (`changed = false`) without incrementing revision or changing history. `media.add` accepts one fully validated `MediaItem` and rejects duplicate IDs and source URIs. `media.remove` accepts a `MediaId` and returns `MEDIA_NOT_FOUND` if absent. Each successful add/remove checks the next revision and reserves history storage before mutation; failures change no project, revision, or history. Timeline and marker commands use strict typed arguments and the Phase 6B/6D/6E2A behavior above. `timeline.sequence.set_frame_rate` strictly accepts a nullable positive exact rational rate, participates in session-local undo/redo, increments revision once when changed, and preserves redo and revision on a no-op. Results identify the operation, session, before/after revisions, whether state changed, and the resulting semantic `ChangeSet`.
@@ -250,17 +269,26 @@ Stable errors include `UNKNOWN_COMMAND`, `UNSUPPORTED_COMMAND_SCHEMA`, `UNKNOWN_
 
 ## 5. Query system
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 The deterministic query catalog is `project.summary`, `media.list`, `media.get`, `timeline.tracks`, `timeline.clips`, `timeline.snap`, `timeline.markers`, and `timeline.sequence.settings`. Existing queries remain schema v1; `timeline.snap` advertises schema v2 while accepting schema v1 and v2, and `timeline.markers` and `timeline.sequence.settings` are schema v1. `QueryEnvelope` v1 has `query_id`, `schema_version`, typed `project_id`, typed `project_instance_id`, and `arguments`. `project.summary` accepts an empty object and retains its existing wire shape: project ID, runtime instance ID, current revision, and name. `media.list` accepts unsigned `offset` and `limit`, rejects zero or limits above 100, returns a bounded page in project insertion order, and includes items, total count, offset, limit, and `next_offset` when more items exist. An offset beyond the end returns a valid empty page. `timeline.tracks` returns canonical track order with ID, kind, and clip count. `timeline.clips` takes a track ID, offset, and limit from 1 through 100, and returns only clip ID, media ID, exact timeline start, and source range in canonical order. An offset equal to or beyond the clip count produces an empty page; `next_offset` appears only when another page exists. `timeline.markers` takes strict unsigned `offset` and `limit` arguments with a maximum page size of 100, returns canonical marker state and ordering, and produces an empty page beyond the end. `timeline.sequence.settings` accepts an empty argument object and returns the current nullable exact sequence rate. `timeline.snap` keeps the Phase 6E1 clip-only resolver for schema v1 and adds marker candidates only for explicit schema v2; both versions scan canonical state independently of paginated pages. Timeline DTOs are application-facing types, not persistence codec structures. All queries read canonical state without mutation or revision changes; listing does not open/probe source files, and offline sources remain listable.
 
 Unknown queries and unsupported query schemas return `UNKNOWN_QUERY` and `UNSUPPORTED_QUERY_SCHEMA`; project/session mismatches use the corresponding shared codes, and invalid arguments return `INVALID_ARGUMENTS`. Queries must not start hidden destructive work or return provider credentials. Output fields and schema versions are discoverable for automation clients. `QueryResult` omits absent optional result fields so existing `project.summary`, `media.list`, and `media.get` wire shapes remain unchanged. IPC protocol v1 and the shared `ApplicationRequest` route are unchanged.
 
 ## 6. History and transactions
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phase 4D implements the first in-memory transaction and history behavior without event sourcing. `ChangeSet` supports normalized project-name changes, indexed media-added/removed changes, compact Phase 6B/6D timeline changes, and compact Phase 6E2A marker changes: track add/remove stores ID, kind, and index; clip insert/delete stores the clip, track, and index; clip move stores the clip/media/source range and exact old/new track, index, and timeline start; trim stores before/after clip state; split stores the original and exact left/right states; ripple delete stores only the deleted clip, track/index, shifted count, and shift duration; marker add/delete stores the exact marker and canonical index; marker move stores ID/label and exact old/new times and indices; marker rename stores ID/time and before/after labels. Ripple history keeps an internal constant-size state guard rather than a per-shifted-clip list. Entries do not store full `ProjectDocument` or marker-collection snapshots. Undo/redo validate the expected canonical identity and state before mutation and return `HISTORY_CONFLICT` without partial changes on mismatch. Each undo/redo is a new canonical mutation and increments the current revision once. New real edits clear redo history. No-op edits, failed operations/groups, and reads leave project state, revision, and history unchanged. History lives only inside `ProjectSession`: it is not saved in `.orproj` and resets when the document is opened into a new session. Required project/history storage is reserved before timeline mutations; allocation failure uses `HISTORY_STORAGE_FAILURE` and leaves state and both stacks unchanged.
 
 The transaction envelope still accepts only `project.rename` child calls. Grouped commands stage all intermediate names and normalize them to one net `ChangeSet`; a net no-op does not increment revision or create history. Timeline commands are explicitly rejected inside a transaction. This proves bounded single-operation atomic grouping, not a general transaction framework. The separate project-storage and recovery-checkpoint APIs do not depend on keeping an unbounded event log; persistent history remains out of scope. IPC remains protocol v1 and carries timeline operations through the existing generic `ApplicationRequest` envelope; no timeline-specific transport is added.
 
 ## 7. CLI
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The CLI is a first-class semantic interface to the shared application and domain operations. Parity means semantic/domain operation parity for project changes and meaningful project queries, not exposure of presentation-only UI controls; see [PRODUCT.md](PRODUCT.md) for examples.
 
@@ -341,6 +369,9 @@ Dry-run, long-running job progress, and agent EditPlans remain future work. Do n
 
 ## 8. Local IPC
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phase 4F implements `or_ipc` protocol v1 for application/control requests. Frames contain a four-byte big-endian length and strict JSON body, bounded to 1 MiB. Each request uses a UUIDv4 ID echoed by the response; one request is processed per connection. Supported requests are `Describe`, shared `ApplicationRequest` (including the Phase 8F export job request/status/cancel contract), `Save`, and guarded `Shutdown`. The descriptor is strict and versioned and contains the endpoint, project/runtime IDs, and a random per-server token. Authentication and protocol checks happen before project disclosure or dispatch.
 
 macOS/Linux use Unix-domain sockets in a server-created private runtime directory, with 0700 directory and 0600 socket/descriptor permissions. Sandboxed macOS builds place this directory in the app-provided temporary directory and include the local server entitlement; the app code creates no TCP listener. Windows uses a named pipe configured to reject remote clients; its runtime directory, descriptor file, and pipe have protected owner-only DACLs. There is no TCP, HTTP, WebSocket, LAN listener, or fallback. The token is not printed or logged; descriptor access is the client credential. This is a same-user local automation boundary, not isolation from malicious processes running as the same OS user. `LiveProjectHost` owns one `ProjectFileSession`, serializes direct bridge and IPC requests through the same control-plane state, and does not expose arbitrary file reads or shell execution. Android constructs this host without a server worker and continues to use the same direct bridge command/state path; the IPC protocol and its supported transports are unchanged. Export validates an absolute caller-supplied `.mkv` destination and does not read arbitrary files or execute shell commands. The Flutter shell schedules sidecar autosave; the headless `or session serve` command has no periodic scheduler.
@@ -348,6 +379,9 @@ macOS/Linux use Unix-domain sockets in a server-created private runtime director
 Timeout/cancellation, subscriptions, multiple simultaneous sessions, and remote clients are not part of protocol v1.
 
 ## 9. Flutter and Rust bridge
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Flutter is a thin UI over the application API. Rust remains the only canonical project/timeline state. Flutter may own presentation, navigation, panel, selected-tool, temporary text/input state, and scoped cached read models/view models, but not a second authoritative editable project model.
 
@@ -367,6 +401,9 @@ Android project New/Open use SAF document URIs only at the Flutter/native storag
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
 ## 10. Preview rendering and frame model
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Rust and wgpu own render evaluation and output. Flutter presents a registered
 external texture through one shared semantic viewer contract. The runtime owns
@@ -510,6 +547,9 @@ and other native interop remain runtime-adapter work for later checkpoints.
 
 ## 11. Media and render graph
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 FFmpeg is the intended baseline for media probing, demux, decode, encode, mux, conversion, and resampling. Checkpoint 7C0 selects the current high-level `ffmpeg-the-third` Rust binding, package version `6.0.0+ffmpeg-9.0`, with its paired `ffmpeg-sys-the-third` 6.0.0 binding layer. The maintained upstream release adds FFmpeg 9 support while retaining FFmpeg 5.1 through 8.1 compatibility, and exposes Rust wrappers for format/demux, codec/decode, frame, software-resampling, and software-scaling APIs. Its declared Rust 1.80 MSRV is below the workspace's Rust 1.85 floor. Both Rust packages declare WTFPL. The system-link path needs FFmpeg headers and shared libraries, `pkg-config`, a C compiler, and `clang`/`libclang` for runtime bindgen; the binding uses vcpkg discovery for MSVC. The `ffmpeg-sys` link step does not directly require CMake; the Linux/macOS FFmpeg source build uses `configure`/`make`. CMake/tool versions for a Windows vcpkg port are port-specific and must be fixed with that platform's later build gate. See the [published 6.0.0 package](https://crates.io/crates/ffmpeg-the-third/6.0.0), [upstream release history](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/CHANGELOG.md), and [current build manifest](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/ffmpeg-sys-the-third/Cargo.toml).
 
 The approved baseline is FFmpeg 8.1.3, using matching headers and library ABI majors at build and runtime. Any update requires a new compatibility, API, MSRV, license, and hosted-link review; the later gates use 8.1.3. Checkpoint 7C0 provisions a separate Linux CI prefix built from the official 8.1.3 source with shared libraries, `--disable-autodetect`, `--disable-everything`, and no `--enable-gpl`, `--enable-nonfree`, or `--enable-version3` options, then compiles, links, loads, and checks the native library ABI/license strings through an out-of-workspace probe. The CI-only build also uses `--disable-asm` to reduce build requirements. The 7C0 probe was tooling only. The production workspace now pins `ffmpeg-the-third` 6.0.0 with only codec, format, software-resampling, and software-scaling features. Its hosted prefix keeps the LGPL-only dynamic configuration and enables only the `file` protocol, Matroska demuxer, and FFV1/PCM S16LE decoders needed by the generated fixture; this small fixture codec set does not select the product codec set.
@@ -544,6 +584,9 @@ Use optimized upstream implementations and compiler auto-vectorization before co
 
 ## 12. Audio and text
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Decode audio through `or_media`; `or_audio` defines the device-neutral output boundary. Its preallocated single-producer/single-consumer interleaved buffer is bounded and non-blocking: producers receive backpressure when full, while the callback fills missing frames with silence and reports the underrun. The callback advances the audio master clock by device frames, including silence, and returns an exact clock message bound to its `RenderSnapshot` for video pacing. Timeline-to-device conversion subtracts the snapshot seek origin, multiplies exact rational seconds by the integer device sample rate, then floors to the frame at or before that time. Video drops frames more than the configured drift tolerance behind audio and waits when they are ahead; frames within the tolerance may present. Synchronization rejects clock messages from another project or revision while allowing each worker to request its own exact time range.
 
 The callback does not allocate, lock, call Flutter or providers, or access canonical project state. Cancellation silences and drains queued data; a seek starts a fresh clock message at its exact timeline origin. Phase 8E owns `cpal` 0.18.1 in `or_audio`; it must not become a direct `or_core` dependency. Desktop output currently requests exactly 48 kHz, stereo, f32; unsupported device formats return a structured unavailable error and video playback can continue on the monotonic clock. A bounded worker decodes 250 ms windows through `or_media`, applies each clip's gain (millidecibels converted to linear amplitude), linear stereo balance pan (basis points), and multiplicative linear fades at exact timeline sample times, then mixes and clamps the prepared interleaved blocks. The 12,000-frame SPSC ring and 256-entry/32 MiB audio decode budget bound producer backpressure. Preview uses the device clock as master and gates video against a one-frame drift tolerance. Hosted CI does not require a physical device, so device-neutral tests and hosted build verification are authoritative.
@@ -565,6 +608,9 @@ The font source is the official [Inter v4.1 release](https://github.com/rsms/int
 All five files are under `crates/or_render/assets/fonts/inter/`. The direct `cosmic-text` dependency is pinned to 0.19.0 with default features disabled and only `std` and `swash` enabled; Cargo reports `MIT OR Apache-2.0` and Rust 1.89 compatibility.
 
 ## 13. Background jobs and cache
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Phase 5A implements `JobId` (validated UUIDv4), `JobKind::MediaProbe`, and `JobState` values (`Queued`, `Running`, `Succeeded`, `Failed`, and `Cancelled`). `JobKind::MediaProbe` remains synchronous; Phase 5D adds concrete thumbnail and waveform job kinds for generated library previews, and Phase 5F adds `JobKind::ProxyGenerate` (serialized as `proxy_generate`).
 
@@ -608,6 +654,9 @@ Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, 
 
 ## 14. AI providers and local inference
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Checkpoint 10A owns the provider boundary for later AI features. Typed tasks go
 through the `or_ai` Provider Manager to managed local sidecars, optional
 permissioned cloud adapters, deterministic test providers, or a typed
@@ -646,6 +695,9 @@ requests; cloud tasks receive only the minimum context they need.
 
 ## 15. Model management and secrets
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Checkpoint 10A owns the versioned model manifest and bounded artifact contract:
 ID/version, task capabilities, runtime/provider requirement, source, expected
 SHA-256, size bound, license/provenance, hardware requirements, and
@@ -658,6 +710,9 @@ storage, license, and permission flows over the 10A contract.
 Store user provider secrets in operating-system secure storage. Internal provider calls may access a credential through a narrowly scoped application service. Agent and CLI interfaces expose only configured or not-configured state and never return plaintext stored credentials. Do not log request headers or secret-bearing configuration.
 
 ## 16. EditPlan and automation recipes
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The planned agent edit flow is:
 
@@ -675,6 +730,9 @@ Treat all model output as untrusted input. Refuse unknown commands, target IDs, 
 Automation recipes are declarative OR command sequences with schema and permission validation. They do not execute arbitrary shell commands.
 
 ## 17. Templates, themes, MotionScene, and community
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Templates are declarative packages with stable editable slot IDs, dependency manifests, checksums, and license metadata. They contain project structure and values, not arbitrary executable code.
 
@@ -751,6 +809,9 @@ by itself.
 
 ## 18. Plugins
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phase 16B uses `wasmi` 1.1.0 inside a dedicated extension runtime, never as an
 `or_core` dependency. General WASI is not enabled by default. Plugins receive
 only explicit OR host capabilities; default authority excludes filesystems,
@@ -764,6 +825,9 @@ ABI.
 Native and OpenFX compatibility is later and has a higher trust cost. Do not treat installed plugins as unrestricted trusted code by default.
 
 ## 19. Export and interchange
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Desktop export captures one project revision through the shared application
 request and queues bounded background work with monotonic frame progress and
@@ -798,6 +862,9 @@ collision, and parsing limits.
 
 ## 20. UI feature registration and mobile
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Production Flutter may use static feature descriptors containing ID, label, icon, group, availability, command IDs, panel, inspector sections, and shortcut metadata. Keep registration lightweight; do not build a speculative plugin framework around it.
 
 Stable shell slots include App Bar, Editor Tool Rail, Left Tool Panel, Viewer, Inspector, Timeline Toolbar, Timeline, Task or Status Area, Dialog or Mobile Sheet, and Command Palette. Integrate new work in an existing slot unless a permanent new region is justified and reviewed.
@@ -828,6 +895,9 @@ Visible Flutter strings and accessibility labels use a localization-capable reso
 
 ## 21. Security
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Treat project files, media, subtitles, templates, themes, downloaded assets, models, plugin output, and agent or AI output as untrusted. Validate input at every serialization, IPC, plugin, model, and community boundary. Enforce limits for file sizes, dimensions, durations, archive expansion, and job resources before implementation exposes those inputs.
 
 Keep secrets out of logs, project files, CLI output, and agent context. Require explicit capabilities for plugins and community actions. Security and licensing constraints are part of feature design, not follow-up cleanup.
@@ -838,9 +908,15 @@ Provider network capability and permission are enforced centrally by the applica
 
 ## 22. Implementation structure
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Start with the smallest useful Rust workspace and Flutter shell when Phase 3 is explicitly started. Planned domains are conceptual boundaries, not a mandate to create one crate per domain. Split a module into a crate only when a concrete build, reuse, ownership, or dependency boundary justifies it. Never create empty future crates or modules.
 
 ## 23. Frozen decisions and owned open details
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The following architecture decisions are frozen for the remaining roadmap and
 are implemented only by their owning checkpoint:
@@ -905,6 +981,9 @@ behavior is deferred for a later architecture choice. Optional capabilities
 remain optional; this plan does not claim they are implemented.
 
 ## 24. Upstream references
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 These upstream references support frozen dependencies and current interface
 claims. Re-check version-specific facts when an owning checkpoint implements

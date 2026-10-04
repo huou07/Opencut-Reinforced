@@ -9,9 +9,13 @@ activated change to product evidence policy.
 
 ## Status
 
-Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. Phase 6A adds timeline-domain validation, strict `.orproj` v3 codec and v1/v2 migration, recovery and storage compatibility, query-wire regression, and referenced-media removal guard coverage. Phase 6B adds application command/history/query coverage, headless and attached semantic CLI tests, save/reopen and undo-save storage checks, recovery snapshot/apply/reload checks, and transaction/precondition regression coverage. Phase 6C adds bridge DTO tests, Flutter widget coverage for read-only track/clip presentation and command interactions, bounded and stale page handling, and a hosted native Rust-host timeline lifecycle test through save/reopen. Phase 6D adds exact trim/split/ripple core invariants, compact history/conflict/overflow/capacity guards, CLI changed-only save and attached dirty-state parity, Flutter action/dialog acceptance, and hosted typed-bridge save/reopen coverage. Phase 6E2A adds marker ID/domain/order/bounds tests, strict v4 codec and v1/v2/v3 migration tests, clean-open/explicit-save storage tests, v1 recovery with v3 and v4 nested snapshots, semantic marker command/history/conflict/transaction/revision tests, bounded marker query and sub-1 MiB page tests, Snap V1/V2 schema/tie/read-only tests, headless/attached CLI parity, and local IPC coverage without changing Flutter marker APIs or UI. Phase 7A adds deterministic `or_runtime` coverage for exact snapshot revision/time identity, frame descriptor and lease ownership, bounded queue pressure/close/cancellation, separate render/audio/decode budget release, and software-first capability/provider selection. Phase 7B adds deterministic `or_render` contract coverage, offscreen wgpu synthetic rendering, row-padded readback normalization, resource-owned frame lifetime, and handle-only viewer presentation checks. Phase 7C0 adds a locked, hosted Linux FFmpeg 8.1.3 shared-library compile/link/load probe under an LGPL-only configuration. 7F1 adds deterministic viewer-mailbox tests and hosted macOS/Linux/Windows builds that compile a desktop packaging probe against production `or_media`, stage official FFmpeg 8.1.3 shared libraries beside that probe in the app bundle, verify loading without developer FFmpeg search paths, and preserve source/build provenance. The shared Flutter bridge remains FFmpeg-independent; Phase 9A0 separately builds and packages the approved Android shared libraries and validates the native runtime on an x86_64 emulator. It does not add FFmpeg dependencies to Android product code or to Flutter widget tests. Phase 7F builds the native Flutter pixel-buffer texture adapters but does not add a product viewer or playback controls. The 7C implementation adds bounded/stale/cancellable `or_media` queues, exact timestamp/seek checks, owned software RGBA frame tests, and a linked audio resample/range test with a tiny generated FFV1/PCM fixture. CI runs the production crate against the approved FFmpeg 8.1.3 shared prefix. Checkpoint 8F adds local export/autosave coverage; its authoritative milestone status remains gated on hosted supervisor evidence. The test layers below distinguish implemented coverage from future product tests.
+Implementation status and versions are obtained only through [STATE](execution/STATE.json),
+the locked checkpoint specification, supervisor evidence, and the implementation SHA/source.
 
 ## Current Phase 3 checks
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Rust unit tests cover core bootstrap values and bridge DTO mapping; CLI contract tests execute the real binary and verify human output, JSON, help, and invalid input.
 - The dedicated `apps/or_app/integration_test/native_bridge_diagnostics_test.dart` initializes the native Rust library, calls app info, health, and capability discovery through the typed bridge, and compares the results with the CLI snapshot.
@@ -19,6 +23,9 @@ Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Pha
 These checks prove the bootstrap architecture only. They do not demonstrate editing, media, or release behavior.
 
 ## Current Phase 4UI-1 coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Structural tests in `apps/or_app/test/widget_test.dart` cover:
 
@@ -34,9 +41,15 @@ The frozen prototype is guarded separately by its before/after SHA-256 and an em
 
 ## Current CI gates
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; a focused deterministic `or_audio` test; Flutter dependency, formatting, analysis, and widget checks; storage, v1/v2/v3 recovery, real local IPC, shared-host/attached-CLI media parity, and Windows endpoint ACL tests on macOS and Windows; native builds for macOS, Linux, Windows, and Android; native macOS Flutter bridge, project lifecycle, and offline-media integration tests; and Android x86_64 emulator checks. The Flutter static and widget job has a bounded 40-minute timeout: run 36897619300 spent 17m29s installing FFmpeg development libraries and hit the previous 20-minute job timeout before widget tests could run. The Ubuntu 26.04 Rust job installs system FFmpeg tooling for CI-only generated-media tests, logs `ffmpeg -version` and `ffprobe -version`, and explicitly runs the generated-media real-probe and real-artifact integration tests. It separately builds FFmpeg 8.1.3 as LGPL-only shared libraries and runs the bounded Rust binding compile/link/load probe described under Phase 7C0. The macOS, Linux, and Windows desktop jobs independently build that official FFmpeg release from a SHA-512-verified upstream archive using its LGPL 2.1-or-later defaults, without enabling GPL, version3, or nonfree options. Each job records the compiler/toolchain, source tag and archive identity, configure arguments, components, license posture, patch status, and runtime library names; it preserves the source archive and installed shared libraries as a hosted artifact. Desktop Flutter builds compile the texture adapter and FFmpeg-independent bridge with `PKG_CONFIG_PATH` empty. A separate probe that calls production `or_media` is staged beside the bridge with FFmpeg libraries; it checks binding ABI majors and the LGPL license with ambient runtime search paths cleared. The macOS bridge integration tests run after the libraries are packaged. This runner supplies the locked Proxy V1 scale-filter option `reset_sar`; older system FFmpeg versions fail proxy generation without changing the profile. Android CI cross-builds the production FFmpeg probe and software preview bridge against the approved shared profile for all three ABIs, verifies the viewer JNI and FFmpeg libraries in the APK, runs the x86_64 probe with libraries extracted from the APK, and drives the bridge diagnostics plus `apps/or_app/integration_test/android_preview_surface_test.dart` on API 36 x86_64 SwiftShader. It records the API/GPU path, queue budgets, cancellation and fallback telemetry, and `ANDROID_HARDWARE_MEDIA=UNVERIFIED`. The emulator step keeps its 30-minute timeout, bounds `adb wait-for-device` to 120 seconds, and preserves the emulator log. It does not run IPC or the project-storage integration test on Android.
 
 ## CI-first verification status
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 GitHub-hosted Actions is canonical for platform correctness, linker-dependent builds, and the native bridge runtime smoke test. Local inability to run a platform test does not remove its verification requirement; it moves the evidence source to the equivalent required Actions job.
 
@@ -51,6 +64,9 @@ For example, a blocked local macOS native check plus a passing GitHub macOS nati
 
 ## Current Phase 4A coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `ProjectId` and `ProjectInstanceId`: UUIDv4 generation, canonical display and parse round trips, serde round trips, and invalid/non-v4 project ID rejection.
 - `ProjectRevision`: initial zero, checked increments, overflow rejection, and serde round trip.
 - `RationalTime` and `RationalRate`: normalization, invalid denominator/rate rejection, serde validation and normalization, and exact 24, 24000/1001, 30000/1001, and 48000/1 unit conversions.
@@ -59,6 +75,9 @@ For example, a blocked local macOS native check plus a passing GitHub macOS nati
 Phase 4A tests foundational values only; later sections record project and application coverage.
 
 ## Current Phase 4B coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - New `ProjectDocument` ID, initial revision, exact name, and domain round trip.
 - V1 format marker, schema version, envelope fields, deterministic pretty output, and trailing newline.
@@ -71,6 +90,9 @@ Filesystem save/load tests are recorded under Phase 4E1. The initial v1-to-v2 pr
 
 ## Current Phase 4C coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `ProjectSession::open` preserving the document while owning a valid runtime instance ID, plus discovery of the then-implemented command and query contracts.
 - Strict command/query envelope serde round trips, unknown-field rejection, and validation order for operation ID, schema, project, instance, revision, and arguments.
 - `project.rename`: exact Unicode preservation, one revision increment per real rename, same-name no-op, stale revision/current-revision reporting, project/session mismatch, unknown/unsupported command rejection, malformed/extra arguments, and overflow without partial mutation.
@@ -78,6 +100,9 @@ Filesystem save/load tests are recorded under Phase 4E1. The initial v1-to-v2 pr
 - Rename → `.orproj` encode/decode preserves the changed name and revision without persisting the runtime instance ID.
 
 ## Current Phase 4D coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Exact command/query catalogs including undo/redo discovery; strict command-call and transaction-envelope serde round trips, unknown-field rejection, and typed-ID validation.
 - Atomic rename groups, net `ChangeSet` normalization, one revision increment/history entry for changed groups, and no revision/history/redo clearing for net no-ops.
@@ -89,6 +114,9 @@ Filesystem save/load tests are recorded under Phase 4E1. Phase 5B migration and 
 
 ## Current Phase 4E1 coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - Bounded load accepts canonical `.orproj` v1 through the existing codec and rejects files over 64 MiB, invalid UTF-8, invalid codec data, and missing files.
 - Save/load preserves `ProjectId`, nonzero `ProjectRevision`, and exact project name without mutating the source session; runtime instance ID and undo/redo history are not persisted.
 - New and existing destinations, Unicode paths, and the caller-owned parent-directory rule are covered.
@@ -97,6 +125,9 @@ Filesystem save/load tests are recorded under Phase 4E1. Phase 5B migration and 
 - The storage integration test runs in the Linux workspace Rust checks and on macOS and Windows in Platform Verification. Android CI builds the Rust bridge for Android but does not run storage tests on an Android device.
 
 ## Current Phase 4E2 coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Candidate inspection requires exact saved-base equality; inspection also covers `NONE`, stale checkpoints, same-revision content mismatch, intermediate revisions, rollback below base, foreign projects, and orphaned sidecars.
 - Strict recovery-envelope marker, schema, and unknown-field validation; nested `.orproj` codec failures; bounded oversize rejection; and invalid UTF-8 rejection.
@@ -109,6 +140,9 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 
 ## Current Phase 4F coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `ProjectSession::handle_application_request` dispatches commands, queries, and transactions through the existing semantic methods; operation errors remain the core `OperationError` values.
 - `ProjectFileSession` tests cover open without revision change, dirty state, exact saved-base comparison including same-revision external replacement, recovery candidate blocking, stale recovery allowance, and safe save behavior.
 - `or_ipc` unit tests cover big-endian framing, empty/oversized/truncated frames, strict endpoint descriptors and redacted debug output, request-ID matching, malformed UTF-8/JSON without mutation, and authentication/protocol rejection before dispatch.
@@ -118,6 +152,9 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - CLI integration tests run in the Linux Rust workspace job. The macOS and Windows jobs also run the real attached-CLI contracts directly; Windows additionally runs the `or_ipc` unit suite for endpoint ACL checks.
 
 ## Current Phase 4UI-2 coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Widget tests inject fake project gateways and file pickers. They cover desktop create/open, cancellation, exact project-name preservation, revision-zero creation, close and switch Save/Discard/Cancel decisions, save failures, stale-revision refresh without retry, event-sequence invalidation, recovery candidate/stale/conflict/invalid handling, Android's unavailable New/Open state, keyboard shortcuts, and exit cancellation.
 - The macOS native integration test uses the generated Rust bridge to create and open a real `.orproj`, check revision and runtime identity, rename/undo/redo/save through the Flutter workspace, inspect the Advanced / Developer descriptor surface, verify descriptor cleanup, and reopen with the persistent project ID but a fresh runtime instance ID.
@@ -130,6 +167,9 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 
 ## Current Phase 5A coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `MediaId` and `JobId`: UUIDv4 generation, canonical display/parse, serde round trips, and rejection of malformed and non-v4 IDs.
 - Exact duration parsing: `0`, whole seconds, decimal fractions, normalization, excess precision, invalid signs/text, and overflow. Rates cover `24/1`, `24000/1001`, `30000/1001`, zero values, invalid syntax, and overflow.
 - External JSON conversion: video-only, audio-only, combined streams, subtitle/other streams, missing optional fields, unknown external fields, malformed documents, invalid dimensions, invalid durations, and invalid optional frame rates/audio values. Invalid optional rates and audio sample-rate/channel-count values become unavailable; invalid required dimensions or durations fail with a structured metadata error.
@@ -140,6 +180,9 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; the macOS bridge/lifecycle evidence comes from hosted CI.
 
 ## Current Phase 5B coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `.orproj` codec tests cover v1-to-v2 migration with exact project ID/revision/name preservation and an empty library, v2 empty and media round trips, strict unknown-field rejection, malformed/oversized URI and metadata values, duplicate IDs/sources, and deterministic media order. A clean v1 open is checked not to rewrite disk; explicit save emits v2 without a conversion-only revision increment.
 - Recovery tests cover the v1 recovery envelope with old/new nested project formats, including cross-schema saved-base and recovery snapshots, while preserving exact-base conflict checks.
@@ -152,6 +195,9 @@ Recovery UI behavior is covered under Phase 4UI-2 below. Autosave remains unimpl
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`; hosted macOS Actions supplies the native evidence.
 
 ## Current Phase 5C coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 Job Manager unit tests (`crates/or_core/src/jobs/manager.rs`) use synchronization primitives rather than sleeps and cover:
 
@@ -179,6 +225,9 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 
 ## Phase 5D coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - Source-fingerprint tests cover stable small-file content hashing, changed bytes in a large file, bounded large-file sampling, and errors for unavailable or non-regular sources. The fingerprint includes file size, available modification time, and sampled bytes; it is used only for disposable cache invalidation.
 - `MediaArtifactService` tests cover locked profile-key separation, valid cached PNG generation for both profiles, terminal event ordering, ready cache hits without a second job, same-key in-flight deduplication, unsupported streams without spawning `ffmpeg`, queue and record backpressure, cache-budget failure, timeout/cancellation, bounded output, malformed PNG rejection, and child cleanup.
 - Bridge tests cover desktop cache-root policy. The hosted macOS offline-media bridge test checks thumbnail and waveform requests return `notApplicable`, artifact work does not change the project revision, and malformed cache keys are rejected.
@@ -187,6 +236,9 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - Hosted macOS CI runs the native Flutter project lifecycle and offline-media bridge tests. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Current Phase 5F and cache-index coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Lazy index creation and exact schema-v1 table/index shape; existing thumbnail and waveform cache files and canonical proxy `.mkv` files are discovered without regeneration.
 - Reopen reconciliation preserves access sequences, repairs size drift, adds orphan files, removes missing-file rows, and rebuilds corrupt, unsupported-version, or inconsistent index metadata without deleting artifacts.
@@ -201,6 +253,9 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - Hosted macOS and Windows run the file-backed cache and proxy fake-executable tests through `cache::tests` and `media_artifacts::tests`; Android verifies the Rust-backed APK build and does not run proxy generation. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 6A, 6B, 6C, 6D, and 6E1 coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - Timeline unit tests cover UUIDv4 `TrackId` and `ClipId` parsing/serde, Video/Audio-only kinds, empty default state, track and clip bounds, globally unique IDs, media existence and kind compatibility, nonnegative starts, positive duration, checked end arithmetic, known source-duration bounds, unknown-duration acceptance, ordered clips, same-track overlap rejection, adjacency, allowed cross-track overlap, and valid reuse of one media item across tracks.
 - Strict project codec tests cover v5 round trips for empty and populated timelines, markers, and exact sequence rates; v1–v4 migrations set the rate to `null` and preserve identity, revision, media, and timeline state. V5 requires the nullable rate field and rejects malformed or extra rational fields.
@@ -221,6 +276,9 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 
 ## Phase 6E2A coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `crates/or_core/src/timeline.rs` covers generated/canonical UUIDv4 `MarkerId` values, malformed and non-v4 rejection, empty/default marker state, nonnegative time, no upper time bound, exact surrounding whitespace, Unicode labels at the 256-byte boundary, blank/oversized labels, duplicate IDs, same-time duplicate labels, canonical time/ID ordering, and the 10,000-marker bound.
 - `crates/or_core/src/project_document.rs` covers strict v5 marker and sequence-rate fields, exact rate round trips, v1–v4 migrations with an unset rate, bounded marker deserialization, and unknown/invalid data. `crates/or_core/src/project_file_session.rs` verifies clean v1–v4 opens, no immediate rewrite, and explicit v5 saves without conversion-only revision increments.
 - `crates/or_core/src/application.rs` covers all four marker commands, canonical insertion/reordering, exact labels, duplicate/not-found/invalid/limit errors, missing-marker and revision-overflow atomicity, semantic `ChangeSet` recipes, add/move/rename/delete undo/redo, history conflicts, no-op move/rename redo preservation, transaction rejection, clip-edit marker stability, bounded canonical marker paging, strict page arguments, unchanged existing `QueryResult` shapes, and a 100-marker 256-byte serialized page below 1 MiB.
@@ -229,6 +287,9 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - `crates/or_cli/tests/semantic_cli.rs` covers headless and attached marker list/add/move/rename/delete, generated IDs, exact rational parsing, changed-only headless saves, attached dirty-until-save behavior, and CLI Snap V2 marker reporting. No Flutter marker read model, bridge API, or Snap V2 GUI coverage is expected in this phase.
 
 ## Current Phase 7A coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 `crates/or_runtime` unit tests remain headless and standard-library-only. They
 verify that `RenderSnapshot` preserves the exact requested rational range and
@@ -252,6 +313,9 @@ license/build, and hosted platform evidence before pinning.
 
 ## Current Phase 7B coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 `crates/or_render` keeps its tests headless and render-core scoped. They verify
 handle-only viewer contracts, immutable render-graph inputs tied to
 `RenderSnapshot`, deterministic wgpu synthetic solid-color rendering,
@@ -262,6 +326,9 @@ not launch Flutter or a native OR application. Viewer presentation, media
 decode, native interop, and copied Dart frame transport remain outside 7B.
 
 ## Phase 7F0 timing and viewer contract coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 `or_core::RationalRate` tests exact checked floor/ceiling frame-index
 conversion and frame-time conversion. `ProjectTimeline` tests the global
@@ -277,6 +344,9 @@ adds Android surface presentation behind that contract. Local native Flutter
 runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 7F1 media and texture packaging gate
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 `or_runtime` tests the bounded viewer mailbox, RGBA-to-premultiplied-BGRA
 conversion, stale generation rejection, and the three-lease in-flight bound.
@@ -316,6 +386,9 @@ verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 7F preview transport coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 `or_runtime::transport` tests exact seeks, explicit-rate requirements,
 half-open playback ends, frame-lattice stepping, monotonic-clock updates, and
 stale generations. `or_media` verifies the preceding source presentation
@@ -329,6 +402,9 @@ through the project command.
 Native Flutter runtime execution remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 7C0 coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 `tools/ffmpeg-link-probe` is an out-of-workspace CI tool with an exact
 `ffmpeg-the-third` 6.0.0 package pin and locked Rust dependency graph. Hosted
@@ -350,6 +426,9 @@ disallowed locally by policy.
 
 ## Current Phase 7D evaluation coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 The 7D review found no enabled hardware decoder or native-frame interop adapter
 to verify. The software decode integration test checks an exact-time seek,
 owned RGBA pixels, and budget release; `or_media` also tests that FFmpeg's
@@ -365,6 +444,9 @@ fallback checks, and repeatable target-hardware measurements.
 
 ## Current Phase 7E coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 `or_audio` tests exact rational timeline-to-device flooring relative to a
 `RenderSnapshot`, callback clock advancement through silence, bounded ring
 backpressure and wraparound, cancellation, and exact video wait/drop/present
@@ -375,6 +457,9 @@ device block performs no allocation. The Rust CI job runs `cargo test --locked
 -p or_audio`; no audio device or native output backend is selected or exercised.
 
 ## Test pyramid
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 ### Rust domain and application unit tests
 
@@ -460,6 +545,9 @@ Future MotionScene and procedural-motion coverage is checkpoint-scoped:
 
 ## Performance instrumentation and benchmarks
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Phase 7G adds deterministic `ResourceBudget::metrics()` snapshots for current
 and peak in-flight resources/bytes, successful acquisitions, and in-flight or
 byte-budget rejections. These counters use no clock and send no telemetry. The
@@ -493,11 +581,17 @@ GitHub-hosted CI is authoritative for build correctness, automated tests, platfo
 
 ## Fixtures and results
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Use tiny, self-created or legally safe media fixtures. Keep fixture provenance and rights clear. Avoid shipping downloaded models or copyrighted media as test data.
 
 A check that did not run must never be reported as passing. Report its exact status and reason. Keep a failing or unavailable check visible rather than silently omitting it. Prototype simulation tests are not production application tests.
 
 ## Execution-plan infrastructure
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The standard-library-only execution infrastructure has focused tests for valid
 plan/state validation, duplicate IDs, missing dependencies, cycles, multiple
@@ -532,6 +626,9 @@ hardening commit itself must pass both workflows.
 
 ## Phase 8A typed project model and timeline contract coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - Timeline model tests cover Video, Audio, Text, and Caption tracks; Media, Text, and Caption clip content; stable IDs; exact starts and positive exact durations; media source-range preservation; bounded text and typed clip settings; per-kind track-state rules; solo evaluation by medium; and locked-track mutation rejection.
 - Strict project codec tests cover schema-v7 round trips, unknown-field and closed-enum rejection, typed setting bounds, SAF source validation, and v5-to-v7 migration with stable media/clip identity, exact source duration, default state/settings, and preserved project revision. The v6 decoder remains covered as a legacy input; earlier v1–v4 migration and clean-open behavior remain covered.
 - Application tests cover typed insert/update commands, typed v2 track/clip queries, exact duration-based move/trim/split/ripple behavior, validation atomicity, persistent track state, undo/redo, and unchanged IPC protocol v1 dispatch.
@@ -541,6 +638,9 @@ hardening commit itself must pass both workflows.
 - Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 8B timeline usability coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `crates/or_app_bridge/src/api/project.rs` tests preserve typed Video, Audio,
   Text, and Caption track kinds plus lock, visibility, mute, and solo state in
@@ -561,6 +661,9 @@ hardening commit itself must pass both workflows.
 
 ## Phase 8C video transform foundation coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `or_core` verifies exact visual-setting updates, range rejection without
   project/history mutation, undo/redo, and schema-v7 encode/decode. `or_render`
   checks crop, opacity, translation, scale, rotation, and anchor behavior
@@ -575,6 +678,9 @@ hardening commit itself must pass both workflows.
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 8D basic text and manual-caption coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `or_render::TextRasterizer` tests load exactly the four bundled Inter faces,
   produce deterministic transparent RGBA for multiline text, preserve the
@@ -599,6 +705,9 @@ hardening commit itself must pass both workflows.
 
 ## Phase 8E basic audio and effects coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `or_audio` tests deterministic gain, linear pan, fade envelopes, invalid
   ranges, exact device-clock conversion, underrun silence, bounded SPSC
   transfer, and the callback's no-allocation contract. The desktop stream is
@@ -617,6 +726,9 @@ hardening commit itself must pass both workflows.
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 8F export, autosave, and Desktop MVP hardening
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `or_core` tests cover dirty recovery-sidecar creation and replacement,
   canonical-file byte preservation, explicit-save promotion of the exact
@@ -643,6 +755,9 @@ hardening commit itself must pass both workflows.
 
 ## Phase 9A Android SAF and project/media I/O coverage
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 - `or_core` tests strict `FileUri` and `AndroidSafDocumentUri` identities,
   preserves the existing `local_file` serialization, rejects malformed and
   oversized SAF URIs, and verifies schema-v7 SAF sources round-trip without
@@ -661,6 +776,9 @@ hardening commit itself must pass both workflows.
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 ## Phase 9B Android media and render surface coverage
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `LiveProjectHost::in_process_with_export_handler` is covered headlessly: it
   dispatches commands through the shared Rust project session, keeps dirty/save
@@ -712,6 +830,9 @@ hardening commit itself must pass both workflows.
 
 ## Future verification layers
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 ### CONFORMANCE
 
 Normal CI should verify control-plane and runtime contracts with deterministic,
@@ -735,6 +856,9 @@ correctness and must not justify a dependency, native path, or removed fallback
 without repeatable evidence.
 
 ## Product acceptance evidence from 9B
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 The execution policy now distinguishes static, unit, integration, native,
 packaged, user-journey, clean-environment, relaunch, performance, resource,

@@ -1,6 +1,6 @@
 # Security Policy
 
-The project has no released stable versions yet.
+For release availability and supported versions, consult [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) and the exact package/source evidence. Security reports should identify the implementation SHA and package identity.
 
 ## Reporting a vulnerability
 

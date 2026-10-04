@@ -1,8 +1,13 @@
 # Roadmap
 
-## Status
+## Reading this historical roadmap
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is IN PROGRESS; checkpoint 7H is the current hardening and Developer Preview gate and awaits supervisor evidence. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+This is design and historical planning context, loaded on demand. Current
+execution status and checkpoint selection come only from
+[STATE.json](execution/STATE.json) and the execution resolver. Historical status
+labels below describe the roadmap at its original writing; they must not select
+work or establish completion. Git preserves the original status introduction.
+No dates or delivery promises are implied.
 
 ## Phases
 
