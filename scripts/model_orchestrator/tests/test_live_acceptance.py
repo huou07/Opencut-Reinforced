@@ -409,6 +409,8 @@ class LiveM5:
         controller = self.root / 'controller'
         subprocess.run(['git', 'clone', '-q', '--no-hardlinks', str(self.fixture.controller), str(controller)],
                        check=True)
+        subprocess.run(['git', '-C', str(controller), 'remote', 'set-url', 'origin',
+                        'https://github.com/' + c.REPOSITORY_IDENTITY + '.git'], check=True)
         harness = ('#!/bin/sh -e\nMARKER="# LIVE_PROBE_%s"\n'
                    'test -f "/candidate/scripts/model_orchestrator/contracts.py"\n'
                    'grep -q "$MARKER" "/candidate/scripts/model_orchestrator/contracts.py"\n'
@@ -452,6 +454,8 @@ class LiveM5:
         candidate = self.root / 'candidate-authority'
         subprocess.run(['git', 'clone', '-q', '--no-hardlinks', str(self.fixture.candidate), str(candidate)],
                        check=True)
+        subprocess.run(['git', '-C', str(candidate), 'remote', 'set-url', 'origin',
+                        'https://github.com/' + c.REPOSITORY_IDENTITY + '.git'], check=True)
         build = self.build
         bootstrap = c.ControllerBootstrap(
             source_sha=source, anchor_sha=c.TRUSTED_DESIGN_BASE, base_sha=build['base_sha'],
