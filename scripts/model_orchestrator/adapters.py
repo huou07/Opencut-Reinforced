@@ -46,6 +46,8 @@ OPENCODE_EVENT_CONTRACT = {
     'terminal_error_types': ('error',),
     'final_types': ('text',),
     'confirm_fields': (),
+    'terminal_step_reason': 'stop',
+    'continuing_step_reason': 'tool-calls',
 }
 TELEMETRY_FIELDS = ('task_class', 'model_id', 'provider_id', 'family', 'adapter_version',
                     'reasoning_requested', 'reasoning_sent', 'reasoning_confirmed',
@@ -370,12 +372,36 @@ def parse_event_stream(data: bytes, *, limits: StreamLimits, event_contract: Map
     _require(session is not None, 'empty event stream', PROTOCOL_ERROR)
     error = next((event for event in events if event['type'] in terminal_errors), None)
     finals = []
+    framed = any(event['type'] in ('step_start', 'step_finish') for event in events)
+    active = None
+    stopped = False
     for event in events:
-        if event['type'] in final_types:
+        kind = event['type']
+        if framed and kind == 'step_start':
+            _require(active is None and not stopped, 'nested or post-terminal step', PROTOCOL_ERROR)
+            active = []
+        elif kind in final_types:
             part = event.get('part')
             _require(type(part) is dict and type(part.get('text')) is str and part['text'],
                      'final text event carries no content', PROTOCOL_ERROR)
-            finals.append(part['text'])
+            if framed:
+                _require(active is not None and not stopped, 'text outside framed step', PROTOCOL_ERROR)
+                active.append(part['text'])
+            else:
+                finals.append(part['text'])
+        elif framed and kind == 'step_finish':
+            part = event.get('part')
+            _require(active is not None and type(part) is dict, 'unmatched step finish', PROTOCOL_ERROR)
+            reason = part.get('reason')
+            _require(reason in (event_contract['terminal_step_reason'], event_contract['continuing_step_reason']),
+                     'unknown or incomplete step finish', PROTOCOL_ERROR)
+            if reason == event_contract['terminal_step_reason']:
+                _require(not stopped and event is events[-1], 'duplicate or nonterminal stop', PROTOCOL_ERROR)
+                finals.extend(active)
+                stopped = True
+            active = None
+    if framed and error is None:
+        _require(active is None and stopped, 'unclosed or nonterminal inference stream', PROTOCOL_ERROR)
     _require(len(finals) <= 1, 'ambiguous final payload', PROTOCOL_ERROR)
     return ParsedStream(events=tuple(events), session_id=session, error=error, final_payload=finals[0] if finals else None)
 

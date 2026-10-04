@@ -419,6 +419,25 @@ class EventStreamTests(unittest.TestCase):
         parsed = a.parse_event_stream(data, limits=self.limits, event_contract=a.OPENCODE_EVENT_CONTRACT)
         self.assertEqual((parsed.session_id, parsed.final_payload, parsed.error), ('ses_1', '{"verdict":1}', None))
 
+    def test_step_closed_final_ignores_intermediate_text_and_refuses_incomplete_runs(self):
+        def event(kind, **part):
+            return c.canonical_json(dict(type=kind, sessionID='ses_steps', part=part))
+        start = event('step_start', type='step-start')
+        intermediate = event('text', type='text', text='\n\n')
+        tool_finish = event('step_finish', type='step-finish', reason='tool-calls')
+        final = event('text', type='text', text='{"verdict":"PASS"}')
+        stop = event('step_finish', type='step-finish', reason='stop')
+        good = [start, intermediate, tool_finish, start, final, stop]
+        parsed = a.parse_event_stream(self.stream(*good), limits=self.limits, event_contract=a.OPENCODE_EVENT_CONTRACT)
+        self.assertEqual(parsed.final_payload, '{"verdict":"PASS"}')
+        attacks = [good[:-1], [start, intermediate, tool_finish], [start, final, final, stop],
+                   good + [start, final, stop], [start, final, event('step_finish', reason='length')],
+                   [final, start, final, stop], [start, start, final, stop],
+                   [start, final, event('step_finish', reason='unknown')]]
+        for rows in attacks:
+            with self.subTest(rows=rows), self.assertRaises(a.AdapterError):
+                a.parse_event_stream(self.stream(*rows), limits=self.limits, event_contract=a.OPENCODE_EVENT_CONTRACT)
+
     def test_negative_matrix(self):
         good = '{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"done"}}'
         cases = [

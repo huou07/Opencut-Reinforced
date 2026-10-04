@@ -328,6 +328,7 @@ def build_review_prompt(*, task: Mapping[str, Any], candidate_sha: str, diff_tex
     bound = 262144
     truncated = len(diff_text) > bound
     parts = [
+        'Independent readonly review. Use only read/glob/grep. Shell, tests, edits and nested agents are unavailable. Assess checks from the supplied controller facts; request missing evidence with INCONCLUSIVE instead of executing commands.',
         'TASK: ' + c.canonical_json(task),
         'CANDIDATE: ' + candidate_sha + ' BASE: ' + task['base_sha'],
         'GUARD_FLAGS: ' + c.canonical_json({v.quality_flag_id(flag): flag for flag in guard_flags}),
