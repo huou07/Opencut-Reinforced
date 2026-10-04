@@ -8,6 +8,8 @@ import copy
 import datetime as _datetime
 import hashlib
 import json
+import os
+import re
 import subprocess
 import sys
 import time
@@ -628,6 +630,7 @@ def verify_hosted_checkpoint(
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    control_plane_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     policy = execution_evidence.load_policy(repo_root / "docs" / "execution" / "EVIDENCE_POLICY.json")
     github_api = api or _github_api_for_repo(repo_root, policy)
@@ -666,6 +669,10 @@ def verify_hosted_checkpoint(
         implementation_origin_sha=implementation_origin_sha,
         evidence_classes=class_proofs,
     )
+    if control_plane_receipt is not None:
+        if not isinstance(control_plane_receipt, dict):
+            raise SupervisorError("control plane receipt must be an object")
+        record = dict(record, control_plane_receipt=dict(control_plane_receipt))
     execution_evidence.validate_evidence_record(
         record,
         checkpoint_id=str(checkpoint["id"]),
@@ -1414,6 +1421,228 @@ def _run_one_checkpoint(
     )
 
 
+COMPLETION_INTENT_PATH = ".git/or-v2-completion-intent.json"
+
+
+def _read_store_object(store_root: Path, digest: str) -> dict[str, Any]:
+    """Content-addressed controller object load; the digest is the identity."""
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise SupervisorError("handoff receipt digest must be a SHA-256 hex digest")
+    root = Path(store_root)
+    if not root.is_dir():
+        raise SupervisorError("handoff controller store root is not a directory")
+    path = root / "objects" / (digest + ".json")
+    try:
+        record = json.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SupervisorError(f"cannot read handoff receipt object: {exc}") from exc
+    if not isinstance(record, dict):
+        raise SupervisorError("handoff receipt object must be a JSON object")
+    if hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != digest:
+        raise SupervisorError("handoff receipt object identity mismatch")
+    return record
+
+
+def validate_task_handoff(
+    repo_root: Path,
+    *,
+    task_id: str,
+    checkpoint_id: str,
+    store_root: Path,
+    authorization_digest: str,
+    remote_receipt_digest: str,
+) -> dict[str, Any]:
+    """Validate a task-bound V2 handoff without invoking anything hosted.
+
+    Missing task ID, forged/stale receipts, wrong SHA/NEXT/main, or a dirty
+    tree refuses before the supervisor is invoked. A positive handoff binds
+    the original task plus all receipts and the frozen supervisor code.
+    """
+    if not isinstance(task_id, str) or not task_id:
+        raise SupervisorError("handoff requires an explicit task ID; task_id=None never invokes the supervisor")
+    if not isinstance(checkpoint_id, str) or not checkpoint_id:
+        raise SupervisorError("handoff requires an explicit checkpoint ID")
+    plan, state = execution_plan.load_plan_state(repo_root)
+    if state.get("current_next") != checkpoint_id:
+        raise SupervisorError("handoff checkpoint is not current NEXT")
+    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    authorization_record = _read_store_object(store_root, authorization_digest)
+    if authorization_record.get("kind") != "authorization":
+        raise SupervisorError("handoff authorization object has the wrong kind")
+    authorization = authorization_record.get("payload", {}).get("authorization")
+    if not isinstance(authorization, dict):
+        raise SupervisorError("handoff authorization payload is malformed")
+    if authorization.get("task_id") != task_id:
+        raise SupervisorError("handoff authorization binds a different task")
+    task_checkpoint = authorization.get("checkpoint_id")
+    if not isinstance(task_checkpoint, str) or not task_checkpoint:
+        raise SupervisorError("handoff authorization has no task checkpoint")
+    remote_record = _read_store_object(store_root, remote_receipt_digest)
+    if remote_record.get("kind") != "receipt" or remote_record.get("payload", {}).get("kind") != "remote-promotion":
+        raise SupervisorError("handoff remote object is not a remote promotion receipt")
+    remote_receipt = remote_record["payload"]["receipt"]
+    if remote_receipt.get("authorization_digest") != authorization_digest:
+        raise SupervisorError("handoff remote receipt binds a different authorization")
+    candidate_sha = authorization.get("candidate_sha")
+    if (
+        not isinstance(candidate_sha, str)
+        or execution_evidence.SHA_PATTERN.fullmatch(candidate_sha) is None
+        or remote_receipt.get("observed_remote_sha") != candidate_sha
+        or remote_receipt.get("candidate_sha") != candidate_sha
+    ):
+        raise SupervisorError("handoff candidate SHA is inconsistent")
+    if git_output(repo_root, "status", "--porcelain=v1", "--untracked-files=all"):
+        raise SupervisorError("handoff requires a clean worktree")
+    git_output(repo_root, "fetch", "--prune", "origin")
+    head = git_output(repo_root, "rev-parse", "HEAD")
+    origin = git_output(repo_root, "rev-parse", "origin/main")
+    if head != candidate_sha or origin != candidate_sha:
+        raise SupervisorError("handoff requires HEAD == origin/main == promoted implementation SHA")
+    supervisor_digest = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    return {
+        "schema_version": 1,
+        "task_id": task_id,
+        "task_checkpoint": task_checkpoint,
+        "checkpoint_id": checkpoint_id,
+        "implementation_sha": candidate_sha,
+        "authorization_digest": authorization_digest,
+        "remote_receipt_digest": remote_receipt_digest,
+        "supervisor_digest": supervisor_digest,
+        "next": checkpoint_id,
+        "head": candidate_sha,
+    }
+
+
+def write_completion_intent(repo_root: Path, intent: Mapping[str, Any]) -> Path:
+    """Persist the exact completion intent before the state/evidence commit."""
+    from execution_plan import validate_completion_intent as _validate_intent
+
+    plan, state = execution_plan.load_plan_state(repo_root)
+    _validate_intent(intent, plan, state)
+    path = repo_root / COMPLETION_INTENT_PATH
+    data = (json.dumps(dict(intent), sort_keys=True) + "\n").encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return path
+
+
+def read_completion_intent(repo_root: Path) -> dict[str, Any] | None:
+    path = repo_root / COMPLETION_INTENT_PATH
+    if not path.is_file():
+        return None
+    try:
+        intent = json.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SupervisorError(f"cannot read completion intent: {exc}") from exc
+    if not isinstance(intent, dict):
+        raise SupervisorError("completion intent must be a JSON object")
+    return intent
+
+
+def reconcile_completion_intent(repo_root: Path, intent: Mapping[str, Any]) -> str:
+    """Reconcile preserved exact completion intent; never a second completion commit."""
+    from execution_plan import reconcile_completion as _reconcile
+    from execution_plan import validate_completion_intent as _validate_intent
+
+    plan, state = execution_plan.load_plan_state(repo_root)
+    _validate_intent(intent, plan, state)
+    try:
+        remote_head = git_output(repo_root, "rev-parse", "origin/main")
+    except subprocess.CalledProcessError:
+        remote_head = None
+    try:
+        local_head = git_output(repo_root, "rev-parse", "HEAD")
+    except subprocess.CalledProcessError:
+        local_head = None
+    evidence_path = repo_root / "docs" / "execution" / "evidence" / f"{intent['checkpoint_id']}.json"
+    if evidence_path.is_file():
+        try:
+            stored = json.loads(evidence_path.read_bytes().decode("utf-8"))
+        except ValueError:
+            stored = None
+        if not isinstance(stored, dict):
+            raise SupervisorError("completion evidence is corrupt; preserve for controlled recovery")
+        if stored.get("implementation_sha") != intent["implementation_sha"]:
+            raise SupervisorError("dirty evidence differs from preserved intent; never bless arbitrary data")
+        evidence_exists = True
+    else:
+        evidence_exists = False
+    decision = _reconcile(
+        intent, remote_head=remote_head, local_head=local_head, evidence_exists=evidence_exists
+    )
+    if decision == "DIAGNOSE":
+        raise SupervisorError("completion state does not match preserved intent; diagnose")
+    return decision
+
+
+def run_task_handoff(
+    repo_root: Path,
+    *,
+    task_id: str,
+    checkpoint_id: str,
+    store_root: Path,
+    authorization_digest: str,
+    remote_receipt_digest: str,
+    control_plane_receipt: Mapping[str, Any] | None = None,
+    api: execution_evidence.GitHubApi | None = None,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> str:
+    """Task-bound V2 handoff: validate, verify hosted evidence, complete once."""
+    handoff = validate_task_handoff(
+        repo_root,
+        task_id=task_id,
+        checkpoint_id=checkpoint_id,
+        store_root=store_root,
+        authorization_digest=authorization_digest,
+        remote_receipt_digest=remote_receipt_digest,
+    )
+    plan, state = execution_plan.load_plan_state(repo_root)
+    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    implementation_sha = handoff["implementation_sha"]
+    _run_pre_host_checks(repo_root, implementation_sha)
+    subject = git_output(repo_root, "show", "-s", "--format=%s", implementation_sha)
+    evidence_result = verify_hosted_checkpoint(
+        repo_root,
+        plan,
+        checkpoint,
+        implementation_sha,
+        subject,
+        api=api,
+        clock=clock,
+        sleep=sleep,
+        control_plane_receipt=control_plane_receipt,
+    )
+    record = evidence_result["record"]
+    intent = {
+        "schema_version": 1,
+        "checkpoint_id": checkpoint_id,
+        "implementation_sha": implementation_sha,
+        "evidence_digest": hashlib.sha256(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "state_path": "docs/execution/STATE.json",
+        "evidence_path": f"docs/execution/evidence/{checkpoint_id}.json",
+    }
+    write_completion_intent(repo_root, intent)
+    result = finalize_verified_checkpoint(
+        repo_root,
+        plan=plan,
+        state=state,
+        checkpoint=checkpoint,
+        evidence_result=evidence_result,
+        implementation_sha=implementation_sha,
+        api=evidence_result["api"],
+    )
+    intent["recorded_completion_sha"] = result["state_commit_sha"]
+    write_completion_intent(repo_root, intent)
+    return _verified_report(result, plan)
+
+
 def run_goal(
     repo_root: Path, goal: str, runner: str | None = None, resume_sha: str | None = None
 ) -> list[str]:
@@ -1515,6 +1744,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="FAILED_SHA",
         help="verify a trusted repaired HEAD for an already-landed implementation",
     )
+    modes.add_argument(
+        "--resume-task",
+        metavar="TASK_ID",
+        help="task-bound V2 handoff for an already-promoted implementation SHA",
+    )
+    parser.add_argument("--task-checkpoint", help="product checkpoint the V2 task promotes")
+    parser.add_argument("--store-root", help="controller-owned runtime store root")
+    parser.add_argument("--authorization-digest", help="promotion authorization object digest")
+    parser.add_argument("--remote-receipt-digest", help="remote promotion receipt object digest")
+    parser.add_argument("--control-plane-receipt", help="JSON file with the nested V2 completion receipt")
     args = parser.parse_args(argv)
     try:
         if args.preflight:
@@ -1525,6 +1764,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.repair_resume_from:
             reports = repair_resume_goal(REPO_ROOT, args.goal, args.repair_resume_from)
+        elif args.resume_task:
+            for flag in ("task_checkpoint", "store_root", "authorization_digest", "remote_receipt_digest"):
+                if not getattr(args, flag):
+                    raise SupervisorError(f"--resume-task requires --{flag.replace('_', '-')}")
+            receipt = None
+            if args.control_plane_receipt:
+                receipt = json.loads(Path(args.control_plane_receipt).read_text(encoding="utf-8"))
+            reports = [
+                run_task_handoff(
+                    REPO_ROOT,
+                    task_id=args.resume_task,
+                    checkpoint_id=args.task_checkpoint,
+                    store_root=Path(args.store_root),
+                    authorization_digest=args.authorization_digest,
+                    remote_receipt_digest=args.remote_receipt_digest,
+                    control_plane_receipt=receipt,
+                )
+            ]
         else:
             reports = run_goal(REPO_ROOT, args.goal, args.runner, args.resume_sha)
     except (

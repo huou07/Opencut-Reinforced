@@ -1146,6 +1146,39 @@ def validate_evidence_record(
         if preview.get("build_info") != preview_policy["build_info_asset"]:
             raise EvidenceError("developer_preview.build_info does not match policy")
 
+    orchestration = policy.get("orchestration_v2") or {}
+    if isinstance(orchestration, dict) and orchestration.get("enforce_control_plane_receipt") is True:
+        receipt = record.get("control_plane_receipt")
+        if not isinstance(receipt, dict):
+            raise EvidenceError("active V2 completion requires a nested control_plane_receipt")
+        try:
+            from model_orchestrator import contracts as orchestrator_contracts
+        except ImportError as exc:
+            raise EvidenceError("orchestrator contracts are unavailable") from exc
+        try:
+            schemas = orchestrator_contracts.load_protocol_schemas(REPO_ROOT)
+        except orchestrator_contracts.ContractError as exc:
+            raise EvidenceError(f"invalid orchestrator schemas: {exc}") from exc
+        context = {
+            "task_id": receipt.get("task_id"),
+            "checkpoint_id": checkpoint_id,
+        }
+        for key in (
+            "task_contract_digest", "authority_digest", "adoption_manifest_digest",
+            "base_sha", "promotion_authorization_digest", "remote_promotion_receipt_digest",
+            "guard_receipt_digest", "verification_receipt_digests", "reviewer_receipt_digest",
+            "acceptance_contract_digest", "production_acceptance_receipts",
+        ):
+            context[key] = receipt.get(key)
+        try:
+            orchestrator_contracts.validate_control_plane_receipt(receipt, schemas, context=context)
+        except orchestrator_contracts.ContractError as exc:
+            raise EvidenceError(f"invalid nested control_plane_receipt: {exc}") from exc
+        if receipt.get("checkpoint_id") != checkpoint_id:
+            raise EvidenceError("nested control_plane_receipt binds a different checkpoint")
+        if receipt.get("promoted_implementation_sha") != implementation_sha:
+            raise EvidenceError("nested control_plane_receipt binds a different implementation")
+
 
 def platform_verification_runs_for_push(changed_paths: Sequence[str]) -> bool:
     """Mirror the workflow path filter: any non-state/evidence change runs it."""

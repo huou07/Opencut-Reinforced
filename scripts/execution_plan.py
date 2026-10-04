@@ -704,6 +704,80 @@ def validate_plan(
     }
 
 
+COMPLETION_INTENT_FIELDS = {
+    "schema_version",
+    "checkpoint_id",
+    "implementation_sha",
+    "evidence_digest",
+    "state_path",
+    "evidence_path",
+}
+
+
+def validate_completion_intent(intent: Any, plan: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    """Validate a supervisor completion intent without writing state.
+
+    The intent binds exactly one NEXT checkpoint, its implementation SHA, the
+    evidence digest, and the two state-only commit paths. Anything else
+    refuses; recovery never regenerates a second completion commit.
+    """
+    intent = _require_object(intent, "completion intent")
+    if set(intent) - COMPLETION_INTENT_FIELDS not in (set(), {"recorded_completion_sha"}):
+        raise PlanError("completion intent has invalid fields")
+    if not COMPLETION_INTENT_FIELDS <= set(intent):
+        raise PlanError("completion intent is missing required fields")
+    if "recorded_completion_sha" in intent:
+        recorded = intent["recorded_completion_sha"]
+        if not isinstance(recorded, str) or re.fullmatch(r"[0-9a-f]{40}", recorded) is None:
+            raise PlanError("completion intent recorded_completion_sha must be a lowercase 40-character SHA")
+    if intent.get("schema_version") != 1:
+        raise PlanError("completion intent schema_version must be 1")
+    checkpoint_id = _require_string(intent.get("checkpoint_id"), "completion intent.checkpoint_id")
+    checkpoint_for_id(plan, checkpoint_id)
+    if state.get("current_next") != checkpoint_id:
+        raise PlanError("completion intent checkpoint is not current NEXT")
+    implementation_sha = intent.get("implementation_sha")
+    if not isinstance(implementation_sha, str) or re.fullmatch(r"[0-9a-f]{40}", implementation_sha) is None:
+        raise PlanError("completion intent implementation_sha must be a lowercase 40-character SHA")
+    evidence_digest = intent.get("evidence_digest")
+    if not isinstance(evidence_digest, str) or re.fullmatch(r"[0-9a-f]{64}", evidence_digest) is None:
+        raise PlanError("completion intent evidence_digest must be a SHA-256 digest")
+    if intent.get("state_path") != "docs/execution/STATE.json":
+        raise PlanError("completion intent may only advance STATE.json")
+    if intent.get("evidence_path") != f"docs/execution/evidence/{checkpoint_id}.json":
+        raise PlanError("completion intent evidence path must name this checkpoint only")
+    return intent
+
+
+def reconcile_completion(
+    intent: Mapping[str, Any],
+    *,
+    remote_head: str | None,
+    local_head: str | None,
+    evidence_exists: bool,
+) -> str:
+    """Decide completion recovery from observed SHAs: PROCEED, PUSH_RECORDED, ADOPTED, or DIAGNOSE.
+
+    - PROCEED: remote is still the implementation SHA and no completion
+      commit exists; the recorded completion may proceed exactly once.
+    - PUSH_RECORDED: remote is still the implementation SHA but the recorded
+      completion commit exists locally and was never pushed; push it without
+      regenerating another commit.
+    - ADOPTED: remote already equals the recorded completion SHA; resume
+      state-commit hygiene, never a second completion commit.
+    - DIAGNOSE: anything else; preserved intent is retained for diagnosis.
+    """
+    implementation_sha = intent.get("implementation_sha")
+    recorded_sha = intent.get("recorded_completion_sha")
+    if remote_head == implementation_sha and not evidence_exists and recorded_sha is None:
+        return "PROCEED"
+    if remote_head == implementation_sha and recorded_sha is not None and recorded_sha == local_head:
+        return "PUSH_RECORDED"
+    if remote_head is not None and remote_head == recorded_sha:
+        return "ADOPTED"
+    return "DIAGNOSE"
+
+
 def checkpoint_for_id(plan: dict[str, Any], checkpoint_id: str) -> dict[str, Any]:
     for checkpoint in _require_list(plan.get("checkpoints"), "plan.checkpoints"):
         if isinstance(checkpoint, dict) and checkpoint.get("id") == checkpoint_id:

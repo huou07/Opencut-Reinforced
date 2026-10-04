@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -2909,6 +2910,111 @@ class ModelOrchestratorAdoptionTests(unittest.TestCase):
         with redirect_stdout(buffer):
             result = check_architecture_policy.main()
         self.assertEqual(result, 0, buffer.getvalue())
+
+
+class ModelOrchestratorPromotionTests(unittest.TestCase):
+    """M4 supervisor/plan/evidence boundaries: task handoff, intents, nested receipts."""
+
+    def write_object(self, store_root: Path, kind: str, payload: dict) -> str:
+        record = {"schema_version": 1, "kind": kind, "payload": payload}
+        digest = hashlib.sha256(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        objects = store_root / "objects"
+        objects.mkdir(parents=True, exist_ok=True)
+        (objects / (digest + ".json")).write_text(json.dumps(record))
+        return digest
+
+    def handoff_fixture(self, directory: str) -> dict:
+        root = Path(directory).resolve()
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(root / "origin.git")], check=True)
+        repo = root / "product"
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+        plan = {"checkpoints": [{"id": "A"}, {"id": "B"}]}
+        state = {"current_next": "A", "checkpoints": {"A": "NEXT", "B": "PLANNED"}}
+        (repo / "docs/execution").mkdir(parents=True)
+        (repo / "docs/execution/PLAN.json").write_text(json.dumps(plan))
+        (repo / "docs/execution/STATE.json").write_text(json.dumps(state))
+        subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "-c", "user.name=T", "-c", "user.email=t@t.invalid",
+             "commit", "-qm", "base"], check=True)
+        subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(root / "origin.git")], check=True)
+        subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main:main"], check=True)
+        (repo / "impl.txt").write_text("implementation")
+        subprocess.run(["git", "-C", str(repo), "add", "impl.txt"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "-c", "user.name=T", "-c", "user.email=t@t.invalid",
+             "commit", "-qm", "implementation"], check=True)
+        head = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main:main"], check=True)
+        store = root / "store"
+        authorization = {"schema_version": 1, "task_id": "task-1", "checkpoint_id": "A",
+                         "base_sha": "b" * 40, "candidate_sha": head, "authority_digest": "d" * 64,
+                         "template_digest": "e" * 64, "candidate_receipt_digest": "f" * 64,
+                         "verification_receipt_digests": [], "reviewer_receipt_digest": "a" * 64,
+                         "pending_hosted_classes": [], "lease_epoch": 0, "issuance_sequence": 1}
+        auth_digest = self.write_object(
+            store, "authorization",
+            {"schema_version": 1, "task_id": "task-1", "authorization": authorization})
+        remote = {"schema_version": 1, "task_id": "task-1", "authorization_digest": auth_digest,
+                  "destination_ref": "refs/heads/main", "base_sha": "b" * 40, "candidate_sha": head,
+                  "observed_remote_sha": head, "intent_nonce": "nonce-1"}
+        remote_digest = self.write_object(
+            store, "receipt", {"schema_version": 1, "kind": "remote-promotion", "receipt": remote})
+        return {"repo": repo, "store": store, "head": head, "auth": auth_digest, "remote": remote_digest}
+
+    def test_task_handoff_binds_or_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ctx = self.handoff_fixture(directory)
+            intent = agent_supervisor.validate_task_handoff(
+                ctx["repo"], task_id="task-1", checkpoint_id="A", store_root=ctx["store"],
+                authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
+            self.assertEqual(intent["implementation_sha"], ctx["head"])
+            self.assertEqual(intent["next"], "A")
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_task_handoff(
+                    ctx["repo"], task_id="", checkpoint_id="A", store_root=ctx["store"],
+                    authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_task_handoff(
+                    ctx["repo"], task_id="task-1", checkpoint_id="B", store_root=ctx["store"],
+                    authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
+            (ctx["repo"] / "dirty.txt").write_text("dirty")
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_task_handoff(
+                    ctx["repo"], task_id="task-1", checkpoint_id="A", store_root=ctx["store"],
+                    authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
+
+    def test_completion_recovery_decisions(self) -> None:
+        intent = {"implementation_sha": "a" * 40}
+        plan = execution_plan
+        self.assertEqual(
+            plan.reconcile_completion(intent, remote_head="a" * 40, local_head="a" * 40, evidence_exists=False),
+            "PROCEED")
+        self.assertEqual(
+            plan.reconcile_completion(
+                dict(intent, recorded_completion_sha="c" * 40),
+                remote_head="a" * 40, local_head="c" * 40, evidence_exists=True),
+            "PUSH_RECORDED")
+        self.assertEqual(
+            plan.reconcile_completion(
+                dict(intent, recorded_completion_sha="c" * 40),
+                remote_head="c" * 40, local_head="c" * 40, evidence_exists=True),
+            "ADOPTED")
+        self.assertEqual(
+            plan.reconcile_completion(
+                dict(intent, recorded_completion_sha="c" * 40),
+                remote_head="d" * 40, local_head="c" * 40, evidence_exists=True),
+            "DIAGNOSE")
+        bad = dict(intent, checkpoint_id="A")
+        with self.assertRaises(execution_plan.PlanError):
+            plan.validate_completion_intent(bad, {"checkpoints": []}, {"current_next": "A"})
+
+    def test_resume_task_cli_requires_companion_flags(self) -> None:
+        with redirect_stdout(StringIO()):
+            result = agent_supervisor.main(["--goal", "checkpoint:A", "--resume-task", "task-1"])
+        self.assertEqual(result, 1)
 
 
 if __name__ == "__main__":
