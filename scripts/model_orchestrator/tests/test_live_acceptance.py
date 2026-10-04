@@ -60,8 +60,12 @@ def credential_fingerprint(cred_dir):
 
 
 def run_binary(binary, *argv, env=None, cwd=None, timeout=120):
+    if env is None:
+        env = {'PATH': '/usr/bin:/bin', 'LANG': 'C'}
+        if isinstance(os.environ.get('HOME'), str) and os.environ['HOME']:
+            env['HOME'] = os.environ['HOME']
     try:
-        proc = subprocess.run([str(binary), *argv], env=env or {'PATH': '/usr/bin:/bin', 'LANG': 'C'},
+        proc = subprocess.run([str(binary), *argv], env=env,
                               cwd=cwd, capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         raise unittest.SkipTest('live binary unavailable: ' + str(exc))
