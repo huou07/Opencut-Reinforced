@@ -121,9 +121,12 @@ class OpenCodeConformanceTests(unittest.TestCase):
     def test_binary_identity_and_help_surface(self):
         binary, _ = self.binary()
         proc = run_binary(binary.path, '--help')
+        run_help = run_binary(binary.path, 'run', '--help')
         self.assertEqual(proc.returncode, 0)
+        self.assertEqual(run_help.returncode, 0)
+        help_text = (proc.stdout + proc.stderr + run_help.stdout + run_help.stderr).decode()
         for token in ('run', '--model', '--format', '--variant', '--agent'):
-            self.assertIn(token, proc.stdout.decode())
+            self.assertIn(token, help_text)
         self.assertEqual(binary.version, os.environ.get('OR_V2_OPENCODE_VERSION'))
 
     def test_config_precedence_project_wins(self):
@@ -166,122 +169,164 @@ class OpenCodeConformanceTests(unittest.TestCase):
                    'OPENCODE_CONFIG': str(overlay / 'opencode.json')}
             proc = run_binary(binary.path, 'agent', 'list', env=env, cwd=directory)
             self.assertEqual(proc.returncode, 0)
+            import re
+            text = proc.stdout.decode()
+            match = re.search(r'(?m)^build \(primary\)\s*(\[.*?\])(?=\n[^ \n]|\Z)', text, re.S)
+            self.assertIsNotNone(match, 'default build agent missing from installed transport')
+            rules = json.loads(match.group(1))
+            for tool, expected in (('task', 'deny'), ('read', 'allow'), ('edit', 'allow'), ('bash', 'allow')):
+                applicable = [row for row in rules if row['permission'] in ('*', tool) and row['pattern'] == '*']
+                self.assertTrue(applicable, 'missing permission for ' + tool)
+                self.assertEqual(applicable[-1]['action'], expected, 'installed role permission differs: ' + tool)
+            resolved = json.loads(run_binary(binary.path, 'debug', 'config', env=env, cwd=directory).stdout)
+            for tool, expected in b.role_policy('IMPLEMENTATION')['permission'].items():
+                self.assertEqual(resolved['permission'][tool], expected)
 
 
 class CodexLiveTests(unittest.TestCase):
-    """CP46: minimum real read-only Codex invocation, or authentic quota evidence."""
+    """CP46: minimum real native read-only decision; fault tests never certify a model."""
+    def test_no_tool_transport_argv_and_native_model_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            exe = root / 'codex'
+            exe.write_text('#!/bin/sh\nprintf "codex-cli 0.158.0\\n"\n')
+            exe.chmod(0o700)
+            binary = a.CodexBinary(exe, hashlib.sha256(exe.read_bytes()).hexdigest(), a.CODEX_VERSION)
+            schema = root / 'decision.schema.json'
+            schema.write_text(c.canonical_json(a.architecture_decision_schema()))
+            adapter = a.CodexAdapter(binary, model_id='gpt-6-luna', workdir=root, decision_schema_path=schema)
+            argv = adapter.build_argv('No tools; emit a decision only.', root / 'last.json')
+            for flag in ('--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check'):
+                self.assertIn(flag, argv)
+            self.assertEqual(argv[argv.index('--sandbox') + 1], 'read-only')
+            self.assertEqual(argv[argv.index('-m') + 1], 'gpt-6-luna')
+            self.assertIn('web_search="disabled"', argv)
+            disabled = [argv[i + 1] for i, part in enumerate(argv) if part == '--disable']
+            self.assertEqual(set(disabled), set(a.CODEX_DISABLED_FEATURES))
+            schema.write_text('{"type":"object"}')
+            with self.assertRaises(a.AdapterError):
+                a.CodexAdapter(binary, model_id='gpt-6-luna', workdir=root, decision_schema_path=schema)
+
+    def test_tool_and_incomplete_streams_refuse(self):
+        def stream(item):
+            return (c.canonical_json({'type': 'item.completed', 'item': item}) + '\n'
+                    + c.canonical_json({'type': 'turn.completed', 'usage': {}}) + '\n').encode()
+        for kind in ('command_execution', 'mcp_tool_call', 'web_search', 'file_change', 'collab_tool_call', 'unknown'):
+            with self.subTest(kind=kind), self.assertRaises(a.AdapterError):
+                a.validate_codex_readonly_stream(stream({'type': kind}))
+        a.validate_codex_readonly_stream(stream({'type': 'agent_message', 'text': '{}'}))
+        for data in (b'', b'{"type":"turn.started"}\n', b'{"type":"turn.failed"}\n'):
+            with self.assertRaises(a.AdapterError):
+                a.validate_codex_readonly_stream(data)
+
     def test_minimum_read_only_invocation(self):
         if os.environ.get('OR_V2_CODEX_LIVE') != '1':
             raise unittest.SkipTest('codex live requires OR_V2_CODEX_LIVE=1')
         for key in ('OR_V2_CODEX_BIN', 'OR_V2_CODEX_SHA', 'OR_V2_CODEX_VERSION', 'OR_V2_CODEX_MODEL'):
-            if not os.environ.get(key):
-                raise unittest.SkipTest('codex live input missing: ' + key)
+            self.assertTrue(os.environ.get(key), 'codex live input missing: ' + key)
         binary = a.CodexBinary(Path(os.environ['OR_V2_CODEX_BIN']), os.environ['OR_V2_CODEX_SHA'],
                                os.environ['OR_V2_CODEX_VERSION'])
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
+            root = Path(os.environ.get('OR_V2_CODEX_OUTPUT', directory)).resolve()
+            root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            home = root / 'private-home'
+            home.mkdir(mode=0o700)
             schema = root / 'decision.schema.json'
-            schema.write_text(json.dumps({'type': 'object'}))
-            adapter = a.CodexAdapter(binary, model_id=os.environ['OR_V2_CODEX_MODEL'], workdir=root,
+            schema.write_text(c.canonical_json(a.architecture_decision_schema()))
+            # Authentication stays in the legitimate host store. No auth bytes
+            # are read by the harness, copied to a candidate, or emitted.
+            auth_home = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))).resolve()
+            adapter = a.CodexAdapter(binary, model_id=os.environ['OR_V2_CODEX_MODEL'], workdir=home,
                                      decision_schema_path=schema, quota_signatures=[],
-                                     env={'PATH': '/usr/bin:/bin', 'LANG': 'C'})
+                                     env={'PATH': '/usr/bin:/bin', 'LANG': 'C', 'HOME': str(home),
+                                          'CODEX_HOME': str(auth_home)})
             packet = {'schema_version': 1, 'task_id': 'cp46-probe', 'checkpoint_id': 'M5',
                       'authority_digest': 'd' * 64, 'base_sha': 'a' * 40, 'kind': 'difficult_root_cause',
                       'failure_facts': {'transport': 'conformance probe'}, 'attempt_digest': 'd' * 64,
                       'invariant_citations': [], 'question': 'Does the read-only transport conform?',
                       'scope': 'transport conformance only'}
             packet['packet_digest'] = c.canonical_digest({k: v for k, v in packet.items() if k != 'packet_digest'})
-            prompt = ('Emit exactly one JSON object with keys schema_version (=1), packet_digest (=%s), '
-                      'disposition (=DEFER), decision, constraints, required_verification, stop_conditions, '
-                      'cited_facts. No other text.' % packet['packet_digest'])
+            prompt = ('Transport conformance only. Do not use tools, read files, edit source, run tests/builds, '
+                      'or launch agents. Emit exactly one JSON object: schema_version=1; packet_digest="%s"; '
+                      'disposition="DEFER"; decision="Read-only transport probe; no architecture authority"; '
+                      'constraints=["read-only","no tools"]; required_verification=[]; '
+                      'stop_conditions=["no source or controller writes"]; '
+                      'cited_facts=[{"fact":"The supplied packet requests transport conformance only",'
+                      '"classification":"PROVEN"}]. No other text.' % packet['packet_digest'])
             outdir = root / 'out'
-            outdir.mkdir()
-            try:
-                decision, deferred = adapter.run_architecture(prompt, packet=packet, output_dir=outdir)
-            except a.AdapterError as exc:
-                if exc.code in (a.TRANSPORT_ERROR,):
-                    raise unittest.SkipTest('codex availability: ' + str(exc))
-                raise
+            outdir.mkdir(mode=0o700)
+            identity = {'case_id': 'CP46', 'binary_path': str(binary.path), 'binary_sha256': binary.sha256,
+                        'binary_version': binary.version, 'host_sha256': binary.host_sha256, 'model_id': adapter.model_id,
+                        'packet_digest': packet['packet_digest'],
+                        'argv': adapter.build_argv(prompt, outdir / 'codex-last-message.json')}
+            (root / 'identity.json').write_text(c.canonical_json(identity) + '\n')
+            before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in home.rglob('*') if p.is_file()}
+            decision, deferred = adapter.run_architecture(prompt, packet=packet, output_dir=outdir, timeout_seconds=180)
             self.assertIsNone(deferred)
             checked = a.validate_architecture_decision(decision, packet)
             self.assertEqual(checked['packet_digest'], packet['packet_digest'])
-            self.assertIn(checked['disposition'], a.DECISION_DISPOSITIONS)
-            before = sorted(p.name for p in root.rglob('*') if p.is_file())
-            self.assertNotIn('decision.schema.json-modified', before)
+            self.assertEqual(checked['disposition'], 'DEFER')
+            after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in home.rglob('*') if p.is_file()}
+            self.assertEqual(after, before, 'read-only model workdir changed')
+            (root / 'receipt.json').write_text(c.canonical_json(dict(identity, result='PASS',
+                  events_sha256=hashlib.sha256((outdir / 'codex-events.jsonl').read_bytes()).hexdigest(),
+                  last_message_sha256=hashlib.sha256((outdir / 'codex-last-message.json').read_bytes()).hexdigest(),
+                  no_tools=True, readonly_unchanged=True)) + '\n')
 
 
 class IndependentReviewTests(unittest.TestCase):
-    """CP48: a separate read-only reviewer session traces the entire live path."""
-
+    """CP48: isolated exact release source and complete evidence, never a bundle-only host call."""
     def test_independent_source_review(self):
         cfg = live_config()
+        release_sha = os.environ.get('OR_V2_HOSTED_SHA')
+        self.assertIsNotNone(release_sha, 'independent source review requires exact final release SHA')
         output = Path(cfg['OR_V2_OUTPUT']).resolve()
-        evidence_path = output / 'live-evidence.json'
-        if not evidence_path.is_file():
-            raise unittest.SkipTest('independent review requires the CP44 live evidence')
-        evidence = json.loads(evidence_path.read_text())
-        for key in ('task_id', 'candidate_head', 'task', 'worker', 'reviewer', 'authorization_digest',
-                    'remote_receipt_digest', 'promotion', 'image', 'binary', 'docker', 'credential'):
-            self.assertIn(key, evidence)
-        before = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-        hosted_path = output / 'cp47-hosted-evidence.json'
-        bundle = {'schema_version': 1, 'evidence': evidence,
-                  'hosted': json.loads(hosted_path.read_text()) if hosted_path.is_file() else None,
-                  'instruction': ('Review the attached M5 live acceptance evidence end to end: prepare, claim, '
-                                  'real worker, guards, required checks, full review, authorization, normal push, '
-                                  'local recovery, task handoff readiness, hosted receipt, state-only completion '
-                                  'readiness. Return exactly one strict review_report JSON object with schema_version 1, '
-                                  'the echoed task_id, task_contract_digest and candidate_sha given below, verdict, '
-                                  'coverage including m5-live, findings with exact citations, quality_flag_dispositions, '
-                                  'and unresolved_questions. PASS requires no blocking defect; it never means product '
-                                  'accepted.')}
-        task = evidence['task']
-        bundle.update(task_id=task['task_id'], task_contract_digest=c.canonical_digest(task),
-                      candidate_sha=evidence['candidate_head'])
-        workdir = Path(tempfile.mkdtemp(prefix='or-v2-cp48-')).resolve()
-        home = workdir / 'home'
-        (home / '.local' / 'share' / 'opencode').mkdir(parents=True)
-        shutil.copyfile(Path(cfg['OR_V2_CRED_DIR']).resolve() / 'opencode' / 'auth.json',
-                        home / '.local' / 'share' / 'opencode' / 'auth.json')
-        os.chmod(home / '.local' / 'share' / 'opencode' / 'auth.json', 0o600)
-        bundle_path = workdir / 'review-bundle.json'
-        bundle_path.write_text(json.dumps(bundle) + '\n')
-        binary = a.OpenCodeBinary(Path(cfg['OR_V2_OPENCODE_BIN']), cfg['OR_V2_OPENCODE_SHA'],
-                                  cfg['OR_V2_OPENCODE_VERSION'])
-        enrollment = {'provider_id': cfg['OR_V2_REVIEWER_MODEL'].split('/')[0],
-                      'model_id': cfg['OR_V2_REVIEWER_MODEL'], 'family': cfg['OR_V2_REVIEWER_FAMILY'],
-                      'allowed_roles': ['INVESTIGATION_REVIEW'], 'reasoning_capabilities': ['HIGH'],
-                      'task_class_qualification': {'INVESTIGATION_REVIEW': True},
-                      'adapter_certification_digest': binary.certification_digest(), 'budget': {}, 'variants': {}}
-        adapter = a.OpenCodeAdapter(binary, role='INVESTIGATION_REVIEW',
-                                    enrollment=dict(enrollment, reasoning_requested='HIGH'),
-                                    workdir=workdir, limits=a.StreamLimits(4 << 20, 256, 1800),
-                                    env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'LANG': 'C',
-                                         'HOME': str(home)})
-        observation = adapter.run(['Review the attached bundle file and return the strict report.',
-                                   str(bundle_path)],
-                                  agent='orch-reviewer', timeout_seconds=1500)
-        self.assertFalse(observation.timed_out)
-        if observation.error is not None or observation.exit_code != 0:
-            raise unittest.SkipTest('independent reviewer availability: %r' % (observation.error,))
-        self.assertIsNotNone(observation.final_payload)
-        report = a.parse_review_report(
-            observation.final_payload, task=task, candidate_sha=evidence['candidate_head'], schemas=SCHEMAS,
-            reviewer_family=cfg['OR_V2_REVIEWER_FAMILY'],
-            implementation_family=evidence['worker']['family'],
-            flag_ids=evidence.get('guard_flags', []))
-        self.assertEqual(report['verdict'], 'PASS')
-        self.assertTrue(report['coverage'])
-        live_root = subprocess.check_output(
-            ['git', '-C', str(ROOT), 'status', '--porcelain=v1', '--untracked-files=all'],
-            env={'PATH': '/usr/bin:/bin', 'LANG': 'C'}).decode().splitlines()
-        unexpected = [line for line in live_root if '__pycache__' not in line]
-        self.assertEqual(unexpected, [])
-        (output / 'cp48-independent-review.json').write_text(json.dumps(
-            {'report': report, 'session_id': observation.session_id, 'model_id': observation.model_id,
-             'argv_digest': observation.argv_digest, 'elapsed_seconds': observation.elapsed_seconds},
-            indent=2, sort_keys=True) + '\n')
-        self.assertEqual(hashlib.sha256(evidence_path.read_bytes()).hexdigest(), before)
+        for name in o.SOURCE_REVIEW_EVIDENCE:
+            self.assertTrue((output / name).exists(), 'CP48 prerequisite missing: ' + name)
+        evidence = c.load_json_strict((output / 'live-evidence.json').read_text())
+        self.assertEqual(evidence['review_verdict'], 'PASS')
+        self.assertTrue(evidence['verification_passed'])
+        self.assertEqual(evidence['promotion'], 'PROMOTED')
+        self.assertEqual(c.load_json_strict((output / 'cp46-receipt.json').read_text())['result'], 'PASS')
+        self.assertEqual(c.load_json_strict((output / 'cp47-hosted-evidence.json').read_text())['head_sha'], release_sha)
+        import uuid
+        review_cfg = dict(cfg, OR_V2_OUTPUT=str(output / ('cp48-authority-' + uuid.uuid4().hex[:12])))
+        live = LiveM5(review_cfg)
+        task = live.task()
+        task.update(goal='Independently audit exact released control-plane source and complete execution evidence; no writes.',
+                    out_of_scope=['No product adoption', 'No source/controller writes', 'No code execution', 'No nested models'],
+                    observable_outcome='A separate readonly source/evidence report bound to the exact release SHA',
+                    permission_expectation='Isolated readonly source and evidence; inference credentials only')
+        task['resource_limits'].update(output_bytes=8 << 20, wall_seconds=1800)
+        records = live.enrollments(task, live.authority, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
+        task['role_enrollment_ids'] = [c.canonical_digest(record) for record in records]
+        authority = live.commit_controller(task)
+        enrollments = [a.load_enrollment(record, authority=authority, task=task,
+                         expected_digest=c.canonical_digest(record)) for record in records]
+        enrollment = o.select_reviewer(task, enrollments, availability={},
+                                       implementation_family=evidence['worker']['family'], task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
+        sessions = [evidence['reviewer']['session_id']]
+        transcript = a.parse_event_stream((output / 'worker-transcript.bin').read_bytes(),
+                                          limits=a.StreamLimits(8 << 20, 4096, 3600),
+                                          event_contract=live.binary.event_contract)
+        sessions.append(transcript.session_id)
+        import uuid
+        observations = output / ('cp48-' + release_sha[:12] + '-' + uuid.uuid4().hex[:12])
+        outcome = o.run_source_review(authority=authority, task=task, source_repo=ROOT,
+                                      release_sha=release_sha, evidence_root=output, enrollment=enrollment,
+                                      binary=live.binary, box=live.box(), image=live.image,
+                                      container_binary='/usr/local/bin/opencode',
+                                      implementation_family=evidence['worker']['family'], storage_root=live.volume,
+                                      observation_dir=observations,
+                                      limits=b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 8 << 20, 1800),
+                                      credential_dir=Path(cfg['OR_V2_CRED_DIR']) if enrollment['provider_id'] == 'opencode-go' else None,
+                                      prior_session_ids=sessions, timeout_seconds=1800)
+        # A genuine blocking review remains recorded for causal repair.
+        (observations / 'review.json').write_text(c.canonical_json(outcome) + '\n')
+        (output / 'cp48-independent-review.json').write_text(c.canonical_json(outcome) + '\n')
+        self.assertEqual(outcome['report']['candidate_sha'], release_sha)
+        self.assertNotIn(outcome['metadata']['session_id'], sessions)
+        self.assertEqual(outcome['verdict'], 'PASS', c.canonical_json(outcome['report']))
 
 
 class HostedHarnessTests(unittest.TestCase):
@@ -289,40 +334,9 @@ class HostedHarnessTests(unittest.TestCase):
     WORKFLOW = '.github/workflows/control-plane-acceptance.yml'
 
     def collect(self, head_sha, run_id=None):
-        def get(path):
-            request = urllib.request.Request('https://api.github.com' + path,
-                                             headers={'Accept': 'application/vnd.github+json',
-                                                      'User-Agent': 'opencut-reinforced-m5'})
-            with urllib.request.urlopen(request, timeout=60) as response:
-                return json.loads(response.read().decode())
-        if run_id is None:
-            runs = get('/repos/huou07/Opencut-Reinforced/actions/workflows/control-plane-acceptance.yml/runs?per_page=10')
-            candidates = [run for run in runs.get('workflow_runs', [])
-                          if run.get('head_sha') == head_sha and run.get('conclusion') == 'success'
-                          and run.get('event') in ('push', 'workflow_dispatch')]
-            if not candidates:
-                raise unittest.SkipTest('no successful hosted harness run for ' + head_sha)
-            run = sorted(candidates, key=lambda r: r['updated_at'])[-1]
-        else:
-            run = get('/repos/huou07/Opencut-Reinforced/actions/runs/%d' % int(run_id))
-            if run.get('head_sha') != head_sha or run.get('conclusion') != 'success':
-                raise unittest.SkipTest('named hosted run is not a successful run for ' + head_sha)
-        jobs = get('/repos/huou07/Opencut-Reinforced/actions/runs/%d/jobs?per_page=20' % run['id'])
-        names = {job['name']: job for job in jobs.get('jobs', [])}
-        for name in ('Fixture acceptance', 'Collect receipts'):
-            if name not in names or names[name]['conclusion'] != 'success':
-                raise unittest.SkipTest('hosted job missing or unsuccessful: ' + name)
-        artifacts = get('/repos/huou07/Opencut-Reinforced/actions/runs/%d/artifacts?per_page=20' % run['id'])
-        artifact_names = sorted(artifact['name'] for artifact in artifacts.get('artifacts', []))
-        expected = sorted(['acceptance-receipt-' + head_sha, 'collector-receipt-' + head_sha])
-        if artifact_names != expected:
-            raise unittest.SkipTest('hosted artifacts differ: %r' % (artifact_names,))
-        referenced = run.get('referenced_workflows') or []
-        return {'run_id': run['id'], 'run_attempt': run['run_attempt'], 'head_sha': run['head_sha'],
-                'event': run['event'], 'jobs': {name: {'id': names[name]['id'], 'conclusion': names[name]['conclusion'],
-                                                       'head_sha': names[name]['head_sha']} for name in names},
-                'artifacts': artifact_names, 'referenced_workflows': referenced,
-                'html_url': run['html_url']}
+        from model_orchestrator import hosted
+        expected = hosted.expectation(ROOT, head_sha)
+        return hosted.collect(expected=expected, run_id=run_id)
 
     def test_hosted_receipt_collection(self):
         head_sha = os.environ.get('OR_V2_HOSTED_SHA')
@@ -331,9 +345,6 @@ class HostedHarnessTests(unittest.TestCase):
         run_id = os.environ.get('OR_V2_HOSTED_RUN_ID')
         evidence = self.collect(head_sha, run_id=int(run_id) if run_id else None)
         self.assertEqual(evidence['head_sha'], head_sha)
-        for name, job in evidence['jobs'].items():
-            self.assertEqual(job['conclusion'], 'success')
-            self.assertEqual(job['head_sha'], head_sha)
         output = Path(os.environ.get('OR_V2_OUTPUT', tempfile.gettempdir())) / 'cp47-hosted-evidence.json'
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
@@ -359,8 +370,8 @@ class LiveM5:
         if not self.volume.is_dir() or self.volume.is_symlink():
             raise unittest.SkipTest('live volume is not a real directory: ' + str(self.volume))
         self.output.mkdir(parents=True, exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(prefix='or-v2-m5-')
-        self.root = Path(self.temp.name).resolve()
+        self.root = self.output / 'controller-run'
+        self.root.mkdir(mode=0o700)
         self.binary = a.OpenCodeBinary(Path(cfg['OR_V2_OPENCODE_BIN']), cfg['OR_V2_OPENCODE_SHA'],
                                        cfg['OR_V2_OPENCODE_VERSION'])
         self.docker = b.DockerCLI(Path(cfg['OR_V2_DOCKER']), cfg['OR_V2_DOCKER_SHA'],
@@ -466,94 +477,23 @@ class LiveM5:
             build=c.RecordPin('controller/build-M5.json', c.canonical_digest(build)))
         return c.load_release_authority(candidate, controller, bootstrap=bootstrap)
 
-    def credential_mount(self):
-        """Explicit inference-credential shadow mount; the file never enters receipts."""
-        cred = Path(self.cfg['OR_V2_CRED_DIR']).resolve() / 'opencode' / 'auth.json'
-        if not cred.is_file():
-            raise unittest.SkipTest('live credential staging missing')
-        finger = credential_fingerprint(cred.parent.parent)
-        return (str(cred), '/worker-home/.local/share/opencode/auth.json'), finger
-
-    def home_mounts(self, overlays, home_base):
-        """Writable scratch home with read-only policy and credential shadows.
-
-        Live discovery: the model binary requires a writable home for its own
-        runtime state (project index, sessions), so the M1 fully-read-only
-        home cannot host a real execution. The writable base holds no policy:
-        every frozen policy file and the credential file are shadow-mounted
-        read-only on top, which the effective-profile check verifies exactly.
-        """
-        # The mapped container UID must be able to create the model runtime
-        # state directories, so the scratch base is world-writable. It holds
-        # no policy: every policy and credential path is a read-only shadow
-        # mount on top. The whole tree is deleted after the run on this
-        # single-operator host.
-        home_base = Path(home_base)
-        home_base.mkdir(mode=0o777, exist_ok=True)
-        os.chmod(home_base, 0o777)
-        for sub in ('.local/share/opencode', '.config/opencode'):
-            path = home_base / sub
-            path.mkdir(mode=0o777, parents=True, exist_ok=True)
-            parts = [home_base]
-            for part in Path(sub).parts:
-                parts.append(parts[-1] / part)
-            for part in parts:
-                os.chmod(part, 0o777)
-        home = Path(overlays['home'])
-        mounts = [(str(home_base), '/worker-home', True),
-                  (str(home / 'opencode.json'), '/worker-home/opencode.json'),
-                  (str(home / '.config' / 'opencode' / 'opencode.json'),
-                   '/worker-home/.config/opencode/opencode.json')]
-        credential, _ = self.credential_mount()
-        mounts.append((credential[0], credential[1]))
-        return mounts
-
     def box(self):
         return b.ContainerSandbox(self.docker, boot_identity=b.host_boot_identity(), host_platform='linux')
 
-    def config_masks(self, overlays, role, candidate):
-        """Candidate config masks with the inert runtime .gitignore included.
-
-        Live discovery: the model runtime ensures .opencode/.gitignore exists
-        at startup and crashes when the read-only mask lacks it, while a
-        pre-existing empty file is left alone. The mask therefore ships exactly
-        one empty .gitignore alongside the frozen policy files; anything else
-        in the mask refuses. Workers still cannot create project config: the
-        mask is read-only and post-hoc guards see every committed change.
-        """
-        validated = b._validated_role_overlays(overlays, role, candidate)
-        masks = [(s, d) for s, d in validated
-                 if d not in ('/candidate/.opencode', '/worker-home')]
-        mask = self.root / 'config-mask'
-        opencode_dir = mask / '.opencode'
-        opencode_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-        gitignore = opencode_dir / '.gitignore'
-        if not gitignore.exists():
-            gitignore.write_bytes(b'')
-        os.chmod(gitignore, 0o444)
-        os.chmod(opencode_dir, 0o555)
-        os.chmod(mask, 0o555)
-        contents = sorted(p.relative_to(mask).as_posix() for p in mask.rglob('*'))
-        if contents != ['.opencode', '.opencode/.gitignore']:
-            raise AssertionError('config mask contents differ: %r' % (contents,))
-        if gitignore.read_bytes() != b'':
-            raise AssertionError('config mask gitignore is not the inert placeholder')
-        masks.append((str(opencode_dir), '/candidate/.opencode'))
-        return masks
-
-    def launch_with_credential(self, *, box, candidate, view, role, container_binary, message_parts, agent,
-                               enrollment, image, network, limits, overlay_mounts, labels, name, timeout_seconds):
-        # The caller composes overlay_mounts (candidate masks plus the home
-        # design with policy shadows and the credential shadow); the launcher
-        # verifies the exact set. No implicit mounts are added here.
-        mounts = list(overlay_mounts)
-        return a.launch_model_stage(box=box, candidate=candidate, view=view, role=role,
-                                    container_binary=container_binary, message_parts=message_parts, agent=agent,
-                                    adapter=a.OpenCodeAdapter(self.binary, role=role, enrollment=enrollment,
-                                                              workdir=Path('/candidate'),
-                                                              limits=a.StreamLimits(4 << 20, 4096, 3600), env=None),
-                                    image=image, network=network, limits=limits, overlay_mounts=mounts,
-                                    labels=labels, name=name, timeout_seconds=timeout_seconds)
+    def enrollments(self, task, authority, *, task_class=None):
+        path = os.environ.get('OR_V2_ENROLLMENT_FILE')
+        if not path:
+            raise ValueError('live acceptance requires externally evaluated qualification observations')
+        records = c.load_json_strict(Path(path).read_text())
+        enrolled = []
+        for role, model in (('IMPLEMENTATION', self.cfg['OR_V2_WORKER_MODEL']),
+                            ('INVESTIGATION_REVIEW', self.cfg['OR_V2_REVIEWER_MODEL'])):
+            record = next(item for item in records if item['model_id'] == model and role in item['allowed_roles']
+                          and (task_class is None or role == 'IMPLEMENTATION' or any(q['task_class'] == task_class for q in item['qualification_evidence'])))
+            record = dict(record, operator_adoption_identity=self.build['authorization_id'],
+                          adapter_certification_digest=self.binary.certification_digest())
+            enrolled.append(record)
+        return enrolled
 
 
 class LiveWorkerTests(unittest.TestCase):
@@ -563,6 +503,8 @@ class LiveWorkerTests(unittest.TestCase):
         cfg = live_config()
         live = LiveM5(cfg)
         task = live.task()
+        records = live.enrollments(task, live.authority)
+        task['role_enrollment_ids'] = [c.canonical_digest(record) for record in records]
         authority = live.commit_controller(task)
         payload = c._release_authority(authority)
         self.assertEqual(payload['build']['task_id'], task['task_id'])
@@ -577,12 +519,11 @@ class LiveWorkerTests(unittest.TestCase):
                                        task['base_sha'], authority=authority)
         runtime.register_candidate(task['task_id'], candidate)
         box = live.box()
-        daemon = box._runtime(live.image)
-        worker_enrollment = live.enroll(cfg['OR_V2_WORKER_MODEL'], cfg['OR_V2_WORKER_FAMILY'], 'IMPLEMENTATION')
-        worker_enrollment = dict(worker_enrollment, reasoning_requested='HIGH')
-        reviewer_enrollment = live.enroll(cfg['OR_V2_REVIEWER_MODEL'], cfg['OR_V2_REVIEWER_FAMILY'],
-                                          'INVESTIGATION_REVIEW')
-        reviewer_enrollment = dict(reviewer_enrollment, reasoning_requested='HIGH')
+        enrollments = [a.load_enrollment(record, authority=authority, task=task,
+                        expected_digest=c.canonical_digest(record)) for record in records]
+        worker_enrollment = o.select_worker(task, enrollments, availability={}, required_reasoning='MEDIUM')
+        reviewer_enrollment = o.select_reviewer(task, enrollments, availability={},
+                                                 implementation_family=worker_enrollment['family'])
         self.assertNotEqual(worker_enrollment['family'], reviewer_enrollment['family'])
         marker = '# LIVE_PROBE_%s' % live.nonce
         prompt = ('Create exactly one file in the candidate at scripts/model_orchestrator/contracts.py '
@@ -593,65 +534,54 @@ class LiveWorkerTests(unittest.TestCase):
                   '-c user.email="worker@example.invalid" commit -m "live probe"`. Do not print the line back; '
                   'the controller verifies the file independently.' % marker)
         with runtime.lock('task', task['task_id']):
-            stage = runtime.claim(task['task_id'], task_digest, owner_nonce='live-owner',
+            stage = o.claim_stage(runtime, task['task_id'], task_digest, owner_nonce='live-owner',
                                   boot_identity=box.boot_identity, stage_id='live-stage', stage_nonce='live-nonce')
-            path = w.reserve_launch(runtime, stage, candidate, live.volume, daemon, live.image, 'IMPLEMENTATION')
-            view = a.build_worker_view(candidate, live.volume, task['task_id'], 'live-stage', 'IMPLEMENTATION',
-                                       destination=path)
-            w.bind_launch(runtime, stage)
-            overlays = b.write_role_overlays(path.parent / 'overlays', 'IMPLEMENTATION')
-            mounts = live.config_masks(overlays, 'IMPLEMENTATION', candidate.root)
-            mounts.extend(live.home_mounts(overlays, path.parent / 'home'))
-            cred_mounts, finger = live.credential_mount()
-            self.assertEqual(set(finger), {'provider_id', 'key_sha256', 'key_length'})
-            provisional = b.StageIdentity('0' * 64, box.boot_identity, stage['owner_nonce'], stage['stage_id'],
-                                          stage['lease_epoch'], stage['stage_nonce'],
-                                          task['authority_digest'], 'IMPLEMENTATION', stage['task_id'])
-            record = runtime.launch_record(stage)
-            worker_limits = b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 1 << 20, 600)
-            # Live invocations use the default agent: project agent files are
-            # masked by the config boundary, so naming one only produces a
-            # fallback warning. Role enforcement comes from overlays, mounts,
-            # network, and post-hoc verification, not the agent label.
-            worker_result = live.launch_with_credential(
-                box=box, candidate=candidate, view=view, role='IMPLEMENTATION',
-                container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent=None,
-                enrollment=worker_enrollment, image=live.image, network='bridge', limits=worker_limits,
-                overlay_mounts=mounts, labels=provisional.labels(), name=record['container_name'],
-                timeout_seconds=600)
-            (live.output / 'worker-transcript.bin').write_bytes(worker_result.transcript)
-            (live.output / 'worker-stderr.bin').write_bytes(worker_result.transcript_stderr)
-            self.assertFalse(worker_result.timed_out)
-            self.assertEqual(worker_result.exit_code, 0)
-            stage = runtime.bind_container(stage, worker_result.container_id)
-            proof = box.reconcile_launch(runtime, stage)
-            preserved = w.preserve_launch(runtime, stage, proof)
-            settled = runtime.settle(stage, proof)
-            self.assertEqual(settled['tasks'][task['task_id']]['status'], 'SETTLED')
-        floor = g.load_floor(authority, 'controller/task-m5.json', 'controller/catalog-m5.json')
-        guarded = g.inspect(candidate, floor, live.root / 'quarantine', source_authority=authority)
+            worker_result = o.run_worker(
+                store=runtime, stage=stage, box=box, candidate=candidate, task=task,
+                enrollment=worker_enrollment, binary=live.binary, agent=None, prompt=prompt,
+                image=live.image, limits=b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 1 << 20, 600),
+                network='bridge', container_binary='/usr/local/bin/opencode', storage_root=live.volume,
+                timeout_seconds=600,
+                credential_dir=Path(cfg['OR_V2_CRED_DIR']) if worker_enrollment['provider_id'] == 'opencode-go' else None,
+                observation_dir=live.output)
+            (live.output / 'worker-observation.json').write_text(c.canonical_json(worker_result) + '\n')
+            stage = dict(stage, container_id=worker_result['container_id'])
+            self.assertFalse(worker_result['timed_out'])
+            self.assertEqual(worker_result['exit_code'], 0)
+            self.assertFalse(worker_result['truncated'])
+            self.assertEqual(worker_result['task_status'], 'SETTLED')
+        attempt_dir = live.root / 'attempt'
+        floor, guarded, readiness = o.import_and_verify(
+            store=runtime, task_id=task['task_id'], task_path='controller/task-m5.json',
+            catalog_path='controller/catalog-m5.json', guard_root=live.root / 'quarantine', attempt_dir=attempt_dir)
         guard = guarded.verify()
         self.assertFalse(guard['vetoes'])
-        attempt_dir = live.root / 'attempt'
-        readiness = v.execute(guarded, attempt_dir, lease_epoch=stage['lease_epoch'], sequence=1)
         self.assertTrue(readiness['verification_passed'])
         self.assertEqual(sorted(readiness['unresolved']), sorted(guard['flags']))
         self.assertEqual(readiness['pending_hosted_classes'], [])
-        review = self.live_review(live, box, guarded, attempt_dir, task, guard,
-                                  reviewer_enrollment, worker_enrollment['family'])
+        with runtime.lock('task', task['task_id']):
+            review = o.run_reviewer(authority=authority, floor=floor, guarded=guarded,
+                                     attempt_dir=attempt_dir, enrollment=reviewer_enrollment, binary=live.binary,
+                                     agent=None, box=box, image=live.image, container_binary='/usr/local/bin/opencode',
+                                     implementation_family=worker_enrollment['family'],
+                                     limits=b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 1 << 20, 600),
+                                     credential_dir=Path(cfg['OR_V2_CRED_DIR']) if reviewer_enrollment['provider_id'] == 'opencode-go' else None,
+                                     storage_root=live.volume, observation_dir=live.output, store=runtime)
         review_digest = o.persist_review(runtime, task['task_id'], review['report'], review['metadata'])
         inputs = p.collect_inputs(store=runtime, task_id=task['task_id'],
                                   guard_root=live.root / 'quarantine', attempt_dir=attempt_dir,
-                                  task_path='controller/task-m5.json', catalog_path='controller/catalog-m5.json')
+                                  task_path='controller/task-m5.json', catalog_path='controller/catalog-m5.json',
+                                  implementation_family=worker_enrollment['family'])
         authorization = p.build_authorization(inputs, schemas=SCHEMAS,
                                               implementation_family=worker_enrollment['family'], issuance_sequence=1)
         authorization_digest = p.persist_authorization(runtime, task['task_id'], authorization)
-        bare = live.output / 'bare-remote.git'
+        bare = Path(cfg['OR_V2_BARE']).resolve()
+        self.assertFalse(bare.exists(), 'live bare target must be fresh')
         subprocess.run(['git', 'init', '--bare', '-q', str(bare)], check=True)
         integration = live.root / 'integration'
         subprocess.run(['git', 'clone', '-q', str(Path(authority.candidate_root)), str(integration)], check=True)
         subprocess.run(['git', '-C', str(integration), 'checkout', '-q', '-b', 'main', task['base_sha']], check=True)
-        subprocess.run(['git', '-C', str(integration), 'remote', 'add', 'origin', str(bare)], check=True)
+        subprocess.run(['git', '-C', str(integration), 'remote', 'set-url', 'origin', str(bare)], check=True)
         subprocess.run(['git', '-C', str(integration), 'push', '-q', 'origin', 'main:main'], check=True)
         env = dict(os.environ, GIT_AUTHOR_NAME='M5 Live', GIT_AUTHOR_EMAIL='m5@example.invalid',
                    GIT_COMMITTER_NAME='M5 Live', GIT_COMMITTER_EMAIL='m5@example.invalid')
@@ -664,9 +594,25 @@ class LiveWorkerTests(unittest.TestCase):
             pushes.append(list(argv))
             return p._run_push(argv, cwd)
 
-        promoted = p.promote(store=runtime, task_id=task['task_id'], authorization_digest=authorization_digest,
-                             integration_repo=integration, remote='origin', expected_remote_url=str(bare),
-                             hooks_dir=hooks, push_runner=counting_push)
+        def crash_after_push(point):
+            if point == 'after_push':
+                raise RuntimeError('controlled controller crash after real push')
+        with self.assertRaisesRegex(RuntimeError, 'controlled controller crash'):
+            p.promote(store=runtime, task_id=task['task_id'], authorization_digest=authorization_digest,
+                      integration_repo=integration, remote='origin', expected_remote_url=str(bare),
+                      hooks_dir=hooks, push_runner=counting_push, fault=crash_after_push)
+        latest, _ = p._latest_intent(runtime, task['task_id'])
+        restarted = s.RuntimeStore(runtime.root, authority)
+        promoted = p.reconcile_push(store=restarted, task_id=task['task_id'], intent_digest=latest,
+                                    integration_repo=integration, remote='origin', push_observed=False)
+        latest, _ = p._latest_intent(restarted, task['task_id'])
+        replayed = p.reconcile_push(store=restarted, task_id=task['task_id'], intent_digest=latest,
+                                   integration_repo=integration, remote='origin', push_observed=False)
+        self.assertEqual(replayed['status'], 'PROMOTED')
+        (live.output / 'recovery.json').write_text(c.canonical_json(dict(
+            crash_point='after_push', actual_push_count=len(pushes), initial=promoted, replay=replayed,
+            local_head=p._git_ok(integration, 'rev-parse', 'HEAD'),
+            remote_head=p.advertised_main(integration, 'origin'), candidate_sha=guard['head'])) + '\n')
         self.assertEqual(promoted['status'], 'PROMOTED')
         self.assertEqual(len(pushes), 1)
         self.assertNotIn('--force', pushes[0])
@@ -674,13 +620,30 @@ class LiveWorkerTests(unittest.TestCase):
         remote_receipts = [d for d in runtime.inspect()['object_digests']
                            if s._object(s._read(runtime.root / 'objects' / (d + '.json')))['payload'].get('kind') == 'remote-promotion']
         self.assertEqual(len(remote_receipts), 1)
+        import agent_supervisor
+        handoff = agent_supervisor.validate_disabled_task_handoff(
+            integration, store=runtime, task_id=task['task_id'], authorization_digest=authorization_digest,
+            remote_receipt_digest=remote_receipts[0])
+        self.assertEqual(handoff['status'], 'DISABLED_CONTROL_PLANE_READY')
+        self.assertEqual(handoff['product_next'], '9B')
+        (live.output / 'handoff.json').write_text(c.canonical_json(handoff) + '\n')
+        (live.output / 'state-readiness.json').write_text(c.canonical_json(dict(
+            status='DISABLED_CONTROL_PLANE_READY', task_id=task['task_id'], candidate_sha=guard['head'],
+            product_next=handoff['product_next'], verified_contract_versions=handoff['verified_contract_versions'],
+            plan_unchanged=True, state_unchanged=True,
+            authority_semantics='NO_PRODUCT_COMPLETION_NO_ADOPTION')) + '\n')
+        pins = live.output / 'controller-pins'
+        shutil.copytree(Path(authority.controller_root) / 'controller', pins)
+        (pins / 'authority.json').write_text(authority.payload_json + '\n')
+        (pins / 'source.json').write_text(c.canonical_json(dict(source_sha=authority.source_sha,
+            candidate_root=authority.candidate_root, controller_root=authority.controller_root)) + '\n')
         evidence = {'task_id': task['task_id'], 'candidate_head': guard['head'], 'base_sha': task['base_sha'],
                     'marker': marker, 'task': task,
                     'worker': {'model_id': worker_enrollment['model_id'], 'family': worker_enrollment['family'],
-                               'container_id': worker_result.container_id, 'exit_code': worker_result.exit_code,
-                               'timed_out': worker_result.timed_out, 'truncated': worker_result.truncated,
-                               'effective_digest': worker_result.effective_digest,
-                               'elapsed_seconds': worker_result.elapsed_seconds},
+                               'container_id': worker_result['container_id'], 'exit_code': worker_result['exit_code'],
+                               'timed_out': worker_result['timed_out'], 'truncated': worker_result['truncated'],
+                               'effective_digest': worker_result['effective_digest'],
+                               'elapsed_seconds': worker_result['elapsed_seconds'], 'metadata': worker_result['metadata']},
                     'reviewer': review['metadata'], 'review_verdict': review['report']['verdict'],
                     'verification_passed': True, 'authorization_digest': authorization_digest,
                     'remote_receipt_digest': remote_receipts[0], 'review_digest': review_digest,
@@ -688,58 +651,13 @@ class LiveWorkerTests(unittest.TestCase):
                     'image': live.image, 'binary': {'path': str(live.binary.path), 'sha256': live.binary.sha256,
                                                     'version': live.binary.version},
                     'docker': {'digest': live.docker.digest, 'endpoint': live.docker.endpoint},
-                    'credential': finger, 'guard_vetoes': guard['vetoes'], 'guard_flags': guard['flags']}
+                    'credential': credential_fingerprint(cfg['OR_V2_CRED_DIR']), 'guard_vetoes': guard['vetoes'], 'guard_flags': guard['flags']}
         self.assertNotIn('key', json.dumps({k: v for k, v in evidence.items() if k != 'credential'}))
         (live.output / 'live-evidence.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
         shutil.copytree(runtime.root, live.output / 'runtime')
         shutil.copytree(live.root / 'quarantine', live.output / 'quarantine')
         shutil.copytree(attempt_dir, live.output / 'attempt')
 
-    def live_review(self, live, box, guarded, attempt_dir, task, guard, enrollment, worker_family):
-        candidate_root = guarded.root / 'candidate'
-        prompt = o.build_review_prompt(
-            task=task, candidate_sha=guard['head'],
-            diff_text=subprocess.check_output(
-                ['git', '-C', str(candidate_root), 'diff', '--no-color', task['base_sha'], guard['head']],
-                env={'PATH': '/usr/bin:/bin', 'LANG': 'C'}).decode('utf-8', 'replace')[:262144],
-            guard_flags=guard['flags'],
-            verification_summary={'passed': True, 'checks': ['m5-live']}, budgets=task['budget'])
-        base = live.root / 'review'
-        base.mkdir()
-        shutil.copytree(candidate_root, base / 'input', symlinks=True)
-        if w.manifest(base / 'input') != guard['manifest']:
-            raise AssertionError('reviewer input differs from guarded candidate')
-        review_candidate = b.Candidate(base / 'input', task['base_sha'], task['authority_digest'],
-                                       'review-' + guard['head'][:12], _seal=b._SEAL)
-        view = a.build_worker_view(review_candidate, base, task['task_id'], 'review', 'INVESTIGATION_REVIEW')
-        overlays = b.write_role_overlays(base / 'overlays', 'INVESTIGATION_REVIEW')
-        mounts = live.config_masks(overlays, 'INVESTIGATION_REVIEW', base / 'input')
-        mounts.extend(live.home_mounts(overlays, base / 'home'))
-        nonce = 'review-' + guard['head'][:12]
-        provisional = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'review', 1, nonce,
-                                      task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id'])
-        result = live.launch_with_credential(
-            box=box, candidate=review_candidate, view=view, role='INVESTIGATION_REVIEW',
-            container_binary='/usr/local/bin/opencode', message_parts=[prompt], agent=None,
-            enrollment=enrollment, image=live.image, network='bridge', limits=b.Limits(1, 1 << 29, 64, 52 << 30,
-                                                                                       1 << 30, 1 << 20, 600),
-            overlay_mounts=mounts, labels=provisional.labels(), name='or-v2-live-review-' + nonce,
-            timeout_seconds=600)
-        self.assertFalse(result.timed_out)
-        self.assertEqual(result.exit_code, 0)
-        (live.output / 'reviewer-transcript.bin').write_bytes(result.transcript)
-        stream = a.parse_event_stream(result.transcript, limits=a.StreamLimits(4 << 20, 4096, 3600),
-                                      event_contract=live.binary.event_contract)
-        self.assertIsNone(stream.error)
-        self.assertIsNotNone(stream.final_payload)
-        report = a.parse_review_report(stream.final_payload, task=task, candidate_sha=guard['head'],
-                                       schemas=SCHEMAS, reviewer_family=enrollment['family'],
-                                       implementation_family=worker_family, flag_ids=guard['flags'])
-        box.docker(['rm', result.container_id])
-        metadata = {'adapter': live.binary.certification_digest(), 'model_id': enrollment['model_id'],
-                    'family': enrollment['family'], 'session_id': stream.session_id,
-                    'argv_digest': c.canonical_digest([live.binary.path, enrollment['model_id']])}
-        return {'report': report, 'metadata': metadata}
 
 
 if __name__ == '__main__':

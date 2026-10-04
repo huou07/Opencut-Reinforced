@@ -495,7 +495,12 @@ class RuntimeStore:
             task['status'] = 'CLAIMED'; state['active_task'] = task_id
             task['stage'] = dict(task_id=task_id, stage_id=stage_id, lease_epoch=state['epoch'],
                     owner_nonce=owner_nonce, host_boot_identity=boot_identity, stage_nonce=stage_nonce, container_id=None)
-        result = self.transaction(current['sequence'], current['epoch'], update)
+        contract = _object(_read(self.root / 'objects' / (contract_digest + '.json')))['payload']
+        attempt_objects = []
+        if contract.get('checkpoint_id') in ('M3', 'M4', 'M5'):
+            from .orchestrator import claim_attempt
+            attempt_objects.append(claim_attempt(self, contract, current['epoch'] + 1))
+        result = self.transaction(current['sequence'], current['epoch'], update, objects=attempt_objects)
         return result['tasks'][task_id]['stage']
 
     def bind_container(self, stage, container_id):

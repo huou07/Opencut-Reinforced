@@ -369,12 +369,17 @@ def recover_attempt(guarded,destination):
     return readiness(guarded,destination)
 
 
+def quality_flag_id(flag):
+    """Bind prose guard observations to the frozen review schema's ID type."""
+    return c.canonical_digest(flag)
+
+
 def readiness(guarded,destination):
     """Supporting verification facts and pending obligations, never promotion."""
     guard=guarded.verify();floor=guarded.floor;task=floor.task
     attempt=_attempt(guarded,destination)
     receipts=attempt['receipts'];g.require(len({r['check_id'] for r in receipts})==len(receipts),'duplicate check receipt')
-    reasons=list(guard['vetoes'])+list(guard['flags']);pending=[]
+    reasons=list(guard['vetoes']);pending=[]
     if attempt['phase']!='COMPLETE' or any(r['phase']!='REMOVED' for r in attempt['checks'].values()):
         reasons.append('verifier lifecycle incomplete')
     if set(r['check_id'] for r in receipts)!=set(task['required_check_ids']):reasons.append('incomplete required check set')
@@ -409,6 +414,10 @@ def readiness(guarded,destination):
             reasons.append('acceptance checks missing: '+requirement['class_id'])
     result=dict(schema_version=1,task_id=task['task_id'],candidate_sha=guard['head'],floor_digest=floor.digest,
                 attempt_nonce=attempt['nonce'],verification_passed=bool(receipts) and all(r['outcome']=='PASS' for r in receipts),
-                acceptance_ready=not reasons,pending_hosted_classes=pending,unresolved=reasons,
+                acceptance_ready=not reasons and not guard['flags'],
+                review_ready=bool(receipts) and all(r['outcome']=='PASS' for r in receipts) and not reasons,
+                quality_flags=list(guard['flags']),
+                quality_flag_ids={quality_flag_id(flag):flag for flag in guard['flags']},blocking_reasons=reasons,
+                pending_hosted_classes=pending,unresolved=reasons+list(guard['flags']),
                 receipts=receipts,authority_semantics='FACTS_ONLY_NO_REVIEW_PROMOTION_ADOPTION')
     g.write_json(Path(destination)/'readiness.json',result);return result

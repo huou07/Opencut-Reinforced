@@ -76,6 +76,15 @@ def opencode_binary(args: argparse.Namespace) -> a.OpenCodeBinary:
     return a.OpenCodeBinary(Path(args.opencode_bin), args.opencode_sha, args.opencode_version)
 
 
+def load_role_enrollment(args: argparse.Namespace, authority: c.ValidatedReleaseAuthority,
+                         task: dict) -> a.ValidatedEnrollment:
+    if not args.enrollment:
+        raise c.ContractError('launch requires an externally pinned enrollment')
+    record = load_json(args.enrollment)
+    digest = args.enrollment_digest or c.canonical_digest(record)
+    return a.load_enrollment(record, authority=authority, task=task, expected_digest=digest)
+
+
 def do_admit(args: argparse.Namespace) -> dict:
     try:
         authority = load_authority(args)
@@ -105,10 +114,10 @@ def do_claim(args: argparse.Namespace) -> dict:
         full_task = c.load_json_strict(open_store_args_task(args, runtime, args.task_id))
         enrollment = None
         if args.launch:
-            enrollment = a.validate_enrollment(load_json(args.enrollment))
-            worker = o.select_worker(full_task, [enrollment], availability=json.loads(args.availability or '{}'),
-                                     locked_model=args.locked_model)
-            enrollment = dict(enrollment, reasoning_requested=worker['reasoning_requested'])
+            enrollment = load_role_enrollment(args, authority, full_task)
+            enrollment = o.select_worker(full_task, [enrollment], availability=c.load_json_strict(args.availability or '{}'),
+                                         locked_model=args.locked_model, task_class=args.task_class,
+                                         required_reasoning=args.required_reasoning)
         with runtime.lock('task', args.task_id):
             stage = o.claim_stage(runtime, args.task_id, task['contract_digest'], owner_nonce=args.owner,
                                   boot_identity=args.boot, stage_id=args.stage_id, stage_nonce=args.stage_nonce)
@@ -122,7 +131,8 @@ def do_claim(args: argparse.Namespace) -> dict:
                                    prompt=Path(args.prompt).read_text(encoding='utf-8'), image=args.image,
                                    limits=b.Limits(*[int(x) for x in args.limits.split(',')]),
                                    network=args.network, container_binary=args.container_binary,
-                                   storage_root=Path(args.storage_root), timeout_seconds=args.timeout)
+                                   storage_root=Path(args.storage_root), timeout_seconds=args.timeout,
+                                   credential_dir=Path(args.credential_dir) if args.credential_dir else None)
             return result('OK', stage=outcome['task_status'], preserved=outcome['preserved'],
                           exit_code=outcome['exit_code'], timed_out=outcome['timed_out'],
                           transcript_digest=outcome['transcript_digest'])
@@ -134,7 +144,7 @@ def do_claim(args: argparse.Namespace) -> dict:
     except (c.ContractError, b.SandboxError, a.AdapterError) as exc:
         code = getattr(exc, 'code', 'REFUSED')
         code = code if code in ('REFUSED', 'UNAVAILABLE', 'CONFLICT', 'PENDING', 'DEFERRED',
-                                'ADAPTER_UNAVAILABLE', 'MODEL_UNAVAILABLE', 'TRANSPORT_ERROR', 'PROTOCOL_ERROR') else 'REFUSED'
+                                'ADAPTER_UNAVAILABLE', 'MODEL_UNAVAILABLE', 'TRANSPORT_ERROR') else 'REFUSED'
         if code in ('ADAPTER_UNAVAILABLE', 'MODEL_UNAVAILABLE', 'TRANSPORT_ERROR'):
             code = 'UNAVAILABLE'
         return result(code, reason=str(exc))
@@ -147,20 +157,33 @@ def open_store_args_task(args: argparse.Namespace, runtime: s.RuntimeStore, task
     return c.canonical_json(record['payload'])
 
 
+def do_verify(args):
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        with runtime.lock('task', args.task_id):
+            _, _, readiness = o.import_and_verify(store=runtime, task_id=args.task_id,
+                task_path=args.task_path, catalog_path=args.catalog_path,
+                guard_root=Path(args.guard_root), attempt_dir=Path(args.attempt_dir))
+        return result('OK' if readiness['verification_passed'] else 'REFUSED', readiness=readiness)
+    except c.ContractError as exc:
+        return result('REFUSED', reason=str(exc))
+
+
 def do_review(args: argparse.Namespace) -> dict:
     try:
         authority = load_authority(args)
         runtime = open_store(args, authority)
         floor = g.load_floor(authority, args.task_path, args.catalog_path)
         guarded = g.restore_guarded(floor, Path(args.guard_root))
+        full_task = c.load_json_strict(open_store_args_task(args, runtime, args.task_id))
+        if full_task != floor.task:
+            raise c.ContractError('review floor differs from immutable admitted task')
+        enrollment = load_role_enrollment(args, authority, full_task)
+        enrollment = o.select_reviewer(full_task, [enrollment], availability=c.load_json_strict(args.availability or '{}'),
+                                       implementation_family=args.implementation_family, task_class=args.task_class,
+                                       required_reasoning=args.required_reasoning)
         with runtime.lock('task', args.task_id):
-            o.claim_review(runtime, args.task_id)
-            enrollment = a.validate_enrollment(load_json(args.enrollment))
-            payload = c._release_authority(authority)
-            full_task = floor.task
-            reviewer = o.select_reviewer(full_task, [enrollment], availability=json.loads(args.availability or '{}'),
-                                         implementation_family=args.implementation_family)
-            enrollment = dict(enrollment, reasoning_requested=reviewer['reasoning_requested'])
             daemon_box = b.ContainerSandbox(b.DockerCLI(Path(args.docker_bin), args.docker_sha, endpoint=args.endpoint),
                                             boot_identity=b.host_boot_identity(), host_platform='linux')
             outcome = o.run_reviewer(authority=authority, floor=floor, guarded=guarded,
@@ -169,7 +192,9 @@ def do_review(args: argparse.Namespace) -> dict:
                                      image=args.image, container_binary=args.container_binary,
                                      implementation_family=args.implementation_family,
                                      limits=b.Limits(*[int(x) for x in args.limits.split(',')]),
-                                     timeout_seconds=args.timeout)
+                                     timeout_seconds=args.timeout,
+                                     credential_dir=Path(args.credential_dir) if args.credential_dir else None,
+                                     storage_root=Path(args.storage_root) if args.storage_root else None, store=runtime)
             digest = o.persist_review(runtime, args.task_id, outcome['report'], outcome['metadata'])
             status = 'OK' if outcome['verdict'] == 'PASS' else 'REFUSED'
             return result(status, verdict=outcome['verdict'], review_digest=digest)
@@ -280,7 +305,7 @@ def do_snapshot(args: argparse.Namespace) -> dict:
                 stage = o.derive_stage(runtime, task_id)
         snapshot = o.publish_snapshot(plan_checkpoint=args.plan_checkpoint, operational_stage=stage,
                                       next_legal_action=args.next_action,
-                                      model_availability=json.loads(args.availability or '{}'),
+                                      model_availability=c.load_json_strict(args.availability or '{}'),
                                       health=args.health, blockers=args.blockers.split(',') if args.blockers else [],
                                       pending_escalation=args.escalation, runtime_present=present)
         _ = state
@@ -308,6 +333,9 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument('--stage-nonce', required=True)
     claim.add_argument('--launch', action='store_true')
     claim.add_argument('--enrollment')
+    claim.add_argument('--enrollment-digest', help='optional exact pin; must match admitted task role_enrollment_ids')
+    claim.add_argument('--task-class', default='IMPLEMENTATION')
+    claim.add_argument('--required-reasoning', choices=a.REASONING_LEVELS, default='MEDIUM')
     claim.add_argument('--availability', default='{}')
     claim.add_argument('--locked-model')
     claim.add_argument('--opencode-bin')
@@ -316,7 +344,8 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument('--docker-bin')
     claim.add_argument('--docker-sha')
     claim.add_argument('--endpoint')
-    claim.add_argument('--agent', default='orch-worker')
+    claim.add_argument('--agent')
+    claim.add_argument('--credential-dir')
     claim.add_argument('--prompt')
     claim.add_argument('--image')
     claim.add_argument('--limits', help='cpu,memory_bytes,pids,candidate_bytes,scratch_bytes,output_bytes,wall_seconds')
@@ -325,6 +354,10 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument('--storage-root')
     claim.add_argument('--timeout', type=int, default=600)
     claim.set_defaults(func=do_claim)
+    verify = sub.add_parser('verify')
+    for name in ('task-id', 'task-path', 'catalog-path', 'guard-root', 'attempt-dir'):
+        verify.add_argument('--' + name, required=True)
+    verify.set_defaults(func=do_verify)
     review = sub.add_parser('review')
     review.add_argument('--task-id', required=True)
     review.add_argument('--task-path', required=True)
@@ -332,6 +365,9 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument('--guard-root', required=True)
     review.add_argument('--attempt-dir', required=True)
     review.add_argument('--enrollment', required=True)
+    review.add_argument('--enrollment-digest', help='optional exact pin; must match admitted task role_enrollment_ids')
+    review.add_argument('--task-class', default='INVESTIGATION_REVIEW')
+    review.add_argument('--required-reasoning', choices=('HIGH', 'XHIGH', 'MAX'), default='HIGH')
     review.add_argument('--availability', default='{}')
     review.add_argument('--implementation-family', required=True)
     review.add_argument('--opencode-bin', required=True)
@@ -340,7 +376,9 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument('--docker-bin', required=True)
     review.add_argument('--docker-sha', required=True)
     review.add_argument('--endpoint', required=True)
-    review.add_argument('--agent', default='orch-reviewer')
+    review.add_argument('--agent')
+    review.add_argument('--credential-dir')
+    review.add_argument('--storage-root', required=True)
     review.add_argument('--image', required=True)
     review.add_argument('--limits', required=True)
     review.add_argument('--container-binary', default='/usr/local/bin/opencode')

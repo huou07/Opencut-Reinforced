@@ -224,12 +224,44 @@ class AuthorizationTests(unittest.TestCase):
                           integration_repo=repo, remote='origin', expected_remote_url=url, hooks_dir=hooks)
             self.assertEqual(set(runtime.inspect()['object_digests']), before)
 
+    def test_quality_disposition_never_waives_failed_checks_vetoes_or_fidelity(self):
+        fixture, authority, runtime, task, _ = m4_store(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, runtime.root.parent, True)
+        head = 'c' * 40
+        epoch = runtime.inspect()['tasks'][task['task_id']]['lease_epoch']
+        flag = 'unresolved material change: work.txt'
+        from model_orchestrator import verification as v
+        review = review_payload(task, head)
+        review['report']['quality_flag_dispositions'] = [
+            dict(id=v.quality_flag_id(flag), disposition='NOT_LOWERING', evidence_digest='d' * 64)]
+        inputs = dict(task=task, guard=dict(guard_record(head), flags=[flag]),
+                      readiness=dict(verification_passed=True, unresolved=[flag],
+                                     pending_hosted_classes=[], receipts=verification_receipts(task, head, epoch)),
+                      review=review, lease_epoch=epoch)
+        self.assertEqual(p.build_authorization(inputs, schemas=SCHEMAS,
+                         implementation_family='fixture-a', issuance_sequence=1)['candidate_sha'], head)
+        for attack in ('missing', 'lowering', 'stale', 'stale-flag', 'veto', 'acceptance', 'failed', 'incomplete'):
+            bad = copy.deepcopy(inputs)
+            if attack == 'missing': bad['review']['report']['quality_flag_dispositions'] = []
+            elif attack == 'lowering':
+                bad['review']['report']['quality_flag_dispositions'][0]['disposition'] = 'DEFECT'
+                bad['review']['report']['verdict'] = 'DEFECT_FOUND'
+            elif attack == 'stale': bad['review']['report']['candidate_sha'] = 'f' * 40
+            elif attack == 'stale-flag': bad['review']['report']['quality_flag_dispositions'][0]['id'] = v.quality_flag_id('other observation')
+            elif attack == 'veto': bad['guard']['vetoes'] = ['required case missing: case1']
+            elif attack == 'acceptance': bad['readiness']['unresolved'].append('required real class evidence pending: USER_JOURNEY')
+            elif attack == 'failed': bad['readiness']['receipts'][0]['outcome'] = 'FAIL'
+            else: bad['readiness']['receipts'] = []
+            with self.subTest(attack=attack), self.assertRaises(c.ContractError):
+                p.build_authorization(bad, schemas=SCHEMAS, implementation_family='fixture-a', issuance_sequence=1)
+
     def test_collect_inputs_refuses_unknown_or_unsettled_task(self):
         fixture, authority, runtime, task, _ = m4_store(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, runtime.root.parent, True)
         with self.assertRaises(p.PromotionError):
             p.collect_inputs(store=runtime, task_id='unknown-task', guard_root=Path('/nonexistent'),
-                             attempt_dir=Path('/nonexistent'), task_path='x', catalog_path='y')
+                             attempt_dir=Path('/nonexistent'), task_path='x', catalog_path='y',
+                             implementation_family='fixture-a')
 
 
 class PushMatrixTests(unittest.TestCase):
@@ -639,38 +671,97 @@ class HandoffTests(unittest.TestCase):
             finally:
                 path.write_bytes(original)
 
-    def test_wrong_sha_next_main_and_dirty_tree_refuse(self):
+    def test_disabled_wrong_sha_dirty_tree_and_paused_store_refuse(self):
         with tempfile.TemporaryDirectory() as directory:
-            _, runtime, task, repo, head, digest, remote = self.context(directory)
-            with self.assertRaises(agent_supervisor.SupervisorError):
-                agent_supervisor.validate_task_handoff(repo, task_id=task['task_id'], checkpoint_id='B',
-                                                       store_root=runtime.root, authorization_digest=digest,
-                                                       remote_receipt_digest=remote)
+            runtime, task, repo, head, digest, remote = self.disabled_context(directory)
+            def check():
+                return agent_supervisor.validate_disabled_task_handoff(repo, store=runtime,
+                    task_id=task['task_id'], authorization_digest=digest, remote_receipt_digest=remote)
             git(repo, 'commit', '-q', '--allow-empty', '-m', 'drift')
-            with self.assertRaises(agent_supervisor.SupervisorError):
-                agent_supervisor.validate_task_handoff(repo, task_id=task['task_id'], checkpoint_id='A',
-                                                       store_root=runtime.root, authorization_digest=digest,
-                                                       remote_receipt_digest=remote)
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, 'HEAD'):
+                check()
             git(repo, 'reset', '-q', '--hard', head)
             (repo / 'dirty.txt').write_text('dirty')
-            with self.assertRaises(agent_supervisor.SupervisorError):
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, 'clean worktree'):
+                check()
+            (repo / 'dirty.txt').unlink()
+            runtime.set_paused(True)
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, 'unpaused settled'):
+                check()
+
+    def disabled_context(self, directory):
+        fixture, authority, runtime, task, _ = m4_store(directory)
+        repo, url = integration_repo(Path(directory) / 'integration-fixture', fixture)
+        head = candidate_commit(repo)
+        settle_test_only(runtime, task['task_id'])
+        digest, _ = authorize(runtime, task, head)
+        result = p.promote(store=runtime, task_id=task['task_id'], authorization_digest=digest,
+                           integration_repo=repo, remote='origin', expected_remote_url=url,
+                           hooks_dir=Path(directory).resolve() / 'hooks')
+        self.assertEqual(result['status'], 'PROMOTED')
+        state = runtime.inspect()
+        remotes = [(key, p.load_object(runtime, key)) for key in state['object_digests']]
+        remote = next(key for key, record in remotes if record['kind'] == 'receipt'
+                      and record['payload'].get('kind') == 'remote-promotion')
+        return runtime, task, repo, head, digest, remote
+
+    def test_disabled_task_can_never_complete_product_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, runtime, task, repo, head, digest, remote = self.context(directory)
+            before = (repo / 'docs/execution/STATE.json').read_bytes()
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, 'disabled control-plane'):
                 agent_supervisor.validate_task_handoff(repo, task_id=task['task_id'], checkpoint_id='A',
                                                        store_root=runtime.root, authorization_digest=digest,
                                                        remote_receipt_digest=remote)
+            self.assertEqual((repo / 'docs/execution/STATE.json').read_bytes(), before)
 
-    def test_positive_handoff_binds_all_receipts_and_supervisor(self):
+    def test_disabled_handoff_is_exact_bound_read_only_readiness(self):
         with tempfile.TemporaryDirectory() as directory:
-            _, runtime, task, repo, head, digest, remote = self.context(directory)
-            intent = agent_supervisor.validate_task_handoff(repo, task_id=task['task_id'], checkpoint_id='A',
-                                                            store_root=runtime.root, authorization_digest=digest,
-                                                            remote_receipt_digest=remote)
-            self.assertEqual((intent['task_id'], intent['task_checkpoint'], intent['checkpoint_id'],
-                              intent['implementation_sha'], intent['authorization_digest'],
-                              intent['remote_receipt_digest'], intent['next'], intent['head']),
-                             (task['task_id'], 'M4', 'A', head, digest, remote, 'A', head))
-            import hashlib
-            self.assertEqual(intent['supervisor_digest'],
-                             hashlib.sha256(Path(agent_supervisor.__file__).read_bytes()).hexdigest())
+            runtime, task, repo, head, digest, remote = self.disabled_context(directory)
+            before = runtime.inspect()
+            plan = (repo / 'docs/execution/PLAN.json').read_bytes()
+            state = (repo / 'docs/execution/STATE.json').read_bytes()
+            refs = git(repo, 'show-ref')
+            intent = agent_supervisor.validate_disabled_task_handoff(
+                repo, store=runtime, task_id=task['task_id'], authorization_digest=digest,
+                remote_receipt_digest=remote)
+            self.assertEqual(intent['status'], 'DISABLED_CONTROL_PLANE_READY')
+            self.assertEqual(intent['task_checkpoint'], 'M4')
+            self.assertEqual(intent['implementation_sha'], head)
+            self.assertEqual(intent['task_contract_digest'], c.canonical_digest(task))
+            self.assertEqual(intent['verified_contract_versions'],
+                             {'project_schema': 7, 'recovery_schema': 1, 'ipc_protocol': 1})
+            self.assertEqual(intent['authority_semantics'], 'DISABLED_FACTS_ONLY_NO_PRODUCT_COMPLETION_NO_ADOPTION')
+            self.assertEqual(runtime.inspect(), before)
+            self.assertEqual((repo / 'docs/execution/PLAN.json').read_bytes(), plan)
+            self.assertEqual((repo / 'docs/execution/STATE.json').read_bytes(), state)
+            self.assertEqual(git(repo, 'show-ref'), refs)
+            self.assertFalse((repo / agent_supervisor.COMPLETION_INTENT_PATH).exists())
+
+    def test_disabled_handoff_refuses_unpublished_wrong_phase_and_stale_remote(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, task, repo, head, digest, remote = self.disabled_context(directory)
+            record = p.load_object(runtime, digest)
+            forged = copy.deepcopy(record)
+            forged['payload']['authorization']['checkpoint_id'] = 'M5'
+            current = runtime.inspect()
+            runtime.transaction(current['sequence'], current['epoch'], lambda state: None, objects=[forged])
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_disabled_task_handoff(repo, store=runtime, task_id=task['task_id'],
+                    authorization_digest=c.canonical_digest(forged), remote_receipt_digest=remote)
+            # An orphan content-addressed record has no authority without snapshot publication.
+            orphan = copy.deepcopy(record)
+            orphan['payload']['authorization']['issuance_sequence'] += 1
+            orphan_digest = c.canonical_digest(orphan)
+            (runtime.root / 'objects' / (orphan_digest + '.json')).write_text(c.canonical_json(orphan) + '\n')
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_disabled_task_handoff(repo, store=runtime, task_id=task['task_id'],
+                    authorization_digest=orphan_digest, remote_receipt_digest=remote)
+            subprocess.run(['git', '--git-dir', str(Path(directory).resolve() / 'integration-fixture/remote.git'),
+                            'update-ref', 'refs/heads/main', BASE], check=True)
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_disabled_task_handoff(repo, store=runtime, task_id=task['task_id'],
+                    authorization_digest=digest, remote_receipt_digest=remote)
 
 
 class CompletionRecoveryTests(unittest.TestCase):

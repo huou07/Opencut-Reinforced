@@ -42,7 +42,8 @@ def load_object(store: s.RuntimeStore, digest: str) -> dict:
 
 
 def collect_inputs(*, store: s.RuntimeStore, task_id: str, guard_root: Path,
-                   attempt_dir: Path, task_path: str, catalog_path: str) -> dict[str, Any]:
+                   attempt_dir: Path, task_path: str, catalog_path: str,
+                   implementation_family: str) -> dict[str, Any]:
     """Load every authorization input from controller-owned locations only."""
     from . import guards as g
     from . import verification as v
@@ -61,12 +62,34 @@ def collect_inputs(*, store: s.RuntimeStore, task_id: str, guard_root: Path,
     guard = guarded.verify()
     _refuse(not guard['vetoes'], 'deterministic guard veto prevents promotion')
     readiness = v.readiness(guarded, Path(attempt_dir))
-    _refuse(readiness['verification_passed'] is True and not readiness['unresolved'], 'promotion requires passed verification with resolved readiness')
+    _refuse(readiness['review_ready'] is True, 'promotion requires passed verification with no non-semantic blockers')
     reviews = [load_object(store, digest) for digest in state['object_digests']]
     reviews = [r['payload'] for r in reviews if r['kind'] == 'review' and r['payload'].get('task_id') == task_id]
     _refuse(len(reviews) == 1, 'promotion requires exactly one persisted independent review')
+    parsed = _validated_review(reviews[0], task=task, guard=guard, schemas=floor.verify()['schemas'],
+                               implementation_family=implementation_family)
+    readiness = dict(readiness, acceptance_ready=True, unresolved=[],
+                     quality_flag_dispositions=parsed['quality_flag_dispositions'])
     return {'task': task, 'payload': payload, 'guard': guard, 'readiness': readiness,
             'review': reviews[0], 'lease_epoch': task_state['lease_epoch']}
+
+
+def _validated_review(review, *, task, guard, schemas, implementation_family):
+    _refuse(type(implementation_family) is str and implementation_family and
+            implementation_family != 'unknown', 'implementation family required')
+    report = review.get('report', review)
+    metadata = review.get('metadata', {})
+    reviewer_family = metadata.get('family', review.get('family', 'unknown'))
+    from . import adapters as adapters_module, verification as verification_module
+    parsed = adapters_module.parse_review_report(report, task=task, candidate_sha=guard['head'], schemas=schemas,
+                                                 reviewer_family=reviewer_family,
+                                                 implementation_family=implementation_family,
+                                                 flag_ids=[verification_module.quality_flag_id(flag) for flag in guard['flags']])
+    _refuse(parsed['verdict'] == 'PASS', 'a non-PASS review cannot issue promotion authority')
+    dispositions = {item['id']: item['disposition'] for item in parsed['quality_flag_dispositions']}
+    undisposed = [flag for flag in guard['flags'] if dispositions.get(verification_module.quality_flag_id(flag)) != 'NOT_LOWERING']
+    _refuse(not undisposed, 'guard flags lack reviewer disposition: ' + ', '.join(undisposed[:5]))
+    return parsed
 
 
 def build_authorization(inputs: Mapping[str, Any], *, schemas: Mapping[str, Any],
@@ -103,18 +126,14 @@ def build_authorization(inputs: Mapping[str, Any], *, schemas: Mapping[str, Any]
         c.validate_verification_receipt(receipt, schemas, task=task, candidate_sha=head, context=context)
         _refuse(receipt['outcome'] == 'PASS', 'a failed required check cannot authorize promotion')
         verified.append(receipt)
-    report = review.get('report', review)
-    metadata = review.get('metadata', {})
-    reviewer_family = metadata.get('family', review.get('family', 'unknown'))
-    from . import adapters as adapters_module
-    parsed = adapters_module.parse_review_report(report, task=task, candidate_sha=head, schemas=schemas,
-                                                 reviewer_family=reviewer_family,
-                                                 implementation_family=implementation_family,
-                                                 flag_ids=guard['flags'])
-    _refuse(parsed['verdict'] == 'PASS', 'a non-PASS review cannot issue promotion authority')
-    dispositions = {item['id']: item['disposition'] for item in parsed['quality_flag_dispositions']}
-    undisposed = [flag for flag in guard['flags'] if dispositions.get(flag) != 'NOT_LOWERING']
-    _refuse(not undisposed, 'guard flags lack reviewer disposition: ' + ', '.join(undisposed[:5]))
+    _refuse(set(r['check_id'] for r in verified) == set(task['required_check_ids']) and
+            len(verified) == len(task['required_check_ids']), 'incomplete or duplicate required check receipts')
+    _refuse(not guard['vetoes'], 'deterministic guard veto prevents promotion')
+    _refuse(readiness['verification_passed'] is True and
+            not [reason for reason in readiness['unresolved'] if reason not in guard['flags']],
+            'promotion requires passed verification with no non-semantic blockers')
+    _validated_review(review, task=task, guard=guard, schemas=schemas,
+                      implementation_family=implementation_family)
     authorization = {'schema_version': 1, 'task_id': task['task_id'], 'checkpoint_id': task['checkpoint_id'],
                      'base_sha': task['base_sha'], 'candidate_sha': head,
                      'authority_digest': task['authority_digest'], 'template_digest': task['template_digest'],
@@ -347,7 +366,15 @@ def promote(*, store: s.RuntimeStore, task_id: str, authorization_digest: str, i
             _refuse('--force' not in argv and '--force-with-lease' not in argv, 'force push is never promotion')
             hit('before_push')
             runner = push_runner or (lambda command, cwd: _run_push(command, cwd))
-            code, stdout, stderr = runner(argv, repo)
+            # Serialize the irreversible dispatch with pause publication. An
+            # earlier pause (including pause/resume) invalidates this intent.
+            with store.lock('state'):
+                fresh_state = store.inspect()
+                _refuse(fresh_state['paused'] is False
+                        and fresh_state['pause_generation'] == current['pause_generation']
+                        and fresh_state['tasks'].get(task_id) == task_state,
+                        'paused or stale promotion before push', 'CONFLICT')
+                code, stdout, stderr = runner(argv, repo)
             hit('after_push')
             return _reconcile_push_inner(store=store, task_id=task_id, intent_digest=intent_digest,
                                          integration_repo=repo, remote=remote, push_observed=(code == 0),
@@ -391,6 +418,7 @@ def _reconcile_push_inner(*, store: s.RuntimeStore, task_id: str, intent_digest:
     """
     hit = fault or (lambda point: None)
     latest_digest, intent = _resolve_intent(store, task_id, intent_digest)
+    repo = Path(integration_repo)
     if intent['outcome'] in FINAL_OUTCOMES:
         return {'status': intent['outcome'] if intent['outcome'] != 'UNCOMMITTED' else 'PROMOTION_READY',
                 'intent_digest': latest_digest, 'note': 'already reconciled; no second push'}

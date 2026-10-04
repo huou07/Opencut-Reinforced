@@ -14,6 +14,7 @@ import multiprocessing
 import os
 from pathlib import Path
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -179,12 +180,10 @@ def main():
         case=args.output/point;case.mkdir();root=case/'runtime';store=s.RuntimeStore(root,authority);store.initialize()
         task=valid_task();payload=c._release_authority(authority);task.update(task_id=payload['build']['task_id'],checkpoint_id='M1',base_sha=payload['build']['base_sha'],candidate_branch=payload['build']['candidate_branch'],authority_digest=payload['git']['authority_digest'])
         digest=store.register_task(task,copy.deepcopy(task));task_id=task['task_id']
-        # Existing volume root is owned by subordinate uid 10001. A bounded,
-        # networkless setup fixture creates ONLY this exact disposable input dir.
+        # The operator owns the bounded mount; create only this fresh input.
         input_name='closure-'+uuid.uuid4().hex;input_path=args.volume/input_name
         (case/'input-locator.json').write_text(json.dumps(dict(path=str(input_path))))
-        box.docker(['run','--rm','--network=none','--user=10001:10001','--mount=type=bind,src='+str(args.volume)+',dst=/volume',args.image,
-                    '/bin/sh','-ec','mkdir /volume/'+input_name+'; chmod 777 /volume/'+input_name])
+        input_path.mkdir(mode=0o700)
         candidate=b.create_fixture_candidate(source,input_path,base)
         quota=b._bounded_candidate_filesystem(input_path,48<<30);before=w.manifest(input_path)
         overlays=b.write_role_overlays(case/'overlays','IMPLEMENTATION')
@@ -201,14 +200,11 @@ def main():
                  filesystem=dict(device=quota[0],capacity=quota[1],mount=quota[2]),original_manifest=before,**result)
         rows.append(row);(case/'evidence.json').write_text(json.dumps(row,indent=2)+'\n')
         print(json.dumps(row),flush=True)
-        # Only this verified disposable input is removed. Its nested directories
-        # are controller-owned; permit the volume's subordinate owner to unlink
-        # them only after useful work and acceptance evidence are durable.
-        for directory, _, _ in os.walk(input_path, topdown=False):
-            if Path(directory) != input_path:
-                Path(directory).chmod(0o777)
-        box.docker(['run','--rm','--network=none','--user=10001:10001','--mount=type=bind,src='+str(args.volume)+',dst=/volume',args.image,
-                    '/bin/rm','-rf','/volume/'+input_name])
+        # Useful work and evidence are durable; remove only the unchanged,
+        # controller-owned disposable input, never the bounded mount root.
+        assert input_path.parent == args.volume and input_path.name == input_name
+        assert input_path.stat().st_uid == os.getuid()
+        shutil.rmtree(input_path)
     (args.output/'acceptance.json').write_text(json.dumps(dict(cases=rows,result='PASS',scope='disabled M1 inert fixture; no M2 authority'),indent=2)+'\n')
 
 

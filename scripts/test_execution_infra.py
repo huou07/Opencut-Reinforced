@@ -2962,16 +2962,26 @@ class ModelOrchestratorPromotionTests(unittest.TestCase):
                   "observed_remote_sha": head, "intent_nonce": "nonce-1"}
         remote_digest = self.write_object(
             store, "receipt", {"schema_version": 1, "kind": "remote-promotion", "receipt": remote})
+        task = {"schema_version": 1, "task_id": "task-1", "task_kind": "product_checkpoint", "checkpoint_id": "A",
+                "base_sha": authorization["base_sha"], "authority_digest": authorization["authority_digest"],
+                "template_digest": authorization["template_digest"]}
+        task_digest = self.write_object(store, "task_contract", task)
+        snapshot = {"schema_version": 1, "paused": False, "active_task": None,
+                    "object_digests": [task_digest, auth_digest, remote_digest],
+                    "tasks": {"task-1": {"contract_digest": task_digest, "status": "SETTLED",
+                                         "stage": None, "lease_epoch": 0}}}
+        (store / "state.json").write_text(json.dumps(snapshot))
         return {"repo": repo, "store": store, "head": head, "auth": auth_digest, "remote": remote_digest}
 
     def test_task_handoff_binds_or_refuses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             ctx = self.handoff_fixture(directory)
-            intent = agent_supervisor.validate_task_handoff(
-                ctx["repo"], task_id="task-1", checkpoint_id="A", store_root=ctx["store"],
-                authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
-            self.assertEqual(intent["implementation_sha"], ctx["head"])
-            self.assertEqual(intent["next"], "A")
+            # Published binding-only fixture lacks external operational bootstrap;
+            # checksummed local objects must never create product authority.
+            with self.assertRaises(agent_supervisor.SupervisorError):
+                agent_supervisor.validate_task_handoff(
+                    ctx["repo"], task_id="task-1", checkpoint_id="A", store_root=ctx["store"],
+                    authorization_digest=ctx["auth"], remote_receipt_digest=ctx["remote"])
             with self.assertRaises(agent_supervisor.SupervisorError):
                 agent_supervisor.validate_task_handoff(
                     ctx["repo"], task_id="", checkpoint_id="A", store_root=ctx["store"],

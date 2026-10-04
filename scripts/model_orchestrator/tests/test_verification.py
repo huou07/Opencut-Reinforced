@@ -143,6 +143,13 @@ class ParserTests(unittest.TestCase):
                     header.replace(b'R100',b'U')+b'old\0',b'garbage\0',b'\0',header+b'old\0new\0trailing\0'):
             with self.subTest(raw=raw),self.assertRaises(c.ContractError):g.parse_raw(raw)
 
+    def test_quality_flag_ids_bind_exact_observation_to_frozen_review_schema(self):
+        flag = 'unresolved material change: scripts/model_orchestrator/guards.py'
+        identity = v.quality_flag_id(flag)
+        self.assertIsNotNone(c._ID_RE.fullmatch(identity))
+        self.assertEqual(identity, v.quality_flag_id(flag))
+        self.assertNotEqual(identity, v.quality_flag_id(flag + ' changed'))
+
     def test_CP14_CP16_case_count_never_replaces_identity(self):
         required=['old-case']
         for data in (b'{"status":"PASS"}',b'{"cases":[]}',b'{"cases":[{"id":"new-case","result":"PASS"}]}',
@@ -388,10 +395,38 @@ class LiveVerificationTests(unittest.TestCase):
         result=v.execute(self.guard,self.case/'attempt',lease_epoch=1,sequence=1)
         self.rows.append(dict(case=self._testMethodName,result=result));return result
 
+    def test_quality_flags_reach_review_without_waiving_real_verification(self):
+        from model_orchestrator import promotion as p
+        from model_orchestrator.tests.test_lifecycle import passing_report
+        self.fixture()
+        result = self.execute()
+        guard = self.guard.verify()
+        self.assertTrue(guard['flags'])
+        self.assertTrue(result['review_ready'])
+        self.assertFalse(result['acceptance_ready'])
+        self.assertEqual(result['quality_flags'], guard['flags'])
+        self.assertEqual(result['unresolved'], guard['flags'])
+        self.assertEqual(result['blocking_reasons'], [])
+        report = passing_report(self.f.task, guard['head'])
+        report['quality_flag_dispositions'] = [dict(id=v.quality_flag_id(flag), disposition='NOT_LOWERING',
+            evidence_digest=c.canonical_digest(guard)) for flag in guard['flags']]
+        inputs = dict(task=self.f.task, guard=guard, readiness=result, lease_epoch=1,
+                      review=dict(report=report, metadata=dict(family='fixture-b')))
+        authorization = p.build_authorization(inputs, schemas=self.f.floor.verify()['schemas'],
+                              implementation_family='fixture-a', issuance_sequence=1)
+        self.assertEqual(authorization['candidate_sha'], guard['head'])
+        inputs['review']['report']['quality_flag_dispositions'] = []
+        with self.assertRaises(c.ContractError):
+            p.build_authorization(inputs, schemas=self.f.floor.verify()['schemas'],
+                                  implementation_family='fixture-a', issuance_sequence=1)
+        self.rows.append(dict(case=self._testMethodName+'-disposition',
+                              result='PASS: real receipts retain flags until exact independent disposition'))
+
     def test_CP13_C_real_exit_failure_overrides_worker_PASS(self):
         self.fixture('printf \'{"status":"PASS"}\' > /scratch/PASS.json\nprintf \'{"cases":[{"id":"case1","result":"PASS"}]}\\n\'\nexit 7\n')
         result=self.execute();receipt=result['receipts'][0]
         self.assertEqual(receipt['exit_code'],7);self.assertEqual(receipt['outcome'],'FAIL');self.assertFalse(result['verification_passed'])
+        self.assertFalse(result['review_ready'])
 
     def test_CP14_timeout(self):
         self.fixture('sleep 20\n',timeout=0.2);result=self.execute()
@@ -441,6 +476,7 @@ class LiveVerificationTests(unittest.TestCase):
         self.fixture(classes=('UNIT','PACKAGED_RUNTIME','PERSISTENCE_RELAUNCH'))
         result=self.execute();self.assertTrue(result['verification_passed']);self.assertFalse(result['acceptance_ready'])
         self.assertTrue(any('PACKAGED_RUNTIME' in item for item in result['unresolved']))
+        self.assertFalse(result['review_ready'])
 
     def test_CP18_missing_binding_and_hosted_pending(self):
         self.fixture(classes=('PACKAGED_RUNTIME',),hosted=True)
@@ -542,9 +578,8 @@ class LiveVerificationTests(unittest.TestCase):
             box,_=v._runtime(self.f.catalog['checks']['unit'])
             volume=Path('/srv/opencut-v2/candidate');input_name='m2-handoff-'+uuid.uuid4().hex
             g.write_json(row/'input-locator.json',dict(path=str(volume/input_name),image=IMAGE))
-            box.docker(['run','--rm','--network=none','--user=10001:10001','--mount=type=bind,src='+str(volume)+',dst=/volume',IMAGE,
-                '/bin/sh','-ec','mkdir /volume/'+input_name+'; chmod 777 /volume/'+input_name])
             storage=volume/input_name
+            storage.mkdir(mode=0o700)
             source=b.create_candidate(self.f.candidate,storage,COMBINED_BASE,authority=self.f.authorities['M1'])
             b._bounded_candidate_filesystem(source.root,48<<30);before=w.manifest(source.root)
             store=s.RuntimeStore(row/'runtime',self.f.authorities['M1']);store.initialize()
@@ -619,10 +654,10 @@ class LiveVerificationTests(unittest.TestCase):
                 preserved_manifest=w.manifest(preserved.root)))
             # Original disposable input is unchanged. Useful work is outside
             # this exact input in M1's durably indexed preservation artifact.
-            for directory,_,_ in os.walk(storage,topdown=False):
-                if Path(directory)!=storage:Path(directory).chmod(0o777)
-            box.docker(['run','--rm','--network=none','--user=10001:10001','--mount=type=bind,src='+str(volume)+',dst=/volume',IMAGE,
-                '/bin/rm','-rf','/volume/'+input_name])
+            self.assertEqual(storage.parent,volume)
+            self.assertEqual(storage.name,input_name)
+            self.assertEqual(storage.stat().st_uid,os.getuid())
+            shutil.rmtree(storage)
 
     def test_CP17_verifier_durable_creation_receipt_fault_boundaries(self):
         self.fixture();ctx=multiprocessing.get_context('fork')

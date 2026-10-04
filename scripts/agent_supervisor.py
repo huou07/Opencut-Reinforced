@@ -1431,16 +1431,128 @@ def _read_store_object(store_root: Path, digest: str) -> dict[str, Any]:
     root = Path(store_root)
     if not root.is_dir():
         raise SupervisorError("handoff controller store root is not a directory")
+    from model_orchestrator import contracts as contracts, store as runtime_store
     path = root / "objects" / (digest + ".json")
     try:
-        record = json.loads(path.read_bytes().decode("utf-8"))
-    except (OSError, ValueError) as exc:
-        raise SupervisorError(f"cannot read handoff receipt object: {exc}") from exc
-    if not isinstance(record, dict):
-        raise SupervisorError("handoff receipt object must be a JSON object")
-    if hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != digest:
-        raise SupervisorError("handoff receipt object identity mismatch")
-    return record
+        record = runtime_store._object(runtime_store._read(path))
+        if contracts.canonical_digest(record) != digest:
+            raise SupervisorError("handoff receipt object identity mismatch")
+        return record
+    except contracts.ContractError as exc:
+        raise SupervisorError("cannot read immutable handoff object: " + str(exc)) from exc
+
+
+def _bound_handoff_inputs(store_root, task_id, authorization_digest, remote_receipt_digest, snapshot=None):
+    """Only published controller objects and the original immutable task bind handoff."""
+    from model_orchestrator import contracts as contracts, store as runtime_store
+    if not isinstance(task_id, str) or not task_id:
+        raise SupervisorError("handoff requires an explicit task ID; task_id=None never invokes the supervisor")
+    try:
+        current = snapshot if snapshot is not None else runtime_store._read(Path(store_root) / 'state.json')
+        task_state = current['tasks'].get(task_id)
+        if (current.get('schema_version') != 1 or current.get('paused') is not False
+                or current.get('active_task') is not None or not isinstance(task_state, dict)
+                or task_state.get('status') != 'SETTLED' or task_state.get('stage') is not None):
+            raise SupervisorError("handoff requires an unpaused settled controller task")
+        published = current['object_digests']
+        if (type(published) is not list or any(type(value) is not str or re.fullmatch('[0-9a-f]{64}', value) is None for value in published)
+                or len(set(published)) != len(published) or type(task_state.get('lease_epoch')) is not int
+                or task_state['lease_epoch'] < 1 or type(task_state.get('attempt')) is not int or task_state['attempt'] < 1):
+            raise SupervisorError("handoff requires valid published objects and a claimed task lease")
+        if not all(digest in published for digest in
+                   (task_state['contract_digest'], authorization_digest, remote_receipt_digest)):
+            raise SupervisorError("handoff objects are not published in the controller snapshot")
+        contract = _read_store_object(store_root, task_state['contract_digest'])
+        if contract['kind'] != 'task_contract' or contract['payload'].get('task_id') != task_id:
+            raise SupervisorError("handoff task pointer is not the original immutable contract")
+        task = contract['payload']
+        schemas = contracts.load_protocol_schemas(REPO_ROOT)
+        contracts.validate_task_contract(task, schemas, frozen_template=task)
+        authorization_record = _read_store_object(store_root, authorization_digest)
+        if authorization_record['kind'] != 'authorization' or authorization_record['payload'].get('task_id') != task_id:
+            raise SupervisorError("handoff authorization binds a different task or object kind")
+        authorization = authorization_record['payload'].get('authorization')
+        if not isinstance(authorization, dict):
+            raise SupervisorError("handoff authorization payload is malformed")
+        binding = dict(authorization)
+        binding.update({field: task.get(field) for field in ('task_id', 'checkpoint_id', 'base_sha', 'authority_digest', 'template_digest')})
+        binding['lease_epoch'] = task_state['lease_epoch']
+        contracts.validate_record(authorization, 'promotion_authorization',
+                                  schemas, context=binding)
+        for field in ('task_id', 'checkpoint_id', 'base_sha', 'authority_digest', 'template_digest'):
+            if authorization.get(field) != task.get(field):
+                raise SupervisorError("handoff authorization differs from immutable task: " + field)
+        if authorization['lease_epoch'] != task_state['lease_epoch']:
+            raise SupervisorError("handoff authorization has a stale task lease")
+        remote_record = _read_store_object(store_root, remote_receipt_digest)
+        if remote_record['kind'] != 'receipt' or remote_record['payload'].get('kind') != 'remote-promotion':
+            raise SupervisorError("handoff remote object is not a remote promotion receipt")
+        remote = remote_record['payload']['receipt']
+        candidate = authorization['candidate_sha']
+        contracts.validate_record(remote, 'remote_promotion_receipt', schemas,
+            context={'task_id': task_id, 'authorization_digest': authorization_digest,
+                     'base_sha': task['base_sha'], 'candidate_sha': candidate})
+        if (remote.get('task_id') != task_id or remote.get('authorization_digest') != authorization_digest
+                or remote.get('base_sha') != task['base_sha'] or remote.get('destination_ref') != 'refs/heads/main'
+                or remote.get('observed_remote_sha') != candidate or remote.get('candidate_sha') != candidate):
+            raise SupervisorError("handoff remote receipt has inconsistent task/authorization/candidate binding")
+        return task, authorization, remote, current
+    except (KeyError, TypeError, contracts.ContractError) as exc:
+        raise SupervisorError("malformed or unreadable handoff controller snapshot: " + str(exc)) from exc
+
+
+def _validate_handoff_head(repo_root, candidate_sha, *, refresh):
+    # Optional index refresh and host Git helpers cannot write during disabled inspection.
+    def observe(*args):
+        return git_output(repo_root, '--no-optional-locks', '-c', 'core.hooksPath=' + os.devnull,
+                          '-c', 'core.fsmonitor=false', *args)
+    if observe("status", "--porcelain=v1", "--untracked-files=all"):
+        raise SupervisorError("handoff requires a clean worktree")
+    if refresh:
+        observe("fetch", "--prune", "origin")
+    head = observe("rev-parse", "HEAD")
+    origin = observe("rev-parse", "origin/main")
+    observed = observe("ls-remote", "origin", "refs/heads/main").split()
+    if head != candidate_sha or origin != candidate_sha or observed != [candidate_sha, 'refs/heads/main']:
+        raise SupervisorError("handoff requires HEAD == origin/main == live remote == promoted implementation SHA")
+
+
+def validate_disabled_task_handoff(
+    repo_root: Path, *, store, task_id: str, authorization_digest: str, remote_receipt_digest: str,
+) -> dict[str, Any]:
+    """Read-only disabled control-plane readiness; no product completion or adoption."""
+    from model_orchestrator import contracts as contracts, store as runtime_store
+    if type(store) is not runtime_store.RuntimeStore:
+        raise SupervisorError("disabled handoff requires a trusted runtime store")
+    try:
+        snapshot = store.inspect()
+        task, authorization, remote, _ = _bound_handoff_inputs(
+            store.root, task_id, authorization_digest, remote_receipt_digest, snapshot)
+        contracts.validate_phase_admission(store.authority, task, capability='M4')
+        if task.get('task_kind') != 'control_plane_phase':
+            raise SupervisorError("disabled handoff requires a control-plane phase task")
+        if any(task.get(field) != 'none' for field in ('project_schema_effect', 'recovery_schema_effect', 'ipc_effect')):
+            raise SupervisorError("disabled handoff cannot change product contracts")
+        candidate_sha = authorization['candidate_sha']
+        _validate_handoff_head(repo_root, candidate_sha, refresh=False)
+        plan, state = execution_plan.load_plan_state(repo_root)
+        versions = {'project_schema': 7, 'recovery_schema': 1, 'ipc_protocol': 1}
+        if execution_plan.read_contract_versions(repo_root) != versions or state.get('verified_contract_versions') != versions:
+            raise SupervisorError("disabled handoff requires preserved product contract versions 7/1/1")
+        for path in ('docs/execution/PLAN.json', 'docs/execution/STATE.json'):
+            if _git_file_bytes(repo_root, task['base_sha'], path) != _git_file_bytes(repo_root, candidate_sha, path):
+                raise SupervisorError("disabled handoff changed product plan/state")
+        if store.inspect() != snapshot:
+            raise SupervisorError("controller changed during disabled handoff validation")
+        return dict(schema_version=1, status='DISABLED_CONTROL_PLANE_READY', task_id=task_id,
+                    task_checkpoint=task['checkpoint_id'], implementation_sha=candidate_sha,
+                    task_contract_digest=contracts.canonical_digest(task), authorization_digest=authorization_digest,
+                    supervisor_digest=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    remote_receipt_digest=remote_receipt_digest, product_next=state.get('current_next'),
+                    verified_contract_versions=versions,
+                    authority_semantics='DISABLED_FACTS_ONLY_NO_PRODUCT_COMPLETION_NO_ADOPTION')
+    except (contracts.ContractError, execution_plan.PlanError, subprocess.CalledProcessError) as exc:
+        raise SupervisorError("disabled handoff validation refused: " + str(exc)) from exc
 
 
 def validate_task_handoff(
@@ -1458,46 +1570,31 @@ def validate_task_handoff(
     tree refuses before the supervisor is invoked. A positive handoff binds
     the original task plus all receipts and the frozen supervisor code.
     """
-    if not isinstance(task_id, str) or not task_id:
-        raise SupervisorError("handoff requires an explicit task ID; task_id=None never invokes the supervisor")
     if not isinstance(checkpoint_id, str) or not checkpoint_id:
         raise SupervisorError("handoff requires an explicit checkpoint ID")
+    task, authorization, remote_receipt, snapshot = _bound_handoff_inputs(
+        store_root, task_id, authorization_digest, remote_receipt_digest)
+    if task.get('task_kind') != 'product_checkpoint':
+        raise SupervisorError("disabled control-plane tasks cannot enter product handoff")
+    task_checkpoint = task.get('checkpoint_id')
+    if task_checkpoint != checkpoint_id:
+        raise SupervisorError("immutable task checkpoint differs from product handoff checkpoint")
+    from model_orchestrator import store as runtime_store, contracts as contracts
+    try:
+        bootstrap = runtime_store._read(Path(store_root) / 'bootstrap.json')
+    except contracts.ContractError as exc:
+        raise SupervisorError("product handoff requires a controller bootstrap: " + str(exc)) from exc
+    if bootstrap.get('execution') == 'DISABLED_BUILD_ONLY':
+        raise SupervisorError("disabled build authority cannot complete a product checkpoint")
     plan, state = execution_plan.load_plan_state(repo_root)
-    if state.get("current_next") != checkpoint_id:
+    if state.get("current_next") != checkpoint_id or state.get('checkpoints', {}).get(checkpoint_id) != 'NEXT':
         raise SupervisorError("handoff checkpoint is not current NEXT")
-    checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
-    authorization_record = _read_store_object(store_root, authorization_digest)
-    if authorization_record.get("kind") != "authorization":
-        raise SupervisorError("handoff authorization object has the wrong kind")
-    authorization = authorization_record.get("payload", {}).get("authorization")
-    if not isinstance(authorization, dict):
-        raise SupervisorError("handoff authorization payload is malformed")
-    if authorization.get("task_id") != task_id:
-        raise SupervisorError("handoff authorization binds a different task")
-    task_checkpoint = authorization.get("checkpoint_id")
-    if not isinstance(task_checkpoint, str) or not task_checkpoint:
-        raise SupervisorError("handoff authorization has no task checkpoint")
-    remote_record = _read_store_object(store_root, remote_receipt_digest)
-    if remote_record.get("kind") != "receipt" or remote_record.get("payload", {}).get("kind") != "remote-promotion":
-        raise SupervisorError("handoff remote object is not a remote promotion receipt")
-    remote_receipt = remote_record["payload"]["receipt"]
-    if remote_receipt.get("authorization_digest") != authorization_digest:
-        raise SupervisorError("handoff remote receipt binds a different authorization")
-    candidate_sha = authorization.get("candidate_sha")
-    if (
-        not isinstance(candidate_sha, str)
-        or execution_evidence.SHA_PATTERN.fullmatch(candidate_sha) is None
-        or remote_receipt.get("observed_remote_sha") != candidate_sha
-        or remote_receipt.get("candidate_sha") != candidate_sha
-    ):
-        raise SupervisorError("handoff candidate SHA is inconsistent")
-    if git_output(repo_root, "status", "--porcelain=v1", "--untracked-files=all"):
-        raise SupervisorError("handoff requires a clean worktree")
-    git_output(repo_root, "fetch", "--prune", "origin")
-    head = git_output(repo_root, "rev-parse", "HEAD")
-    origin = git_output(repo_root, "rev-parse", "origin/main")
-    if head != candidate_sha or origin != candidate_sha:
-        raise SupervisorError("handoff requires HEAD == origin/main == promoted implementation SHA")
+    execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    candidate_sha = authorization['candidate_sha']
+    _validate_handoff_head(repo_root, candidate_sha, refresh=True)
+    from model_orchestrator import store as runtime_store
+    if runtime_store._read(Path(store_root) / 'state.json') != snapshot:
+        raise SupervisorError("controller changed during product handoff validation")
     supervisor_digest = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     return {
         "schema_version": 1,
