@@ -119,15 +119,10 @@ class Floor:
     def catalog(self): return c.load_json_strict(self.catalog_json)
 
     def verify(self):
+        # The floor is an M2 guard capability; it admits the exact externally
+        # executing phase task at or after M2, never a rewritten checkpoint.
         payload = c._release_authority(self.authority)
-        require('M2' in payload['build']['authorized_phases'] and
-                payload['build']['completed_phases'][:2] == ['M0','M1'], 'M2 disabled build prerequisites missing')
-        require(self.task['authority_digest'] == payload['git']['authority_digest'] and
-                self.task['base_sha'] == payload['git']['base_oid'], 'task authority/base binding differs')
-        require(self.task['task_id']==payload['build']['task_id'] and self.task['checkpoint_id']=='M2' and
-                self.task['candidate_branch']==payload['build']['candidate_branch'] and
-                set(self.task['allowed_paths'])<=set(payload['build']['allowed_paths']), 'task exceeds disabled M2 authority')
-        return payload
+        return c._phase_admission(payload, self.task, 'M2')
 
 
 def controller_blob(authority, name):

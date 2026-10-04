@@ -180,10 +180,10 @@ class RuntimeStore:
         self._held = []
 
     def _authority(self):
-        payload = c._release_authority(self.authority)
-        if 'M1' not in payload['build']['authorized_phases'] or payload['build']['completed_phases'][:1] != ['M0']:
-            raise StoreError('phase-scoped M1 build authorization required')
-        return payload
+        # The store is an M1 capability; it may serve any executing phase at
+        # or after M1. Ownership (bootstrap phase 'M1') is distinct from the
+        # externally authorized executing phase validated here.
+        return c.validate_shared_capability(self.authority, 'M1')
 
     def initialize(self):
         payload = self._authority()
@@ -433,13 +433,7 @@ class RuntimeStore:
         # inspect/transaction already revalidated the sealed authority source.
         payload = c.load_json_strict(self.authority.payload_json)
         c.validate_task_contract(task, payload['schemas'], frozen_template=frozen_template)
-        if task['task_kind'] != 'control_plane_phase' or task['checkpoint_id'] != 'M1' or task['task_id'] != payload['build']['task_id']:
-            raise StoreError('disabled store admits only exact authorized M1 task')
-        build = payload['build']
-        if (task['base_sha'] != build['base_sha'] or task['candidate_branch'] != build['candidate_branch']
-                or task['authority_digest'] != payload['git']['authority_digest']
-                or not set(task['allowed_paths']).issubset(build['allowed_paths'])):
-            raise StoreError('task differs from original authority/base/scope')
+        c._phase_admission(payload, task, 'M1')
 
     def register_task(self, task, frozen_template):
         self._authority()

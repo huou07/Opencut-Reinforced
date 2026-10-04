@@ -14,7 +14,23 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
-from model_orchestrator import contracts as c
+from model_orchestrator import contracts as c, store as s, sandbox as b, guards as g
+import atexit
+
+
+_SHARED_PROVENANCE = {}
+
+
+def shared_provenance():
+    """One real-Git provenance fixture per test process; mutating tests restore."""
+    if 'fixture' not in _SHARED_PROVENANCE:
+        directory = tempfile.TemporaryDirectory(prefix='or-v2-shared-provenance-')
+        _SHARED_PROVENANCE['directory'] = directory
+        # Resolve platform temp symlinks (/var -> /private/var on macOS) so
+        # no fixture root carries a symlink path component.
+        _SHARED_PROVENANCE['fixture'] = ProvenanceFixture(str(Path(directory.name).resolve()))
+        atexit.register(directory.cleanup)
+    return _SHARED_PROVENANCE['fixture']
 
 SCHEMAS = c.load_protocol_schemas(REPO_ROOT)
 DIGEST = 'd' * 64
@@ -204,7 +220,7 @@ class LifecycleMatrixTests(unittest.TestCase):
     """CP33: deterministic lifecycle from independently Git-pinned provenance."""
     @classmethod
     def setUpClass(cls):
-        cls.temp=tempfile.TemporaryDirectory();cls.addClassCleanup(cls.temp.cleanup);cls.fixture=ProvenanceFixture(cls.temp.name)
+        cls.fixture=shared_provenance()
     def build(self,phase='M0'):
         authority=self.fixture.authorities[phase];build=json.loads(authority.payload_json)['build']
         record=c.proposal_record(build_authorization_digest=c.canonical_digest(build),implementation_phase=phase,completed_phases=copy.deepcopy(build['completed_phases']),lifecycle_state='IMPLEMENTATION_'+phase)
@@ -341,6 +357,84 @@ class LifecycleMatrixTests(unittest.TestCase):
             with self.assertRaises(c.ContractError):c.validate_adoption_record(record,SCHEMAS,external=authority)
             with self.assertRaises(c.ContractError):c.load_release_authority(f.candidate,f.controller,bootstrap=f.bootstrap())
         finally:f.git(f.controller,'checkout','-q',f.source)
+
+
+class PhaseAdmissionMatrixTests(unittest.TestCase):
+    """Shared phase-aware admission: one immutable task, one executing phase."""
+    @classmethod
+    def setUpClass(cls):
+        cls.fixture=shared_provenance()
+    def task_for(self,phase):
+        authority=self.fixture.authorities[phase]
+        payload=c._release_authority(authority)
+        build=payload['build']
+        task=valid_task()
+        task.update(task_id=build['task_id'],checkpoint_id=phase,base_sha=build['base_sha'],
+                    candidate_branch=build['candidate_branch'],
+                    authority_digest=payload['git']['authority_digest'])
+        return authority,payload,task
+    def test_each_phase_admits_its_executing_task(self):
+        for phase in c.IMPLEMENTATION_PHASES:
+            with self.subTest(phase=phase):
+                authority,_,task=self.task_for(phase)
+                c.validate_phase_admission(authority,task)
+                if c.IMPLEMENTATION_PHASES.index(phase)>=1:
+                    c.validate_phase_admission(authority,task,capability='M1')
+                else:
+                    with self.assertRaises(c.ContractError):
+                        c.validate_phase_admission(authority,task,capability='M1')
+                if c.IMPLEMENTATION_PHASES.index(phase)>=2:
+                    c.validate_phase_admission(authority,task,capability='M2')
+                else:
+                    with self.assertRaises(c.ContractError):
+                        c.validate_phase_admission(authority,task,capability='M2')
+    def test_admission_negative_matrix(self):
+        authority_m3,_,task_m3=self.task_for('M3')
+        for key,value in [('task_kind','product_checkpoint'),('checkpoint_id','M9'),('checkpoint_id','9B')]:
+            bad=copy.deepcopy(task_m3);bad[key]=value
+            with self.subTest(key=key,value=value),self.assertRaises(c.ContractError):
+                c.validate_phase_admission(authority_m3,bad)
+        for checkpoint in ('M0','M1','M2','M4','M5'):
+            bad=copy.deepcopy(task_m3);bad['checkpoint_id']=checkpoint
+            with self.subTest(checkpoint=checkpoint),self.assertRaises(c.ContractError):
+                c.validate_phase_admission(authority_m3,bad)
+        authority_m1,_,task_m1=self.task_for('M1')
+        with self.assertRaises(c.ContractError):c.validate_phase_admission(authority_m1,task_m3)
+        with self.assertRaises(c.ContractError):c.validate_phase_admission(authority_m3,task_m1)
+        for key,value in [('task_id','task-other'),('base_sha','b'*40),('candidate_branch','control/other'),
+                          ('authority_digest','0'*64),('allowed_paths',['scripts/model_orchestrator/contracts.py','docs/execution/STATE.json'])]:
+            bad=copy.deepcopy(task_m3);bad[key]=value
+            with self.subTest(key=key),self.assertRaises(c.ContractError):
+                c.validate_phase_admission(authority_m3,bad)
+        with self.assertRaises(c.ContractError):c.validate_phase_admission({'build':{}},task_m3)
+        with self.assertRaises(c.ContractError):c.validate_shared_capability({'build':{}},'M1')
+        with self.assertRaises(c.ContractError):c.validate_phase_admission(authority_m3,task_m3,capability='M9')
+    def test_cross_invariant_m3_task_store_sandbox_guard_agree(self):
+        authority,payload,task=self.task_for('M3')
+        build=payload['build']
+        with tempfile.TemporaryDirectory() as directory:
+            parent=Path(directory).resolve()
+            runtime=s.RuntimeStore(parent/'runtime',authority)
+            runtime.initialize()
+            digest=runtime.register_task(task,copy.deepcopy(task))
+            candidate=b.create_candidate(self.fixture.candidate,parent/'worker',c.TRUSTED_DESIGN_BASE,authority=authority)
+            runtime.register_candidate(task['task_id'],candidate)
+            floor=g.Floor(authority,copy.deepcopy(task),{},seal=g._SEAL)
+            floor.verify()
+            stored=runtime.inspect()['tasks'][task['task_id']]
+            self.assertEqual(stored['contract_digest'],digest)
+            self.assertEqual(c.canonical_digest(dict(schema_version=1,kind='task_contract',payload=floor.task)),digest)
+            descriptor=runtime.candidate_descriptor(task['task_id'])
+            self.assertEqual((descriptor['base_oid'],descriptor['authority_digest']),(task['base_sha'],task['authority_digest']))
+            self.assertEqual((build['task_id'],build['base_sha'],build['candidate_branch'],build['authorized_phases']),
+                             (task['task_id'],task['base_sha'],task['candidate_branch'],['M3']))
+            for checkpoint in ('M1','M2'):
+                bad=copy.deepcopy(task);bad['checkpoint_id']=checkpoint
+                with self.subTest(checkpoint=checkpoint):
+                    with self.assertRaises(c.ContractError):runtime._task(bad,copy.deepcopy(bad))
+                    with self.assertRaises(c.ContractError):g.Floor(authority,bad,{},seal=g._SEAL).verify()
+            bad=copy.deepcopy(task);bad['task_id']='task-other'
+            with self.assertRaises(c.ContractError):runtime._task(bad,copy.deepcopy(bad))
 
 
 class GitFixture:

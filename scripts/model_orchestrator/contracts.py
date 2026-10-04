@@ -547,6 +547,74 @@ def _release_authority(external: Any) -> dict[str, Any]:
     return payload
 
 
+def executing_build_phase(build: Mapping[str, Any]) -> str:
+    """The single externally authorized executing phase derived from build progress.
+
+    `completed_phases` must be the exact ordered prefix immediately preceding
+    the executing phase. A future, skipped, reordered, duplicated, or replayed
+    phase refuses here; worker-controlled data never determines the result.
+    """
+    progress = build.get('completed_phases')
+    if (not isinstance(progress, list) or progress != list(IMPLEMENTATION_PHASES[:len(progress)])
+            or len(progress) >= len(IMPLEMENTATION_PHASES)):
+        raise ContractError('build authorization is not executing an implementation phase')
+    executing = IMPLEMENTATION_PHASES[len(progress)]
+    if executing not in build.get('authorized_phases', []):
+        raise ContractError('executing phase is outside the external build authorization')
+    return executing
+
+
+def validate_shared_capability(external: Any, capability: str) -> dict[str, Any]:
+    """A shared primitive requires only its own prerequisite capability phase.
+
+    Implementation ownership never pins execution: the store and sandbox (M1)
+    may serve any executing phase at or after M1; guards/floor (M2) may serve
+    any executing phase at or after M2, always under exact authorized progress.
+    This is capability reuse, not authority widening.
+    """
+    payload = _release_authority(external)
+    if capability not in IMPLEMENTATION_PHASES:
+        raise ContractError('unknown shared capability phase')
+    executing = executing_build_phase(payload['build'])
+    if IMPLEMENTATION_PHASES.index(executing) < IMPLEMENTATION_PHASES.index(capability):
+        raise ContractError('shared control primitive does not exist yet: ' + capability)
+    return payload
+
+
+def _phase_admission(payload: Mapping[str, Any], task: Mapping[str, Any], capability: str | None = None) -> dict[str, Any]:
+    """ONE phase-aware admission rule for shared control-plane reuse.
+
+    The task is admitted against the current externally authorized executing
+    phase; a shared primitive additionally requires its own prerequisite
+    capability. Exact task binding (task ID, base SHA, candidate branch,
+    authority digest, allowed-paths subset) remains mandatory. A past phase
+    replay, a future/skipped phase, a rewritten checkpoint, a product task, or
+    any binding mismatch refuses.
+    """
+    build = payload['build']
+    if task.get('task_kind') != 'control_plane_phase' or task.get('checkpoint_id') not in IMPLEMENTATION_PHASES:
+        raise ContractError('task is not an authorized control-plane phase task')
+    executing = executing_build_phase(build)
+    if task['checkpoint_id'] != executing:
+        raise ContractError('task phase is not the externally executing phase')
+    if capability is not None:
+        if capability not in IMPLEMENTATION_PHASES:
+            raise ContractError('unknown shared capability phase')
+        if IMPLEMENTATION_PHASES.index(executing) < IMPLEMENTATION_PHASES.index(capability):
+            raise ContractError('shared control primitive does not exist yet: ' + capability)
+    if (task['task_id'] != build['task_id'] or task['base_sha'] != build['base_sha']
+            or task['candidate_branch'] != build['candidate_branch']
+            or task['authority_digest'] != payload['git']['authority_digest']
+            or not set(task['allowed_paths']) <= set(build['allowed_paths'])):
+        raise ContractError('task differs from external authority/base/scope')
+    return payload
+
+
+def validate_phase_admission(external: Any, task: Mapping[str, Any], *, capability: str | None = None) -> dict[str, Any]:
+    """Admit the exact externally executing phase task against validated provenance."""
+    return _phase_admission(_release_authority(external), task, capability)
+
+
 def load_release_authority(candidate_root: Path, controller_root: Path, *, bootstrap: ControllerBootstrap) -> ValidatedReleaseAuthority:
     """Read independent controller records at externally approved exact pins.
 

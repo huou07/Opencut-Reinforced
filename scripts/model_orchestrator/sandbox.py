@@ -20,7 +20,8 @@ from typing import Callable, Any
 import uuid
 
 from .contracts import (ContractError, ValidatedReleaseAuthority, _release_authority,
-                        canonical_digest, canonical_json, load_json_strict)
+                        canonical_digest, canonical_json, load_json_strict,
+                        validate_shared_capability)
 
 UNAVAILABLE = 'M1_ISOLATION_ENVIRONMENT_UNAVAILABLE'
 _SEAL = object()
@@ -51,10 +52,9 @@ def _safe_path(path: Path) -> Path:
 
 
 def _authority(authority: ValidatedReleaseAuthority) -> dict[str, Any]:
-    payload = _release_authority(authority)
-    _require('M1' in payload['build']['authorized_phases'] and
-             payload['build']['completed_phases'][:1] == ['M0'], 'M1 build authority/prerequisite missing')
-    return payload
+    # The sandbox is an M1 capability; it may serve any executing phase at or
+    # after M1 under exact authorized progress, including later M3/M4/M5 tasks.
+    return validate_shared_capability(authority, 'M1')
 
 
 def _git(root: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
