@@ -552,6 +552,7 @@ class WorkerStageResult:
     exit_code: int | None
     timed_out: bool
     transcript: bytes
+    transcript_stderr: bytes
     truncated: bool
     effective_digest: str
     elapsed_seconds: float
@@ -695,7 +696,7 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
                                    env={'PATH': '/usr/bin:/bin', 'LANG': 'C'},
                                    stdout=subprocess_module.PIPE, stderr=subprocess_module.PIPE, start_new_session=True)
     try:
-        output, _ = proc.communicate(timeout=timeout_seconds + 30)
+        output, errors = proc.communicate(timeout=timeout_seconds + 30)
         timed_out = False
     except subprocess_module.TimeoutExpired:
         try:
@@ -706,7 +707,7 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
             os.killpg(proc.pid, 9)
         except (OSError, ProcessLookupError):
             pass
-        output, _ = proc.communicate()
+        output, errors = proc.communicate()
         timed_out = True
     elapsed = time.monotonic() - started
     instance = box._inspect(identity) if hasattr(box, '_inspect') else None
@@ -723,7 +724,8 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
             # controller reconciliation independently proves whole-container death.
     truncated = len(output) > limits.output_bytes + 4096
     return WorkerStageResult(container_id=container_id, exit_code=exit_code, timed_out=timed_out,
-                             transcript=output[:limits.output_bytes + 4096], truncated=truncated,
+                             transcript=output[:limits.output_bytes + 4096],
+                             transcript_stderr=errors[:65536], truncated=truncated,
                              effective_digest=effective_digest, elapsed_seconds=elapsed)
 
 

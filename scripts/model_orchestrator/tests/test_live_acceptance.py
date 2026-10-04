@@ -483,13 +483,22 @@ class LiveM5:
         every frozen policy file and the credential file are shadow-mounted
         read-only on top, which the effective-profile check verifies exactly.
         """
+        # The mapped container UID must be able to create the model runtime
+        # state directories, so the scratch base is world-writable. It holds
+        # no policy: every policy and credential path is a read-only shadow
+        # mount on top. The whole tree is deleted after the run on this
+        # single-operator host.
         home_base = Path(home_base)
-        home_base.mkdir(mode=0o755, exist_ok=True)
-        os.chmod(home_base, 0o755)
-        config_dir = home_base / '.local' / 'share' / 'opencode'
-        config_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-        for path in (home_base, home_base / '.local', home_base / '.local' / 'share', config_dir):
-            os.chmod(path, 0o755)
+        home_base.mkdir(mode=0o777, exist_ok=True)
+        os.chmod(home_base, 0o777)
+        for sub in ('.local/share/opencode', '.config/opencode'):
+            path = home_base / sub
+            path.mkdir(mode=0o777, parents=True, exist_ok=True)
+            parts = [home_base]
+            for part in Path(sub).parts:
+                parts.append(parts[-1] / part)
+            for part in parts:
+                os.chmod(part, 0o777)
         home = Path(overlays['home'])
         mounts = [(str(home_base), '/worker-home', True),
                   (str(home / 'opencode.json'), '/worker-home/opencode.json'),
@@ -582,6 +591,7 @@ class LiveWorkerTests(unittest.TestCase):
                 overlay_mounts=mounts, labels=provisional.labels(), name=record['container_name'],
                 timeout_seconds=600)
             (live.output / 'worker-transcript.bin').write_bytes(worker_result.transcript)
+            (live.output / 'worker-stderr.bin').write_bytes(worker_result.transcript_stderr)
             self.assertFalse(worker_result.timed_out)
             self.assertEqual(worker_result.exit_code, 0)
             stage = runtime.bind_container(stage, worker_result.container_id)
