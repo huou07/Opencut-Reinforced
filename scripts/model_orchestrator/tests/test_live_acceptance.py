@@ -502,7 +502,10 @@ class LiveWorkerTests(unittest.TestCase):
         runtime = s.RuntimeStore(store_root, authority)
         runtime.initialize()
         task_digest = runtime.register_task(task, copy.deepcopy(task))
-        candidate = b.create_candidate(Path(authority.candidate_root), live.volume / ('m5-src-' + live.nonce),
+        src_name = os.environ.get('OR_V2_CANDIDATE_NAME', 'm5-src-' + live.nonce)
+        if '/' in src_name or not src_name or len(src_name) > 64:
+            raise unittest.SkipTest('invalid live candidate name')
+        candidate = b.create_candidate(Path(authority.candidate_root), live.volume / src_name,
                                        task['base_sha'], authority=authority)
         runtime.register_candidate(task['task_id'], candidate)
         box = live.box()
