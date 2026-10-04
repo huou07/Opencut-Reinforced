@@ -511,6 +511,27 @@ class LiveM5:
     def box(self):
         return b.ContainerSandbox(self.docker, boot_identity=b.host_boot_identity(), host_platform='linux')
 
+    @staticmethod
+    def ensure_gitignore_placeholder(view):
+        """Create the empty .gitignore the model runtime expects, if absent.
+
+        Live discovery: the runtime ensures .opencode/.gitignore exists when
+        it manages files. An absent file under the read-only config mask
+        fails the run; a pre-existing empty one is left alone. The placeholder
+        is controller scaffolding, never worker work: it is removed again
+        before preservation iff still empty, so a worker-modified file stays
+        visible to the guards instead.
+        """
+        target = Path(view) / '.opencode' / '.gitignore'
+        if target.parent.is_dir() and not target.exists():
+            target.write_bytes(b'')
+
+    @staticmethod
+    def remove_placeholder_if_pristine(view):
+        target = Path(view) / '.opencode' / '.gitignore'
+        if target.is_file() and target.read_bytes() == b'':
+            target.unlink()
+
     def launch_with_credential(self, *, box, candidate, view, role, container_binary, message_parts, agent,
                                enrollment, image, network, limits, overlay_mounts, labels, name, timeout_seconds):
         # The caller composes overlay_mounts (candidate masks plus the home
@@ -568,6 +589,7 @@ class LiveWorkerTests(unittest.TestCase):
             path = w.reserve_launch(runtime, stage, candidate, live.volume, daemon, live.image, 'IMPLEMENTATION')
             view = a.build_worker_view(candidate, live.volume, task['task_id'], 'live-stage', 'IMPLEMENTATION',
                                        destination=path)
+            live.ensure_gitignore_placeholder(view)
             w.bind_launch(runtime, stage)
             overlays = b.write_role_overlays(path.parent / 'overlays', 'IMPLEMENTATION')
             validated = b._validated_role_overlays(overlays, 'IMPLEMENTATION', candidate.root)
@@ -596,6 +618,7 @@ class LiveWorkerTests(unittest.TestCase):
             self.assertEqual(worker_result.exit_code, 0)
             stage = runtime.bind_container(stage, worker_result.container_id)
             proof = box.reconcile_launch(runtime, stage)
+            live.remove_placeholder_if_pristine(view)
             preserved = w.preserve_launch(runtime, stage, proof)
             settled = runtime.settle(stage, proof)
             self.assertEqual(settled['tasks'][task['task_id']]['status'], 'SETTLED')
@@ -683,6 +706,7 @@ class LiveWorkerTests(unittest.TestCase):
         review_candidate = b.Candidate(base / 'input', task['base_sha'], task['authority_digest'],
                                        'review-' + guard['head'][:12], _seal=b._SEAL)
         view = a.build_worker_view(review_candidate, base, task['task_id'], 'review', 'INVESTIGATION_REVIEW')
+        live.ensure_gitignore_placeholder(view)
         overlays = b.write_role_overlays(base / 'overlays', 'INVESTIGATION_REVIEW')
         validated = b._validated_role_overlays(overlays, 'INVESTIGATION_REVIEW', base / 'input')
         mounts = [(s, d) for s, d in validated if d.startswith('/candidate/')]
