@@ -9,7 +9,7 @@ AGENTS directed Rust/AI tasks to entire architecture and technical plans and rel
 
 DEVELOPMENT_WORKFLOW opened with a copied phase 3–8 history/status essay (including completion labels). Its history is recoverable from the baseline Git object, phase specs and evidence. The opener now delegates current status to STATE. Durable workflow rules remain.
 
-ROADMAP claimed 7H was the current checkpoint despite STATE selecting a later checkpoint. Its obsolete current-status introduction is replaced; historical phase labels remain explicitly on-demand historical planning. README claimed schema v5, no viewer/export/autosave and unavailable Android project I/O despite later contracts/source. Its stale implementation essay is replaced with exact state/spec/evidence lookup rather than another copied capability list. PRODUCT’s pre-MVP-planning statement is replaced with the scope/evidence distinction. ARCHITECTURE and TESTING retain implementation/coverage descriptions as reference, not completion authority. Frozen historical prose is not rewritten into a new claim.
+ROADMAP claimed 7H was the current checkpoint despite STATE selecting a later checkpoint. Its obsolete current-status introduction is replaced; historical phase labels remain explicitly on-demand historical planning. README claimed schema v5, no viewer/export/autosave and unavailable Android project I/O despite later contracts/source. The routing baseline left that stale essay in place; the PRE-M2 closure removes it rather than adding another inventory. Its stale implementation essay is replaced with exact state/spec/evidence lookup rather than another copied capability list. PRODUCT’s pre-MVP-planning statement is replaced with the scope/evidence distinction. ARCHITECTURE and TESTING retain implementation/coverage descriptions as reference, not completion authority. Frozen historical prose is not rewritten into a new claim.
 
 Architecture, technical plan and workflow repeat canonical state/time/runtime rules. The invariant source takes precedence; section routes expose relevant detail without maintaining another copy. Exact phase specs own checkpoint-specific contracts; testing prose describes strategies/coverage, not proof. ADR prose owns rationale, not current execution status.
 
@@ -211,3 +211,24 @@ These baseline declarations are identified, not re-certified. They remain in imm
 - `docs/ROADMAP.md:390` — **Status: PLANNED**
 - `docs/ROADMAP.md:399` — **Status: PLANNED**
 - `docs/ROADMAP.md:408` — **Status: PLANNED**
+
+## PRE-M2 semantic audit (documentation branch)
+
+| Files | Classification and disposition |
+| --- | --- |
+| README | Mutable schema-v5 and missing viewer/playback/export/autosave/SAF/insertion/zoom inventory removed in full; architecture paragraph made directional. |
+| AGENTS | Permanent safety/architecture/build authorization rules; no product capability inventory. |
+| INDEX | Release-unavailability claim removed; links describe purpose only. |
+| DOCUMENTATION | Permanent routing/authority rules; narrative role policy added. |
+| DEVELOPMENT_WORKFLOW | Permanent command/state/verification rules; ambiguous current MotionScene checkpoint phrasing made directional. |
+| PRODUCT | Intended scope labels, not maturity/status; font/audio library version implementation claims removed. |
+| ARCHITECTURE | Active status and Implemented today inventories removed; retained detailed implementation descriptions explicitly historical at the routing baseline. |
+| TECHNICAL_PLAN | Active Status inventory removed; retained subsystem design and implementation notes explicitly historical at the routing baseline. |
+| TESTING | Active Status inventory removed (including contradictory no-viewer claim); retained coverage/CI snapshots explicitly historical, never proof. |
+| TOOLING | Permanent execution rules plus explicitly historical host/CI observations; toolchain versions directed to source. |
+
+Every mixed-reference section includes the baseline notice in routed excerpts.
+No frozen contract, phase, ADR, evidence, PLAN or STATE was rewritten. The narrow
+observed-pattern guards and README outline cannot prove arbitrary prose correct;
+human semantic review remains mandatory. Historical notes can disagree with
+each other and current evidence and are expressly marked as such.

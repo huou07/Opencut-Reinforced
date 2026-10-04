@@ -209,8 +209,41 @@ def check_links(root):
     return failures
 
 
+# Policy is structural; patterns cover observed regressions, not arbitrary English.
+ENTRYPOINTS = ('README.md', 'AGENTS.md', 'docs/INDEX.md', 'docs/DOCUMENTATION.md',
+               'docs/DEVELOPMENT_WORKFLOW.md', 'docs/PRODUCT.md')
+README_HEADINGS = ('Execution and implementation evidence', 'Vision', 'Architecture direction',
+                   'Product direction', 'Platforms', 'Design and documentation', 'Contributing', 'License')
+STALE_CLAIMS = re.compile(r'(?:export|viewer)(?: support)? (?:is |are )?not implemented|'
+                         r'Android SAF is unavailable|current (?:project|\.orproj) schema (?:is )?(?:v|version )?\d+', re.I)
+
+
+def narrative_errors(root):
+    errors = []
+    for name in ENTRYPOINTS:
+        path = root / name
+        if not path.exists():
+            continue  # Small resolver fixtures need not instantiate the whole repo.
+        text = path.read_text()
+        if STALE_CLAIMS.search(text):
+            errors.append('independent mutable implementation claim: ' + name)
+        if name == 'README.md':
+            titles = tuple(title for _, level, title in _headings(text.splitlines()) if level == 2)
+            if titles != README_HEADINGS:
+                errors.append('README must retain timeless entrypoint outline; no implementation inventory')
+    for name in ('ARCHITECTURE', 'TECHNICAL_PLAN', 'TESTING', 'TOOLING'):
+        path = root / ('docs/' + name + '.md')
+        if not path.exists():
+            continue
+        lines = path.read_text().splitlines(keepends=True)
+        for index, level, title in _headings(lines):
+            if level == 2 and title != 'Status' and not any('Historical implementation/coverage notes retained from Git baseline' in line for line in lines[index+1:index+4]):
+                errors.append('missing historical section provenance: ' + str(path.relative_to(root)) + ': ' + title)
+    return errors
+
+
 def validate(root, manifest):
-    errors = check_links(root)
+    errors = check_links(root) + narrative_errors(root)
     routed = {entry['path'] for entry in manifest['documents'].values()} | set(manifest['on_demand'])
     for path in (root / 'docs/features').rglob('*.md'):
         if str(path.relative_to(root)) not in routed:

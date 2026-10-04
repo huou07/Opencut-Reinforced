@@ -6,7 +6,7 @@ This map points to the current source of truth. Read the documents relevant to y
 
 | Document | Purpose |
 | --- | --- |
-| [README.md](../README.md) | Public project overview, status, product direction, platforms, and links |
+| [README.md](../README.md) | Public project overview, state lookup, product direction, platforms, and links |
 | [AGENTS.md](../AGENTS.md) | Repository rules, safety constraints, and agent document routing |
 | [DESIGN.md](../DESIGN.md) | Approved OR Focused Monochrome application design language |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Contributor workflow and pull request expectations |
@@ -23,7 +23,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | [ROADMAP.md](ROADMAP.md) | Phased plan, dependencies, and MVP boundary |
 | [TESTING.md](TESTING.md) | Canonical testing sections, historical coverage, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
-| [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |
+| [RELEASE.md](RELEASE.md) | Application release policy and evidence lookup |
 | [TOOLING.md](TOOLING.md) | Local development baseline, hosted platform verification, optional tools, and repository safeguards |
 | [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) | Preserved prototype behavior and future UI regression guards |
 | [execution/README.md](execution/README.md) | Machine-readable architecture lock, checkpoint graph, and execution contract |

@@ -105,3 +105,23 @@ Documentation routes are not a V2 authority loader: later execution must still
 pin and validate the complete Git manifest. The certified M1 Git object and
 frozen automation files are retained; this documentation branch neither
 re-certifies a new release nor authorizes M2.
+
+## Narrative integrity policy
+
+No global or active narrative maintains current mutable implementation truth.
+README is a timeless entrypoint with a fixed purpose/direction/platform/navigation
+outline, never a capability inventory. AGENTS, INDEX, DOCUMENTATION and workflow
+text contain rules and lookup paths. PRODUCT labels specify intended scope.
+Current facts follow STATE → locked specification → supervisor evidence →
+implementation SHA/source; version constants and verified state own versions.
+
+ARCHITECTURE, TECHNICAL_PLAN, TESTING and TOOLING retain explicitly baseline-bound
+historical implementation/coverage notes at their original paths. Each selected
+section carries the historical notice so excerpt routing cannot drop provenance.
+Frozen contracts, ADRs and evidence remain historical/on demand and unmoved.
+Do not update their historical claims to imitate current status.
+
+The validator enforces the README outline, historical notices on mixed references,
+and narrow regression patterns for observed stale claims on active entrypoints.
+These are deterministic guards, not English semantic analysis; semantic review
+is still required for new narrative text. No narrative may confer execution authority.

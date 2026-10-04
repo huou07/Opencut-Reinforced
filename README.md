@@ -7,8 +7,7 @@ A free and open-source cross-platform video editor designed around one structure
 Current checkpoint status is maintained only in
 [STATE.json](docs/execution/STATE.json); [PLAN.json](docs/execution/PLAN.json)
 selects the execution order. Inspect it with
-`python3 scripts/execution_plan.py status`. Planned capability descriptions
-below do not establish implementation or completion.
+`python3 scripts/execution_plan.py status`. Product direction below does not establish implementation or completion.
 
 For an exact implemented checkpoint, consult its
 [locked specification](docs/execution/phases) and
@@ -24,7 +23,7 @@ OR aims to be a powerful but approachable editor that is desktop-first, Android-
 
 ## Architecture direction
 
-The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFileSession`; Flutter calls it through a typed opaque Rust handle, while the CLI reaches it through local IPC. Both use the same command/query dispatch and runtime identity, revision, history, and dirty state. The Flutter UI has a production-direction native shell aligned with the frozen prototype; the broader product architecture remains the intended direction:
+The intended architecture joins presentation, automation, and agents through one shared command boundary:
 
     Flutter UI
         |
@@ -35,8 +34,6 @@ The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFil
     Timeline / Media / Render
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
-
-The project format has bounded filesystem load, race-safe no-clobber creation, and atomic save. Migrations from schemas v1–v4 preserve existing project content, leave the optional sequence rate unset, and write v5 only on explicit save without a conversion-only revision change. Recovery checkpoints retain envelope v1 and include v5 project snapshots. The bounded background Job Manager and disposable CacheStore generate read-only thumbnails and waveforms through system `ffmpeg`; Phase 5E adds a rebuildable SQLite index and automatic LRU eviction, and Phase 5F adds a file-backed Matroska proxy generation foundation under the same cache. Artifacts, index data, and source fingerprints are not project state. Phase 6E1 implements pointer timeline move/trim editing and canonical drop-time clip-boundary snapping; Phase 6E2B adds the marker UI and core/CLI Snap V2 integration. Phase 7B provides the headless wgpu render spine and 7C linked software decode; 7F0 adds the canonical explicit sequence-rate setting and frame-step timing contract. Product playback, viewer/texture integration, audio-device output, export, autosave, Android Storage Access Framework integration, media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, and AI are not implemented. `ffprobe` and `ffmpeg` remain external system executables and are not bundled.
 
 ## Product direction
 

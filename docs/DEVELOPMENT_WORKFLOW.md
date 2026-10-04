@@ -51,8 +51,7 @@ For project mutations, keep Flutter, headless, and attached CLI operations on th
 
 ### Future MotionScene authoring
 
-MotionScene is future non-executable declarative source, not a product feature
-of the current execution checkpoint. Keep exact `RationalTime`, random-access
+The MotionScene direction is non-executable declarative source. Keep exact `RationalTime`, random-access
 evaluation, typed/bounded primitives, stable asset/font provenance, and the
 shared RenderSnapshot/wgpu path. Preview and materialization must share the
 evaluator, and materialization must register persistent output through normal

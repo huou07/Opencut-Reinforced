@@ -98,6 +98,22 @@ class RoutingTests(unittest.TestCase):
         self.assertTrue(any('orphan' in e for e in errors))
         self.assertTrue(any('mutable execution status' in e for e in errors))
 
+    def test_observed_semantic_regressions_in_global_entrypoints(self):
+        for claim in ('export is not implemented', 'Android SAF is unavailable',
+                      'current project schema is v5', 'viewer is not implemented'):
+            with self.subTest(claim=claim):
+                (self.root / 'AGENTS.md').write_text(claim)
+                self.assertTrue(routing.narrative_errors(self.root))
+        (self.root / 'AGENTS.md').write_text('Consult STATE and evidence for capabilities.')
+        self.assertEqual(routing.narrative_errors(self.root), [])
+
+    def test_readme_inventory_and_dropped_historical_provenance_refuse(self):
+        (self.root / 'README.md').write_text('# Project\n## Implemented today\nInventory\n')
+        self.assertTrue(routing.narrative_errors(self.root))
+        (self.root / 'README.md').unlink()
+        (self.root / 'docs/TESTING.md').write_text('# Tests\n## Coverage\nUnbound snapshot\n')
+        self.assertTrue(routing.narrative_errors(self.root))
+
     def test_budgets_warn_without_truncation(self):
         self.manifest['budgets'] = {'core': 1, 'feature': 1, 'context': 1}; self.write()
         errors, warnings, _ = routing.validate(self.root, routing.load(self.root))

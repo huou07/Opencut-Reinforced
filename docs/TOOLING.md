@@ -4,6 +4,9 @@ This tooling supports contributors and maintainers; it is not part of the Opencu
 
 ## Verification model
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
 
 By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. If local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.
@@ -19,7 +22,10 @@ When a required local check is environment-blocked and an equivalent Actions job
 
 ## Local development baseline
 
-Install only the tools needed for the part you are changing. The repository pins Rust 1.98.0; Flutter CI uses Flutter 3.47.5 stable.
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
+Install only the tools needed for the part you are changing. Read toolchain versions from `rust-toolchain.toml` and the pinned workflow source at the implementation SHA.
 
 Rust checks run from the repository root:
 
@@ -45,6 +51,9 @@ flutter test
 Flutter's Rust native-assets hook builds the bridge for the host target during Flutter builds and tests. Flutter checks that need unavailable host tooling may be environment-blocked locally; use the matching Actions job. Do not change Xcode selection, set `DEVELOPER_DIR`, accept licenses, install/repair platform components, or use `sudo` for platform setup as a normal agent workaround. Those are optional manual choices only for a developer who explicitly wants local platform builds and chooses to configure that machine.
 
 ## Hosted platform verification
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 GitHub Actions is the canonical place for native platform builds. Contributors do not need to own a Mac, Windows PC, or Linux machine, and do not need to install every platform SDK.
 
@@ -101,9 +110,12 @@ Full Xcode, CocoaPods, Android SDK/JDK, Windows SDK, and Linux platform packages
 
 ## CodeGraph
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 CodeGraph indexes a project for symbol search, source exploration, and code relationships. The official upstream is [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph).
 
-CodeGraph is machine-local development tooling. Its project index lives in `.codegraph/`, which is ignored and must not be committed. It is currently wired for Codex and OpenCode.
+CodeGraph is machine-local development tooling. Its project index lives in `.codegraph/`, which is ignored and must not be committed. Consult the local tool configuration for integrations.
 
 From the repository root, verify the installation and index with:
 
@@ -116,6 +128,9 @@ Initialize an index with `codegraph init` when needed.
 
 ## Ponytail
 
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
 Ponytail helps coding agents prefer small, necessary implementations while retaining correctness and safety checks. The official upstream is [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail).
 
 - Codex installation uses `codex plugin marketplace add DietrichGebert/ponytail` followed by `codex plugin add ponytail@ponytail`.
@@ -125,6 +140,9 @@ Ponytail helps coding agents prefer small, necessary implementations while retai
 Review third-party agent tooling before installing it. Do not install additional agent frameworks or overlapping instruction suites by default. Add tooling only when a concrete project need justifies it.
 
 ## Repository / GitHub safeguards
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access.
 - `.github/workflows/repo-hygiene.yml` runs on pull requests, pushes to `main`, and manual dispatch. The repository requires Actions references to use full commit SHAs; the workflow pins `actions/checkout` accordingly.
@@ -137,16 +155,25 @@ Review third-party agent tooling before installing it. Do not install additional
 
 ## Future tooling
 
-- CodeQL is not enabled yet. Evaluate coverage for Rust and GitHub Actions workflows; Flutter/Dart should continue to use its own static-analysis and test tooling.
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
+
+- Evaluate CodeQL coverage for Rust and GitHub Actions workflows; Flutter/Dart should continue to use its own static-analysis and test tooling.
 - Add stable-release signing, notarization, and attestations when distribution requirements are scoped.
-- Add Storage Access Framework checks when Android project-file integration is implemented.
+- Preserve Storage Access Framework checks required by the selected checkpoint.
 
 ## Approved agent tooling
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 - CodeGraph
 - Ponytail
 
 ## Model orchestrator V2 — disabled M1 primitives
+
+Historical implementation/coverage notes retained from Git baseline `c6ef63bbf98fc15549c66605321991a33481faa5`; they may contain obsolete or contradictory claims and do not describe current capability or versions. Design requirements remain subject to locked contracts and permanent invariants. Resolve current facts through [STATE](execution/STATE.json) → locked specification → supervisor evidence → implementation SHA/source.
+
 
 M1 adds `scripts/model_orchestrator/store.py` and `sandbox.py` under the frozen
 V2 contract. These are controller primitives, not a product runner. They provide
