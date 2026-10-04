@@ -112,6 +112,9 @@ def build_authorization(inputs: Mapping[str, Any], *, schemas: Mapping[str, Any]
                                                  implementation_family=implementation_family,
                                                  flag_ids=guard['flags'])
     _refuse(parsed['verdict'] == 'PASS', 'a non-PASS review cannot issue promotion authority')
+    dispositions = {item['id']: item['disposition'] for item in parsed['quality_flag_dispositions']}
+    undisposed = [flag for flag in guard['flags'] if dispositions.get(flag) != 'NOT_LOWERING']
+    _refuse(not undisposed, 'guard flags lack reviewer disposition: ' + ', '.join(undisposed[:5]))
     authorization = {'schema_version': 1, 'task_id': task['task_id'], 'checkpoint_id': task['checkpoint_id'],
                      'base_sha': task['base_sha'], 'candidate_sha': head,
                      'authority_digest': task['authority_digest'], 'template_digest': task['template_digest'],

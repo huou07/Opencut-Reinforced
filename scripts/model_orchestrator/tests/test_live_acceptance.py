@@ -412,8 +412,9 @@ class LiveM5:
         subprocess.run(['git', '-C', str(controller), 'remote', 'set-url', 'origin',
                         'https://github.com/' + c.REPOSITORY_IDENTITY + '.git'], check=True)
         harness = ('#!/bin/sh -e\nMARKER="# LIVE_PROBE_%s"\n'
-                   'test -f "/candidate/scripts/model_orchestrator/contracts.py"\n'
-                   'grep -q "$MARKER" "/candidate/scripts/model_orchestrator/contracts.py"\n'
+                   'FILE="/candidate/scripts/model_orchestrator/contracts.py"\n'
+                   'test -f "$FILE"\n'
+                   'test "$(cat "$FILE")" = "$MARKER"\n'
                    'printf \'{"cases":[{"id":"m5-probe","result":"PASS"}]}\\n\'\n' % self.nonce)
         harness_digest = hashlib.sha256(harness.encode()).hexdigest()
         task['harness_digest'] = harness_digest
@@ -517,8 +518,9 @@ class LiveWorkerTests(unittest.TestCase):
         reviewer_enrollment = dict(reviewer_enrollment, reasoning_requested='HIGH')
         self.assertNotEqual(worker_enrollment['family'], reviewer_enrollment['family'])
         marker = '# LIVE_PROBE_%s' % live.nonce
-        prompt = ('Append exactly one line to the end of file scripts/model_orchestrator/contracts.py '
-                  'in the candidate: `%s`. Change no other file. Then commit exactly that change with '
+        prompt = ('Create exactly one file in the candidate at scripts/model_orchestrator/contracts.py '
+                  'whose entire content is exactly this single line followed by a newline: `%s`. '
+                  'Change no other file. Then commit exactly that change with '
                   '`git -c user.name="V2 Worker" -c user.email="worker@example.invalid" add '
                   'scripts/model_orchestrator/contracts.py && git -c user.name="V2 Worker" '
                   '-c user.email="worker@example.invalid" commit -m "live probe"`. Do not print the line back; '
@@ -558,7 +560,7 @@ class LiveWorkerTests(unittest.TestCase):
         attempt_dir = live.root / 'attempt'
         readiness = v.execute(guarded, attempt_dir, lease_epoch=stage['lease_epoch'], sequence=1)
         self.assertTrue(readiness['verification_passed'])
-        self.assertFalse(readiness['unresolved'])
+        self.assertEqual(sorted(readiness['unresolved']), sorted(guard['flags']))
         self.assertEqual(readiness['pending_hosted_classes'], [])
         review = self.live_review(live, box, guarded, attempt_dir, task, guard,
                                   reviewer_enrollment, worker_enrollment['family'])
@@ -597,6 +599,7 @@ class LiveWorkerTests(unittest.TestCase):
         remote_receipts = [d for d in runtime.inspect()['object_digests']
                            if s._object(s._read(runtime.root / 'objects' / (d + '.json')))['payload'].get('kind') == 'remote-promotion']
         self.assertEqual(len(remote_receipts), 1)
+        (live.output / 'worker-transcript.bin').write_bytes(worker_result.transcript)
         evidence = {'task_id': task['task_id'], 'candidate_head': guard['head'], 'base_sha': task['base_sha'],
                     'marker': marker, 'task': task,
                     'worker': {'model_id': worker_enrollment['model_id'], 'family': worker_enrollment['family'],
@@ -649,6 +652,7 @@ class LiveWorkerTests(unittest.TestCase):
             timeout_seconds=600)
         self.assertFalse(result.timed_out)
         self.assertEqual(result.exit_code, 0)
+        (live.output / 'reviewer-transcript.bin').write_bytes(result.transcript)
         stream = a.parse_event_stream(result.transcript, limits=a.StreamLimits(4 << 20, 4096, 3600),
                                       event_contract=live.binary.event_contract)
         self.assertIsNone(stream.error)
