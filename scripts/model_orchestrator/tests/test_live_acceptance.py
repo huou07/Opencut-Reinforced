@@ -298,6 +298,8 @@ class IndependentReviewTests(unittest.TestCase):
         task.update(goal='Independently audit exact released control-plane source and complete execution evidence; no writes.',
                     out_of_scope=['No product adoption', 'No source/controller writes', 'No code execution', 'No nested models'],
                     observable_outcome='A separate readonly source/evidence report bound to the exact release SHA',
+                    expected_result='A source/evidence trace with exact binding and no blocking defect; supplied CP44-47 receipts provide the deterministic prerequisites.',
+                    error_cases=['Missing evidence', 'Stale release SHA', 'Unresolved blocking defect', 'Non-independent source reviewer'],
                     permission_expectation='Isolated readonly source and evidence; inference credentials only')
         task['resource_limits'].update(output_bytes=8 << 20, wall_seconds=1800)
         records = live.enrollments(task, live.authority, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
