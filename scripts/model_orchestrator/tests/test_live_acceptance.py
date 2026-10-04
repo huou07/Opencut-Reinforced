@@ -492,11 +492,11 @@ class LiveM5:
             os.chmod(path, 0o755)
         home = Path(overlays['home'])
         mounts = [(str(home_base), '/worker-home', True),
-                  (str(home / 'opencode.json'), '/worker-home/opencode.json', False),
+                  (str(home / 'opencode.json'), '/worker-home/opencode.json'),
                   (str(home / '.config' / 'opencode' / 'opencode.json'),
-                   '/worker-home/.config/opencode/opencode.json', False)]
+                   '/worker-home/.config/opencode/opencode.json')]
         credential, _ = self.credential_mount()
-        mounts.append((credential[0], credential[1], False))
+        mounts.append((credential[0], credential[1]))
         return mounts
 
     def box(self):
