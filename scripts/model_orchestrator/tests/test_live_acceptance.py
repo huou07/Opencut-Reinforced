@@ -504,7 +504,10 @@ class LiveM5:
 
     def launch_with_credential(self, *, box, candidate, view, role, container_binary, message_parts, agent,
                                enrollment, image, network, limits, overlay_mounts, labels, name, timeout_seconds):
-        mounts = list(overlay_mounts) + [self.credential_mount()[0][0]]
+        # The caller composes overlay_mounts (candidate masks plus the home
+        # design with policy shadows and the credential shadow); the launcher
+        # verifies the exact set. No implicit mounts are added here.
+        mounts = list(overlay_mounts)
         return a.launch_model_stage(box=box, candidate=candidate, view=view, role=role,
                                     container_binary=container_binary, message_parts=message_parts, agent=agent,
                                     adapter=a.OpenCodeAdapter(self.binary, role=role, enrollment=enrollment,
