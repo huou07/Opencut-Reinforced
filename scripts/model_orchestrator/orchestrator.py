@@ -312,6 +312,16 @@ def claim_review(store: s.RuntimeStore, task_id: str) -> dict[str, Any]:
                 claim_sequence=attempt['payload']['claim_sequence'])
 
 
+def _review_output_instruction(schema):
+    fields = schema['fields']
+    return ('Output only one JSON object, no Markdown, code fences or surrounding prose. '
+            'Every object is closed: additional keys are forbidden. Root keys exactly: ' +
+            ', '.join(schema['required']) + '. Finding keys exactly: ' +
+            ', '.join(fields['findings']['items']['required']) + '. Quality disposition keys exactly: ' +
+            ', '.join(fields['quality_flag_dispositions']['items']['required']) +
+            '. First character must be { and last character }. Schema: ' + c.canonical_json(schema))
+
+
 def build_review_prompt(*, task: Mapping[str, Any], candidate_sha: str, diff_text: str, guard_flags: Sequence[str],
                         verification_summary: Mapping[str, Any], budgets: Mapping[str, Any]) -> str:
     _refuse(type(diff_text) is str, 'candidate diff required')
@@ -324,7 +334,7 @@ def build_review_prompt(*, task: Mapping[str, Any], candidate_sha: str, diff_tex
         'VERIFICATION: ' + c.canonical_json(verification_summary),
         'BUDGETS: ' + c.canonical_json(budgets),
         'DIFF%s: ' % ('_TRUNCATED_AT_%d_BYTES' % bound if truncated else '') + diff_text[:bound],
-        'Output only one JSON object. No Markdown, code fences, explanations or text outside JSON. First character must be { and last character }. Match this schema: ' + c.canonical_json(c.load_json_strict((Path(__file__).resolve().parents[2] / 'docs/execution/automation/PROTOCOL_SCHEMAS.json').read_text())['records']['review_report']),
+        _review_output_instruction(c.load_json_strict((Path(__file__).resolve().parents[2] / 'docs/execution/automation/PROTOCOL_SCHEMAS.json').read_text())['records']['review_report']),
         'Echo task_id, task_contract_digest=' + c.canonical_digest(task) + ' and candidate_sha. Coverage must contain required_check_ids. Every GUARD_FLAGS key requires a quality_flag_dispositions entry with explicit NOT_LOWERING only if proven by source and checks; evidence_digest=' + c.canonical_digest(verification_summary) + '. PASS requires no blocking defect and never means product accepted.',
     ]
     return '\n---\n'.join(parts)
@@ -730,8 +740,8 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                   'Output only one strict review_report JSON object. No Markdown or code fences. First character {, last character }. For every traced stage, include coverage label and a NONBLOCKING '
                   'PROVEN/SUPPORTED finding with id equal to the stage; citation must contain existing '
                   'source/<full-relative-file>:<line>; evidence/<full-relative-file>:<line> references, and a substantive checked claim. '
-                  'If evidence is absent or a defect exists, report it truthfully using BLOCKED/INCONCLUSIVE/DEFECT_FOUND. '
-                  'Schema: ' + c.canonical_json(payload['schemas']['records']['review_report']) +
+                  'If evidence is absent or a defect exists, report it truthfully using BLOCKED/INCONCLUSIVE/DEFECT_FOUND. ' +
+                  _review_output_instruction(payload['schemas']['records']['review_report']) +
                   ' Exact binding: task_id=' + task['task_id'] + ', task_contract_digest=' + c.canonical_digest(task) +
                   ', candidate_sha=' + release_sha + '. Required coverage also includes: ' + c.canonical_json(task['required_check_ids']))
         labels = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'source-review', 1, nonce,
