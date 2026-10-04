@@ -299,3 +299,109 @@ Available-boundary observations for this M1 candidate (2026-10-03/04):
   remain unavailable. Effective filesystem overlays are now verified, while
   installed OpenCode adapter conformance remains untested and unavailable until
   its later phase.
+
+### M1 launch-workspace recovery ownership contract (CP07 × CP10 × CP11)
+
+A stage's mutable launch copy is a result-bearing object, distinct from the
+immutable input candidate. Original candidate recovery alone cannot preserve
+worker edits. The controller-owned `RuntimeStore.state.json` task `launch`
+receipt is the only workspace locator. Worker filesystem metadata, directory
+names discovered by search, Docker mount discovery, and `_prepared` memory
+cannot establish that locator or any execution authority.
+
+Lifecycle: **reserve → materialize/bind → execute → reconcile → preserve/import
+→ settle → cleanup**. `workspace.py` implements receipt validation, original
+input binding, preservation and cleanup; `sandbox.py` implements effective
+configuration and real Docker observations; `store.py` owns the durable state
+transitions and task lease. No product/model dispatch or M2 guard is added.
+
+- **Reserve:** under the existing task lease, persist task/stage ID, lease epoch,
+  owner/stage nonce, host boot identity, daemon identity, pinned image, role,
+  exact workspace path, controller-private parent device/inode, original input
+  root/base/nonce/device/inode/content manifest, and an exact container name.
+  State uses the existing fsync/atomic-replace transaction. Reservation precedes
+  directory creation/copy, so a partial copy remains reachable without scanning.
+- **Bind:** fsync the independent copy and parent directories and persist the
+  root device/inode before Docker create. Pre-created empty targets for absent
+  config masks have exact durable filesystem identities. They prevent Docker
+  from modifying the original input and cannot count as worker work.
+- **Execute:** the container name derives from the reservation UUID, persisted
+  before Docker create. Persist its exact ID before effective inspection/start.
+  A create-before-ID-persistence crash is reconciled by exact name and labels;
+  start requires the original controller's verified preparation. A fresh
+  controller never redispatches a claimed stage. The original input remains
+  outside the worker mount. Trusted role overlays and their effective mounts,
+  home/environment, and resource bounds remain mandatory.
+- **Reconcile:** a fresh controller reads the receipt, checks the original
+  boot/daemon and exact ownership labels, and verifies the known mount pointer.
+  Mount inspection verifies the receipt; it never discovers a workspace. Kill
+  live descendants through their container and independently observe whole
+  termination. Exact name/ID and stage inventories can prove absence after
+  container removal; disappearance never erases the workspace locator.
+  A sealed reconciliation proof binds both stage identity and workspace path.
+- **Preserve/import:** remove only receipt-bound empty mask targets after proven
+  termination; inode/content mismatch refuses deletion. Original config and
+  useful worker changes remain intact. Persist an exact preservation locator
+  before copying into the existing controller-only artifacts namespace. Fsync
+  and compare full content/mode manifests, export through sanitized Git
+  quarantine, and persist the verified snapshot manifest and existing HEAD.
+  Dirty tracked/untracked files and clean commits are preserved separately from
+  authority. No reset, clean or synthetic recovery commit is allowed. The
+  preserved candidate can continue through the existing sanitized export/import
+  path. An interrupted copy/pack is completed from the exact retained source.
+- **Settle:** require the sealed real reconciliation proof and a verified durable
+  useful-work handoff. Clearing the active stage never clears the launch receipt
+  or its container/workspace/result identities. Task contract and original
+  candidate identity remain immutable. The receipt cannot become verification,
+  review, promotion, or operational-adoption authority.
+- **Cleanup:** only a settled lease and reverified durable handoff allow CLEANING.
+  Reobserve/remove the original container and refuse any other mount user. A
+  bounded mapped-UID cleanup container can remove worker-owned directories; it
+  receives only the retired view. Its exact name, image, task/stage/nonce labels
+  and command derive from the already persisted CLEANING receipt. Verify its
+  effective least-privilege profile before start. Restart reconciles this exact
+  helper before another create; no process-local PID is proof. Remove helper,
+  prove no remaining mount user, remove the retired root, fsync its parent and
+  persist REMOVED. Preserved useful work remains in the existing artifacts
+  namespace for explicit recovery/consumption, with its receipt/hash binding.
+
+A RESERVED copy that never reached the durable pre-create BOUND gate can abort
+without allocating another full copy (including after disk exhaustion). Prove
+real container absence, verify the exact unchanged original input and that any
+partial copy contains only input prefixes or known empty masks, persist
+ABORTING with the lease settled, then delete the partial duplicate and persist
+ABORTED. Any divergent work refuses deletion and stays reachable. The original
+input remains the recovery object. An ABORTING interruption is resumable.
+
+Missing locators, old stores lacking launch receipts, wrong task/stage/nonce/
+epoch/owner, changed parent/root inode, deleted/reused paths, forged mount
+pointers, changed daemon/boot, useful mask-target bytes, or corrupted handoffs
+fail closed. No implicit migration or legacy unreceipted-directory discovery is
+permitted. Existing controller artifact retention is intentional preservation;
+launch copies and cleanup containers have explicit terminal cleanup states.
+
+The permanent regression is explicitly named `CP07_CP10_CP11` in
+`test_isolation_and_state.py`. For real crash acceptance, use only an already
+prepared dedicated volume and rootless engine, with a new evidence directory:
+
+```sh
+python3 scripts/model_orchestrator/tests/test_live_workspace_recovery.py \
+  --volume /srv/opencut-v2/candidate --output /absolute/new/evidence-directory \
+  --image sha256:<pinned-fixture-image-with-Git>
+```
+
+This opt-in harness uses real independent Git input, real containers, SIGKILL
+of controller processes and fresh recovery processes with empty `_prepared`.
+It exercises dirty work, an existing clean worker commit, container disappearance,
+pre-create/persist/start boundaries, pre-settlement handoff and cleanup-helper
+crashes. The fixture image must provide Git and GNU timeout. The worker runs real
+`git add` and `git commit`; recovery verifies/imports that exact commit without
+creating another one. A separate test image may derive from the pinned Debian
+image and already-installed host Git/libraries without downloads or installation.
+Its Dockerfile, file hashes and exact image digest belong in fixture evidence;
+these development tools are not application dependencies or product packages.
+Case records include real PIDs/exit signals, complete container/stage identities,
+filesystem capacity, source manifests and preserved result locators. Fixture
+inputs are explicitly disposed only after preservation and acceptance; evidence
+and useful result artifacts remain available. This is disabled M1 acceptance,
+never product execution or M2 authorization.

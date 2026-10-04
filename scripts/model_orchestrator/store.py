@@ -260,7 +260,7 @@ class RuntimeStore:
                 raise StoreError('immutable object identity mismatch')
         for task_id, task in state['tasks'].items():
             _id(task_id)
-            _exact(task, ('contract_digest', 'candidate_digest', 'lease_epoch', 'attempt', 'stage', 'status'))
+            _exact(task, ('contract_digest', 'candidate_digest', 'lease_epoch', 'attempt', 'stage', 'status', 'launch'))
             _integer(task['lease_epoch']); _integer(task['attempt'])
             if task['contract_digest'] not in refs or task['status'] not in ('READY', 'CLAIMED', 'SETTLED'):
                 raise StoreError('missing task contract or invalid status')
@@ -283,6 +283,19 @@ class RuntimeStore:
                 _integer(descriptor['device']); _integer(descriptor['inode'])
                 if type(descriptor['root']) is not str or not Path(descriptor['root']).is_absolute() or not re.fullmatch('[0-9a-f]{40}', descriptor['base_oid']):
                     raise StoreError('invalid candidate descriptor')
+            if task['launch'] is not None:
+                from .workspace import validate_record
+                validate_record(task['launch'], task_id, task['lease_epoch'])
+                launch = task['launch']
+                if task['stage'] is not None and (launch['stage'] != dict(task['stage'], container_id=None)
+                        or launch['container_id'] != task['stage']['container_id']):
+                    raise StoreError('launch and active stage ownership differ')
+                if task['candidate_digest'] is not None:
+                    original = {key:value for key,value in descriptor.items() if key != 'schema_version'}
+                    if original != {key:value for key,value in launch['input'].items() if key != 'manifest'}:
+                        raise StoreError('launch differs from original registered candidate')
+                elif launch['input']['authority_digest'] != 'FIXTURE_ONLY':
+                    raise StoreError('authority-bound launch requires original candidate registration')
             if task['stage'] is not None:
                 stage = task['stage']
                 _exact(stage, ('task_id', 'stage_id', 'lease_epoch', 'owner_nonce', 'host_boot_identity', 'stage_nonce', 'container_id'))
@@ -388,6 +401,9 @@ class RuntimeStore:
                     raise StoreError('original task/candidate/attempt history cannot be replaced or rewound')
             next_state['sequence'] += 1
             self._validate(next_state)
+            from .workspace import validate_transition
+            for task_id, original in previous['tasks'].items():
+                validate_transition(original['launch'], next_state['tasks'][task_id]['launch'])
             hit('before_temp_write')
             fd, name = tempfile.mkstemp(prefix='.state-', dir=self.root)
             temp = Path(name)
@@ -434,7 +450,7 @@ class RuntimeStore:
         def update(state):
             if state['tasks']:
                 raise StoreError('one original task contract only; cannot re-freeze')
-            state['tasks'][task['task_id']] = dict(contract_digest=digest, candidate_digest=None, lease_epoch=0, attempt=0, stage=None, status='READY')
+            state['tasks'][task['task_id']] = dict(contract_digest=digest, candidate_digest=None, lease_epoch=0, attempt=0, stage=None, status='READY', launch=None)
         self.transaction(current['sequence'], current['epoch'], update, objects=[record])
         return digest
 
@@ -498,8 +514,51 @@ class RuntimeStore:
             if task['stage'] != stage or stage['container_id'] is not None:
                 raise StoreError('stale stage or container already bound')
             task['stage']['container_id'] = container_id
+            if task['launch'] is not None:
+                task['launch']['container_id'] = container_id
         result = self.transaction(current['sequence'], current['epoch'], update)
         return result['tasks'][stage['task_id']]['stage']
+
+    def launch_record(self, stage):
+        task = self.inspect()['tasks'].get(stage['task_id'])
+        if task is None or task['launch'] is None:
+            raise StoreError('missing durable launch workspace locator')
+        record = task['launch']
+        original = dict(stage, container_id=None)
+        if record['stage'] != original or task['lease_epoch'] != stage['lease_epoch'] or record['container_id'] != stage['container_id']:
+            raise StoreError('wrong/stale launch task, stage, owner or epoch')
+        if task['stage'] is not None and task['stage'] != stage:
+            raise StoreError('stale bound container identity')
+        return copy.deepcopy(record)
+
+    def update_launch(self, stage, record, *, initial=False):
+        if (0, stage['task_id']) not in self._held:
+            raise StoreError('task lease required for workspace lifecycle')
+        current = self.inspect()
+        def update(state):
+            task = state['tasks'][stage['task_id']]
+            if task['stage'] != stage and task['status'] != 'SETTLED':
+                raise StoreError('wrong stage during workspace lifecycle')
+            if initial:
+                if task['launch'] is not None or task['status'] != 'CLAIMED':
+                    raise StoreError('workspace already reserved or stage not claimed')
+            else:
+                self.launch_record(stage)
+            task['launch'] = record
+        return self.transaction(current['sequence'], current['epoch'], update)
+
+    def abort_unstarted(self, stage, record):
+        if (0, stage['task_id']) not in self._held:
+            raise StoreError('task lease required for prelaunch abort')
+        current = self.inspect()
+        def update(state):
+            task = state['tasks'][stage['task_id']]
+            if task['launch'] != record or record['phase'] not in ('RESERVED', 'ABORTING') or stage['container_id'] is not None:
+                raise StoreError('workspace may contain worker work')
+            task['launch']['phase'] = 'ABORTING'
+            task['stage'] = None; task['status'] = 'SETTLED'; state['active_task'] = None
+        self.transaction(current['sequence'], current['epoch'], update)
+        record['phase'] = 'ABORTING'
 
     def settle(self, stage, reconciliation):
         """Only Docker-observed sealed termination can release a recorded writer."""
@@ -513,5 +572,10 @@ class RuntimeStore:
             task = state['tasks'][stage['task_id']]
             if task['stage'] != stage:
                 raise StoreError('stale epoch/owner/stage result')
+            launch = task['launch']
+            if launch is None or launch['phase'] != 'PRESERVED':
+                raise StoreError('launch work must be durably preserved before settlement')
+            from .workspace import verify_preserved
+            verify_preserved(self, launch)
             task['stage'] = None; task['status'] = 'SETTLED'; state['active_task'] = None
         return self.transaction(current['sequence'], current['epoch'], update)

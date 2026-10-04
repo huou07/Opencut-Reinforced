@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
-from model_orchestrator import contracts as c, store as s, sandbox as b
+from model_orchestrator import contracts as c, store as s, sandbox as b, workspace as w
 from model_orchestrator.tests.test_contracts import ProvenanceFixture, valid_task
 
 CTX = multiprocessing.get_context('fork')
@@ -290,6 +290,79 @@ class StoreTests(unittest.TestCase):
         b.inspect_candidate(imported.root)
         self.assertEqual(subprocess.check_output(['git','rev-parse','HEAD'],cwd=imported.root).decode().strip(),commit)
         self.assertEqual(path.read_text(),'dirty interrupted work')
+
+    def test_CP07_CP10_CP11_durable_launch_pointer_identity_and_dirty_commit_preservation(self):
+        task_id, digest = self.initialize_task()
+        candidate = b.create_candidate(self.fixture.candidate, self.root.parent/'original',
+                c.TRUSTED_DESIGN_BASE, authority=self.authority)
+        self.runtime.register_candidate(task_id, candidate)
+        with self.runtime.lock('task', task_id):
+            stage = self.runtime.claim(task_id, digest, owner_nonce='owner', boot_identity='boot',
+                    stage_id='stage', stage_nonce='nonce')
+            with patch.object(self.runtime,'root',candidate.root/'runtime'),self.assertRaises(c.ContractError):
+                w.reserve_launch(self.runtime,stage,candidate,candidate.root.parent,'daemon','sha256:'+'b'*64,'IMPLEMENTATION')
+            path = w.reserve_launch(self.runtime, stage, candidate, candidate.root.parent, 'daemon', 'sha256:'+'b'*64, 'IMPLEMENTATION')
+            b._make_launch_view(candidate, candidate.root.parent, task_id, 'stage', 'IMPLEMENTATION', path)
+            w.bind_launch(self.runtime, stage)
+            (path/'tracked.txt').write_text('useful clean commit')
+            subprocess.run(['git','add','tracked.txt'],cwd=path,check=True)
+            subprocess.run(['git','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','worker commit'],cwd=path,check=True)
+            head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=path).strip()
+            (path/'tracked.txt').write_text('dirty edit')
+            (path/'new.txt').write_text('new useful work')
+            (path/'worker-workspace-receipt.json').write_text('{"path":"/forged","lease_epoch":999}')
+            restarted=s.RuntimeStore(self.root,self.authority)
+            def observation(args):
+                if args[0]=='ps':return 'a'*64
+                if args[0]=='info':return c.canonical_json(dict(ID='daemon',OSType='linux',SecurityOptions=['name=rootless']))
+                identity=b.StageIdentity('a'*64,'boot','owner','stage',1,'nonce',candidate.authority_digest,'IMPLEMENTATION',task_id)
+                return c.canonical_json([dict(Id='a'*64,Config=dict(Labels=identity.labels()),
+                        Mounts=[dict(Source=str(candidate.root.parent),Destination='/candidate')],
+                        State=dict(Running=True,Pid=1,Paused=False,Restarting=False))])
+            box=b.ContainerSandbox(observation,boot_identity='boot',host_platform='linux',fixture_only=True)
+            with self.assertRaises(c.ContractError):box.verify_no_launch_users(restarted,stage)
+            with self.assertRaises(c.ContractError):box.reconcile_launch(restarted,stage)
+            recovered=w.restore_launch(restarted,stage)
+            self.assertEqual(recovered.root,path)
+            self.assertEqual((recovered.root/'tracked.txt').read_text(),'dirty edit')
+            self.assertEqual(subprocess.check_output(['git','rev-parse','HEAD'],cwd=recovered.root).strip(),head)
+            self.assertFalse((candidate.root/'tracked.txt').exists())
+            self.assertEqual(b.restore_candidate(restarted,task_id).root,candidate.root)
+            for key,value in [('task_id','other'),('stage_nonce','wrong'),('lease_epoch',2),('owner_nonce','wrong'),('stage_id','wrong')]:
+                with self.subTest(key=key),self.assertRaises(c.ContractError):
+                    w.restore_launch(restarted,dict(stage,**{key:value}))
+            with self.assertRaises(c.ContractError):
+                restarted.claim(task_id,digest,owner_nonce='other',boot_identity='boot',stage_id='other',stage_nonce='other')
+            with self.assertRaises(c.ContractError):
+                w.reserve_launch(self.runtime,stage,candidate,candidate.root.parent,'daemon','sha256:'+'b'*64,'IMPLEMENTATION')
+            saved=path.with_name('saved');path.rename(saved);path.mkdir()
+            with self.assertRaises(c.ContractError):w.restore_launch(restarted,stage)
+            path.rmdir()
+            with self.assertRaises((c.ContractError,OSError)):w.restore_launch(restarted,stage)
+            saved.rename(path)
+            current=self.runtime.inspect()
+            original=copy.deepcopy(current['tasks'][task_id]['launch'])
+            for mutate in (lambda state:state['tasks'][task_id].update(launch=None),
+                           lambda state:state['tasks'][task_id]['launch'].update(path=str(candidate.root)),
+                           lambda state:state['tasks'][task_id]['launch']['stage'].update(stage_nonce='forged'),
+                           lambda state:state['tasks'][task_id]['launch'].update(phase='REMOVED')):
+                with self.assertRaises(c.ContractError):
+                    self.runtime.transaction(current['sequence'],current['epoch'],mutate)
+            self.assertEqual(self.runtime.inspect(),current)
+            masked=next(item for item in original['mask_targets'] if item['name']=='opencode.json')
+            (path/masked['name']).write_text('useful divergent bytes')
+            with self.assertRaises(c.ContractError):w.strip_controller_mask_targets(original,recovered)
+            self.assertEqual((path/masked['name']).read_text(),'useful divergent bytes')
+            (path/masked['name']).write_text('')
+
+            current['tasks'][task_id]['launch']=None
+            # Independent fresh controller must never fall back to Docker mounts or input.
+            with patch.object(restarted,'inspect',return_value=current),self.assertRaises(c.ContractError):w.restore_launch(restarted,stage)
+            forged=copy.deepcopy(original);forged['path']=str(candidate.root)
+            with self.assertRaises(c.ContractError):w.validate_record(forged,task_id,stage['lease_epoch'])
+            removed=copy.deepcopy(original);removed['phase']='REMOVED'
+            current['tasks'][task_id]['launch']=removed
+            with patch.object(restarted,'inspect',return_value=current),self.assertRaises(c.ContractError):w.restore_launch(restarted,stage)
 
     def test_task_pointer_history_and_forged_completion_cannot_release_writer(self):
         task_id,digest=self.initialize_task()

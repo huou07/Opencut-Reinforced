@@ -65,6 +65,7 @@ def _git(root: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
     try:
         result = subprocess.run(['git', '--no-optional-locks', '-c', 'core.hooksPath=' + os.devnull,
                                  '-c', 'core.fsmonitor=false', '-c', 'core.attributesFile=' + os.devnull,
+                                 '-c', 'safe.directory=' + str(root),
                                  '-c', 'protocol.file.allow=never', *args], cwd=root, env=env,
                                 input=input_bytes, capture_output=True, timeout=60, check=True)
     except (OSError, subprocess.SubprocessError) as exc:
@@ -403,7 +404,7 @@ def _validated_role_overlays(overlays: dict[str, Path], role: str, candidate: Pa
 
 
 def _make_launch_view(candidate: Candidate, storage_root: Path, task_id: str, stage_id: str,
-                      role: str) -> Path:
+                      role: str, destination: Path | None = None) -> Path:
     """Copy into the same bounded filesystem so absent masks never touch input."""
     storage_root = _safe_path(storage_root)
     _require(candidate.root.parent == storage_root, 'candidate must be a direct child of bounded launch storage')
@@ -413,9 +414,24 @@ def _make_launch_view(candidate: Candidate, storage_root: Path, task_id: str, st
     item = launch_root.lstat()
     _require(stat.S_ISDIR(item.st_mode) and item.st_uid == os.geteuid()
              and stat.S_IMODE(item.st_mode) == 0o700, 'launch-view storage is not controller-private')
-    stage_root = Path(tempfile.mkdtemp(prefix=task_id + '-' + stage_id + '-', dir=launch_root))
-    view = stage_root / 'candidate'
+    if destination is None:
+        stage_root = Path(tempfile.mkdtemp(prefix=task_id + '-' + stage_id + '-', dir=launch_root))
+        view = stage_root / 'candidate'
+    else:
+        view = _safe_path(destination)
+        _require(view.parent.parent == launch_root and not view.parent.exists(), 'reserved launch path reused')
+        view.parent.mkdir(mode=0o700)
+
     shutil.copytree(candidate.root, view, copy_function=shutil.copy2, symlinks=True)
+    # Controller-created empty mount targets are recorded before execution and
+    # removed only after reconciliation; they must never dirty a clean handoff.
+    for name in ('opencode.json', 'opencode.jsonc', '.opencode'):
+        path = view/name
+        if not path.exists():
+            if name == '.opencode':
+                path.mkdir()
+            else:
+                path.touch()
     inspect_candidate(view)
     source_device = candidate.root.stat().st_dev
     for directory, dirs, files in os.walk(view, followlinks=False):
@@ -465,17 +481,20 @@ class StageIdentity:
 class TerminatedStageIdentity:
     identity: StageIdentity
     fixture_only: bool
+    workspace_path: str | None
 
-    def __init__(self, identity: StageIdentity, fixture_only: bool, *, _seal: object = None):
+    def __init__(self, identity: StageIdentity, fixture_only: bool, *, workspace_path: str | None = None, _seal: object = None):
         _require(_seal is _SEAL, 'termination requires observed entire-container reconciliation')
         object.__setattr__(self, 'identity', identity)
         object.__setattr__(self, 'fixture_only', fixture_only)
+        object.__setattr__(self, 'workspace_path', workspace_path)
 
     def matches(self, stage: dict[str, Any]) -> bool:
         """A sealed observation may only settle its exact persisted lease."""
         return (isinstance(stage, dict) and all(stage.get(key) == getattr(self.identity, key)
-                for key in ('container_id', 'host_boot_identity', 'owner_nonce',
-                            'stage_id', 'lease_epoch', 'stage_nonce', 'task_id')))
+                for key in ('host_boot_identity', 'owner_nonce',
+                            'stage_id', 'lease_epoch', 'stage_nonce', 'task_id'))
+                and self.identity.container_id == (stage.get('container_id') or '0' * 64))
 
 
 TerminatedStage = TerminatedStageIdentity
@@ -616,7 +635,8 @@ class ContainerSandbox:
                               command: tuple[str, ...], owner_nonce: str, stage_id: str,
                               lease_epoch: int, task_id: str, stage_nonce: str,
                               persist: Callable[[StageIdentity], None],
-                              overlays: dict[str, Path] | None = None) -> StageIdentity:
+                              overlays: dict[str, Path] | None = None, store: Any = None,
+                              stage: dict[str, Any] | None = None, fault: Callable[[str], None] | None = None) -> StageIdentity:
         _require(candidate.authority_digest == 'FIXTURE_ONLY', 'shell adapter is fixture-only')
         _require(role in ('IMPLEMENTATION', 'VERIFIER_CONTROLLER'), 'model observation roles deny shell/tools')
         _require(isinstance(command, tuple) and bool(command) and all(isinstance(x, str) and x and '\x00' not in x for x in command),
@@ -633,7 +653,21 @@ class ContainerSandbox:
         daemon = self._runtime(image)
         quota = None if self.fixture_only else _bounded_candidate_filesystem(candidate.root, limits.candidate_bytes)
         storage_root = candidate.root.parent if quota is None else Path(quota[2])
-        launch_candidate = _make_launch_view(candidate, storage_root, task_id, stage_id, role)
+        from . import workspace as w
+        hit = fault or (lambda point: None)
+        _require(self.fixture_only or store is not None, 'real launch requires durable controller workspace binding')
+        reserved = None
+        if store is not None:
+            _require(stage == dict(task_id=task_id, stage_id=stage_id, lease_epoch=lease_epoch,
+                     owner_nonce=owner_nonce, host_boot_identity=self.boot_identity, stage_nonce=nonce,
+                     container_id=None), 'launch stage differs from durable claim')
+            reserved = w.reserve_launch(store, stage, candidate, storage_root, daemon, image, role)
+            hit('after_reservation')
+        launch_candidate = _make_launch_view(candidate, storage_root, task_id, stage_id, role, reserved)
+        if store is not None:
+            w.bind_launch(store, stage)
+        hit('after_workspace')
+
         args = ['create', '--pull=never', '--read-only', '--user=10001:10001', '--cap-drop=ALL',
                 '--security-opt=no-new-privileges:true', '--network=none', '--ipc=none', '--cgroupns=private',
                 '--pids-limit=' + str(limits.pids), '--cpus=' + str(limits.cpu),
@@ -649,6 +683,8 @@ class ContainerSandbox:
                 '--env=XDG_STATE_HOME=/worker-home/.local/state',
                 '--env=OPENCODE_CONFIG=/worker-home/opencode.json',
                 '--env=GIT_CONFIG_NOSYSTEM=1', '--env=GIT_CONFIG_GLOBAL=/dev/null']
+        if store is not None:
+            args.append('--name=' + store.launch_record(stage)['container_name'])
         for source, destination in overlay_mounts:
             args.append('--mount=type=bind,src=' + str(source) + ',dst=' + destination + ',readonly')
         for key, value in provisional.labels().items():
@@ -659,6 +695,7 @@ class ContainerSandbox:
                            str(limits.wall_seconds), *command)
         args.extend(['--entrypoint=' + bounded_command[0], image, *bounded_command[1:]])
         container_id = self.docker(args).strip()
+        hit('after_create')
         identity = StageIdentity(container_id, self.boot_identity, owner_nonce, stage_id,
                                  lease_epoch, nonce, 'FIXTURE_ONLY', role, task_id)
         identity.validate()
@@ -666,10 +703,14 @@ class ContainerSandbox:
         mounts.extend((str(source), destination, False) for source, destination in overlay_mounts)
         expected = dict(image=image, candidate=str(launch_candidate), input_candidate=str(candidate.root),
                         mounts=mounts, limits=limits, daemon=daemon, quota=quota,
-                        command=bounded_command, candidate_handle=candidate)
+                        command=bounded_command, candidate_handle=candidate, store=store, stage=stage)
         # Persist even if effective inspection fails. A crashed controller must
         # retain the instance locator; no local PID is accepted as death proof.
+        if store is not None:
+            stage = store.bind_container(stage, container_id)
+            expected['stage'] = stage
         persist(identity)
+        hit('after_persistence')
         self.verify_effective(identity, expected)
         self._prepared[container_id] = (identity, expected)
         return identity
@@ -702,13 +743,14 @@ class ContainerSandbox:
                  and host.get('PidsLimit') == limits.pids, 'resource limits differ')
         _require(host.get('RestartPolicy') == {'Name': 'no', 'MaximumRetryCount': 0}
                  and host.get('LogConfig') == {'Type': 'none', 'Config': {}}, 'unbounded persistence/logs')
-        _require(config.get('WorkingDir') == '/candidate' and config.get('Entrypoint') == [expected['command'][0]]
+        _require(config.get('WorkingDir') == expected.get('workdir', '/candidate') and config.get('Entrypoint') == [expected['command'][0]]
                  and (config.get('Cmd') or []) == list(expected['command'][1:]), 'effective command differs')
         environment = config.get('Env', [])
         required = ['HOME=/worker-home', 'TMPDIR=/scratch', 'XDG_CONFIG_HOME=/worker-home/.config',
                     'XDG_DATA_HOME=/worker-home/.local/share', 'XDG_STATE_HOME=/worker-home/.local/state',
                     'OPENCODE_CONFIG=/worker-home/opencode.json',
                     'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null']
+        required = expected.get('environment', required)
         approved = required + ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin']
         _require(isinstance(environment, list) and len(environment) == len(set(environment))
                  and set(required) <= set(environment) <= set(approved), 'effective launch environment differs')
@@ -728,8 +770,9 @@ class ContainerSandbox:
         _require(host.get('Tmpfs') == {'/scratch': scratch}, 'scratch quota differs')
         ulimits = {item['Name']: (item['Soft'], item['Hard']) for item in host.get('Ulimits', [])}
         _require(ulimits == {'nofile': (256, 256), 'fsize': (limits.output_bytes, limits.output_bytes)}, 'output/FD bounds differ')
-        _require(instance.get('State', {}).get('Status') == 'created' and not instance['State'].get('Running'),
-                 'stage executed before verification')
+        if expected.get('created_only', True):
+            _require(instance.get('State', {}).get('Status') == 'created' and not instance['State'].get('Running'),
+                     'stage executed before verification')
 
     def start_stage(self, identity: StageIdentity) -> None:
         _require(identity.container_id in self._prepared, 'stage was not verified/persisted by this controller')
@@ -737,6 +780,12 @@ class ContainerSandbox:
         _require(identity == recorded and identity.host_boot_identity == self.boot_identity, 'stage identity/boot differs')
         self.verify_effective(identity, expected)
         expected['candidate_handle'].verify()
+        if expected.get('store') is not None:
+            record = expected['store'].launch_record(expected['stage'])
+            from .workspace import restore_launch
+            _require(str(restore_launch(expected['store'], expected['stage']).root) == expected['candidate'],
+                     'persisted workspace differs before start')
+
         _require(self._runtime(expected['image']) == expected['daemon'], 'daemon identity changed')
         if not self.fixture_only:
             _require(_bounded_candidate_filesystem(Path(expected['input_candidate']), expected['limits'].candidate_bytes)
@@ -776,3 +825,139 @@ class ContainerSandbox:
                      'another stage instance may remain live')
         self._prepared.pop(identity.container_id, None)
         return TerminatedStageIdentity(identity, self.fixture_only, _seal=_SEAL)
+
+
+    def reconcile_launch(self, store, stage) -> TerminatedStageIdentity:
+        """Fresh controller uses only durable reservation + trusted exact observations."""
+        from .store import RuntimeStore
+        _require(type(store) is RuntimeStore, 'trusted durable runtime store required')
+        record = store.launch_record(stage)
+        _require(stage['host_boot_identity'] == self.boot_identity, 'launch boot mismatch')
+        info = self._json(['info', '--format', '{{json .}}'])
+        _require(info.get('ID') == record['daemon'] and info.get('OSType') == 'linux'
+                 and any('rootless' in item for item in info.get('SecurityOptions', [])), 'recovery daemon identity changed')
+        name = record['container_name']
+        ids = self.docker(['ps', '--all', '--no-trunc', '--filter', 'name=^/' + name + '$',
+                           '--format', '{{.ID}}']).splitlines()
+        _require(len(ids) <= 1 and all(_CONTAINER.fullmatch(item) for item in ids), 'exact container reservation ambiguous')
+        if ids:
+            container = ids[0]
+            _require(stage['container_id'] in (None, container), 'container reservation reused')
+            original = record['input']
+            identity = StageIdentity(container, self.boot_identity, stage['owner_nonce'], stage['stage_id'],
+                    stage['lease_epoch'], stage['stage_nonce'], original['authority_digest'], record['role'], stage['task_id'])
+            instance = self._inspect(identity)
+            mounts = [m for m in instance.get('Mounts', []) if m.get('Destination') == '/candidate']
+            _require(len(mounts) == 1 and mounts[0].get('Source') == record['path'], 'forged worker workspace path')
+            proof = self.reconcile_stage(identity)
+            # Bind a Docker create that survived a controller death before ID persistence.
+            if stage['container_id'] is None:
+                store.bind_container(stage, container)
+            return TerminatedStageIdentity(proof.identity, self.fixture_only, workspace_path=record['path'], _seal=_SEAL)
+        # Removal does not erase the workspace pointer. Empty exact ID and stage
+        # inventories from the same verified daemon prove absence, never a PID.
+        if stage['container_id'] is not None:
+            _require(not self.docker(['ps', '--all', '--no-trunc', '--filter', 'id=' + stage['container_id'],
+                                     '--format', '{{.ID}}']).splitlines(), 'recorded container renamed or ambiguous')
+        _require(not self.docker(['ps', '--all', '--no-trunc', '--filter', 'label=or.v2.stage=' + stage['stage_id'],
+                                 '--format', '{{.ID}}']).splitlines(), 'other stage instance prevents absence proof')
+        identity = StageIdentity(stage['container_id'] or '0' * 64, self.boot_identity, stage['owner_nonce'],
+                stage['stage_id'], stage['lease_epoch'], stage['stage_nonce'], record['input']['authority_digest'],
+                record['role'], stage['task_id'])
+        return TerminatedStageIdentity(identity, self.fixture_only, workspace_path=record['path'], _seal=_SEAL)
+
+    def remove_launch_container(self, store, stage):
+        record = store.launch_record(stage)
+        ids = self.docker(['ps', '--all', '--no-trunc', '--filter', 'name=^/' + record['container_name'] + '$',
+                           '--format', '{{.ID}}']).splitlines()
+        if ids:
+            _require(ids == [stage['container_id']], 'cleanup container identity differs')
+            self.docker(['rm', stage['container_id']])  # no force: a live container refuses
+
+
+    def verify_no_launch_users(self, store, stage):
+        """Mount inspection verifies a known locator; it never discovers one."""
+        record = store.launch_record(stage)
+        ids = self.docker(['ps', '--all', '--no-trunc', '--format', '{{.ID}}']).splitlines()
+        _require(len(ids) <= 4096 and all(_CONTAINER.fullmatch(item) for item in ids), 'container inventory uncertain')
+        for container_id in ids:
+            observations = self._json(['inspect', container_id])
+            _require(len(observations) == 1 and observations[0].get('Id') == container_id, 'container observation uncertain')
+            for mount in observations[0].get('Mounts', []):
+                source = mount.get('Source', '')
+                _require(isinstance(source,str), 'malformed mount source')
+                exact_or_child = source == record['path'] or source.startswith(record['path'].rstrip('/') + '/')
+                ancestor = bool(source) and Path(record['path']).is_relative_to(Path(source))
+                state = observations[0].get('State', {})
+                live = (state.get('Running') is not False or state.get('Paused') or
+                        state.get('Restarting') or state.get('Pid') != 0)
+                _require(not exact_or_child and not (ancestor and live),
+                         'another container retains workspace mount')
+
+
+    def erase_retired_launch(self, store, stage, fault=None):
+        """A mapped-UID cleanup process can unlink worker-owned directories.
+
+        Its exact name is derived from the already fsynced CLEANING receipt.
+        It has only the retired view; useful work lives outside its namespace.
+        A restart reconciles that name before creating another cleanup process.
+        """
+        from .workspace import verify_preserved, _parent
+        hit = fault or (lambda point: None)
+        record = store.launch_record(stage)
+        _require(record['phase'] == 'CLEANING' and store.inspect()['tasks'][stage['task_id']]['stage'] is None,
+                 'cleanup helper requires durable handoff and settled lease')
+        verify_preserved(store, record)
+        _require(self._runtime(record['image']) == record['daemon'], 'cleanup daemon/image changed')
+        path = _parent(record)
+        status = path.stat()
+        _require((status.st_dev, status.st_ino) == (record['device'], record['inode']), 'retired workspace reused')
+        name = record['container_name'] + '-cleanup'
+        cleanup_stage = 'cleanup-' + Path(record['path']).parent.name
+        def identity(container):
+            return StageIdentity(container,self.boot_identity,stage['owner_nonce'],cleanup_stage,
+                    stage['lease_epoch'],stage['stage_nonce'],record['input']['authority_digest'],record['role'],stage['task_id'])
+        labels = identity('0'*64).labels()
+        command = ('/usr/bin/timeout','--signal=KILL','--kill-after=1','180','/bin/sh','-ec',
+                   'find /retired -mindepth 1 -maxdepth 1 -exec /bin/rm -rf -- {} +')
+        expected = dict(image=record['image'],mounts=[(str(path),'/retired',True)],
+                        limits=Limits(1,268435456,64,48<<30,1<<20,1<<20,180),command=command,
+                        workdir='/retired',environment=[],created_only=False)
+        ids = self.docker(['ps', '--all', '--no-trunc', '--filter', 'name=^/' + name + '$', '--format', '{{.ID}}']).splitlines()
+        _require(len(ids) <= 1 and all(_CONTAINER.fullmatch(item) for item in ids), 'cleanup identity uncertain')
+        if ids:
+            self.verify_effective(identity(ids[0]),expected)
+            item = self._inspect(identity(ids[0]))
+            if item.get('State', {}).get('Running') or item.get('State', {}).get('Paused'):
+                self.docker(['kill', ids[0]])
+            item = self._json(['inspect', ids[0]])[0]
+            _require(item.get('State', {}).get('Pid') == 0 and item['State'].get('Running') is False
+                     and not item['State'].get('Restarting') and not item['State'].get('Paused'), 'cleanup process death unproved')
+            self.docker(['rm', ids[0]])
+        self.verify_no_launch_users(store,stage)
+        args = ['create', '--name=' + name, '--pull=never', '--read-only', '--user=10001:10001',
+                '--cap-drop=ALL', '--security-opt=no-new-privileges:true', '--network=none', '--ipc=none',
+                '--pids-limit=64', '--cpus=1', '--cgroupns=private', '--workdir=/retired',
+                '--tmpfs=/scratch:rw,nosuid,nodev,noexec,size=1048576,mode=1777',
+                '--ulimit=nofile=256:256', '--ulimit=fsize=1048576:1048576', '--memory=268435456', '--memory-swap=268435456',
+                '--log-driver=none', '--restart=no', '--mount=type=bind,src=' + str(path) + ',dst=/retired']
+        for key, value in labels.items():
+            args.extend(['--label', key + '=' + value])
+        args.extend(['--entrypoint=' + command[0],record['image'],*command[1:]])
+        container = self.docker(args).strip()
+        _require(_CONTAINER.fullmatch(container) is not None, 'invalid cleanup container')
+        hit('after_cleanup_create')
+        expected['created_only']=True
+        self.verify_effective(identity(container),expected)
+        self.docker(['start', container])
+        hit('after_cleanup_start')
+        deadline = time.monotonic() + 181
+        while True:
+            item = self._json(['inspect', container])[0]
+            if item.get('State', {}).get('Running') is False and item['State'].get('Pid') == 0:
+                break
+            _require(time.monotonic() < deadline, 'cleanup deadline exceeded; receipt retained for reconciliation')
+            time.sleep(0.1)
+        _require(item['State'].get('ExitCode') == 0, 'mapped cleanup failed; useful handoff retained')
+        self.docker(['rm', container])
+        hit('after_cleanup_remove')
