@@ -27,7 +27,7 @@
       "enrolled_models": []
     },
     "IMPLEMENTATION": {
-      "reasoning_requested": "HIGH",
+      "reasoning_requested": "MEDIUM",
       "authority": "immutable_bounded_task_only",
       "enrolled_models": []
     },
@@ -48,26 +48,60 @@
     }
   },
   "enrollment_fields": [
-    "provider_id", "model_id", "family", "allowed_roles", "adapter_certification_digest",
-    "reasoning_capabilities", "availability_observation", "pricing_observation",
-    "task_class_qualification", "budget", "operator_adoption_identity"
+    "provider_id",
+    "model_id",
+    "family",
+    "allowed_roles",
+    "adapter_certification_digest",
+    "reasoning_capabilities",
+    "availability_observation",
+    "pricing_observation",
+    "task_class_qualification",
+    "budget",
+    "operator_adoption_identity",
+    "qualification_evidence"
   ],
   "selection": {
     "hard_requirements": [
-      "role_qualified", "certified_transport", "provider_available",
-      "task_budget", "required_reasoning", "review_family_independence"
+      "role_qualified",
+      "certified_transport",
+      "provider_available",
+      "task_budget",
+      "required_reasoning",
+      "review_family_independence"
     ],
     "ranking": "approved_conservative_reliability_and_expected_total_acceptance_cost",
     "automatic_policy_learning": false,
     "missing_qualified_reviewer": "REVIEW_PENDING",
     "missing_qualified_worker": "AVAILABILITY_BLOCKED",
-    "missing_architecture_quota": "ESCALATION_DEFERRED_QUOTA"
+    "missing_architecture_quota": "ESCALATION_DEFERRED_QUOTA",
+    "reasoning_effort": {
+      "policy": "lowest_qualified_supported_effort_at_required_task_class_floor",
+      "ordinary_implementation_floor": "MEDIUM",
+      "security_authority_review_floor": "HIGH",
+      "free_nonscarce_quota": "highest_qualified_supported_effort",
+      "paid_or_scarce_quota": "lowest_qualified_supported_effort",
+      "unsupported_effort": "unavailable",
+      "default_proves_higher_floor": false
+    }
   },
   "telemetry_fields": [
-    "task_class", "model_id", "provider_id", "family", "adapter_version",
-    "reasoning_requested", "reasoning_sent", "reasoning_confirmed",
-    "candidate_outcome", "reviewer_defects", "repair_count", "wall_time",
-    "tool_loops", "acceptance_outcome", "tokens_if_available", "cost_if_available"
+    "task_class",
+    "model_id",
+    "provider_id",
+    "family",
+    "adapter_version",
+    "reasoning_requested",
+    "reasoning_sent",
+    "reasoning_confirmed",
+    "candidate_outcome",
+    "reviewer_defects",
+    "repair_count",
+    "wall_time",
+    "tool_loops",
+    "acceptance_outcome",
+    "tokens_if_available",
+    "cost_if_available"
   ],
   "unknown_cost_or_tokens": null,
   "note": "No model ID is certified by this design commit. Enroll verified deployment facts during separate adoption; absence blocks execution and never lowers quality."
