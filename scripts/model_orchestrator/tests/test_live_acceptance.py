@@ -522,7 +522,8 @@ class LiveM5:
         mask is read-only and post-hoc guards see every committed change.
         """
         validated = b._validated_role_overlays(overlays, role, candidate)
-        masks = [(s, d) for s, d in validated if d != '/candidate/.opencode']
+        masks = [(s, d) for s, d in validated
+                 if d not in ('/candidate/.opencode', '/worker-home')]
         mask = self.root / 'config-mask'
         opencode_dir = mask / '.opencode'
         opencode_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
