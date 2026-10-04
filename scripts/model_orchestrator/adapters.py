@@ -669,8 +669,8 @@ def launch_model_stage(*, box: Any, candidate: Any, view: Path, role: str, conta
             '--workdir=' + workdir]
     if name is not None:
         args.append('--name=' + name)
-    for source, destination in overlay_mounts:
-        args.append('--mount=type=bind,src=' + str(source) + ',dst=' + destination + ',readonly')
+    for source, destination, writable in mounts[1:]:
+        args.append('--mount=type=bind,src=' + str(source) + ',dst=' + destination + ('' if writable else ',readonly'))
     for key, value in labels.items():
         args.extend(['--label', key + '=' + value])
     for variable in expected['environment']:
