@@ -153,6 +153,32 @@ discriminating test, and an explanation of why the patch fixes the cause.
 Retries and timeouts alone are not a root-cause repair. Record measurements
 for realtime performance or resource claims.
 
+### Execution discipline
+
+Difficulty, length, complexity, inconvenience, computational expense within
+authorized limits, or estimates of hours/days/weeks do not justify reducing,
+deferring, abandoning, or moving an authorized task to future user sessions.
+Attempt the complete authorized scope now and continue until achieved or a
+concrete legitimate blocker is observed. Execution decisions are based on
+observed blockers and evidence, not speculative human-duration estimates.
+
+Decompose only for dependencies, atomic/reviewable commits, crash recovery,
+isolation, independent verification, genuine parallelism, or bounded destructive
+operations—not intimidation, an easier foundation, or a preference to ask the
+user to continue later.
+
+Existing checkpoint boundaries and explicit token/cost/resource/security limits
+still apply. Fail closed for missing authority; genuinely unavailable
+credentials, resources, hardware, tools, quota or platforms; destructive work
+beyond authorization; proven frozen-architecture contradictions; security,
+legal or safety boundaries; or required evidence impossible in the authorized
+environment. Difficulty is never a blocker or permission to invent work limits.
+
+For every new persistent/mutable object or state boundary, verify its
+interaction with existing invariants, including ownership, durable identity,
+lifecycle, crash behavior, recovery, isolation, cleanup conditions and authority
+semantics. Local acceptance alone is insufficient.
+
 ## Model orchestrator V2 (proposed, disabled)
 
 ADR 0009 and `docs/execution/automation/` freeze a candidate control-plane
