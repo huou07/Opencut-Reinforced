@@ -472,7 +472,32 @@ class LiveM5:
         if not cred.is_file():
             raise unittest.SkipTest('live credential staging missing')
         finger = credential_fingerprint(cred.parent.parent)
-        return [(str(cred.parent), '/worker-home/.local/share/opencode')], finger
+        return (str(cred), '/worker-home/.local/share/opencode/auth.json'), finger
+
+    def home_mounts(self, overlays, home_base):
+        """Writable scratch home with read-only policy and credential shadows.
+
+        Live discovery: the model binary requires a writable home for its own
+        runtime state (project index, sessions), so the M1 fully-read-only
+        home cannot host a real execution. The writable base holds no policy:
+        every frozen policy file and the credential file are shadow-mounted
+        read-only on top, which the effective-profile check verifies exactly.
+        """
+        home_base = Path(home_base)
+        home_base.mkdir(mode=0o755, exist_ok=True)
+        os.chmod(home_base, 0o755)
+        config_dir = home_base / '.local' / 'share' / 'opencode'
+        config_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        for path in (home_base, home_base / '.local', home_base / '.local' / 'share', config_dir):
+            os.chmod(path, 0o755)
+        home = Path(overlays['home'])
+        mounts = [(str(home_base), '/worker-home', True),
+                  (str(home / 'opencode.json'), '/worker-home/opencode.json', False),
+                  (str(home / '.config' / 'opencode' / 'opencode.json'),
+                   '/worker-home/.config/opencode/opencode.json', False)]
+        credential, _ = self.credential_mount()
+        mounts.append((credential[0], credential[1], False))
+        return mounts
 
     def box(self):
         return b.ContainerSandbox(self.docker, boot_identity=b.host_boot_identity(), host_platform='linux')
@@ -533,7 +558,9 @@ class LiveWorkerTests(unittest.TestCase):
                                        destination=path)
             w.bind_launch(runtime, stage)
             overlays = b.write_role_overlays(path.parent / 'overlays', 'IMPLEMENTATION')
-            mounts = b._validated_role_overlays(overlays, 'IMPLEMENTATION', candidate.root)
+            validated = b._validated_role_overlays(overlays, 'IMPLEMENTATION', candidate.root)
+            mounts = [(s, d) for s, d in validated if d.startswith('/candidate/')]
+            mounts.extend(live.home_mounts(overlays, path.parent / 'home'))
             cred_mounts, finger = live.credential_mount()
             self.assertEqual(set(finger), {'provider_id', 'key_sha256', 'key_length'})
             provisional = b.StageIdentity('0' * 64, box.boot_identity, stage['owner_nonce'], stage['stage_id'],
@@ -639,7 +666,9 @@ class LiveWorkerTests(unittest.TestCase):
                                        'review-' + guard['head'][:12], _seal=b._SEAL)
         view = a.build_worker_view(review_candidate, base, task['task_id'], 'review', 'INVESTIGATION_REVIEW')
         overlays = b.write_role_overlays(base / 'overlays', 'INVESTIGATION_REVIEW')
-        mounts = b._validated_role_overlays(overlays, 'INVESTIGATION_REVIEW', base / 'input')
+        validated = b._validated_role_overlays(overlays, 'INVESTIGATION_REVIEW', base / 'input')
+        mounts = [(s, d) for s, d in validated if d.startswith('/candidate/')]
+        mounts.extend(live.home_mounts(overlays, base / 'home'))
         nonce = 'review-' + guard['head'][:12]
         provisional = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'review', 1, nonce,
                                       task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id'])
