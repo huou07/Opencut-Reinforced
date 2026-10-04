@@ -61,6 +61,18 @@ def _require(condition: bool, message: str, code: str = ADAPTER_UNAVAILABLE) -> 
         raise AdapterError(message, code)
 
 
+def _probe_env() -> dict[str, str]:
+    """Minimal probe environment; passes the controller HOME through when present.
+
+    Some hosts restrict the default home directory. Probes never invent a
+    home, they only inherit the controller's own.
+    """
+    env = {'PATH': '/usr/bin:/bin', 'LANG': 'C'}
+    if isinstance(os.environ.get('HOME'), str) and os.environ['HOME']:
+        env['HOME'] = os.environ['HOME']
+    return env
+
+
 def _scrubbed_env(explicit: Mapping[str, str] | None) -> dict[str, str]:
     if explicit is None:
         return {'PATH': '/usr/bin:/bin', 'LANG': 'C', 'LC_ALL': 'C'}
@@ -90,7 +102,7 @@ class OpenCodeBinary:
         digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
         _require(digest == sha256, 'OpenCode executable pin mismatch')
         try:
-            observed = subprocess.run([str(path), '--version'], env={'PATH': '/usr/bin:/bin', 'LANG': 'C'},
+            observed = subprocess.run([str(path), '--version'], env=_probe_env(),
                                       capture_output=True, timeout=30, check=True).stdout.decode('utf-8').strip()
         except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
             raise AdapterError('OpenCode version probe failed: ' + str(exc), ADAPTER_UNAVAILABLE) from exc
@@ -120,7 +132,7 @@ class CodexBinary:
         digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
         _require(digest == sha256, 'Codex executable pin mismatch')
         try:
-            observed = subprocess.run([str(path), '--version'], env={'PATH': '/usr/bin:/bin', 'LANG': 'C'},
+            observed = subprocess.run([str(path), '--version'], env=_probe_env(),
                                       capture_output=True, timeout=30, check=True).stdout.decode('utf-8').strip()
         except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
             raise AdapterError('Codex version probe failed: ' + str(exc), ADAPTER_UNAVAILABLE) from exc
@@ -501,7 +513,7 @@ def discover_models(binary: OpenCodeBinary) -> list[str]:
     """Raw provider listing for operator visibility only; never enrollment."""
     _require(type(binary) is OpenCodeBinary, 'pinned OpenCode binary required')
     try:
-        output = subprocess.run([str(binary.path), 'models'], env={'PATH': '/usr/bin:/bin', 'LANG': 'C'},
+        output = subprocess.run([str(binary.path), 'models'], env=_probe_env(),
                                 capture_output=True, timeout=60, check=True).stdout.decode('utf-8')
     except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
         raise AdapterError('model discovery failed: ' + str(exc), TRANSPORT_ERROR) from exc
