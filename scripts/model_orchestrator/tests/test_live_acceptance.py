@@ -283,6 +283,8 @@ class IndependentReviewTests(unittest.TestCase):
         output = Path(cfg['OR_V2_OUTPUT']).resolve()
         for name in o.SOURCE_REVIEW_EVIDENCE:
             self.assertTrue((output / name).exists(), 'CP48 prerequisite missing: ' + name)
+        source_family = os.environ.get('OR_V2_IMPLEMENTATION_FAMILY')
+        self.assertTrue(source_family and source_family != 'unknown', 'CP48 requires externally supplied source implementation family')
         evidence = c.load_json_strict((output / 'live-evidence.json').read_text())
         self.assertEqual(evidence['review_verdict'], 'PASS')
         self.assertTrue(evidence['verification_passed'])
@@ -304,7 +306,8 @@ class IndependentReviewTests(unittest.TestCase):
         enrollments = [a.load_enrollment(record, authority=authority, task=task,
                          expected_digest=c.canonical_digest(record)) for record in records]
         enrollment = o.select_reviewer(task, enrollments, availability={},
-                                       implementation_family=evidence['worker']['family'], task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
+                                       implementation_family=source_family, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
+        self.assertNotEqual(enrollment['family'], evidence['worker']['family'])
         sessions = [evidence['reviewer']['session_id']]
         transcript = a.parse_event_stream((output / 'worker-transcript.bin').read_bytes(),
                                           limits=a.StreamLimits(8 << 20, 4096, 3600),
@@ -316,7 +319,7 @@ class IndependentReviewTests(unittest.TestCase):
                                       release_sha=release_sha, evidence_root=output, enrollment=enrollment,
                                       binary=live.binary, box=live.box(), image=live.image,
                                       container_binary='/usr/local/bin/opencode',
-                                      implementation_family=evidence['worker']['family'], storage_root=live.volume,
+                                      implementation_family=source_family, storage_root=live.volume,
                                       observation_dir=observations,
                                       limits=b.Limits(1, 1 << 30, 64, 52 << 30, 1 << 30, 8 << 20, 1800),
                                       credential_dir=Path(cfg['OR_V2_CRED_DIR']) if enrollment['provider_id'] == 'opencode-go' else None,

@@ -771,7 +771,7 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                 after = w.manifest(source) if source.is_dir() else c.canonical_digest(source.read_bytes().hex())
                 _refuse(after == before, 'controller evidence changed during review')
             _refuse(hosted.expectation(Path(source_repo), release_sha) == expected, 'source changed during review')
-            metadata = dict(identity, session_id=stream.session_id, container_id=result.container_id,
+            metadata = dict(identity, implementation_family=implementation_family, session_id=stream.session_id, container_id=result.container_id,
                             effective_digest=result.effective_digest, model_id=enrollment['model_id'], family=enrollment['family'],
                             argv_digest=c.canonical_digest(adapter.build_argv([prompt])), readonly_unchanged=True,
                             authority_semantics='SUPPORTING_FACTS_ONLY_NO_ADOPTION')
