@@ -525,7 +525,7 @@ class LiveM5:
         masks = [(s, d) for s, d in validated if d != '/candidate/.opencode']
         mask = self.root / 'config-mask'
         opencode_dir = mask / '.opencode'
-        opencode_dir.mkdir(mode=0o555, parents=True, exist_ok=True)
+        opencode_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
         gitignore = opencode_dir / '.gitignore'
         if not gitignore.exists():
             gitignore.write_bytes(b'')
