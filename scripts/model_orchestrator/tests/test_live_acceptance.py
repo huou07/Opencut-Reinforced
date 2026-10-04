@@ -530,7 +530,7 @@ class LiveWorkerTests(unittest.TestCase):
             overlays = b.write_role_overlays(path.parent / 'overlays', 'IMPLEMENTATION')
             mounts = b._validated_role_overlays(overlays, 'IMPLEMENTATION', candidate.root)
             cred_mounts, finger = live.credential_mount()
-            self.assertNotIn('key', json.dumps(finger))
+            self.assertEqual(set(finger), {'provider_id', 'key_sha256', 'key_length'})
             provisional = b.StageIdentity('0' * 64, box.boot_identity, stage['owner_nonce'], stage['stage_id'],
                                           stage['lease_epoch'], stage['stage_nonce'],
                                           task['authority_digest'], 'IMPLEMENTATION', stage['task_id'])
