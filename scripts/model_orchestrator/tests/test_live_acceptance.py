@@ -312,7 +312,8 @@ class IndependentReviewTests(unittest.TestCase):
             task['resource_limits'].update(output_bytes=8 << 20, wall_seconds=1800)
             records = live.enrollments(task, live.authority, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
             task['role_enrollment_ids'] = [c.canonical_digest(record) for record in records]
-            authority = live.commit_controller(task)
+            authority = live.commit_controller(task, source_review_binding=dict(
+                release_sha=release_sha, implementation_family=source_family))
             (live.root / 'review-enrollments.json').write_text(c.canonical_json(records) + '\n')
         runtime = s.RuntimeStore(live.root / 'runtime', authority)
         if not resuming:
@@ -437,7 +438,7 @@ class LiveM5:
                 'adapter_certification_digest': self.binary.certification_digest(),
                 'budget': {'cost_microusd': 100000}, 'variants': {}}
 
-    def commit_controller(self, task):
+    def commit_controller(self, task, *, source_review_binding=None):
         """Pin the live task/catalog/harness in a fresh controller clone."""
         controller = self.root / 'controller'
         subprocess.run(['git', 'clone', '-q', '--no-hardlinks', str(self.fixture.controller), str(controller)],
@@ -476,6 +477,9 @@ class LiveM5:
                        performance={})
         (controller / 'controller').mkdir(exist_ok=True)
         (controller / 'controller' / 'task-m5.json').write_text(json.dumps(task) + '\n')
+        if source_review_binding is not None:
+            binding = dict(source_review_binding, task_contract_digest=c.canonical_digest(task))
+            (controller / 'controller/source-review-binding.json').write_text(c.canonical_json(binding) + '\n')
         (controller / 'controller' / 'catalog-m5.json').write_text(json.dumps(catalog) + '\n')
         (controller / 'controller' / 'harness-m5.sh').write_text(harness)
         env = dict(os.environ, GIT_AUTHOR_NAME='M5 Live', GIT_AUTHOR_EMAIL='m5@example.invalid',

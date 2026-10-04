@@ -9,6 +9,7 @@ escalate, recover, and the read-only Desktop snapshot.
 from __future__ import annotations
 
 import copy
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -400,7 +401,7 @@ def build_review_prompt(*, task: Mapping[str, Any], candidate_sha: str, diff_tex
     bound = 262144
     truncated = len(diff_text) > bound
     parts = [
-        'Independent readonly review. Use only read/glob/grep. Shell, tests, edits and nested agents are unavailable. Assess checks from the supplied controller facts; request missing evidence with INCONCLUSIVE instead of executing commands.',
+        'Independent readonly review. Use only read/glob/grep. Shell, tests, edits and nested agents are unavailable. The VERIFICATION facts include exact receipts and frozen harness source; read those supplied sources without re-executing them. Assess checks from the supplied controller facts; request missing evidence with INCONCLUSIVE instead of executing commands.',
         'TASK: ' + c.canonical_json(task),
         'CANDIDATE: ' + candidate_sha + ' BASE: ' + task['base_sha'],
         'GUARD_FLAGS: ' + c.canonical_json({v.quality_flag_id(flag): flag for flag in guard_flags}),
@@ -516,9 +517,18 @@ def run_reviewer(*, authority: c.ValidatedReleaseAuthority, floor: g.Floor, guar
     diff = g.git(floor, candidate_root, 'diff', '--no-color', task['base_sha'], guard['head'])
     _refuse(len(diff) <= 1 << 20, 'candidate diff bound exceeded')
     receipts = readiness['receipts']
+    harnesses = {}
+    for receipt in receipts:
+        binding = floor.catalog['checks'][receipt['check_id']]
+        content = g.controller_blob(authority, binding['harness'])
+        _refuse(hashlib.sha256(content).hexdigest() == binding['harness_digest'], 'review harness pin differs')
+        harnesses[binding['harness']] = dict(sha256=binding['harness_digest'], source=content.decode('utf-8'))
+    verification_facts = dict(passed=readiness['verification_passed'],
+                              checks=[r['check_id'] for r in receipts], receipts=receipts, harnesses=harnesses)
+    _refuse(len(c.canonical_json(verification_facts).encode()) <= 1 << 20, 'review evidence prompt exceeds bound')
     prompt = build_review_prompt(task=task, candidate_sha=guard['head'], diff_text=diff.decode('utf-8', 'replace'),
                                  guard_flags=guard['flags'],
-                                 verification_summary={'passed': readiness['verification_passed'], 'checks': [r['check_id'] for r in receipts]},
+                                 verification_summary=verification_facts,
                                  budgets=task['budget'])
     _refuse(enrollment.get('family') != implementation_family, 'same reviewer family leaves REVIEW_PENDING', 'REVIEW_PENDING')
     review_claim = None
@@ -731,6 +741,19 @@ def _validate_source_review_tools(events: Sequence[Mapping[str, Any]]) -> None:
                      'source reviewer attempted execution/nested tool')
 
 
+def validate_source_review_binding(authority, task, release_sha, implementation_family):
+    """Review target/family are approved controller blobs, never caller/model guesses."""
+    c.validate_phase_admission(authority, task, capability='M3')
+    binding = c.load_json_strict(c._git(Path(authority.controller_root), 'show',
+        authority.source_sha + ':controller/source-review-binding.json').decode())
+    _refuse(type(binding) is dict and set(binding) == {'release_sha', 'task_contract_digest', 'implementation_family'}
+             and binding['release_sha'] == release_sha and re.fullmatch('[0-9a-f]{40}', release_sha) is not None
+             and binding['task_contract_digest'] == c.canonical_digest(task)
+             and binding['implementation_family'] == implementation_family
+             and implementation_family not in ('', 'unknown'), 'source review target/task/family differs from external pin')
+    return binding
+
+
 def run_source_review(*, store: s.RuntimeStore, authority: c.ValidatedReleaseAuthority, task: Mapping[str, Any],
                       source_repo: Path, release_sha: str, evidence_root: Path,
                       enrollment: a.ValidatedEnrollment, binary: a.OpenCodeBinary,
@@ -745,6 +768,7 @@ def run_source_review(*, store: s.RuntimeStore, authority: c.ValidatedReleaseAut
              and enrollment.task_contract_digest == c.canonical_digest(task)
              and enrollment.authority_digest == task['authority_digest'], 'source reviewer enrollment task binding differs')
     _refuse(enrollment['family'] != implementation_family, 'source reviewer is not independent', 'REVIEW_PENDING')
+    validate_source_review_binding(authority, task, release_sha, implementation_family)
     resources = task['resource_limits']
     _refuse(limits.cpu <= resources['cpu'] and limits.memory_bytes <= resources['memory_bytes']
              and limits.pids <= resources['pids'] and limits.candidate_bytes <= resources['disk_bytes']

@@ -2,6 +2,8 @@
 """CP48 trust/input negative tests; no model launches and no certification claims."""
 from __future__ import annotations
 import copy
+from dataclasses import replace
+import json
 import subprocess
 import sys
 import tempfile
@@ -97,6 +99,31 @@ class SourceToolsTests(unittest.TestCase):
 
 
 class SourceReviewBindingTests(unittest.TestCase):
+    def test_exact_release_task_and_source_implementation_family_are_externally_pinned(self):
+        fixture = shared_provenance()
+        authority = fixture.authorities['M5']
+        payload = c._release_authority(authority)
+        task = valid_task()
+        task.update(task_id=payload['build']['task_id'], checkpoint_id='M5',
+                    base_sha=payload['build']['base_sha'], candidate_branch=payload['build']['candidate_branch'],
+                    authority_digest=payload['git']['authority_digest'])
+        with tempfile.TemporaryDirectory() as directory:
+            controller = Path(directory).resolve() / 'controller'
+            subprocess.run(['git', 'clone', '-q', str(fixture.controller), str(controller)], check=True)
+            fixture.git(controller, 'remote', 'set-url', 'origin', 'https://github.com/' + c.REPOSITORY_IDENTITY + '.git')
+            binding = dict(release_sha='a' * 40, task_contract_digest=c.canonical_digest(task), implementation_family='gpt')
+            (controller / 'controller/source-review-binding.json').write_text(json.dumps(binding))
+            sha = fixture.commit(controller, 'fixture: approved exact source audit inputs')
+            approved = c.load_release_authority(fixture.candidate, controller,
+                        bootstrap=replace(fixture.bootstrap('M5'), source_sha=sha))
+            self.assertEqual(o.validate_source_review_binding(approved, task, 'a' * 40, 'gpt'), binding)
+            for target, family, contract in [('b' * 40, 'gpt', task), ('a' * 40, 'muse', task),
+                                             ('a' * 40, 'gpt', dict(task, goal='changed task'))]:
+                with self.subTest(target=target, family=family), self.assertRaises(c.ContractError):
+                    o.validate_source_review_binding(approved, contract, target, family)
+            with self.assertRaises(c.ContractError):
+                o.validate_source_review_binding(payload, task, 'a' * 40, 'gpt')
+
     def test_other_task_enrollment_cannot_enter_source_review(self):
         fixture = shared_provenance()
         authority = fixture.authorities['M5']
