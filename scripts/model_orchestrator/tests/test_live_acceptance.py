@@ -377,7 +377,7 @@ class LiveM5:
                     goal='Append the exact live marker to the disposable candidate, nothing else.',
                     out_of_scope=['No product work', 'No other files', 'No network beyond inference'],
                     allowed_paths=['scripts/model_orchestrator/contracts.py'],
-                    required_check_ids=['m5-live'], required_tests=['m5-live'], case_inventory=['m5-baseline'],
+                    required_check_ids=['m5-live'], required_tests=['m5-live'], case_inventory=['m5-probe'],
                     harness_digest='0' * 64, evidence_classes=['UNIT'], acceptance_cases=['m5-accept'],
                     resource_limits=check_resources(),
                     budget=dict(tokens=200000, cost_microusd=100000, wall_seconds=1800, tool_calls=200,
@@ -434,7 +434,7 @@ class LiveM5:
                                                docker_digest=hashlib.sha256(
                                                    Path(self.cfg['OR_V2_DOCKER']).read_bytes()).hexdigest(),
                                                endpoint=self.cfg['OR_V2_ENDPOINT'])},
-                       cases={'m5-baseline': dict(path='scripts/execution_plan.py', symbol='validate_plan')},
+                       cases={'m5-probe': dict(path='scripts/execution_plan.py', symbol='validate_plan')},
                        harnesses=[], executables=[], scratch_paths=['cache'],
                        acceptance={'UNIT': dict(requirement_digest=c.canonical_digest(task['acceptance_requirements'][0]),
                                                 harness='controller/harness-m5.sh', boundary='rootless',
