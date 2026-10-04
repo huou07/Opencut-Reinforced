@@ -429,8 +429,8 @@ class LiveM5:
                                                executable_digest=c.canonical_digest([self.image, '/bin/sh']),
                                                harness='controller/harness-m5.sh', harness_digest=harness_digest,
                                                image=self.image, docker=str(Path(self.cfg['OR_V2_DOCKER']).resolve()),
-                                               docker_digest=c.canonical_digest(
-                                                   Path(self.cfg['OR_V2_DOCKER']).read_bytes()),
+                                               docker_digest=hashlib.sha256(
+                                                   Path(self.cfg['OR_V2_DOCKER']).read_bytes()).hexdigest(),
                                                endpoint=self.cfg['OR_V2_ENDPOINT'])},
                        cases={'m5-baseline': dict(path='scripts/execution_plan.py', symbol='validate_plan')},
                        harnesses=[], executables=[], scratch_paths=['cache'],
