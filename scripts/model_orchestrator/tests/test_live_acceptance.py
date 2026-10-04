@@ -543,6 +543,7 @@ class LiveWorkerTests(unittest.TestCase):
                 overlay_mounts=mounts, labels=provisional.labels(), name=record['container_name'],
                 timeout_seconds=600)
             self.assertFalse(worker_result.timed_out)
+            stage = runtime.bind_container(stage, worker_result.container_id)
             proof = box.reconcile_launch(runtime, stage)
             preserved = w.preserve_launch(runtime, stage, proof)
             settled = runtime.settle(stage, proof)
