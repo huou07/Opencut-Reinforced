@@ -212,6 +212,89 @@ class ClaimAttemptExecutionTests(unittest.TestCase):
             self.assertEqual((code, payload['status']), (2, 'REFUSED'))
             self.assertEqual(runtime.inspect(), before)
 
+    def test_post_failure_cli_causal_approval_preserves_original_bootstrap_and_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            authority, task, runtime, contract_digest = self.context(directory)
+            parent = Path(directory).resolve()
+            for number in (1, 2, 3):
+                self.claim(runtime, task, contract_digest, str(number))
+                reset_ready_test_only(runtime, task['task_id'])
+            with self.assertRaises(o.OrchestratorError) as refusal:
+                self.claim(runtime, task, contract_digest, 'exhausted')
+            self.assertEqual(refusal.exception.code, 'REQUIRE_CAUSAL')
+            before_bootstrap = (runtime.root / 'bootstrap.json').read_bytes()
+            before_attempts = [c.canonical_digest(r) for r in o._store_objects(runtime) if r['kind'] == 'attempt']
+            controller = parent / 'diagnosis-controller'
+            subprocess.run(['git', 'clone', '-q', str(self.fixture.controller), str(controller)], check=True)
+            self.fixture.git(controller, 'remote', 'set-url', 'origin', 'https://github.com/' + c.REPOSITORY_IDENTITY + '.git')
+            episode = o.AttemptLedger.load(runtime).entries[0]['episode']
+            evidence = dict(attempt_digests=before_attempts, result='post-failure discriminating subprocess',
+                            exit_code=subprocess.run(['/bin/sh', '-c', 'exit 7']).returncode)
+            digest = c.canonical_digest(evidence)
+            diagnostics = controller / 'controller/diagnostics'
+            diagnostics.mkdir(parents=True)
+            (diagnostics / (digest + '.json')).write_text(json.dumps(evidence))
+            causal = dict(task_contract_digest=c.canonical_digest(task), episode=episode,
+                reviewer_family='independent', implementation_family='worker', reviewer_session='post-failure-session',
+                failure_evidence_digest=digest, falsifiable_cause='explicit failure exit',
+                discriminating_result='independent process exited 7', patch_explanation='causal admission only')
+            (controller / ('controller/causal-' + episode + '.json')).write_text(json.dumps(causal))
+            source = self.fixture.commit(controller, 'fixture: diagnosis after exhausted claims')
+            bootstrap = parent / 'bootstrap.json'
+            bootstrap.write_text(json.dumps(bootstrap_dict(self.fixture.bootstrap('M3'))))
+            diagnosis_bootstrap = parent / 'diagnosis-bootstrap.json'
+            diagnosis_bootstrap.write_text(json.dumps(bootstrap_dict(replace(self.fixture.bootstrap('M3'), source_sha=source))))
+            base = ['--bootstrap', str(bootstrap), '--candidate-root', str(self.fixture.candidate),
+                    '--controller-root', str(self.fixture.controller), '--runtime', str(runtime.root)]
+            before = runtime.inspect()
+            for bad in (dict(causal, task_contract_digest='0' * 64),
+                        dict(causal, reviewer_family='worker')):
+                (controller / ('controller/causal-' + episode + '.json')).write_text(json.dumps(bad))
+                bad_source = self.fixture.commit(controller, 'fixture: wrong causal binding')
+                diagnosis_bootstrap.write_text(json.dumps(bootstrap_dict(replace(self.fixture.bootstrap('M3'), source_sha=bad_source))))
+                code, _ = cli(*base, 'approve-causal', '--task-id', task['task_id'],
+                              '--diagnosis-controller', str(controller), '--diagnosis-bootstrap', str(diagnosis_bootstrap))
+                self.assertEqual(code, 2)
+                self.assertEqual(runtime.inspect(), before)
+            (controller / ('controller/causal-' + episode + '.json')).write_text(json.dumps(causal))
+            source = self.fixture.commit(controller, 'fixture: restored exact causal binding')
+            diagnosis_bootstrap.write_text(json.dumps(bootstrap_dict(replace(self.fixture.bootstrap('M3'), source_sha=source))))
+            runtime.set_paused(True)
+            code, _ = cli(*base, 'approve-causal', '--task-id', task['task_id'],
+                          '--diagnosis-controller', str(controller), '--diagnosis-bootstrap', str(diagnosis_bootstrap))
+            self.assertEqual(code, 2)
+            runtime.set_paused(False)
+            code, payload = cli(*base, 'approve-causal', '--task-id', task['task_id'],
+                          '--diagnosis-controller', str(controller), '--diagnosis-bootstrap', str(diagnosis_bootstrap))
+            self.assertEqual((code, payload['status']), (0, 'OK'))
+            self.assertEqual((runtime.root / 'bootstrap.json').read_bytes(), before_bootstrap)
+            restarted = s.RuntimeStore(runtime.root, authority)
+            self.claim(restarted, task, contract_digest, 'causal')
+            self.assertEqual(o.AttemptLedger.load(restarted).entries[-1]['kind'], 'causal')
+            reset_ready_test_only(restarted, task['task_id'])
+            with self.assertRaises(o.OrchestratorError) as exhausted:
+                self.claim(restarted, task, contract_digest, 'too-many')
+            self.assertEqual(exhausted.exception.code, 'ESCALATE')
+
+    def test_source_audit_claims_persist_without_fabricating_worker_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            authority, task, runtime, _ = self.context(directory)
+            original_task = runtime.inspect()['tasks'][task['task_id']]
+            claims = []
+            for number in (1, 2, 3):
+                restarted = s.RuntimeStore(runtime.root, authority)
+                with restarted.lock('task', task['task_id']):
+                    claims.append(o.claim_review(restarted, task['task_id'], source_audit=True))
+            self.assertEqual([r['kind'] for r in claims], ['initial', 'speculative', 'speculative'])
+            self.assertEqual(runtime.inspect()['tasks'][task['task_id']], original_task)
+            before = runtime.inspect()
+            with runtime.lock('task', task['task_id']), self.assertRaises(o.OrchestratorError):
+                o.claim_review(runtime, task['task_id'], source_audit=True)
+            self.assertEqual(runtime.inspect(), before)
+            runtime.set_paused(True)
+            with runtime.lock('task', task['task_id']), self.assertRaises(o.OrchestratorError):
+                o.claim_review(runtime, task['task_id'], source_audit=True)
+
     def test_only_independently_pinned_exact_causal_diagnosis_permits_causal_claim_after_two_corrections(self):
         fixture = shared_provenance()
         task = task_for(fixture.authorities['M3'])

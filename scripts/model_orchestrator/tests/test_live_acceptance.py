@@ -292,19 +292,32 @@ class IndependentReviewTests(unittest.TestCase):
         self.assertEqual(c.load_json_strict((output / 'cp46-receipt.json').read_text())['result'], 'PASS')
         self.assertEqual(c.load_json_strict((output / 'cp47-hosted-evidence.json').read_text())['head_sha'], release_sha)
         import uuid
-        review_cfg = dict(cfg, OR_V2_OUTPUT=str(output / ('cp48-authority-' + uuid.uuid4().hex[:12])))
-        live = LiveM5(review_cfg)
-        task = live.task()
-        task.update(goal='Independently audit exact released control-plane source and complete execution evidence; no writes.',
-                    out_of_scope=['No product adoption', 'No source/controller writes', 'No code execution', 'No nested models'],
-                    observable_outcome='A separate readonly source/evidence report bound to the exact release SHA',
-                    expected_result='A source/evidence trace with exact binding and no blocking defect; supplied CP44-47 receipts provide the deterministic prerequisites.',
-                    error_cases=['Missing evidence', 'Stale release SHA', 'Unresolved blocking defect', 'Non-independent source reviewer'],
-                    permission_expectation='Isolated readonly source and evidence; inference credentials only')
-        task['resource_limits'].update(output_bytes=8 << 20, wall_seconds=1800)
-        records = live.enrollments(task, live.authority, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
-        task['role_enrollment_ids'] = [c.canonical_digest(record) for record in records]
-        authority = live.commit_controller(task)
+        review_cfg = dict(cfg, OR_V2_OUTPUT=str(output / ('cp48-authority-' + release_sha)))
+        resuming = (Path(review_cfg['OR_V2_OUTPUT']) / 'controller-run/bootstrap.json').exists()
+        live = LiveM5(review_cfg, resume=resuming)
+        if resuming:
+            from model_orchestrator.__main__ import bootstrap_from_dict
+            bootstrap = bootstrap_from_dict(c.load_json_strict((live.root / 'bootstrap.json').read_text()))
+            authority = c.load_release_authority(live.root / 'candidate-authority', live.root / 'controller', bootstrap=bootstrap)
+            task = c.load_json_strict(c._git(Path(authority.controller_root), 'show', authority.source_sha + ':controller/task-m5.json').decode())
+            records = c.load_json_strict((live.root / 'review-enrollments.json').read_text())
+        else:
+            task = live.task()
+            task.update(goal='Independently audit exact released control-plane source and complete execution evidence; no writes.',
+                        out_of_scope=['No product adoption', 'No source/controller writes', 'No code execution', 'No nested models'],
+                        observable_outcome='A separate readonly source/evidence report bound to the exact release SHA',
+                        expected_result='A source/evidence trace with exact binding and no blocking defect; supplied CP44-47 receipts provide the deterministic prerequisites.',
+                        error_cases=['Missing evidence', 'Stale release SHA', 'Unresolved blocking defect', 'Non-independent source reviewer'],
+                        permission_expectation='Isolated readonly source and evidence; inference credentials only')
+            task['resource_limits'].update(output_bytes=8 << 20, wall_seconds=1800)
+            records = live.enrollments(task, live.authority, task_class='CONTROL_PLANE_CERTIFICATION_REVIEW')
+            task['role_enrollment_ids'] = [c.canonical_digest(record) for record in records]
+            authority = live.commit_controller(task)
+            (live.root / 'review-enrollments.json').write_text(c.canonical_json(records) + '\n')
+        runtime = s.RuntimeStore(live.root / 'runtime', authority)
+        if not resuming:
+            runtime.initialize()
+            runtime.register_task(task, copy.deepcopy(task))
         enrollments = [a.load_enrollment(record, authority=authority, task=task,
                          expected_digest=c.canonical_digest(record)) for record in records]
         enrollment = o.select_reviewer(task, enrollments, availability={},
@@ -317,7 +330,8 @@ class IndependentReviewTests(unittest.TestCase):
         sessions.append(transcript.session_id)
         import uuid
         observations = output / ('cp48-' + release_sha[:12] + '-' + uuid.uuid4().hex[:12])
-        outcome = o.run_source_review(authority=authority, task=task, source_repo=ROOT,
+        with runtime.lock('task', task['task_id']):
+            outcome = o.run_source_review(store=runtime, authority=authority, task=task, source_repo=ROOT,
                                       release_sha=release_sha, evidence_root=output, enrollment=enrollment,
                                       binary=live.binary, box=live.box(), image=live.image,
                                       container_binary='/usr/local/bin/opencode',
@@ -363,7 +377,7 @@ def check_resources():
 class LiveM5:
     """Live M5 fixture: real authority, real containers, real inference, disposable everything."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, *, resume=False):
         self.cfg = cfg
         self.nonce = 'live-%s' % os.getpid()
         self.fixture = shared_provenance()
@@ -376,7 +390,7 @@ class LiveM5:
             raise unittest.SkipTest('live volume is not a real directory: ' + str(self.volume))
         self.output.mkdir(parents=True, exist_ok=True)
         self.root = self.output / 'controller-run'
-        self.root.mkdir(mode=0o700)
+        self.root.mkdir(mode=0o700, exist_ok=resume)
         self.binary = a.OpenCodeBinary(Path(cfg['OR_V2_OPENCODE_BIN']), cfg['OR_V2_OPENCODE_SHA'],
                                        cfg['OR_V2_OPENCODE_VERSION'])
         self.docker = b.DockerCLI(Path(cfg['OR_V2_DOCKER']), cfg['OR_V2_DOCKER_SHA'],
@@ -483,6 +497,8 @@ class LiveM5:
             authorization_id=build['authorization_id'], task_id=build['task_id'], sequence=1,
             nonce=build['nonce'], sandbox_digest=build['sandbox_digest'],
             build=c.RecordPin('controller/build-M5.json', c.canonical_digest(build)))
+        from dataclasses import asdict
+        (self.root / 'bootstrap.json').write_text(c.canonical_json(asdict(bootstrap)) + '\n')
         return c.load_release_authority(candidate, controller, bootstrap=bootstrap)
 
     def box(self):

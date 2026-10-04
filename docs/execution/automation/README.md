@@ -722,6 +722,16 @@ according to frozen policy; no endless new two-attempt budget. Diagnostic tasks
 are read-only unless a separate explicitly scoped harness task is authorized;
 they cannot modify product behavior or lower the acceptance floor.
 
+A diagnosis produced after failures may be supplied with `approve-causal`
+(`--diagnosis-controller`, `--diagnosis-bootstrap`, exact `--task-id` and
+`--subsystem`). The separately sealed external authority must have the identical
+release/build payload; its committed packet and evidence must bind the original
+task, episode and published attempt digests. The runtime publishes the approved
+facts atomically without replacing its bootstrap, task or attempt history.
+Source certification reviews also reserve persistent `source_reviewer` attempts;
+a restart reopens the same exact-release authority/store rather than creating a
+new retry budget. These read-only claims create no worker settlement or promotion.
+
 At most one additional admitted causal repair per episode is allowed without
 a new architecture decision. If it fails, persist the full ledger and escalate;
 the architecture decision must explicitly authorize any further bounded repair.

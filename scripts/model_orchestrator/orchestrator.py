@@ -239,30 +239,99 @@ def admit_task(store: s.RuntimeStore, task: Mapping[str, Any], frozen_template: 
     return store.register_task(task, frozen_template)
 
 
+def approve_causal(store: s.RuntimeStore, task_id: str, *, diagnosis_authority: c.ValidatedReleaseAuthority,
+                   subsystem: str = 'worker') -> str:
+    """Publish a post-failure diagnosis from a separately approved immutable controller.
+
+    The original runtime bootstrap/task/build never changes. A raw candidate
+    packet cannot grant this approval; the caller supplies sealed external pins.
+    """
+    _refuse(type(store) is s.RuntimeStore and (0, task_id) in store._held,
+             'task lease required for causal approval', 'CONFLICT')
+    _refuse(subsystem in ('worker', 'reviewer', 'source_reviewer'), 'unknown attempt subsystem')
+    original = c._release_authority(store.authority)
+    approved = c._release_authority(diagnosis_authority)
+    _refuse(approved == original, 'causal approval cannot change build, release, scope or phase')
+    current = store.inspect()
+    task_state = current['tasks'].get(task_id)
+    _refuse(not current['paused'] and current['active_task'] is None and task_state is not None
+             and task_state['stage'] is None, 'causal approval requires unpaused idle task', 'CONFLICT')
+    records = _store_objects(store)
+    task = next(record['payload'] for record in records
+                if c.canonical_digest(record) == task_state['contract_digest'])
+    episode = AttemptLedger.episode_id(task['checkpoint_id'], subsystem,
+                                       c.canonical_json(sorted(task['required_check_ids'])))
+    _refuse(AttemptLedger.load(store).admit(episode) == 'REQUIRE_CAUSAL',
+             'causal approval requires two exhausted speculative corrections')
+    root, sha = Path(diagnosis_authority.controller_root), diagnosis_authority.source_sha
+    causal = c.load_json_strict(c._git(root, 'show', sha + ':controller/causal-' + episode + '.json').decode())
+    _validate_causal(causal, task, episode)
+    evidence = c.load_json_strict(c._git(root, 'show', sha + ':controller/diagnostics/' +
+                                        causal['failure_evidence_digest'] + '.json').decode())
+    attempts = [c.canonical_digest(record) for record in records
+                if record['kind'] == 'attempt' and record['payload']['episode'] == episode]
+    _refuse(c.canonical_digest(evidence) == causal['failure_evidence_digest']
+             and evidence.get('attempt_digests') == attempts,
+             'causal evidence must bind the exact published failed opportunities')
+    record = dict(schema_version=1, kind='diagnostic', payload=dict(
+        type='APPROVED_CAUSAL', task_id=task_id, task_contract_digest=c.canonical_digest(task),
+        episode=episode, original_source_sha=store.authority.source_sha,
+        approved_source_sha=sha, authority_digest=c.canonical_digest(approved),
+        causal=causal, evidence=evidence, attempt_digests=attempts))
+    _refuse(not any(r['kind'] == 'diagnostic' and r['payload'].get('type') == 'APPROVED_CAUSAL'
+                    and r['payload'].get('episode') == episode for r in records), 'causal approval already published')
+    def update(state):
+        _refuse(not state['paused'] and state['pause_generation'] == current['pause_generation']
+                 and state['tasks'].get(task_id) == task_state and state['active_task'] is None,
+                 'stale causal approval', 'CONFLICT')
+    store.transaction(current['sequence'], current['epoch'], update, objects=[record])
+    return c.canonical_digest(record)
+
+
+def _validate_causal(causal, task, episode):
+    _refuse(type(causal) is dict and causal.get('task_contract_digest') == c.canonical_digest(task)
+             and causal.get('episode') == episode
+             and causal.get('reviewer_family') not in (None, '', 'unknown', causal.get('implementation_family'))
+             and type(causal.get('reviewer_session')) is str and causal['reviewer_session'],
+             'causal diagnosis requires independent exact task/episode binding')
+
+
 def claim_attempt(store, task, lease_epoch, *, subsystem='worker'):
     """Atomic claim admission. Frozen gate identity cannot be reset by stage/model names."""
     _refuse(type(store) is s.RuntimeStore, 'trusted runtime store required')
-    _refuse(subsystem in ('worker', 'reviewer'), 'unknown attempt subsystem')
+    _refuse(subsystem in ('worker', 'reviewer', 'source_reviewer'), 'unknown attempt subsystem')
     c.validate_phase_admission(store.authority, task, capability='M3')
     episode = AttemptLedger.episode_id(task['checkpoint_id'], subsystem,
                                        c.canonical_json(sorted(task['required_check_ids'])))
     ledger = AttemptLedger.load(store)
     causal = None
     if ledger.admit(episode) == 'REQUIRE_CAUSAL':
-        path = 'controller/causal-' + episode + '.json'
-        try:
-            causal = c.load_json_strict(c._git(Path(store.authority.controller_root), 'show',
-                                              store.authority.source_sha + ':' + path).decode())
-        except c.ContractError as exc:
-            raise OrchestratorError('two speculative attempts exhausted; pin an independent causal diagnosis in controller source', 'REQUIRE_CAUSAL') from exc
-        _refuse(causal.get('task_contract_digest') == c.canonical_digest(task)
-                 and causal.get('episode') == episode
-                 and causal.get('reviewer_family') not in (None, '', 'unknown', causal.get('implementation_family'))
-                 and type(causal.get('reviewer_session')) is str and causal['reviewer_session'],
-                 'causal diagnosis requires independent exact task/episode binding')
-        evidence = c.load_json_strict(c._git(Path(store.authority.controller_root), 'show',
-                                           store.authority.source_sha + ':controller/diagnostics/' +
-                                           causal['failure_evidence_digest'] + '.json').decode())
+        approvals = [r['payload'] for r in _store_objects(store)
+                     if r['kind'] == 'diagnostic' and r['payload'].get('type') == 'APPROVED_CAUSAL'
+                     and r['payload'].get('episode') == episode]
+        if approvals:
+            _refuse(len(approvals) == 1, 'ambiguous causal approval')
+            approval = approvals[0]
+            _refuse(approval['task_contract_digest'] == c.canonical_digest(task)
+                     and approval['original_source_sha'] == store.authority.source_sha
+                     and approval['authority_digest'] == c.canonical_digest(c._release_authority(store.authority)),
+                     'stale causal approval binding')
+            causal, evidence = approval['causal'], approval['evidence']
+            attempts = [c.canonical_digest(r) for r in _store_objects(store)
+                        if r['kind'] == 'attempt' and r['payload']['episode'] == episode]
+            _refuse(attempts == approval['attempt_digests'] == evidence.get('attempt_digests'),
+                     'causal approval failure history changed')
+        else:
+            path = 'controller/causal-' + episode + '.json'
+            try:
+                causal = c.load_json_strict(c._git(Path(store.authority.controller_root), 'show',
+                                                  store.authority.source_sha + ':' + path).decode())
+                _validate_causal(causal, task, episode)
+                evidence = c.load_json_strict(c._git(Path(store.authority.controller_root), 'show',
+                    store.authority.source_sha + ':controller/diagnostics/' + causal['failure_evidence_digest'] + '.json').decode())
+            except c.ContractError as exc:
+                raise OrchestratorError('two speculative attempts exhausted; approve an independently pinned causal diagnosis', 'REQUIRE_CAUSAL') from exc
+        _validate_causal(causal, task, episode)
         _refuse(c.canonical_digest(evidence) == causal['failure_evidence_digest'], 'causal evidence pin differs')
     decision = ledger.admit(episode, causal_packet=causal)
     _refuse(decision == 'ADMIT', 'attempt discipline requires ' + decision, decision)
@@ -283,31 +352,34 @@ def claim_stage(store: s.RuntimeStore, task_id: str, contract_digest: str, *, ow
                        stage_id=stage_id, stage_nonce=stage_nonce)
 
 
-def claim_review(store: s.RuntimeStore, task_id: str) -> dict[str, Any]:
+def claim_review(store: s.RuntimeStore, task_id: str, *, source_audit: bool = False) -> dict[str, Any]:
     """Durably reserve one review opportunity without changing the worker receipt lease."""
     _refuse(type(store) is s.RuntimeStore, 'trusted runtime store required')
     _refuse((0, task_id) in store._held, 'task lease required for review claim', 'CONFLICT')
     current = store.inspect()
     _refuse(current['paused'] is False, 'paused controller starts no new review stage', 'CONFLICT')
     task_state = current['tasks'].get(task_id)
-    _refuse(task_state is not None and task_state['status'] == 'SETTLED' and task_state['stage'] is None
+    _refuse(task_state is not None and task_state['status'] == ('READY' if source_audit else 'SETTLED') and task_state['stage'] is None
              and current['active_task'] is None, 'review requires a settled verification stage', 'CONFLICT')
-    _refuse(type(task_state['lease_epoch']) is int and task_state['lease_epoch'] > 0,
+    _refuse(source_audit or type(task_state['lease_epoch']) is int and task_state['lease_epoch'] > 0,
              'review requires the original claimed worker lease', 'CONFLICT')
     contract = _store_objects(store)
     contract = next((record for record in contract if c.canonical_digest(record) == task_state['contract_digest']), None)
     _refuse(contract is not None and contract['kind'] == 'task_contract'
              and contract['payload'].get('task_id') == task_id, 'review requires the original immutable task')
-    attempt = claim_attempt(store, contract['payload'], task_state['lease_epoch'], subsystem='reviewer')
+    attempt = claim_attempt(store, contract['payload'], current['epoch'] + 1 if source_audit else task_state['lease_epoch'],
+                            subsystem='source_reviewer' if source_audit else 'reviewer')
     def update(state):
         _refuse(state['paused'] is False and state['pause_generation'] == current['pause_generation']
                  and state['active_task'] is None and state['tasks'].get(task_id) == task_state,
                  'paused, stale or unsettled review claim', 'CONFLICT')
+        if source_audit:
+            state['epoch'] += 1
     published = store.transaction(current['sequence'], current['epoch'], update, objects=[attempt])
     attempt_digest = c.canonical_digest(attempt)
     _refuse(attempt_digest in published['object_digests'], 'review attempt was not published')
     return dict(task_id=task_id, pause_generation=published['pause_generation'],
-                lease_epoch=task_state['lease_epoch'], attempt_digest=attempt_digest,
+                lease_epoch=published['epoch'] if source_audit else task_state['lease_epoch'], attempt_digest=attempt_digest,
                 episode=attempt['payload']['episode'], kind=attempt['payload']['kind'],
                 claim_sequence=attempt['payload']['claim_sequence'])
 
@@ -659,7 +731,7 @@ def _validate_source_review_tools(events: Sequence[Mapping[str, Any]]) -> None:
                      'source reviewer attempted execution/nested tool')
 
 
-def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[str, Any],
+def run_source_review(*, store: s.RuntimeStore, authority: c.ValidatedReleaseAuthority, task: Mapping[str, Any],
                       source_repo: Path, release_sha: str, evidence_root: Path,
                       enrollment: a.ValidatedEnrollment, binary: a.OpenCodeBinary,
                       box: b.ContainerSandbox, image: str, container_binary: str,
@@ -667,7 +739,6 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                       limits: b.Limits, credential_dir: Path | None = None,
                       prior_session_ids: Sequence[str] = (), timeout_seconds: int = 1800) -> dict:
     """Independent isolated source/evidence audit; produces supporting facts only."""
-    import uuid
     from . import hosted
     payload = c.validate_phase_admission(authority, task, capability='M3')
     _refuse(type(enrollment) is a.ValidatedEnrollment
@@ -691,7 +762,12 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                              expected=expected, run_id=hosted_evidence['run_id'], run_attempt=hosted_evidence['run_attempt'])
     adapter = a.OpenCodeAdapter(binary, role='INVESTIGATION_REVIEW', enrollment=enrollment,
                                 workdir=Path('/candidate'), limits=a.StreamLimits(8 << 20, 4096, timeout_seconds))
-    nonce = 'source-review-' + uuid.uuid4().hex[:20]
+    _refuse(type(store) is s.RuntimeStore and store.authority == authority, 'source review requires original runtime authority')
+    registered = store.inspect()['tasks'].get(task['task_id'])
+    _refuse(registered is not None and registered['contract_digest'] == c.canonical_digest(
+        dict(schema_version=1, kind='task_contract', payload=task)), 'source review task differs from immutable runtime task')
+    review_claim = claim_review(store, task['task_id'], source_audit=True)
+    nonce = 'source-review-' + review_claim['attempt_digest'][:20]
     observation_dir = b._safe_path(Path(observation_dir))
     observation_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='or-v2-source-review-', dir=storage_root) as directory:
@@ -746,7 +822,7 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                   _review_output_instruction(payload['schemas']['records']['review_report']) +
                   ' Exact binding: task_id=' + task['task_id'] + ', task_contract_digest=' + c.canonical_digest(task) +
                   ', candidate_sha=' + release_sha + '. Required coverage also includes: ' + c.canonical_json(task['required_check_ids']))
-        labels = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'source-review', 1, nonce,
+        labels = b.StageIdentity('0' * 64, box.boot_identity, nonce, 'source-review', review_claim['lease_epoch'], nonce,
                                   task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id']).labels()
         result = a.launch_model_stage(box=box, candidate=candidate, view=view, role='INVESTIGATION_REVIEW',
                                       container_binary=container_binary, message_parts=[prompt], agent=None,
@@ -772,13 +848,13 @@ def run_source_review(*, authority: c.ValidatedReleaseAuthority, task: Mapping[s
                 after = w.manifest(source) if source.is_dir() else c.canonical_digest(source.read_bytes().hex())
                 _refuse(after == before, 'controller evidence changed during review')
             _refuse(hosted.expectation(Path(source_repo), release_sha) == expected, 'source changed during review')
-            metadata = dict(identity, implementation_family=implementation_family, session_id=stream.session_id, container_id=result.container_id,
+            metadata = dict(identity, durable_claim=review_claim, implementation_family=implementation_family, session_id=stream.session_id, container_id=result.container_id,
                             effective_digest=result.effective_digest, model_id=enrollment['model_id'], family=enrollment['family'],
                             argv_digest=c.canonical_digest(adapter.build_argv([prompt])), readonly_unchanged=True,
                             authority_semantics='SUPPORTING_FACTS_ONLY_NO_ADOPTION')
             return {'report': report, 'metadata': metadata, 'verdict': report['verdict']}
         finally:
-            if box._inspect(b.StageIdentity(result.container_id, box.boot_identity, nonce, 'source-review', 1, nonce,
+            if box._inspect(b.StageIdentity(result.container_id, box.boot_identity, nonce, 'source-review', review_claim['lease_epoch'], nonce,
                                             task['authority_digest'], 'INVESTIGATION_REVIEW', task['task_id']))['State']['Running'] is False:
                 box.docker(['rm', result.container_id])
                 a.erase_runtime_home(box, view.parent, image)

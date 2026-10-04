@@ -103,6 +103,19 @@ def do_admit(args: argparse.Namespace) -> dict:
         return result('REFUSED', reason=str(exc))
 
 
+def do_approve_causal(args: argparse.Namespace) -> dict:
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        diagnosis = c.load_release_authority(Path(args.candidate_root), Path(args.diagnosis_controller),
+                    bootstrap=bootstrap_from_dict(load_json(args.diagnosis_bootstrap)))
+        with runtime.lock('task', args.task_id):
+            digest = o.approve_causal(runtime, args.task_id, diagnosis_authority=diagnosis, subsystem=args.subsystem)
+        return result('OK', approval_digest=digest)
+    except (c.ContractError, s.StoreError, o.OrchestratorError) as exc:
+        return result('REFUSED', reason=str(exc))
+
+
 def do_claim(args: argparse.Namespace) -> dict:
     try:
         authority = load_authority(args)
@@ -325,6 +338,12 @@ def build_parser() -> argparse.ArgumentParser:
     admit.add_argument('--task', required=True)
     admit.add_argument('--template', required=True)
     admit.set_defaults(func=do_admit)
+    causal = sub.add_parser('approve-causal')
+    causal.add_argument('--task-id', required=True)
+    causal.add_argument('--diagnosis-controller', required=True)
+    causal.add_argument('--diagnosis-bootstrap', required=True)
+    causal.add_argument('--subsystem', choices=('worker', 'reviewer', 'source_reviewer'), default='worker')
+    causal.set_defaults(func=do_approve_causal)
     claim = sub.add_parser('claim')
     claim.add_argument('--task-id', required=True)
     claim.add_argument('--owner', required=True)

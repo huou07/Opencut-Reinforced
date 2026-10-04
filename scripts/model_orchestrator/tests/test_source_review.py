@@ -106,7 +106,7 @@ class SourceReviewBindingTests(unittest.TestCase):
                     base_sha=payload['build']['base_sha'], candidate_branch=payload['build']['candidate_branch'],
                     authority_digest=payload['git']['authority_digest'])
         with self.assertRaises(o.OrchestratorError) as caught:
-            o.run_source_review(authority=authority, task=task, source_repo=ROOT,
+            o.run_source_review(store=None, authority=authority, task=task, source_repo=ROOT,
                                 release_sha='a' * 40, evidence_root=ROOT,
                                 enrollment=reviewer_enrollment().with_reasoning('HIGH'), binary=None,
                                 box=None, image='', container_binary='', implementation_family='fixture-a',
