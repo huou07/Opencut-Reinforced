@@ -471,7 +471,7 @@ class LiveM5:
         if not cred.is_file():
             raise unittest.SkipTest('live credential staging missing')
         finger = credential_fingerprint(cred.parent.parent)
-        return [(str(cred.parent), '/worker-home/.local/share/opencode', False)], finger
+        return [(str(cred.parent), '/worker-home/.local/share/opencode')], finger
 
     def box(self):
         return b.ContainerSandbox(self.docker, boot_identity=b.host_boot_identity(), host_platform='linux')
