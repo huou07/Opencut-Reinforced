@@ -176,6 +176,13 @@ class HostedEvidenceTests(unittest.TestCase):
 
 class RoadmapHostedProofTests(unittest.TestCase):
     """CP47: a fixture PASS JSON cannot replace exact hosted producer/source facts."""
+    def test_collector_freezes_exact_measured_suite_inventory(self):
+        import ast,re
+        workflow=(h.ROOT/h.WORKFLOW).read_text()
+        match=re.search(r"^\s*expected_suites = (.*)$",workflow,re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(ast.literal_eval(match[1]),set(h.SUITES))
+
     def inputs(self):
         import io,zipfile,hashlib,json,base64
         from model_orchestrator import hosted as h

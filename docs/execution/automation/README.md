@@ -1298,6 +1298,9 @@ Successful or authorized work cannot be reset; a new claim still enforces
 speculative/causal limits. Archived work remains retained until separately safe
 cleanup; a partial unreferenced repair copy grants no launch authority.
 
+The hosted collector pins the exact measured suite identities, including the
+roadmap suites, rather than accepting a caller-selected suite count.
+
 Isolated roadmap acceptance has its own explicit local publication, toy plan,
 markers and fixture completion evidence; it cannot advance actual product STATE
 or satisfy production evidence. It must nevertheless exercise real adopted
