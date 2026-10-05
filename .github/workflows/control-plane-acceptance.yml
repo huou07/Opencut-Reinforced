@@ -103,7 +103,7 @@ jobs:
           assert receipt['package_digest'] == digest(receipt['package'])
           assert receipt['receipt_digest'] == digest({k: v for k, v in receipt.items() if k != 'receipt_digest'})
           suites = receipt['suites']
-          assert len(suites) == 13 and len({suite['id'] for suite in suites}) == 13
+          assert len(suites) == 15 and len({suite['id'] for suite in suites}) == 15
           for suite in suites:
               assert suite['result'] == 'PASS' and suite['cases']
               assert len({case['id'] for case in suite['cases']}) == len(suite['cases'])

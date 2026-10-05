@@ -1555,7 +1555,18 @@ def validate_disabled_task_handoff(
         raise SupervisorError("disabled handoff validation refused: " + str(exc)) from exc
 
 
-def validate_task_handoff(
+def validate_task_handoff(repo_root: Path, *, task_id: str, checkpoint_id: str, store_root: Path,
+                          authorization_digest: str, remote_receipt_digest: str, trusted_store=None) -> dict[str, Any]:
+    from model_orchestrator import store as runtime_store
+    if type(trusted_store) is not runtime_store.RuntimeStore:
+        raise SupervisorError('disabled control-plane or unvalidated runtime cannot enter product handoff')
+    with trusted_store.lock('task', task_id), trusted_store.lock('integration'):
+        return _validate_task_handoff(repo_root, task_id=task_id, checkpoint_id=checkpoint_id,
+            store_root=store_root, authorization_digest=authorization_digest,
+            remote_receipt_digest=remote_receipt_digest, trusted_store=trusted_store)
+
+
+def _validate_task_handoff(
     repo_root: Path,
     *,
     task_id: str,
@@ -1563,6 +1574,7 @@ def validate_task_handoff(
     store_root: Path,
     authorization_digest: str,
     remote_receipt_digest: str,
+    trusted_store=None,
 ) -> dict[str, Any]:
     """Validate a task-bound V2 handoff without invoking anything hosted.
 
@@ -1572,24 +1584,37 @@ def validate_task_handoff(
     """
     if not isinstance(checkpoint_id, str) or not checkpoint_id:
         raise SupervisorError("handoff requires an explicit checkpoint ID")
-    task, authorization, remote_receipt, snapshot = _bound_handoff_inputs(
-        store_root, task_id, authorization_digest, remote_receipt_digest)
+    from model_orchestrator import store as runtime_store, contracts as contracts
+    if type(trusted_store) is not runtime_store.RuntimeStore or trusted_store.root != Path(store_root).resolve():
+        raise SupervisorError('disabled control-plane or unvalidated runtime cannot enter product handoff')
+    try:
+        facts = contracts._release_authority(trusted_store.authority)
+        if facts['git']['purpose'] != 'OPERATIONAL' or 'operational' not in facts:
+            raise SupervisorError('disabled control-plane authority cannot enter product handoff')
+        snapshot = trusted_store.inspect()
+        task, authorization, remote_receipt, snapshot = _bound_handoff_inputs(
+            store_root, task_id, authorization_digest, remote_receipt_digest, snapshot=snapshot)
+        contracts.validate_phase_admission(trusted_store.authority, task, capability='M4')
+        destination = facts['operational']['authorization']['destination_url']
+        if git_output(repo_root, 'remote', 'get-url', 'origin') != destination:
+            raise SupervisorError('product handoff target differs from external task pin')
+    except contracts.ContractError as exc:
+        raise SupervisorError('product handoff authority refused: ' + str(exc)) from exc
     if task.get('task_kind') != 'product_checkpoint':
         raise SupervisorError("disabled control-plane tasks cannot enter product handoff")
     task_checkpoint = task.get('checkpoint_id')
     if task_checkpoint != checkpoint_id:
         raise SupervisorError("immutable task checkpoint differs from product handoff checkpoint")
-    from model_orchestrator import store as runtime_store, contracts as contracts
-    try:
-        bootstrap = runtime_store._read(Path(store_root) / 'bootstrap.json')
-    except contracts.ContractError as exc:
-        raise SupervisorError("product handoff requires a controller bootstrap: " + str(exc)) from exc
-    if bootstrap.get('execution') == 'DISABLED_BUILD_ONLY':
-        raise SupervisorError("disabled build authority cannot complete a product checkpoint")
+    product_pin = facts['operational']['authorization']
+    for name in ('PLAN', 'STATE'):
+        if hashlib.sha256((repo_root / ('docs/execution/' + name + '.json')).read_bytes()).hexdigest() != product_pin[name.lower() + '_digest']:
+            raise SupervisorError('handoff changed the operator-pinned product ' + name)
     plan, state = execution_plan.load_plan_state(repo_root)
     if state.get("current_next") != checkpoint_id or state.get('checkpoints', {}).get(checkpoint_id) != 'NEXT':
         raise SupervisorError("handoff checkpoint is not current NEXT")
     execution_plan.checkpoint_for_id(plan, checkpoint_id)
+    execution_plan.validate_contract_transition(plan, state, execution_plan.load_architecture_policy(repo_root),
+        execution_plan.read_contract_versions(repo_root), checkpoint_id=checkpoint_id)
     candidate_sha = authorization['candidate_sha']
     _validate_handoff_head(repo_root, candidate_sha, refresh=True)
     from model_orchestrator import store as runtime_store
@@ -1684,6 +1709,9 @@ def run_task_handoff(
     store_root: Path,
     authorization_digest: str,
     remote_receipt_digest: str,
+    trusted_store=None,
+    guard_root: Path | None = None,
+    attempt_dir: Path | None = None,
     control_plane_receipt: Mapping[str, Any] | None = None,
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
@@ -1697,7 +1725,47 @@ def run_task_handoff(
         store_root=store_root,
         authorization_digest=authorization_digest,
         remote_receipt_digest=remote_receipt_digest,
+        trusted_store=trusted_store,
     )
+    from model_orchestrator import contracts as contracts, promotion as promotion
+    facts = contracts._release_authority(trusted_store.authority)
+    if facts['operational']['authorization']['execution_profile'] != 'PRODUCT':
+        raise SupervisorError('isolated fixture authority cannot complete a real product checkpoint')
+    if not isinstance(control_plane_receipt, dict):
+        raise SupervisorError('operational completion requires a nested controller-bound receipt')
+    current = trusted_store.inspect()
+    task_state = current['tasks'][task_id]
+    task = promotion.load_object(trusted_store, task_state['contract_digest'])['payload']
+    authorization = promotion.load_authorization(trusted_store, authorization_digest)
+    from model_orchestrator import guards as guards
+    if guard_root is None or attempt_dir is None:
+        raise SupervisorError('completion requires the preserved guarded candidate and verifier attempt')
+    pinned = facts['operational']['authorization']
+    floor = guards.load_floor(trusted_store.authority, pinned['task_path'], pinned['catalog_path'])
+    guarded = guards.restore_guarded(floor, guard_root)
+    reviews = [promotion.load_object(trusted_store, digest) for digest in current['object_digests']]
+    review = next(record['payload'] for record in reviews if record['kind'] == 'review' and record['payload'].get('task_id') == task_id)
+    inputs = promotion.collect_inputs(store=trusted_store, task_id=task_id, guard_root=guard_root, attempt_dir=attempt_dir,
+        task_path=pinned['task_path'], catalog_path=pinned['catalog_path'], implementation_family=review['metadata']['implementation_family'])
+    rebuilt = promotion.build_authorization(inputs, schemas=facts['schemas'],
+        implementation_family=review['metadata']['implementation_family'], issuance_sequence=authorization['issuance_sequence'])
+    if rebuilt != authorization:
+        raise SupervisorError('completion promotion inputs differ from the issued authorization')
+    expected = dict(task_id=task_id, checkpoint_id=checkpoint_id, task_contract_digest=task_state['contract_digest'],
+        authority_digest=task['authority_digest'], base_sha=task['base_sha'],
+        adoption_manifest_digest=contracts.canonical_digest(facts['adoption']),
+        promotion_authorization_digest=authorization_digest, remote_promotion_receipt_digest=remote_receipt_digest,
+        verification_receipt_digests=authorization['verification_receipt_digests'],
+        reviewer_receipt_digest=authorization['reviewer_receipt_digest'],
+        acceptance_contract_digest=contracts.canonical_digest(task['acceptance_requirements']),
+        guard_receipt_digest=contracts.canonical_digest(guarded.verify()),
+        production_acceptance_receipts=control_plane_receipt.get('production_acceptance_receipts'))
+    try:
+        contracts.validate_control_plane_receipt(control_plane_receipt, facts['schemas'], context=expected)
+    except contracts.ContractError as exc:
+        raise SupervisorError('invalid operational completion receipt: ' + str(exc)) from exc
+    if control_plane_receipt['promoted_implementation_sha'] != handoff['implementation_sha']:
+        raise SupervisorError('completion receipt binds another implementation')
     plan, state = execution_plan.load_plan_state(repo_root)
     checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
     implementation_sha = handoff["implementation_sha"]
@@ -1715,6 +1783,11 @@ def run_task_handoff(
         control_plane_receipt=control_plane_receipt,
     )
     record = evidence_result["record"]
+    from model_orchestrator.product import validate_hosted_product_receipts
+    try:
+        validate_hosted_product_receipts(trusted_store.authority, control_plane_receipt, record)
+    except contracts.ContractError as exc:
+        raise SupervisorError('production measurement provenance refused: ' + str(exc)) from exc
     intent = {
         "schema_version": 1,
         "checkpoint_id": checkpoint_id,
@@ -1851,6 +1924,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--authorization-digest", help="promotion authorization object digest")
     parser.add_argument("--remote-receipt-digest", help="remote promotion receipt object digest")
     parser.add_argument("--control-plane-receipt", help="JSON file with the nested V2 completion receipt")
+    parser.add_argument('--operational-bootstrap', help='trusted host bootstrap with product-task RecordPin')
+    parser.add_argument('--control-root', help='clean adopted V2 source root')
+    parser.add_argument('--controller-root', help='clean independent pinned controller root')
+    parser.add_argument('--product-root', help='clean immutable product base root')
+    parser.add_argument('--integration-root', help='promoted product integration clone')
     args = parser.parse_args(argv)
     try:
         if args.preflight:
@@ -1865,12 +1943,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             for flag in ("task_checkpoint", "store_root", "authorization_digest", "remote_receipt_digest"):
                 if not getattr(args, flag):
                     raise SupervisorError(f"--resume-task requires --{flag.replace('_', '-')}")
+            from model_orchestrator.__main__ import load_authority
+            from model_orchestrator.store import RuntimeStore
+            from argparse import Namespace
+            if not all((args.operational_bootstrap, args.control_root, args.controller_root, args.product_root, args.integration_root)):
+                raise SupervisorError('product handoff requires exact operational roots/bootstrap')
+            authority = load_authority(Namespace(bootstrap=args.operational_bootstrap, candidate_root=args.control_root,
+                controller_root=args.controller_root, product_root=args.product_root))
+            trusted_store = RuntimeStore(Path(args.store_root), authority)
             receipt = None
             if args.control_plane_receipt:
                 receipt = json.loads(Path(args.control_plane_receipt).read_text(encoding="utf-8"))
             reports = [
                 run_task_handoff(
-                    REPO_ROOT,
+                    Path(args.integration_root),
+                    trusted_store=trusted_store,
+                    guard_root=Path(args.guard_root) if args.guard_root else None,
+                    attempt_dir=Path(args.attempt_dir) if args.attempt_dir else None,
                     task_id=args.resume_task,
                     checkpoint_id=args.task_checkpoint,
                     store_root=Path(args.store_root),

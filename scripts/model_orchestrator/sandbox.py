@@ -21,7 +21,7 @@ import uuid
 
 from .contracts import (ContractError, ValidatedReleaseAuthority, _release_authority,
                         canonical_digest, canonical_json, load_json_strict,
-                        validate_shared_capability)
+                        validate_shared_capability, authority_roots, base_source_root)
 
 UNAVAILABLE = 'M1_ISOLATION_ENVIRONMENT_UNAVAILABLE'
 _SEAL = object()
@@ -153,7 +153,7 @@ def _create_candidate(source: Path, destination: Path, base_oid: str, binding: s
 def create_candidate(source: Path, destination: Path, base_oid: str, *,
                      authority: ValidatedReleaseAuthority) -> Candidate:
     payload = _authority(authority)
-    _require(_safe_path(source) == Path(authority.candidate_root), 'base source must be pinned authority')
+    _require(_safe_path(source) == base_source_root(authority), 'base source must be pinned authority')
     _require(base_oid == payload['git']['base_oid'], 'base differs from original authority')
     return _create_candidate(source, destination, base_oid, payload['git']['authority_digest'])
 
@@ -223,7 +223,7 @@ def import_candidate(pack_path: Path, destination: Path, head_oid: str, *,
     _require(_OID.fullmatch(head_oid) is not None, 'exact candidate commit required')
     _require(pack_path.is_file() and pack_path.stat().st_size <= 64 << 20, 'invalid/oversized candidate pack')
     _require(not destination.exists(), 'import must not replace preserved candidate')
-    for authority_root in (Path(authority.candidate_root), Path(authority.controller_root)):
+    for authority_root in authority_roots(authority):
         _require(destination != authority_root and authority_root not in destination.parents
                  and destination not in authority_root.parents, 'import cannot touch authority storage')
     destination.mkdir(parents=True)
@@ -278,7 +278,7 @@ def restore_candidate(store: Any, task_id: str) -> Candidate:
     status = root.stat()
     _require((status.st_dev, status.st_ino) == (descriptor['device'], descriptor['inode']),
              'preserved candidate filesystem identity changed')
-    for authority_root in (Path(store.authority.candidate_root), Path(store.authority.controller_root), store.root):
+    for authority_root in (*authority_roots(store.authority), store.root):
         authority_root = authority_root.resolve()
         _require(root != authority_root and root not in authority_root.parents and authority_root not in root.parents,
                  'candidate recovery overlaps authority/runtime')

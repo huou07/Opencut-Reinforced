@@ -78,7 +78,8 @@
     "control_amendment_marker": "adoption",
     "build_authorization": "external_provenance",
     "certification_bundle": "external_provenance",
-    "operational_adoption_pin": "external_provenance"
+    "operational_adoption_pin": "external_provenance",
+    "product_task_authorization": "external_provenance"
   },
   "records": {
     "task_contract": {
@@ -2246,6 +2247,94 @@
         "parent_sha",
         "plan_digest",
         "state_digest"
+      ]
+    },
+    "product_task_authorization": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "const": "huou07/Opencut-Reinforced"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "OPERATOR_PRODUCT_TASK"
+        },
+        "authorization_id": {
+          "type": "id"
+        },
+        "nonce": {
+          "type": "id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        },
+        "release_sha": {
+          "type": "sha"
+        },
+        "adoption_digest": {
+          "type": "digest"
+        },
+        "product_base_sha": {
+          "type": "sha"
+        },
+        "plan_digest": {
+          "type": "digest"
+        },
+        "state_digest": {
+          "type": "digest"
+        },
+        "checkpoint_id": {
+          "type": "id"
+        },
+        "task_path": {
+          "type": "path"
+        },
+        "task_digest": {
+          "type": "digest"
+        },
+        "catalog_path": {
+          "type": "path"
+        },
+        "catalog_digest": {
+          "type": "digest"
+        },
+        "execution_profile": {
+          "type": "enum",
+          "values": [
+            "PRODUCT",
+            "ISOLATED_FIXTURE"
+          ]
+        },
+        "destination_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "repository",
+        "purpose",
+        "authorization_id",
+        "nonce",
+        "sequence",
+        "release_sha",
+        "adoption_digest",
+        "product_base_sha",
+        "plan_digest",
+        "state_digest",
+        "checkpoint_id",
+        "task_path",
+        "task_digest",
+        "catalog_path",
+        "catalog_digest",
+        "execution_profile",
+        "destination_url"
       ]
     }
   },

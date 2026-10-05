@@ -135,11 +135,13 @@ candidate current directory. Source-closure changes require a new release.
 
 Contract input precedence is: adopted control release for executable/policy
 authority; exact base Git objects for product plan/state/contracts; task
-template approved under that authority. If release and base disagree about
-control contracts or expected NEXT, admission stops for an amendment; neither
-wins silently. Normally an activated release is present in authoritative main.
-Product-only successor commits can advance its base without changing frozen
-control blobs. Allowed workflow changes are candidate product inputs, never
+template approved under that authority. The post-adoption reconciliation keeps
+the adopted control source in a separate immutable lineage; it is not merged
+into product main. Product-only successor commits advance the separately pinned
+base. PRODUCT task pins retain the adopted immutable PLAN and select exact
+current STATE/NEXT; workers cannot add or change V2 control files in product
+history. The product source need not contain the control bundle. Allowed
+workflow changes are candidate product inputs, never
 replacements for their frozen acceptance/authorization baseline.
 
 Before every claim, result acceptance, promotion, or supervisor invocation,
@@ -943,9 +945,12 @@ unexpected Git-directory indirection. Scrub Git environment/config and execute
 only trusted Git without hooks, filters or candidate imports.
 
 For disabled build fixtures, base must be an ancestor of the candidate release;
-for operational authority, the adopted release must be an ancestor of the exact
-product base and frozen control blobs must agree. Both must descend from the
-operator-pinned repository anchor. Remote URL is a consistency check, not a
+for operational product authority, the adopted control release and exact
+product base independently descend from the operator-pinned repository anchor.
+They are separate clean clones. The control release is not merged into product
+main: its complete control manifest remains pinned, and the product snapshot
+has a separate complete base manifest. The legacy single-root OPERATIONAL
+manifest API is insufficient to authorize this two-root product path. Remote URL is a consistency check, not a
 cryptographic identity proof; the externally pinned anchor establishes lineage.
 Production pins come from operator bootstrap, never candidate arguments.
 
@@ -1150,3 +1155,71 @@ revalidate changed dependencies and observe the new release binding. Hosted
 collection and independent whole-source review bind the new exact SHA. All
 records remain external and require the existing typed bootstrap/pin loader;
 raw mappings, timestamps and reports confer no authority.
+
+
+### Operational product admission and separate Git lineages
+
+An externally adopted release proves control-plane eligibility; it does not
+approve any product checkpoint. `product.load_operational_authority` first calls
+`load_release_authority` with typed build/certification/adoption pins and proves
+`CERTIFIED_ACTIVE`. A second operator-selected `RecordPin` names a committed
+`product_task_authorization` in the independent controller. It binds the adopted
+release and adoption digest, exact product base, PLAN/STATE byte digests, current
+unique NEXT with completed prerequisites, and exact task and verifier catalog
+digests. The task retains the locked checkpoint's evidence classes, schema/IPC
+effects, phase specification and permitted control-path exceptions. Admission
+checks the publication main against the exact base before accepting the task.
+Raw mappings, candidate-supplied records, or an execution label confer no authority.
+
+This reconciles the disabled phase-only shared admission with the existing
+product-checkpoint supervisor contract. The completed M0–M5 build is retained as
+release provenance; it is never treated as a replayed executing build phase.
+The shared store, isolation, verification, review and promotion capabilities
+serve only the exact externally pinned product task. Disabled build authority
+continues to admit only its explicitly executing control phase.
+
+The immutable product base clone and clean adopted control clone both descend
+from the approved repository anchor. They need not descend from each other.
+Worker/imported candidates descend from the approved product base. Integration
+uses a fourth clone and a non-force fast-forward to the pinned destination main;
+the immutable base clone remains unchanged during push/recovery. This supports
+9B branching from the real product main without importing V2 control code into
+product history. The original product PLAN/STATE and version sources remain
+protected. A new task requires a new external task pin for its new NEXT/base.
+
+`PRODUCT` authorizations require the adopted immutable PLAN and approved GitHub
+publication URL. `ISOLATED_FIXTURE` authorizations require an existing explicit
+local bare publication target; their altered toy checkpoint plan and receipts
+cannot publish product main or prove actual checkpoint acceptance. Fixture
+qualification/adoption facts are never promoted into production release authority.
+
+The trusted CLI accepts `--product-root` and a host bootstrap containing
+`product_task_pin` alongside its exact `ControllerBootstrap` fields. Its
+`admit`, `candidate`, `claim --launch`, `verify`, `review`, `authorize`, `promote`
+and `handoff` verbs reuse the same runtime store and frozen task. `handoff` calls
+the real supervisor with that externally validated store, confirms the exact
+published receipts and integration HEAD/remote, and performs no state advance.
+Actual completion additionally requires the unchanged hosted evidence policy
+and a schema-2 control-plane receipt; `agent_supervisor.py --resume-task` now
+requires the operational bootstrap and all explicit roots. Desktop's dispatcher
+remains a no-tools snapshot viewer. A fresh operator-authorized 9B task must be
+pinned and executed by this trusted host CLI, never by candidate assertions or
+by granting the Desktop viewer shell authority.
+
+
+Operational completion also reopens the controller-private guard/verifier
+attempt and reproduces the issued promotion authorization. It binds the nested
+completion receipt to those objects, the exact adoption and acceptance floor,
+then compares production measurements against authenticated exact-SHA hosted
+runs, successful class steps, and downloaded artifacts. Each required class
+publishes `or-v2-product-TASK-CLASS`, containing exactly
+`production-receipt.json` (the frozen nested production receipt schema) and
+`observation.json`. GitHub's archive digest and the observation byte digest must
+match. The observation binds task ID and canonical task digest, candidate SHA,
+class, authority/harness/package/environment/permission digests, case result
+sets, measurements and result. These values must match the independently
+pinned task requirements and the producer's measured facts. Performance and
+resource classes require measured bounds. Fixtures cannot invoke real product
+completion, and no receipt is synthesized from a green step or a model PASS.
+The future authorized checkpoint must supply its actual measured hosted
+artifacts; missing artifacts block completion without advancing STATE.

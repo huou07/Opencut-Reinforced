@@ -576,7 +576,8 @@ def run_reviewer(*, authority: c.ValidatedReleaseAuthority, floor: g.Floor, guar
             box.docker(['rm', result.container_id])
             a.erase_runtime_home(box, view.parent, image)
     metadata = {'adapter': binary.certification_digest(), 'model_id': adapter.enrollment['model_id'],
-                'family': enrollment['family'], 'effort': [adapter.requested, adapter.sent, adapter.confirmed],
+                'family': enrollment['family'], 'implementation_family': implementation_family,
+                'effort': [adapter.requested, adapter.sent, adapter.confirmed],
                 'session_id': stream.session_id, 'attempt_claim': review_claim, 'argv_digest': c.canonical_digest(adapter.build_argv([prompt], agent=agent))}
     return {'report': report, 'metadata': metadata, 'verdict': report['verdict']}
 

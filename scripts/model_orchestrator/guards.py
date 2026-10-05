@@ -134,7 +134,11 @@ def controller_blob(authority, name):
 
 
 def load_floor(authority, task_path, catalog_path):
-    c._release_authority(authority)
+    payload = c._release_authority(authority)
+    if 'operational' in payload:
+        auth = payload['operational']['authorization']
+        if task_path != auth['task_path'] or catalog_path != auth['catalog_path']:
+            raise c.ContractError('product floor paths differ from exact operator pins')
     task = c.load_json_strict(controller_blob(authority,task_path).decode())
     catalog = c.load_json_strict(controller_blob(authority,catalog_path).decode())
     s._exact(catalog, CATALOG_KEYS)
@@ -150,7 +154,7 @@ def load_floor(authority, task_path, catalog_path):
         path_bytes(name.encode('ascii'))
     for case,binding in catalog['cases'].items():
         s._exact(binding,('path','symbol'));path_bytes(binding['path'].encode('ascii'))
-        names=symbols(c._git(Path(authority.candidate_root),'show',task['base_sha']+':'+binding['path']))
+        names=symbols(c._git(c.base_source_root(authority),'show',task['base_sha']+':'+binding['path']))
         require(names is not None and binding['symbol'] in names,'required baseline case identity missing: '+case)
     for check in task['check_argv']:
         binding = catalog['checks'][check['id']]
@@ -401,7 +405,7 @@ def inspect(candidate, floor, destination, *, source_authority=None, fault=None)
     bounded_input(candidate.root,task['resource_limits']['disk_bytes'])
     destination=b._safe_path(destination)
     require(not destination.exists(),'stale quarantine reservation cannot be reused')
-    for root in (candidate.root,Path(floor.authority.candidate_root),Path(floor.authority.controller_root)):
+    for root in (candidate.root,*c.authority_roots(floor.authority)):
         require(root!=destination and root not in destination.parents and destination not in root.parents,'quarantine overlaps input/authority')
     destination.mkdir(mode=0o700,parents=True)
     record=dict(schema_version=1,nonce=uuid.uuid4().hex,task_id=task['task_id'],floor_digest=floor.digest,

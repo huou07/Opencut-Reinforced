@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SUITES = {
     name: 'model_orchestrator.tests.' + name for name in
     ('test_contracts', 'test_isolation_and_state', 'test_verification',
-     'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks')}
+     'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks', 'test_product_operational', 'test_live_product_operational')}
 SUITES.update(test_execution_infra='scripts.test_execution_infra',
               test_document_routing='scripts.test_document_routing')
 CHECKS = {

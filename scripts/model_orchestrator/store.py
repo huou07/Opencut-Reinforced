@@ -188,7 +188,7 @@ class RuntimeStore:
     def initialize(self):
         payload = self._authority()
         _nofollow(self.root)
-        for source in (Path(self.authority.candidate_root), Path(self.authority.controller_root)):
+        for source in c.authority_roots(self.authority):
             if self.root == source or source in self.root.parents or self.root in source.parents:
                 raise StoreError('runtime must be independent of authority materializations')
         if self.root.exists():
@@ -203,7 +203,7 @@ class RuntimeStore:
                 self._exclusive(self.root / 'locks' / name, b'')
             bootstrap = dict(schema_version=1, authority_digest=c.canonical_digest(payload),
                              source_sha=self.authority.source_sha, filesystem=kind,
-                             phase='M1', execution='DISABLED_BUILD_ONLY')
+                             phase='M1', execution='OPERATIONAL_PRODUCT_TASK' if payload['git']['purpose'] == 'OPERATIONAL' else 'DISABLED_BUILD_ONLY')
             self._exclusive(self.root / 'bootstrap.json', _bytes(bootstrap))
             snapshot = dict(schema_version=1, sequence=0, epoch=0, pause_generation=0,
                             paused=False, authority_digest=bootstrap['authority_digest'],
@@ -230,7 +230,7 @@ class RuntimeStore:
         _exact(bootstrap, ('schema_version', 'authority_digest', 'source_sha', 'filesystem', 'phase', 'execution'))
         if type(bootstrap['schema_version']) is not int or bootstrap != dict(schema_version=1,
                 authority_digest=c.canonical_digest(payload), source_sha=self.authority.source_sha,
-                filesystem=filesystem_type(self.root), phase='M1', execution='DISABLED_BUILD_ONLY'):
+                filesystem=filesystem_type(self.root), phase='M1', execution='OPERATIONAL_PRODUCT_TASK' if payload['git']['purpose'] == 'OPERATIONAL' else 'DISABLED_BUILD_ONLY'):
             raise StoreError('missing, drifted or malformed active authority')
         return bootstrap
 
@@ -438,6 +438,9 @@ class RuntimeStore:
     def register_task(self, task, frozen_template):
         self._authority()
         self._task(task, frozen_template)
+        if c.load_json_strict(self.authority.payload_json)['git']['purpose'] == 'OPERATIONAL':
+            from .product import verify_product_base
+            verify_product_base(self.authority)
         record = dict(schema_version=1, kind='task_contract', payload=task)
         digest = c.canonical_digest(record)
         current = self.inspect()

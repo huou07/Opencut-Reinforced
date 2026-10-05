@@ -346,6 +346,9 @@ def promote(*, store: s.RuntimeStore, task_id: str, authorization_digest: str, i
             _refuse(authorization['lease_epoch'] == task_state['lease_epoch'], 'stale or future authorization epoch')
             _refuse(authorization['issuance_sequence'] == _latest_authorization_sequence(store, task_id),
                     'superseded authorization issuance')
+            authority = c._release_authority(store.authority)
+            if 'operational' in authority and expected_remote_url != authority['operational']['authorization']['destination_url']:
+                raise c.ContractError('promotion destination differs from operator product authorization')
             repo = Path(integration_repo)
             topology = check_integration_repo(repo, remote, expected_remote_url, authorization['base_sha'])
             _refuse(topology['head'] == authorization['base_sha'], 'integration main moved')

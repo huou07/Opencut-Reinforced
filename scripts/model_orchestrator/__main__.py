@@ -64,7 +64,17 @@ def bootstrap_from_dict(raw: object) -> c.ControllerBootstrap:
 
 
 def load_authority(args: argparse.Namespace) -> c.ValidatedReleaseAuthority:
-    bootstrap = bootstrap_from_dict(load_json(args.bootstrap))
+    raw = load_json(args.bootstrap)
+    bootstrap = bootstrap_from_dict(raw)
+    if raw.get('product_task_pin') is not None:
+        if not args.product_root:
+            raise c.ContractError('operational bootstrap requires the immutable product base root')
+        from .product import load_operational_authority
+        pin = raw['product_task_pin']
+        return load_operational_authority(Path(args.candidate_root), Path(args.controller_root), Path(args.product_root),
+            bootstrap=bootstrap, product_pin=c.RecordPin(pin['path'], pin['digest']))
+    if args.product_root:
+        raise c.ContractError('product root requires an externally pinned product task')
     return c.load_release_authority(Path(args.candidate_root), Path(args.controller_root), bootstrap=bootstrap)
 
 
@@ -327,11 +337,74 @@ def do_snapshot(args: argparse.Namespace) -> dict:
         return result('REFUSED', reason=str(exc))
 
 
+def do_candidate(args: argparse.Namespace) -> dict:
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        task = c.load_json_strict(open_store_args_task(args, runtime, args.task_id))
+        with runtime.lock('task', args.task_id):
+            if runtime.inspect()['tasks'][args.task_id]['candidate_digest'] is not None:
+                raise c.ContractError('candidate already registered; restore it without replacement')
+            candidate = b.create_candidate(c.base_source_root(authority), Path(args.destination), task['base_sha'], authority=authority)
+            digest = runtime.register_candidate(args.task_id, candidate)
+        return result('OK', candidate_digest=digest, base_sha=task['base_sha'])
+    except (c.ContractError, s.StoreError) as exc:
+        return result('REFUSED', reason=str(exc))
+
+
+def do_authorize(args: argparse.Namespace) -> dict:
+    from . import promotion as p
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        with runtime.lock('task', args.task_id):
+            inputs = p.collect_inputs(store=runtime, task_id=args.task_id, guard_root=Path(args.guard_root),
+                attempt_dir=Path(args.attempt_dir), task_path=args.task_path, catalog_path=args.catalog_path,
+                implementation_family=args.implementation_family)
+            authorization = p.build_authorization(inputs, schemas=inputs['payload']['schemas'],
+                implementation_family=args.implementation_family, issuance_sequence=args.sequence)
+            digest = p.persist_authorization(runtime, args.task_id, authorization)
+        return result('OK', authorization_digest=digest)
+    except (c.ContractError, s.StoreError, p.PromotionError) as exc:
+        return result('REFUSED', reason=str(exc))
+
+
+def do_promote(args: argparse.Namespace) -> dict:
+    from . import promotion as p
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        facts = c._release_authority(authority)
+        if 'operational' not in facts:
+            raise c.ContractError('operational CLI promotion requires external product task authority')
+        promoted = p.promote(store=runtime, task_id=args.task_id, authorization_digest=args.authorization_digest,
+            integration_repo=Path(args.integration_repo), remote='origin',
+            expected_remote_url=facts['operational']['authorization']['destination_url'], hooks_dir=Path(args.hooks_dir))
+        return result('OK' if promoted['status'] == 'PROMOTED' else 'PENDING', promotion=promoted)
+    except (c.ContractError, s.StoreError, p.PromotionError) as exc:
+        return result('REFUSED', reason=str(exc))
+
+
+def do_handoff(args: argparse.Namespace) -> dict:
+    import agent_supervisor
+    try:
+        authority = load_authority(args)
+        runtime = open_store(args, authority)
+        handoff = agent_supervisor.validate_task_handoff(Path(args.integration_repo),
+            task_id=args.task_id, checkpoint_id=args.checkpoint, store_root=runtime.root,
+            authorization_digest=args.authorization_digest, remote_receipt_digest=args.remote_receipt_digest,
+            trusted_store=runtime)
+        return result('OK', handoff=handoff)
+    except (c.ContractError, s.StoreError, agent_supervisor.SupervisorError) as exc:
+        return result('REFUSED', reason=str(exc))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='or-v2', description='V2 model orchestrator control CLI')
     parser.add_argument('--bootstrap', required=True, help='controller bootstrap JSON with exact record pins')
     parser.add_argument('--candidate-root', required=True)
     parser.add_argument('--controller-root', required=True)
+    parser.add_argument('--product-root', help='independent clean immutable product base snapshot')
     parser.add_argument('--runtime', required=True, help='trusted runtime store root')
     sub = parser.add_subparsers(dest='verb', required=True)
     admit = sub.add_parser('admit')
@@ -439,6 +512,23 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument('--blockers', default='')
     snapshot.add_argument('--escalation')
     snapshot.set_defaults(func=do_snapshot)
+    candidate = sub.add_parser('candidate')
+    candidate.add_argument('--task-id', required=True)
+    candidate.add_argument('--destination', required=True)
+    candidate.set_defaults(func=do_candidate)
+    authorize = sub.add_parser('authorize')
+    for name in ('task-id', 'guard-root', 'attempt-dir', 'task-path', 'catalog-path', 'implementation-family'):
+        authorize.add_argument('--' + name, required=True)
+    authorize.add_argument('--sequence', type=int, required=True)
+    authorize.set_defaults(func=do_authorize)
+    promote = sub.add_parser('promote')
+    for name in ('task-id', 'authorization-digest', 'integration-repo', 'hooks-dir'):
+        promote.add_argument('--' + name, required=True)
+    promote.set_defaults(func=do_promote)
+    handoff = sub.add_parser('handoff')
+    for name in ('task-id', 'checkpoint', 'integration-repo', 'authorization-digest', 'remote-receipt-digest'):
+        handoff.add_argument('--' + name, required=True)
+    handoff.set_defaults(func=do_handoff)
     return parser
 
 

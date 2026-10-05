@@ -101,6 +101,9 @@ ADOPTION_ALLOWED_PATHS = frozenset(
         "docs/execution/PHASE_SPEC_TEMPLATE.md",
         "scripts/model_orchestrator/__init__.py",
         "scripts/model_orchestrator/contracts.py",
+        "scripts/model_orchestrator/product.py",
+        "scripts/model_orchestrator/tests/test_product_operational.py",
+        "scripts/model_orchestrator/tests/test_live_product_operational.py",
         "scripts/model_orchestrator/store.py",
         "scripts/model_orchestrator/sandbox.py",
         "scripts/model_orchestrator/workspace.py",
@@ -456,7 +459,7 @@ def validate_record(record: Any, record_name: str, schemas: Mapping[str, Any], *
         return validate_adoption_record(record, schemas, external=context)
     if record_name == 'control_amendment_marker':
         return validate_control_amendment_marker(record, schemas)
-    if record_name in ('build_authorization', 'certification_bundle', 'operational_adoption_pin'):
+    if record_name in ('build_authorization', 'certification_bundle', 'operational_adoption_pin', 'product_task_authorization'):
         raise ContractError('external authority records require the Git pin loader')
     record = _shape(record, record_name, schemas)
     if record_name == 'verification_receipt':
@@ -532,14 +535,16 @@ class ValidatedReleaseAuthority:
     candidate_root: str
     controller_root: str
     source_sha: str
+    product_root: str | None
 
-    def __init__(self, payload: Mapping[str, Any], candidate_root: Path, controller_root: Path, source_sha: str, *, _seal: object = None):
+    def __init__(self, payload: Mapping[str, Any], candidate_root: Path, controller_root: Path, source_sha: str, *, product_root: Path | None = None, _seal: object = None):
         if _seal is not _PROVENANCE_SEAL:
             raise ContractError('validated provenance requires the Git pin loader')
         object.__setattr__(self, 'payload_json', canonical_json(payload))
         object.__setattr__(self, 'candidate_root', str(candidate_root))
         object.__setattr__(self, 'controller_root', str(controller_root))
         object.__setattr__(self, 'source_sha', source_sha)
+        object.__setattr__(self, 'product_root', str(product_root) if product_root is not None else None)
 
 
 def _release_authority(external: Any) -> dict[str, Any]:
@@ -551,7 +556,26 @@ def _release_authority(external: Any) -> dict[str, Any]:
         if _git(root, 'rev-parse', 'HEAD').decode().strip() != sha or _git(root, 'status', '--porcelain=v1', '--untracked-files=all').strip():
             raise ContractError('stale or dirty provenance materialization')
     _verify_materialization(Path(external.candidate_root), payload['git']['manifest'])
+    if external.product_root is not None:
+        root = _authority_repo(Path(external.product_root), payload['git']['anchor_oid'])
+        if payload['git']['purpose'] != 'OPERATIONAL' or 'operational' not in payload:
+            raise ContractError('product materialization lacks operational provenance')
+        if _git(root, 'rev-parse', 'HEAD').decode().strip() != payload['git']['base_oid'] or _git(root, 'status', '--porcelain=v1', '--untracked-files=all').strip():
+            raise ContractError('stale or dirty product base snapshot')
+        _verify_materialization(root, payload['git']['base_manifest'])
     return payload
+
+
+def authority_roots(external):
+    if type(external) is not ValidatedReleaseAuthority:
+        raise ContractError('sealed authority roots required')
+    return tuple(Path(p) for p in (external.candidate_root, external.controller_root, external.product_root) if p is not None)
+
+
+def base_source_root(external):
+    if type(external) is not ValidatedReleaseAuthority:
+        raise ContractError('sealed base source required')
+    return Path(external.product_root or external.candidate_root)
 
 
 def executing_build_phase(build: Mapping[str, Any]) -> str:
@@ -582,6 +606,10 @@ def validate_shared_capability(external: Any, capability: str) -> dict[str, Any]
     payload = _release_authority(external)
     if capability not in IMPLEMENTATION_PHASES:
         raise ContractError('unknown shared capability phase')
+    if payload['git']['purpose'] == 'OPERATIONAL' and 'operational' in payload:
+        if payload['build']['completed_phases'] != list(IMPLEMENTATION_PHASES) or payload['certification'] is None or payload['adoption'] is None:
+            raise ContractError('operational capability requires complete adopted implementation')
+        return payload
     executing = executing_build_phase(payload['build'])
     if IMPLEMENTATION_PHASES.index(executing) < IMPLEMENTATION_PHASES.index(capability):
         raise ContractError('shared control primitive does not exist yet: ' + capability)
@@ -598,6 +626,12 @@ def _phase_admission(payload: Mapping[str, Any], task: Mapping[str, Any], capabi
     replay, a future/skipped phase, a rewritten checkpoint, a product task, or
     any binding mismatch refuses.
     """
+    if payload['git']['purpose'] == 'OPERATIONAL' and 'operational' in payload:
+        if capability is not None and capability not in IMPLEMENTATION_PHASES:
+            raise ContractError('unknown shared capability phase')
+        if task.get('task_kind') != 'product_checkpoint' or canonical_digest(task) != canonical_digest(payload['operational']['task']):
+            raise ContractError('product task differs from exact external NEXT/base/scope authorization')
+        return payload
     build = payload['build']
     if task.get('task_kind') != 'control_plane_phase' or task.get('checkpoint_id') not in IMPLEMENTATION_PHASES:
         raise ContractError('task is not an authorized control-plane phase task')

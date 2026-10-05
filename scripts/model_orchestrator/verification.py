@@ -133,7 +133,7 @@ def execute(guarded,destination,*,lease_epoch,sequence,fault=None):
     g.require(not guard['vetoes'],'deterministic guard veto prevents verification')
     g.require(type(lease_epoch) is int and lease_epoch>0 and type(sequence) is int and sequence>0,'attempt fencing required')
     destination=b._safe_path(destination);g.require(not destination.exists(),'existing/stale verifier attempt cannot be reused')
-    for root in (guarded.root,Path(floor.authority.controller_root),Path(floor.authority.candidate_root)):
+    for root in (guarded.root,*c.authority_roots(floor.authority)):
         g.require(root!=destination and root not in destination.parents and destination not in root.parents,'attempt overlaps authority/input')
     destination.mkdir(mode=0o700,parents=True);s._fsync_dir(destination.parent)
     attempt=dict(schema_version=1,nonce=uuid.uuid4().hex,task_id=task['task_id'],floor_digest=floor.digest,
