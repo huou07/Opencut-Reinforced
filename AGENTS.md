@@ -13,6 +13,20 @@ Do not assume unfinished features already exist.
 
 Do not scaffold major subsystems unless the user explicitly requests them.
 
+## Engineering principles
+
+Understand before editing. Plan enough to avoid obvious mistakes, then act.
+Work smart, not merely hard. Persistent, not stubborn. Finish the outcome, not
+the attempt. Evidence beats claims. Complexity has to earn its keep.
+
+[docs/ENGINEERING_PRINCIPLES.md](docs/ENGINEERING_PRINCIPLES.md) is the detailed
+durable policy: memory model, evidence and repair discipline, untrusted input,
+anti-slop, context/quota lifecycle, delegation, and what does or does not block
+work. It is the `engineering` routing bundle
+(`python3 scripts/execution_plan.py docs --features engineering`). Read it
+before substantial multi-step implementation or debugging work. It never
+overrides the OR-specific authority named in this file.
+
 ## Product direction
 
 Current intended architecture:
@@ -146,38 +160,32 @@ Packaged capabilities must be tested with packaged dependencies and the
 permission model that users receive. Do not weaken a failed acceptance test
 or silently change its evidence class.
 
-After at most two speculative corrective attempts for the same subsystem or
-gate, stop and diagnose. Another repair commit requires exact failure
-evidence, a falsifiable root-cause hypothesis, a reproduction or
-discriminating test, and an explanation of why the patch fixes the cause.
-Retries and timeouts alone are not a root-cause repair. Record measurements
-for realtime performance or resource claims.
+Repairs follow the root-cause discipline in
+[docs/ENGINEERING_PRINCIPLES.md](docs/ENGINEERING_PRINCIPLES.md) §6: after at
+most two speculative attempts against one subsystem or gate, stop and diagnose.
+Record measurements for realtime performance or resource claims.
 
 ### Execution discipline
 
 Difficulty, length, complexity, inconvenience, computational expense within
-authorized limits, or estimates of hours/days/weeks do not justify reducing,
-deferring, abandoning, or moving an authorized task to future user sessions.
-Attempt the complete authorized scope now and continue until achieved or a
-concrete legitimate blocker is observed. Execution decisions are based on
-observed blockers and evidence, not speculative human-duration estimates.
-
-Decompose only for dependencies, atomic/reviewable commits, crash recovery,
-isolation, independent verification, genuine parallelism, or bounded destructive
-operations—not intimidation, an easier foundation, or a preference to ask the
-user to continue later.
+authorized limits, or estimates of hours/days/weeks never justify reducing,
+deferring, or abandoning an authorized task. Attempt the complete authorized
+scope now and continue until it is achieved or a concrete legitimate blocker is
+observed. Decompose only for dependencies, atomic/reviewable commits, crash
+recovery, isolation, independent verification, genuine parallelism, or bounded
+destructive operations.
 
 Existing checkpoint boundaries and explicit token/cost/resource/security limits
 still apply. Fail closed for missing authority; genuinely unavailable
 credentials, resources, hardware, tools, quota or platforms; destructive work
 beyond authorization; proven frozen-architecture contradictions; security,
 legal or safety boundaries; or required evidence impossible in the authorized
-environment. Difficulty is never a blocker or permission to invent work limits.
+environment.
 
 For every new persistent/mutable object or state boundary, verify its
 interaction with existing invariants, including ownership, durable identity,
-lifecycle, crash behavior, recovery, isolation, cleanup conditions and authority
-semantics. Local acceptance alone is insufficient.
+lifecycle, crash behavior, recovery, isolation, cleanup conditions and
+authority semantics. Local acceptance alone is insufficient.
 
 ## Model orchestrator V2 (proposed, disabled)
 
@@ -204,25 +212,16 @@ eligibility.
 
 ## Minimal implementation rule
 
-Prefer the smallest correct implementation.
-
-In order:
-
-1. Does this need to exist?
-2. Does the repository already provide it?
-3. Does the language standard library provide it?
-4. Does the target platform provide it?
-5. Does an existing dependency provide it?
-6. Can the requirement be solved simply without a new abstraction?
-7. Only then add the minimum new implementation required.
+Prefer the smallest correct implementation: does this need to exist at all, does
+the repository already provide it, does the language standard library or the
+target platform provide it, does an existing dependency provide it, can it be one
+line — and only then add the minimum new implementation required.
 
 Never remove necessary validation, reliability, security, accessibility, or data-loss protection merely to reduce code size.
 
 ## Git discipline
 
-Every completed logical change must have a corresponding Git commit.
-
-Rules:
+Every completed logical change must have a corresponding Git commit:
 
 - one coherent change = one atomic commit
 - commit only after the change is internally consistent
@@ -233,17 +232,6 @@ Rules:
 - never force-push unless explicitly requested
 - do not discard unrelated user changes
 - leave the worktree clean at task completion unless clearly explained
-
-Suggested prefixes:
-
-- feat:
-- fix:
-- refactor:
-- test:
-- docs:
-- chore:
-- build:
-- ci:
 
 ## Documentation rule
 
@@ -265,28 +253,21 @@ Entrypoints remain timeless. Explicit baseline history and frozen historical
 contracts may retain old observations; every routed historical excerpt must keep
 its provenance notice. Preserve historical regression guards without turning
 those lists into current-status inventories. See [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
-
 ## Test rule
 
-Every substantive implementation change must update or add relevant automated tests when behavior is added or changed.
+Every substantive implementation change must update or add relevant automated
+tests when behavior is added or changed. Before handing work back, run the
+relevant tests plus the lint/static, formatting, build/type and
+acceptance/integration checks that are configured. All relevant checks must
+pass.
 
-Before handing work back to the user:
+If a test cannot run because of a real environment limitation, do not claim it
+passed: document exactly what was not run, explain why, and provide the
+strongest available alternative verification.
 
-- run the relevant tests
-- run lint/static checks where configured
-- run formatting checks where configured
-- run build/type checks where configured
-- run relevant acceptance/integration checks where available
-
-All relevant checks must pass.
-
-If a test cannot run because of a real environment limitation:
-- do not claim it passed
-- document exactly what was not run
-- explain why
-- provide the strongest available alternative verification
-
-For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
+For documentation-only or local-tooling-only changes where an automated product
+test is not meaningful, do not invent a fake test merely to satisfy this rule.
+Report `tests: N/A` with the reason.
 
 ## CI-first platform verification
 
@@ -294,16 +275,17 @@ Use local machines for editing and headless source checks; GitHub Actions is can
 
 ## Regression preservation rule
 
-Do not regress behavior that has already been fixed or verified. Before changing
-an existing subsystem, inspect its current behavior and relevant tests or
-acceptance checks, and preserve unrelated working behavior. A regression fix is
-incomplete until it adds an automated test where practical, or a reproducible
-acceptance check for UI behavior that cannot reasonably be unit-tested yet.
+Do not regress behavior that has already been fixed or verified. Inspect the
+current behavior and its tests or acceptance checks before changing a subsystem,
+and preserve unrelated working behavior. A regression fix is incomplete until it
+adds an automated test where practical, or a reproducible acceptance check for UI
+behavior that cannot reasonably be unit-tested yet.
+
 Keep recorded guards passing unless the user explicitly changes the requirement;
 never remove or weaken a guard just to make a change pass. When refactoring
 conflicts with known-good behavior, preserve behavior first and refactor
-incrementally. Prefer **preserve → change one subsystem → verify → commit** over
-broad rewrites, and rerun checks for every touched subsystem before handoff.
+incrementally: **preserve → change one subsystem → verify → commit**, and rerun
+checks for every touched subsystem before handoff.
 
 ## Definition of done
 

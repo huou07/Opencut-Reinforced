@@ -8,6 +8,9 @@
     "agents": {
       "path": "AGENTS.md"
     },
+    "principles": {
+      "path": "docs/ENGINEERING_PRINCIPLES.md"
+    },
     "acceptance": {
       "path": "docs/execution/ARCHITECTURE_INVARIANTS.md",
       "heading": "Product acceptance"
@@ -255,6 +258,9 @@
     }
   },
   "features": {
+    "engineering": [
+      "principles"
+    ],
     "viewer": [
       "preview",
       "viewer-tests",

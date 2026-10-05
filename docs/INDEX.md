@@ -8,6 +8,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | --- | --- |
 | [README.md](../README.md) | Public project overview, state lookup, product direction, platforms, and links |
 | [AGENTS.md](../AGENTS.md) | Repository rules, safety constraints, and agent document routing |
+| [ENGINEERING_PRINCIPLES.md](ENGINEERING_PRINCIPLES.md) | Durable project-wide engineering conduct: evidence, repair, memory, context/quota lifecycle, delegation |
 | [DESIGN.md](../DESIGN.md) | Approved OR Focused Monochrome application design language |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Contributor workflow and pull request expectations |
 | [SECURITY.md](../SECURITY.md) | How to report a repository vulnerability |
