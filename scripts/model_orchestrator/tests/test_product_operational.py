@@ -169,6 +169,8 @@ class ProductAuthorityTests(unittest.TestCase):
             candidate = b.create_candidate(fixture.product, Path(directory).resolve() / 'candidate', fixture.base, authority=fixture.authority)
             self.assertEqual(git(candidate.root, 'rev-parse', 'HEAD'), fixture.base)
             self.assertFalse((candidate.root / 'scripts/model_orchestrator/product.py').exists())
+            runtime.register_candidate(fixture.task['task_id'], candidate)
+            self.assertEqual(runtime.candidate_descriptor(fixture.task['task_id'])['base_oid'], fixture.base)
         floor = g.load_floor(fixture.authority, fixture.task_path, fixture.catalog_path)
         self.assertEqual(floor.task['checkpoint_id'], '9B')
 
@@ -185,6 +187,15 @@ class ProductAuthorityTests(unittest.TestCase):
             proc = subprocess.run(argv, env=dict(os.environ, PYTHONPATH=str(REPO_ROOT / 'scripts')), capture_output=True)
             self.assertEqual(proc.returncode, 0, proc.stdout.decode() + proc.stderr.decode())
             self.assertEqual(json.loads(proc.stdout)['status'], 'OK')
+            candidate_argv = argv[:argv.index('admit')] + ['candidate', '--task-id', fixture.task['task_id'],
+                '--destination', str(root / 'candidate')]
+            proc = subprocess.run(candidate_argv, env=dict(os.environ, PYTHONPATH=str(REPO_ROOT / 'scripts')),
+                                  capture_output=True)
+            self.assertEqual(proc.returncode, 0, proc.stdout.decode() + proc.stderr.decode())
+            self.assertEqual(json.loads(proc.stdout)['base_sha'], fixture.base)
+            proc = subprocess.run(candidate_argv, env=dict(os.environ, PYTHONPATH=str(REPO_ROOT / 'scripts')),
+                                  capture_output=True)
+            self.assertEqual(proc.returncode, 2, 'duplicate registration must refuse without replacing the candidate')
             forged = dict(asdict(fixture.bootstrap), execution='OPERATIONAL_PRODUCT_TASK')
             bootstrap.write_text(c.canonical_json(forged))
             proc = subprocess.run(argv, env=dict(os.environ, PYTHONPATH=str(REPO_ROOT / 'scripts')), capture_output=True)

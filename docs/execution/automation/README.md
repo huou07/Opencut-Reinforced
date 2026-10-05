@@ -1187,6 +1187,12 @@ the immutable base clone remains unchanged during push/recovery. This supports
 product history. The original product PLAN/STATE and version sources remain
 protected. A new task requires a new external task pin for its new NEXT/base.
 
+Candidate registration compares against the validated execution manifest's
+base, which is the product base for an operational task and the build base for
+a disabled phase. The CLI holds the task lease across creation and registration;
+registration reuses that exact owned lease or acquires it itself. It does not
+relax the global lock order or permit duplicate candidate replacement.
+
 `PRODUCT` authorizations require the adopted immutable PLAN and approved GitHub
 publication URL. `ISOLATED_FIXTURE` authorizations require an existing explicit
 local bare publication target; their altered toy checkpoint plan and receipts

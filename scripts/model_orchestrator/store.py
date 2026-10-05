@@ -9,7 +9,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Callable
 
@@ -457,14 +457,14 @@ class RuntimeStore:
             raise StoreError('owned independent candidate required')
         resume_candidate(candidate, authority=self.authority)
         payload = self._authority()
-        if candidate.authority_digest != payload['git']['authority_digest'] or candidate.base_oid != payload['build']['base_sha']:
+        if candidate.authority_digest != payload['git']['authority_digest'] or candidate.base_oid != payload['git']['base_oid']:
             raise StoreError('candidate differs from original task authority/base')
         descriptor = dict(schema_version=1, root=str(candidate.root), base_oid=candidate.base_oid,
                 authority_digest=candidate.authority_digest, nonce=candidate.nonce,
                 device=candidate.filesystem_identity[0], inode=candidate.filesystem_identity[1])
         record = dict(schema_version=1, kind='candidate_identity', payload=descriptor)
         digest = c.canonical_digest(record)
-        with self.lock('task', task_id):
+        with nullcontext() if (0, task_id) in self._held else self.lock('task', task_id):
             current = self.inspect()
             def update(state):
                 task = state['tasks'][task_id]
