@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -47,9 +48,15 @@ def _digest(data):
 
 def protected_manifest(root, sha):
     """Freeze roadmap/spec/policy/control inputs; only STATE/evidence can advance."""
+    from agent_supervisor import EXPLICIT_PROTECTED_PATHS, PROTECTED_DIRECTORY_PREFIXES
+    exact = (EXPLICIT_PROTECTED_PATHS - {'docs/execution/STATE.json'}) | set(c.CONFIG_PATHS) | {
+        'DESIGN.md', 'docs/ARCHITECTURE.md', 'docs/TECHNICAL_PLAN.md', 'docs/PRODUCT.md',
+        'docs/SECURITY_LICENSING.md', 'docs/execution/README.md',
+        'docs/execution/AGENT_EXECUTION.md', 'docs/execution/PHASE_SPEC_TEMPLATE.md'}
+    prefixes = tuple(p for p in PROTECTED_DIRECTORY_PREFIXES if p != 'docs/execution/evidence/') + (
+        'docs/execution/automation/', 'scripts/model_orchestrator/', '.opencode/', 'docs/adr/')
     return [e for e in c.build_manifest(Path(root), sha, _base_input=True)
-            if c._authority_path(e['path']) and e['path'] != 'docs/execution/STATE.json'
-            and not e['path'].startswith('docs/execution/evidence/')]
+            if e['path'] in exact or e['path'].startswith(prefixes)]
 
 
 def _state(root, sha):
@@ -126,11 +133,7 @@ def derive_task(release, product_root, pin, delegation, sequence, base):
     if c.canonical_digest(protected_manifest(product_root, base)) != delegation['protected_manifest_digest']:
         raise c.ContractError('roadmap/spec/policy changed outside delegation')
     facts = product.release_active(release)
-    manifest = copy.deepcopy(facts['git'])
-    manifest.update(base_oid=base, base_manifest=c.build_manifest(Path(product_root), base, _base_input=True),
-                    purpose='OPERATIONAL', adoption_digest=c.canonical_digest(facts['adoption']))
-    manifest.pop('authority_digest')
-    manifest['authority_digest'] = c.canonical_digest(manifest)
+    manifest = product.operational_base_facts(facts, product_root, base)
     task = copy.deepcopy(_json(release.controller_root, pin.source_sha, entry['task_path']))
     task.update(task_id='roadmap-' + pin.delegation.digest[:20] + '-' + str(sequence),
                 base_sha=base, authority_digest=manifest['authority_digest'],
@@ -148,12 +151,72 @@ def derive_task(release, product_root, pin, delegation, sequence, base):
     return task, auth
 
 
-def validate_completion(product_root, delegation, auth, completed_base):
+class RecordedAttemptApi:
+    """Recollect supervisor-selected attempts, never substitute the latest rerun.
+
+    The existing evidence validators still check the exact SHA, workflow, branch,
+    event, jobs, measured steps and preview source/release. Missing historical
+    evidence refuses immediately; this read-only adapter cannot dispatch work.
+    """
+    def __init__(self, api, evidence):
+        self.api = api
+        self.authenticated = api.authenticated
+        self.runs = {}
+        self.workflows = {}
+        for gate in evidence['gates']:
+            self.runs[gate['run_id']] = gate['run_attempt']
+            self.workflows[gate['workflow_file'].split('/')[-1]] = gate['run_id']
+        preview = evidence['developer_preview']
+        if preview['required']:
+            run = preview['workflow_run']
+            self.runs[run['id']] = run['attempt']
+            self.workflows[preview['workflow_file'].split('/')[-1]] = run['id']
+
+    def get(self, path):
+        prefix = '/repos/' + c.REPOSITORY_IDENTITY
+        match = re.fullmatch(re.escape(prefix) + r'/actions/workflows/([^/]+)/runs\?.*', path)
+        if match:
+            from urllib.parse import unquote
+            name = unquote(match[1])
+            if name not in self.workflows:
+                raise c.ContractError('unrecorded workflow cannot prove roadmap completion')
+            run_id = self.workflows[name]
+            run = self.api.get(prefix+'/actions/runs/'+str(run_id)+'/attempts/'+str(self.runs[run_id]))
+            if run.get('id') != run_id or run.get('run_attempt') != self.runs[run_id]:
+                raise c.ContractError('hosted response differs from recorded run attempt')
+            return dict(total_count=1, workflow_runs=[run])
+        match = re.fullmatch(re.escape(prefix) + r'/actions/runs/(\d+)/jobs(\?.*)?', path)
+        if match:
+            run_id = int(match[1])
+            if run_id not in self.runs:
+                raise c.ContractError('unrecorded run cannot prove roadmap completion')
+            return self.api.get(prefix+'/actions/runs/'+str(run_id)+'/attempts/'+str(self.runs[run_id])+'/jobs'+(match[2] or ''))
+        return self.api.get(path)
+
+    def post(self, *args, **kwargs):
+        raise c.ContractError('completed checkpoint recollection cannot dispatch a replacement run')
+
+
+def validate_completion(product_root, delegation, auth, completed_base, task, *, release=None):
     """Reopen immutable product commits; a controller/model DONE label is insufficient."""
     import execution_plan, execution_evidence, agent_supervisor
     root = Path(product_root)
     implementation = c._git(root, 'rev-parse', completed_base + '^').decode().strip()
     c._ancestor(root, auth['product_base_sha'], implementation)
+    from .guards import matches
+    revisions = c._git(root, 'rev-list', '--reverse', auth['product_base_sha']+'..'+implementation).decode().splitlines()
+    if not revisions:
+        raise c.ContractError('completion has no implementation commits')
+    parent = auth['product_base_sha']
+    for revision in revisions:
+        parents = c._git(root, 'rev-list', '--parents', '-n', '1', revision).decode().split()[1:]
+        if parents != [parent]:
+            raise c.ContractError('roadmap implementation history must be linear from exact task base')
+        changed = c._git(root, 'diff', '--name-only', parent, revision).decode().splitlines()
+        if any(not matches(path, task['allowed_paths'], subtree=True)
+               or matches(path, task['forbidden_paths'], subtree=True) for path in changed):
+            raise c.ContractError('completed implementation exceeded delegated checkpoint scope')
+        parent = revision
     paths = c._git(root, 'diff', '--name-only', implementation, completed_base).decode().splitlines()
     if set(paths) != {'docs/execution/STATE.json', 'docs/execution/evidence/' + auth['checkpoint_id'] + '.json'}:
         raise c.ContractError('successor base is not a supervisor evidence/state-only completion')
@@ -180,9 +243,25 @@ def validate_completion(product_root, delegation, auth, completed_base):
         # the exact required workflow/job/class/preview facts independently.
         api = execution_evidence.GitHubApi(*c.REPOSITORY_IDENTITY.split('/'),token=execution_evidence.select_token())
         subject = c._git(root,'show','-s','--format=%s',implementation).decode().strip()
-        verified = agent_supervisor.verify_hosted_checkpoint(root,plan,checkpoint,implementation,subject,api=api,control_plane_receipt=receipt)['record']
+        verified = agent_supervisor.verify_hosted_checkpoint(root,plan,checkpoint,implementation,subject,api=RecordedAttemptApi(api,evidence),control_plane_receipt=receipt)['record']
         if any(verified[k] != evidence[k] for k in ('gates','developer_preview','evidence_classes')):
             raise c.ContractError('completed hosted evidence is stale or differs from recollection')
+        # Reopen class artifacts too; named successful steps alone are insufficient.
+        facts = product.release_active(release)
+        manifest = product.operational_base_facts(facts, root, auth['product_base_sha'])
+        historical = c.ValidatedReleaseAuthority(dict(facts, git=manifest, operational=dict(authorization=auth, task=task, checkpoint=checkpoint)),
+            Path(release.candidate_root), Path(release.controller_root), release.source_sha, product_root=root, _seal=c._PROVENANCE_SEAL)
+        from . import hosted
+        attempts = {gate['run_id']: gate['run_attempt'] for gate in evidence['gates']}
+        def recorded_request(path):
+            match = re.fullmatch(r'(/repos/[^/]+/[^/]+/actions/runs/)(\d+)', path)
+            if match:
+                run_id = int(match[2])
+                if run_id not in attempts:
+                    raise c.ContractError('production receipt uses an unrecorded hosted run')
+                path += '/attempts/'+str(attempts[run_id])
+            return hosted.github(path)
+        product.validate_hosted_product_receipts(historical, receipt, evidence, request=recorded_request)
     else:
         # This separate fixture record cannot pass the production evidence schema.
         if evidence.get('authority_semantics') != 'ISOLATED_ROADMAP_FIXTURE_NOT_PRODUCT_EVIDENCE' or evidence.get('task_digest') != auth['task_digest'] or evidence.get('roadmap_delegation_digest') != auth['roadmap_delegation_digest']:
@@ -265,7 +344,7 @@ def validate_derivation(release, product_root, pin, auth):
         old = row['authorization']
         if old['sequence'] != sequence or old['product_base_sha'] != base or old['roadmap_delegation_digest'] != pin.delegation.digest:
             raise c.ContractError('broken roadmap completion/derivation chain')
-        _, expected_old = derive_task(release, product_root, pin, delegation, sequence, base)
+        old_task, expected_old = derive_task(release, product_root, pin, delegation, sequence, base)
         if old != expected_old:
             raise c.ContractError('historical task derivation changed delegated scope/floor/bindings')
         if old == auth:
@@ -280,7 +359,7 @@ def validate_derivation(release, product_root, pin, auth):
             return delegation
         if row['completed_base_sha'] is None:
             raise c.ContractError('unfinished predecessor cannot grant successor authority')
-        validate_completion(product_root, delegation, old, row['completed_base_sha'])
+        validate_completion(product_root, delegation, old, row['completed_base_sha'], old_task, release=release)
         base = row['completed_base_sha']
     raise c.ContractError('task absent from external roadmap derivation ledger')
 
@@ -311,7 +390,10 @@ def issue_next(candidate_root, controller_root, product_root, bootstrap, pin):
         raise c.ContractError('unfinished task requires recovery, not new authorization')
     base=run['tasks'][-1]['completed_base_sha'] if run['tasks'] else delegation['initial_base_sha']
     for row in run['tasks']:
-        validate_completion(product_root,delegation,row['authorization'],row['completed_base_sha'])
+        old_task, old_auth = derive_task(release,product_root,pin,delegation,row['authorization']['sequence'],row['authorization']['product_base_sha'])
+        if old_auth != row['authorization']:
+            raise c.ContractError('completed task differs from deterministic delegation')
+        validate_completion(product_root,delegation,row['authorization'],row['completed_base_sha'],old_task,release=release)
     if sequence>len(delegation['checkpoints']):
         if _state(product_root,base)['current_next'] is not None:
             raise c.ContractError('roadmap scope exhausted while NEXT remains')
@@ -447,7 +529,7 @@ def run_roadmap(candidate_root, controller_root, product_root, bootstrap, pin, r
                 continue
             completed=result['completed_base_sha']
             c._commit(Path(product_root),completed)
-            validate_completion(product_root,delegation,auth,completed)
+            validate_completion(product_root,delegation,auth,completed,task,release=release)
             # The publication observation and clean new snapshot both bind DONE.
             if c._git(Path(product_root),'rev-parse','HEAD').decode().strip()!=completed or c._git(Path(product_root),'status','--porcelain').strip():
                 raise c.ContractError('executor did not materialize the clean exact completed product base')

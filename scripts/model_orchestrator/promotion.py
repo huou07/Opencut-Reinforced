@@ -64,8 +64,9 @@ def collect_inputs(*, store: s.RuntimeStore, task_id: str, guard_root: Path,
     readiness = v.readiness(guarded, Path(attempt_dir))
     _refuse(readiness['review_ready'] is True, 'promotion requires passed verification with no non-semantic blockers')
     reviews = [load_object(store, digest) for digest in state['object_digests']]
-    reviews = [r['payload'] for r in reviews if r['kind'] == 'review' and r['payload'].get('task_id') == task_id]
-    _refuse(len(reviews) == 1, 'promotion requires exactly one persisted independent review')
+    reviews = [r['payload'] for r in reviews if r['kind'] == 'review' and r['payload'].get('task_id') == task_id
+               and r['payload'].get('report',{}).get('candidate_sha') == guard['head']]
+    _refuse(len(reviews) == 1, 'promotion requires exactly one persisted independent review for the exact candidate')
     parsed = _validated_review(reviews[0], task=task, guard=guard, schemas=floor.verify()['schemas'],
                                implementation_family=implementation_family)
     readiness = dict(readiness, acceptance_ready=True, unresolved=[],
@@ -553,7 +554,8 @@ def build_control_plane_receipt(*, store: s.RuntimeStore, task_id: str, authoriz
     remote = remote_record['payload']['receipt']
     _refuse(remote['authorization_digest'] == authorization_digest, 'remote receipt binds a different authorization')
     reviews = [load_object(store, digest) for digest in current['object_digests']]
-    reviews = [r['payload'] for r in reviews if r['kind'] == 'review' and r['payload'].get('task_id') == task_id]
+    reviews = [r['payload'] for r in reviews if r['kind'] == 'review' and r['payload'].get('task_id') == task_id
+               and r['payload'].get('report',{}).get('candidate_sha') == authorization['candidate_sha']]
     _refuse(len(reviews) == 1, 'completion requires exactly one persisted review')
     payload = c._release_authority(store.authority)
     receipt = {'schema_version': 1, 'task_id': task_id, 'checkpoint_id': task['checkpoint_id'],

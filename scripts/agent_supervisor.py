@@ -1744,7 +1744,8 @@ def run_task_handoff(
     floor = guards.load_floor(trusted_store.authority, pinned['task_path'], pinned['catalog_path'])
     guarded = guards.restore_guarded(floor, guard_root)
     reviews = [promotion.load_object(trusted_store, digest) for digest in current['object_digests']]
-    review = next(record['payload'] for record in reviews if record['kind'] == 'review' and record['payload'].get('task_id') == task_id)
+    review = next(record['payload'] for record in reviews if record['kind'] == 'review' and record['payload'].get('task_id') == task_id
+                  and contracts.canonical_digest(record['payload']) == authorization['reviewer_receipt_digest'])
     inputs = promotion.collect_inputs(store=trusted_store, task_id=task_id, guard_root=guard_root, attempt_dir=attempt_dir,
         task_path=pinned['task_path'], catalog_path=pinned['catalog_path'], implementation_family=review['metadata']['implementation_family'])
     rebuilt = promotion.build_authorization(inputs, schemas=facts['schemas'],
@@ -2008,7 +2009,9 @@ def complete_isolated_roadmap_fixture(repo_root, *, trusted_store, authorization
         store_root=trusted_store.root,authorization_digest=authorization_digest,remote_receipt_digest=remote_receipt_digest,trusted_store=trusted_store)
     current=trusted_store.inspect()
     reviews=[p.load_object(trusted_store,d) for d in current['object_digests']]
-    review=next(r['payload'] for r in reviews if r['kind']=='review' and r['payload'].get('task_id')==task['task_id'])
+    issued=p.load_authorization(trusted_store,authorization_digest)
+    review=next(r['payload'] for r in reviews if r['kind']=='review' and r['payload'].get('task_id')==task['task_id']
+                and c.canonical_digest(r['payload'])==issued['reviewer_receipt_digest'])
     inputs=p.collect_inputs(store=trusted_store,task_id=task['task_id'],guard_root=guard_root,attempt_dir=attempt_dir,
         task_path=auth['task_path'],catalog_path=auth['catalog_path'],implementation_family=review['metadata']['implementation_family'])
     issued=p.load_authorization(trusted_store,authorization_digest)

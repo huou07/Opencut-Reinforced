@@ -44,8 +44,25 @@ def operational_manifest(authority, product_root, base_sha):
         raise c.ContractError('dirty or stale product base materialization')
     base = c.build_manifest(root, base_sha, _base_input=True)
     c._verify_materialization(root, base)
+    return operational_base_facts(facts, root, base_sha, base_manifest=base)
+
+
+def operational_base_facts(facts, root, base_sha, *, base_manifest=None):
+    """Reconstruct exact historical base facts without granting execution authority.
+
+    Product contract versions belong to the independently completed product base,
+    not to the control release's implementation-time version snapshot. Admission
+    and the supervisor still enforce the locked PLAN's permitted transitions.
+    """
+    import execution_plan
+    versions = execution_plan.read_contract_versions(Path(root), base_sha)
+    state = c.load_json_strict(c._git(Path(root), 'show', base_sha + ':docs/execution/STATE.json').decode())
+    if execution_plan.validate_contract_versions(state['verified_contract_versions'], 'product base versions') != versions:
+        raise c.ContractError('product base versions differ from supervisor STATE')
     result = copy.deepcopy(facts['git'])
-    result.update(base_oid=base_sha, base_manifest=base, purpose='OPERATIONAL',
+    result.update(base_oid=base_sha,
+                  base_manifest=base_manifest if base_manifest is not None else c.build_manifest(Path(root), base_sha, _base_input=True),
+                  contract_versions=versions, purpose='OPERATIONAL',
                   adoption_digest=c.canonical_digest(facts['adoption']))
     result.pop('authority_digest')
     result['authority_digest'] = c.canonical_digest(result)

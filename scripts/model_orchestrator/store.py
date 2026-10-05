@@ -292,8 +292,23 @@ class RuntimeStore:
                     raise StoreError('launch and active stage ownership differ')
                 if task['candidate_digest'] is not None:
                     original = {key:value for key,value in descriptor.items() if key != 'schema_version'}
-                    if original != {key:value for key,value in launch['input'].items() if key != 'manifest'}:
-                        raise StoreError('launch differs from original registered candidate')
+                    inputs = [original]
+                    for digest in refs:
+                        archived = _object(_read(self.root / 'objects' / (digest + '.json')))
+                        if archived['kind']=='receipt' and archived['payload'].get('kind')=='worker-repair-input' and archived['payload'].get('task_id')==task_id:
+                            repair=archived['payload']
+                            _exact(repair,('kind','task_id','task_contract_digest','previous_launch','readiness','failed_reviews','input'))
+                            if repair['task_contract_digest']!=task['contract_digest'] or any(repair['input'][key]!=original[key] for key in ('base_oid','authority_digest','nonce')):
+                                raise StoreError('repair archive changed original authority')
+                            if Path(repair['input']['root']).parent!=Path(original['root']).parent:
+                                raise StoreError('repair archive escaped original bounded storage')
+                            from .workspace import validate_record
+                            validate_record(repair['previous_launch'],task_id,repair['previous_launch']['stage']['lease_epoch'])
+                            if repair['previous_launch']['phase'] not in ('PRESERVED','CLEANING','REMOVED') or repair['readiness']['verification_passed'] and not repair['failed_reviews']:
+                                raise StoreError('repair archive lacks settled failure facts')
+                            inputs.append({key:value for key,value in repair['input'].items() if key != 'manifest'})
+                    if {key:value for key,value in launch['input'].items() if key != 'manifest'} not in inputs:
+                        raise StoreError('launch differs from original registered candidate or archived repair')
                 elif launch['input']['authority_digest'] != 'FIXTURE_ONLY':
                     raise StoreError('authority-bound launch requires original candidate registration')
             if task['stage'] is not None:
@@ -403,7 +418,14 @@ class RuntimeStore:
             self._validate(next_state)
             from .workspace import validate_transition
             for task_id, original in previous['tasks'].items():
-                validate_transition(original['launch'], next_state['tasks'][task_id]['launch'])
+                after_task=next_state['tasks'][task_id]
+                archived=any(record['kind']=='receipt' and record['payload'].get('kind')=='worker-repair-input'
+                    and record['payload'].get('task_id')==task_id and record['payload'].get('previous_launch')==original['launch'] for record in objects)
+                if original['launch'] is not None and after_task['launch'] is None and archived:
+                    if original['status']!='SETTLED' or original['stage'] is not None or after_task['status']!='READY' or previous['active_task'] is not None or previous['paused'] or original['launch']['phase'] not in ('PRESERVED','CLEANING','REMOVED'):
+                        raise StoreError('unreconciled launch cannot be archived for repair')
+                else:
+                    validate_transition(original['launch'], after_task['launch'])
             hit('before_temp_write')
             fd, name = tempfile.mkstemp(prefix='.state-', dir=self.root)
             temp = Path(name)
@@ -500,7 +522,7 @@ class RuntimeStore:
                     owner_nonce=owner_nonce, host_boot_identity=boot_identity, stage_nonce=stage_nonce, container_id=None)
         contract = _object(_read(self.root / 'objects' / (contract_digest + '.json')))['payload']
         attempt_objects = []
-        if contract.get('checkpoint_id') in ('M3', 'M4', 'M5'):
+        if contract.get('checkpoint_id') in ('M3', 'M4', 'M5') or contract.get('task_kind') == 'product_checkpoint':
             from .orchestrator import claim_attempt
             attempt_objects.append(claim_attempt(self, contract, current['epoch'] + 1))
         result = self.transaction(current['sequence'], current['epoch'], update, objects=attempt_objects)

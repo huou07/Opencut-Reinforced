@@ -414,6 +414,78 @@ def build_review_prompt(*, task: Mapping[str, Any], candidate_sha: str, diff_tex
     return '\n---\n'.join(parts)
 
 
+def prepare_worker_repair(*, store, task_id, task_path, catalog_path, guard_root, attempt_dir, destination):
+    """Rearm only a settled, preserved failed product attempt; retain all history.
+
+    The verified failure and original launch locator are durably archived before
+    another claim. Claim admission retains the same task/episode and causal
+    discipline. No process, base, authority, or successful promotion is reset.
+    """
+    import shutil
+    from . import workspace as w
+    _refuse((0, task_id) in store._held, 'task lease required for repair', 'CONFLICT')
+    facts = c._release_authority(store.authority)
+    _refuse(facts['git']['purpose'] == 'OPERATIONAL', 'repair requires adopted product authority')
+    current = store.inspect()
+    task_state = current['tasks'].get(task_id)
+    _refuse(not current['paused'] and current['active_task'] is None and task_state is not None
+            and task_state['status'] == 'SETTLED' and task_state['stage'] is None, 'unreconciled worker cannot be repaired')
+    launch = task_state['launch']
+    _refuse(launch is not None and launch['phase'] in ('PRESERVED','CLEANING','REMOVED'), 'repair requires preserved whole-stage termination')
+    floor = g.load_floor(store.authority, task_path, catalog_path)
+    guarded = g.restore_guarded(floor, Path(guard_root))
+    guard = guarded.verify()
+    _refuse(not guard['vetoes'], 'out-of-scope deterministic veto cannot be repaired by widening authority')
+    readiness = v.readiness(guarded, Path(attempt_dir))
+    records = _store_objects(store)
+    reviews = [record['payload'] for record in records if record['kind']=='review'
+               and record['payload'].get('task_id')==task_id and record['payload']['report'].get('candidate_sha')==guard['head']]
+    failed_reviews = [review for review in reviews if review['report']['verdict']!='PASS']
+    _refuse(not readiness['verification_passed'] or bool(failed_reviews), 'successful candidate has no repair authority')
+    _refuse(not any(record['kind']=='authorization' and record['payload'].get('task_id')==task_id for record in records), 'promoted/authorized work cannot be reset')
+    source = w.verify_preserved(store, launch)
+    destination = b._safe_path(Path(destination))
+    _refuse(not destination.exists(), 'repair input destination already exists; reconcile instead of overwrite')
+    original = b.restore_candidate(store, task_id)
+    _refuse(destination.parent==original.root.parent, 'repair input must share original bounded candidate storage')
+    for root in c.authority_roots(store.authority)+(store.root,):
+        _refuse(destination!=root and root not in destination.parents and destination not in root.parents, 'repair input overlaps authority')
+    shutil.copytree(source,destination)
+    candidate=b.Candidate(destination,original.base_oid,original.authority_digest,original.nonce,_seal=b._SEAL)
+    candidate.verify();w.flush_tree(destination)
+    item=destination.stat()
+    record=dict(schema_version=1,kind='receipt',payload=dict(kind='worker-repair-input',task_id=task_id,
+        task_contract_digest=task_state['contract_digest'],previous_launch=launch,
+        readiness=readiness,failed_reviews=failed_reviews,input=dict(root=str(destination),
+        base_oid=candidate.base_oid,authority_digest=candidate.authority_digest,nonce=candidate.nonce,
+        device=item.st_dev,inode=item.st_ino,manifest=w.manifest(destination))))
+    def update(state):
+        _refuse(state['tasks'][task_id]==task_state and state['active_task'] is None and not state['paused'], 'stale repair preparation')
+        state['tasks'][task_id]['status']='READY'
+        state['tasks'][task_id]['launch']=None
+    store.transaction(current['sequence'],current['epoch'],update,objects=[record])
+    return c.canonical_digest(record)
+
+
+def worker_input(store, task_id):
+    """Restore the newest immutable repair input or the original candidate."""
+    from . import workspace as w
+    records=[r['payload'] for r in _store_objects(store) if r['kind']=='receipt'
+             and r['payload'].get('kind')=='worker-repair-input' and r['payload'].get('task_id')==task_id]
+    if not records:return b.restore_candidate(store,task_id)
+    record=records[-1]
+    task=store.inspect()['tasks'][task_id]
+    _refuse(record['task_contract_digest']==task['contract_digest'], 'repair input binds wrong task')
+    info=record['input'];path=b._safe_path(Path(info['root']));item=path.stat()
+    _refuse((item.st_dev,item.st_ino)==(info['device'],info['inode']) and w.manifest(path)==info['manifest'], 'repair input changed or disappeared')
+    candidate=b.Candidate(path,info['base_oid'],info['authority_digest'],info['nonce'],_seal=b._SEAL)
+    original=b.restore_candidate(store,task_id)
+    _refuse(candidate.base_oid==original.base_oid and candidate.authority_digest==original.authority_digest
+            and candidate.nonce==original.nonce, 'repair input changed original authority')
+    candidate.verify()
+    return candidate
+
+
 def run_worker(*, store: s.RuntimeStore, stage: dict, box: b.ContainerSandbox, candidate: b.Candidate,
                task: Mapping[str, Any], enrollment: Mapping[str, Any], binary: a.OpenCodeBinary,
                agent: str, prompt: str, image: str, limits: b.Limits, network: str,

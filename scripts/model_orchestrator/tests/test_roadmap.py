@@ -22,6 +22,8 @@ class RoadmapFixture:
     def __init__(self,root,**kwargs):
         f=self.fixture=ProductFixture(root,**dict(kwargs,toy=True))
         self.__dict__.update(f.__dict__)
+        git(self.controller,'config','user.name','Roadmap Unit Fixture')
+        git(self.controller,'config','user.email','fixture@example.invalid')
         plan=json.loads(c._git(self.product,'show',c.TRUSTED_DESIGN_BASE+':docs/execution/PLAN.json').decode())
         original=next(row for row in plan['checkpoints'] if row['id']=='9B')
         rows=[]
@@ -193,11 +195,100 @@ class RoadmapAuthorityTests(unittest.TestCase):
         import shutil
         shutil.rmtree(f.bare);other.rename(f.bare)
 
+    def test_product_claims_keep_attempt_history_and_refuse_unsettled_repair(self):
+        # Unit fixture: no process launched; READY resets exercise only the
+        # durable claim ledger. Real repair/preservation is the live boundary.
+        from model_orchestrator import store as st,orchestrator as o
+        from model_orchestrator.tests.test_attempt_execution import reset_ready_test_only
+        f=self.fixture
+        bp,pin,task=r.issue_next(f.candidate,f.controller,f.product,f.bootstrap,f.roadmap_pin)
+        authority=product.load_operational_authority(f.candidate,f.controller,f.product,bootstrap=bp,product_pin=pin,roadmap_pin=f.roadmap_pin)
+        runtime=st.RuntimeStore(f.root/'claim-runtime',authority);runtime.initialize()
+        digest=runtime.register_task(task,task)
+        for attempt in range(3):
+            with runtime.lock('task',task['task_id']):
+                runtime.claim(task['task_id'],digest,owner_nonce='unit-owner',boot_identity='unit-boot',stage_id='unit-stage-'+str(attempt),stage_nonce='unit-nonce-'+str(attempt))
+                with self.assertRaisesRegex(o.OrchestratorError,'unreconciled'):
+                    o.prepare_worker_repair(store=runtime,task_id=task['task_id'],task_path='unused',catalog_path='unused',guard_root='unused',attempt_dir='unused',destination='unused')
+            reset_ready_test_only(runtime,task['task_id'])
+        episode=o.AttemptLedger.episode_id(task['checkpoint_id'],'worker',c.canonical_json(sorted(task['required_check_ids'])))
+        self.assertEqual(o.AttemptLedger.load(runtime).speculative_used(episode),2)
+        with runtime.lock('task',task['task_id']),self.assertRaisesRegex(o.OrchestratorError,'two speculative'):
+            runtime.claim(task['task_id'],digest,owner_nonce='unit-owner',boot_identity='unit-boot',stage_id='unit-fourth',stage_nonce='unit-fourth')
+
+    def test_failed_worker_repair_archives_work_and_keeps_original_binding(self):
+        # Unit-only no-process lifecycle fixture. Real Docker termination and
+        # failed verification/repair are required separately by live acceptance.
+        import shutil
+        from types import SimpleNamespace
+        from model_orchestrator import store as st,orchestrator as o,sandbox as b,workspace as w
+        f=self.fixture
+        bp,pin,task=r.issue_next(f.candidate,f.controller,f.product,f.bootstrap,f.roadmap_pin)
+        authority=product.load_operational_authority(f.candidate,f.controller,f.product,bootstrap=bp,product_pin=pin,roadmap_pin=f.roadmap_pin)
+        runtime=st.RuntimeStore(f.root/'repair-runtime',authority);runtime.initialize();digest=runtime.register_task(task,task)
+        storage=f.root/'repair-storage';storage.mkdir()
+        candidate=b.create_candidate(f.product,storage/'original',task['base_sha'],authority=authority)
+        runtime.register_candidate(task['task_id'],candidate)
+        with runtime.lock('task',task['task_id']):
+            stage=runtime.claim(task['task_id'],digest,owner_nonce='unit-owner',boot_identity='unit-boot',stage_id='unit-stage',stage_nonce='unit-nonce')
+            path=w.reserve_launch(runtime,stage,candidate,storage,'unit-daemon','sha256:'+'b'*64,'IMPLEMENTATION')
+            b._make_launch_view(candidate,storage,task['task_id'],'unit-stage','IMPLEMENTATION',path)
+            w.bind_launch(runtime,stage)
+            (path/'roadmap-1.txt').write_text('WRONG\n');git(path,'add','roadmap-1.txt');git(path,'commit','-qm','unit: retained failed marker')
+            preserved=runtime.root/'artifacts'/runtime.launch_record(stage)['container_name']/'candidate'
+            preserved.parent.mkdir(parents=True);shutil.copytree(path,preserved)
+            for phase in ('RECONCILED','PRESERVING','PRESERVED'):
+                launch=runtime.launch_record(stage);launch['phase']=phase
+                if phase in ('PRESERVING','PRESERVED'):launch['result']=dict(path=str(preserved),manifest=w.manifest(preserved),head=git(preserved,'rev-parse','HEAD'))
+                runtime.update_launch(stage,launch)
+            current=runtime.inspect()
+            def unit_settled(state):
+                state['tasks'][task['task_id']].update(status='SETTLED',stage=None);state['active_task']=None
+            runtime.transaction(current['sequence'],current['epoch'],unit_settled)
+            guard=SimpleNamespace(verify=lambda:dict(vetoes=[],head=git(preserved,'rev-parse','HEAD')))
+            with patch('model_orchestrator.guards.restore_guarded',return_value=guard),patch('model_orchestrator.verification.readiness',return_value=dict(verification_passed=False)):
+                repair=o.prepare_worker_repair(store=runtime,task_id=task['task_id'],task_path=r._json(f.controller,bp.source_sha,pin.path)['task_path'],
+                    catalog_path=r._json(f.controller,bp.source_sha,pin.path)['catalog_path'],guard_root='unused',attempt_dir='unused',destination=storage/'repaired-input')
+            self.assertIn(repair,runtime.inspect()['object_digests'])
+            self.assertEqual(runtime.candidate_descriptor(task['task_id'])['root'],str(candidate.root))
+            retained=o.worker_input(runtime,task['task_id'])
+            self.assertEqual((retained.root/'roadmap-1.txt').read_text(),'WRONG\n')
+            new=runtime.claim(task['task_id'],digest,owner_nonce='unit-owner',boot_identity='unit-boot',stage_id='unit-repair',stage_nonce='unit-repair')
+            w.reserve_launch(runtime,new,retained,storage,'unit-daemon','sha256:'+'b'*64,'IMPLEMENTATION')
+            self.assertEqual(runtime.inspect()['tasks'][task['task_id']]['attempt'],2)
+            (retained.root/'roadmap-1.txt').write_text('tampered\n')
+            with self.assertRaisesRegex(o.OrchestratorError,'changed or disappeared'):o.worker_input(runtime,task['task_id'])
+
     def test_model_raw_delegation_has_zero_authority(self):
         f=self.fixture;release=c.load_release_authority(f.candidate,f.controller,bootstrap=f.bootstrap)
         with self.assertRaises(c.ContractError):r.load_delegation(release,f.product,f.delegation)
         wrong=r.RoadmapPin(f.source,c.RecordPin(f.delegation_path,'0'*64))
         with self.assertRaises(c.ContractError):r.load_delegation(release,f.product,wrong)
+
+
+class RecordedAttemptTests(unittest.TestCase):
+    def test_recollects_pinned_attempt_and_refuses_dispatch(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        api = SimpleNamespace(authenticated=True, get=Mock(return_value=dict(id=12,run_attempt=1)))
+        pinned = r.RecordedAttemptApi(api, dict(gates=[dict(run_id=12,run_attempt=1,workflow_file='.github/workflows/test.yml')],developer_preview=dict(required=False)))
+        prefix='/repos/'+c.REPOSITORY_IDENTITY
+        self.assertEqual(pinned.get(prefix+'/actions/workflows/test.yml/runs?head_sha=abc')['workflow_runs'][0]['run_attempt'],1)
+        self.assertEqual(api.get.call_args.args[0],prefix+'/actions/runs/12/attempts/1')
+        pinned.get(prefix+'/actions/runs/12/jobs?per_page=100')
+        self.assertEqual(api.get.call_args.args[0],prefix+'/actions/runs/12/attempts/1/jobs?per_page=100')
+        for action in (lambda:pinned.post('anything'),lambda:pinned.get(prefix+'/actions/runs/13/jobs')):
+            with self.assertRaises(c.ContractError):action()
+        api.get.return_value=dict(id=12,run_attempt=2)
+        with self.assertRaises(c.ContractError):pinned.get(prefix+'/actions/workflows/test.yml/runs?head_sha=abc')
+
+    def test_protected_manifest_excludes_product_version_source(self):
+        entries=[dict(path=path) for path in ('crates/or_core/src/project_document.rs','crates/or_ipc/src/protocol.rs',
+            'README.md','docs/execution/PLAN.json','scripts/model_orchestrator/roadmap.py','docs/execution/phases/PHASE_9.md',
+            'docs/execution/STATE.json','docs/execution/evidence/OR-A.json')]
+        with patch.object(c,'build_manifest',return_value=entries):
+            self.assertEqual([row['path'] for row in r.protected_manifest('.', 'unused')],
+                ['docs/execution/PLAN.json','scripts/model_orchestrator/roadmap.py','docs/execution/phases/PHASE_9.md'])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -1257,7 +1257,15 @@ an intact deterministic derivation chain and independently validated prior
 completion. Root records/templates cannot be replaced by later controller
 blobs. Raw JSON, branch names, executor DONE labels and candidate pins confer
 no authority. Production completion revalidates exact hosted workflow/class
-facts and the existing supervisor state transition.
+facts and the existing supervisor state transition. Historical recollection selects
+the recorded workflow run attempt and its jobs, including preview verification;
+a later workflow rerun cannot replace the accepted facts. Every implementation
+commit is rechecked against its root-pinned task scope, including transient edits.
+The protected roadmap manifest freezes execution policy, phase specifications,
+permanent architecture and orchestrator controls, not ordinary product source or
+its implementation-time version-file bytes. Operational version facts come from
+the exact supervisor-completed product base and must match STATE; permitted
+version changes still require the locked PLAN/policy transition owner.
 
 `python3 -m model_orchestrator.roadmap` owns an exclusive trusted-host run lease,
 commits each task and budget reservation before launching its operator-pinned
@@ -1280,7 +1288,15 @@ Routing preserves qualifications, family independence and task-class reasoning
 floors: sufficient qualified free models first, GPT-6 Luna as the economical
 paid fallback, stronger paid models only when those choices are unavailable or
 insufficient. Unknown prices/availability do not confer eligibility; reasoning
-uses the existing free/non-scarce versus paid/scarce effort rule.
+uses the existing free/non-scarce versus paid/scarce effort rule. Product worker
+claims retain the same durable attempt discipline as control claims. A trusted
+`repair` stage may rearm only settled, preserved work with independently reopened
+failed verifier or exact-head reviewer facts. It archives the whole original
+launch and failure receipts, copies useful work to a fresh bounded input, and
+retains the original task/base/authority, candidate descriptor and episode.
+Successful or authorized work cannot be reset; a new claim still enforces
+speculative/causal limits. Archived work remains retained until separately safe
+cleanup; a partial unreferenced repair copy grants no launch authority.
 
 Isolated roadmap acceptance has its own explicit local publication, toy plan,
 markers and fixture completion evidence; it cannot advance actual product STATE

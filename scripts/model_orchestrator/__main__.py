@@ -122,13 +122,29 @@ def do_approve_causal(args: argparse.Namespace) -> dict:
     try:
         authority = load_authority(args)
         runtime = open_store(args, authority)
-        diagnosis = c.load_release_authority(Path(args.candidate_root), Path(args.diagnosis_controller),
-                    bootstrap=bootstrap_from_dict(load_json(args.diagnosis_bootstrap)))
+        if args.product_root:
+            diagnosis_args=argparse.Namespace(**dict(vars(args),bootstrap=args.diagnosis_bootstrap,controller_root=args.diagnosis_controller))
+            diagnosis=load_authority(diagnosis_args)
+        else:
+            diagnosis = c.load_release_authority(Path(args.candidate_root), Path(args.diagnosis_controller),
+                        bootstrap=bootstrap_from_dict(load_json(args.diagnosis_bootstrap)))
         with runtime.lock('task', args.task_id):
             digest = o.approve_causal(runtime, args.task_id, diagnosis_authority=diagnosis, subsystem=args.subsystem)
         return result('OK', approval_digest=digest)
     except (c.ContractError, s.StoreError, o.OrchestratorError) as exc:
         return result('REFUSED', reason=str(exc))
+
+
+def do_repair(args):
+    try:
+        authority=load_authority(args)
+        runtime=open_store(args,authority)
+        with runtime.lock('task',args.task_id):
+            digest=o.prepare_worker_repair(store=runtime,task_id=args.task_id,task_path=args.task_path,
+                catalog_path=args.catalog_path,guard_root=Path(args.guard_root),attempt_dir=Path(args.attempt_dir),destination=Path(args.destination))
+        return result('OK',repair_input_digest=digest)
+    except (c.ContractError,s.StoreError,o.OrchestratorError,b.SandboxError) as exc:
+        return result('REFUSED',reason=str(exc))
 
 
 def do_claim(args: argparse.Namespace) -> dict:
@@ -151,7 +167,7 @@ def do_claim(args: argparse.Namespace) -> dict:
                                   boot_identity=args.boot, stage_id=args.stage_id, stage_nonce=args.stage_nonce)
             if not args.launch:
                 return result('OK', stage='CLAIMED', lease_epoch=stage['lease_epoch'])
-            candidate = b.restore_candidate(runtime, args.task_id)
+            candidate = o.worker_input(runtime, args.task_id)
             daemon_box = b.ContainerSandbox(b.DockerCLI(Path(args.docker_bin), args.docker_sha, endpoint=args.endpoint),
                                             boot_identity=args.boot, host_platform='linux')
             outcome = o.run_worker(store=runtime, stage=stage, box=daemon_box, candidate=candidate, task=full_task,
@@ -160,7 +176,8 @@ def do_claim(args: argparse.Namespace) -> dict:
                                    limits=b.Limits(*[int(x) for x in args.limits.split(',')]),
                                    network=args.network, container_binary=args.container_binary,
                                    storage_root=Path(args.storage_root), timeout_seconds=args.timeout,
-                                   credential_dir=Path(args.credential_dir) if args.credential_dir else None)
+                                   credential_dir=Path(args.credential_dir) if args.credential_dir else None,
+                                   observation_dir=Path(args.observation_dir) if args.observation_dir else Path(args.runtime)/'observations'/args.stage_id)
             return result('OK', stage=outcome['task_status'], preserved=outcome['preserved'],
                           exit_code=outcome['exit_code'], timed_out=outcome['timed_out'],
                           transcript_digest=outcome['transcript_digest'])
@@ -222,7 +239,8 @@ def do_review(args: argparse.Namespace) -> dict:
                                      limits=b.Limits(*[int(x) for x in args.limits.split(',')]),
                                      timeout_seconds=args.timeout,
                                      credential_dir=Path(args.credential_dir) if args.credential_dir else None,
-                                     storage_root=Path(args.storage_root) if args.storage_root else None, store=runtime)
+                                     storage_root=Path(args.storage_root) if args.storage_root else None, store=runtime,
+                                     observation_dir=Path(args.observation_dir) if args.observation_dir else Path(args.runtime)/'observations'/('review-'+str(runtime.inspect()['sequence'])))
             digest = o.persist_review(runtime, args.task_id, outcome['report'], outcome['metadata'])
             status = 'OK' if outcome['verdict'] == 'PASS' else 'REFUSED'
             return result(status, verdict=outcome['verdict'], review_digest=digest)
@@ -422,6 +440,11 @@ def build_parser() -> argparse.ArgumentParser:
     causal.add_argument('--diagnosis-bootstrap', required=True)
     causal.add_argument('--subsystem', choices=('worker', 'reviewer', 'source_reviewer'), default='worker')
     causal.set_defaults(func=do_approve_causal)
+    repair = sub.add_parser('repair')
+    for name in ('task-id','task-path','catalog-path','guard-root','attempt-dir','destination'):
+        repair.add_argument('--'+name,required=True)
+    repair.set_defaults(func=do_repair)
+
     claim = sub.add_parser('claim')
     claim.add_argument('--task-id', required=True)
     claim.add_argument('--owner', required=True)
@@ -430,6 +453,7 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument('--stage-nonce', required=True)
     claim.add_argument('--launch', action='store_true')
     claim.add_argument('--enrollment')
+    claim.add_argument('--observation-dir',help='trusted durable transport observation directory')
     claim.add_argument('--enrollment-digest', help='optional exact pin; must match admitted task role_enrollment_ids')
     claim.add_argument('--task-class', default='IMPLEMENTATION')
     claim.add_argument('--required-reasoning', choices=a.REASONING_LEVELS, default='MEDIUM')
@@ -462,6 +486,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument('--guard-root', required=True)
     review.add_argument('--attempt-dir', required=True)
     review.add_argument('--enrollment', required=True)
+    review.add_argument('--observation-dir',help='trusted durable transport observation directory')
     review.add_argument('--enrollment-digest', help='optional exact pin; must match admitted task role_enrollment_ids')
     review.add_argument('--task-class', default='INVESTIGATION_REVIEW')
     review.add_argument('--required-reasoning', choices=('HIGH', 'XHIGH', 'MAX'), default='HIGH')
