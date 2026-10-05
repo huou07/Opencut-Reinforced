@@ -120,7 +120,7 @@ jobs:
           assert receipt['package_digest'] == digest(receipt['package'])
           assert receipt['receipt_digest'] == digest({k: v for k, v in receipt.items() if k != 'receipt_digest'})
           suites = receipt['suites']
-          expected_suites = {'test_contracts', 'test_isolation_and_state', 'test_verification', 'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks', 'test_product_operational', 'test_live_product_operational', 'test_roadmap', 'test_live_roadmap', 'test_execution_infra', 'test_document_routing'}
+          expected_suites = {'test_contracts', 'test_isolation_and_state', 'test_verification', 'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks', 'test_product_operational', 'test_live_product_operational', 'test_roadmap', 'test_live_roadmap', 'test_execution_infra', 'test_document_routing', 'control-checks'}
           assert len(suites) == len(expected_suites) and {suite['id'] for suite in suites} == expected_suites
           for suite in suites:
               assert suite['result'] == 'PASS' and suite['cases']

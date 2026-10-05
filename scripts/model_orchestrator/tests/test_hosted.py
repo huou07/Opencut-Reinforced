@@ -181,7 +181,7 @@ class RoadmapHostedProofTests(unittest.TestCase):
         workflow=(h.ROOT/h.WORKFLOW).read_text()
         match=re.search(r"^\s*expected_suites = (.*)$",workflow,re.MULTILINE)
         self.assertIsNotNone(match)
-        self.assertEqual(ast.literal_eval(match[1]),set(h.SUITES))
+        self.assertEqual(ast.literal_eval(match[1]),set(h.SUITES) | {'control-checks'})
 
     def inputs(self):
         import io,zipfile,hashlib,json,base64

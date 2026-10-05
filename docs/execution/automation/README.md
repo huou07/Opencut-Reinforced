@@ -1307,3 +1307,6 @@ or satisfy production evidence. It must nevertheless exercise real adopted
 control authority, model execution/review, rootless verification, guarded
 promotion, authentic hosted observations and the real supervisor transition.
 This control-plane change does not authorize or implement product 9B.
+
+The hosted collector pins both the measured test-module inventory and the
+producer’s `control-checks` suite; omitting either fails certification collection.
