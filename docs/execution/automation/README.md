@@ -1229,3 +1229,8 @@ resource classes require measured bounds. Fixtures cannot invoke real product
 completion, and no receipt is synthesized from a green step or a model PASS.
 The future authorized checkpoint must supply its actual measured hosted
 artifacts; missing artifacts block completion without advancing STATE.
+
+Reviewer admission uses the same exact external task binding as worker admission.
+An operational product task retains its own task identity; it is not compared
+with the historical disabled build task identity. Verification and independent
+review still require the unchanged pinned floor and candidate receipts.

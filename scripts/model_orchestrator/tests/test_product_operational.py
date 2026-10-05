@@ -12,8 +12,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
-from model_orchestrator import contracts as c, product as op, store as s, sandbox as b, guards as g
+from model_orchestrator import contracts as c, product as op, store as s, sandbox as b, guards as g, orchestrator as o
 from model_orchestrator.tests.test_contracts import shared_provenance, valid_task, REPO_ROOT, DIGEST
 from model_orchestrator.tests.test_promotion_and_handoff import git
 
@@ -201,6 +203,25 @@ class ProductAuthorityTests(unittest.TestCase):
             proc = subprocess.run(argv, env=dict(os.environ, PYTHONPATH=str(REPO_ROOT / 'scripts')), capture_output=True)
             self.assertEqual(proc.returncode, 2)
             self.assertEqual(json.loads(proc.stdout)['status'], 'REFUSED')
+
+    def test_review_admits_exact_product_task_before_verification(self):
+        fixture = self.fixture
+        floor = g.load_floor(fixture.authority, fixture.task_path, fixture.catalog_path)
+        self.assertNotEqual(floor.task['task_id'], c._release_authority(fixture.authority)['build']['task_id'])
+        guarded = SimpleNamespace(verify=lambda: {'vetoes': []})
+        arguments = dict(authority=fixture.authority, floor=floor, guarded=guarded,
+            attempt_dir=fixture.root / 'unexecuted-attempt', enrollment=None, binary=None,
+            agent=None, box=None, image=None, container_binary=None,
+            implementation_family='muse', limits=None)
+        # Stop at the real verifier boundary: this test grants no PASS receipt.
+        with patch.object(o.v, 'readiness', side_effect=RuntimeError('verification boundary')) as readiness:
+            with self.assertRaisesRegex(RuntimeError, '^verification boundary$'):
+                o.run_reviewer(**arguments)
+            readiness.assert_called_once_with(guarded, arguments['attempt_dir'])
+        wrong = copy.deepcopy(floor.task); wrong['task_id'] = 'unapproved-review-task'
+        with patch.object(o.v, 'readiness') as readiness, self.assertRaises(c.ContractError):
+            o.run_reviewer(**dict(arguments, floor=SimpleNamespace(task=wrong)))
+        readiness.assert_not_called()
 
     def test_disabled_build_or_unadopted_release_refuses(self):
         for field in ('adoption', 'certification'):

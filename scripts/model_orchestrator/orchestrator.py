@@ -503,8 +503,7 @@ def run_reviewer(*, authority: c.ValidatedReleaseAuthority, floor: g.Floor, guar
                  observation_dir: Path | None = None, store: s.RuntimeStore | None = None) -> dict[str, Any]:
     """Independent read-only review: reverify everything, then transport one strict report."""
     task = floor.task
-    payload = c._release_authority(authority)
-    _refuse(task['task_id'] == payload['build']['task_id'], 'review task differs from authority')
+    payload = c.validate_phase_admission(authority, task, capability='M3')
     guard = guarded.verify()
     _refuse(not guard['vetoes'], 'deterministic guard veto prevents review')
     readiness = v.readiness(guarded, attempt_dir)
