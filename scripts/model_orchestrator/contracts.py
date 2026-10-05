@@ -102,6 +102,9 @@ ADOPTION_ALLOWED_PATHS = frozenset(
         "scripts/model_orchestrator/__init__.py",
         "scripts/model_orchestrator/contracts.py",
         "scripts/model_orchestrator/product.py",
+        "scripts/model_orchestrator/roadmap.py",
+        "scripts/model_orchestrator/tests/test_roadmap.py",
+        "scripts/model_orchestrator/tests/test_live_roadmap.py",
         "scripts/model_orchestrator/tests/test_product_operational.py",
         "scripts/model_orchestrator/tests/test_live_product_operational.py",
         "scripts/model_orchestrator/store.py",
@@ -459,7 +462,7 @@ def validate_record(record: Any, record_name: str, schemas: Mapping[str, Any], *
         return validate_adoption_record(record, schemas, external=context)
     if record_name == 'control_amendment_marker':
         return validate_control_amendment_marker(record, schemas)
-    if record_name in ('build_authorization', 'certification_bundle', 'operational_adoption_pin', 'product_task_authorization'):
+    if record_name in ('build_authorization', 'certification_bundle', 'operational_adoption_pin', 'product_task_authorization', 'roadmap_delegation'):
         raise ContractError('external authority records require the Git pin loader')
     record = _shape(record, record_name, schemas)
     if record_name == 'verification_receipt':

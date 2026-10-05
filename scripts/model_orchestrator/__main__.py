@@ -71,8 +71,13 @@ def load_authority(args: argparse.Namespace) -> c.ValidatedReleaseAuthority:
             raise c.ContractError('operational bootstrap requires the immutable product base root')
         from .product import load_operational_authority
         pin = raw['product_task_pin']
+        roadmap_pin = None
+        if raw.get('roadmap_pin') is not None:
+            from .roadmap import RoadmapPin
+            rp = raw['roadmap_pin']
+            roadmap_pin = RoadmapPin(rp['source_sha'], c.RecordPin(**rp['delegation']))
         return load_operational_authority(Path(args.candidate_root), Path(args.controller_root), Path(args.product_root),
-            bootstrap=bootstrap, product_pin=c.RecordPin(pin['path'], pin['digest']))
+            bootstrap=bootstrap, product_pin=c.RecordPin(pin['path'], pin['digest']), roadmap_pin=roadmap_pin)
     if args.product_root:
         raise c.ContractError('product root requires an externally pinned product task')
     return c.load_release_authority(Path(args.candidate_root), Path(args.controller_root), bootstrap=bootstrap)

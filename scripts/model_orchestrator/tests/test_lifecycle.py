@@ -186,6 +186,16 @@ class RoutingObservationTests(unittest.TestCase):
         return a.select_model('IMPLEMENTATION', enrollments, task_budget={'cost_microusd': budget},
                               required_reasoning=floor, **kw)
 
+    def test_qualified_free_then_luna_then_justified_stronger_paid(self):
+        free = self.enrollment(model='fixture/free', price=0)
+        luna = self.enrollment(model='openai/gpt-6-luna', price=8)
+        strong = self.enrollment(model='fixture/strong', price=3)
+        self.assertEqual(self.choose([strong, luna, free])['model_id'], free['model_id'])
+        self.assertEqual(self.choose([strong, luna])['model_id'], luna['model_id'])
+        self.assertEqual(self.choose([strong, luna], availability={luna['model_id']: 'unavailable'})['model_id'], strong['model_id'])
+        low = self.enrollment(model='openai/gpt-6-luna', price=1, efforts=('LOW',))
+        self.assertEqual(self.choose([strong, low], floor='HIGH')['model_id'], strong['model_id'])
+
     def test_unknown_price_and_missing_price_never_mean_free(self):
         unknown = self.enrollment(pricing_observation=dict(kind='unknown', effort_cost_microusd={},
                          retry_cost_microusd=0, budget_pressure_microusd=0))

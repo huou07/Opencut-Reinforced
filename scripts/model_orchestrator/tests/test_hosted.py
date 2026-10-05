@@ -173,5 +173,44 @@ class HostedEvidenceTests(unittest.TestCase):
             h.validate_receipts(receipt, collector, expected=expected, run_id=RUN, run_attempt=1)
 
 
+
+class RoadmapHostedProofTests(unittest.TestCase):
+    """CP47: a fixture PASS JSON cannot replace exact hosted producer/source facts."""
+    def inputs(self):
+        import io,zipfile,hashlib,json,base64
+        from model_orchestrator import hosted as h
+        sha='a'*40;candidate='b'*40;task='c'*64
+        receipt=dict(schema_version=1,authority_semantics='ISOLATED_ROADMAP_FIXTURE_NOT_PRODUCT_EVIDENCE',
+            candidate_sha=candidate,task_digest=task,path='roadmap-1.txt',marker='# ROADMAP_1_PASS',
+            content_sha256=hashlib.sha256(b'# ROADMAP_1_PASS\n').hexdigest(),release_sha=sha,run_id=123,attempt=1,result='PASS')
+        data=io.BytesIO()
+        with zipfile.ZipFile(data,'w') as z:z.writestr('roadmap-fixture-receipt.json',json.dumps(receipt))
+        archive=data.getvalue()
+        prefix='/repos/huou07/Opencut-Reinforced'
+        api={prefix+'/actions/runs/123':dict(repository=dict(full_name='huou07/Opencut-Reinforced'),head_sha=sha,event='workflow_dispatch',conclusion='success',path=h.WORKFLOW,run_attempt=1),
+            prefix+'/actions/runs/123/jobs?per_page=100':dict(jobs=[dict(id=456,name='Isolated roadmap hosted marker acceptance',conclusion='success',steps=[dict(name='Independently measure exact immutable fixture marker',conclusion='success')])]),
+            prefix+'/actions/runs/123/artifacts?per_page=100':dict(artifacts=[dict(id=789,name='roadmap-fixture-'+task,expired=False,digest='sha256:'+hashlib.sha256(archive).hexdigest(),workflow_run=dict(head_sha=sha))]),
+            prefix+'/actions/artifacts/789/zip':archive,
+            prefix+'/contents/roadmap-1.txt?ref='+candidate:dict(type='file',encoding='base64',size=17,content=base64.b64encode(b'# ROADMAP_1_PASS\n').decode())}
+        def request(path):
+            value=api[path];return value if isinstance(value,bytes) else json.dumps(value).encode()
+        return api,dict(run_id=123,release_sha=sha,candidate_sha=candidate,task_digest=task,marker_path='roadmap-1.txt',marker='# ROADMAP_1_PASS',request=request)
+
+    def test_fixture_observation_requires_exact_hosted_binding(self):
+        from model_orchestrator import hosted as h
+        api,kwargs=self.inputs()
+        result=h.collect_roadmap_fixture(**kwargs)
+        self.assertEqual(result['candidate_sha'],kwargs['candidate_sha'])
+        for path,key,value in [
+            ('/actions/runs/123','head_sha','d'*40),
+            ('/actions/runs/123','conclusion','failure'),
+            ('/contents/roadmap-1.txt?ref='+'b'*40,'content','d3Jvbmc='),
+        ]:
+            api,args=self.inputs();api['/repos/huou07/Opencut-Reinforced'+path][key]=value
+            with self.subTest(key=key),self.assertRaises(c.ContractError):h.collect_roadmap_fixture(**args)
+        api,args=self.inputs()
+        api['/repos/huou07/Opencut-Reinforced/actions/runs/123/jobs?per_page=100']['jobs'][0]['steps'][0]['conclusion']='skipped'
+        with self.assertRaises(c.ContractError):h.collect_roadmap_fixture(**args)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

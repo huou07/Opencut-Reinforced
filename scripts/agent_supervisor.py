@@ -1924,6 +1924,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--authorization-digest", help="promotion authorization object digest")
     parser.add_argument("--remote-receipt-digest", help="remote promotion receipt object digest")
     parser.add_argument("--control-plane-receipt", help="JSON file with the nested V2 completion receipt")
+    parser.add_argument('--guard-root', help='preserved controller-owned guarded candidate')
+    parser.add_argument('--attempt-dir', help='preserved controller-owned verifier attempt')
     parser.add_argument('--operational-bootstrap', help='trusted host bootstrap with product-task RecordPin')
     parser.add_argument('--control-root', help='clean adopted V2 source root')
     parser.add_argument('--controller-root', help='clean independent pinned controller root')
@@ -1984,6 +1986,55 @@ def main(argv: Sequence[str] | None = None) -> int:
         print()
     print(f"Supervisor completed {args.goal}.")
     return 0
+
+
+
+
+def complete_isolated_roadmap_fixture(repo_root, *, trusted_store, authorization_digest,
+        remote_receipt_digest, guard_root, attempt_dir, hosted_run_id):
+    """Real supervisor transition for a local toy roadmap, never product evidence.
+
+    Requires real external adopted/delegated fixture authority, real guarded
+    promotion, verifier/reviewer receipts and actual exact hosted observation.
+    The production completion path remains unchanged and rejects this profile.
+    """
+    from model_orchestrator import contracts as c, promotion as p, guards as g, hosted
+    facts=c._release_authority(trusted_store.authority)
+    auth=facts['operational']['authorization']
+    if auth['execution_profile']!='ISOLATED_FIXTURE' or 'roadmap_delegation_digest' not in auth:
+        raise SupervisorError('only externally delegated isolated roadmap fixtures may enter this boundary')
+    task=facts['operational']['task']
+    handoff=validate_task_handoff(repo_root,task_id=task['task_id'],checkpoint_id=task['checkpoint_id'],
+        store_root=trusted_store.root,authorization_digest=authorization_digest,remote_receipt_digest=remote_receipt_digest,trusted_store=trusted_store)
+    current=trusted_store.inspect()
+    reviews=[p.load_object(trusted_store,d) for d in current['object_digests']]
+    review=next(r['payload'] for r in reviews if r['kind']=='review' and r['payload'].get('task_id')==task['task_id'])
+    inputs=p.collect_inputs(store=trusted_store,task_id=task['task_id'],guard_root=guard_root,attempt_dir=attempt_dir,
+        task_path=auth['task_path'],catalog_path=auth['catalog_path'],implementation_family=review['metadata']['implementation_family'])
+    issued=p.load_authorization(trusted_store,authorization_digest)
+    if p.build_authorization(inputs,schemas=facts['schemas'],implementation_family=review['metadata']['implementation_family'],issuance_sequence=issued['issuance_sequence'])!=issued:
+        raise SupervisorError('isolated completion changed promotion/verifier/reviewer inputs')
+    proof=hosted.collect_roadmap_fixture(run_id=hosted_run_id,release_sha=auth['release_sha'],
+        candidate_sha=handoff['implementation_sha'],task_digest=auth['task_digest'],
+        marker_path='roadmap-'+str(auth['sequence'])+'.txt',marker='# ROADMAP_'+str(auth['sequence'])+'_PASS')
+    plan,state=execution_plan.load_plan_state(repo_root)
+    after=advance_state_once(state,plan,task['checkpoint_id'],repo_root=repo_root)
+    evidence=dict(schema_version=1,authority_semantics='ISOLATED_ROADMAP_FIXTURE_NOT_PRODUCT_EVIDENCE',
+        implementation_sha=handoff['implementation_sha'],task_digest=auth['task_digest'],
+        roadmap_delegation_digest=auth['roadmap_delegation_digest'],hosted_proof=proof,
+        supervisor_digest=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        promotion_authorization_digest=authorization_digest,remote_receipt_digest=remote_receipt_digest,
+        verification_receipt_digests=issued['verification_receipt_digests'],reviewer_receipt_digest=issued['reviewer_receipt_digest'])
+    evidence_path=repo_root/('docs/execution/evidence/'+task['checkpoint_id']+'.json')
+    if evidence_path.exists():raise SupervisorError('isolated completion already exists; reconcile exact receipts')
+    if git_output(repo_root,'ls-remote','--exit-code',auth['destination_url'],'refs/heads/main').split()!=[handoff['implementation_sha'],'refs/heads/main']:
+        raise SupervisorError('isolated remote moved before completion')
+    _write_json(evidence_path,evidence);_write_json(repo_root/'docs/execution/STATE.json',after)
+    validate_state_commit_paths(git_status_paths(repo_root),task['checkpoint_id'])
+    git_output(repo_root,'add','--','docs/execution/STATE.json',str(evidence_path.relative_to(repo_root)))
+    git_output(repo_root,'commit','-m','chore(fixture): supervisor completes '+task['checkpoint_id'])
+    git_output(repo_root,'push',auth['destination_url'],'HEAD:refs/heads/main')
+    return git_output(repo_root,'rev-parse','HEAD')
 
 
 if __name__ == "__main__":

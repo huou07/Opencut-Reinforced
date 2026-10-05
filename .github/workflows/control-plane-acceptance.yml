@@ -1,4 +1,5 @@
 name: Control-plane acceptance
+run-name: ${{ inputs.fixture_task_digest && format('Roadmap fixture {0}', inputs.fixture_task_digest) || 'Control-plane acceptance' }}
 
 # Supporting hosted fixture facts only. Required live Linux/model boundaries
 # run on the prepared Debian host; their skipped cases remain explicitly SKIP.
@@ -7,6 +8,20 @@ on:
     branches:
       - control/**
   workflow_dispatch:
+    inputs:
+      fixture_sha:
+        description: Isolated roadmap marker implementation SHA (supporting facts only)
+        required: false
+        type: string
+      fixture_task_digest:
+        required: false
+        type: string
+      fixture_path:
+        required: false
+        type: string
+      fixture_marker:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,6 +32,7 @@ concurrency:
 
 jobs:
   fixture-acceptance:
+    if: ${{ !inputs.fixture_sha }}
     name: Fixture acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -58,6 +74,7 @@ jobs:
           retention-days: 90
 
   collect-receipts:
+    if: ${{ !inputs.fixture_sha }}
     name: Collect receipts
     needs: [fixture-acceptance]
     runs-on: ubuntu-latest
@@ -103,7 +120,7 @@ jobs:
           assert receipt['package_digest'] == digest(receipt['package'])
           assert receipt['receipt_digest'] == digest({k: v for k, v in receipt.items() if k != 'receipt_digest'})
           suites = receipt['suites']
-          assert len(suites) == 15 and len({suite['id'] for suite in suites}) == 15
+          assert len(suites) == 17 and len({suite['id'] for suite in suites}) == 17
           for suite in suites:
               assert suite['result'] == 'PASS' and suite['cases']
               assert len({case['id'] for case in suite['cases']}) == len(suite['cases'])
@@ -124,5 +141,44 @@ jobs:
         with:
           name: collector-receipt-${{ github.sha }}
           path: collector-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+  roadmap-fixture:
+    name: Isolated roadmap hosted marker acceptance
+    if: ${{ inputs.fixture_sha != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Independently measure exact immutable fixture marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIXTURE_SHA: ${{ inputs.fixture_sha }}
+          FIXTURE_TASK: ${{ inputs.fixture_task_digest }}
+          FIXTURE_PATH: ${{ inputs.fixture_path }}
+          FIXTURE_MARKER: ${{ inputs.fixture_marker }}
+        run: |
+          python3 - <<'EOF'
+          import base64, hashlib, json, os, re, urllib.request
+          sha, task, path, marker = [os.environ[k] for k in ('FIXTURE_SHA','FIXTURE_TASK','FIXTURE_PATH','FIXTURE_MARKER')]
+          assert re.fullmatch('[0-9a-f]{40}', sha) and re.fullmatch('[0-9a-f]{64}', task)
+          assert re.fullmatch('roadmap-[12]\.txt', path)
+          assert marker == '# ROADMAP_' + path[8] + '_PASS'
+          req = urllib.request.Request('https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/contents/' + path + '?ref=' + sha,
+            headers={'Authorization':'Bearer ' + os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req, timeout=30) as response: blob=json.load(response)
+          assert blob['type']=='file' and blob['encoding']=='base64' and blob['size'] < 1024
+          data=base64.b64decode(blob['content'])
+          assert data == (marker + '\n').encode()
+          receipt=dict(schema_version=1,authority_semantics='ISOLATED_ROADMAP_FIXTURE_NOT_PRODUCT_EVIDENCE',
+            candidate_sha=sha,task_digest=task,path=path,marker=marker,content_sha256=hashlib.sha256(data).hexdigest(),
+            release_sha=os.environ['GITHUB_SHA'],run_id=int(os.environ['GITHUB_RUN_ID']),attempt=int(os.environ['GITHUB_RUN_ATTEMPT']),result='PASS')
+          open('roadmap-fixture-receipt.json','w').write(json.dumps(receipt,sort_keys=True))
+          EOF
+      - name: Upload isolated hosted observation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: roadmap-fixture-${{ inputs.fixture_task_digest }}
+          path: roadmap-fixture-receipt.json
           if-no-files-found: error
           retention-days: 90

@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SUITES = {
     name: 'model_orchestrator.tests.' + name for name in
     ('test_contracts', 'test_isolation_and_state', 'test_verification',
-     'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks', 'test_product_operational', 'test_live_product_operational')}
+     'test_lifecycle', 'test_promotion_and_handoff', 'test_live_acceptance', 'test_hosted', 'test_attempt_execution', 'test_source_review', 'test_cross_phase_attacks', 'test_product_operational', 'test_live_product_operational', 'test_roadmap', 'test_live_roadmap')}
 SUITES.update(test_execution_infra='scripts.test_execution_infra',
               test_document_routing='scripts.test_document_routing')
 CHECKS = {
@@ -312,6 +312,42 @@ def main():
         return measure_suite(*args.args)
     produce(*args.args)
     return 0
+
+
+
+
+def collect_roadmap_fixture(*, run_id, release_sha, candidate_sha, task_digest, marker_path, marker, request=None):
+    """Actual bounded hosted observation; cannot grant production acceptance."""
+    request = request or github
+    prefix='/repos/'+c.REPOSITORY_IDENTITY
+    get=lambda path:c.load_json_strict(request(prefix+path).decode())
+    run=get('/actions/runs/'+str(run_id))
+    require(run['repository']['full_name']==c.REPOSITORY_IDENTITY and run['head_sha']==release_sha
+            and run['event']=='workflow_dispatch' and run['conclusion']=='success'
+            and run['path'].split('@')[0]==WORKFLOW,'wrong/stale fixture hosted run')
+    jobs=get('/actions/runs/'+str(run_id)+'/jobs?per_page=100')['jobs']
+    matching=[job for job in jobs if job['name']=='Isolated roadmap hosted marker acceptance']
+    require(len(matching)==1 and matching[0]['conclusion']=='success','fixture hosted marker job missing/failed')
+    steps=[step for step in matching[0]['steps'] if step['name']=='Independently measure exact immutable fixture marker']
+    require(len(steps)==1 and steps[0]['conclusion']=='success','fixture measurement step missing/failed')
+    artifacts=get('/actions/runs/'+str(run_id)+'/artifacts?per_page=100')['artifacts']
+    rows=[a for a in artifacts if a['name']=='roadmap-fixture-'+task_digest and not a['expired']]
+    require(len(rows)==1 and rows[0]['workflow_run']['head_sha']==run['head_sha'],'fixture artifact missing/ambiguous/stale')
+    data=request(prefix+'/actions/artifacts/'+str(rows[0]['id'])+'/zip')
+    require(len(data)<=MAX_ARTIFACT and rows[0]['digest']=='sha256:'+digest(data),'fixture artifact digest mismatch')
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        require(archive.namelist()==['roadmap-fixture-receipt.json'],'unexpected fixture archive')
+        require(archive.infolist()[0].file_size<=MAX_ARTIFACT,'oversized fixture receipt')
+        receipt=c.load_json_strict(archive.read(archive.namelist()[0]).decode())
+    expected=dict(schema_version=1,authority_semantics='ISOLATED_ROADMAP_FIXTURE_NOT_PRODUCT_EVIDENCE',
+        candidate_sha=candidate_sha,task_digest=task_digest,path=marker_path,marker=marker,
+        content_sha256=digest((marker+'\n').encode()),release_sha=release_sha,run_id=run_id,attempt=run['run_attempt'],result='PASS')
+    require(receipt==expected,'fixture hosted observation differs from immutable task/marker')
+    # Recheck raw immutable GitHub bytes rather than trusting the artifact alone.
+    blob=get('/contents/'+marker_path+'?ref='+candidate_sha)
+    require(blob['type']=='file' and blob['encoding']=='base64' and blob['size']<1024,'invalid fixture Git blob')
+    require(base64.b64decode(blob['content'])==(marker+'\n').encode(),'fixture marker source differs')
+    return dict(receipt,job_id=matching[0]['id'],artifact_id=rows[0]['id'],archive_digest=digest(data))
 
 
 if __name__ == '__main__':

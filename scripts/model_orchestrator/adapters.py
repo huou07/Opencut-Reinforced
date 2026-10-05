@@ -314,9 +314,13 @@ def select_model(role: str, enrollments: Sequence[Mapping[str, Any]], *, task_bu
             _require(type(ceiling) is int and ceiling >= 0, 'invalid enrollment cost ceiling')
             if effective > ceiling:
                 continue
-        choices.append((effective, record['model_id'], enrolled.with_reasoning(effort)))
+        # Quality/effort/availability and both budget checks have already passed.
+        # A stronger paid model wins only when no sufficient qualified free or
+        # economical Luna observation remains eligible (or operator locked it).
+        tier = 0 if price['kind'] == 'free' else 1 if record['model_id'].split('/')[-1] == 'gpt-6-luna' else 2
+        choices.append((tier, effective, record['model_id'], enrolled.with_reasoning(effort)))
     _require(bool(choices), 'no qualified available enrolled model/effort within task budget; no substitution', MODEL_UNAVAILABLE)
-    return min(choices, key=lambda choice: choice[:2])[2]
+    return min(choices, key=lambda choice: choice[:3])[3]
 
 
 @dataclass(frozen=True)

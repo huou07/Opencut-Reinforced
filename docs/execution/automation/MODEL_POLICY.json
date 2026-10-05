@@ -83,7 +83,12 @@
       "paid_or_scarce_quota": "lowest_qualified_supported_effort",
       "unsupported_effort": "unavailable",
       "default_proves_higher_floor": false
-    }
+    },
+    "fallback_order": [
+      "qualified_available_free_at_quality_floor",
+      "qualified_available_gpt-6-luna_at_quality_floor",
+      "stronger_only_when_economical_roles_unavailable_or_insufficient"
+    ]
   },
   "telemetry_fields": [
     "task_class",

@@ -79,7 +79,8 @@
     "build_authorization": "external_provenance",
     "certification_bundle": "external_provenance",
     "operational_adoption_pin": "external_provenance",
-    "product_task_authorization": "external_provenance"
+    "product_task_authorization": "external_provenance",
+    "roadmap_delegation": "external_provenance"
   },
   "records": {
     "task_contract": {
@@ -2314,6 +2315,14 @@
         },
         "destination_url": {
           "type": "string"
+        },
+        "roadmap_delegation_digest": {
+          "type": "digest"
+        },
+        "roadmap_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
         }
       },
       "required": [
@@ -2335,6 +2344,150 @@
         "catalog_digest",
         "execution_profile",
         "destination_url"
+      ]
+    },
+    "roadmap_delegation": {
+      "version": 1,
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "const": "huou07/Opencut-Reinforced"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "OPERATOR_ROADMAP_DELEGATION"
+        },
+        "authorization_id": {
+          "type": "id"
+        },
+        "nonce": {
+          "type": "id"
+        },
+        "release_sha": {
+          "type": "sha"
+        },
+        "adoption_digest": {
+          "type": "digest"
+        },
+        "initial_base_sha": {
+          "type": "sha"
+        },
+        "plan_digest": {
+          "type": "digest"
+        },
+        "state_digest": {
+          "type": "digest"
+        },
+        "protected_manifest_digest": {
+          "type": "digest"
+        },
+        "execution_profile": {
+          "type": "enum",
+          "values": [
+            "PRODUCT",
+            "ISOLATED_FIXTURE"
+          ]
+        },
+        "destination_url": {
+          "type": "string"
+        },
+        "checkpoints": {
+          "type": "list",
+          "items": {
+            "type": "object",
+            "fields": {
+              "checkpoint_id": {
+                "type": "id"
+              },
+              "task_path": {
+                "type": "path"
+              },
+              "task_digest": {
+                "type": "digest"
+              },
+              "catalog_path": {
+                "type": "path"
+              },
+              "catalog_digest": {
+                "type": "digest"
+              }
+            },
+            "required": [
+              "checkpoint_id",
+              "task_path",
+              "task_digest",
+              "catalog_path",
+              "catalog_digest"
+            ]
+          },
+          "min_items": 1
+        },
+        "budget_ceiling": {
+          "type": "object",
+          "fields": {
+            "cost_microusd": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1125899906842624
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1125899906842624
+            },
+            "wall_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1125899906842624
+            },
+            "tool_calls": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1125899906842624
+            }
+          },
+          "required": [
+            "cost_microusd",
+            "tokens",
+            "wall_seconds",
+            "tool_calls"
+          ]
+        },
+        "executor_path": {
+          "type": "path"
+        },
+        "executor_digest": {
+          "type": "digest"
+        },
+        "expires_at_unix": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1125899906842624
+        }
+      },
+      "required": [
+        "schema_version",
+        "repository",
+        "purpose",
+        "authorization_id",
+        "nonce",
+        "release_sha",
+        "adoption_digest",
+        "initial_base_sha",
+        "plan_digest",
+        "state_digest",
+        "protected_manifest_digest",
+        "execution_profile",
+        "destination_url",
+        "checkpoints",
+        "budget_ceiling",
+        "executor_path",
+        "executor_digest",
+        "expires_at_unix"
       ]
     }
   },

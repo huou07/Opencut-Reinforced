@@ -60,7 +60,7 @@ def _blob(authority, path):
     return c._git(Path(authority.controller_root), 'show', authority.source_sha + ':' + path)
 
 
-def load_operational_authority(candidate_root, controller_root, product_root, *, bootstrap, product_pin):
+def load_operational_authority(candidate_root, controller_root, product_root, *, bootstrap, product_pin, roadmap_pin=None):
     """Only the trusted host can select this typed product authorization pin."""
     if type(product_pin) is not c.RecordPin:
         raise c.ContractError('typed externally approved product task pin required')
@@ -72,6 +72,11 @@ def load_operational_authority(candidate_root, controller_root, product_root, *,
         raise c.ContractError('product authorization pin differs from Git blob')
     if auth['release_sha'] != bootstrap.release_sha or auth['adoption_digest'] != c.canonical_digest(facts['adoption']):
         raise c.ContractError('product task binds a different or stale adoption')
+    if 'roadmap_delegation_digest' in auth or 'roadmap_sequence' in auth:
+        from .roadmap import validate_derivation
+        validate_derivation(release, product_root, roadmap_pin, auth)
+    elif roadmap_pin is not None:
+        raise c.ContractError('roadmap root cannot authorize an unrelated task')
     root = c.resolve_authority_root(Path(product_root))
     manifest = operational_manifest(release, root, auth['product_base_sha'])
     plan_bytes = c._git(root, 'show', auth['product_base_sha'] + ':docs/execution/PLAN.json')

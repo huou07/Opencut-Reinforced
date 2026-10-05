@@ -597,7 +597,7 @@ class RepositoryConsistencyTests(unittest.TestCase):
         # Exact reconciled M0–M5 inventory; hosted observations confer no authority.
         self.assertEqual(files,{'contracts.py','__init__.py','store.py','sandbox.py','workspace.py',
                                 'guards.py','verification.py','adapters.py','orchestrator.py','__main__.py',
-                                'promotion.py','push_guard.py','hosted.py','product.py'})
+                                'promotion.py','push_guard.py','hosted.py','product.py','roadmap.py'})
     def test_serialized_document_lifecycle_is_semantically_bound(self):
         import shutil
         with tempfile.TemporaryDirectory() as directory:

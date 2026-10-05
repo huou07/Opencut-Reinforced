@@ -1185,7 +1185,8 @@ uses a fourth clone and a non-force fast-forward to the pinned destination main;
 the immutable base clone remains unchanged during push/recovery. This supports
 9B branching from the real product main without importing V2 control code into
 product history. The original product PLAN/STATE and version sources remain
-protected. A new task requires a new external task pin for its new NEXT/base.
+protected. Each checkpoint retains a separate exact external task pin. A pinned bounded
+roadmap delegation may derive that pin without another human authorization.
 
 Candidate registration compares against the validated execution manifest's
 base, which is the product base for an operational task and the build base for
@@ -1234,3 +1235,56 @@ Reviewer admission uses the same exact external task binding as worker admission
 An operational product task retains its own task identity; it is not compared
 with the historical disabled build task identity. Verification and independent
 review still require the unchanged pinned floor and candidate receipts.
+
+### Bounded full-roadmap delegation
+
+`roadmap.RoadmapPin` is an operator-selected immutable controller source SHA
+and `RecordPin` for `roadmap_delegation`. The external adopted release remains
+the root for execution eligibility. The delegation freezes the exact initial
+product base, PLAN/STATE bytes, protected roadmap/spec/policy manifest, canonical
+remaining NEXT relation, all checkpoint task blueprints and verifier catalogs,
+publication target, trusted executor, expiry deadline and explicit run-wide
+budget ceilings.
+There is one actual operator consent; derived task records truthfully name that
+consent and their delegation sequence, without inventing new human messages.
+
+The trusted coordinator issues only the current unique NEXT with exact clean
+base/STATE, then uses the unchanged worker, verifier, independent review,
+non-force promotion, hosted acceptance and supervisor completion paths. Models
+cannot mint task authority, edit the plan or select a successor. A child task
+passes the real product loader only with the original typed roadmap root pin,
+an intact deterministic derivation chain and independently validated prior
+completion. Root records/templates cannot be replaced by later controller
+blobs. Raw JSON, branch names, executor DONE labels and candidate pins confer
+no authority. Production completion revalidates exact hosted workflow/class
+facts and the existing supervisor state transition.
+
+`python3 -m model_orchestrator.roadmap` owns an exclusive trusted-host run lease,
+commits each task and budget reservation before launching its operator-pinned
+executor, and retains unfinished reservations after crashes. Every checkpoint
+uses a separate immutable execution controller/product snapshot; advancing the
+run ledger cannot alter an existing runtime bootstrap during repair/recovery. The executor uses
+V2's durable stage/repair/diagnosis policy within a single checkpoint, returns
+measured usage and the supervisor's completion SHA, and never changes the
+controller ledger. Resume uses validated child snapshots; completed tasks cannot
+be executed again. Every successor is derived from the exact published
+completion base. Unknown usage blocks additional spending. Reservations charge
+at least the whole task ceiling; actual higher usage cannot silently widen the
+run budget. These are conservative authority reservations, not claims about
+provider billing or a fabricated hard provider spending cap. Required external
+capability/pricing/accounting absence, explicit ceiling exhaustion or a new
+architecture/security/licensing/product-contract decision stops the run. Normal
+failures remain within the existing independently diagnosed repair boundary.
+
+Routing preserves qualifications, family independence and task-class reasoning
+floors: sufficient qualified free models first, GPT-6 Luna as the economical
+paid fallback, stronger paid models only when those choices are unavailable or
+insufficient. Unknown prices/availability do not confer eligibility; reasoning
+uses the existing free/non-scarce versus paid/scarce effort rule.
+
+Isolated roadmap acceptance has its own explicit local publication, toy plan,
+markers and fixture completion evidence; it cannot advance actual product STATE
+or satisfy production evidence. It must nevertheless exercise real adopted
+control authority, model execution/review, rootless verification, guarded
+promotion, authentic hosted observations and the real supervisor transition.
+This control-plane change does not authorize or implement product 9B.
