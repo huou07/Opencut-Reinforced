@@ -734,6 +734,23 @@ hardening commit itself must pass both workflows.
   remains explicit. No physical MediaCodec, HardwareBuffer, or zero-copy
   acceptance is claimed. Local native execution remains
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
+- Hosted Android disconnects are classified rather than reported as a bare
+  non-zero exit. `scripts/classify_android_disconnect.py` reads only the
+  preserved driver, guest logcat, health and post-drive state logs and names the
+  cause with the exact evidence lines: emulator instability, native crash, JNI
+  crash, app crash, main-thread stall, VM-service failure, or driver lifecycle.
+  Emulator and native causes outrank the driver and VM symptoms that follow from
+  them. An absent Dart VM service announcement proves product code never ran, so
+  a harness failure is not read as a product defect. Every drive case produces a
+  classification, including a passing one, and the classification never changes
+  the case exit status. `scripts/test_classify_android_disconnect.py` guards that
+  precedence with synthetic logs; those cases are not acceptance evidence.
+- The `granted-descriptor-capability` job proves the operating-system boundary
+  this checkpoint depends on: the same granted bytes read successfully through an
+  inherited file descriptor, while a cross-UID `/proc/self/fd` reopen of that
+  descriptor is denied. That is why Phase 9 duplicates a bounded seekable
+  capability instead of reopening a `content://` path, and it is independent of
+  the Rust-level granted-private-file decode test.
 
 ### 9B repair diagnostic provenance
 

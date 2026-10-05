@@ -1079,6 +1079,9 @@ jobs:
       - name: Check Android SAF report rejection guards
         run: python3 scripts/test_android_saf_preview_report.py
 
+      - name: Check Android disconnect classification guards
+        run: python3 scripts/test_classify_android_disconnect.py
+
       - name: Build separate permission-enforced SAF acceptance provider
         working-directory: apps/or_app/android
         run: ./gradlew -PorSafFixture=true :saf_fixture:assembleDebug
@@ -1229,6 +1232,21 @@ jobs:
             | tee "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt"
           cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Summarize Android disconnect classifications
+        if: always()
+        run: |
+          set -uo pipefail
+          found=0
+          for report in "$RUNNER_TEMP"/android-disconnect-*.json; do
+            [[ -e "$report" ]] || continue
+            found=1
+            echo "### $(basename "$report")" >> "$GITHUB_STEP_SUMMARY"
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [[ "$found" != 1 ]]; then
+            echo "No disconnect classification was produced; no Android drive case failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Stop Android verification emulator
         if: always()
         run: |
@@ -1253,6 +1271,61 @@ jobs:
             ${{ runner.temp }}/android-health-*.log
             ${{ runner.temp }}/android-state-*.txt
             ${{ runner.temp }}/android-documents-ui.log
+            ${{ runner.temp }}/android-disconnect-*.json
             ${{ runner.temp }}/android-saf-acceptance/**
+          if-no-files-found: error
+          retention-days: 14
+
+  granted-descriptor-capability:
+    name: Granted descriptor capability boundary
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prove a granted content:// FD cannot be reopened by path
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import errno, json, os, subprocess, tempfile
+          # Phase 9 duplicates a granted, bounded, seekable descriptor instead of
+          # reopening the provider path. This proves that is required rather than
+          # merely convenient: the same bytes read through the inherited FD, but
+          # a cross-UID /proc reopen is denied.
+          child = '''import errno, json, os
+          info = os.fstat(0)
+          direct = os.pread(0, 32, 0)
+          error = None
+          try:
+              fd = os.open("/proc/self/fd/0", os.O_RDONLY)
+              os.close(fd)
+          except OSError as failure:
+              error = failure.errno
+          print(json.dumps({"reader_uid": os.getuid(), "file_owner_uid": info.st_uid,
+                            "file_mode": oct(info.st_mode & 0o777),
+                            "direct_read_bytes": len(direct), "proc_reopen_errno": error}))
+          assert os.getuid() != info.st_uid
+          assert len(direct) == 32
+          assert error == errno.EACCES
+          '''
+          with tempfile.TemporaryDirectory(prefix="or-fd-permission-") as directory:
+              path = Path(directory) / "private.mkv"
+              path.write_bytes(Path("crates/or_media/tests/fixtures/tiny.mkv").read_bytes())
+              path.chmod(0o600)
+              with path.open("rb") as granted:
+                  output = subprocess.check_output(
+                      ["sudo", "-u", "nobody", "python3", "-c", child], stdin=granted, text=True)
+              print(output)
+              Path(os.environ["RUNNER_TEMP"], "descriptor-permission.json").write_text(output)
+          PY
+
+      - name: Preserve granted descriptor discriminator result
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: granted-descriptor-capability
+          path: ${{ runner.temp }}/descriptor-permission.json
           if-no-files-found: error
           retention-days: 14

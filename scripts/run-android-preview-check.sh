@@ -22,6 +22,7 @@ guest_pid=$!
     ps -p "$(cat "$RUNNER_TEMP/android-emulator.pid")" -o pid,stat,%cpu,rss,args
     ps -eo pid,%cpu,rss,args --sort=-rss | sed -n '1,11p'
     cat /proc/meminfo
+    cat /proc/pressure/memory 2>/dev/null || true
     timeout 5s adb -s "$android_device_id" get-state
     timeout 5s adb -s "$android_device_id" shell cat /proc/loadavg
     sleep 5
@@ -75,4 +76,11 @@ for line in lines:
     if any(signal in line for signal in ('Skipped ', 'VM service is listening', 'Fatal signal', 'FATAL EXCEPTION', 'ANR in ', 'ANDROID_PREVIEW_', 'ANDROID_SAF_ACCEPTANCE_')):
         print(line)
 PY
+# Name the disconnect cause instead of reporting a bare non-zero exit. This runs
+# on every case so a failure is never ambiguous, and it never changes the status.
+python3 "$GITHUB_WORKSPACE/scripts/classify_android_disconnect.py" \
+  --driver "$log" --guest "$guest_log" \
+  --state "$RUNNER_TEMP/android-state-$case_name.txt" --health "$health_log" \
+  --case "$case_name" --output "$RUNNER_TEMP/android-disconnect-$case_name.json" \
+  || true
 exit "$status"

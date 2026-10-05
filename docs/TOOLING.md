@@ -198,6 +198,16 @@ lifecycles: diagnostic bootstrap, existing local-file surface assertions, and
 the real SAF user journey. Generic clean-AVD retries and the old offline
 classifier are removed because the diagnostic did not prove their cause.
 
+Every Android drive case now ends with a deterministic disconnect
+classification instead of a bare exit status. `scripts/run-android-preview-check.sh`
+invokes `scripts/classify_android_disconnect.py` on the preserved driver, guest,
+health and state logs, writes `android-disconnect-<case>.json` into the Android
+artifact, and leaves the case exit status untouched. A separate always-run step
+appends the classifications to the job summary, so a red Android run states its
+cause without downloading artifacts. The health sampler also records
+`/proc/pressure/memory` alongside `/proc/meminfo`. The classifier explains a
+disconnect; it is never product acceptance evidence.
+
 The corrected diagnostic [run 37101265973](https://github.com/huou07/Opencut-Reinforced/actions/runs/37101265973)
 failed before tests in its first app lifecycle, while a fresh original-surface
 control reached the independent presentation defect. Native/JNI crash,
