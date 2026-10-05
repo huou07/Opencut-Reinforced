@@ -64,6 +64,7 @@ def api_fixture(receipt, collector, *, extra=False):
         ('Collect receipts', ['Download acceptance receipt', 'Validate and seal collector receipt', 'Upload collector receipt'])]):
         jobs.append(dict(id=index + 1, name=name, head_sha=HEAD, conclusion='success', status='completed',
                          steps=[dict(name=step, conclusion='success') for step in steps]))
+    jobs.append(dict(id=3, name='Isolated roadmap hosted marker acceptance', head_sha=HEAD, conclusion='skipped', status='completed', steps=[]))
     artifacts, data = [], {}
     for index, (kind, document) in enumerate([('acceptance', receipt), ('collector', collector)]):
         body = archive(document, kind, extra=extra)
@@ -95,6 +96,18 @@ class HostedEvidenceTests(unittest.TestCase):
         self.assertEqual(result['head_sha'], HEAD)
         self.assertEqual(len(result['artifacts']), 2)
         self.assertEqual(result['authority_semantics'], 'SUPPORTING_FACTS_ONLY_NO_ADOPTION')
+
+    def test_certification_requires_marker_job_skipped_on_exact_source(self):
+        expected, body = fixture()
+        receipt, collector = sealed(body)
+        for attack in ('success', 'missing', 'stale'):
+            records, _, request = api_fixture(receipt, collector)
+            jobs = records['/actions/runs/101/attempts/1/jobs?per_page=100']['jobs']
+            if attack == 'success': jobs[-1]['conclusion'] = 'success'
+            elif attack == 'missing': jobs.pop()
+            else: jobs[-1]['head_sha'] = 'f' * 40
+            with self.subTest(attack=attack), self.assertRaises(c.ContractError):
+                h.collect(expected=expected, request=request)
 
     def test_green_metadata_does_not_waive_bad_receipt_contents(self):
         expected, body = fixture()

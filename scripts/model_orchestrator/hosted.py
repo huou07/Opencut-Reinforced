@@ -269,8 +269,10 @@ def collect(*, expected, run_id=None, request=github):
     commit = get('/git/commits/' + head)
     require(commit['sha'] == head and commit['tree']['sha'] == expected['package']['tree_sha'], 'GitHub source tree differs')
     jobs = get('/actions/runs/%d/attempts/%d/jobs?per_page=100' % (run['id'], run['run_attempt']))['jobs']
-    require(len(jobs) == 2 and {j['name'] for j in jobs} == {'Fixture acceptance', 'Collect receipts'}, 'missing/duplicate hosted job')
-    for job in jobs:
+    require(len(jobs) == 3 and {j['name'] for j in jobs} == {'Fixture acceptance', 'Collect receipts', 'Isolated roadmap hosted marker acceptance'}, 'missing/duplicate hosted job')
+    marker_job = next(j for j in jobs if j['name'] == 'Isolated roadmap hosted marker acceptance')
+    require(marker_job['head_sha'] == head and marker_job['status'] == 'completed' and marker_job['conclusion'] == 'skipped', 'certification run executed unexpected fixture marker job')
+    for job in (j for j in jobs if j is not marker_job):
         require(job['head_sha'] == head and job['conclusion'] == 'success' and job['status'] == 'completed', 'unsuccessful/stale job')
         required = ('Measure acceptance cases', 'Upload acceptance receipt') if job['name'] == 'Fixture acceptance' else ('Download acceptance receipt', 'Validate and seal collector receipt', 'Upload collector receipt')
         for name in required:

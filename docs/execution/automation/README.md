@@ -1310,3 +1310,5 @@ This control-plane change does not authorize or implement product 9B.
 
 The hosted collector pins both the measured test-module inventory and the
 producer’s `control-checks` suite; omitting either fails certification collection.
+Certification collection requires the marker-only job to be explicitly skipped
+on the exact source; marker dispatches cannot substitute for release certification.
