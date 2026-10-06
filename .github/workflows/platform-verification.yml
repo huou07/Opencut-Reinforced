@@ -1191,12 +1191,11 @@ jobs:
           # fatal signal, ANR, or tombstone. The surviving case always precedes
           # the failure, so the wedge is accumulated guest state under
           # SwiftShader, not a product fault and not host memory exhaustion.
-          bash "$GITHUB_WORKSPACE/scripts/stop-android-emulator.sh"
-          bash "$GITHUB_WORKSPACE/scripts/start-android-emulator.sh" wipe-data
           # The surface case reads its fixture from the app's private files
-          # directory, so the app must exist before `run-as` can create it. A
-          # wiped guest has no app installed yet; the drive installs it.
-          adb install "$case_apks/surface.apk"
+          # directory, so the app must be installed before `run-as` stages it.
+          # Both cases share this one explicitly sized guest: the SAF step boots
+          # its own, and booting a guest per case does not fit one step's
+          # timeout (run 37445482157 timed out on the second boot).
           adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" /data/local/tmp/or-android-preview-tiny.mkv
           adb shell run-as io.github.huou07.or_app mkdir -p files
           adb shell run-as io.github.huou07.or_app cp /data/local/tmp/or-android-preview-tiny.mkv files/or-android-preview-tiny.mkv
