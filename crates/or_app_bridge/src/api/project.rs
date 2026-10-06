@@ -3246,7 +3246,7 @@ mod tests {
     fn handle_without_artifact_service(directory: &TestHostDirectory) -> ProjectHostHandle {
         ProjectHostHandle {
             host: LiveProjectHost::in_process_with_export_handler(
-                ProjectFileSession::create_new(&directory.project(), "A").unwrap(),
+                ProjectFileSession::create_new(directory.project(), "A").unwrap(),
                 Arc::new(TestExportHandler),
             ),
             media_artifact_service: None,
