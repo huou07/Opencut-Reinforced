@@ -6,9 +6,12 @@ health and post-drive state logs. When `flutter drive` fails, a bare non-zero
 exit says nothing about *why*, which is what made earlier failures ambiguous.
 
 This reads only the preserved logs and names the failure class with the exact
-evidence lines that produced it. It never judges product acceptance: it
-discriminates the disconnect cause so a real product defect is not confused
-with emulator, driver or harness instability.
+evidence lines that produced it: emulator instability, native crash, JNI crash,
+app crash, main-thread stall, VM-service failure, driver lifecycle, or a test
+that failed with no crash signature at all. It never judges product acceptance:
+it discriminates the disconnect cause so a real product defect is not confused
+with emulator, driver or harness instability. A failed test is never reported as
+PASS.
 
 Deterministic and unit-tested. No LLM, no network, no device access.
 """
@@ -66,6 +69,13 @@ CLASSES = (
         r"VM service.*terminated",
         r"lost connection to device",
     ), ("driver", "guest")),
+    ("TEST_ASSERTION_FAILURE", (
+        r"Some tests failed",
+        r"Test failed\. See exception logs above",
+        r"EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK",
+        r"\+\d+ -\d+: ",
+        r"The test description was:",
+    ), ("driver",)),
     ("DRIVER_LIFECYCLE", (
         r"Gradle build failed",
         r"could not find an option named",
@@ -152,7 +162,13 @@ def classify(texts):
             evidence[name] = hits[:5]
     started = any(re.search(NEVER_STARTED, texts.get(source, ""))
                   for source in ("guest", "driver"))
-    primary = matched[0] if matched else ("PASS" if started else "NEVER_REACHED_APP")
+    if matched:
+        primary = matched[0]
+    elif started:
+        # No crash, stall or emulator signature, but a clean drive would say so.
+        primary = "FAILURE_WITHOUT_DISCONNECT_SIGNATURE" if _tests_failed(texts) else "PASS"
+    else:
+        primary = "NEVER_REACHED_APP"
     return {
         "disconnect_classified": bool(matched),
         "primary_class": primary,
@@ -163,6 +179,12 @@ def classify(texts):
         "note": ("classification explains the disconnect only; it is not product "
                  "acceptance evidence"),
     }
+
+
+def _tests_failed(texts):
+    patterns = next(p for name, p, _ in CLASSES if name == "TEST_ASSERTION_FAILURE")
+    driver = texts.get("driver", "")
+    return any(re.search(pattern, driver, re.MULTILINE) for pattern in patterns)
 
 
 def main(argv=None):

@@ -738,7 +738,9 @@ hardening commit itself must pass both workflows.
   non-zero exit. `scripts/classify_android_disconnect.py` reads only the
   preserved driver, guest logcat, health and post-drive state logs and names the
   cause with the exact evidence lines: emulator instability, native crash, JNI
-  crash, app crash, main-thread stall, VM-service failure, or driver lifecycle.
+  crash, app crash, main-thread stall, VM-service failure, driver lifecycle, or a
+  test that failed with no crash signature at all. A failed test is never
+  reported as `PASS`.
   Emulator and native causes outrank the driver and VM symptoms that follow from
   them. An absent Dart VM service announcement proves product code never ran, so
   a harness failure is not read as a product defect. Every drive case produces a

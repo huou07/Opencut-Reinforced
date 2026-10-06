@@ -46,6 +46,30 @@ def texts(**kwargs):
 
 
 class ClassificationTest(unittest.TestCase):
+    def test_a_failed_test_is_never_reported_as_pass(self):
+        # Verbatim driver output from hosted run 37395454733: the SAF journey
+        # failed with a fixture PlatformException and no crash signature. Calling
+        # that PASS would hide a product-layer failure.
+        driver = "\n".join([
+            STARTED,
+            "I/flutter ( 4933): 00:02 +1: Android SAF preview works through "
+            "DocumentsUI and real editor controls [E]",
+            "I/flutter ( 4933):   Test failed. See exception logs above.",
+            "I/flutter ( 4933): 00:02 +1 -1: Some tests failed.",
+            "PlatformException(FIXTURE_FAILED,",
+            "java.lang.IllegalArgumentException: Bounded fixture project required, null, null)",
+        ])
+        result = classify(texts(guest=OR_MARKER, driver=driver))
+        self.assertEqual(result["primary_class"], "TEST_ASSERTION_FAILURE")
+        self.assertTrue(result["disconnect_classified"])
+        self.assertTrue(result["vm_service_announced"])
+
+    def test_a_genuinely_clean_case_is_still_pass(self):
+        result = classify(texts(guest=OR_MARKER + "\n" + STARTED,
+                                driver="All tests passed."))
+        self.assertEqual(result["primary_class"], "PASS")
+        self.assertFalse(result["disconnect_classified"])
+
     def test_real_play_services_stall_is_not_attributed_to_or(self):
         result = classify(texts(guest=REAL_GUEST, driver="All tests passed!"))
         self.assertEqual(result["or_pids"], ["3304"])
