@@ -2,15 +2,26 @@
 # Starts a fresh Android emulator and waits for a responsive guest.
 # Usage: OR_AVD_NAME=... start-android-emulator.sh [wipe-data]
 #
-# Each Android acceptance case gets its own emulator. One long-lived guest that
-# has already driven two cases wedges under SwiftShader: qemu stays at ~187% CPU
-# and 3.6 GiB RSS while the guest stops answering adb, and the case then fails as
-# "device offline" with no product cause. A fresh guest per case removes that
-# accumulated state. It is not a retry: the case still runs exactly once and still
-# fails if the product is wrong.
+# Each Android acceptance case gets its own emulator, and each guest gets enough
+# memory and cores to run the product's own bounded budgets under SwiftShader.
+#
+# Measured reasons, not guesses:
+#  - One long-lived guest that has already driven other cases stops answering adb
+#    while qemu still holds ~187-217% CPU and 3.4-3.6 GiB RSS, with ~12 GiB
+#    `MemAvailable` on the host and no OR fatal signal, ANR, or tombstone.
+#  - The `avdmanager` default for this image is 2560 MB and the default core
+#    count. The app then reports "Skipped 193 frames" on its first frame and the
+#    drive dies inside `waitForServiceExtension` before the isolate can serve the
+#    VM service. The host had ~12 GiB free the whole time, so this is a guest
+#    sizing limit rather than host exhaustion.
+#
+# A bigger guest and a fresh guest per case are preconditions, not retries: the
+# case still runs exactly once and still fails if the product is wrong.
 set -euo pipefail
 avd_name="${OR_AVD_NAME:-or-api36-x86_64}"
 android_device_id="${OR_ANDROID_DEVICE_ID:-emulator-5554}"
+guest_ram_mb="${OR_ANDROID_GUEST_RAM_MB:-6144}"
+guest_cores="${OR_ANDROID_GUEST_CORES:-4}"
 export ANDROID_AVD_HOME="$HOME/.android/avd"
 mkdir -p "$ANDROID_AVD_HOME"
 if [[ ! -f "$ANDROID_AVD_HOME/$avd_name.ini" ]]; then
@@ -24,6 +35,22 @@ if ! grep -Fxq "$avd_name" <<< "$avd_list"; then
   printf '%s\n' "$avd_list" >&2
   exit 1
 fi
+# Pin the guest size instead of inheriting the image default.
+avd_config="$ANDROID_AVD_HOME/${avd_name}.avd/config.ini"
+touch "$avd_config"
+set_avd_value() {
+  local key="$1" value="$2"
+  if grep -qE "^${key}=" "$avd_config"; then
+    sed -i '' -E "s/^${key}=.*/${key}=${value}/" "$avd_config" 2>/dev/null ||
+      sed -i -E "s/^${key}=.*/${key}=${value}/" "$avd_config"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$avd_config"
+  fi
+}
+set_avd_value hw.ramSize "$guest_ram_mb"
+set_avd_value hw.cpu.ncore "$guest_cores"
+grep -Fxq "hw.ramSize=$guest_ram_mb" "$avd_config"
+grep -Fxq "hw.cpu.ncore=$guest_cores" "$avd_config"
 test -e /dev/kvm
 sudo chown "$USER" /dev/kvm
 test -r /dev/kvm

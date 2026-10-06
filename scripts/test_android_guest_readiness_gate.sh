@@ -71,4 +71,17 @@ else
   fails=$((fails + 1))
 fi
 
+# The AVD must be sized explicitly. The image default is 2560 MB, and with it
+# the app skipped 193 frames on its first frame while the drive lost the VM
+# service; the host had ~12 GiB free, so this is a guest limit.
+start_script="$ROOT/scripts/start-android-emulator.sh"
+if grep -q 'set_avd_value hw.ramSize' "$start_script" &&
+  grep -q 'set_avd_value hw.cpu.ncore' "$start_script" &&
+  grep -q 'grep -Fxq "hw.ramSize=\$guest_ram_mb"' "$start_script"; then
+  echo "PASS the guest is sized explicitly instead of inheriting the image default"
+else
+  echo "FAIL the guest does not pin its RAM and core count"
+  fails=$((fails + 1))
+fi
+
 if [[ "$fails" -eq 0 ]]; then echo "GATE_TESTS=PASS"; else echo "GATE_TESTS=FAIL ($fails)"; exit 1; fi
