@@ -1190,6 +1190,10 @@ jobs:
           # SwiftShader, not a product fault and not host memory exhaustion.
           bash "$GITHUB_WORKSPACE/scripts/stop-android-emulator.sh"
           bash "$GITHUB_WORKSPACE/scripts/start-android-emulator.sh" wipe-data
+          # The surface case reads its fixture from the app's private files
+          # directory, so the app must exist before `run-as` can create it. A
+          # wiped guest has no app installed yet; the drive installs it.
+          adb install "$case_apks/surface.apk"
           adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" /data/local/tmp/or-android-preview-tiny.mkv
           adb shell run-as io.github.huou07.or_app mkdir -p files
           adb shell run-as io.github.huou07.or_app cp /data/local/tmp/or-android-preview-tiny.mkv files/or-android-preview-tiny.mkv
