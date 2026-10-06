@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(RustLib.init);
 
@@ -89,6 +90,36 @@ void main() {
     expect(preview.width, greaterThan(0));
     expect(preview.height, greaterThan(0));
     expect(preview.errorCode, isNull);
+    // A presented frame must also be the right colour. Rust publishes
+    // premultiplied BGRA and the plugin copies it into ARGB_8888; getting that
+    // byte order wrong shows red content as blue while every transport
+    // assertion still passes.
+    await binding.convertFlutterSurfaceToImage();
+    final frameBytes = await binding.takeScreenshot('android-surface-colour');
+    final codec = await ui.instantiateImageCodec(
+      Uint8List.fromList(frameBytes),
+    );
+    final frame = await codec.getNextFrame();
+    final rgba = (await frame.image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!;
+    final textureRect = tester.getRect(find.byType(Texture));
+    final center =
+        (tester.getCenter(find.byType(Texture)) * tester.view.devicePixelRatio)
+            .translate(-textureRect.left, -textureRect.top);
+    final offset =
+        (center.dy.floor() * frame.image.width + center.dx.floor()) * 4;
+    final pixel = List.generate(4, (index) => rgba.getUint8(offset + index));
+    frame.image.dispose();
+    codec.dispose();
+    expect(
+      pixel[0],
+      greaterThanOrEqualTo(200),
+      reason: 'red fixture content must present as red, not swapped to blue',
+    );
+    expect(pixel[1], lessThanOrEqualTo(40));
+    expect(pixel[2], lessThanOrEqualTo(40));
+    expect(pixel[3], 255);
     final revisionUnchanged =
         (await gateway.summary(session)).revision == initial.revision;
     expect(revisionUnchanged, isTrue);

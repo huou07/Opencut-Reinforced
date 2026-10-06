@@ -12,6 +12,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.system.ErrnoException
 import android.system.Os
+import java.nio.ByteBuffer
 import android.system.OsConstants
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -53,6 +54,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     // Worker owns the bitmap. workPending retains exclusive ownership until
     // the main draw completes, so no copy/resize/recycle can race with drawing.
     private var bitmap: Bitmap? = null
+    private var bgraSwapScratch: ByteBuffer? = null
     private var registeredMediaSources: List<String>? = null
     private var registeredOwner: String? = null
     private var registrationCount = 0L
@@ -276,6 +278,29 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         presentScheduledFrame(allowFollowUp = true)
     }
 
+    /**
+     * Rust publishes premultiplied BGRA, which is the byte order a Flutter
+     * external texture expects. `Bitmap.Config.ARGB_8888` stores bytes as
+     * R, G, B, A, so `copyPixelsFromBuffer` would swap red and blue and show
+     * red content as blue. Swap while copying instead, reusing one scratch
+     * buffer so the present path stays allocation-free after the first frame.
+     */
+    private fun copyBgraIntoArgb8888(target: android.graphics.Bitmap, frame: AndroidViewerFrame) {
+        val source = frame.pixels.duplicate().apply { position(0) }
+        val count = target.width * target.height
+        val scratch = bgraSwapScratch
+            ?.takeIf { it.capacity() >= count * 4 }
+            ?: ByteBuffer.allocateDirect(count * 4).also { bgraSwapScratch = it }
+        scratch.clear()
+        val bytes = ByteArray(4)
+        for (index in 0 until count) {
+            source.get(bytes)
+            scratch.put(bytes[2]).put(bytes[1]).put(bytes[0]).put(bytes[3])
+        }
+        scratch.flip()
+        target.copyPixelsFromBuffer(scratch)
+    }
+
     private fun presentScheduledFrame(allowFollowUp: Boolean) {
         val epoch = surfaceEpoch.get()
         try {
@@ -292,7 +317,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                         ?: Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888).also {
                                             bitmap?.recycle(); bitmap = it
                                         }
-                                    target.copyPixelsFromBuffer(frame.pixels.duplicate().apply { position(0) })
+                                    copyBgraIntoArgb8888(target, frame)
                                     copiedGeneration = frame.generation
                                 } else staleDrops.incrementAndGet()
                             } finally { nativeReleaseFrame(frame.releaseContext) }
