@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -930,24 +931,42 @@ class RustProjectGateway implements ProjectGateway {
   @override
   Stream<ProjectMediaArtifactEvent> watchMediaArtifacts(
     ProjectSessionHandle session,
-  ) => _host(session).subscribeMediaArtifactEvents().map(
-    (event) => ProjectMediaArtifactEvent(
-      sequence: event.sequence,
-      mediaId: event.mediaId,
-      kind: _artifactKind(event.kind),
-      cacheKey: event.cacheKey,
-      jobId: event.jobId,
-      state: switch (event.state) {
-        rust.MediaArtifactEventStateView.succeeded =>
-          ProjectMediaArtifactEventState.succeeded,
-        rust.MediaArtifactEventStateView.failed =>
-          ProjectMediaArtifactEventState.failed,
-        rust.MediaArtifactEventStateView.cancelled =>
-          ProjectMediaArtifactEventState.cancelled,
-      },
-      errorCode: event.errorCode,
-    ),
+  ) =>
+      _host(session)
+          .subscribeMediaArtifactEvents()
+          .map(_mediaArtifactEvent)
+          .transform(_translating<ProjectMediaArtifactEvent>());
+
+  static ProjectMediaArtifactEvent _mediaArtifactEvent(
+    rust.MediaArtifactEventView event,
+  ) => ProjectMediaArtifactEvent(
+    sequence: event.sequence,
+    mediaId: event.mediaId,
+    kind: _artifactKind(event.kind),
+    cacheKey: event.cacheKey,
+    jobId: event.jobId,
+    state: switch (event.state) {
+      rust.MediaArtifactEventStateView.succeeded =>
+        ProjectMediaArtifactEventState.succeeded,
+      rust.MediaArtifactEventStateView.failed =>
+        ProjectMediaArtifactEventState.failed,
+      rust.MediaArtifactEventStateView.cancelled =>
+        ProjectMediaArtifactEventState.cancelled,
+    },
+    errorCode: event.errorCode,
   );
+
+  /// A raw bridge error must never reach the shell, which handles the typed
+  /// gateway exception only.
+  static StreamTransformer<T, T> _translating<T>() =>
+      StreamTransformer<T, T>.fromHandlers(
+        handleError: (error, stackTrace, sink) => sink.addError(
+          error is rust.ProjectBridgeError
+              ? ProjectGatewayException(error.code, error.message)
+              : error,
+          stackTrace,
+        ),
+      );
 
   @override
   Future<ProjectActionResult> importMedia(
@@ -1049,16 +1068,19 @@ class RustProjectGateway implements ProjectGateway {
 
   @override
   Stream<ProjectHostEvent> watch(ProjectSessionHandle session) =>
-      _host(session).subscribeEvents().map(
-        (event) => ProjectHostEvent(
-          sequence: event.sequence,
-          kind: event.kind,
-          projectId: event.projectId,
-          projectInstanceId: event.projectInstanceId,
-          revision: event.revision,
-          dirty: event.dirty,
-        ),
-      );
+      _host(session)
+          .subscribeEvents()
+          .map(
+            (event) => ProjectHostEvent(
+              sequence: event.sequence,
+              kind: event.kind,
+              projectId: event.projectId,
+              projectInstanceId: event.projectInstanceId,
+              revision: event.revision,
+              dirty: event.dirty,
+            ),
+          )
+          .transform(_translating<ProjectHostEvent>());
 
   @override
   Future<ProjectRecoveryInspection> inspectRecovery(String path) async {

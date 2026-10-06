@@ -1728,11 +1728,13 @@ impl ProjectHostHandle {
         &self,
         sink: StreamSink<MediaArtifactEventView>,
     ) -> Result<(), ProjectBridgeError> {
-        let service = self
-            .media_artifact_service
-            .as_ref()
-            .ok_or_else(cache_unavailable_error)?;
-        let receiver = service.subscribe_events();
+        // A platform without cached artifacts has no events to deliver, so the
+        // subscription is empty rather than failed. The generated stream wrapper
+        // discards this call's future, so an error here would surface as an
+        // unobserved bridge error instead of anything the caller could handle.
+        let Some(receiver) = self.media_artifact_event_receiver() else {
+            return Ok(());
+        };
         thread::Builder::new()
             .name("or-flutter-media-artifact-events".to_owned())
             .spawn(move || forward_media_artifact_events(receiver, sink))
@@ -1741,6 +1743,12 @@ impl ProjectHostHandle {
                 message: error.to_string(),
             })?;
         Ok(())
+    }
+
+    fn media_artifact_event_receiver(&self) -> Option<mpsc::Receiver<MediaArtifactEvent>> {
+        self.media_artifact_service
+            .as_ref()
+            .map(MediaArtifactService::subscribe_events)
     }
 
     fn request_media_artifact(
@@ -3200,11 +3208,63 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        CachePlatform, MediaArtifactKindView, audio_settings_view,
-        configured_media_artifact_cache_root, effects_from_view, media_artifact_event_view,
-        operation_error_code, rational_time_view, timeline_clip_page_view,
-        timeline_marker_page_view, timeline_snap_view, timeline_track_view, visual_settings_view,
+        CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectHostHandle,
+        audio_settings_view, configured_media_artifact_cache_root, effects_from_view,
+        media_artifact_event_view, operation_error_code, rational_time_view,
+        timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
+        timeline_track_view, visual_settings_view,
     };
+    use or_core::{ExportRequest, ExportResponse, ProjectFileSession};
+    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use std::sync::Arc;
+
+    struct TestHostDirectory(PathBuf);
+
+    impl TestHostDirectory {
+        fn new() -> Self {
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir()
+                .join(format!("or-bridge-test-{}-{unique}", std::process::id()));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn project(&self) -> PathBuf {
+            self.0.join("unused.orproj")
+        }
+    }
+
+    impl Drop for TestHostDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn handle_without_artifact_service(directory: &TestHostDirectory) -> ProjectHostHandle {
+        ProjectHostHandle {
+            host: LiveProjectHost::in_process_with_export_handler(
+                ProjectFileSession::create_new(&directory.project(), "A").unwrap(),
+                Arc::new(TestExportHandler),
+            ),
+            media_artifact_service: None,
+            preview_runtime: Arc::new(PreviewRuntime::new()),
+        }
+    }
+
+    struct TestExportHandler;
+
+    impl ExportRequestHandler for TestExportHandler {
+        fn handle_export_request(
+            &self,
+            _session: &or_core::ProjectSession,
+            _request: ExportRequest,
+        ) -> ExportResponse {
+            ExportResponse::failure("UNUSED_TEST_HANDLER", "export is unused in this test")
+        }
+    }
     use or_core::{
         AudioSettings, CacheArtifactKind, CacheKey, ClipContent, ClipId, ClipSettings,
         EffectReference, JobId, MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaId,
@@ -3595,6 +3655,32 @@ mod tests {
             ),
             None,
         );
+    }
+
+    #[test]
+    fn artifact_events_are_absent_rather_than_failed_without_a_service() {
+        // Android has no cached-artifact service. The generated stream wrapper
+        // discards the subscribe call's future, so returning an error here became
+        // an unhandled ProjectBridgeError that escaped every Dart catch site.
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+
+        assert!(
+            handle.media_artifact_event_receiver().is_none(),
+            "a platform without cached artifacts must subscribe to nothing, not fail",
+        );
+        let error = handle
+            .read_media_artifact(
+                MediaArtifactKindView::Thumbnail,
+                CacheKey::new(
+                    CacheArtifactKind::Thumbnail,
+                    SourceFingerprint::from_bytes(b"source"),
+                    ParametersFingerprint::from_bytes(b"thumbnail"),
+                )
+                .to_hex(),
+            )
+            .expect_err("a missing cache must be reported, not ignored");
+        assert_eq!(error.code, "CACHE_UNAVAILABLE");
     }
 
     #[test]
