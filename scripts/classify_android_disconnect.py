@@ -31,7 +31,11 @@ CLASSES = (
         r"adb:\s*error:\s*cannot connect to daemon",
         r"error:\s*closed",
         r"Timeout waiting for the emulator device",
-    ), ("state", "health")),
+        # `flutter drive` prints these when the emulator is gone; without them a
+        # lost emulator is misread as a driver or product failure.
+        r"No supported devices found with name or id matching",
+        r"The following devices were found:",
+    ), ("state", "health", "driver")),
     ("NATIVE_CRASH", (
         r"\*\*\* \*\*\* \*\*\* \*\*\*",
         r"Fatal signal \d+",
@@ -75,6 +79,43 @@ CLASSES = (
 # A guest log that never announced the VM service never reached product code.
 NEVER_STARTED = r"VM service is listening"
 
+# Classes that describe OR's own process. The guest also logs Choreographer and
+# ANR lines for Play services and other emulator processes; attributing those to
+# OR would blame the product for an emulator problem, which is the exact
+# confusion this classifier exists to prevent.
+APP_SCOPED = {"NATIVE_CRASH", "JNI_CRASH", "APP_CRASH", "MAIN_THREAD_STALL"}
+OR_PACKAGE = "io.github.huou07.or_app"
+
+# logcat threadtime prefix: "MM-DD HH:MM:SS.mmm  PID TID LEVEL tag: message"
+THREADTIME_PID = re.compile(r"^\s*\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(\d+)\s+(\d+)\s")
+# in-process tag form: "I/Choreographer( 3304): ..."
+TAGGED_PID = re.compile(r"\(\s*(\d+)\)")
+
+
+def or_pids(texts):
+    """PIDs attributable to OR, learned from lines that name the OR package."""
+    pids = set()
+    for source in ("guest", "driver", "state", "health"):
+        for line in texts.get(source, "").splitlines():
+            if OR_PACKAGE not in line:
+                continue
+            match = THREADTIME_PID.match(line) or TAGGED_PID.search(line)
+            if match:
+                pids.add(match.group(1))
+    return pids
+
+
+def _belongs_to_or(line, pids):
+    """True when the line is OR's own, not another guest process."""
+    if OR_PACKAGE in line:
+        return True
+    if not pids:
+        # No PID was ever learned; refusing to attribute anything is the only
+        # honest answer, so only package-bearing lines qualify.
+        return False
+    match = THREADTIME_PID.match(line) or TAGGED_PID.search(line)
+    return bool(match) and match.group(1) in pids
+
 
 def _read(path):
     if not path or not os.path.isfile(path):
@@ -92,15 +133,20 @@ def collect(paths):
 
 
 def classify(texts):
+    pids = or_pids(texts)
     matched, evidence = [], {}
     for name, patterns, sources in CLASSES:
+        scoped = name in APP_SCOPED
         hits = []
         for pattern in patterns:
             regex = re.compile(pattern, re.MULTILINE)
             for source in sources:
                 for line in texts.get(source, "").splitlines():
-                    if regex.search(line):
-                        hits.append({"source": source, "pattern": pattern, "line": line.strip()[:300]})
+                    if not regex.search(line):
+                        continue
+                    if scoped and not _belongs_to_or(line, pids):
+                        continue
+                    hits.append({"source": source, "pattern": pattern, "line": line.strip()[:300]})
         if hits:
             matched.append(name)
             evidence[name] = hits[:5]
@@ -112,6 +158,7 @@ def classify(texts):
         "primary_class": primary,
         "all_classes": matched,
         "vm_service_announced": started,
+        "or_pids": sorted(pids),
         "evidence": evidence,
         "note": ("classification explains the disconnect only; it is not product "
                  "acceptance evidence"),

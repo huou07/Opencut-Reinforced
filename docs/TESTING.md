@@ -743,8 +743,17 @@ hardening commit itself must pass both workflows.
   them. An absent Dart VM service announcement proves product code never ran, so
   a harness failure is not read as a product defect. Every drive case produces a
   classification, including a passing one, and the classification never changes
-  the case exit status. `scripts/test_classify_android_disconnect.py` guards that
-  precedence with synthetic logs; those cases are not acceptance evidence.
+  the case exit status. App-scoped classes are attributed to OR only: OR's PID
+  is learned from lines naming `io.github.huou07.or_app`, so Choreographer and
+  ANR lines belonging to Play services or other guest processes are never
+  blamed on the product, and a log that never names OR is not attributed at all.
+  `scripts/test_classify_android_disconnect.py` guards that precedence and the
+  attribution rule with the real hosted lines from run 37363615433 attempt 3;
+  those cases are not acceptance evidence.
+- A case also fails fast and explicitly when the emulator is no longer
+  available, instead of surfacing a confusing "no supported devices" driver
+  error. The case still fails: a lost emulator means that acceptance did not
+  run.
 - The `granted-descriptor-capability` job proves the operating-system boundary
   this checkpoint depends on: the same granted bytes read successfully through an
   inherited file descriptor, while a cross-UID `/proc/self/fd` reopen of that

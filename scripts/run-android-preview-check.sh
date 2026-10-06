@@ -43,6 +43,23 @@ if [[ "$case_name" == saf ]]; then
 fi
 cd "$GITHUB_WORKSPACE/apps/or_app"
 status=0
+# A previous case can take the emulator down. Check before launching so the run
+# reports a lost emulator instead of a confusing "no supported devices" driver
+# error, and so the cause is classified. The case still fails: a lost emulator
+# means this acceptance did not run.
+if [[ "$(adb -s "$android_device_id" get-state 2>/dev/null || true)" != device ]]; then
+  {
+    date -u
+    echo "BLOCKED: emulator $android_device_id was not available before case $case_name."
+    echo 'adb devices:'
+    adb devices -l || true
+  } > "$RUNNER_TEMP/android-state-$case_name.txt" 2>&1
+  cat "$RUNNER_TEMP/android-state-$case_name.txt" >&2
+  python3 "$GITHUB_WORKSPACE/scripts/classify_android_disconnect.py" \
+    --state "$RUNNER_TEMP/android-state-$case_name.txt" --health "$health_log" \
+    --case "$case_name" --output "$RUNNER_TEMP/android-disconnect-$case_name.json" || true
+  exit 1
+fi
 flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds "$@" \
   2>&1 | tee "$log" || status=$?
 if [[ -n "$picker_pid" ]]; then
