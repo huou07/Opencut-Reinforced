@@ -1085,6 +1085,9 @@ jobs:
       - name: Check Android guest readiness gate guards
         run: bash scripts/test_android_guest_readiness_gate.sh
 
+      - name: Check Android native DocumentsUI selection guards
+        run: python3 scripts/test_select_android_saf_document.py
+
       - name: Build separate permission-enforced SAF acceptance provider
         working-directory: apps/or_app/android
         run: ./gradlew -PorSafFixture=true :saf_fixture:assembleDebug

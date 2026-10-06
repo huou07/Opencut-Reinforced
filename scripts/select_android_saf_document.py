@@ -21,17 +21,30 @@ def select(device, guest_log, output):
     # action bound starts only when the in-app test reaches its native picker.
     while "ANDROID_SAF_DOCUMENTS_UI_READY" not in guest_log.read_text(errors="replace"):
         time.sleep(0.25)
-    deadline = time.monotonic() + 90
+    # Bounded, but generous: this guest is software-rendered and its first
+    # DocumentsUI frame can take tens of seconds. The bound exists to fail
+    # instead of hanging, not to race a cold window.
+    deadline = time.monotonic() + 300
     opened_roots = selected_root = False
 
     def adb(*args):
         return subprocess.check_output(["adb", "-s", device, *args], timeout=10)
 
     while time.monotonic() < deadline:
-        adb("shell", "uiautomator", "dump", "/sdcard/or-saf-window.xml")
-        raw = adb("shell", "cat", "/sdcard/or-saf-window.xml")
+        # UIAutomator transiently answers "null root node returned by
+        # UiTestAutomationBridge" while DocumentsUI is still animating in, and
+        # `adb shell cat` fails until the dump file exists. Those are ordinary
+        # startup races inside this bounded wait, not failures of the journey:
+        # treating them as fatal killed the helper and left the drive waiting on
+        # a selection that could never arrive.
+        try:
+            adb("shell", "uiautomator", "dump", "/sdcard/or-saf-window.xml")
+            raw = adb("shell", "cat", "/sdcard/or-saf-window.xml")
+            root = ET.fromstring(raw)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ET.ParseError):
+            time.sleep(0.25)
+            continue
         (output / "documents-ui-last.xml").write_bytes(raw)
-        root = ET.fromstring(raw)
         nodes = list(root.iter("node"))
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
@@ -49,13 +62,21 @@ def select(device, guest_log, output):
             target = drawer
             opened_roots = True
         if target is not None:
-            adb("shell", "input", "tap", *map(str, center(target.get("bounds", ""))))
+            try:
+                adb("shell", "input", "tap", *map(str, center(target.get("bounds", ""))))
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                # The window can move between the dump and the tap. Re-dump and
+                # decide again from the fresh tree.
+                continue
             if target is document:
                 (output / "documents-ui-selection.txt").write_text(
                     "Selected OR SAF acceptance / acceptance.orproj in native DocumentsUI.\n")
                 return
         time.sleep(0.25)
-    (output / "documents-ui-failure.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    try:
+        (output / "documents-ui-failure.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
     raise RuntimeError("The native DocumentsUI selection did not complete within the action bound")
 
 
