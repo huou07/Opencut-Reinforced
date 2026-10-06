@@ -1120,71 +1120,10 @@ jobs:
           set -euo pipefail
           avd_name=or-api36-x86_64
           android_device_id=emulator-5554
-          export ANDROID_AVD_HOME="$HOME/.android/avd"
-          mkdir -p "$ANDROID_AVD_HOME"
-          printf 'no\n' | avdmanager create avd --force --name "$avd_name" \
-            --package 'system-images;android-36;google_apis;x86_64'
-          test -f "$ANDROID_AVD_HOME/$avd_name.ini"
-          avd_list="$(avdmanager list avd -c)"
-          if ! grep -Fxq "$avd_name" <<< "$avd_list"; then
-            echo "Expected Android AVD '$avd_name' was not created; available AVDs:" >&2
-            printf '%s\n' "$avd_list" >&2
-            exit 1
-          fi
-          test -e /dev/kvm
-          sudo chown "$USER" /dev/kvm
-          test -r /dev/kvm
-          test -w /dev/kvm
-          : > "$RUNNER_TEMP/android-emulator.log"
-          emulator_pid=
-          trap 'if [[ -n "${emulator_pid:-}" ]]; then kill "$emulator_pid" 2>/dev/null || true; fi' EXIT
-          start_android_emulator() {
-            local wipe_data="${1:-false}"
-            local -a wipe_args=()
-            if [[ "$wipe_data" == true ]]; then wipe_args=(-wipe-data); fi
-            "$ANDROID_HOME/emulator/emulator" -avd "$avd_name" "${wipe_args[@]}" \
-              -no-window -no-audio -no-boot-anim -no-snapshot \
-              -gpu swiftshader_indirect >> "$RUNNER_TEMP/android-emulator.log" 2>&1 &
-            emulator_pid=$!
-            if ! timeout 120s adb wait-for-device; then
-              echo 'Android emulator did not appear within 120 seconds; emulator log follows:' >&2
-              cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
-              return 1
-            fi
-            local booted=0
-            for _ in $(seq 1 120); do
-              if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
-                booted=1
-                break
-              fi
-              sleep 5
-            done
-            if [[ "$booted" != 1 ]]; then
-              cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
-              return 1
-            fi
-            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
-            test "$(adb shell getprop ro.product.cpu.abi | tr -d '\r')" = x86_64
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-          }
-          start_android_emulator
-          {
-            echo 'Device API level: '"$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
-            echo 'Emulator ABI: '"$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
-            echo 'GPU path: Android API 36 x86_64 emulator with SwiftShader (-gpu swiftshader_indirect)'
-            echo 'Presentation path: Rust bounded RGBA lease -> reusable Android Bitmap -> Flutter SurfaceProducer'
-            echo 'Queue budgets: render 4 frames / 256 MiB; audio 256 frames / 32 MiB; decode 16 frames / 256 MiB; viewer 3 outstanding leases'
-            echo 'Presenter bound: one copied/pending frame, 8 pending callers, 8 queued operations, 64 active SAF sources, frame <=1920x1080 and <=16 MiB'
-            echo 'Cancellation: Rust preview generation invalidation; stale frames dropped before presentation'
-            echo 'Fallback telemetry: integration log records frame sequence, dimensions, preview error, surface result, and revision stability'
-            echo 'ANDROID_HARDWARE_MEDIA=UNVERIFIED (no physical device, MediaCodec, or HardwareBuffer run)'
-          } > "$RUNNER_TEMP/android-render-matrix.txt"
-          cat "$RUNNER_TEMP/android-render-matrix.txt"
-          cat "$RUNNER_TEMP/android-render-matrix.txt" >> "$GITHUB_STEP_SUMMARY"
+          export OR_AVD_NAME="$avd_name"
+          export OR_ANDROID_DEVICE_ID="$android_device_id"
 
-          # Every Android case is built before the emulator starts. Each case has
+          # Every Android case is built before any emulator starts. Each case has
           # its own Dart entrypoint, so each gets its own APK. Driving those
           # prebuilt binaries keeps Gradle and the Kotlin daemons out of the
           # software-rendered emulator phase: the hosted VM service connection was
@@ -1209,6 +1148,21 @@ jobs:
           ./gradlew --stop
           cd "$GITHUB_WORKSPACE/apps/or_app"
 
+          bash "$GITHUB_WORKSPACE/scripts/start-android-emulator.sh"
+          {
+            echo 'Device API level: '"$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo 'Emulator ABI: '"$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+            echo 'GPU path: Android API 36 x86_64 emulator with SwiftShader (-gpu swiftshader_indirect)'
+            echo 'Presentation path: Rust bounded RGBA lease -> reusable Android Bitmap -> Flutter SurfaceProducer'
+            echo 'Queue budgets: render 4 frames / 256 MiB; audio 256 frames / 32 MiB; decode 16 frames / 256 MiB; viewer 3 outstanding leases'
+            echo 'Presenter bound: one copied/pending frame, 8 pending callers, 8 queued operations, 64 active SAF sources, frame <=1920x1080 and <=16 MiB'
+            echo 'Cancellation: Rust preview generation invalidation; stale frames dropped before presentation'
+            echo 'Fallback telemetry: integration log records frame sequence, dimensions, preview error, surface result, and revision stability'
+            echo 'ANDROID_HARDWARE_MEDIA=UNVERIFIED (no physical device, MediaCodec, or HardwareBuffer run)'
+          } > "$RUNNER_TEMP/android-render-matrix.txt"
+          cat "$RUNNER_TEMP/android-render-matrix.txt"
+          cat "$RUNNER_TEMP/android-render-matrix.txt" >> "$GITHUB_STEP_SUMMARY"
+
           run_ffmpeg_runtime_probe() {
             local apk="$case_apks/diagnostics.apk"
             local runtime_dir="$RUNNER_TEMP/android-apk-ffmpeg-x86_64"
@@ -1224,7 +1178,6 @@ jobs:
             adb shell chmod 755 /data/local/tmp/ffmpeg-link-probe || return $?
             adb shell 'LD_LIBRARY_PATH=/data/local/tmp/ffmpeg-runtime /data/local/tmp/ffmpeg-link-probe'
           }
-          printf '%s\n' "$emulator_pid" > "$RUNNER_TEMP/android-emulator.pid"
           run_ffmpeg_runtime_probe
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" diagnostics \
             integration_test/native_bridge_diagnostics_test.dart test_driver/integration_test.dart \
@@ -1235,8 +1188,11 @@ jobs:
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" surface \
             integration_test/android_preview_surface_test.dart test_driver/integration_test.dart \
             "$case_apks/surface.apk"
-          # Retain this exact emulator for the distinct real product proof step.
-          trap - EXIT
+          # Stop this guest. A single long-lived guest that has already driven two
+          # cases wedges under SwiftShader: qemu stays near 187% CPU and 3.6 GiB RSS
+          # while the guest stops answering adb, and the next case fails as "device
+          # offline" with no product cause. The SAF step starts its own guest.
+          bash "$GITHUB_WORKSPACE/scripts/stop-android-emulator.sh"
 
       - name: Verify Android SAF preview user journey and resource bounds
         timeout-minutes: 30
@@ -1244,11 +1200,16 @@ jobs:
           OR_ANDROID_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-acceptance
         run: |
           set -euo pipefail
+          export OR_AVD_NAME=or-api36-x86_64
+          export OR_ANDROID_DEVICE_ID=emulator-5554
+          bash "$GITHUB_WORKSPACE/scripts/start-android-emulator.sh" wipe-data
           fixture_apk="$GITHUB_WORKSPACE/apps/or_app/build/saf_fixture/outputs/apk/debug/saf_fixture-debug.apk"
           test -f "$fixture_apk"
           adb -s emulator-5554 install "$fixture_apk"
           mkdir -p "$OR_ANDROID_ACCEPTANCE_OUTPUT"
           # Built with the emulator step above; this step reuses that exact APK.
+          # The guest is fresh here: the SAF journey is the real product proof and
+          # must not inherit a wedged emulator from earlier cases.
           case_apks="$RUNNER_TEMP/android-case-apks"
           test -s "$case_apks/saf.apk"
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" saf \
@@ -1279,10 +1240,7 @@ jobs:
 
       - name: Stop Android verification emulator
         if: always()
-        run: |
-          if [[ -f "$RUNNER_TEMP/android-emulator.pid" ]]; then
-            kill "$(cat "$RUNNER_TEMP/android-emulator.pid")" 2>/dev/null || true
-          fi
+        run: bash "$GITHUB_WORKSPACE/scripts/stop-android-emulator.sh"
 
       - name: Preserve Android FFmpeg source and build provenance
         if: always() && steps.android-ffmpeg-build.outcome == 'success'
