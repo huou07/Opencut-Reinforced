@@ -1184,8 +1184,33 @@ jobs:
           cat "$RUNNER_TEMP/android-render-matrix.txt"
           cat "$RUNNER_TEMP/android-render-matrix.txt" >> "$GITHUB_STEP_SUMMARY"
 
+          # Every Android case is built before the emulator starts. Each case has
+          # its own Dart entrypoint, so each gets its own APK. Driving those
+          # prebuilt binaries keeps Gradle and the Kotlin daemons out of the
+          # software-rendered emulator phase: the hosted VM service connection was
+          # repeatedly lost while ~4 GiB of build JVMs stayed resident next to
+          # SwiftShader qemu, and load stayed at 23+ instead of falling.
+          case_apks="$RUNNER_TEMP/android-case-apks"
+          mkdir -p "$case_apks"
+          build_case_apk() {
+            local name="$1" entrypoint="$2" apk
+            shift 2
+            cd "$GITHUB_WORKSPACE/apps/or_app"
+            flutter build apk --debug --target "$entrypoint" "$@"
+            apk="$case_apks/$name.apk"
+            cp build/app/outputs/flutter-apk/app-debug.apk "$apk"
+            test -s "$apk"
+          }
+          build_case_apk diagnostics integration_test/native_bridge_diagnostics_test.dart \
+            "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
+          build_case_apk surface integration_test/android_preview_surface_test.dart
+          build_case_apk saf integration_test/android_saf_preview_test.dart
+          cd "$GITHUB_WORKSPACE/apps/or_app/android"
+          ./gradlew --stop
+          cd "$GITHUB_WORKSPACE/apps/or_app"
+
           run_ffmpeg_runtime_probe() {
-            local apk="$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
+            local apk="$case_apks/diagnostics.apk"
             local runtime_dir="$RUNNER_TEMP/android-apk-ffmpeg-x86_64"
             local probe="$RUNNER_TEMP/android-ffmpeg/probes/x86_64/ffmpeg-link-probe"
             mkdir -p "$runtime_dir"
@@ -1203,12 +1228,13 @@ jobs:
           run_ffmpeg_runtime_probe
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" diagnostics \
             integration_test/native_bridge_diagnostics_test.dart test_driver/integration_test.dart \
-            --keep-app-running "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
+            "$case_apks/diagnostics.apk" --keep-app-running
           adb push "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" /data/local/tmp/or-android-preview-tiny.mkv
           adb shell run-as io.github.huou07.or_app mkdir -p files
           adb shell run-as io.github.huou07.or_app cp /data/local/tmp/or-android-preview-tiny.mkv files/or-android-preview-tiny.mkv
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" surface \
-            integration_test/android_preview_surface_test.dart test_driver/integration_test.dart
+            integration_test/android_preview_surface_test.dart test_driver/integration_test.dart \
+            "$case_apks/surface.apk"
           # Retain this exact emulator for the distinct real product proof step.
           trap - EXIT
 
@@ -1222,8 +1248,12 @@ jobs:
           test -f "$fixture_apk"
           adb -s emulator-5554 install "$fixture_apk"
           mkdir -p "$OR_ANDROID_ACCEPTANCE_OUTPUT"
+          # Built with the emulator step above; this step reuses that exact APK.
+          case_apks="$RUNNER_TEMP/android-case-apks"
+          test -s "$case_apks/saf.apk"
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" saf \
-            integration_test/android_saf_preview_test.dart test_driver/android_saf_preview.dart
+            integration_test/android_saf_preview_test.dart test_driver/android_saf_preview.dart \
+            "$case_apks/saf.apk"
           test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           for image in saf-editor-texture saf-editor-permission-recovered saf-surface-recreated; do
             test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/$image.png"

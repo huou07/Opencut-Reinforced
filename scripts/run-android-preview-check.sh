@@ -4,7 +4,8 @@ set -euo pipefail
 case_name="$1"
 target="$2"
 driver="$3"
-shift 3
+apk="$4"
+shift 4
 android_device_id=emulator-5554
 log="$RUNNER_TEMP/android-driver-$case_name.log"
 guest_log="$RUNNER_TEMP/android-guest-$case_name.log"
@@ -60,7 +61,11 @@ if [[ "$(adb -s "$android_device_id" get-state 2>/dev/null || true)" != device ]
     --case "$case_name" --output "$RUNNER_TEMP/android-disconnect-$case_name.json" || true
   exit 1
 fi
-flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds "$@" \
+# The APK is built before the emulator starts. Driving a prebuilt binary keeps
+# Gradle and the Kotlin daemons out of the software-rendered emulator phase,
+# where ~4 GiB of build JVMs was competing for the runner's vCPUs.
+flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
+  --use-application-binary="$apk" "$@" \
   2>&1 | tee "$log" || status=$?
 if [[ -n "$picker_pid" ]]; then
   if [[ "$status" != 0 ]]; then
