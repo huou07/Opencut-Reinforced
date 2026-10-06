@@ -3342,51 +3342,56 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       );
     }
     if (snapshot.items.isEmpty && (widget.markerPage?.items.isEmpty ?? true)) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'No timeline tracks',
-              style: TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+      // This panel gets a small share of a short screen, so the empty state
+      // must scroll: it previously overflowed by 154 px at 320x640 and 86 px at
+      // 390x844, which is the emulator viewport.
+      return SingleChildScrollView(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'No timeline tracks',
+                style: TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(height: OrSpacing.x2),
-            Wrap(
-              spacing: OrSpacing.x2,
-              runSpacing: OrSpacing.x2,
-              alignment: WrapAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('timeline-empty-add-video'),
-                  onPressed: widget.busy ? null : widget.onAddVideoTrack,
-                  icon: const Icon(Icons.movie_outlined, size: 16),
-                  label: const Text('Add Video Track'),
-                ),
-                OutlinedButton.icon(
-                  key: const ValueKey('timeline-empty-add-audio'),
-                  onPressed: widget.busy ? null : widget.onAddAudioTrack,
-                  icon: const Icon(Icons.graphic_eq_outlined, size: 16),
-                  label: const Text('Add Audio Track'),
-                ),
-                OutlinedButton.icon(
-                  key: const ValueKey('timeline-empty-add-text'),
-                  onPressed: widget.busy ? null : widget.onAddTextTrack,
-                  icon: const Icon(Icons.text_fields_outlined, size: 16),
-                  label: const Text('Add Text Track'),
-                ),
-                OutlinedButton.icon(
-                  key: const ValueKey('timeline-empty-add-caption'),
-                  onPressed: widget.busy ? null : widget.onAddCaptionTrack,
-                  icon: const Icon(Icons.subtitles_outlined, size: 16),
-                  label: const Text('Add Caption Track'),
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(height: OrSpacing.x2),
+              Wrap(
+                spacing: OrSpacing.x2,
+                runSpacing: OrSpacing.x2,
+                alignment: WrapAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('timeline-empty-add-video'),
+                    onPressed: widget.busy ? null : widget.onAddVideoTrack,
+                    icon: const Icon(Icons.movie_outlined, size: 16),
+                    label: const Text('Add Video Track'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('timeline-empty-add-audio'),
+                    onPressed: widget.busy ? null : widget.onAddAudioTrack,
+                    icon: const Icon(Icons.graphic_eq_outlined, size: 16),
+                    label: const Text('Add Audio Track'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('timeline-empty-add-text'),
+                    onPressed: widget.busy ? null : widget.onAddTextTrack,
+                    icon: const Icon(Icons.text_fields_outlined, size: 16),
+                    label: const Text('Add Text Track'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('timeline-empty-add-caption'),
+                    onPressed: widget.busy ? null : widget.onAddCaptionTrack,
+                    icon: const Icon(Icons.subtitles_outlined, size: 16),
+                    label: const Text('Add Caption Track'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     }

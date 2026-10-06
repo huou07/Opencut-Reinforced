@@ -368,7 +368,10 @@ void main() {
       );
       expect((await gateway.summary(session)).revision, revision);
       final journey = await _resources();
-      await tester.tap(find.byKey(const ValueKey('nav-home')));
+      // The close control lives on the Projects workspace. Tapping nav-home
+      // landed on Home, which has no active-project card, so the close step
+      // could never complete.
+      await tester.tap(find.byKey(const ValueKey('nav-projects')));
       await _until(
         tester,
         () => find
@@ -376,6 +379,12 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
+      // The action row sits below the fold at this height; a real user scrolls
+      // to it before tapping.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('active-project-close')),
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('active-project-close')));
       await _until(tester, () => gateway.closed);
       expect(_providerFds(), 0);

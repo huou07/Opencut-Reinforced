@@ -1372,6 +1372,61 @@ void main() {
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
+  testWidgets('ZZ probe create at 320x640', (tester) async {
+    _setViewport(tester, const Size(320, 640));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/zz-ovf.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    FlutterError.onError = (details) {
+      FlutterError.dumpErrorToConsole(details);
+    };
+    await tester.tap(find.byKey(const ValueKey('home-new-project')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('new-project-name')),
+      'Ov',
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'compact SAF-style journey closes an open project from Projects',
+    (tester) async {
+      // The Android SAF journey ends by opening the Projects workspace and
+      // tapping its close control at the emulator's 320x640 viewport. Neither
+      // that sequence nor the compact layout was covered before.
+      _setViewport(tester, const Size(320, 640));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/compact-close.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Compact close');
+
+      await tester.tap(find.byKey(const ValueKey('nav-projects')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('active-project-close')),
+        findsOneWidget,
+        reason: 'the Projects screen must offer Close for the open project',
+      );
+
+      // The action row sits below the fold at this height, so a real user must
+      // scroll to it. The journey does the same.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('active-project-close')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('active-project-close')));
+      await tester.pumpAndSettle();
+      expect(gateway.closeCalls, 1);
+      expect(find.text('No recent projects yet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('close guard supports cancel, discard, and save', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
