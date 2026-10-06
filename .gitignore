@@ -12,3 +12,6 @@ node_modules/
 coverage/
 *.swp
 *.swo
+
+# Local agent runtime state (checkpoints, caches); never commit.
+.opencode/
