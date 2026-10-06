@@ -15,7 +15,9 @@ adb -s "$android_device_id" logcat -c
 adb -s "$android_device_id" logcat -b all -v threadtime > "$guest_log" 2>&1 &
 guest_pid=$!
 # Collection tolerates failed samples, which are preserved. sed consumes all
-# ps output, so pipefail/SIGPIPE cannot silently kill this sampler.
+# ps output, so pipefail/SIGPIPE cannot silently kill this sampler. The adb
+# probe runs once per 15s: two round trips every 5s were killing adb's own
+# transport with `timeout` while the software-rendered guest was still busy.
 (
   set +e
   while true; do
@@ -24,9 +26,8 @@ guest_pid=$!
     ps -eo pid,%cpu,rss,args --sort=-rss | sed -n '1,11p'
     cat /proc/meminfo
     cat /proc/pressure/memory 2>/dev/null || true
-    timeout 5s adb -s "$android_device_id" get-state
-    timeout 5s adb -s "$android_device_id" shell cat /proc/loadavg
-    sleep 5
+    timeout 15s adb -s "$android_device_id" get-state
+    for _ in 1 2; do sleep 5; timeout 5s adb -s "$android_device_id" get-state; done
   done
 ) > "$health_log" 2>&1 &
 health_pid=$!
@@ -44,14 +45,31 @@ if [[ "$case_name" == saf ]]; then
 fi
 cd "$GITHUB_WORKSPACE/apps/or_app"
 status=0
+# `adb get-state` only proves the adb server can see the emulator. The Flutter
+# device discovery also runs `adb shell` against the guest, and a guest still
+# busy from the previous case did not answer it: the drive failed with "No
+# supported devices found" while adb had worked 500ms earlier. Require the guest
+# itself to answer three times in a row, bounded, before launching. This is a
+# precondition, not a retry: the case still runs once and still fails if the
+# guest never responds.
+ready=0
+for _ in $(seq 1 36); do
+  if [[ "$(timeout 15s adb -s "$android_device_id" shell echo or-ready 2>/dev/null | tr -d '\r')" == or-ready ]]; then
+    ready=$((ready + 1))
+    ((ready == 3)) && break
+  else
+    ready=0
+  fi
+  sleep 5
+done
 # A previous case can take the emulator down. Check before launching so the run
 # reports a lost emulator instead of a confusing "no supported devices" driver
 # error, and so the cause is classified. The case still fails: a lost emulator
 # means this acceptance did not run.
-if [[ "$(adb -s "$android_device_id" get-state 2>/dev/null || true)" != device ]]; then
+if [[ "$ready" != 3 ]]; then
   {
     date -u
-    echo "BLOCKED: emulator $android_device_id was not available before case $case_name."
+    echo "BLOCKED: emulator $android_device_id guest did not answer three consecutive probes before case $case_name."
     echo 'adb devices:'
     adb devices -l || true
   } > "$RUNNER_TEMP/android-state-$case_name.txt" 2>&1
