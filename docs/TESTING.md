@@ -714,6 +714,16 @@ hardening commit itself must pass both workflows.
   identity through provider FD acquisition, duplication, software decode,
   shared rendering, and surface presentation. Fixture setup and revocation
   controls do not replace the app picker, gateway, renderer, or viewer.
+- The fixture hands that project to the separate-UID provider through the setup
+  Intent, so its transport bound must admit the document OR itself saves. The
+  journey proves more than a successful seed: the provider reports the byte count
+  it serves and the test requires it to equal the exact UTF-8 length of the
+  canonical `.orproj`. A 65-entry acceptance project saves to 67,473 bytes of
+  pretty-printed canonical JSON, so the fixture bound is 256 KiB — measured with
+  headroom, and still far inside the ~1 MiB Binder transaction that carries the
+  Intent. An earlier 64 KiB bound rejected every legitimate document for this
+  journey. A rejection now names the observed byte count instead of only
+  restating the requirement.
 - The same acceptance checks permission revocation/regrant and recovery, a
   fresh real gateway session whose first preview action is Play, an active
   source beyond the first 64 library items, partial registration followed by

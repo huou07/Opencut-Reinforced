@@ -260,12 +260,17 @@ void main() {
       addTearDown(() => directory.deleteSync(recursive: true));
       final source = _source('late65');
       final path = await _project(directory, 'SAF preview acceptance', source);
-      final provider = await _control(
-        'seedProject',
-        projectJson: await File(path).readAsString(),
-      );
+      final projectJson = await File(path).readAsString();
+      final provider = await _control('seedProject', projectJson: projectJson);
       expect(provider['providerUid'], isNot(provider['appUid']));
       expect(provider['mediaBytes'], 9045);
+      expect(
+        provider['projectBytes'],
+        utf8.encode(projectJson).length,
+        reason:
+            'The provider must serve the exact document OR saved, not a '
+            'truncated or substituted fixture project.',
+      );
       expect(_providerFds(), 0);
       final gateway = _ObservedGateway();
       await tester.pumpWidget(

@@ -17,6 +17,11 @@ import org.json.JSONObject;
 /** Explicit fixture setup/revocation, retaining Android's actual URI permission checks. */
 public final class ControlActivity extends Activity {
     static final String OR_PACKAGE = "io.github.huou07.or_app";
+    // The acceptance journey seeds a project with more than 64 library entries, so
+    // OR's own canonical save is ~66 KiB of pretty-printed JSON. This bound must
+    // admit that real document and stay well inside the ~1 MiB Binder transaction
+    // that carries the Intent between the two UIDs.
+    static final int MAX_PROJECT_BYTES = 256 * 1024;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         new Thread(() -> {
@@ -35,8 +40,10 @@ public final class ControlActivity extends Activity {
                             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                         }
                         String project = getIntent().getStringExtra("projectJson");
-                        if (project == null || project.getBytes(StandardCharsets.UTF_8).length > 65536) throw new IllegalArgumentException("Bounded fixture project required");
-                        try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "acceptance.orproj"))) { output.write(project.getBytes(StandardCharsets.UTF_8)); }
+                        byte[] encoded = project == null ? new byte[0] : project.getBytes(StandardCharsets.UTF_8);
+                        if (encoded.length > MAX_PROJECT_BYTES) throw new IllegalArgumentException(
+                            "Bounded fixture project required: " + encoded.length + " bytes exceeds " + MAX_PROJECT_BYTES);
+                        try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "acceptance.orproj"))) { output.write(encoded); }
                         for (String id : new String[]{"good", "late65", "missing", "pipe", "blocked"}) {
                             grantUriPermission(OR_PACKAGE, DocumentsContract.buildDocumentUri(FixtureDocumentsProvider.AUTHORITY, id), Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         }
@@ -58,7 +65,8 @@ public final class ControlActivity extends Activity {
                     default: throw new IllegalArgumentException("Unknown fixture operation");
                 }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
-                    .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length());
+                    .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
+                    .put("projectBytes", new File(getFilesDir(), "acceptance.orproj").length());
                 runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });
             } catch (Exception error) {
                 runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });
