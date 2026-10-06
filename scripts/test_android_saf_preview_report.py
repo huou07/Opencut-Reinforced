@@ -10,6 +10,7 @@ def report():
         'checks': dict.fromkeys(CHECKS, True), 'providerUid': 10001, 'appUid': 10002,
         'sourceUri': 'content://dev.opencut.saffixture.documents/document/late65',
         'visiblePixelRgba': [254, 0, 0, 255], 'recoveredPixelRgba': [254, 0, 0, 255],
+        'recreatedPixelRgba': [254, 0, 0, 255],
         'providerOpens': 4, 'uiPlayMicros': 100,
         'sameSourceRegistrations': [1, 1], 'sameSourceProviderOpens': [2, 2],
         'stressResources': {'presentedFrames': 1, 'bitmapBytes': 1024, 'peakPendingFrameResults': 8,
@@ -43,6 +44,11 @@ class ReportTest(unittest.TestCase):
             value = report()
             value['androidSafAcceptance'].update(mutation)
             with self.assertRaises(ValueError): verify(value)
+
+    def test_recreated_surface_must_present_the_frame_not_the_backdrop(self):
+        value = report()
+        value['androidSafAcceptance']['recreatedPixelRgba'] = [254, 247, 255, 255]
+        with self.assertRaises(ValueError): verify(value)
 
 
 if __name__ == '__main__': unittest.main()

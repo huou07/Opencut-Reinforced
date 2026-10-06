@@ -193,10 +193,15 @@ enforced provider. The helper provider is absent from OR's APK. The debug-only
 fixture control bridge prepares/revokes fixture grants; it cannot return a
 picker result or render a frame. Composed screenshots, the asserted report,
 actual `/proc/self/fd` provider links, native leases, and collector logs are
-preserved in the Android FFmpeg artifact. The proof retains distinct driver
-lifecycles: diagnostic bootstrap, existing local-file surface assertions, and
-the real SAF user journey. Generic clean-AVD retries and the old offline
-classifier are removed because the diagnostic did not prove their cause.
+preserved in the Android FFmpeg artifact. Every captured texture pixel is
+machine-checked against the fixture frame, including the texture issued after a
+full release and recreate: that surface is cold, so the journey keeps asking the
+real plugin for real frames and lets this guest composite before the capture,
+bounded so a genuinely blank surface still fails. The proof retains distinct
+driver lifecycles: diagnostic bootstrap, existing local-file surface
+assertions, and the real SAF user journey. Generic clean-AVD retries and the old
+offline classifier are removed because the diagnostic did not prove their
+cause.
 
 Every Android drive case now ends with a deterministic disconnect
 classification instead of a bare exit status. `scripts/run-android-preview-check.sh`

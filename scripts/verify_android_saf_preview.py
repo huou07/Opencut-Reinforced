@@ -23,7 +23,7 @@ def verify(report):
         raise ValueError('The provider must have a separate Android UID')
     if data['sourceUri'] != 'content://dev.opencut.saffixture.documents/document/late65':
         raise ValueError('Expected actual late-library provider URI')
-    for field in ('visiblePixelRgba', 'recoveredPixelRgba'):
+    for field in ('visiblePixelRgba', 'recoveredPixelRgba', 'recreatedPixelRgba'):
         r, g, b, a = data[field]
         if not (200 <= r <= 255 and 0 <= g <= 40 and 0 <= b <= 40 and a == 255):
             raise ValueError('Composed Flutter Texture pixels were not the fixture frame')

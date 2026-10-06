@@ -100,11 +100,30 @@ Future<List<int>> _redTexture(
   final pixel = List.generate(4, (i) => rgba.getUint8(offset + i));
   image.dispose();
   codec.dispose();
-  expect(pixel[0], greaterThanOrEqualTo(200));
-  expect(pixel[1], lessThanOrEqualTo(40));
-  expect(pixel[2], lessThanOrEqualTo(40));
-  expect(pixel[3], 255);
+  expect(pixel[0], greaterThanOrEqualTo(200), reason: 'Red channel of $pixel');
+  expect(pixel[1], lessThanOrEqualTo(40), reason: 'Green channel of $pixel');
+  expect(pixel[2], lessThanOrEqualTo(40), reason: 'Blue channel of $pixel');
+  expect(pixel[3], 255, reason: 'Alpha channel of $pixel');
   return pixel;
+}
+
+// The two editor captures above are of a texture that had been presenting for
+// seconds, so a single posted frame was already on screen. A brand-new
+// SurfaceTexture is different: the engine has to acquire the first buffer the
+// plugin posts before the layer carries it, and this SwiftShader guest drops
+// hundreds of frames doing that. Keep asking the real plugin for real frames
+// and let the platform settle, so the capture measures the surface and not how
+// fast this guest composites. Bounded, so a genuinely blank surface still
+// fails on the unchanged pixel assertion.
+Future<void> _settleRecreatedSurface(WidgetTester tester) async {
+  for (var attempt = 0; attempt < 8; attempt++) {
+    expect(
+      await _presenter.invokeMethod<bool>('frameAvailable'),
+      isTrue,
+      reason: 'A recreated Android surface must present a real frame.',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+  }
 }
 
 // Fixture preparation uses canonical commands. It does not replace the native
@@ -484,8 +503,12 @@ void main() {
           home: Scaffold(body: Texture(textureId: recreated)),
         ),
       );
-      expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
-      await _redTexture(tester, binding, 'saf-surface-recreated');
+      await _settleRecreatedSurface(tester);
+      final recreatedPixels = await _redTexture(
+        tester,
+        binding,
+        'saf-surface-recreated',
+      );
       await secondGateway.close(second, discardUnsaved: false);
       expect(_providerFds(), 0);
 
@@ -590,6 +613,7 @@ void main() {
           'projectRevision': revision.toString(),
           'visiblePixelRgba': pixels,
           'recoveredPixelRgba': recoveredPixels,
+          'recreatedPixelRgba': recreatedPixels,
           'journeyResources': journey,
           'stressResources': stress,
           'finalResources': finalResources,
