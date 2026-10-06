@@ -1082,6 +1082,9 @@ jobs:
       - name: Check Android disconnect classification guards
         run: python3 scripts/test_classify_android_disconnect.py
 
+      - name: Check Android guest readiness gate guards
+        run: bash scripts/test_android_guest_readiness_gate.sh
+
       - name: Build separate permission-enforced SAF acceptance provider
         working-directory: apps/or_app/android
         run: ./gradlew -PorSafFixture=true :saf_fixture:assembleDebug

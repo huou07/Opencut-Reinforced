@@ -48,13 +48,21 @@ status=0
 # `adb get-state` only proves the adb server can see the emulator. The Flutter
 # device discovery also runs `adb shell` against the guest, and a guest still
 # busy from the previous case did not answer it: the drive failed with "No
-# supported devices found" while adb had worked 500ms earlier. Require the guest
-# itself to answer three times in a row, bounded, before launching. This is a
-# precondition, not a retry: the case still runs once and still fails if the
-# guest never responds.
+# supported devices found" while adb had worked 500ms earlier.
+#
+# Answering at all is not enough. A freshly booted guest answers `adb shell`
+# immediately while it is still starved, and the drive then dies inside
+# `waitForServiceExtension` before the isolate can serve the VM service. So the
+# guest must answer three consecutive probes *quickly*: a settled guest answers
+# in well under a second, a busy one takes seconds. This is a precondition, not a
+# retry: the case still runs once and still fails if the guest never settles.
 ready=0
+probes=0
 for _ in $(seq 1 36); do
-  if [[ "$(timeout 15s adb -s "$android_device_id" shell echo or-ready 2>/dev/null | tr -d '\r')" == or-ready ]]; then
+  probes=$((probes + 1))
+  probe_start=$SECONDS
+  if [[ "$(timeout 15s adb -s "$android_device_id" shell echo or-ready 2>/dev/null | tr -d '\r')" == or-ready ]] &&
+    ((SECONDS - probe_start <= 3)); then
     ready=$((ready + 1))
     ((ready == 3)) && break
   else
@@ -62,6 +70,7 @@ for _ in $(seq 1 36); do
   fi
   sleep 5
 done
+echo "Android $case_name guest readiness: ready=$ready probes=$probes"
 # A previous case can take the emulator down. Check before launching so the run
 # reports a lost emulator instead of a confusing "no supported devices" driver
 # error, and so the cause is classified. The case still fails: a lost emulator
