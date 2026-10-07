@@ -867,6 +867,7 @@ mod desktop {
             // Cancellation invalidates publication first. Drain any decoder
             // holding a cloned capability before the platform clears its FDs.
             let _render = lock(&self.render_lock);
+            lock(&self.render_resources.video_sessions).clear();
             let mut state = lock(&self.state);
             state.program = None;
             state.key = None;

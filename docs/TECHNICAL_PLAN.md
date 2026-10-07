@@ -831,9 +831,10 @@ bounded backpressure while source registration or completion is pending, while
 explicit seeks cancel older work and serialize completion. The native adapter
 checks every FD registration, rolls back partial sets, revalidates grants on
 cached sets, and releases duplicated capabilities on project close/switch.
-If platform source binding fails after a prepared frame, abort also drains the
+If platform source binding fails after a prepared frame, abort drains the
 bounded decoder-session cache so a cached decoder cannot keep a revoked SAF
-descriptor alive.
+descriptor alive. Preview shutdown drains that cache after taking the render
+lock, releasing duplicated SAF descriptors when the project closes.
 Software decode uses the packaged FFmpeg profile and shared render path; the
 bounded BGRA lease is copied to one reusable bitmap and presented through
 Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
