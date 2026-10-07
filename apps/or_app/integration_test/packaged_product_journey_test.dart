@@ -162,10 +162,10 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(find.byKey(const ValueKey('preview-frame-rate')));
   await _pumpUntil(
     tester,
-    () => find.text('24 fps').evaluate().isNotEmpty,
-    '24 fps menu option',
+    () => find.text('24 fps').hitTestable().evaluate().isNotEmpty,
+    '24 fps menu option readiness',
   );
-  await tester.tap(find.text('24 fps'));
+  await tester.tap(find.text('24 fps').hitTestable());
   await _pumpUntil(
     tester,
     () =>
