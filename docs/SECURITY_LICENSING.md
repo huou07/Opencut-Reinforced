@@ -135,13 +135,14 @@ spawns it with direct process arguments and no shell, exactly as before.
 
 Helper build additions beyond the 7C production prefix are the `ffmpeg`/`ffprobe`
 programs, the `pipe` protocol for piped artifact output, the `png` and `mpeg4` encoders, the `image2` and `image2pipe` muxers, and the `setpts`,
-`scale`, `format`, `aformat`, `aresample`, and `showwavespic` filters, plus the system
-zlib compression library the PNG encoder requires. No GPL, version3, nonfree,
+`scale`, `format`, `aformat`, `aresample`, and `showwavespic` filters, plus the zlib
+compression library the PNG encoder requires. Windows helpers statically link
+pinned zlib 1.3.2 source (SHA-256
+`bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) and ship its
+license notice; macOS and Linux use system zlib with no extra bundled file. No GPL, version3, nonfree,
 or external codec library is enabled; the LGPL-2.1-or-later posture, source
 archive, configure record, license notices, and library-replacement terms are
-unchanged. macOS and Linux use their system zlib with no extra bundled file;
-the Windows package stages the MSYS2 zlib DLL beside the helpers with its
-license text. Android is unaffected: it has no artifact service and keeps the
+unchanged. Android is unaffected: it has no artifact service and keeps the
 linked-only runtime. This review does not determine patent or codec licensing obligations;
 the shipped codec set stays FFV1/PCM S16LE plus proxy/display encodings, and
 wider capture/delivery codecs still require the separate legal, platform, and

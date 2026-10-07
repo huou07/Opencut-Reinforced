@@ -371,16 +371,13 @@ jobs:
               Copy-Item -Path $libraries.FullName -Destination $destination -Force
             }
           }
-          # 9B1 packaged media helpers live beside the app binary with the
-          # system zlib DLL; Windows loads them from the application directory.
+          # 9B1 packaged media helpers live beside the app binary; zlib is
+          # statically linked into the helper executables.
           foreach ($helper in @('ffmpeg.exe', 'ffprobe.exe')) {
             $source = Join-Path (Join-Path $env:FFMPEG_INSTALL_PREFIX 'bin') $helper
             if (-not (Test-Path $source -PathType Leaf)) { throw "FFmpeg helper missing: $helper" }
             Copy-Item -Path $source -Destination $bundle -Force
           }
-          $zlib = Get-ChildItem -Path (Join-Path $env:FFMPEG_INSTALL_PREFIX 'bin') -Filter 'zlib*.dll' -File
-          if ($null -eq $zlib) { throw 'zlib runtime library missing beside the helpers' }
-          Copy-Item -Path $zlib.FullName -Destination $bundle -Force
           $notices = Join-Path $bundle 'licenses/FFmpeg'
           New-Item -ItemType Directory -Force -Path $notices | Out-Null
           $zlibLicense = Join-Path $env:FFMPEG_INSTALL_PREFIX 'ZLIB-LICENSE.txt'
@@ -395,7 +392,8 @@ jobs:
           compatible LGPL-compliant build under the applicable license terms.
           The ffmpeg.exe and ffprobe.exe programs beside the application are built
           from the same source and configuration for import and media previews;
-          the bundled zlib DLL's license is in ZLIB-LICENSE.txt.
+          the Windows ffmpeg.exe helper statically links zlib 1.3.2; its license
+          is included in ZLIB-LICENSE.txt.
           '@ | Set-Content -LiteralPath (Join-Path $notices 'FFmpeg-NOTICE.txt') -Encoding utf8
           $env:PATH = "$($destinations -join ';');$env:SystemRoot\System32;$env:SystemRoot"
           $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
