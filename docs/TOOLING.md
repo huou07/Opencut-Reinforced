@@ -197,7 +197,10 @@ preserved in the Android FFmpeg artifact. Every captured texture pixel is
 machine-checked against the fixture frame, including the texture issued after a
 full release and recreate: that surface is cold, so the journey keeps asking the
 real plugin for real frames and lets this guest composite before the capture,
-bounded so a genuinely blank surface still fails. The proof retains distinct
+bounded so a genuinely blank surface still fails. The composed PNGs are
+published through the binding's own screenshot accumulation, and the journey
+asserts that accumulation before it reports, because replacing that map made
+the screenshots exist only while the test failed. The proof retains distinct
 driver lifecycles: diagnostic bootstrap, existing local-file surface
 assertions, and the real SAF user journey. Generic clean-AVD retries and the old
 offline classifier are removed because the diagnostic did not prove their

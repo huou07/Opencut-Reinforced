@@ -585,7 +585,22 @@ void main() {
       final providerStats = await _control('status');
       expect(providerStats['providerOpens'], greaterThan(0));
       expect(tester.takeException(), isNull);
+      final captures =
+          (binding.reportData?['screenshots'] as List?) ?? const [];
+      expect(
+        captures.map((entry) => (entry as Map)['screenshotName']).toSet(),
+        {
+          'saf-editor-texture',
+          'saf-editor-permission-recovered',
+          'saf-surface-recreated',
+        },
+        reason: 'Every asserted capture must reach the acceptance artifact.',
+      );
+      // takeScreenshot accumulates each captured PNG in this map and the driver
+      // writes those bytes to the acceptance output. Assigning a fresh map
+      // discarded them, so the screenshots only existed while the test failed.
       binding.reportData = {
+        ...?binding.reportData,
         'androidSafAcceptance': {
           'checks': {
             for (final name in [
