@@ -869,8 +869,9 @@ bundle. The path is seeded before CMake's first configure and refreshed from
 the patched package before the integration test runs. macOS restores the
 framework's Flutter Rust Bridge library alias after its native integration
 builds, which otherwise replace that framework directory.
-The journey waits for the frame-rate control to become enabled and for its
-menu item to appear before selecting it. It blocks host FFmpeg lookup through
+The journey waits for the frame-rate and save controls to become enabled and
+for the frame-rate menu item to appear before interacting with them. It blocks
+host FFmpeg lookup through
 `PATH` with inert failure guards while preserving system utilities.
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, then exercise unsupported media,

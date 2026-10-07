@@ -3,7 +3,7 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart'
-    show IconButton, PopupMenuButton, SnackBar, Widget;
+    show IconButton, PopupMenuButton, SnackBar, TextButton, Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -186,6 +186,15 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'project edit',
   );
 
+  await _pumpUntil(
+    tester,
+    () =>
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('workspace-save')))
+            .onPressed !=
+        null,
+    'project save control readiness',
+  );
   await tester.tap(find.byKey(const ValueKey('workspace-save')));
   await _pumpUntil(
     tester,
