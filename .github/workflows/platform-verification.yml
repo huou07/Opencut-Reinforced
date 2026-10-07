@@ -872,7 +872,11 @@ jobs:
           pkg-config --cflags --libs zlib
           # zlib is statically linked into the MSVC helper executables.
           cp "$RUNNER_TEMP/ZLIB-LICENSE.txt" "$prefix/ZLIB-LICENSE.txt"
-          ./configure "${configure_args[@]}"
+          if ! ./configure "${configure_args[@]}"; then
+            echo "FFmpeg configure log (last 240 lines):"
+            tail -n 240 ffbuild/config.log
+            exit 1
+          fi
           make -j2
           make install
           # The install bin directory holds helper DLLs. Exercise the actual
