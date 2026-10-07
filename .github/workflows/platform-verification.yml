@@ -773,7 +773,7 @@ jobs:
           if ($actualHash -ne 'bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16') { throw "zlib source hash mismatch: $actualHash" }
           tar -xzf $archive -C $env:RUNNER_TEMP
           cmake -S $source -B $build -A x64 `
-            -DCMAKE_INSTALL_PREFIX=$prefix `
+            "-DCMAKE_INSTALL_PREFIX=$prefix" `
             -DZLIB_BUILD_SHARED=OFF -DZLIB_BUILD_STATIC=ON -DZLIB_BUILD_TESTING=OFF
           cmake --build $build --config Release
           cmake --install $build --config Release
