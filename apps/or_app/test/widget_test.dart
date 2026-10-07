@@ -460,7 +460,7 @@ void main() {
     expect(gateway.importMediaCalls, 1);
     expect(
       find.text(
-        'Media probe backend is unavailable.\nThis Developer Preview currently requires a system-provided ffprobe.',
+        'The packaged media inspector could not start. Check the app installation and try again.',
       ),
       findsOneWidget,
     );

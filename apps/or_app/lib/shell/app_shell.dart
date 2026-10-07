@@ -874,7 +874,7 @@ class _AppShellState extends State<AppShell> {
           );
         } else if (result.errorCode == 'PROBE_BACKEND_UNAVAILABLE') {
           _showUnavailable(
-            'Media probe backend is unavailable.\nThis Developer Preview currently requires a system-provided ffprobe.',
+            'The packaged media inspector could not start. Check the app installation and try again.',
           );
         } else if (result.errorCode == 'PROJECT_FILE_CHANGED') {
           _showUnavailable(

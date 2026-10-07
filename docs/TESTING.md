@@ -857,3 +857,14 @@ application/native or JNI failure, VM-service failure, emulator instability,
 and startup main-thread load. Skipped-frame warnings are measurements to
 investigate. Do not classify a disconnect as infrastructure based only on ADB
 being offline.
+
+9B1's desktop product journey runs the real Flutter application with the Rust
+project gateway and packaged FFmpeg helpers on macOS, Windows, and Linux. It
+removes helper overrides and loader/build paths, and blocks host FFmpeg lookup
+through `PATH` with inert failure guards while preserving system utilities.
+Separate app processes create/import/edit/save, relaunch and
+reopen/export over an existing destination, then exercise unsupported media,
+missing sources, an unavailable packaged probe, failed replacement, and failed
+project reopen. The acceptance step checks that failures preserve the saved
+project and the failed destination, then uses the packaged `ffprobe` to validate
+FFV1 video and PCM S16LE audio in the export.

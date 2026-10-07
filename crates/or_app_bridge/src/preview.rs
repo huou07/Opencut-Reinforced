@@ -854,6 +854,8 @@ mod desktop {
             let _prepare = lock(&self.preparation_lock);
             if self.generation.load(Ordering::SeqCst) == request_id {
                 self.cancel()?;
+                let _render = lock(&self.render_lock);
+                lock(&self.render_resources.video_sessions).clear();
             }
             Ok(())
         }
