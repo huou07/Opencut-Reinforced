@@ -96,6 +96,28 @@ pub(crate) fn create_project_file_new(
     sync_parent(parent).map_err(ProjectStorageError::DurabilityUncertain)
 }
 
+/// Atomically replaces a destination file with an already-written sibling.
+///
+/// Unlike [`atomic_replace_bytes`], the staged source already exists: this
+/// publishes staged work (for example a completed export) through the same
+/// durability boundary, including Windows replace-existing semantics, so saving
+/// over an existing destination cannot leave a half-written file.
+pub fn replace_published_file(
+    source: &Path,
+    destination: &Path,
+) -> Result<(), ProjectStorageError> {
+    if source.file_name().is_none() || destination.file_name().is_none() {
+        return Err(ProjectStorageError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "published file paths must name a file",
+        )));
+    }
+    if let Err(error) = replace_file(source, destination) {
+        return Err(ProjectStorageError::Replace(error));
+    }
+    sync_parent(parent_directory(destination)).map_err(ProjectStorageError::DurabilityUncertain)
+}
+
 /// Atomically replaces a file with bytes using the shared storage durability boundary.
 ///
 /// This stays crate-private so only the project and recovery storage APIs can use it.

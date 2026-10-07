@@ -256,9 +256,9 @@ impl MatroskaFfv1PcmS16leWriter {
         let mut output = self.output.take().expect("export output is open");
         output.write_trailer().map_err(ExportEncodeError::from)?;
         drop(output);
-        fs::rename(&self.staging_file, &self.destination).map_err(|error| {
-            ExportEncodeError(format!("could not publish the completed export: {error}"))
-        })?;
+        or_core::replace_published_file(&self.staging_file, &self.destination).map_err(
+            |error| ExportEncodeError(format!("could not publish the completed export: {error}")),
+        )?;
         self.committed = true;
         let _ = fs::remove_dir(&self.staging_directory);
         Ok(())

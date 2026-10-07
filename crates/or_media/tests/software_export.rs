@@ -68,6 +68,34 @@ fn writer_publishes_matroska_with_ffv1_and_pcm_s16le_streams() {
 }
 
 #[test]
+fn exporting_over_an_existing_destination_replaces_it_atomically() {
+    ffmpeg::init().unwrap();
+    let directory = TestDirectory::new();
+    let path = directory.file();
+    let first = vec![255; 4 * 2 * 4];
+    let mut writer = MatroskaFfv1PcmS16leWriter::create(&path, 4, 2, 24, 1).unwrap();
+    writer.write_video_frame(&first, 4, 2, 0).unwrap();
+    writer.write_audio_frames(&vec![0; 960], 0).unwrap();
+    writer.finish().unwrap();
+    let replaced_bytes = fs::read(&path).unwrap();
+
+    // Saving over an existing export must succeed on every platform, including
+    // Windows where a plain rename refuses to replace the destination, and must
+    // never leave a half-written file behind.
+    let second = vec![64; 4 * 2 * 4];
+    let mut writer = MatroskaFfv1PcmS16leWriter::create(&path, 4, 2, 24, 1).unwrap();
+    writer.write_video_frame(&second, 4, 2, 0).unwrap();
+    writer.write_video_frame(&second, 4, 2, 1).unwrap();
+    writer.write_audio_frames(&vec![0; 960], 0).unwrap();
+    writer.finish().unwrap();
+
+    let published = fs::read(&path).unwrap();
+    assert_ne!(published, replaced_bytes);
+    let input = ffmpeg::format::input(&path).unwrap();
+    assert_eq!(input.streams().count(), 2);
+}
+
+#[test]
 fn dropping_an_incomplete_export_preserves_destination_and_removes_staging() {
     let directory = TestDirectory::new();
     let path = directory.file();
