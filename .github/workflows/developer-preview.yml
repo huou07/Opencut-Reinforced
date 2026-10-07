@@ -650,11 +650,30 @@ jobs:
           test -f "$apk"
           apk_entries="$(unzip -Z1 "$apk")"
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            grep -Fxq "lib/$abi/libor_app_bridge.so" <<< "$apk_entries"
+            entry="lib/$abi/libor_app_bridge.so"
+            if ! grep -Fxq "$entry" <<< "$apk_entries"; then
+              echo "Missing APK entry: $entry"
+              grep -E '^lib/(arm64-v8a|armeabi-v7a|x86_64)/.*\.so$' <<< "$apk_entries" || true
+              exit 1
+            fi
             for library in avcodec avformat avutil swresample swscale; do
-              grep -Fxq "lib/$abi/lib$library.so" <<< "$apk_entries"
+              entry="lib/$abi/lib$library.so"
+              if ! grep -Fxq "$entry" <<< "$apk_entries"; then
+                echo "Missing APK entry: $entry"
+                grep -E '^lib/(arm64-v8a|armeabi-v7a|x86_64)/.*\.so$' <<< "$apk_entries" || true
+                exit 1
+              fi
             done
           done
+
+      - name: Preserve failed Android preview APK for diagnosis
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: developer-preview-android-failed-${{ github.run_id }}
+          path: apps/or_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Package Android APK
         shell: bash
