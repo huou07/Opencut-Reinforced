@@ -2002,6 +2002,38 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 ["apps/or_app/lib/editor.dart"]
             )
 
+    def test_historical_resume_accepts_only_additive_selected_evidence_bindings(self) -> None:
+        before = {
+            "schema_version": 1,
+            "evidence_class_proofs": {"A": {"UNIT": [{"step_name": "unit"}]}},
+        }
+        after = {
+            **before,
+            "evidence_class_proofs": {
+                **before["evidence_class_proofs"],
+                "B": {"STATIC": [{"step_name": "static"}], "USER_JOURNEY": [{"step_name": "journey"}]},
+            },
+        }
+        plan = {
+            "checkpoints": [
+                {"id": "A", "required_evidence_classes": ["UNIT"]},
+                {"id": "B", "required_evidence_classes": ["STATIC", "USER_JOURNEY"]},
+            ]
+        }
+        agent_supervisor.validate_evidence_policy_additions(before, after, plan, ["B"])
+        changed_existing = {
+            **after,
+            "evidence_class_proofs": {**after["evidence_class_proofs"], "A": {"UNIT": []}},
+        }
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "changed an existing"):
+            agent_supervisor.validate_evidence_policy_additions(
+                before, changed_existing, plan, ["B"]
+            )
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "outside the selected"):
+            agent_supervisor.validate_evidence_policy_additions(
+                before, after, plan, ["A"]
+            )
+
     def test_platform_path_filter_only_skips_metadata_changes(self) -> None:
         self.assertFalse(
             execution_evidence.platform_verification_runs_for_push(

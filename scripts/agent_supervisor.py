@@ -82,6 +82,7 @@ RESUME_FOLLOWUP_CONTROL_PATHS = {
     "docs/execution/AGENT_EXECUTION.md",
     "docs/execution/README.md",
     "docs/execution/PLAN.json",
+    "docs/execution/EVIDENCE_POLICY.json",
     "scripts/agent_supervisor.py",
     "scripts/execution_plan.py",
     "scripts/test_execution_infra.py",
@@ -596,6 +597,50 @@ def validate_historical_plan_compatibility(
             )
 
 
+def validate_evidence_policy_additions(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    checkpoint_ids: Sequence[str],
+) -> None:
+    """Permit only additive evidence bindings for explicitly selected requirements."""
+
+    if set(before) != set(after):
+        raise SupervisorError("historical resume changed evidence policy fields")
+    for key in before:
+        if key != "evidence_class_proofs" and before[key] != after[key]:
+            raise SupervisorError(f"historical resume changed evidence policy {key}")
+    previous = before.get("evidence_class_proofs")
+    current = after.get("evidence_class_proofs")
+    if not isinstance(previous, dict) or not isinstance(current, dict):
+        raise SupervisorError("evidence policy class proofs must be objects")
+    if any(current.get(key) != value for key, value in previous.items()):
+        raise SupervisorError("historical resume removed or changed an existing evidence binding")
+    additions = set(current) - set(previous)
+    selected = set(checkpoint_ids)
+    if not additions <= selected:
+        raise SupervisorError(
+            "historical resume added evidence bindings outside the selected requirements: "
+            + ", ".join(sorted(additions - selected))
+        )
+    for checkpoint_id in additions:
+        checkpoint = execution_plan.checkpoint_for_id(dict(plan), checkpoint_id)
+        classes = current[checkpoint_id]
+        if not isinstance(classes, dict):
+            raise SupervisorError(f"evidence bindings for {checkpoint_id} must be an object")
+        required = set(checkpoint["required_evidence_classes"])
+        if not required <= set(classes):
+            raise SupervisorError(
+                f"evidence bindings for {checkpoint_id} omit required classes: "
+                + ", ".join(sorted(required - set(classes)))
+            )
+        for class_name, proofs in classes.items():
+            if not isinstance(proofs, list) or not proofs:
+                raise SupervisorError(
+                    f"evidence binding {checkpoint_id}.{class_name} must name a proof"
+                )
+
+
 def checkpoint_prompt(
     repo_root: Path,
     resolution: dict[str, Any],
@@ -1073,7 +1118,10 @@ def finalize_verified_checkpoints(
 
 
 def _resume_baseline(
-    repo_root: Path, resume_sha: str, allowed_paths: Sequence[str] = ()
+    repo_root: Path,
+    resume_sha: str,
+    allowed_paths: Sequence[str] = (),
+    checkpoint_ids: Sequence[str] = (),
 ) -> str:
     # Exclude the resume commit when locating the prior state baseline so a
     # forbidden STATE.json edit in that implementation commit remains visible
@@ -1091,6 +1139,17 @@ def _resume_baseline(
     except subprocess.CalledProcessError as exc:
         raise SupervisorError("resume SHA is not a descendant of the prior state baseline") from exc
     changed = git_output(repo_root, "diff", "--name-only", f"{baseline}..{resume_sha}").splitlines()
+    if "docs/execution/EVIDENCE_POLICY.json" in changed:
+        old_policy = _json_at_revision(
+            repo_root, baseline, "docs/execution/EVIDENCE_POLICY.json"
+        )
+        new_policy = _json_at_revision(
+            repo_root, resume_sha, "docs/execution/EVIDENCE_POLICY.json"
+        )
+        plan = _json_at_revision(repo_root, resume_sha, "docs/execution/PLAN.json")
+        validate_evidence_policy_additions(
+            old_policy, new_policy, plan, checkpoint_ids
+        )
     allowed = set(allowed_paths)
     protected = [
         path
@@ -1838,12 +1897,25 @@ def run_goal(
                     git_output(repo_root, "diff", "--name-only", f"{resume_sha}..{head}").splitlines()
                 )
                 validate_historical_resume_paths(sorted(later_paths))
+                if "docs/execution/EVIDENCE_POLICY.json" in later_paths:
+                    validate_evidence_policy_additions(
+                        _json_at_revision(
+                            repo_root, resume_sha, "docs/execution/EVIDENCE_POLICY.json"
+                        ),
+                        _json_at_revision(
+                            repo_root, head, "docs/execution/EVIDENCE_POLICY.json"
+                        ),
+                        plan,
+                        batch_ids,
+                    )
                 historical_plan = _json_at_revision(
                     repo_root, resume_sha or "", "docs/execution/PLAN.json"
                 )
                 validate_historical_plan_compatibility(historical_plan, plan)
                 allowed_paths = sorted(set(allowed_paths) | RESUME_FOLLOWUP_CONTROL_PATHS)
-            _resume_baseline(repo_root, resume_sha or "", allowed_paths)
+            _resume_baseline(
+                repo_root, resume_sha or "", allowed_paths, checkpoint_ids=batch_ids
+            )
             validate_resume_preconditions(
                 resume_sha=resume_sha or "",
                 head=head,

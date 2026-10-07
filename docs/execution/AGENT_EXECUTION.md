@@ -129,6 +129,12 @@ transition, the completion commit, and state-commit hygiene. `--prepare` does
 not mean the checkpoint has started or completed. Desktop chat history is
 human-readable execution history only, not repository-authoritative evidence.
 
+Historical resume can cross a candidate's evidence-policy edit only when that
+edit adds proof bindings for selected requirements, preserves every existing
+binding and policy field, and covers every required class. This keeps older
+exact-SHA candidates verifiable without allowing a candidate to weaken its
+acceptance contract.
+
 ## Required sequence
 
 Before work, the supervisor requires `main`, a clean worktree, `HEAD ==
