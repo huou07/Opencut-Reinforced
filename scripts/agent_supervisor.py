@@ -690,15 +690,24 @@ def validate_resume_supervisor_extension(before: bytes, after: bytes) -> None:
         if ast.dump(old_defs[name], include_attributes=False)
         != ast.dump(new_defs[name], include_attributes=False)
     }
-    if new_names != {"allow_additive_evidence_policy_change"}:
-        raise SupervisorError("resume supervisor may only add the evidence-policy helper")
-    if changed_names != {"checkpoint_prompt", "run_goal"}:
+    if new_names != {
+        "allow_additive_evidence_policy_change",
+        "validate_resume_supervisor_extension",
+    }:
+        raise SupervisorError("resume supervisor added an unexpected control helper")
+    if changed_names != {"_resume_baseline", "checkpoint_prompt", "run_goal"}:
         raise SupervisorError("resume supervisor changed an existing control validator")
+
     def non_function_nodes(tree: ast.Module) -> list[str]:
         return [
             ast.dump(node, include_attributes=False)
             for node in tree.body
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and not (
+                isinstance(node, ast.Import)
+                and len(node.names) == 1
+                and node.names[0].name == "ast"
+            )
         ]
 
     if non_function_nodes(old_tree) != non_function_nodes(new_tree):
@@ -734,6 +743,45 @@ def validate_resume_supervisor_extension(before: bytes, after: bytes) -> None:
         candidate_run_goal, include_attributes=False
     ) != ast.dump(old_defs["run_goal"], include_attributes=False):
         raise SupervisorError("resume supervisor changed run authorization or verification logic")
+
+    class RemoveResumeGuards(ast.NodeTransformer):
+        removed: set[str] = set()
+
+        def visit_If(self, node: ast.If) -> ast.AST | None:
+            condition = ast.unparse(node.test)
+            body = ast.unparse(node)
+            if condition == "'docs/execution/EVIDENCE_POLICY.json' in changed":
+                if "allowed.add('docs/execution/EVIDENCE_POLICY.json')" in body:
+                    self.removed.add("policy")
+                    return None
+            if condition == "'scripts/agent_supervisor.py' in protected":
+                if (
+                    "validate_resume_supervisor_extension" not in body
+                    or "protected.remove('scripts/agent_supervisor.py')" not in body
+                ):
+                    raise SupervisorError("resume supervisor allowance is malformed")
+                self.removed.add("supervisor")
+                return None
+            if condition == "'AGENTS.md' in protected":
+                if (
+                    "all existing bindings and other policy fields remain immutable" not in body
+                    or "protected.remove('AGENTS.md')" not in body
+                ):
+                    raise SupervisorError("resume AGENTS.md allowance is malformed")
+                self.removed.add("agents")
+                return None
+            node = self.generic_visit(node)
+            if isinstance(node.test, ast.Name) and node.test.id == "protected" and not node.body:
+                return None
+            return node
+
+    candidate_resume = copy.deepcopy(new_defs["_resume_baseline"])
+    resume_guards = RemoveResumeGuards()
+    resume_guards.visit(candidate_resume)
+    if resume_guards.removed != {"policy", "supervisor", "agents"} or ast.dump(
+        candidate_resume, include_attributes=False
+    ) != ast.dump(old_defs["_resume_baseline"], include_attributes=False):
+        raise SupervisorError("resume supervisor changed baseline or protected-path rules")
 
     prompt_source = ast.get_source_segment(after.decode("utf-8"), new_defs["checkpoint_prompt"]) or ""
     if (

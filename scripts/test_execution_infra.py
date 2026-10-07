@@ -2036,6 +2036,10 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
     def test_resume_supervisor_extension_cannot_change_existing_guards(self) -> None:
         before = b'''\
+def _resume_baseline():
+    if protected:
+        raise RuntimeError("blocked")
+
 def checkpoint_prompt():
     return "Do not edit EVIDENCE_POLICY.json"
 
@@ -2047,6 +2051,21 @@ def validate_resume_preconditions():
     raise RuntimeError("pinned guard")
 '''
         after = b'''\
+import ast
+
+def _resume_baseline():
+    if "docs/execution/EVIDENCE_POLICY.json" in changed:
+        allowed.add("docs/execution/EVIDENCE_POLICY.json")
+    if protected:
+        if "scripts/agent_supervisor.py" in protected:
+            validate_resume_supervisor_extension(before, after)
+            protected.remove("scripts/agent_supervisor.py")
+        if "AGENTS.md" in protected:
+            message = "all existing bindings and other policy fields remain immutable"
+            protected.remove("AGENTS.md")
+    if protected:
+        raise RuntimeError("blocked")
+
 def checkpoint_prompt():
     return "EVIDENCE_POLICY.json may only add named proof bindings; all prior bindings and policy fields are immutable"
 
@@ -2060,6 +2079,9 @@ def run_goal():
 
 def validate_resume_preconditions():
     raise RuntimeError("pinned guard")
+
+def validate_resume_supervisor_extension(before, after):
+    pass
 
 def allow_additive_evidence_policy_change(before, root, plan, selected):
     path = "docs/execution/EVIDENCE_POLICY.json"
