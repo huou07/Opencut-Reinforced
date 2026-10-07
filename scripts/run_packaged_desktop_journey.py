@@ -62,6 +62,34 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _snapshot_linux_media_runtime(
+    helpers: Path, bridge_directory: Path, destination: Path
+) -> Path:
+    destination.mkdir(parents=True)
+    library_directory = destination / "lib"
+    library_directory.mkdir()
+    for helper_name in _helper_names():
+        shutil.copy2(helpers / helper_name, destination / helper_name)
+    for pattern in (
+        "libavcodec.so*",
+        "libavfilter.so*",
+        "libavformat.so*",
+        "libavutil.so*",
+        "libswresample.so*",
+        "libswscale.so*",
+    ):
+        matches = tuple(bridge_directory.glob(pattern))
+        if not matches:
+            raise SystemExit(f"The packaged media runtime is missing {pattern}.")
+        for library in matches:
+            shutil.copy2(
+                library,
+                library_directory / library.name,
+                follow_symlinks=False,
+            )
+    return destination
+
+
 def _run(command: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
     if os.name == "nt" and command[0].lower().endswith((".bat", ".cmd")):
         return subprocess.run(
@@ -138,6 +166,13 @@ def main() -> int:
     # Point the acceptance app at the bridge inside the built package; its
     # app-relative runtime paths then resolve only packaged media libraries.
     env["FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR"] = str(bridge_directory)
+    if sys.platform.startswith("linux"):
+        runtime_snapshot = _snapshot_linux_media_runtime(
+            helper_directory, bridge_directory, work / "packaged-media-runtime"
+        )
+        # Flutter's Linux install step clears the bundle. The project CMake
+        # install hook restores this already-packaged payload.
+        env["OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY"] = str(runtime_snapshot)
     env.update(
         {
             "OR_PACKAGED_JOURNEY_PROJECT": str(project),

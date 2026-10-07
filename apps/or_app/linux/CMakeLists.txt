@@ -112,6 +112,30 @@ install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
    COMPONENT Runtime)
 
+# Desktop acceptance runs through `flutter test -d linux`, which reinstalls the
+# app bundle before launching its integration test. Preserve the exact FFmpeg
+# payload already verified by the packaging step when that runner rebuilds the
+# clean bundle.
+set(OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY "$ENV{OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}")
+if(OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY)
+  foreach(required_file
+      "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/ffmpeg"
+      "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/ffprobe"
+      "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/lib/libavutil.so.60")
+    if(NOT EXISTS "${required_file}")
+      message(FATAL_ERROR "Packaged media runtime file is missing: ${required_file}")
+    endif()
+  endforeach()
+  install(DIRECTORY "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/lib/"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+  install(PROGRAMS
+    "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/ffmpeg"
+    "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/ffprobe"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+endif()
+
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.
 set(FLUTTER_ASSET_DIR_NAME "flutter_assets")

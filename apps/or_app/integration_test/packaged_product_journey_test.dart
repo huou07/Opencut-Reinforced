@@ -2,7 +2,8 @@ import 'dart:io';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
-import 'package:flutter/material.dart' show IconButton, SnackBar, Widget;
+import 'package:flutter/material.dart'
+    show IconButton, PopupMenuButton, SnackBar, Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -143,8 +144,21 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'media insertion into the timeline',
   );
 
+  await _pumpUntil(
+    tester,
+    () => tester
+        .widget<PopupMenuButton<dynamic>>(
+          find.byKey(const ValueKey('preview-frame-rate')),
+        )
+        .enabled,
+    'preview frame-rate control readiness',
+  );
   await tester.tap(find.byKey(const ValueKey('preview-frame-rate')));
-  await tester.pumpAndSettle();
+  await _pumpUntil(
+    tester,
+    () => find.text('24 fps').evaluate().isNotEmpty,
+    '24 fps menu option',
+  );
   await tester.tap(find.text('24 fps'));
   await _pumpUntil(
     tester,
