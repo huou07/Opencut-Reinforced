@@ -11,6 +11,9 @@ import sys
 from pathlib import Path
 
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
 def _run(label: str, command: list[str], env: dict[str, str]) -> bytes:
     result = subprocess.run(command, capture_output=True, env=env)
     if result.returncode:
@@ -154,9 +157,11 @@ def main() -> int:
     if "matroska" not in source.get("format", {}).get("format_name", ""):
         raise SystemExit(f"The supported media fixture did not probe as Matroska: {source}")
     for image in (thumbnail, waveform):
-        result = _probe(ffprobe, image, env)
-        streams = result.get("streams", [])
-        if not image.is_file() or image.stat().st_size == 0 or not streams or streams[0].get("codec_name") != "png":
+        if (
+            not image.is_file()
+            or image.stat().st_size <= len(PNG_SIGNATURE)
+            or image.read_bytes()[: len(PNG_SIGNATURE)] != PNG_SIGNATURE
+        ):
             raise SystemExit(f"The generated PNG could not be validated: {image}")
     proxy_result = _probe(ffprobe, proxy, env)
     proxy_streams = proxy_result.get("streams", [])
