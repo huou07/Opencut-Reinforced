@@ -5,6 +5,7 @@ mod cache;
 mod jobs;
 mod media;
 mod media_artifacts;
+mod media_helpers;
 mod media_import;
 mod media_probe;
 mod project;
@@ -51,6 +52,10 @@ pub use media_artifacts::{
     SOURCE_FINGERPRINT_SAMPLE_WINDOW_BYTES, SourceFingerprintError,
     ffmpeg_executable_from_environment, fingerprint_media_source,
 };
+pub use media_helpers::{
+    FFMPEG_PATH_ENVIRONMENT_VARIABLE, FFPROBE_PATH_ENVIRONMENT_VARIABLE, ffmpeg_executable,
+    ffprobe_executable, packaged_helper_directory, resolve_helper_executable,
+};
 pub use media_import::{MediaImportError, prepare_media_import};
 pub use media_probe::{MediaProbeError, MediaProbeErrorCode, probe_media_file};
 pub use project::{
@@ -72,7 +77,7 @@ pub use project_recovery::{
 };
 pub use project_storage::{
     MAX_PROJECT_FILE_BYTES, ProjectStorageError, TempFileOperation, load_project_file,
-    save_project_file_atomic,
+    replace_published_file, save_project_file_atomic,
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{

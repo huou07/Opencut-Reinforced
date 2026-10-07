@@ -263,6 +263,30 @@ wasmi 1.1.0 in the extension runtime boundary without default WASI; its fuel,
 store, and outer host resource limits are explicit. Native extensions remain
 separately gated.
 
+## Media import
+
+**MVP FOUNDATION:** import validates one selected local file against the
+minimum import matrix below and adds it through `media.add`. Files outside the
+matrix fail at import with an accurate machine-readable unsupported-format
+reason; the project is unchanged. Normal import, thumbnails, waveforms, proxies,
+preview, and export run on the packaged FFmpeg 8.1.3 runtime that ships with the
+application: no system `ffmpeg`/`ffprobe` and no developer `PATH` entries or
+`OR_FFMPEG_PATH`/`OR_FFPROBE_PATH` overrides are required.
+
+The 9B1 minimum import matrix is exactly the mandatory correctness profile the
+packaged runtime can decode:
+
+| Container | Video stream | Audio stream |
+| --- | --- | --- |
+| Matroska (`.mkv`) | FFV1 | PCM S16LE |
+
+A non-Matroska container is rejected as an unsupported container before
+probing; a Matroska file whose streams fall outside FFV1/PCM S16LE is rejected
+as an unsupported codec after probing. Neither case is reported as corruption.
+MP4, MOV, WebM, H.264, H.265, VP9, and AV1 remain future formats requiring the
+same legal, platform, and build-configuration review as the optional export
+delivery profiles.
+
 ## Export
 
 **MVP FOUNDATION:** usable software video export through a background job with progress and cancellation. The mandatory correctness profile is Matroska + FFV1 video + PCM S16LE audio through linked software FFmpeg. Other delivery and hardware profiles are optional and require separate evidence.

@@ -33,6 +33,10 @@ pub enum MediaProbeErrorCode {
     MediaNotRegularFile,
     #[serde(rename = "PROBE_BACKEND_UNAVAILABLE")]
     ProbeBackendUnavailable,
+    #[serde(rename = "UNSUPPORTED_CONTAINER")]
+    UnsupportedContainer,
+    #[serde(rename = "UNSUPPORTED_CODEC")]
+    UnsupportedCodec,
     #[serde(rename = "PROBE_TIMEOUT")]
     ProbeTimeout,
     #[serde(rename = "PROBE_OUTPUT_TOO_LARGE")]
@@ -51,6 +55,8 @@ impl MediaProbeErrorCode {
             Self::MediaNotFound => "MEDIA_NOT_FOUND",
             Self::MediaNotRegularFile => "MEDIA_NOT_REGULAR_FILE",
             Self::ProbeBackendUnavailable => "PROBE_BACKEND_UNAVAILABLE",
+            Self::UnsupportedContainer => "UNSUPPORTED_CONTAINER",
+            Self::UnsupportedCodec => "UNSUPPORTED_CODEC",
             Self::ProbeTimeout => "PROBE_TIMEOUT",
             Self::ProbeOutputTooLarge => "PROBE_OUTPUT_TOO_LARGE",
             Self::ProbeFailed => "PROBE_FAILED",
@@ -64,6 +70,8 @@ impl MediaProbeErrorCode {
             Self::MediaNotFound => "media file was not found",
             Self::MediaNotRegularFile => "media path is not a regular file",
             Self::ProbeBackendUnavailable => "ffprobe backend is not available",
+            Self::UnsupportedContainer => "the media container is not in the import matrix",
+            Self::UnsupportedCodec => "a media stream codec is not in the import matrix",
             Self::ProbeTimeout => "media probing timed out",
             Self::ProbeOutputTooLarge => "ffprobe output exceeded the configured size limit",
             Self::ProbeFailed => "ffprobe failed to inspect the media file",
@@ -117,12 +125,16 @@ impl fmt::Display for MediaProbeError {
 
 impl Error for MediaProbeError {}
 
-/// Inspects one local filesystem file through the system-provided `ffprobe`.
+/// Inspects one local filesystem file through the packaged-first `ffprobe`.
 ///
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
-/// a project, or mutate project revision/history.
+/// a project, or mutate project revision/history. Files outside the 9B1 minimum
+/// import matrix (Matroska container, FFV1 video, PCM S16LE audio) are rejected
+/// with an unsupported-format code instead of probed as corrupt media.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
-    FfprobeBackend::from_environment().probe(path)
+    let metadata = FfprobeBackend::from_environment().probe(path)?;
+    enforce_import_matrix(&metadata)?;
+    Ok(metadata)
 }
 
 struct FfprobeBackend {
@@ -134,11 +146,7 @@ struct FfprobeBackend {
 
 impl FfprobeBackend {
     fn from_environment() -> Self {
-        let executable = std::env::var_os("OR_FFPROBE_PATH")
-            .filter(|path| !path.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("ffprobe"));
-        Self::new(executable)
+        Self::new(crate::media_helpers::ffprobe_executable())
     }
 
     fn new(executable: PathBuf) -> Self {
@@ -171,6 +179,7 @@ impl FfprobeBackend {
                 MediaProbeError::new(MediaProbeErrorCode::ProbeFailed)
             }
         })?;
+        reject_non_matroska_container(&resolved_path)?;
         let stdout = self.run(&resolved_path)?;
         parse_probe_json(&stdout, metadata.len())
     }
@@ -488,6 +497,68 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
     Ok(metadata)
 }
 
+/// EBML header shared by Matroska and WebM.
+const EBML_HEADER: &[u8; 4] = b"\x1a\x45\xdf\xa3";
+
+/// Video codec in the 9B1 minimum import matrix.
+const MATRIX_VIDEO_CODEC: &str = "ffv1";
+/// Audio codec in the 9B1 minimum import matrix.
+const MATRIX_AUDIO_CODEC: &str = "pcm_s16le";
+
+/// Rejects a non-EBML file before spawning the probe backend.
+///
+/// The packaged `ffprobe` only demuxes Matroska, so anything without an EBML
+/// header cannot be a supported container. This keeps MP4/MOV-style files on
+/// the accurate unsupported-container path instead of a generic probe failure.
+fn reject_non_matroska_container(path: &Path) -> Result<(), MediaProbeError> {
+    use std::io::Read as _;
+    let mut header = [0_u8; 4];
+    let mut file =
+        fs::File::open(path).map_err(|_| MediaProbeError::new(MediaProbeErrorCode::ProbeFailed))?;
+    let bytes = file
+        .read(&mut header)
+        .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::ProbeFailed))?;
+    if bytes == header.len() && &header == EBML_HEADER {
+        Ok(())
+    } else {
+        Err(MediaProbeError::new(
+            MediaProbeErrorCode::UnsupportedContainer,
+        ))
+    }
+}
+
+/// Rejects probed streams outside the 9B1 minimum import matrix.
+///
+/// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
+/// A Matroska file carrying any other video or audio codec is unsupported, not
+/// corrupt.
+fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
+    if !metadata
+        .format_names()
+        .iter()
+        .any(|name| name == "matroska")
+    {
+        return Err(MediaProbeError::new(
+            MediaProbeErrorCode::UnsupportedContainer,
+        ));
+    }
+    for stream in metadata.streams() {
+        let supported = match stream {
+            MediaStreamMetadata::Video(video) => video
+                .codec_name()
+                .is_some_and(|codec| codec == MATRIX_VIDEO_CODEC),
+            MediaStreamMetadata::Audio(audio) => audio
+                .codec_name()
+                .is_some_and(|codec| codec == MATRIX_AUDIO_CODEC),
+            MediaStreamMetadata::Other(_) => true,
+        };
+        if !supported {
+            return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
+        }
+    }
+    Ok(())
+}
+
 fn optional_string(
     fields: &Map<String, Value>,
     name: &str,
@@ -596,7 +667,7 @@ enum RationalRateParseError {
 mod tests {
     use super::{
         FfprobeBackend, MAX_DIAGNOSTIC_CHARS, MediaProbeErrorCode, RationalRateParseError,
-        parse_probe_json, parse_rational_rate,
+        enforce_import_matrix, parse_probe_json, parse_rational_rate, probe_media_file,
     };
     use crate::{MediaStreamMetadata, RationalRate};
     use std::{
@@ -624,7 +695,11 @@ mod tests {
 
         fn file(&self, name: &str) -> PathBuf {
             let path = self.0.join(name);
-            fs::write(&path, b"generated test input").unwrap();
+            // Backend-plumbing fixtures carry the EBML header so they reach
+            // the stub executable instead of the container-matrix rejection.
+            let mut contents = b"\x1a\x45\xdf\xa3".to_vec();
+            contents.extend_from_slice(b"generated test input");
+            fs::write(&path, contents).unwrap();
             path
         }
 
@@ -769,6 +844,59 @@ mod tests {
     }
 
     #[test]
+    fn non_ebml_files_are_rejected_as_unsupported_without_spawning() {
+        let directory = TestDirectory::new();
+        for name in ["empty.mkv", "text.mp4"] {
+            let path = directory.0.join(name);
+            if name.starts_with("empty") {
+                fs::write(&path, b"").unwrap();
+            } else {
+                fs::write(&path, b"not a media container").unwrap();
+            }
+            assert_eq!(
+                probe_media_file(&path).unwrap_err().code(),
+                MediaProbeErrorCode::UnsupportedContainer,
+                "{name} must not reach the probe backend",
+            );
+        }
+    }
+
+    #[test]
+    fn import_matrix_accepts_ffv1_pcm_and_ignores_other_streams() {
+        let json = br#"{
+            "format": {"format_name":"matroska,webm"},
+            "streams": [
+                {"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16},
+                {"index":1,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"48000","channels":2},
+                {"index":2,"codec_type":"subtitle","codec_name":"subrip"}
+            ]
+        }"#;
+        let metadata = parse_probe_json(json, 2048).unwrap();
+        enforce_import_matrix(&metadata).unwrap();
+    }
+
+    #[test]
+    fn import_matrix_rejects_foreign_codecs_and_containers() {
+        let video = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":16,"height":16}]}"#;
+        let audio = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#;
+        let unnamed = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","width":16,"height":16}]}"#;
+        for json in [video as &[u8], audio as &[u8], unnamed as &[u8]] {
+            let metadata = parse_probe_json(json, 64).unwrap();
+            assert_eq!(
+                enforce_import_matrix(&metadata).unwrap_err().code(),
+                MediaProbeErrorCode::UnsupportedCodec,
+            );
+        }
+        let container =
+            br#"{"format":{"format_name":"mov,mp4"},"streams":[{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16}]}"#;
+        let metadata = parse_probe_json(container, 64).unwrap();
+        assert_eq!(
+            enforce_import_matrix(&metadata).unwrap_err().code(),
+            MediaProbeErrorCode::UnsupportedContainer,
+        );
+    }
+
+    #[test]
     fn rational_rate_parser_keeps_common_rates_exact_and_rejects_invalid_values() {
         for (text, numerator, denominator) in [
             ("24/1", 24, 1),
@@ -864,6 +992,6 @@ mod tests {
         let media = directory.file("path with spaces-媒体.mkv");
         let executable = directory.executable();
         let metadata = backend(&executable).probe(&media).unwrap();
-        assert!(metadata.streams().is_empty());
+        assert!(metadata.format_names().contains(&"matroska".to_owned()));
     }
 }

@@ -325,10 +325,7 @@ impl MediaArtifactServiceConfig {
 }
 
 pub fn ffmpeg_executable_from_environment() -> PathBuf {
-    std::env::var_os("OR_FFMPEG_PATH")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("ffmpeg"))
+    crate::media_helpers::ffmpeg_executable()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

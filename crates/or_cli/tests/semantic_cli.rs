@@ -37,7 +37,11 @@ impl TestDirectory {
 
     fn media_path(&self, name: &str) -> PathBuf {
         let path = self.0.join(name);
-        fs::write(&path, b"small generated CLI test input").unwrap();
+        // Probe-stub fixtures carry the EBML header so they reach the stub
+        // instead of the container-matrix rejection.
+        let mut contents = b"\x1a\x45\xdf\xa3".to_vec();
+        contents.extend_from_slice(b"small generated CLI test input");
+        fs::write(&path, contents).unwrap();
         path
     }
 

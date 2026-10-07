@@ -121,6 +121,40 @@ before distribution. The FFmpeg license does not resolve patents or codec
 royalties; review those when the shipped codec set is selected. The 7C0
 checkpoint recorded this dependency strategy before production integration.
 
+### Checkpoint 9B1 packaged media helpers
+
+Checkpoint 9B1 removes the mandatory system `ffprobe`/`ffmpeg` dependency from
+import, thumbnails, waveforms, and Proxy V1 generation by shipping explicitly
+packaged, signed, version-aligned `ffmpeg` and `ffprobe` programs built from the
+same pinned FFmpeg 8.1.3 source as the linked runtime, instead of reimplementing
+probe, scale, waveform rendering, and proxy encoding against `libav*` in Rust.
+The existing bounded generation logic, timeouts, output caps, staging, and
+typed errors are unchanged; only which executable runs is now packaged-first.
+`or_core` still contains no FFmpeg binding: it resolves a helper path and
+spawns it with direct process arguments and no shell, exactly as before.
+
+Helper build additions beyond the 7C production prefix are all native,
+dependency-free FFmpeg components: the `ffmpeg`/`ffprobe` programs, the `png`
+and `mpeg4` encoders, the `image2` muxer, and the `scale`, `format`, `aformat`,
+`aresample`, and `showwavespic` filters. No GPL, version3, nonfree, or external
+codec library is enabled; the LGPL-2.1-or-later posture, source archive,
+configure record, license notices, and library-replacement terms are unchanged.
+Android is unaffected: it has no artifact service and keeps the linked-only
+runtime. This review does not determine patent or codec licensing obligations;
+the shipped codec set stays FFV1/PCM S16LE plus proxy/display encodings, and
+wider capture/delivery codecs still require the separate legal, platform, and
+build-configuration review.
+
+Packaged layout contract: each desktop application archive and CLI package
+carries its platform's `ffmpeg`/`ffprobe` executables as siblings of the main
+application binary (macOS `Contents/MacOS/`, Windows/Linux bundle directory,
+CLI package directory), signed with the package. Resolution order is the
+explicit `OR_FFPROBE_PATH`/`OR_FFMPEG_PATH` developer override, then the
+packaged sibling, then `PATH` lookup for unpackaged development runs. A
+packaged application with a stripped developer environment therefore never
+touches a system executable; the clean-environment acceptance journey proves
+this by removing those tools and overrides.
+
 ### Checkpoint 7C linked software runtime
 
 `or_media` consumes the approved `ffmpeg-the-third` 6.0.0 binding with dynamic

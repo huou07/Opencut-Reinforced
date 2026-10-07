@@ -27,6 +27,12 @@ fn main() {
                 let _ = fs::write(marker, b"started");
             }
             thread::sleep(Duration::from_secs(2));
+            // The revision-race test imports this file after the sleep, so it
+            // must describe matrix-conformant media like the other fixtures.
+            println!(
+                r#"{{"format":{{"format_name":"matroska,webm","duration":"1.5"}},"streams":[{{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16,"pix_fmt":"yuv420p","avg_frame_rate":"24000/1001"}},{{"index":1,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"48000","channels":2,"channel_layout":"stereo"}}]}}"#
+            );
+            return;
         }
         "oversized.mkv" => {
             let mut stdout = io::stdout().lock();
@@ -44,8 +50,7 @@ fn main() {
             let _ = stderr.flush();
             process::exit(7);
         }
-        "path with spaces-媒体.mkv" => {}
-        "cli sample café.mkv" => {
+        "path with spaces-媒体.mkv" | "cli sample café.mkv" => {
             println!(
                 r#"{{"format":{{"format_name":"matroska,webm","duration":"1.5"}},"streams":[{{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16,"pix_fmt":"yuv420p","avg_frame_rate":"24000/1001"}},{{"index":1,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"48000","channels":2,"channel_layout":"stereo"}}]}}"#
             );
