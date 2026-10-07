@@ -47,6 +47,8 @@ implementation commit. It cannot edit the plan, state, phase contracts,
 validators, supervisor, workflows, or completion evidence. It may only add
 named evidence proof bindings for selected requirements while preserving all
 existing policy fields and bindings; the supervisor validates each addition.
+Historical resume also checks that any candidate-carried additive evidence
+hook leaves existing authorization and verification logic unchanged.
 
 The supervisor is the only authority that can mark requirements `DONE`. A
 single coherent implementation may cover multiple plan IDs. After a runner

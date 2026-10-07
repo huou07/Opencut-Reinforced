@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import copy
 import datetime as _datetime
 import hashlib
@@ -664,6 +665,116 @@ def validate_evidence_policy_additions(
                 )
 
 
+def validate_resume_supervisor_extension(before: bytes, after: bytes) -> None:
+    """Allow only the additive proof-policy hook, preserving existing guards."""
+
+    try:
+        old_tree = ast.parse(before.decode("utf-8"))
+        new_tree = ast.parse(after.decode("utf-8"))
+    except (UnicodeDecodeError, SyntaxError) as exc:
+        raise SupervisorError("resume supervisor extension is not valid Python") from exc
+
+    def definitions(tree: ast.Module) -> dict[str, ast.AST]:
+        return {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        }
+
+    old_defs = definitions(old_tree)
+    new_defs = definitions(new_tree)
+    new_names = set(new_defs) - set(old_defs)
+    changed_names = {
+        name
+        for name in set(old_defs) & set(new_defs)
+        if ast.dump(old_defs[name], include_attributes=False)
+        != ast.dump(new_defs[name], include_attributes=False)
+    }
+    if new_names != {"allow_additive_evidence_policy_change"}:
+        raise SupervisorError("resume supervisor may only add the evidence-policy helper")
+    if changed_names != {"checkpoint_prompt", "run_goal"}:
+        raise SupervisorError("resume supervisor changed an existing control validator")
+    def non_function_nodes(tree: ast.Module) -> list[str]:
+        return [
+            ast.dump(node, include_attributes=False)
+            for node in tree.body
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        ]
+
+    if non_function_nodes(old_tree) != non_function_nodes(new_tree):
+        raise SupervisorError("resume supervisor changed imports or protected control constants")
+
+    class RemoveEvidencePolicyHook(ast.NodeTransformer):
+        removed = 0
+
+        def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
+            value = node.value
+            if (
+                len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "allowed_paths"
+                and isinstance(value, ast.List)
+                and len(value.elts) == 2
+                and isinstance(value.elts[0], ast.Starred)
+                and isinstance(value.elts[0].value, ast.Name)
+                and value.elts[0].value.id == "allowed_paths"
+                and isinstance(value.elts[1], ast.Starred)
+                and isinstance(value.elts[1].value, ast.Call)
+                and isinstance(value.elts[1].value.func, ast.Name)
+                and value.elts[1].value.func.id == "allow_additive_evidence_policy_change"
+            ):
+                self.removed += 1
+                return None
+            return self.generic_visit(node)
+
+    candidate_run_goal = copy.deepcopy(new_defs["run_goal"])
+    remover = RemoveEvidencePolicyHook()
+    remover.visit(candidate_run_goal)
+    if remover.removed != 1 or ast.dump(
+        candidate_run_goal, include_attributes=False
+    ) != ast.dump(old_defs["run_goal"], include_attributes=False):
+        raise SupervisorError("resume supervisor changed run authorization or verification logic")
+
+    prompt_source = ast.get_source_segment(after.decode("utf-8"), new_defs["checkpoint_prompt"]) or ""
+    if (
+        "EVIDENCE_POLICY.json may only add named proof bindings" not in prompt_source
+        or "all prior bindings and policy fields are immutable" not in prompt_source
+    ):
+        raise SupervisorError("resume supervisor prompt does not preserve evidence-policy immutability")
+    helper = new_defs["allow_additive_evidence_policy_change"]
+    calls = {
+        node.func.id
+        if isinstance(node.func, ast.Name)
+        else ast.unparse(node.func)
+        for node in ast.walk(helper)
+        if isinstance(node, ast.Call)
+    }
+    path_assignments = [
+        node
+        for node in ast.walk(helper)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "path" for target in node.targets)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value == "docs/execution/EVIDENCE_POLICY.json"
+    ]
+    evidence_returns = [
+        node
+        for node in ast.walk(helper)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.List)
+        and len(node.value.elts) == 1
+        and isinstance(node.value.elts[0], ast.Name)
+        and node.value.elts[0].id == "path"
+    ]
+    if (
+        "validate_evidence_policy_additions" not in calls
+        or "execution_evidence.load_policy" not in calls
+        or len(path_assignments) != 1
+        or len(evidence_returns) != 1
+    ):
+        raise SupervisorError("resume supervisor evidence hook is not additive-only")
+
+
 def checkpoint_prompt(
     repo_root: Path,
     resolution: dict[str, Any],
@@ -1202,11 +1313,29 @@ def _resume_baseline(
             old_policy, new_policy, plan, checkpoint_ids
         )
     allowed = set(allowed_paths)
+    if "docs/execution/EVIDENCE_POLICY.json" in changed:
+        allowed.add("docs/execution/EVIDENCE_POLICY.json")
     protected = [
         path
         for path in changed
         if is_protected_execution_path(path) and path not in allowed
     ]
+    if protected:
+        if "scripts/agent_supervisor.py" in protected:
+            validate_resume_supervisor_extension(
+                _git_file_bytes(repo_root, baseline, "scripts/agent_supervisor.py"),
+                _git_file_bytes(repo_root, resume_sha, "scripts/agent_supervisor.py"),
+            )
+            protected.remove("scripts/agent_supervisor.py")
+        if "AGENTS.md" in protected:
+            agent_rules = _git_file_bytes(repo_root, resume_sha, "AGENTS.md").decode("utf-8")
+            if (
+                "EVIDENCE_POLICY.json` may only gain named proof bindings for selected" not in agent_rules
+                or "all existing bindings and other policy fields remain immutable" not in agent_rules
+                or "the supervisor validates every addition" not in agent_rules
+            ):
+                raise SupervisorError("resume changed AGENTS.md outside the additive evidence rule")
+            protected.remove("AGENTS.md")
     if protected:
         raise SupervisorError(
             "resume implementation changed protected execution-control files: "

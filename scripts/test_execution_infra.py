@@ -2034,6 +2034,44 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 before, after, plan, ["A"]
             )
 
+    def test_resume_supervisor_extension_cannot_change_existing_guards(self) -> None:
+        before = b'''\
+def checkpoint_prompt():
+    return "Do not edit EVIDENCE_POLICY.json"
+
+def run_goal():
+    allowed_paths = [".github/workflows/platform-verification.yml"]
+    assert allowed_paths
+
+def validate_resume_preconditions():
+    raise RuntimeError("pinned guard")
+'''
+        after = b'''\
+def checkpoint_prompt():
+    return "EVIDENCE_POLICY.json may only add named proof bindings; all prior bindings and policy fields are immutable"
+
+def run_goal():
+    allowed_paths = [".github/workflows/platform-verification.yml"]
+    allowed_paths = [
+        *allowed_paths,
+        *allow_additive_evidence_policy_change(before, root, plan, selected),
+    ]
+    assert allowed_paths
+
+def validate_resume_preconditions():
+    raise RuntimeError("pinned guard")
+
+def allow_additive_evidence_policy_change(before, root, plan, selected):
+    path = "docs/execution/EVIDENCE_POLICY.json"
+    validate_evidence_policy_additions(before, root, plan, selected)
+    execution_evidence.load_policy(root / path)
+    return [path]
+'''
+        agent_supervisor.validate_resume_supervisor_extension(before, after)
+        weakened_guard = after.replace(b'pinned guard', b'guard removed')
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "existing control validator"):
+            agent_supervisor.validate_resume_supervisor_extension(before, weakened_guard)
+
     def test_platform_path_filter_only_skips_metadata_changes(self) -> None:
         self.assertFalse(
             execution_evidence.platform_verification_runs_for_push(

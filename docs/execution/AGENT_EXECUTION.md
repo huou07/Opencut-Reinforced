@@ -134,6 +134,11 @@ edit adds proof bindings for selected requirements, preserves every existing
 binding and policy field, and covers every required class. This keeps older
 exact-SHA candidates verifiable without allowing a candidate to weaken its
 acceptance contract.
+If the candidate carries the additive supervisor hook that authorizes this
+policy change, the resume verifier requires its only behavior changes to be
+the proof-policy hook and prompt wording. It compares the existing run
+authorization and verification logic with the prior revision and fails closed
+on any other supervisor change.
 
 ## Required sequence
 
