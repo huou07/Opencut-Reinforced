@@ -83,6 +83,7 @@ RESUME_FOLLOWUP_CONTROL_PATHS = {
     "docs/execution/README.md",
     "docs/execution/PLAN.json",
     "scripts/agent_supervisor.py",
+    "scripts/execution_plan.py",
     "scripts/test_execution_infra.py",
 }
 

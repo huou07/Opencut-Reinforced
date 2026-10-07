@@ -1991,7 +1991,11 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
     def test_historical_resume_allows_only_control_plane_followups(self) -> None:
         agent_supervisor.validate_historical_resume_paths(
-            ["scripts/agent_supervisor.py", "docs/execution/AGENT_EXECUTION.md"]
+            [
+                "scripts/agent_supervisor.py",
+                "scripts/execution_plan.py",
+                "docs/execution/AGENT_EXECUTION.md",
+            ]
         )
         with self.assertRaisesRegex(agent_supervisor.SupervisorError, "product files changed"):
             agent_supervisor.validate_historical_resume_paths(
