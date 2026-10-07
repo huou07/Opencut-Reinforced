@@ -396,6 +396,25 @@ jobs:
           if ! otool -l "$probe" | grep -Fq '@loader_path'; then
             install_name_tool -add_rpath @loader_path "$probe"
           fi
+          # 9B1 packaged media helpers live beside the app binary, which is the
+          # packaged-first resolution root. libavfilter travels with them; the
+          # app-wide --deep signature below covers the new files.
+          helpers="$app/Contents/MacOS"
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffmpeg" "$helpers/ffmpeg"
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffprobe" "$helpers/ffprobe"
+          for pattern in libavfilter*.dylib; do
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$frameworks/"
+          done
+          for library in "$runtime_dir"/libavfilter*.dylib; do
+            if [ -L "$library" ]; then continue; fi
+            if ! otool -l "$library" | grep -Fq '@loader_path'; then
+              install_name_tool -add_rpath @loader_path "$library"
+            fi
+          done
+          for helper in "$helpers/ffmpeg" "$helpers/ffprobe"; do
+            install_name_tool -add_rpath @loader_path/../Frameworks "$helper"
+          done
           codesign --force --deep --sign - --timestamp=none "$app"
           otool -L "$bridge"
           otool -l "$bridge" | grep -F '@loader_path'
@@ -406,6 +425,16 @@ jobs:
           if otool -L "$probe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           if otool -l "$probe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH "$probe"
+          helpers="$app/Contents/MacOS"
+          test -x "$helpers/ffmpeg"
+          test -x "$helpers/ffprobe"
+          otool -L "$helpers/ffmpeg" | grep -F '@loader_path/../Frameworks'
+          if otool -L "$helpers/ffmpeg" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
+          if otool -L "$helpers/ffprobe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
+          env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
+            "$helpers/ffprobe" -hide_banner -version
+          env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
+            "$helpers/ffmpeg" -hide_banner -encoders | grep -q " png "
 
       - name: Preserve macOS FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'
@@ -662,6 +691,25 @@ jobs:
           ctypes.CDLL(sys.argv[1])
           PY
           env -u LD_LIBRARY_PATH "$probe"
+          # 9B1 packaged media helpers live beside the app binary, which is the
+          # packaged-first resolution root.
+          helpers="$bundle"
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffmpeg" "$helpers/ffmpeg"
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffprobe" "$helpers/ffprobe"
+          for pattern in libavfilter.so*; do
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+          done
+          for library in "$runtime_dir"/libavfilter.so*; do
+            if [ -L "$library" ]; then continue; fi
+            patchelf --set-rpath '$ORIGIN' "$library"
+          done
+          helper_rpath='$ORIGIN/'"$(realpath --relative-to="$helpers" "$runtime_dir")"
+          patchelf --set-rpath "$helper_rpath" "$helpers/ffmpeg" "$helpers/ffprobe"
+          readelf -d "$helpers/ffmpeg" | grep -F "$helper_rpath"
+          if readelf -d "$helpers/ffmpeg" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
+          if readelf -d "$helpers/ffprobe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
+          env -u LD_LIBRARY_PATH "$helpers/ffprobe" -hide_banner -version
+          env -u LD_LIBRARY_PATH "$helpers/ffmpeg" -hide_banner -encoders | grep -q " png "
 
       - name: Preserve Linux FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'
@@ -765,6 +813,15 @@ jobs:
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          # The PNG encoder links the MSYS2 system zlib; the DLL travels with
+          # the install prefix so every packaging step stages it beside the
+          # helpers without reaching back into the toolchain.
+          zlib_dll="$(find "$MSYSTEM_PREFIX/bin" -maxdepth 1 -name 'zlib*.dll' -print -quit)"
+          test -n "$zlib_dll"
+          cp "$zlib_dll" "$prefix/bin/"
+          zlib_license="$(find "$MSYSTEM_PREFIX/share/licenses" -maxdepth 2 -iname '*zlib*' -name 'LICENSE*' -print -quit)"
+          test -n "$zlib_license"
+          cp "$zlib_license" "$prefix/ZLIB-LICENSE.txt"
           # The packaged 9B1 helpers must run and carry exactly the reviewed
           # capabilities; the install bin directory holds the helper DLLs, and
           # app-side loading is proven at packaging time.
@@ -893,19 +950,37 @@ jobs:
           Copy-Item -Path $probeSource -Destination $probe -Force
           $destinations = @($runtimeDir)
           if ($bundle -ne $runtimeDir) { $destinations += $bundle }
-          foreach ($pattern in @('avcodec*.dll', 'avformat*.dll', 'avutil*.dll', 'swresample*.dll', 'swscale*.dll')) {
+          foreach ($pattern in @('avcodec*.dll', 'avformat*.dll', 'avutil*.dll', 'swresample*.dll', 'swscale*.dll', 'avfilter*.dll')) {
             $libraries = Get-ChildItem -Path "$env:FFMPEG_INSTALL_PREFIX/bin" -Filter $pattern -File
             if ($libraries.Count -eq 0) { throw "FFmpeg runtime library missing: $pattern" }
             foreach ($destination in $destinations) {
               Copy-Item -Path $libraries.FullName -Destination $destination -Force
             }
           }
+          # 9B1 packaged media helpers live beside the app binary with the
+          # system zlib DLL; Windows loads them from the application directory.
+          foreach ($helper in @('ffmpeg.exe', 'ffprobe.exe')) {
+            $source = Join-Path "$env:FFMPEG_INSTALL_PREFIX/bin" $helper
+            if (-not (Test-Path $source -PathType Leaf)) { throw "FFmpeg helper missing: $helper" }
+            Copy-Item -Path $source -Destination $bundle -Force
+          }
+          $zlib = Get-ChildItem -Path "$env:FFMPEG_INSTALL_PREFIX/bin" -Filter 'zlib*.dll' -File
+          if ($null -eq $zlib) { throw 'zlib runtime library missing beside the helpers' }
+          Copy-Item -Path $zlib.FullName -Destination $bundle -Force
           $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
           & $dumpbin /dependents $probe
           $env:PATH = "$runtimeDir;$bundle;$env:SystemRoot\System32;$env:SystemRoot"
           $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
           [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
           & $probe
+          # The staged helpers must run on bundled libraries alone.
+          $env:PATH = "$bundle;$env:SystemRoot\System32;$env:SystemRoot"
+          & (Join-Path $bundle 'ffprobe.exe') -hide_banner -version
+          if ($LASTEXITCODE -ne 0) { throw 'staged ffprobe did not run on bundled libraries' }
+          $encoders = & (Join-Path $bundle 'ffmpeg.exe') -hide_banner -encoders
+          if ($LASTEXITCODE -ne 0) { throw 'staged ffmpeg did not run on bundled libraries' }
+          if (-not ($encoders | Select-String ' png ' -SimpleMatch)) { throw 'staged ffmpeg lacks the png encoder' }
+          if (-not ($encoders | Select-String ' mpeg4 ' -SimpleMatch)) { throw 'staged ffmpeg lacks the mpeg4 encoder' }
 
       - name: Preserve Windows FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'

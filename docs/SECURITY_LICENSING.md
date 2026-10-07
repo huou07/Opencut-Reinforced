@@ -145,17 +145,21 @@ license text. Android is unaffected: it has no artifact service and keeps the
 linked-only runtime. This review does not determine patent or codec licensing obligations;
 the shipped codec set stays FFV1/PCM S16LE plus proxy/display encodings, and
 wider capture/delivery codecs still require the separate legal, platform, and
-build-configuration review.
+build-configuration review. The helper programs additionally load `libavfilter`
+from beside the other staged libraries; the Rust binding keeps linking only
+the original five libraries, whose dependency closure is unchanged.
 
-Packaged layout contract: each desktop application archive and CLI package
-carries its platform's `ffmpeg`/`ffprobe` executables as siblings of the main
-application binary (macOS `Contents/MacOS/`, Windows/Linux bundle directory,
-CLI package directory), signed with the package. Resolution order is the
-explicit `OR_FFPROBE_PATH`/`OR_FFMPEG_PATH` developer override, then the
-packaged sibling, then `PATH` lookup for unpackaged development runs. A
-packaged application with a stripped developer environment therefore never
-touches a system executable; the clean-environment acceptance journey proves
-this by removing those tools and overrides.
+Packaged layout contract: each desktop application archive carries its
+platform's `ffmpeg`/`ffprobe` executables as siblings of the main application
+binary (macOS `Contents/MacOS/`, Windows/Linux bundle directory), signed with
+the package. Resolution order is the explicit `OR_FFPROBE_PATH`/`OR_FFMPEG_PATH`
+developer override, then the packaged sibling, then `PATH` lookup for
+unpackaged development runs. A packaged application with a stripped developer
+environment therefore never touches a system executable; the clean-environment
+acceptance journey proves this by removing those tools and overrides. CLI
+packages do not bundle helpers in 9B1: the CLI resolves a packaged sibling
+when one is present and otherwise keeps its developer override/`PATH` behavior
+for unpackaged runs.
 
 ### Checkpoint 7C linked software runtime
 
