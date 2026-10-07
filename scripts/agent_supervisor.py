@@ -873,17 +873,37 @@ def _run_local_completion_checks(repo_root: Path) -> None:
         subprocess.run(command, cwd=repo_root, check=True)
 
 
-def _run_pre_host_checks(repo_root: Path, implementation_sha: str) -> None:
+def _run_pre_host_checks(
+    repo_root: Path,
+    implementation_sha: str,
+    *,
+    checkout_sha: str | None = None,
+) -> None:
     """Run headless Rust tests before spending time on hosted CI verification."""
 
+    checkout_sha = checkout_sha or implementation_sha
+    if git_output(repo_root, "rev-parse", "HEAD") != checkout_sha:
+        raise SupervisorError("checkout changed before pre-host verification")
+    if git_output(repo_root, "rev-parse", "origin/main") != checkout_sha:
+        raise SupervisorError("origin/main changed before pre-host verification")
+    if implementation_sha != checkout_sha:
+        try:
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", implementation_sha, checkout_sha],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise SupervisorError("historical implementation is not an ancestor of checkout") from exc
     try:
         subprocess.run(["cargo", "test", "--workspace"], cwd=repo_root, check=True)
     except subprocess.CalledProcessError as exc:
         raise SupervisorError("pre-host verification failed: cargo test --workspace") from exc
     refuse_dirty_worktree(repo_root)
-    if git_output(repo_root, "rev-parse", "HEAD") != implementation_sha:
+    if git_output(repo_root, "rev-parse", "HEAD") != checkout_sha:
         raise SupervisorError("HEAD changed during pre-host verification")
-    if git_output(repo_root, "rev-parse", "origin/main") != implementation_sha:
+    if git_output(repo_root, "rev-parse", "origin/main") != checkout_sha:
         raise SupervisorError("origin/main changed during pre-host verification")
 
 
@@ -1754,12 +1774,13 @@ def _run_one_checkpoint(
     resolution: dict[str, Any],
     implementation_sha: str,
     implementation_origin_sha: str | None = None,
+    checkout_sha: str | None = None,
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     checkpoint = execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"])
-    _run_pre_host_checks(repo_root, implementation_sha)
+    _run_pre_host_checks(repo_root, implementation_sha, checkout_sha=checkout_sha)
     subject = git_output(repo_root, "show", "-s", "--format=%s", implementation_sha)
     evidence_result = verify_hosted_checkpoint(
         repo_root,
@@ -1791,12 +1812,13 @@ def _run_checkpoint_batch(
     checkpoint_ids: Sequence[str],
     implementation_sha: str,
     implementation_origin_sha: str | None = None,
+    checkout_sha: str | None = None,
     api: execution_evidence.GitHubApi | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     checkpoints = [execution_plan.checkpoint_for_id(plan, item) for item in checkpoint_ids]
-    _run_pre_host_checks(repo_root, implementation_sha)
+    _run_pre_host_checks(repo_root, implementation_sha, checkout_sha=checkout_sha)
     subject = git_output(repo_root, "show", "-s", "--format=%s", implementation_sha)
     evidence_results = [
         verify_hosted_checkpoint(
@@ -1936,6 +1958,7 @@ def run_goal(
                     state=state,
                     resolution=resolution,
                     implementation_sha=resume_sha or "",
+                    checkout_sha=head,
                 )
             else:
                 result = _run_checkpoint_batch(
@@ -1944,6 +1967,7 @@ def run_goal(
                     state=state,
                     checkpoint_ids=batch_ids,
                     implementation_sha=resume_sha or "",
+                    checkout_sha=head,
                 )
             resume_pending = False
         else:
