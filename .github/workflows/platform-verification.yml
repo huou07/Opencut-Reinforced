@@ -513,6 +513,15 @@ jobs:
           --plain-name
           "native preview transport keeps exact time and explicit rate"
 
+      - name: Restore packaged macOS Rust bridge alias after native builds
+        run: |
+          set -euo pipefail
+          app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+          runtime_dir="$app/Contents/Frameworks/or_app_bridge.framework/Versions/A"
+          test -f "$runtime_dir/or_app_bridge"
+          ln -sf or_app_bridge "$runtime_dir/libor_app_bridge.dylib"
+          test -f "$runtime_dir/libor_app_bridge.dylib"
+
       - name: Verify packaged product journey in clean environment
         env:
           OR_PACKAGED_HELPERS_DIRECTORY: ${{ github.workspace }}/apps/or_app/build/macos/Build/Products/Debug/or_app.app/Contents/MacOS
