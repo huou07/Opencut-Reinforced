@@ -441,6 +441,7 @@ void main() {
           matching: find.text('Close'),
         ),
       );
+      await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
       await _until(
         tester,
         () => find
