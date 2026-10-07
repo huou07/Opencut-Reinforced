@@ -55,7 +55,7 @@ DOCUMENT = b"""<?xml version='1.0' encoding='UTF-8'?>
 
 SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
-  <node index="0" text="Save" class="android.widget.Button"
+  <node index="0" text="SAVE" class="android.widget.Button"
         package="com.android.documentsui" bounds="[900,700][1080,800]" />
 </hierarchy>
 """

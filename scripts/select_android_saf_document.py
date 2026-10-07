@@ -58,7 +58,15 @@ def select(device, guest_log, output, flow="open"):
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
         provider = next((node for node in nodes if node.get("text") == "OR SAF acceptance"), None)
-        save = next((node for node in nodes if node.get("text") == "Save" or node.get("content-desc") == "Save"), None)
+        save = next(
+            (
+                node
+                for node in nodes
+                if (node.get("text") or "").casefold() == "save"
+                or (node.get("content-desc") or "").casefold() == "save"
+            ),
+            None,
+        )
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
