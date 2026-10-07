@@ -84,4 +84,70 @@ else
   fails=$((fails + 1))
 fi
 
+# Emulator startup probes must stay bound to the requested serial, and startup
+# must not report success after its guest or process has disappeared.
+if grep -Fq 'adb -s "$android_device_id" wait-for-device' "$start_script" &&
+  grep -Fq 'adb -s "$android_device_id" shell getprop sys.boot_completed' "$start_script" &&
+  grep -Fq 'adb -s "$android_device_id" get-state' "$start_script"; then
+  echo "PASS emulator startup probes the requested serial"
+else
+  echo "FAIL emulator startup can accept a different or vanished guest"
+  fails=$((fails + 1))
+fi
+
+# A new Android step can reuse emulator-5554 only after the prior QEMU process
+# has drained. Give the fake emulator a delayed TERM handler to prove stop waits.
+stop_script="$ROOT/scripts/stop-android-emulator.sh"
+cat > "$work/fake-emulator.py" <<'PY'
+import signal
+import sys
+import time
+
+stopping = False
+def stop(_signal, _frame):
+    global stopping
+    time.sleep(0.7)
+    stopping = True
+
+signal.signal(signal.SIGTERM, stop)
+open(sys.argv[1], "w").close()
+while not stopping:
+    time.sleep(0.05)
+PY
+python3 "$work/fake-emulator.py" "$work/emulator-ready" &
+fake_pid=$!
+for _ in $(seq 1 50); do
+  [[ -e "$work/emulator-ready" ]] && break
+  sleep 0.02
+done
+if [[ ! -e "$work/emulator-ready" ]]; then
+  echo "FAIL fake emulator did not start"
+  fails=$((fails + 1))
+else
+  printf '%s\n' "$fake_pid" > "$work/android-emulator.pid"
+  RUNNER_TEMP="$work" OR_ANDROID_EMULATOR_STOP_WAIT_SECONDS=3 \
+    python3 - "$stop_script" "$fake_pid" <<'PY'
+import os
+import subprocess
+import sys
+import time
+
+started = time.monotonic()
+subprocess.run(["bash", sys.argv[1]], check=True, env=os.environ.copy())
+elapsed = time.monotonic() - started
+state = subprocess.run(
+    ["ps", "-o", "stat=", "-p", sys.argv[2]],
+    check=False, capture_output=True, text=True,
+).stdout.strip()
+if elapsed < 0.6 or (state and not state.startswith("Z")):
+    raise SystemExit(f"stop returned before emulator exit (elapsed={elapsed:.2f}s state={state!r})")
+print(f"PASS emulator stop waited for process exit ({elapsed:.2f}s)")
+PY
+  if [[ "$?" -ne 0 ]]; then
+    echo "FAIL emulator stop returned before process exit"
+    fails=$((fails + 1))
+  fi
+  wait "$fake_pid" 2>/dev/null || true
+fi
+
 if [[ "$fails" -eq 0 ]]; then echo "GATE_TESTS=PASS"; else echo "GATE_TESTS=FAIL ($fails)"; exit 1; fi

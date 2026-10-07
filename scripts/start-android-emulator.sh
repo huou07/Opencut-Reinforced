@@ -65,14 +65,14 @@ if [[ "${1:-false}" == wipe-data ]]; then wipe_args=(-wipe-data); fi
 emulator_pid=$!
 printf '%s\n' "$emulator_pid" > "$RUNNER_TEMP/android-emulator.pid"
 
-if ! timeout 120s adb wait-for-device; then
+if ! timeout 120s adb -s "$android_device_id" wait-for-device; then
   echo 'Android emulator did not appear within 120 seconds; emulator log follows:' >&2
   cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
   exit 1
 fi
 booted=0
 for _ in $(seq 1 120); do
-  if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
+  if [[ "$(adb -s "$android_device_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
     booted=1
     break
   fi
@@ -82,9 +82,15 @@ if [[ "$booted" != 1 ]]; then
   cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
   exit 1
 fi
-test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
-test "$(adb shell getprop ro.product.cpu.abi | tr -d '\r')" = x86_64
-adb shell settings put global window_animation_scale 0
-adb shell settings put global transition_animation_scale 0
-adb shell settings put global animator_duration_scale 0
+test "$(adb -s "$android_device_id" shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+test "$(adb -s "$android_device_id" shell getprop ro.product.cpu.abi | tr -d '\r')" = x86_64
+adb -s "$android_device_id" shell settings put global window_animation_scale 0
+adb -s "$android_device_id" shell settings put global transition_animation_scale 0
+adb -s "$android_device_id" shell settings put global animator_duration_scale 0
+test "$(adb -s "$android_device_id" get-state)" = device
+if ! kill -0 "$emulator_pid" 2>/dev/null; then
+  echo "Android emulator process $emulator_pid exited during startup; emulator log follows:" >&2
+  cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
+  exit 1
+fi
 echo "Android emulator $android_device_id is responsive (pid $emulator_pid)."
