@@ -738,8 +738,12 @@ hardening commit itself must pass both workflows.
 - `apps/or_app/test_driver/android_saf_preview.dart` saves `report.json` and
   three composed screenshots under `OR_ANDROID_ACCEPTANCE_OUTPUT`. Preserve
   these with the API/ABI/GPU path, approved FFmpeg configuration, main draw
-  timings, frame/resource counters, driver log, and guest log. Hosted timing
-  observations do not establish target-device FPS or a performance speedup.
+  timings, frame/resource counters, streamed Flutter driver output, DocumentsUI
+  selector trace, guest logcat, and resource-health samples. These diagnostics
+  are written under the uploaded acceptance-artifact directory as the journey
+  runs, so a bounded CI timeout still retains the last observable stage. Hosted
+  timing observations do not establish target-device FPS or a performance
+  speedup.
   Software fallback is authoritative; `ANDROID_HARDWARE_MEDIA=UNVERIFIED`
   remains explicit. No physical MediaCodec, HardwareBuffer, or zero-copy
   acceptance is claimed. Local native execution remains

@@ -328,9 +328,11 @@ void main() {
             gateway.session != null &&
             find.byType(Texture).evaluate().isNotEmpty,
       );
+      debugPrint('ANDROID_SAF_PROJECT_OPENED');
       expect(gateway.openedPath, contains('/files/or-projects/'));
       // Convert while the Activity has a live window surface. Doing this after
       // the app backgrounds races Android surface teardown and PixelCopy.
+      debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
       await binding.convertFlutterSurfaceToImage();
       final session = gateway.session!;
       final revision = (await gateway.summary(session)).revision;
@@ -402,6 +404,7 @@ void main() {
       );
 
       final pixels = await _redTexture(tester, binding, 'saf-editor-texture');
+      debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_COMPLETE');
 
       await _control('revoke', uri: source);
       expect(

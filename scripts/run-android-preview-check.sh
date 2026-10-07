@@ -13,10 +13,12 @@ else
   shift 4
 fi
 android_device_id=emulator-5554
-log="$RUNNER_TEMP/android-driver-$case_name.log"
-guest_log="$RUNNER_TEMP/android-guest-$case_name.log"
-health_log="$RUNNER_TEMP/android-health-$case_name.log"
-picker_status_file="$RUNNER_TEMP/android-picker-$case_name.status"
+output_directory="${OR_ANDROID_ACCEPTANCE_OUTPUT:-$RUNNER_TEMP/android-$case_name}"
+mkdir -p "$output_directory"
+log="$output_directory/android-driver-$case_name.log"
+guest_log="$output_directory/android-guest-$case_name.log"
+health_log="$output_directory/android-health-$case_name.log"
+picker_status_file="$output_directory/android-picker-$case_name.status"
 : > "$picker_status_file"
 : > "$guest_log"
 adb -s "$android_device_id" logcat -c
@@ -54,11 +56,13 @@ stop_process_tree() {
 trap cleanup EXIT
 if [[ "$case_name" == saf ]]; then
   rm -f "$picker_status_file"
+  echo 'Starting Android SAF DocumentsUI selector.'
   (
     if python3 "$GITHUB_WORKSPACE/scripts/select_android_saf_document.py" \
       --device "$android_device_id" --guest-log "$guest_log" \
       --output "$OR_ANDROID_ACCEPTANCE_OUTPUT" \
-      --flow "${OR_ANDROID_SAF_FLOW:-open}" > "$RUNNER_TEMP/android-documents-ui.log" 2>&1; then
+      --flow "${OR_ANDROID_SAF_FLOW:-open}" \
+      > "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" 2>&1; then
       picker_status=0
     else
       picker_status=$?
@@ -115,8 +119,9 @@ fi
 # The APK is built before the emulator starts. Driving a prebuilt binary keeps
 # Gradle and the Kotlin daemons out of the software-rendered emulator phase,
 # where ~4 GiB of build JVMs was competing for the runner's vCPUs.
+echo "Starting Android Flutter driver for $case_name."
 flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
-  --use-application-binary="$apk" "$@" > "$log" 2>&1 &
+  --use-application-binary="$apk" "$@" 2>&1 | tee "$log" &
 drive_pid=$!
 if [[ -n "$picker_pid" ]]; then
   while [[ ! -s "$picker_status_file" ]] &&
@@ -125,25 +130,23 @@ if [[ -n "$picker_pid" ]]; then
   done
   if [[ ! -s "$picker_status_file" ]] && ! kill -0 "$picker_pid" 2>/dev/null; then
     echo "Android DocumentsUI selector exited without a status." >&2
-    cat "$RUNNER_TEMP/android-documents-ui.log" >&2
+    cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
     stop_process_tree "$drive_pid"
     status=1
   fi
   if [[ -s "$picker_status_file" ]]; then
     read -r picker_status < "$picker_status_file"
     if [[ "$picker_status" != 0 ]]; then
-      cat "$RUNNER_TEMP/android-documents-ui.log" >&2
+      cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
       stop_process_tree "$drive_pid"
       status=1
+    else
+      echo 'Android SAF DocumentsUI selector completed.'
     fi
   fi
 fi
-if wait "$drive_pid"; then
-  cat "$log"
-else
-  status=$?
-  cat "$log"
-fi
+wait "$drive_pid" || status=$?
+echo "Android Flutter driver for $case_name exited with status $status."
 if [[ -n "$picker_pid" ]]; then
   if [[ "$status" != 0 ]]; then
     kill "$picker_pid" 2>/dev/null || true
@@ -249,18 +252,19 @@ PY
   kill "$guest_pid" 2>/dev/null || true
   wait "$guest_pid" 2>/dev/null || true
   adb -s "$android_device_id" logcat -c
-  guest_log="$RUNNER_TEMP/android-guest-saf-recovery.log"
+  guest_log="$recovery_output/android-guest-saf-recovery.log"
   adb -s "$android_device_id" logcat -b all -v threadtime > "$guest_log" 2>&1 &
   guest_pid=$!
   OR_ANDROID_ACCEPTANCE_OUTPUT="$recovery_output"
   export OR_ANDROID_ACCEPTANCE_OUTPUT
-  picker_status_file="$RUNNER_TEMP/android-picker-saf-recovery.status"
+  picker_status_file="$recovery_output/android-picker-saf-recovery.status"
   : > "$picker_status_file"
+  echo "Android app process restarted ($old_pid -> $new_pid); starting recovery DocumentsUI selector."
   (
     if python3 "$GITHUB_WORKSPACE/scripts/select_android_saf_document.py" \
       --device "$android_device_id" --guest-log "$guest_log" \
       --output "$OR_ANDROID_ACCEPTANCE_OUTPUT" --flow open \
-      > "$RUNNER_TEMP/android-documents-ui-recovery.log" 2>&1; then
+      > "$recovery_output/documents-ui-recovery.log" 2>&1; then
       picker_status=0
     else
       picker_status=$?
@@ -268,12 +272,13 @@ PY
     printf '%s\n' "$picker_status" > "$picker_status_file"
   ) &
   picker_pid=$!
-  log="$RUNNER_TEMP/android-driver-saf-recovery.log"
+  log="$recovery_output/android-driver-saf-recovery.log"
+  echo 'Starting Android Flutter recovery driver.'
   flutter drive \
     --driver=test_driver/android_saf_recovery.dart \
     --target=integration_test/android_saf_recovery_test.dart \
     -d "$android_device_id" --no-dds \
-    --use-application-binary="$recovery_apk" > "$log" 2>&1 &
+    --use-application-binary="$recovery_apk" 2>&1 | tee "$log" &
   drive_pid=$!
   recovery_status=0
   while [[ ! -s "$picker_status_file" ]] &&
@@ -283,29 +288,24 @@ PY
   if [[ -s "$picker_status_file" ]]; then
     read -r picker_status < "$picker_status_file"
     if [[ "$picker_status" != 0 ]]; then
-      cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+      cat "$recovery_output/documents-ui-recovery.log" >&2
       stop_process_tree "$drive_pid"
       recovery_status=1
     fi
   elif ! kill -0 "$picker_pid" 2>/dev/null; then
     echo 'Android recovery DocumentsUI selector exited without a status.' >&2
-    cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+    cat "$recovery_output/documents-ui-recovery.log" >&2
     stop_process_tree "$drive_pid"
     recovery_status=1
   fi
-  if wait "$drive_pid"; then
-    cat "$log"
-  else
-    recovery_status=$?
-    cat "$log"
-  fi
+  wait "$drive_pid" || recovery_status=$?
   if [[ "$recovery_status" != 0 ]]; then
     kill "$picker_pid" 2>/dev/null || true
     wait "$picker_pid" 2>/dev/null || true
     exit "$recovery_status"
   fi
   wait "$picker_pid" || {
-    cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+    cat "$recovery_output/documents-ui-recovery.log" >&2
     exit 1
   }
 fi
