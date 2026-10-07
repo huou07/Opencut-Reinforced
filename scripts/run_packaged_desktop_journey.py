@@ -62,6 +62,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _restore_macos_bridge_alias(bridge: Path) -> None:
+    framework_binary = bridge.with_name("or_app_bridge")
+    if not framework_binary.is_file():
+        raise SystemExit(f"The macOS Rust bridge binary is missing: {framework_binary}")
+    if bridge.is_symlink():
+        if bridge.resolve() != framework_binary.resolve():
+            raise SystemExit(f"The macOS Rust bridge alias points to the wrong file: {bridge}")
+        return
+    if bridge.exists():
+        raise SystemExit(f"The macOS Rust bridge alias is not a symlink: {bridge}")
+    bridge.symlink_to(framework_binary.name)
+
+
 def _snapshot_linux_media_runtime(
     helpers: Path, bridge_directory: Path, destination: Path
 ) -> Path:
@@ -254,6 +267,10 @@ def main() -> int:
     invocations.append({"phase": "failures", "exit_code": completed.returncode})
     if completed.returncode != 0:
         return completed.returncode
+    if device == "macos":
+        # Flutter rebuilds the framework during each test phase and removes the
+        # unversioned alias restored by the workflow before this journey.
+        _restore_macos_bridge_alias(bridge)
     if _sha256(project) != before_failed_reopen:
         raise SystemExit("A failed import or reopen changed the saved project.")
     if not failure_sentinel.is_file() or failure_sentinel.read_text(
