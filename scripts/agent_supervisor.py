@@ -992,6 +992,7 @@ def finalize_verified_checkpoint(
     checkpoint: Mapping[str, Any],
     evidence_result: Mapping[str, Any],
     implementation_sha: str,
+    checkout_sha: str | None = None,
     api: execution_evidence.GitHubApi,
     run_local_checks: bool = True,
 ) -> dict[str, Any]:
@@ -1002,6 +1003,7 @@ def finalize_verified_checkpoint(
         checkpoints=[checkpoint],
         evidence_results=[evidence_result],
         implementation_sha=implementation_sha,
+        checkout_sha=checkout_sha,
         api=api,
         run_local_checks=run_local_checks,
     )
@@ -1015,6 +1017,7 @@ def finalize_verified_checkpoints(
     checkpoints: Sequence[Mapping[str, Any]],
     evidence_results: Sequence[Mapping[str, Any]],
     implementation_sha: str,
+    checkout_sha: str | None = None,
     api: execution_evidence.GitHubApi,
     run_local_checks: bool = True,
 ) -> dict[str, Any]:
@@ -1040,8 +1043,9 @@ def finalize_verified_checkpoints(
             policy=policy,
         )
         records[checkpoint_id] = record
-    if git_output(repo_root, "rev-parse", "HEAD") != implementation_sha:
-        raise SupervisorError("verified implementation SHA is not current HEAD")
+    checkout_sha = checkout_sha or implementation_sha
+    if git_output(repo_root, "rev-parse", "HEAD") != checkout_sha:
+        raise SupervisorError("verification checkout changed before evidence finalization")
     first_record = records[ids[0]]
     if "contract_versions" not in first_record:
         raise SupervisorError("new evidence record is missing contract_versions")
@@ -1082,7 +1086,7 @@ def finalize_verified_checkpoints(
         if run_local_checks:
             _run_local_completion_checks(repo_root)
         git_output(repo_root, "fetch", "--prune", "origin")
-        if git_output(repo_root, "rev-parse", "origin/main") != implementation_sha:
+        if git_output(repo_root, "rev-parse", "origin/main") != checkout_sha:
             raise SupervisorError("origin/main moved after implementation verification")
         changed_paths = git_status_paths(repo_root)
         validate_state_commit_paths(changed_paths, ids)
@@ -1800,6 +1804,7 @@ def _run_one_checkpoint(
         checkpoint=checkpoint,
         evidence_result=evidence_result,
         implementation_sha=implementation_sha,
+        checkout_sha=checkout_sha,
         api=evidence_result["api"],
     )
 
@@ -1841,6 +1846,7 @@ def _run_checkpoint_batch(
         checkpoints=checkpoints,
         evidence_results=evidence_results,
         implementation_sha=implementation_sha,
+        checkout_sha=checkout_sha,
         api=evidence_results[0]["api"],
     )
 
