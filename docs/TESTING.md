@@ -851,6 +851,12 @@ exact-SHA step proofs. A lower-level bridge or synthetic check is not a
 substitute for the required Android SAF journey or 9B1 packaged desktop
 journey.
 
+For 9C, the proof policy binds static checks to repository hygiene, Flutter
+widget coverage to the unit class, and integration plus user-journey evidence
+to the hosted Android SAF editor journey. That journey must exercise the
+production mobile editor interactions added by 9C before it can prove those
+classes.
+
 The earlier 9B Android retries remain failure provenance. Before another
 repair, reproduce or distinguish repeated Flutter-driver lifecycle effects,
 application/native or JNI failure, VM-service failure, emulator instability,

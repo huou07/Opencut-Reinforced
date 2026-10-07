@@ -1026,6 +1026,52 @@ class QualityEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(execution_evidence.EvidenceError, "do not match PLAN.json"):
             execution_evidence.validate_evidence_record(record, checkpoint_id="9B", checkpoint=checkpoint_spec, policy=policy)
 
+    def test_9c_class_proofs_bind_mobile_acceptance_to_hosted_android_steps(self) -> None:
+        plan, _ = execution_plan.load_plan_state(REPO_ROOT)
+        checkpoint_spec = execution_plan.checkpoint_for_id(plan, "9C")
+        policy = evidence_policy()
+        sha = "a" * 40
+        gates = [valid_gate("repository_hygiene", sha), valid_gate("platform_verification", sha, 102)]
+        jobs = {
+            101: [{
+                "id": 11,
+                "name": "Repository hygiene",
+                "status": "completed",
+                "conclusion": "success",
+                "steps": [{"name": "Run repository checks", "number": 2, "status": "completed", "conclusion": "success"}],
+            }],
+            102: [
+                {
+                    "id": 21,
+                    "name": "Flutter static and widget checks",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "steps": [{"name": "Run Flutter widget tests", "number": 3, "status": "completed", "conclusion": "success"}],
+                },
+                {
+                    "id": 22,
+                    "name": "Android APK build",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "steps": [{"name": "Verify Android SAF preview user journey and resource bounds", "number": 13, "status": "completed", "conclusion": "success"}],
+                },
+            ],
+        }
+
+        class Api:
+            def get(self, path: str) -> dict[str, object]:
+                run_id = int(path.split("/actions/runs/")[1].split("/")[0])
+                return {"jobs": jobs[run_id]}
+
+        proofs = execution_evidence.collect_evidence_class_proofs(Api(), policy, checkpoint_spec, gates)
+        record = execution_evidence.build_evidence_record(
+            checkpoint_id="9C", implementation_sha=sha, implementation_subject="feat: mobile editor UX",
+            gates=gates, developer_preview={"required": False},
+            contract_versions=contract_versions(), evidence_classes=proofs,
+        )
+        execution_evidence.validate_evidence_record(record, checkpoint_id="9C", checkpoint=checkpoint_spec, policy=policy)
+        self.assertEqual({proof["class"] for proof in proofs}, {"STATIC", "UNIT", "INTEGRATION", "USER_JOURNEY"})
+
     def test_in_flight_amendment_baseline_excludes_product_commits(self) -> None:
         plan, state = nine_b_plan_state()
         with tempfile.TemporaryDirectory() as directory:
