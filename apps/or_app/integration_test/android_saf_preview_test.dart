@@ -387,13 +387,13 @@ void main() {
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
       expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+      await binding.convertFlutterSurfaceToImage();
       final backgroundPixels = await _redTexture(
         tester,
         binding,
         'saf-background-resumed-texture',
       );
 
-      await binding.convertFlutterSurfaceToImage();
       final pixels = await _redTexture(tester, binding, 'saf-editor-texture');
 
       await _control('revoke', uri: source);
