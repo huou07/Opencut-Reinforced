@@ -859,9 +859,11 @@ investigate. Do not classify a disconnect as infrastructure based only on ADB
 being offline.
 
 9B1's desktop product journey runs the real Flutter application with the Rust
-project gateway and packaged FFmpeg helpers on macOS, Windows, and Linux. It
-removes helper overrides and loader/build paths, and blocks host FFmpeg lookup
-through `PATH` with inert failure guards while preserving system utilities.
+project gateway, packaged Rust bridge, and packaged FFmpeg helpers on macOS,
+Windows, and Linux. It clears inherited loader/build paths, then directs the
+integration runner to the bridge inside the app bundle so its app-relative
+runtime dependencies are exercised. It blocks host FFmpeg lookup through
+`PATH` with inert failure guards while preserving system utilities.
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, then exercise unsupported media,
 missing sources, an unavailable packaged probe, failed replacement, and failed

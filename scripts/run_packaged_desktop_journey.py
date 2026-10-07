@@ -28,6 +28,7 @@ FORBIDDEN_ENVIRONMENT = (
     "FFMPEG_DIR",
     "FFMPEG_INSTALL_PREFIX",
     "PKG_CONFIG_PATH",
+    "FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR",
 )
 
 
@@ -76,9 +77,21 @@ def main() -> int:
     helper_directory = Path(
         os.environ.get("OR_PACKAGED_HELPERS_DIRECTORY", "")
     ).resolve()
+    bridge_directory = Path(
+        os.environ.get("OR_PACKAGED_BRIDGE_DIRECTORY", "")
+    ).resolve()
     ffprobe = helper_directory / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
     if not ffprobe.is_file():
         raise SystemExit(f"The packaged ffprobe helper is missing: {ffprobe}")
+    bridge_name = {
+        "nt": "or_app_bridge.dll",
+        "posix": "libor_app_bridge.dylib"
+        if sys.platform == "darwin"
+        else "libor_app_bridge.so",
+    }[os.name]
+    bridge = bridge_directory / bridge_name
+    if not bridge.is_file():
+        raise SystemExit(f"The packaged Rust bridge is missing: {bridge}")
 
     runner_temp = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()))
     work = runner_temp / "or-packaged-product-journey"
@@ -121,6 +134,10 @@ def main() -> int:
     for name in FORBIDDEN_ENVIRONMENT:
         env.pop(name, None)
     env["PATH"] = guarded_path
+    # flutter_rust_bridge otherwise resolves its developer target/release path.
+    # Point the acceptance app at the bridge inside the built package; its
+    # app-relative runtime paths then resolve only packaged media libraries.
+    env["FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR"] = str(bridge_directory)
     env.update(
         {
             "OR_PACKAGED_JOURNEY_PROJECT": str(project),
@@ -229,6 +246,8 @@ def main() -> int:
         "platform": device,
         "host_ffmpeg_path_lookup": "blocked",
         "host_ffprobe_path_lookup": "blocked",
+        "rust_bridge": str(bridge),
+        "rust_bridge_sha256": _sha256(bridge),
         "ffprobe": str(ffprobe),
         "ffprobe_sha256": _sha256(ffprobe),
         "project_sha256_after_failures": _sha256(project),

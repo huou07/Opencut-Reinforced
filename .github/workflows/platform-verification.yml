@@ -365,6 +365,8 @@ jobs:
           app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
           bridge="$app/Contents/Frameworks/or_app_bridge.framework/Versions/A/or_app_bridge"
           runtime_dir="$(dirname "$bridge")"
+          ln -s or_app_bridge "$runtime_dir/libor_app_bridge.dylib"
+          echo "OR_PACKAGED_BRIDGE_DIRECTORY=$runtime_dir" >> "$GITHUB_ENV"
           frameworks="$app/Contents/Frameworks"
           probe_source="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe"
           probe="$runtime_dir/ffmpeg-link-probe"
@@ -422,7 +424,7 @@ jobs:
           helpers="$app/Contents/MacOS"
           test -x "$helpers/ffmpeg"
           test -x "$helpers/ffprobe"
-          otool -L "$helpers/ffmpeg" | grep -F '@loader_path/../Frameworks'
+          otool -l "$helpers/ffmpeg" | grep -F 'path @loader_path/../Frameworks'
           if otool -L "$helpers/ffmpeg" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           if otool -L "$helpers/ffprobe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
@@ -660,6 +662,7 @@ jobs:
           bridge="$(find "$bundle" -type f -name '*or_app_bridge*.so' -print -quit)"
           test -n "$bridge"
           runtime_dir="$(dirname "$bridge")"
+          echo "OR_PACKAGED_BRIDGE_DIRECTORY=$runtime_dir" >> "$GITHUB_ENV"
           probe_source="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe"
           probe="$runtime_dir/ffmpeg-link-probe"
           test -f "$probe_source"
@@ -788,7 +791,7 @@ jobs:
           cmake --install $build --config Release
           $staticLibrary = Join-Path $prefix 'lib/zs.lib'
           if (-not (Test-Path $staticLibrary -PathType Leaf)) { throw 'static MSVC zlib library was not installed' }
-          Copy-Item $staticLibrary (Join-Path $prefix 'lib/z.lib')
+          Copy-Item $staticLibrary (Join-Path $prefix 'lib/zlib.lib')
           Copy-Item (Join-Path $source 'LICENSE') (Join-Path $env:RUNNER_TEMP 'ZLIB-LICENSE.txt')
           Add-Content -Path $env:GITHUB_ENV -Value "OR_ZLIB_PREFIX=$prefix" -Encoding utf8
           Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$prefix/include;$env:INCLUDE" -Encoding utf8
@@ -854,6 +857,7 @@ jobs:
           # FFmpeg configure discovers zlib through pkg-config. CMake's MSVC
           # install provides the static archive and headers but no .pc file.
           zlib_prefix="$(cygpath -u "$OR_ZLIB_PREFIX")"
+          test -f "$zlib_prefix/lib/zlib.lib"
           mkdir -p "$prefix/lib/pkgconfig"
           cat > "$prefix/lib/pkgconfig/zlib.pc" <<EOF
           prefix=$zlib_prefix
@@ -921,7 +925,7 @@ jobs:
           {
             echo "Target: Windows x86_64 (MSVC)"
             echo "FFmpeg release: 8.1.3"
-            echo "zlib release: 1.3.2 (statically linked into Windows ffmpeg.exe; zs.lib exposed as z.lib for FFmpeg configure)"
+            echo "zlib release: 1.3.2 (statically linked into Windows ffmpeg.exe; zs.lib exposed as zlib.lib for FFmpeg configure)"
             echo "zlib source URL: https://zlib.net/fossils/zlib-1.3.2.tar.gz"
             echo "zlib source SHA-256: bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
             echo "Rust binding: ffmpeg-the-third 6.0.0"
@@ -999,6 +1003,7 @@ jobs:
           $bridge = Get-ChildItem -Path $env:GITHUB_WORKSPACE/apps/or_app/build/windows -Filter '*or_app_bridge*.dll' -Recurse | Select-Object -First 1
           if ($null -eq $bridge) { throw 'Packaged or_app_bridge DLL not found' }
           $runtimeDir = $bridge.Directory.FullName
+          Add-Content -Path $env:GITHUB_ENV -Value "OR_PACKAGED_BRIDGE_DIRECTORY=$runtimeDir"
           $probeSource = Join-Path $env:GITHUB_WORKSPACE 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe'
           if (-not (Test-Path $probeSource -PathType Leaf)) { throw 'Production or_media FFmpeg probe was not built' }
           $probe = Join-Path $runtimeDir 'ffmpeg-link-probe.exe'
