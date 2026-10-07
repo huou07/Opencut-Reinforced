@@ -1,0 +1,383 @@
+{
+  "checkpoint_id": "9B1",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 7,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "assets": [
+      {
+        "name": "opencut-reinforced-macos-debug.zip",
+        "size": 43785125
+      },
+      {
+        "name": "opencut-reinforced-windows-x64-debug.zip",
+        "size": 45993149
+      },
+      {
+        "name": "opencut-reinforced-linux-x64-debug.tar.gz",
+        "size": 39308814
+      },
+      {
+        "name": "opencut-reinforced-android-debug.apk",
+        "size": 200157136
+      },
+      {
+        "name": "opencut-reinforced-cli-macos.zip",
+        "size": 2966847
+      },
+      {
+        "name": "opencut-reinforced-cli-windows-x64.zip",
+        "size": 2392991
+      },
+      {
+        "name": "opencut-reinforced-cli-linux-x64.tar.gz",
+        "size": 1588335
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 991
+      },
+      {
+        "name": "BUILD-INFO.txt",
+        "size": 1633
+      },
+      {
+        "name": "FFMPEG-BUILD-INFO.txt",
+        "size": 7784
+      },
+      {
+        "name": "ffmpeg-8.1.3-source.tar.xz",
+        "size": 11732036
+      }
+    ],
+    "build_info": "BUILD-INFO.txt",
+    "checksums": "SHA256SUMS.txt",
+    "release_url": "https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-91af348100ae",
+    "required": true,
+    "source_sha": "91af348100ae0ded9345e31be8c03d3fd689a367",
+    "status": "verified",
+    "tag": "dev-91af348100ae",
+    "workflow_file": ".github/workflows/developer-preview.yml",
+    "workflow_name": "Developer Preview",
+    "workflow_run": {
+      "attempt": 1,
+      "conclusion": "success",
+      "id": 37624837263,
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Verify and publish prerelease",
+          "status": "completed"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/37624837263"
+    }
+  },
+  "evidence_classes": [
+    {
+      "class": "STATIC",
+      "conclusion": "success",
+      "gate_id": "repository_hygiene",
+      "job_id": 112790201206,
+      "job_name": "Repository hygiene",
+      "run_id": 37620777027,
+      "status": "completed",
+      "step_name": "Run repository checks",
+      "step_number": 3
+    },
+    {
+      "class": "UNIT",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201807,
+      "job_name": "Rust checks",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Run Rust tests",
+      "step_number": 13
+    },
+    {
+      "class": "INTEGRATION",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Run native Flutter project lifecycle tests",
+      "step_number": 23
+    },
+    {
+      "class": "NATIVE_RUNTIME",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Package FFmpeg beside the desktop probe and verify runtime loading",
+      "step_number": 18
+    },
+    {
+      "class": "PACKAGED_RUNTIME",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 26
+    },
+    {
+      "class": "PACKAGED_RUNTIME",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 14
+    },
+    {
+      "class": "PACKAGED_RUNTIME",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201964,
+      "job_name": "Windows native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 23
+    },
+    {
+      "class": "USER_JOURNEY",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 26
+    },
+    {
+      "class": "USER_JOURNEY",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 14
+    },
+    {
+      "class": "USER_JOURNEY",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201964,
+      "job_name": "Windows native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 23
+    },
+    {
+      "class": "CLEAN_ENVIRONMENT",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 26
+    },
+    {
+      "class": "CLEAN_ENVIRONMENT",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 14
+    },
+    {
+      "class": "CLEAN_ENVIRONMENT",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201964,
+      "job_name": "Windows native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 23
+    },
+    {
+      "class": "PERSISTENCE_RELAUNCH",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 26
+    },
+    {
+      "class": "PERSISTENCE_RELAUNCH",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 14
+    },
+    {
+      "class": "PERSISTENCE_RELAUNCH",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201964,
+      "job_name": "Windows native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 23
+    },
+    {
+      "class": "PERFORMANCE",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Measure packaged decoder sessions",
+      "step_number": 13
+    },
+    {
+      "class": "RESOURCE_STRESS",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Measure packaged decoder sessions",
+      "step_number": 13
+    },
+    {
+      "class": "CROSS_PLATFORM",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201655,
+      "job_name": "macOS native build and bridge smoke",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 26
+    },
+    {
+      "class": "CROSS_PLATFORM",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201843,
+      "job_name": "Linux native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 14
+    },
+    {
+      "class": "CROSS_PLATFORM",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 112790201964,
+      "job_name": "Windows native build",
+      "run_id": 37620776909,
+      "status": "completed",
+      "step_name": "Verify packaged product journey in clean environment",
+      "step_number": 23
+    }
+  ],
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "91af348100ae0ded9345e31be8c03d3fd689a367",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/37620777027",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 37620777027,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "91af348100ae0ded9345e31be8c03d3fd689a367",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/37620776909",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 37620776909,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "91af348100ae0ded9345e31be8c03d3fd689a367",
+  "implementation_subject": "fix(ci): package Android FFmpeg in developer previews",
+  "schema_version": 2,
+  "verified_at_utc": "2026-10-07T13:12:23Z"
+}
