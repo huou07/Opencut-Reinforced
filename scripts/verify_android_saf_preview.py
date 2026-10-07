@@ -15,6 +15,7 @@ CHECKS = {
     'mobileTouchScrubbingAndTransport', 'mobileMediaLibrarySheet',
     'mobileSelectedClipInspectorSheet',
     'androidSafExportToDocumentsUi',
+    'recoveryCheckpointPersistedBeforeProcessStop',
 }
 
 

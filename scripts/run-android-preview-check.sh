@@ -5,7 +5,13 @@ case_name="$1"
 target="$2"
 driver="$3"
 apk="$4"
-shift 4
+recovery_apk=
+if [[ "$case_name" == saf ]]; then
+  recovery_apk="${5:-}"
+  shift 5
+else
+  shift 4
+fi
 android_device_id=emulator-5554
 log="$RUNNER_TEMP/android-driver-$case_name.log"
 guest_log="$RUNNER_TEMP/android-guest-$case_name.log"
@@ -176,4 +182,131 @@ python3 "$GITHUB_WORKSPACE/scripts/classify_android_disconnect.py" \
   --state "$RUNNER_TEMP/android-state-$case_name.txt" --health "$health_log" \
   --case "$case_name" --output "$RUNNER_TEMP/android-disconnect-$case_name.json" \
   || true
+
+if [[ "$case_name" == saf && "$status" == 0 ]]; then
+  if [[ -z "$recovery_apk" || ! -s "$recovery_apk" ]]; then
+    echo 'The Android SAF process recovery APK is missing.' >&2
+    exit 1
+  fi
+  app_id=io.github.huou07.or_app
+  recovery_output="${OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT:-$OR_ANDROID_ACCEPTANCE_OUTPUT-recovery}"
+  mkdir -p "$recovery_output"
+
+  # The first journey has saved a real recovery sidecar. Capture a live process,
+  # force-stop it through Android, prove it disappeared, then relaunch the same
+  # installed app without clearing its private files or SAF grants.
+  adb -s "$android_device_id" shell monkey -p "$app_id" 1 >/dev/null
+  old_pid=
+  for _ in $(seq 1 60); do
+    old_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
+    [[ -n "$old_pid" ]] && break
+    sleep 1
+  done
+  if [[ -z "$old_pid" ]]; then
+    echo 'The prepared project process did not start before the force-stop.' >&2
+    exit 1
+  fi
+  adb -s "$android_device_id" shell am force-stop "$app_id"
+  stopped=0
+  for _ in $(seq 1 30); do
+    if [[ -z "$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r')" ]]; then
+      stopped=1
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$stopped" != 1 ]]; then
+    echo 'Android did not terminate the app process after force-stop.' >&2
+    exit 1
+  fi
+  adb -s "$android_device_id" shell monkey -p "$app_id" 1 >/dev/null
+  new_pid=
+  for _ in $(seq 1 60); do
+    new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
+    [[ -n "$new_pid" ]] && break
+    sleep 1
+  done
+  if [[ -z "$new_pid" || "$new_pid" == "$old_pid" ]]; then
+    echo "The app did not restart as a new process (old=$old_pid new=$new_pid)." >&2
+    exit 1
+  fi
+  python3 - "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" "$old_pid" "$new_pid" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "package": "io.github.huou07.or_app",
+    "oldPid": int(sys.argv[2]),
+    "emptyAfterForceStop": True,
+    "newPid": int(sys.argv[3]),
+    "result": "PASS",
+}, indent=2) + "\n")
+PY
+
+  # Reopen the same persisted SAF document through DocumentsUI. This second
+  # journey must apply the on-disk checkpoint and preview from recovered state.
+  kill "$guest_pid" 2>/dev/null || true
+  wait "$guest_pid" 2>/dev/null || true
+  adb -s "$android_device_id" logcat -c
+  guest_log="$RUNNER_TEMP/android-guest-saf-recovery.log"
+  adb -s "$android_device_id" logcat -b all -v threadtime > "$guest_log" 2>&1 &
+  guest_pid=$!
+  OR_ANDROID_ACCEPTANCE_OUTPUT="$recovery_output"
+  export OR_ANDROID_ACCEPTANCE_OUTPUT
+  picker_status_file="$RUNNER_TEMP/android-picker-saf-recovery.status"
+  : > "$picker_status_file"
+  (
+    if python3 "$GITHUB_WORKSPACE/scripts/select_android_saf_document.py" \
+      --device "$android_device_id" --guest-log "$guest_log" \
+      --output "$OR_ANDROID_ACCEPTANCE_OUTPUT" --flow open \
+      > "$RUNNER_TEMP/android-documents-ui-recovery.log" 2>&1; then
+      picker_status=0
+    else
+      picker_status=$?
+    fi
+    printf '%s\n' "$picker_status" > "$picker_status_file"
+  ) &
+  picker_pid=$!
+  log="$RUNNER_TEMP/android-driver-saf-recovery.log"
+  flutter drive \
+    --driver=test_driver/android_saf_recovery.dart \
+    --target=integration_test/android_saf_recovery_test.dart \
+    -d "$android_device_id" --no-dds \
+    --use-application-binary="$recovery_apk" > "$log" 2>&1 &
+  drive_pid=$!
+  recovery_status=0
+  while [[ ! -s "$picker_status_file" ]] &&
+    kill -0 "$drive_pid" 2>/dev/null && kill -0 "$picker_pid" 2>/dev/null; do
+    sleep 1
+  done
+  if [[ -s "$picker_status_file" ]]; then
+    read -r picker_status < "$picker_status_file"
+    if [[ "$picker_status" != 0 ]]; then
+      cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+      stop_process_tree "$drive_pid"
+      recovery_status=1
+    fi
+  elif ! kill -0 "$picker_pid" 2>/dev/null; then
+    echo 'Android recovery DocumentsUI selector exited without a status.' >&2
+    cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+    stop_process_tree "$drive_pid"
+    recovery_status=1
+  fi
+  if wait "$drive_pid"; then
+    cat "$log"
+  else
+    recovery_status=$?
+    cat "$log"
+  fi
+  if [[ "$recovery_status" != 0 ]]; then
+    kill "$picker_pid" 2>/dev/null || true
+    wait "$picker_pid" 2>/dev/null || true
+    exit "$recovery_status"
+  fi
+  wait "$picker_pid" || {
+    cat "$RUNNER_TEMP/android-documents-ui-recovery.log" >&2
+    exit 1
+  }
+fi
 exit "$status"

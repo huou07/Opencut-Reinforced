@@ -213,6 +213,11 @@ today.
   touch scrubbing, and tool sheets require the real Android product journey;
   prototype behavior is not evidence. Playback pauses when the app leaves the
   foreground and remains paused when it resumes.
+- Android recovery acceptance writes a valid unsaved edit to the app-private
+  project working copy, closes the live session, force-stops the app process,
+  and reopens the same persisted SAF document through DocumentsUI. The actual
+  recovery dialog must apply the checkpoint, remove its sidecar, and restore a
+  preview frame before the journey passes.
 - Phase 10–16 requirements follow their locked phase documents for captions,
   AI, templates, dubbing, advanced editing, generation, community packaging,
   plugins, and interchange.

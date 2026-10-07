@@ -329,6 +329,9 @@ void main() {
             find.byType(Texture).evaluate().isNotEmpty,
       );
       expect(gateway.openedPath, contains('/files/or-projects/'));
+      // Convert while the Activity has a live window surface. Doing this after
+      // the app backgrounds races Android surface teardown and PixelCopy.
+      await binding.convertFlutterSurfaceToImage();
       final session = gateway.session!;
       final revision = (await gateway.summary(session)).revision;
       expect(
@@ -384,10 +387,14 @@ void main() {
       expect(gateway.lastPreview!.playing, isTrue);
       expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
       await _until(tester, () => gateway.lastPreview?.playing == false);
+      await _until(
+        tester,
+        () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+      );
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
       expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
-      await binding.convertFlutterSurfaceToImage();
+      await _settleRecreatedSurface(tester);
       final backgroundPixels = await _redTexture(
         tester,
         binding,
@@ -700,6 +707,46 @@ void main() {
       final providerStats = await _control('status');
       expect(providerStats['providerOpens'], greaterThan(0));
       expect(tester.takeException(), isNull);
+      // Leave an unsaved, valid project change in the app-private working copy
+      // and persist it using the same recovery checkpoint API the shell uses.
+      // The host runner force-stops this process after the drive completes.
+      final recoveryGateway = RustProjectGateway();
+      final recoverySession = await recoveryGateway.openProject(
+        gateway.openedPath!,
+      );
+      final recoveryBase = await recoveryGateway.summary(recoverySession);
+      expect(
+        (await recoveryGateway.rename(
+          recoverySession,
+          recoveryBase,
+          'Process recovery acceptance',
+        )).succeeded,
+        isTrue,
+      );
+      expect(
+        (await recoveryGateway.autosaveCheckpoint(recoverySession)).succeeded,
+        isTrue,
+      );
+      final recoveryPath = gateway.openedPath!;
+      final recoveryBeforeClose = await recoveryGateway.inspectRecovery(
+        recoveryPath,
+      );
+      expect(recoveryBeforeClose.kind, ProjectRecoveryKind.candidate);
+      expect(recoveryBeforeClose.recoveryName, 'Process recovery acceptance');
+      await recoveryGateway.close(recoverySession, discardUnsaved: true);
+      final recoveryAfterClose = await recoveryGateway.inspectRecovery(
+        recoveryPath,
+      );
+      expect(
+        recoveryAfterClose.kind,
+        ProjectRecoveryKind.candidate,
+        reason: 'Closing the live session must preserve its recovery sidecar.',
+      );
+      expect(
+        recoveryAfterClose.recoveryRevision,
+        recoveryBeforeClose.recoveryRevision,
+      );
+      debugPrint('ANDROID_SAF_RECOVERY_CHECKPOINT_READY');
       final captures =
           (binding.reportData?['screenshots'] as List?) ?? const [];
       expect(
@@ -740,6 +787,7 @@ void main() {
               'mobileMediaLibrarySheet',
               'mobileSelectedClipInspectorSheet',
               'androidSafExportToDocumentsUi',
+              'recoveryCheckpointPersistedBeforeProcessStop',
             ])
               name: true,
           },
@@ -758,6 +806,10 @@ void main() {
           'finalResources': finalResources,
           'providerOpens': providerStats['providerOpens'],
           'finalOsMediaFds': _providerFds(),
+          'recoveryName': recoveryBeforeClose.recoveryName,
+          'recoveryBaseRevision': recoveryBeforeClose.baseRevision.toString(),
+          'recoveryRevision': recoveryBeforeClose.recoveryRevision.toString(),
+          'recoveryKindAfterClose': recoveryAfterClose.kind.name,
           'uiPlayMicros': gateway.playMicros,
           'sameSourceRegistrations': [registeredBefore, registeredAfter],
           'sameSourceProviderOpens': [opensBefore, opensAfter],

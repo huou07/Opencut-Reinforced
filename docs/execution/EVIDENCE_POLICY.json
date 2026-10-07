@@ -329,6 +329,175 @@
           "step_name": "Verify Android SAF preview user journey and resource bounds"
         }
       ]
+    },
+    "9E": {
+      "STATIC": [
+        {
+          "gate_id": "repository_hygiene",
+          "job_name": "Repository hygiene",
+          "step_name": "Run repository checks"
+        }
+      ],
+      "UNIT": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Rust checks",
+          "step_name": "Run Rust tests"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Flutter static and widget checks",
+          "step_name": "Run Flutter widget tests"
+        }
+      ],
+      "INTEGRATION": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify FFmpeg runtime and Flutter Rust bridge on x86_64 emulator"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        }
+      ],
+      "NATIVE_RUNTIME": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify FFmpeg runtime and Flutter Rust bridge on x86_64 emulator"
+        }
+      ],
+      "PACKAGED_RUNTIME": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "macOS native build and bridge smoke",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Windows native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        }
+      ],
+      "USER_JOURNEY": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "macOS native build and bridge smoke",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Windows native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        }
+      ],
+      "CLEAN_ENVIRONMENT": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "macOS native build and bridge smoke",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Windows native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        }
+      ],
+      "PERSISTENCE_RELAUNCH": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "macOS native build and bridge smoke",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Windows native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        }
+      ],
+      "PERFORMANCE": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Measure packaged decoder sessions"
+        }
+      ],
+      "RESOURCE_STRESS": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Measure packaged decoder sessions"
+        }
+      ],
+      "CROSS_PLATFORM": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "macOS native build and bridge smoke",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Linux native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        },
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Windows native build",
+          "step_name": "Verify packaged product journey in clean environment"
+        }
+      ]
     }
   }
 }

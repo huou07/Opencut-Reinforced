@@ -1395,6 +1395,7 @@ jobs:
             "--dart-define=OR_CLI_BOOTSTRAP_JSON=$OR_CLI_BOOTSTRAP_JSON"
           build_case_apk surface integration_test/android_preview_surface_test.dart
           build_case_apk saf integration_test/android_saf_preview_test.dart
+          build_case_apk saf-recovery integration_test/android_saf_recovery_test.dart
           cd "$GITHUB_WORKSPACE/apps/or_app/android"
           ./gradlew --stop
           cd "$GITHUB_WORKSPACE/apps/or_app"
@@ -1456,6 +1457,7 @@ jobs:
         timeout-minutes: 30
         env:
           OR_ANDROID_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-acceptance
+          OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-recovery-acceptance
           OR_ANDROID_SAF_FLOW: both
         run: |
           set -euo pipefail
@@ -1466,14 +1468,16 @@ jobs:
           test -f "$fixture_apk"
           adb -s emulator-5554 install "$fixture_apk"
           mkdir -p "$OR_ANDROID_ACCEPTANCE_OUTPUT"
+          mkdir -p "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT"
           # Built with the emulator step above; this step reuses that exact APK.
           # The guest is fresh here: the SAF journey is the real product proof and
           # must not inherit a wedged emulator from earlier cases.
           case_apks="$RUNNER_TEMP/android-case-apks"
           test -s "$case_apks/saf.apk"
+          test -s "$case_apks/saf-recovery.apk"
           bash "$GITHUB_WORKSPACE/scripts/run-android-preview-check.sh" saf \
             integration_test/android_saf_preview_test.dart test_driver/android_saf_preview.dart \
-            "$case_apks/saf.apk"
+            "$case_apks/saf.apk" "$case_apks/saf-recovery.apk"
           test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for open through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for export through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
@@ -1483,6 +1487,23 @@ jobs:
           python3 scripts/verify_android_saf_preview.py "$OR_ANDROID_ACCEPTANCE_OUTPUT/report.json" \
             | tee "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt"
           cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/verify_android_saf_recovery.py \
+            --process "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" \
+            --prepared "$OR_ANDROID_ACCEPTANCE_OUTPUT/report.json" \
+            --recovered "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/report.json" \
+            | tee "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/verification.txt"
+          cat "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/verification.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve Android SAF process recovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-saf-process-recovery
+          path: |
+            ${{ runner.temp }}/android-saf-acceptance/**
+            ${{ runner.temp }}/android-saf-recovery-acceptance/**
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Summarize Android disconnect classifications
         if: always()
