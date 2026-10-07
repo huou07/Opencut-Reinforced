@@ -3,7 +3,7 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart'
-    show IconButton, PopupMenuButton, SnackBar, TextButton, Widget;
+    show IconButton, OutlinedButton, PopupMenuButton, SnackBar, TextButton, Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -251,8 +251,10 @@ Future<void> _preserveProjectAcrossFailures(
     'project reopen before failure checks',
   );
 
+  final importButton = find.byKey(const ValueKey('media-import'));
   picker.nextMediaPath = picker.mediaPaths[2];
-  await tester.tap(find.byKey(const ValueKey('media-import')));
+  await _waitForImportButton(tester, importButton);
+  await tester.tap(importButton);
   await _pumpUntil(
     tester,
     () => find.text('media source path was not found').evaluate().isNotEmpty,
@@ -261,7 +263,8 @@ Future<void> _preserveProjectAcrossFailures(
   expect(find.text('tiny.mkv'), findsWidgets);
 
   picker.nextMediaPath = picker.mediaPaths[0];
-  await tester.tap(find.byKey(const ValueKey('media-import')));
+  await _waitForImportButton(tester, importButton);
+  await tester.tap(importButton);
   await _pumpUntil(
     tester,
     () => find
@@ -351,6 +354,17 @@ Future<void> _pumpUntil(
     await tester.pump(const Duration(milliseconds: 100));
   }
   fail('Timed out waiting for $operation.');
+}
+
+Future<void> _waitForImportButton(WidgetTester tester, Finder button) async {
+  await tester.ensureVisible(button);
+  await _pumpUntil(
+    tester,
+    () =>
+        tester.widget<OutlinedButton>(button).onPressed != null &&
+        button.hitTestable().evaluate().isNotEmpty,
+    'media import control readiness',
+  );
 }
 
 class _JourneyPicker implements ProjectFilePicker {
