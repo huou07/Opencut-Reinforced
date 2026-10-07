@@ -9,7 +9,8 @@ def report():
     return {'androidSafAcceptance': {
         'checks': dict.fromkeys(CHECKS, True), 'providerUid': 10001, 'appUid': 10002,
         'sourceUri': 'content://dev.opencut.saffixture.documents/document/late65',
-        'visiblePixelRgba': [254, 0, 0, 255], 'recoveredPixelRgba': [254, 0, 0, 255],
+        'visiblePixelRgba': [254, 0, 0, 255], 'backgroundResumePixelRgba': [254, 0, 0, 255],
+        'recoveredPixelRgba': [254, 0, 0, 255],
         'recreatedPixelRgba': [254, 0, 0, 255],
         'providerOpens': 4, 'uiPlayMicros': 100,
         'sameSourceRegistrations': [1, 1], 'sameSourceProviderOpens': [2, 2],
@@ -29,6 +30,7 @@ class ReportTest(unittest.TestCase):
         for mutate in (lambda data: data['checks'].pop('nativeDocumentsUiAndEditorControls'),
                        lambda data: data['checks'].pop('mobileSelectedClipInspectorSheet'),
                        lambda data: data['checks'].pop('androidSafExportToDocumentsUi'),
+                       lambda data: data['checks'].pop('foregroundBackgroundPlaybackPausesAndSurfaceRecovers'),
                        lambda data: data.update(providerUid=data['appUid'])):
             value = report()
             mutate(value['androidSafAcceptance'])
@@ -43,7 +45,8 @@ class ReportTest(unittest.TestCase):
             with self.assertRaises(ValueError): verify(changed)
 
     def test_black_texture_and_real_os_fd_leak_are_rejected(self):
-        for mutation in ({'visiblePixelRgba': [0, 0, 0, 255]}, {'finalOsMediaFds': 1}):
+        for mutation in ({'visiblePixelRgba': [0, 0, 0, 255]}, {'backgroundResumePixelRgba': [0, 0, 0, 255]},
+                         {'finalOsMediaFds': 1}):
             value = report()
             value['androidSafAcceptance'].update(mutation)
             with self.assertRaises(ValueError): verify(value)

@@ -210,8 +210,9 @@ today.
   resource-aware fallback, and mobile-native editing UX are accepted only in
   Phase 9 hosted/device checks.
 - Production mobile preview, transport, timeline visibility, horizontal scroll,
-  touch scrubbing, and tool sheets are future requirements; prototype behavior
-  is not evidence.
+  touch scrubbing, and tool sheets require the real Android product journey;
+  prototype behavior is not evidence. Playback pauses when the app leaves the
+  foreground and remains paused when it resumes.
 - Phase 10–16 requirements follow their locked phase documents for captions,
   AI, templates, dubbing, advanced editing, generation, community packaging,
   plugins, and interchange.

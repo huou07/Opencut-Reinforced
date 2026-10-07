@@ -374,6 +374,25 @@ void main() {
         opensBefore,
         reason: 'Unchanged active-source seeks must reuse the duplicated capability.',
       );
+
+      final playCallsBeforeBackground = gateway.playCalls;
+      await tester.tap(find.byKey(const ValueKey('preview-play')));
+      await _until(
+        tester,
+        () => gateway.playCalls == playCallsBeforeBackground + 1,
+      );
+      expect(gateway.lastPreview!.playing, isTrue);
+      expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
+      await _until(tester, () => gateway.lastPreview?.playing == false);
+      expect(_providerFds(), 1);
+      expect((await gateway.summary(session)).revision, revision);
+      expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+      final backgroundPixels = await _redTexture(
+        tester,
+        binding,
+        'saf-background-resumed-texture',
+      );
+
       await binding.convertFlutterSurfaceToImage();
       final pixels = await _redTexture(tester, binding, 'saf-editor-texture');
 
@@ -687,6 +706,7 @@ void main() {
         captures.map((entry) => (entry as Map)['screenshotName']).toSet(),
         {
           'saf-editor-texture',
+          'saf-background-resumed-texture',
           'saf-editor-permission-recovered',
           'saf-surface-recreated',
         },
@@ -702,6 +722,7 @@ void main() {
             for (final name in [
               'nativeDocumentsUiAndEditorControls',
               'visibleTexturePixels',
+              'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
               'externalUidPermissionEnforcement',
               'activeLateSourceBeyond64',
               'unchangedProjectRevision',
@@ -729,6 +750,7 @@ void main() {
           'exportBytes': exported['exportBytes'],
           'exportValidMatroska': exported['validMatroska'],
           'visiblePixelRgba': pixels,
+          'backgroundResumePixelRgba': backgroundPixels,
           'recoveredPixelRgba': recoveredPixels,
           'recreatedPixelRgba': recreatedPixels,
           'journeyResources': journey,

@@ -2955,6 +2955,18 @@ void main() {
       isNotNull,
     );
 
+    await tester.tap(find.byKey(const ValueKey('preview-play')));
+    await tester.pumpAndSettle();
+    expect(gateway.preview.playing, isTrue);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    expect(gateway.preview.playing, isFalse);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(gateway.preview.playing, isFalse);
+
     await tester.tap(find.byKey(const ValueKey('preview-next-frame')));
     await tester.pumpAndSettle();
     expect(gateway.previewStepCalls, 1);

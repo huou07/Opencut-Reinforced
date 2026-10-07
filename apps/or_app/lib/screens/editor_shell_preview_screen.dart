@@ -1476,7 +1476,8 @@ class _ViewerPanel extends StatefulWidget {
   State<_ViewerPanel> createState() => _ViewerPanelState();
 }
 
-class _ViewerPanelState extends State<_ViewerPanel> {
+class _ViewerPanelState extends State<_ViewerPanel>
+    with WidgetsBindingObserver {
   static const _rateChoices = [
     _FrameRateChoice(
       rate: ProjectRationalRate(24000, 1001),
@@ -1498,13 +1499,30 @@ class _ViewerPanelState extends State<_ViewerPanel> {
   int _epoch = 0;
   bool _busy = false;
   bool _tickInFlight = false;
+  bool _applicationResumed = true;
+  bool _lifecyclePauseAttempted = false;
 
   bool get _connected => widget.gateway != null && widget.session != null;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_initialize());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _applicationResumed = true;
+      _lifecyclePauseAttempted = false;
+      return;
+    }
+    if (_applicationResumed) _lifecyclePauseAttempted = false;
+    _applicationResumed = false;
+    _timer?.cancel();
+    _timer = null;
+    unawaited(_pauseWhileInactive());
   }
 
   @override
@@ -1524,6 +1542,7 @@ class _ViewerPanelState extends State<_ViewerPanel> {
   @override
   void dispose() {
     _epoch++;
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
@@ -1615,7 +1634,7 @@ class _ViewerPanelState extends State<_ViewerPanel> {
   }
 
   void _startTimer(int epoch) {
-    if (_timer != null) return;
+    if (_timer != null || !_applicationResumed) return;
     _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!_isCurrent(epoch) || _tickInFlight || _busy) return;
       unawaited(_tick(epoch));
@@ -1633,7 +1652,19 @@ class _ViewerPanelState extends State<_ViewerPanel> {
       if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
     } finally {
       _tickInFlight = false;
+      if (!_applicationResumed) unawaited(_pauseWhileInactive());
     }
+  }
+
+  Future<void> _pauseWhileInactive() async {
+    if (_applicationResumed ||
+        _lifecyclePauseAttempted ||
+        _preview?.playing != true) {
+      return;
+    }
+    if (_busy || _tickInFlight) return;
+    _lifecyclePauseAttempted = true;
+    await _run((gateway, session) => gateway.previewPause(session));
   }
 
   Future<void> _run(
@@ -1656,7 +1687,10 @@ class _ViewerPanelState extends State<_ViewerPanel> {
     } catch (error) {
       if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
     } finally {
-      if (_isCurrent(epoch)) setState(() => _busy = false);
+      if (_isCurrent(epoch)) {
+        setState(() => _busy = false);
+        if (!_applicationResumed) unawaited(_pauseWhileInactive());
+      }
     }
   }
 
