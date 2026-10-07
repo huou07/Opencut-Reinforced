@@ -33,6 +33,29 @@ env:
     --enable-muxer=matroska
     --enable-decoder=ffv1,pcm_s16le
     --enable-encoder=ffv1,pcm_s16le
+  # Desktop-only additions for the packaged 9B1 media helpers. These arrive
+  # after the common arguments so the program, filter-library, and component
+  # enables win over the minimal defaults, and list options accumulate. Every
+  # addition except the system zlib compression library is a native
+  # dependency-free FFmpeg component under the same LGPL-2.1-or-later posture;
+  # see the 9B1 review in docs/SECURITY_LICENSING.md. Android and the Rust link
+  # probe keep the minimal library-only build.
+  FFMPEG_HELPER_CONFIGURE_ARGS: >-
+    --enable-ffmpeg
+    --enable-ffprobe
+    --enable-avfilter
+    --enable-zlib
+    --enable-protocol=pipe
+    --enable-encoder=png
+    --enable-encoder=mpeg4
+    --enable-muxer=image2
+    --enable-muxer=image2pipe
+    --enable-filter=scale
+    --enable-filter=setpts
+    --enable-filter=format
+    --enable-filter=aformat
+    --enable-filter=aresample
+    --enable-filter=showwavespic
 
 jobs:
   rust:
@@ -253,10 +276,26 @@ jobs:
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}")
+          read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}" "${helper_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          # The packaged 9B1 helpers must run and carry exactly the reviewed
+          # capabilities: Matroska probe, FFV1/PCM decode, PNG thumbnails,
+          # showwavespic waveforms, and mpeg4 proxies. DYLD_LIBRARY_PATH covers
+          # the build prefix; app-relative loading is proven at packaging time.
+          test -x "$prefix/bin/ffmpeg"
+          test -x "$prefix/bin/ffprobe"
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffprobe" -hide_banner -version
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -buildconf | grep -vq "enable-gpl"
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -encoders | grep -q " png "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -encoders | grep -q " mpeg4 "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -muxers | grep -q " image2 "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -muxers | grep -q " image2pipe "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} showwavespic "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} scale "
+          DYLD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} setpts "
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           mkdir -p "$HOME/.cargo"
           # Cargo [env] reaches build.rs when Flutter's native-assets hook drops step env.
@@ -284,11 +323,13 @@ jobs:
             echo "Packaging modifications: copies shared libraries beside the desktop media probe and into the app Frameworks directory, and adds @loader_path runtime paths; preserved install prefix remains unchanged"
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled protocols: file"
+            echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
+            echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: ffv1, pcm_s16le"
-            echo "Enabled muxers: matroska"
+            echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
+            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(clang --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -460,7 +501,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang cmake libclang-dev libasound2-dev ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev
+          sudo apt-get install -y build-essential clang cmake libclang-dev libasound2-dev ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -494,10 +535,25 @@ jobs:
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix" "${common_configure_args[@]}")
+          read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          # The packaged 9B1 helpers must run and carry exactly the reviewed
+          # capabilities; LD_LIBRARY_PATH covers the build prefix and
+          # app-relative loading is proven at packaging time.
+          test -x "$prefix/bin/ffmpeg"
+          test -x "$prefix/bin/ffprobe"
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffprobe" -hide_banner -version
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -buildconf | grep -vq "enable-gpl"
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -encoders | grep -q " png "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -encoders | grep -q " mpeg4 "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -muxers | grep -q " image2 "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -muxers | grep -q " image2pipe "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} showwavespic "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} scale "
+          LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/ffmpeg" -hide_banner -filters | grep -qE "^ [A-Z.]{3} setpts "
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           mkdir -p "$HOME/.cargo"
           # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
@@ -529,11 +585,13 @@ jobs:
             echo 'Packaging modifications: copied shared libraries have ELF RUNPATH set to $ORIGIN; preserved install prefix remains unchanged'
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled protocols: file"
+            echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
+            echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: ffv1, pcm_s16le"
-            echo "Enabled muxers: matroska"
+            echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
+            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Compiler: $(cc --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -644,7 +702,7 @@ jobs:
           msystem: CLANG64
           path-type: inherit
           update: true
-          install: make pkgconf
+          install: make pkgconf mingw-w64-clang-x86_64-zlib
           pacboy: clang:p
 
       - name: Run project storage tests
@@ -702,10 +760,25 @@ jobs:
           tar -xJf "$archive" -C "$temp"
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}")
+          read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}" "${helper_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
           make install
+          # The packaged 9B1 helpers must run and carry exactly the reviewed
+          # capabilities; the install bin directory holds the helper DLLs, and
+          # app-side loading is proven at packaging time.
+          test -x "$prefix/bin/ffmpeg.exe"
+          test -x "$prefix/bin/ffprobe.exe"
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffprobe.exe" -hide_banner -version
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -buildconf | grep -vq "enable-gpl"
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -encoders | grep -q " png "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -encoders | grep -q " mpeg4 "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -muxers | grep -q " image2 "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -muxers | grep -q " image2pipe "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -filters | grep -qE "^ [A-Z.]{3} showwavespic "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -filters | grep -qE "^ [A-Z.]{3} scale "
+          PATH="$prefix/bin:$PATH" "$prefix/bin/ffmpeg.exe" -hide_banner -filters | grep -qE "^ [A-Z.]{3} setpts "
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           for library in avcodec avformat avutil swresample swscale; do
             test -f "$prefix/lib/pkgconfig/lib$library.pc"
@@ -747,11 +820,13 @@ jobs:
             echo "Packaging modifications: exposes MSVC import-library aliases and copies DLLs beside the desktop media probe; preserved install prefix remains otherwise unchanged"
             echo "Configure arguments: ${configure_args[*]}"
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
-            echo "Enabled protocols: file"
+            echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
+            echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska"
             echo "Enabled decoders: ffv1, pcm_s16le"
-            echo "Enabled encoders: ffv1, pcm_s16le"
-            echo "Enabled muxers: matroska"
+            echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
+            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
             echo "Packaging modifications: versionless MSVC import-library aliases are copied for Rust linking; upstream import libraries and DLLs are retained"
             echo "MSVC import library names exposed to Rust: avcodec.lib, avformat.lib, avutil.lib, swresample.lib, swscale.lib"

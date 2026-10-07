@@ -133,14 +133,16 @@ typed errors are unchanged; only which executable runs is now packaged-first.
 `or_core` still contains no FFmpeg binding: it resolves a helper path and
 spawns it with direct process arguments and no shell, exactly as before.
 
-Helper build additions beyond the 7C production prefix are all native,
-dependency-free FFmpeg components: the `ffmpeg`/`ffprobe` programs, the `png`
-and `mpeg4` encoders, the `image2` muxer, and the `scale`, `format`, `aformat`,
-`aresample`, and `showwavespic` filters. No GPL, version3, nonfree, or external
-codec library is enabled; the LGPL-2.1-or-later posture, source archive,
-configure record, license notices, and library-replacement terms are unchanged.
-Android is unaffected: it has no artifact service and keeps the linked-only
-runtime. This review does not determine patent or codec licensing obligations;
+Helper build additions beyond the 7C production prefix are the `ffmpeg`/`ffprobe`
+programs, the `pipe` protocol for piped artifact output, the `png` and `mpeg4` encoders, the `image2` and `image2pipe` muxers, and the `setpts`,
+`scale`, `format`, `aformat`, `aresample`, and `showwavespic` filters, plus the system
+zlib compression library the PNG encoder requires. No GPL, version3, nonfree,
+or external codec library is enabled; the LGPL-2.1-or-later posture, source
+archive, configure record, license notices, and library-replacement terms are
+unchanged. macOS and Linux use their system zlib with no extra bundled file;
+the Windows package stages the MSYS2 zlib DLL beside the helpers with its
+license text. Android is unaffected: it has no artifact service and keeps the
+linked-only runtime. This review does not determine patent or codec licensing obligations;
 the shipped codec set stays FFV1/PCM S16LE plus proxy/display encodings, and
 wider capture/delivery codecs still require the separate legal, platform, and
 build-configuration review.
