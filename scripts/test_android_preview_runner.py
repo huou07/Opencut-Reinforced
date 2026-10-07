@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""The SAF runner fails promptly when its native picker selector fails."""
+
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class AndroidPreviewRunnerTests(unittest.TestCase):
+    def test_picker_failure_stops_a_stalled_flutter_drive(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="or-android-runner-test-") as temp:
+            root = Path(temp)
+            binaries = root / "bin"
+            binaries.mkdir()
+            runner_temp = root / "runner-temp"
+            runner_temp.mkdir()
+            output = root / "acceptance"
+            output.mkdir()
+            events = root / "events.log"
+            emulator_pid = runner_temp / "android-emulator.pid"
+            emulator_pid.write_text(f"{os.getpid()}\n")
+
+            adb = binaries / "adb"
+            adb.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo adb:"$*" >> "{events}"\n'
+                "if [[ \"$*\" == *' logcat -b '* ]]; then sleep 60; exit; fi\n"
+                "if [[ \"$*\" == *' shell echo or-ready'* ]]; then echo or-ready; exit; fi\n"
+                "if [[ \"$*\" == *' get-state'* ]]; then echo device; exit; fi\n"
+                "exit 0\n"
+            )
+            flutter = binaries / "flutter"
+            flutter.write_text(f"#!/usr/bin/env bash\necho flutter >> {events}\nexec sleep 60\n")
+            timeout = binaries / "timeout"
+            timeout.write_text("#!/usr/bin/env bash\nshift\nexec \"$@\"\n")
+            python = binaries / "python3"
+            python.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo python:"$*" >> "{events}"\n'
+                "case \"$1\" in\n"
+                "  */select_android_saf_document.py) echo 'picker diagnostic'; exit 7;;\n"
+                "  *) exit 0;;\n"
+                "esac\n"
+            )
+            for executable in (adb, flutter, timeout, python):
+                executable.chmod(0o755)
+
+            env = os.environ | {
+                "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
+                "RUNNER_TEMP": str(runner_temp),
+                "GITHUB_WORKSPACE": str(ROOT),
+                "OR_ANDROID_ACCEPTANCE_OUTPUT": str(output),
+                "OR_ANDROID_SAF_FLOW": "export",
+            }
+            try:
+                result = subprocess.run(
+                    [
+                        "bash",
+                        str(ROOT / "scripts/run-android-preview-check.sh"),
+                        "saf",
+                        "integration_test.dart",
+                        "driver.dart",
+                        "fixture.apk",
+                    ],
+                    cwd=ROOT,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    timeout=20,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as error:
+                self.fail(
+                    f"runner did not stop promptly: {error.stdout!r} {error.stderr!r}; "
+                    f"events={events.read_text() if events.exists() else 'none'}"
+                )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("picker diagnostic", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
