@@ -1384,12 +1384,103 @@ def _resume_baseline(
             ):
                 raise SupervisorError("resume changed AGENTS.md outside the additive evidence rule")
             protected.remove("AGENTS.md")
+        if "scripts/test_execution_infra.py" in protected:
+            validate_resume_test_additions(
+                _git_file_bytes(repo_root, baseline, "scripts/test_execution_infra.py"),
+                _git_file_bytes(repo_root, resume_sha, "scripts/test_execution_infra.py"),
+            )
+            protected.remove("scripts/test_execution_infra.py")
     if protected:
         raise SupervisorError(
             "resume implementation changed protected execution-control files: "
             + ", ".join(protected)
         )
     return baseline
+
+
+def validate_resume_test_additions(before: bytes, after: bytes) -> None:
+    """Allow new resume-guard tests while preserving every existing test exactly."""
+
+    try:
+        old_tree = ast.parse(before.decode("utf-8"))
+        new_tree = ast.parse(after.decode("utf-8"))
+    except (UnicodeDecodeError, SyntaxError) as exc:
+        raise SupervisorError("resume test extension is not valid Python") from exc
+
+    old_classes = {
+        node.name: node for node in old_tree.body if isinstance(node, ast.ClassDef)
+    }
+    new_classes = {
+        node.name: node for node in new_tree.body if isinstance(node, ast.ClassDef)
+    }
+    if set(old_classes) != set(new_classes):
+        raise SupervisorError("resume test extension changed test classes")
+
+    def module_nodes(tree: ast.Module) -> list[str]:
+        return [
+            ast.dump(node, include_attributes=False)
+            for node in tree.body
+            if not isinstance(node, ast.ClassDef)
+        ]
+
+    if module_nodes(old_tree) != module_nodes(new_tree):
+        raise SupervisorError("resume test extension changed module-level guards")
+
+    additions = 0
+    for name, old_class in old_classes.items():
+        new_class = new_classes[name]
+        old_header, new_header = copy.copy(old_class), copy.copy(new_class)
+        old_header.body = []
+        new_header.body = []
+        if ast.dump(old_header, include_attributes=False) != ast.dump(
+            new_header, include_attributes=False
+        ):
+            raise SupervisorError("resume test extension changed a test class contract")
+
+        old_methods = {
+            node.name: node
+            for node in old_class.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        new_methods = {
+            node.name: node
+            for node in new_class.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        old_other_nodes = [
+            ast.dump(node, include_attributes=False)
+            for node in old_class.body
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        new_other_nodes = [
+            ast.dump(node, include_attributes=False)
+            for node in new_class.body
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        if old_other_nodes != new_other_nodes:
+            raise SupervisorError("resume test extension changed existing class guards")
+        if not set(old_methods) <= set(new_methods):
+            raise SupervisorError("resume test extension removed an existing test")
+        for method_name, old_method in old_methods.items():
+            if ast.dump(old_method, include_attributes=False) != ast.dump(
+                new_methods[method_name], include_attributes=False
+            ):
+                raise SupervisorError("resume test extension changed an existing test")
+        added_methods = set(new_methods) - set(old_methods)
+        if any(not method_name.startswith("test_") for method_name in added_methods):
+            raise SupervisorError("resume test extension may only add test methods")
+        if added_methods and not any(
+            isinstance(base, ast.Attribute)
+            and base.attr == "TestCase"
+            and isinstance(base.value, ast.Name)
+            and base.value.id == "unittest"
+            for base in old_class.bases
+        ):
+            raise SupervisorError("resume test methods must be added to unittest.TestCase classes")
+        additions += len(added_methods)
+
+    if additions == 0:
+        raise SupervisorError("resume test extension did not add a test method")
 
 
 def _control_baseline(repo_root: Path, revision: str) -> str:

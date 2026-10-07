@@ -2094,6 +2094,47 @@ def allow_additive_evidence_policy_change(before, root, plan, selected):
         with self.assertRaisesRegex(agent_supervisor.SupervisorError, "existing control validator"):
             agent_supervisor.validate_resume_supervisor_extension(before, weakened_guard)
 
+    def test_resume_may_only_add_test_methods_to_protected_test_file(self) -> None:
+        before = b'''\
+import unittest
+
+class GuardTests(unittest.TestCase):
+    def test_existing_guard(self):
+        self.assertTrue(True)
+'''
+        added_test = before + b'''\
+    def test_new_guard(self):
+        self.assertFalse(False)
+'''
+        agent_supervisor.validate_resume_test_additions(before, added_test)
+
+        weakened_test = added_test.replace(
+            b"self.assertTrue(True)", b"pass"
+        )
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "changed an existing test"):
+            agent_supervisor.validate_resume_test_additions(before, weakened_test)
+
+        added_helper = added_test + b'''\
+
+def helper():
+    pass
+'''
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "module-level guards"):
+            agent_supervisor.validate_resume_test_additions(before, added_helper)
+
+    def test_resume_requires_new_methods_to_live_in_testcase_classes(self) -> None:
+        before = b'''\
+class GuardTests:
+    def existing(self):
+        pass
+'''
+        after = before + b'''\
+    def test_new_guard(self):
+        pass
+'''
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "unittest.TestCase"):
+            agent_supervisor.validate_resume_test_additions(before, after)
+
     def test_platform_path_filter_only_skips_metadata_changes(self) -> None:
         self.assertFalse(
             execution_evidence.platform_verification_runs_for_push(

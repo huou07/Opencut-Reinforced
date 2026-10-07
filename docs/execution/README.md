@@ -49,6 +49,10 @@ named evidence proof bindings for selected requirements while preserving all
 existing policy fields and bindings; the supervisor validates each addition.
 Historical resume also checks that any candidate-carried additive evidence
 hook leaves existing authorization and verification logic unchanged.
+Changes to `scripts/test_execution_infra.py` are accepted on historical resume
+only when AST validation proves that module-level guards, test classes, and all
+existing test methods remain unchanged and the candidate only adds new test
+methods. The exact candidate's hosted hygiene gate still executes those tests.
 
 The supervisor is the only authority that can mark requirements `DONE`. A
 single coherent implementation may cover multiple plan IDs. After a runner
