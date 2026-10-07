@@ -1456,6 +1456,7 @@ jobs:
         timeout-minutes: 30
         env:
           OR_ANDROID_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-acceptance
+          OR_ANDROID_SAF_FLOW: both
         run: |
           set -euo pipefail
           export OR_AVD_NAME=or-api36-x86_64
@@ -1474,6 +1475,8 @@ jobs:
             integration_test/android_saf_preview_test.dart test_driver/android_saf_preview.dart \
             "$case_apks/saf.apk"
           test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
+          grep -Fq 'for open through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
+          grep -Fq 'for export through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           for image in saf-editor-texture saf-editor-permission-recovered saf-surface-recreated; do
             test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/$image.png"
           done

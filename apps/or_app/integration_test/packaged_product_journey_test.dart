@@ -414,6 +414,15 @@ class _JourneyPicker implements ProjectFilePicker {
       nextExportPath;
 
   @override
+  Future<void> publishExportPath(String path) async {}
+
+  @override
+  Future<void> discardExportPath(String path) async {}
+
+  @override
+  Future<void> cancelExportPublish(String path) async {}
+
+  @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
       null;
 }

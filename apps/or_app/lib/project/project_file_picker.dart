@@ -11,6 +11,9 @@ abstract interface class ProjectFilePicker {
   Future<String?> openMediaPath();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({required String suggestedName});
+  Future<void> publishExportPath(String path);
+  Future<void> discardExportPath(String path);
+  Future<void> cancelExportPublish(String path);
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path);
 }
 
@@ -83,6 +86,15 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<void> publishExportPath(String path) async {}
+
+  @override
+  Future<void> discardExportPath(String path) async {}
+
+  @override
+  Future<void> cancelExportPublish(String path) async {}
+
+  @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
       null;
 }
@@ -97,6 +109,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
 
   final MethodChannel _channel;
   final Map<String, String> _documentUrisByWorkingPath = {};
+  final Map<String, String> _exportUrisByWorkingPath = {};
 
   @override
   bool get isSupported => Platform.isAndroid;
@@ -105,7 +118,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   bool get supportsMediaImport => false;
 
   @override
-  bool get supportsExport => false;
+  bool get supportsExport => true;
 
   @override
   Future<String?> openProjectPath() => _selectProject('openProject');
@@ -152,7 +165,80 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   Future<String?> openMediaPath() async => null;
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async => null;
+  Future<String?> saveExportPath({required String suggestedName}) async {
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'createExport',
+        {'suggestedName': suggestedName},
+      );
+      if (response == null) return null;
+      final path = response['workingPath'];
+      final documentUri = response['documentUri'];
+      if (path is! String || documentUri is! String) {
+        throw const ProjectSafStorageException(
+          'The selected export location is invalid.',
+        );
+      }
+      final uri = Uri.tryParse(documentUri);
+      if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+        throw const ProjectSafStorageException(
+          'The selected export location is invalid.',
+        );
+      }
+      _exportUrisByWorkingPath[path] = documentUri;
+      return path;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android export storage is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<void> publishExportPath(String path) async {
+    final documentUri = _exportUrisByWorkingPath[path];
+    if (documentUri == null) {
+      throw const ProjectSafStorageException(
+        'The selected export location is no longer available.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>('publishExport', {
+        'workingPath': path,
+        'documentUri': documentUri,
+      });
+      _exportUrisByWorkingPath.remove(path);
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
+
+  @override
+  Future<void> discardExportPath(String path) async {
+    final documentUri = _exportUrisByWorkingPath.remove(path);
+    if (documentUri == null) return;
+    try {
+      await _channel.invokeMethod<void>('discardExport', {
+        'workingPath': path,
+        'documentUri': documentUri,
+      });
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
+
+  @override
+  Future<void> cancelExportPublish(String path) async {
+    try {
+      await _channel.invokeMethod<void>('cancelExportPublish', {
+        'workingPath': path,
+      });
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
 
   @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
@@ -181,12 +267,18 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   static ProjectSafStorageException _storageError(
     String code,
   ) => ProjectSafStorageException(switch (code) {
+    'EXPORT_CANCELLED' => 'Export cancelled',
+    'EXPORT_PERMISSION_REQUIRED' =>
+      'Access to the selected export location is unavailable.',
+    'EXPORT_SAVE_FAILED' =>
+      'The exported video could not be saved to the selected location.',
+    'EXPORT_BUSY' => 'The export is already being saved.',
     'PROJECT_NOT_EMPTY' => 'The selected document is not empty. Choose an empty document to create a project.',
     'PROJECT_ALREADY_MANAGED' => 'This document already has a project copy on this device. Open the project instead.',
     'EXTERNAL_PROJECT_CHANGED' =>
       'The external project changed outside OR. Its changes were preserved.',
     'PROJECT_SYNC_FAILED' => 'The project is saved on this device, but could not be synchronized to the selected document.',
-    _ => 'The selected project could not be opened or synchronized.',
+    _ => 'The selected project or export location is unavailable.',
   });
 }
 

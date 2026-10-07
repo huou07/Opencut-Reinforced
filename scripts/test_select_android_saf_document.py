@@ -53,15 +53,26 @@ DOCUMENT = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="Save" class="android.widget.Button"
+        package="com.android.documentsui" bounds="[900,700][1080,800]" />
+</hierarchy>
+"""
+
 
 class FakeAdb:
     """An `adb` that fails like a cold guest, then serves the real tree."""
 
-    def __init__(self, transient_dumps):
+    def __init__(self, transient_dumps, flow="open"):
         self.transient = transient_dumps
         self.tree_index = 0
         self.taps = []
-        self.trees = [DRAWER, PROVIDER, DOCUMENT]
+        self.trees = {
+            "open": [DRAWER, PROVIDER, DOCUMENT],
+            "export": [DRAWER, PROVIDER, SAVE],
+            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, SAVE],
+        }[flow]
 
     def check_output(self, args, timeout=None):
         command = args[3:]
@@ -85,15 +96,15 @@ class FakeAdb:
         raise AssertionError(f"unexpected adb call: {args}")
 
 
-def run(transient_dumps):
+def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
-        adb = FakeAdb(transient_dumps)
+        adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
-            selector.select("emulator-5554", guest, output)
+            selector.select("emulator-5554", guest, output, flow)
         return adb.taps, (output / "documents-ui-selection.txt").exists()
 
 
@@ -116,6 +127,16 @@ class SelectorTests(unittest.TestCase):
     def test_selection_marker_is_written(self):
         _, selected = run(transient_dumps=1)
         self.assertTrue(selected)
+
+    def test_export_uses_the_native_picker_and_save_action(self):
+        taps, selected = run(transient_dumps=1, flow="export")
+        self.assertTrue(selected)
+        self.assertEqual(len(taps), 3, f"expected drawer, provider, Save taps; got {taps}")
+
+    def test_both_export_and_import_use_documentsui(self):
+        taps, selected = run(transient_dumps=0, flow="both")
+        self.assertTrue(selected)
+        self.assertEqual(len(taps), 6, f"expected two native picker flows; got {taps}")
 
 
 if __name__ == "__main__":

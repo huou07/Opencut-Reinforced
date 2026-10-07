@@ -1,6 +1,7 @@
 package io.github.huou07.or_app
 
 import android.content.Intent
+import android.provider.DocumentsContract
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -17,7 +18,9 @@ import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val SAF_CHANNEL = "io.github.huou07.or_app/saf_storage"
 private const val SAF_PICK_REQUEST = 0x4f52
@@ -34,6 +37,7 @@ class MainActivity : FlutterActivity() {
 
     private val worker = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val exportTransfers = ConcurrentHashMap<String, AtomicBoolean>()
     private var pendingPick: PendingPick? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -76,6 +80,24 @@ class MainActivity : FlutterActivity() {
                     suggestedName,
                 )
             }
+            "createExport" -> {
+                val suggestedName = call.argument<String>("suggestedName")
+                    ?.substringAfterLast('/')
+                    ?.substringAfterLast('\\')
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { if (it.endsWith(".mkv", ignoreCase = true)) it else "$it.mkv" }
+                    ?: "export.mkv"
+                launchPicker(
+                    Intent.ACTION_CREATE_DOCUMENT,
+                    "createExport",
+                    result,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    suggestedName,
+                    requiredModes = Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    mimeType = "video/x-matroska",
+                )
+            }
             "synchronizeProject" -> {
                 val workingPath = call.argument<String>("workingPath")
                 val documentUri = call.argument<String>("documentUri")
@@ -84,6 +106,46 @@ class MainActivity : FlutterActivity() {
                 } else {
                     runIo(result, "PROJECT_SYNC_FAILED") {
                         synchronizeProject(workingPath, documentUri)
+                    }
+                }
+            }
+            "publishExport" -> {
+                val workingPath = call.argument<String>("workingPath")
+                val documentUri = call.argument<String>("documentUri")
+                if (workingPath == null || documentUri == null) {
+                    result.error("EXPORT_SAVE_FAILED", "The selected export location is invalid.", null)
+                } else {
+                    val cancelled = AtomicBoolean(false)
+                    if (exportTransfers.putIfAbsent(workingPath, cancelled) != null) {
+                        result.error("EXPORT_BUSY", "The export is already being saved.", null)
+                    } else {
+                        runIo(result, "EXPORT_SAVE_FAILED") {
+                            try {
+                                publishExport(workingPath, documentUri, cancelled)
+                            } finally {
+                                exportTransfers.remove(workingPath, cancelled)
+                            }
+                        }
+                    }
+                }
+            }
+            "cancelExportPublish" -> {
+                val workingPath = call.argument<String>("workingPath")
+                if (workingPath == null) {
+                    result.error("EXPORT_CANCEL_FAILED", "The export cannot be cancelled.", null)
+                } else {
+                    result.success(exportTransfers[workingPath]?.let { it.set(true); true } ?: false)
+                }
+            }
+            "discardExport" -> {
+                val workingPath = call.argument<String>("workingPath")
+                val documentUri = call.argument<String>("documentUri")
+                if (workingPath == null || documentUri == null) {
+                    result.error("EXPORT_CLEANUP_FAILED", "The export cannot be cleared.", null)
+                } else {
+                    exportTransfers[workingPath]?.set(true)
+                    runIo(result, "EXPORT_CLEANUP_FAILED") {
+                        discardExport(workingPath, documentUri)
                     }
                 }
             }
@@ -98,6 +160,7 @@ class MainActivity : FlutterActivity() {
         modes: Int,
         suggestedName: String? = null,
         requiredModes: Int = modes,
+        mimeType: String = "*/*",
     ) {
         if (pendingPick != null) {
             result.error("PROJECT_PICKER_BUSY", "A document request is already open.", null)
@@ -105,10 +168,11 @@ class MainActivity : FlutterActivity() {
         }
         val intent = Intent(action).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
+            type = mimeType
             putExtra(
                 Intent.EXTRA_MIME_TYPES,
-                arrayOf("application/octet-stream", "application/json"),
+                if (mimeType == "*/*") arrayOf("application/octet-stream", "application/json")
+                else arrayOf(mimeType),
             )
             if (suggestedName != null) putExtra(Intent.EXTRA_TITLE, suggestedName)
             addFlags(modes or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
@@ -140,6 +204,7 @@ class MainActivity : FlutterActivity() {
             when (pending.method) {
                 "openProject" -> projectLocation(uri, prepareWorkingCopy(uri))
                 "createProject" -> projectLocation(uri, prepareNewWorkingCopy(uri))
+                "createExport" -> exportLocation(uri)
                 else -> throw SafFailure("PROJECT_PICK_FAILED", "The project selection is invalid.")
             }
         }
@@ -255,6 +320,99 @@ class MainActivity : FlutterActivity() {
         val input = contentResolver.openInputStream(uri)
             ?: throw SafFailure("PROJECT_PICK_FAILED", "The provider could not open the project for reading.")
         return input.use(::readBounded)
+    }
+
+    private fun exportLocation(uri: Uri): Map<String, String> {
+        requireDocumentUri(uri)
+        val file = File.createTempFile("or-export-", ".mkv", exportStagingDirectory())
+        return mapOf("workingPath" to file.absolutePath, "documentUri" to uri.toString())
+    }
+
+    private fun publishExport(workingPath: String, documentUri: String, cancelled: AtomicBoolean) {
+        val source = requireManagedExportFile(workingPath)
+        val uri = try {
+            requireDocumentUri(Uri.parse(documentUri))
+        } catch (_: Exception) {
+            throw SafFailure("EXPORT_SAVE_FAILED", "The selected export location is invalid.")
+        }
+        if (!source.isFile || source.length() <= 0L) {
+            source.delete()
+            throw SafFailure("EXPORT_SAVE_FAILED", "The exported video is empty or unavailable.")
+        }
+        val expectedBytes = source.length()
+        try {
+            val output = contentResolver.openOutputStream(uri, "wt")
+                ?: throw SafFailure("EXPORT_PERMISSION_REQUIRED", "The selected location cannot be written.")
+            FileInputStream(source).use { input ->
+                output.use { destination ->
+                    val buffer = ByteArray(128 * 1024)
+                    var copied = 0L
+                    while (true) {
+                        if (cancelled.get()) {
+                            throw SafFailure("EXPORT_CANCELLED", "Export cancelled.")
+                        }
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (count == 0) throw IOException("The export returned an empty read.")
+                        destination.write(buffer, 0, count)
+                        copied += count
+                    }
+                    destination.flush()
+                    if (copied != expectedBytes) {
+                        throw SafFailure("EXPORT_SAVE_FAILED", "The exported video could not be fully saved.")
+                    }
+                }
+            }
+            if (cancelled.get()) throw SafFailure("EXPORT_CANCELLED", "Export cancelled.")
+        } catch (error: Exception) {
+            try {
+                DocumentsContract.deleteDocument(contentResolver, uri)
+            } catch (_: Exception) {
+                // Some document providers cannot remove a partially written item.
+            }
+            if (error is SafFailure) throw error
+            if (error is SecurityException) {
+                throw SafFailure("EXPORT_PERMISSION_REQUIRED", "Access to the selected location is unavailable.")
+            }
+            throw SafFailure("EXPORT_SAVE_FAILED", "The exported video could not be saved to the selected location.")
+        } finally {
+            source.delete()
+        }
+    }
+
+    private fun discardExport(workingPath: String, documentUri: String) {
+        val source = requireManagedExportFile(workingPath)
+        val uri = try {
+            requireDocumentUri(Uri.parse(documentUri))
+        } catch (_: Exception) {
+            throw SafFailure("EXPORT_CLEANUP_FAILED", "The temporary export could not be cleared.")
+        }
+        source.delete()
+        try {
+            DocumentsContract.deleteDocument(contentResolver, uri)
+        } catch (_: Exception) {
+            // A provider may not support deleting a document created by this picker.
+        }
+    }
+
+    private fun exportStagingDirectory(): File {
+        val directory = File(cacheDir, "or-exports")
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw SafFailure("EXPORT_SAVE_FAILED", "Temporary export storage is unavailable.")
+        }
+        if (!directory.isDirectory) {
+            throw SafFailure("EXPORT_SAVE_FAILED", "Temporary export storage is unavailable.")
+        }
+        return directory.canonicalFile
+    }
+
+    private fun requireManagedExportFile(path: String): File {
+        val directory = exportStagingDirectory()
+        val requested = File(path).canonicalFile
+        if (requested.parentFile != directory || !requested.name.endsWith(".mkv", ignoreCase = true)) {
+            throw SafFailure("EXPORT_SAVE_FAILED", "The temporary export path is invalid.")
+        }
+        return requested
     }
 
     private fun readPrivateFile(file: File): ByteArray {

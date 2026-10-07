@@ -299,6 +299,36 @@
           "step_name": "Verify Android SAF preview user journey and resource bounds"
         }
       ]
+    },
+    "9D": {
+      "STATIC": [
+        {
+          "gate_id": "repository_hygiene",
+          "job_name": "Repository hygiene",
+          "step_name": "Run repository checks"
+        }
+      ],
+      "UNIT": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Flutter static and widget checks",
+          "step_name": "Run Flutter widget tests"
+        }
+      ],
+      "INTEGRATION": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        }
+      ],
+      "USER_JOURNEY": [
+        {
+          "gate_id": "platform_verification",
+          "job_name": "Android APK build",
+          "step_name": "Verify Android SAF preview user journey and resource bounds"
+        }
+      ]
     }
   }
 }

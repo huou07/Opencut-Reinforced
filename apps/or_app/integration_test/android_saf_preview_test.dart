@@ -403,6 +403,20 @@ void main() {
       );
       expect((await gateway.summary(session)).revision, revision);
 
+      final exportButton = find.byKey(const ValueKey('export-project'));
+      await tester.ensureVisible(exportButton);
+      await tester.tap(exportButton);
+      await tester.pump();
+      debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
+      await _until(
+        tester,
+        () => find.text('Export complete').evaluate().isNotEmpty,
+      );
+      final exported = await _control('exportStatus');
+      expect(exported['exportBytes'], greaterThan(4));
+      expect(exported['validMatroska'], isTrue);
+      expect((await gateway.summary(session)).revision, revision);
+
       // Compact transport and editing tools must remain reachable by touch.
       await _dragSeekUi(tester, gateway, .65);
       expect(gateway.seekError, isNull);
@@ -704,6 +718,7 @@ void main() {
               'mobileTouchScrubbingAndTransport',
               'mobileMediaLibrarySheet',
               'mobileSelectedClipInspectorSheet',
+              'androidSafExportToDocumentsUi',
             ])
               name: true,
           },
@@ -711,6 +726,8 @@ void main() {
           'providerUid': provider['providerUid'],
           'appUid': provider['appUid'],
           'projectRevision': revision.toString(),
+          'exportBytes': exported['exportBytes'],
+          'exportValidMatroska': exported['validMatroska'],
           'visiblePixelRgba': pixels,
           'recoveredPixelRgba': recoveredPixels,
           'recreatedPixelRgba': recreatedPixels,

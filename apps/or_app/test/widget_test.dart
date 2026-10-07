@@ -1340,6 +1340,23 @@ void main() {
     expect(gateway.lastExportDestination, '/tmp/export-project.mkv');
     expect(find.byKey(const ValueKey('cancel-export')), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('open-command-palette')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('command-palette-query')),
+      'Close Project',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('command-close-project')));
+    await tester.pumpAndSettle();
+    expect(gateway.closeCalls, 0);
+    expect(
+      find.text(
+        'Wait for the export to finish or cancel it before closing the project.',
+      ),
+      findsOneWidget,
+    );
+
     await tester.tap(find.byKey(const ValueKey('cancel-export')));
     await tester.pump();
     await tester.pump();
@@ -1347,6 +1364,30 @@ void main() {
     expect(find.text('Export cancelled'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'completed export is published through the selected storage boundary',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/export-project.orproj'
+        ..exportPath = '/tmp/export-project.mkv';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Export project');
+
+      await tester.tap(find.byKey(const ValueKey('export-project')));
+      await tester.pump();
+      await tester.pump();
+      gateway.completeExport();
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pump();
+
+      expect(picker.publishExportCalls, 1);
+      expect(find.text('Export complete'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('save failure leaves the project open and dirty', (tester) async {
     _setViewport(tester, const Size(1440, 900));
@@ -3062,6 +3103,8 @@ class _FakeProjectPicker implements ProjectFilePicker {
   int mediaOpenCalls = 0;
   int saveCalls = 0;
   int exportPathCalls = 0;
+  int publishExportCalls = 0;
+  int discardExportCalls = 0;
   int syncCalls = 0;
 
   @override
@@ -3096,6 +3139,19 @@ class _FakeProjectPicker implements ProjectFilePicker {
     exportPathCalls++;
     return exportPath;
   }
+
+  @override
+  Future<void> publishExportPath(String path) async {
+    publishExportCalls++;
+  }
+
+  @override
+  Future<void> discardExportPath(String path) async {
+    discardExportCalls++;
+  }
+
+  @override
+  Future<void> cancelExportPublish(String path) async {}
 
   @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
@@ -3215,6 +3271,20 @@ class _FakeProjectGateway implements ProjectGateway {
   int exportCancelCalls = 0;
   String? lastExportDestination;
   ProjectExportJob? _exportJob;
+
+  void completeExport() {
+    final current = _exportJob!;
+    _exportJob = ProjectExportJob(
+      succeeded: true,
+      errorCode: '',
+      message: 'Export complete.',
+      jobId: current.jobId,
+      state: 'succeeded',
+      progressCompleted: current.progressTotal,
+      progressTotal: current.progressTotal,
+    );
+  }
+
   int closeCalls = 0;
   bool? lastCloseDiscard;
   int inspectCalls = 0;

@@ -43,8 +43,10 @@ python3 scripts/test_execution_infra.py
 The optional `scripts/agent_supervisor.py` runs one fresh external runner
 process per valid checkpoint and refuses dirty or diverged direct-main state.
 It does not know or assume a vendor agent CLI. A runner may push only its
-implementation commit. It cannot edit the plan, state, evidence policy,
-phase contracts, validators, supervisor, workflows, or completion evidence.
+implementation commit. It cannot edit the plan, state, phase contracts,
+validators, supervisor, workflows, or completion evidence. It may only add
+named evidence proof bindings for selected requirements while preserving all
+existing policy fields and bindings; the supervisor validates each addition.
 
 The supervisor is the only authority that can mark requirements `DONE`. A
 single coherent implementation may cover multiple plan IDs. After a runner

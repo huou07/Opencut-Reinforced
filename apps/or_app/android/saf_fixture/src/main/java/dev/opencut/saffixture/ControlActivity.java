@@ -62,11 +62,22 @@ public final class ControlActivity extends Activity {
                         break;
                     case "releaseBlocked": FixtureDocumentsProvider.release.countDown(); break;
                     case "status": break;
+                    case "exportStatus": break;
                     default: throw new IllegalArgumentException("Unknown fixture operation");
+                }
+                File exported = new File(getFilesDir(), "export.mkv");
+                boolean validMatroska = false;
+                if (exported.isFile() && exported.length() >= 4) {
+                    try (InputStream input = new java.io.FileInputStream(exported)) {
+                        validMatroska = input.read() == 0x1a && input.read() == 0x45
+                            && input.read() == 0xdf && input.read() == 0xa3;
+                    }
                 }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
-                    .put("projectBytes", new File(getFilesDir(), "acceptance.orproj").length());
+                    .put("projectBytes", new File(getFilesDir(), "acceptance.orproj").length())
+                    .put("exportBytes", exported.length())
+                    .put("validMatroska", validMatroska);
                 runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });
             } catch (Exception error) {
                 runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });

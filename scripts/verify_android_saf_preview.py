@@ -13,6 +13,7 @@ CHECKS = {
     'sameSourceSeeksReuseProviderCapability',
     'mobileTouchScrubbingAndTransport', 'mobileMediaLibrarySheet',
     'mobileSelectedClipInspectorSheet',
+    'androidSafExportToDocumentsUi',
 }
 
 
@@ -31,6 +32,8 @@ def verify(report):
             raise ValueError('Composed Flutter Texture pixels were not the fixture frame')
     if data['providerOpens'] <= 0 or data['uiPlayMicros'] <= 0:
         raise ValueError('Provider and actual Play measurements are required')
+    if data['exportBytes'] <= 4 or data['exportValidMatroska'] is not True:
+        raise ValueError('Android SAF export must produce a non-empty Matroska file in the selected provider')
     for field in ('sameSourceRegistrations', 'sameSourceProviderOpens'):
         before, after = data[field]
         if before <= 0 or before != after:
@@ -54,5 +57,5 @@ if __name__ == '__main__':
     parser.add_argument('report', type=Path)
     args = parser.parse_args()
     data = verify(json.loads(args.report.read_text()))
-    print('Android SAF native picker/editor/pixel/resource assertions verified.')
-    print(json.dumps({key: data[key] for key in ('uiPlayMicros', 'journeyResources', 'stressResources', 'finalResources')}, indent=2))
+    print('Android SAF picker/editor/export/pixel/resource assertions verified.')
+    print(json.dumps({key: data[key] for key in ('uiPlayMicros', 'exportBytes', 'journeyResources', 'stressResources', 'finalResources')}, indent=2))

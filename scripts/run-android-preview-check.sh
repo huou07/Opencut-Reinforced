@@ -40,7 +40,8 @@ trap cleanup EXIT
 if [[ "$case_name" == saf ]]; then
   python3 "$GITHUB_WORKSPACE/scripts/select_android_saf_document.py" \
     --device "$android_device_id" --guest-log "$guest_log" \
-    --output "$OR_ANDROID_ACCEPTANCE_OUTPUT" > "$RUNNER_TEMP/android-documents-ui.log" 2>&1 &
+    --output "$OR_ANDROID_ACCEPTANCE_OUTPUT" \
+    --flow "${OR_ANDROID_SAF_FLOW:-open}" > "$RUNNER_TEMP/android-documents-ui.log" 2>&1 &
   picker_pid=$!
 fi
 cd "$GITHUB_WORKSPACE/apps/or_app"

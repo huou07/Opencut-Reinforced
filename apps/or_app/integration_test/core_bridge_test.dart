@@ -1236,6 +1236,15 @@ class _NativeProjectPicker implements ProjectFilePicker {
   Future<String?> saveExportPath({required String suggestedName}) async => null;
 
   @override
+  Future<void> publishExportPath(String path) async {}
+
+  @override
+  Future<void> discardExportPath(String path) async {}
+
+  @override
+  Future<void> cancelExportPublish(String path) async {}
+
+  @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
       null;
 }

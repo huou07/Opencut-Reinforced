@@ -174,6 +174,29 @@ def assert_protected_surfaces_unchanged(
         )
 
 
+def allow_additive_evidence_policy_change(
+    before: Mapping[str, bytes | None],
+    repo_root: Path,
+    plan: Mapping[str, Any],
+    checkpoint_ids: Sequence[str],
+) -> list[str]:
+    path = "docs/execution/EVIDENCE_POLICY.json"
+    prior_bytes = before.get(path)
+    current_bytes = (repo_root / path).read_bytes()
+    if prior_bytes == current_bytes:
+        return []
+    if prior_bytes is None:
+        raise SupervisorError("runner cannot create the evidence policy")
+    try:
+        validate_evidence_policy_additions(
+            json.loads(prior_bytes), json.loads(current_bytes), plan, checkpoint_ids
+        )
+        execution_evidence.load_policy(repo_root / path)
+    except (json.JSONDecodeError, execution_evidence.EvidenceError) as exc:
+        raise SupervisorError(f"runner added an invalid evidence binding: {exc}") from exc
+    return [path]
+
+
 def refuse_dirty_worktree(repo_root: Path) -> None:
     status = git_output(repo_root, "status", "--porcelain")
     if status:
@@ -652,18 +675,22 @@ def checkpoint_prompt(
     allowed_paths = resolution.get("runner_allowed_protected_paths", [])
     if allowed_paths:
         protection = (
-            "Do not edit PLAN.json, STATE.json, EVIDENCE_POLICY.json, architecture invariants "
+            "Do not edit PLAN.json, STATE.json, architecture invariants "
             "or policy, phase specs, execution supervisor/validator/evidence files, or completion "
             "evidence. This checkpoint authorizes changes to exactly this protected workflow path:\n"
             + "".join(f"  - {path}\n" for path in allowed_paths)
+            + "EVIDENCE_POLICY.json may only add named proof bindings for this selected requirement set; "
+            "all prior bindings and policy fields are immutable and the supervisor validates each addition.\n"
             + "No other protected execution-control surface may change; PLAN.json and STATE.json "
             "remain immutable.\n"
         )
     else:
         protection = (
-            "Do not edit PLAN.json, STATE.json, EVIDENCE_POLICY.json, architecture invariants "
+            "Do not edit PLAN.json, STATE.json, architecture invariants "
             "or policy, phase specs, execution supervisor/validator/evidence files, completion "
             "evidence, or protected workflow gates.\n"
+            "EVIDENCE_POLICY.json may only add named proof bindings for this selected requirement set; "
+            "all prior bindings and policy fields are immutable and the supervisor validates each addition.\n"
         )
     return (
         "You are executing an externally authorized Opencut Reinforced product scope.\n"
@@ -1994,6 +2021,12 @@ def run_goal(
                 raise SupervisorError("runner changed immutable PLAN.json")
             if (repo_root / "docs/execution/STATE.json").read_bytes() != before_state_bytes:
                 raise SupervisorError("runner changed STATE.json; only the supervisor may advance state")
+            allowed_paths = [
+                *allowed_paths,
+                *allow_additive_evidence_policy_change(
+                    protected_before, repo_root, plan, batch_ids
+                ),
+            ]
             assert_protected_surfaces_unchanged(
                 protected_before,
                 capture_protected_surfaces(repo_root),

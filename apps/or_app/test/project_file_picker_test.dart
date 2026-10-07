@@ -79,6 +79,41 @@ void main() {
     },
   );
 
+  test(
+    'Android export stages locally and publishes through the selected SAF URI',
+    () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return switch (call.method) {
+              'createExport' => {
+                'workingPath':
+                    '/data/user/0/or_app/cache/or-exports/export.mkv',
+                'documentUri':
+                    'content://com.example.documents/document/export',
+              },
+              _ => null,
+            };
+          });
+      final picker = AndroidSafProjectPicker(channel: channel);
+
+      expect(picker.supportsExport, isTrue);
+      final path = await picker.saveExportPath(suggestedName: 'demo.mkv');
+      await picker.publishExportPath(path!);
+
+      expect(path, '/data/user/0/or_app/cache/or-exports/export.mkv');
+      expect(calls.map((call) => call.method), [
+        'createExport',
+        'publishExport',
+      ]);
+      expect(calls.last.arguments, {
+        'workingPath': path,
+        'documentUri': 'content://com.example.documents/document/export',
+      });
+    },
+  );
+
   test('non-empty create targets get a clear safe error', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

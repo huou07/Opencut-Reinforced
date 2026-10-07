@@ -36,7 +36,8 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         row.add(DocumentsContract.Root.COLUMN_ROOT_ID, "acceptance");
         row.add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, "root");
         row.add(DocumentsContract.Root.COLUMN_TITLE, "OR SAF acceptance");
-        row.add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY);
+        row.add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY
+            | DocumentsContract.Root.FLAG_SUPPORTS_CREATE);
         row.add(DocumentsContract.Root.COLUMN_MIME_TYPES, "application/json\nvideo/x-matroska");
         return cursor;
     }
@@ -47,18 +48,44 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     }
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOC_COLUMNS : projection);
-        if (parent.equals("root")) addDocument(cursor, "project");
+        if (parent.equals("root")) {
+            addDocument(cursor, "project");
+            if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
+        }
         return cursor;
     }
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
-        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id + ".mkv");
+        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : "export.mkv");
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : "video/x-matroska");
-        row.add(DocumentsContract.Document.COLUMN_FLAGS, 0);
-        row.add(DocumentsContract.Document.COLUMN_SIZE, id.equals("project") ? new File(getContext().getFilesDir(), "acceptance.orproj").length() : new File(getContext().getFilesDir(), "tiny.mkv").length());
+        row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("export")
+            ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
+            : 0);
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : "tiny.mkv");
+        row.add(DocumentsContract.Document.COLUMN_SIZE, file.length());
+    }
+
+    @Override public String createDocument(String parentId, String mimeType, String displayName) throws FileNotFoundException {
+        if (!parentId.equals("root") || !mimeType.equals("video/x-matroska")) throw new FileNotFoundException("Unsupported fixture document");
+        File output = new File(getContext().getFilesDir(), "export.mkv");
+        if (output.exists() && !output.delete()) throw new FileNotFoundException("Existing export could not be replaced");
+        try {
+            if (!output.createNewFile()) throw new FileNotFoundException("Export document could not be created");
+        } catch (java.io.IOException error) { throw new FileNotFoundException("Export document could not be created"); }
+        return "export";
+    }
+
+    @Override public void deleteDocument(String documentId) throws FileNotFoundException {
+        if (!documentId.equals("export") || !new File(getContext().getFilesDir(), "export.mkv").delete()) {
+            throw new FileNotFoundException("Export document could not be deleted");
+        }
     }
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
+        if (id.equals("export") && (mode.contains("w") || mode.contains("t"))) {
+            return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), "export.mkv"),
+                ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE);
+        }
         if (!mode.equals("r")) throw new FileNotFoundException("Read-only acceptance source");
         opens.incrementAndGet();
         if (id.equals("missing") && !missingRecovered) throw new FileNotFoundException("Missing acceptance source");
@@ -72,7 +99,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
                 throw new FileNotFoundException("Blocked-open cancelled");
             }
         }
-        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : "tiny.mkv");
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : "tiny.mkv");
         if (id.equals("pipe")) {
             try {
                 ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();

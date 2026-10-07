@@ -145,8 +145,10 @@ The runner then receives one generated prompt and one bounded requirement set. I
 
 1. implement only the selected requirements as one coherent change while
    preserving real technical dependencies;
-2. leave `PLAN.json`, `STATE.json`, policy, phase specs, validators, supervisor,
-   and evidence unchanged; leave protected workflows unchanged except for
+2. leave `PLAN.json`, `STATE.json`, phase specs, validators, supervisor,
+   and completion evidence unchanged; `EVIDENCE_POLICY.json` may only gain
+   named proof bindings for selected requirements, preserving every existing
+   binding and policy field; leave protected workflows unchanged except for
    exact paths authorized by the checkpoint's PLAN entry;
 3. run local headless checks allowed by repository policy;
 4. commit and push implementation changes only; and

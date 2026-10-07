@@ -127,10 +127,13 @@ Normal runners implement the exact requirement set authorized by the selected
 goal. They may combine requirements into a coherent change, but may not bypass
 real schema, security, persistence, platform, or API dependencies. They may
 push implementation commits only. They must not edit `PLAN.json`,
-`STATE.json`, `EVIDENCE_POLICY.json`, phase specifications, architecture
+`STATE.json`, phase specifications, architecture
 invariants or policy, execution validators/supervisor, protected workflows, or
 completion evidence. A runner handoff must say `IMPLEMENTED — AWAITING
 SUPERVISOR EVIDENCE`; it must never claim repository-authoritative `DONE`.
+`EVIDENCE_POLICY.json` may only gain named proof bindings for selected
+requirements; all existing bindings and other policy fields remain immutable,
+and the supervisor validates every addition against the plan and hosted job.
 
 The supervisor independently verifies the exact implementation SHA against
 the required hosted workflow runs and jobs for every selected requirement,
