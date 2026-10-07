@@ -878,6 +878,8 @@ host FFmpeg lookup through
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, then exercise unsupported media,
 missing sources, an unavailable packaged probe, failed replacement, and failed
-project reopen. The acceptance step checks that failures preserve the saved
+project reopen. It verifies transient failure messages finish clearing before
+continuing navigation, with a bounded wait rather than a fixed delay. The
+acceptance step checks that failures preserve the saved
 project and the failed destination, then uses the packaged `ffprobe` to validate
 FFV1 video and PCM S16LE audio in the export.

@@ -288,8 +288,11 @@ Future<void> _preserveProjectAcrossFailures(
     attempts: 1800,
   );
 
-  await tester.pump(const Duration(seconds: 5));
-  expect(find.byType(SnackBar), findsNothing);
+  await _pumpUntil(
+    tester,
+    () => find.byType(SnackBar).evaluate().isEmpty,
+    'transient failure feedback dismissal',
+  );
   await tester.tap(find.byKey(const ValueKey('or-brand-home')));
   await tester.pumpAndSettle();
   picker.openPath = picker.badProjectPath;
