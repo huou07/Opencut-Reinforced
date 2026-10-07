@@ -11,6 +11,8 @@ CHECKS = {
     'editAndGenerationDropPreparedFrame', 'surfaceRecreationAndRelease', 'osMediaFdsAndNativeLeasesReleased',
     'boundedPresentationStress',
     'sameSourceSeeksReuseProviderCapability',
+    'mobileTouchScrubbingAndTransport', 'mobileMediaLibrarySheet',
+    'mobileSelectedClipInspectorSheet',
 }
 
 

@@ -254,6 +254,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   ProjectTimelineTrackKind? _selectedTrackKind;
   bool _snapEnabled = true;
   late final ValueNotifier<ProjectPreviewState?> _previewState;
+  final ValueNotifier<int> _mobileSheetRevision = ValueNotifier(0);
 
   @override
   void initState() {
@@ -264,6 +265,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   @override
   void didUpdateWidget(covariant EditorShellPreviewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _mobileSheetRevision.value++;
     final projectIdentityChanged =
         oldWidget.project?.projectId != widget.project?.projectId ||
         oldWidget.project?.projectInstanceId !=
@@ -284,6 +286,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   @override
   void dispose() {
     _previewState.dispose();
+    _mobileSheetRevision.dispose();
     super.dispose();
   }
 
@@ -578,6 +581,8 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         ),
         _MobileToolDock(
           selected: _selectedTool,
+          hasClipSelection: _selectedClipId != null,
+          isProjectWorkspace: widget.isProjectWorkspace,
           onSelected: _showMobileToolSheet,
         ),
       ],
@@ -586,11 +591,69 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   Future<void> _showMobileToolSheet(String tool) async {
     setState(() => _selectedTool = tool);
+    final height = MediaQuery.of(context).size.height * 0.82;
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _UnavailableToolSheet(tool: tool),
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: _mobileSheetRevision,
+        builder: (context, child) {
+          void onClose() => Navigator.of(sheetContext).pop();
+
+          final selectedTrack = _selectedInspectorTrack;
+          if (tool == 'Inspector') {
+            return SizedBox(
+              height: height,
+              child: _InspectorPanel(
+                isProjectWorkspace: widget.isProjectWorkspace,
+                project: widget.project,
+                gateway: widget.projectGateway,
+                session: widget.projectSession,
+                trackId: _selectedTrackId,
+                clipId: _selectedClipId,
+                isVisualTrack:
+                    _selectedTrackKind == ProjectTimelineTrackKind.video ||
+                    _selectedTrackKind == ProjectTimelineTrackKind.text ||
+                    _selectedTrackKind == ProjectTimelineTrackKind.caption,
+                isAudioTrack:
+                    _selectedTrackKind == ProjectTimelineTrackKind.audio,
+                trackLocked: selectedTrack?.state.locked ?? true,
+                busy: widget.busy,
+                onUpdate: widget.onUpdateTimelineClipVisualSettings,
+                onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
+                onClose: onClose,
+              ),
+            );
+          }
+          if (tool == 'Media' && widget.isProjectWorkspace) {
+            return SizedBox(
+              height: height,
+              child: _EditorToolPanel(
+                selectedTool: tool,
+                isProjectWorkspace: true,
+                project: widget.project,
+                mediaPage: widget.mediaPage,
+                timelineTracks: widget.timelineTracks,
+                mediaPreviews: widget.mediaPreviews,
+                mediaLoading: widget.mediaLoading,
+                mediaLoadingMore: widget.mediaLoadingMore,
+                mediaLoadError: widget.mediaLoadError,
+                onImportMedia: widget.busy ? null : widget.onImportMedia,
+                onLoadMoreMedia: widget.onLoadMoreMedia,
+                onRefreshMedia: widget.onRefreshMedia,
+                onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
+                onAddMediaToTimeline: widget.busy
+                    ? null
+                    : widget.onAddMediaToTimeline,
+                onClose: onClose,
+              ),
+            );
+          }
+          return _UnavailableToolSheet(tool: tool);
+        },
+      ),
     );
   }
 
@@ -932,6 +995,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onRefreshMedia,
     required this.onRemoveMedia,
     required this.onAddMediaToTimeline,
+    this.onClose,
   });
 
   final String selectedTool;
@@ -956,6 +1020,7 @@ class _EditorToolPanel extends StatelessWidget {
     ProjectRationalTime duration,
   )?
   onAddMediaToTimeline;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -973,6 +1038,7 @@ class _EditorToolPanel extends StatelessWidget {
         onRefresh: onRefreshMedia,
         onRemove: onRemoveMedia,
         onAddMediaToTimeline: onAddMediaToTimeline,
+        onClose: onClose,
       );
     }
 
@@ -1027,6 +1093,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onRefresh,
     required this.onRemove,
     required this.onAddMediaToTimeline,
+    this.onClose,
   });
 
   final ProjectMediaPage? page;
@@ -1049,6 +1116,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     ProjectRationalTime duration,
   )?
   onAddMediaToTimeline;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -1069,7 +1137,17 @@ class _MediaLibraryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _PanelHeader(title: 'Media'),
+          _PanelHeader(
+            title: 'Media',
+            trailing: onClose == null
+                ? null
+                : IconButton(
+                    key: const ValueKey('mobile-tool-sheet-close'),
+                    tooltip: 'Close tool panel',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_outlined),
+                  ),
+          ),
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -2043,6 +2121,7 @@ class _InspectorPanel extends StatefulWidget {
     required this.busy,
     required this.onUpdate,
     required this.onUpdateAudio,
+    this.onClose,
   });
 
   final bool isProjectWorkspace;
@@ -2069,6 +2148,7 @@ class _InspectorPanel extends StatefulWidget {
     ProjectTimelineAudioSettings,
   )?
   onUpdateAudio;
+  final VoidCallback? onClose;
 
   @override
   State<_InspectorPanel> createState() => _InspectorPanelState();
@@ -2643,7 +2723,17 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _PanelHeader(title: 'Inspector'),
+          _PanelHeader(
+            title: 'Inspector',
+            trailing: widget.onClose == null
+                ? null
+                : IconButton(
+                    key: const ValueKey('mobile-tool-sheet-close'),
+                    tooltip: 'Close tool panel',
+                    onPressed: widget.onClose,
+                    icon: const Icon(Icons.close_outlined),
+                  ),
+          ),
           const Divider(height: 1),
           if (!canEdit)
             Expanded(
@@ -3683,79 +3773,85 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         color: OrColors.backgroundRaised,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
-      child: Row(
-        children: [
-          if (selectedClip != null) ...[
-            Text(
-              'Selected clip ${selectedClip.clipId.substring(0, math.min(8, selectedClip.clipId.length))}',
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: 10,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selectedClip != null) ...[
+              Text(
+                'Selected clip ${selectedClip.clipId.substring(0, math.min(8, selectedClip.clipId.length))}',
+                style: const TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: 10,
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('timeline-selection-duplicate'),
+                tooltip: 'Duplicate clip (Ctrl+D)',
+                visualDensity: VisualDensity.compact,
+                onPressed: canDuplicate ? _duplicateSelectedClip : null,
+                icon: const Icon(Icons.content_copy_outlined, size: 15),
+              ),
+              IconButton(
+                key: const ValueKey('timeline-selection-clear'),
+                tooltip: 'Clear selection',
+                visualDensity: VisualDensity.compact,
+                onPressed: _clearSelection,
+                icon: const Icon(Icons.close, size: 15),
+              ),
+            ],
+            const SizedBox(width: OrSpacing.x2),
+            IconButton(
+              key: const ValueKey('timeline-zoom-out'),
+              tooltip: 'Zoom out',
+              visualDensity: VisualDensity.compact,
+              onPressed: _fitTimelineToView || _timelineZoom <= 0.125
+                  ? null
+                  : () => _changeTimelineZoom(_timelineZoom / 1.25),
+              icon: const Icon(Icons.zoom_out, size: 16),
+            ),
+            SizedBox(
+              key: const ValueKey('timeline-zoom-label'),
+              width: 42,
+              child: Text(
+                _fitTimelineToView
+                    ? 'Fit'
+                    : '${(_timelineZoom * 100).round()}%',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: 10,
+                ),
               ),
             ),
             IconButton(
-              key: const ValueKey('timeline-selection-duplicate'),
-              tooltip: 'Duplicate clip (Ctrl+D)',
+              key: const ValueKey('timeline-zoom-in'),
+              tooltip: 'Zoom in',
               visualDensity: VisualDensity.compact,
-              onPressed: canDuplicate ? _duplicateSelectedClip : null,
-              icon: const Icon(Icons.content_copy_outlined, size: 15),
+              onPressed: !_fitTimelineToView && _timelineZoom >= 8
+                  ? null
+                  : () => _changeTimelineZoom(
+                      _fitTimelineToView ? 1.25 : _timelineZoom * 1.25,
+                    ),
+              icon: const Icon(Icons.zoom_in, size: 16),
             ),
-            IconButton(
-              key: const ValueKey('timeline-selection-clear'),
-              tooltip: 'Clear selection',
-              visualDensity: VisualDensity.compact,
-              onPressed: _clearSelection,
-              icon: const Icon(Icons.close, size: 15),
+            TextButton(
+              key: const ValueKey('timeline-fit-zoom'),
+              onPressed: _fitTimelineToView
+                  ? null
+                  : () {
+                      setState(() => _fitTimelineToView = true);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (_horizontalController.hasClients) {
+                          _horizontalController.jumpTo(0);
+                        }
+                      });
+                    },
+              child: const Text('Fit'),
             ),
           ],
-          const Spacer(),
-          IconButton(
-            key: const ValueKey('timeline-zoom-out'),
-            tooltip: 'Zoom out',
-            visualDensity: VisualDensity.compact,
-            onPressed: _fitTimelineToView || _timelineZoom <= 0.125
-                ? null
-                : () => _changeTimelineZoom(_timelineZoom / 1.25),
-            icon: const Icon(Icons.zoom_out, size: 16),
-          ),
-          SizedBox(
-            key: const ValueKey('timeline-zoom-label'),
-            width: 42,
-            child: Text(
-              _fitTimelineToView ? 'Fit' : '${(_timelineZoom * 100).round()}%',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: 10,
-              ),
-            ),
-          ),
-          IconButton(
-            key: const ValueKey('timeline-zoom-in'),
-            tooltip: 'Zoom in',
-            visualDensity: VisualDensity.compact,
-            onPressed: !_fitTimelineToView && _timelineZoom >= 8
-                ? null
-                : () => _changeTimelineZoom(
-                    _fitTimelineToView ? 1.25 : _timelineZoom * 1.25,
-                  ),
-            icon: const Icon(Icons.zoom_in, size: 16),
-          ),
-          TextButton(
-            key: const ValueKey('timeline-fit-zoom'),
-            onPressed: _fitTimelineToView
-                ? null
-                : () {
-                    setState(() => _fitTimelineToView = true);
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (_horizontalController.hasClients) {
-                        _horizontalController.jumpTo(0);
-                      }
-                    });
-                  },
-            child: const Text('Fit'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -6810,9 +6906,16 @@ class _EmptyTimelineLane extends StatelessWidget {
 }
 
 class _MobileToolDock extends StatelessWidget {
-  const _MobileToolDock({required this.selected, required this.onSelected});
+  const _MobileToolDock({
+    required this.selected,
+    required this.hasClipSelection,
+    required this.isProjectWorkspace,
+    required this.onSelected,
+  });
 
   final String selected;
+  final bool hasClipSelection;
+  final bool isProjectWorkspace;
   final ValueChanged<String> onSelected;
 
   @override
@@ -6828,10 +6931,18 @@ class _MobileToolDock extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            for (final tool in _editorTools)
+            for (final tool in [
+              _editorTools.first,
+              if (hasClipSelection)
+                const _EditorTool('Inspector', Icons.tune_outlined),
+              ..._editorTools.skip(1),
+            ])
               Tooltip(
-                message:
-                    '${tool.label} — unavailable in this Developer Preview',
+                message: tool.label == 'Media' && isProjectWorkspace
+                    ? 'Open the project media library'
+                    : tool.label == 'Inspector' && hasClipSelection
+                    ? 'Edit selected clip settings'
+                    : '${tool.label} — unavailable in this Developer Preview',
                 child: InkWell(
                   key: ValueKey('mobile-editor-tool-${_toolKey(tool.label)}'),
                   onTap: () => onSelected(tool.label),

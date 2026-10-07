@@ -2593,6 +2593,32 @@ void main() {
       find.byKey(const ValueKey('timeline-clip-compact-clip')),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('project-media-panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Close tool panel'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-compact-clip')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clip'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog).last,
+        matching: find.text('Close'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-editor-tool-inspector')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('inspector-visual-x')), findsOneWidget);
+    expect(gateway.getVisualSettingsCalls, 1);
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 

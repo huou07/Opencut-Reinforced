@@ -82,6 +82,22 @@ Future<void> _seekUi(
   await _until(tester, () => gateway.seekCalls > before);
 }
 
+Future<void> _dragSeekUi(
+  WidgetTester tester,
+  _ObservedGateway gateway,
+  double fraction,
+) async {
+  final before = gateway.seekCalls;
+  final slider = find.byKey(const ValueKey('preview-scrub-ruler'));
+  await tester.ensureVisible(slider);
+  final rect = tester.getRect(slider);
+  await tester.dragFrom(
+    Offset(rect.left + 24, rect.center.dy),
+    Offset((rect.width - 48) * fraction, 0),
+  );
+  await _until(tester, () => gateway.seekCalls > before);
+}
+
 Future<List<int>> _redTexture(
   WidgetTester tester,
   IntegrationTestWidgetsFlutterBinding binding,
@@ -386,6 +402,71 @@ void main() {
         'saf-editor-permission-recovered',
       );
       expect((await gateway.summary(session)).revision, revision);
+
+      // Compact transport and editing tools must remain reachable by touch.
+      await _dragSeekUi(tester, gateway, .65);
+      expect(gateway.seekError, isNull);
+      expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
+      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isEmpty,
+      );
+
+      final clip = find.byWidgetPredicate((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith('timeline-clip-') &&
+            !key.value.startsWith('timeline-clip-tooltip-');
+      });
+      await _until(tester, () => clip.evaluate().isNotEmpty);
+      await tester.ensureVisible(clip.first);
+      await tester.tap(clip.first);
+      await _until(tester, () => find.text('Clip').evaluate().isNotEmpty);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog).last,
+          matching: find.text('Close'),
+        ),
+      );
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('mobile-editor-tool-inspector'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-editor-tool-inspector')),
+      );
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('inspector-visual-x'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('inspector-visual-x')))
+            .controller!
+            .text,
+        '0',
+      );
+      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+
       final journey = await _resources();
       // The close control lives on the Projects workspace. Tapping nav-home
       // landed on Home, which has no active-project card, so the close step
@@ -619,6 +700,9 @@ void main() {
               'osMediaFdsAndNativeLeasesReleased',
               'boundedPresentationStress',
               'sameSourceSeeksReuseProviderCapability',
+              'mobileTouchScrubbingAndTransport',
+              'mobileMediaLibrarySheet',
+              'mobileSelectedClipInspectorSheet',
             ])
               name: true,
           },

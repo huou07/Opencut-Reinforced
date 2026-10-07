@@ -26,6 +26,7 @@ class ReportTest(unittest.TestCase):
 
     def test_missing_assertion_and_wrong_uid_are_rejected(self):
         for mutate in (lambda data: data['checks'].pop('nativeDocumentsUiAndEditorControls'),
+                       lambda data: data['checks'].pop('mobileSelectedClipInspectorSheet'),
                        lambda data: data.update(providerUid=data['appUid'])):
             value = report()
             mutate(value['androidSafAcceptance'])

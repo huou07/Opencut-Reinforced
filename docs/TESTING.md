@@ -892,3 +892,10 @@ continuing navigation, with a bounded wait rather than a fixed delay. The
 acceptance step checks that failures preserve the saved
 project and the failed destination, then uses the packaged `ffprobe` to validate
 FFV1 video and PCM S16LE audio in the export.
+
+9C extends the hosted Android SAF editor journey at the compact device size. It
+drags the real preview scrubber, opens the project media library from the mobile
+tool dock, selects a timeline clip, and opens its Inspector sheet. The Inspector
+must load the selected clip's setting through the typed project gateway. The
+acceptance report requires each interaction assertion before it records the
+9C integration and user-journey evidence.
