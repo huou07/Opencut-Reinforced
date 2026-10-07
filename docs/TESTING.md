@@ -863,8 +863,10 @@ project gateway, packaged Rust bridge, and packaged FFmpeg helpers on macOS,
 Windows, and Linux. It clears inherited loader/build paths, then directs the
 integration runner to the bridge inside the app bundle so its app-relative
 runtime dependencies are exercised. Linux snapshots the already verified
-package payload outside the bundle and reinstalls it through the app's CMake
-install step because Flutter's integration test clears and rebuilds that bundle.
+package payload at a stable runner-temp path and reinstalls it through the app's
+CMake install step because Flutter's integration test clears and rebuilds that
+bundle. The path is seeded before CMake's first configure and refreshed from
+the patched package before the integration test runs.
 The journey waits for the frame-rate control to become enabled and for its
 menu item to appear before selecting it. It blocks host FFmpeg lookup through
 `PATH` with inert failure guards while preserving system utilities.

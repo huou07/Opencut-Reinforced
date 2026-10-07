@@ -65,6 +65,8 @@ def _sha256(path: Path) -> str:
 def _snapshot_linux_media_runtime(
     helpers: Path, bridge_directory: Path, destination: Path
 ) -> Path:
+    if destination.exists():
+        shutil.rmtree(destination)
     destination.mkdir(parents=True)
     library_directory = destination / "lib"
     library_directory.mkdir()
@@ -167,8 +169,16 @@ def main() -> int:
     # app-relative runtime paths then resolve only packaged media libraries.
     env["FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR"] = str(bridge_directory)
     if sys.platform.startswith("linux"):
+        runtime_snapshot = Path(
+            os.environ.get("OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY", "")
+        ).resolve()
+        if not runtime_snapshot.is_dir():
+            raise SystemExit(
+                "The Linux packaged media runtime staging directory is missing: "
+                f"{runtime_snapshot}"
+            )
         runtime_snapshot = _snapshot_linux_media_runtime(
-            helper_directory, bridge_directory, work / "packaged-media-runtime"
+            helper_directory, bridge_directory, runtime_snapshot
         )
         # Flutter's Linux install step clears the bundle. The project CMake
         # install hook restores this already-packaged payload.

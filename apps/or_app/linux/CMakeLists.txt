@@ -113,9 +113,9 @@ install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    COMPONENT Runtime)
 
 # Desktop acceptance runs through `flutter test -d linux`, which reinstalls the
-# app bundle before launching its integration test. Preserve the exact FFmpeg
-# payload already verified by the packaging step when that runner rebuilds the
-# clean bundle.
+# app bundle before launching its integration test. The runner seeds this path
+# before the first Flutter build and refreshes it from the verified package
+# before the integration test rebuilds the clean bundle.
 set(OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY "$ENV{OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}")
 if(OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY)
   foreach(required_file
