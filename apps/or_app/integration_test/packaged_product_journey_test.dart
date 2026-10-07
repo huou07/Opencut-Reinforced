@@ -186,16 +186,16 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'project edit',
   );
 
+  final saveButton = find.byKey(const ValueKey('workspace-save'));
+  await tester.ensureVisible(saveButton);
   await _pumpUntil(
     tester,
     () =>
-        tester
-            .widget<TextButton>(find.byKey(const ValueKey('workspace-save')))
-            .onPressed !=
-        null,
+        tester.widget<TextButton>(saveButton).onPressed != null &&
+        saveButton.hitTestable().evaluate().isNotEmpty,
     'project save control readiness',
   );
-  await tester.tap(find.byKey(const ValueKey('workspace-save')));
+  await tester.tap(saveButton);
   await _pumpUntil(
     tester,
     () => find.text('Saved').evaluate().isNotEmpty,
