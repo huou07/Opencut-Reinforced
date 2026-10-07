@@ -54,6 +54,16 @@ only when AST validation proves that module-level guards, test classes, and all
 existing test methods remain unchanged and the candidate only adds new test
 methods. The exact candidate's hosted hygiene gate still executes those tests.
 
+One explicitly authorized long-running product delegation may pin a trusted
+control baseline in `DELEGATION.json`. The supervisor accepts that baseline
+only for the exact recorded goal and while the current STATE baseline remains
+before the delegation marker. A candidate before the marker must descend from
+the pinned control baseline; a candidate after the marker uses the marker
+commit itself. Exact SHA ancestry is checked, the marker is protected from
+runner edits, and STATE advancement disables the override. This preserves one
+delegation across coherent requirement batches without making plan, evidence,
+architecture, acceptance, or verification controls mutable.
+
 The supervisor is the only authority that can mark requirements `DONE`. A
 single coherent implementation may cover multiple plan IDs. After a runner
 pushes, the supervisor independently verifies exact-SHA push-triggered GitHub

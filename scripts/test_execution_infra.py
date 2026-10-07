@@ -2002,6 +2002,124 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 ["apps/or_app/lib/editor.dart"]
             )
 
+    def test_delegation_resume_baseline_is_exact_scoped_and_expires_after_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "config", "user.name", "Execution Test"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "execution-test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+
+            def commit(message: str, files: dict[str, str]) -> str:
+                for relative_path, contents in files.items():
+                    path = root / relative_path
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(contents, encoding="utf-8")
+                subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+                subprocess.run(["git", "commit", "-qm", message], cwd=root, check=True)
+                return subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
+
+            state_sha = commit("state", {"docs/execution/STATE.json": '{"current_next":"A"}\n'})
+            control_sha = commit("trusted control", {"scripts/agent_supervisor.py": "trusted\n"})
+            before_marker = commit("candidate before marker", {"src/product.txt": "candidate\n"})
+            marker_contents = json.dumps(
+                {
+                    "schema_version": 1,
+                    "goal": "milestone:full-roadmap",
+                    "delegation_start_sha": state_sha,
+                    "control_baseline_sha": control_sha,
+                }
+            )
+            marker_sha = commit(
+                "pin full-roadmap delegation",
+                {agent_supervisor.DELEGATION_MARKER: marker_contents + "\n"},
+            )
+
+            self.assertEqual(
+                agent_supervisor._delegation_resume_baseline(
+                    root, before_marker, "milestone:full-roadmap"
+                ),
+                control_sha,
+            )
+            self.assertIsNone(
+                agent_supervisor._delegation_resume_baseline(
+                    root, before_marker, "checkpoint:A"
+                )
+            )
+
+            after_marker = commit("candidate after marker", {"src/other.txt": "candidate\n"})
+            self.assertEqual(
+                agent_supervisor._delegation_resume_baseline(
+                    root, after_marker, "milestone:full-roadmap"
+                ),
+                marker_sha,
+            )
+
+            advanced_state = commit(
+                "state advanced",
+                {"docs/execution/STATE.json": '{"current_next":"B"}\n'},
+            )
+            self.assertIsNone(
+                agent_supervisor._delegation_resume_baseline(
+                    root, advanced_state, "milestone:full-roadmap"
+                )
+            )
+
+    def test_delegation_resume_baseline_rejects_invalid_exact_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "config", "user.name", "Execution Test"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "execution-test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            (root / "docs/execution").mkdir(parents=True)
+            (root / "docs/execution/STATE.json").write_text('{"current_next":"A"}\n')
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "state"], cwd=root, check=True)
+            state_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            (root / "docs/execution/DELEGATION.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "goal": "milestone:full-roadmap",
+                        "delegation_start_sha": state_sha,
+                        "control_baseline_sha": "not-a-commit",
+                    }
+                )
+                + "\n"
+            )
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "invalid delegation"], cwd=root, check=True)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, "invalid exact Git SHA"):
+                agent_supervisor._delegation_resume_baseline(
+                    root, head, "milestone:full-roadmap"
+                )
+
     def test_historical_resume_accepts_only_additive_selected_evidence_bindings(self) -> None:
         before = {
             "schema_version": 1,

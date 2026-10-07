@@ -41,8 +41,10 @@ EXPLICIT_PROTECTED_PATHS = {
     "scripts/check_architecture_policy.py",
     "scripts/test_execution_infra.py",
     "docs/execution/AMENDMENT_BASELINE.json",
+    "docs/execution/DELEGATION.json",
 }
 AMENDMENT_MARKER = "docs/execution/AMENDMENT_BASELINE.json"
+DELEGATION_MARKER = "docs/execution/DELEGATION.json"
 AMENDMENT_CONTROL_PATHS = EXPLICIT_PROTECTED_PATHS | {
     "AGENTS.md",
     "docs/INDEX.md",
@@ -87,6 +89,7 @@ RESUME_FOLLOWUP_CONTROL_PATHS = {
     "scripts/agent_supervisor.py",
     "scripts/execution_plan.py",
     "scripts/test_execution_infra.py",
+    DELEGATION_MARKER,
 }
 
 
@@ -1332,11 +1335,14 @@ def _resume_baseline(
     resume_sha: str,
     allowed_paths: Sequence[str] = (),
     checkpoint_ids: Sequence[str] = (),
+    delegation_goal: str | None = None,
 ) -> str:
     # Exclude the resume commit when locating the prior state baseline so a
     # forbidden STATE.json edit in that implementation commit remains visible
     # in the protected-path diff below.
-    baseline = _control_baseline(repo_root, f"{resume_sha}^")
+    baseline = _delegation_resume_baseline(repo_root, resume_sha, delegation_goal)
+    if baseline is None:
+        baseline = _control_baseline(repo_root, f"{resume_sha}^")
     _validate_amendment_baseline(repo_root, baseline)
     try:
         subprocess.run(
@@ -1489,6 +1495,73 @@ def _control_baseline(repo_root: Path, revision: str) -> str:
     if marker and git_output(repo_root, "merge-base", baseline, marker) == baseline:
         return marker
     return baseline
+
+
+def _delegation_resume_baseline(
+    repo_root: Path, resume_sha: str, goal: str | None
+) -> str | None:
+    """Select the pinned control baseline only while its immutable delegation is active."""
+
+    head = git_output(repo_root, "rev-parse", "HEAD")
+    marker_commit = git_output(
+        repo_root, "log", "-1", "--format=%H", head, "--", DELEGATION_MARKER
+    )
+    if not marker_commit:
+        return None
+
+    record = _json_at_revision(repo_root, marker_commit, DELEGATION_MARKER)
+    expected_keys = {
+        "schema_version",
+        "goal",
+        "delegation_start_sha",
+        "control_baseline_sha",
+    }
+    if set(record) != expected_keys or record.get("schema_version") != 1:
+        raise SupervisorError("delegation record has an unsupported schema")
+    record_goal = record.get("goal")
+    delegation_start_sha = record.get("delegation_start_sha")
+    control_baseline_sha = record.get("control_baseline_sha")
+    if not isinstance(record_goal, str) or not record_goal:
+        raise SupervisorError("delegation record goal is invalid")
+    for value in (delegation_start_sha, control_baseline_sha):
+        if not isinstance(value, str) or len(value) != 40 or value.lower() != value:
+            raise SupervisorError("delegation record contains an invalid exact Git SHA")
+        if any(character not in "0123456789abcdef" for character in value):
+            raise SupervisorError("delegation record contains an invalid exact Git SHA")
+
+    state_baseline = _control_baseline(repo_root, head)
+    if _is_ancestor(repo_root, marker_commit, state_baseline):
+        return None
+    if goal != record_goal:
+        return None
+
+    candidate_state_baseline = _control_baseline(repo_root, f"{resume_sha}^")
+    if candidate_state_baseline != state_baseline:
+        raise SupervisorError("delegation resume does not match the current STATE baseline")
+    for ancestor, descendant, message in (
+        (delegation_start_sha, control_baseline_sha, "control baseline precedes delegation start"),
+        (delegation_start_sha, state_baseline, "current STATE predates delegation start"),
+        (state_baseline, control_baseline_sha, "control baseline is outside the active STATE history"),
+        (control_baseline_sha, marker_commit, "delegation marker predates its control baseline"),
+        (marker_commit, head, "delegation marker is not on current HEAD history"),
+    ):
+        if not _is_ancestor(repo_root, ancestor, descendant):
+            raise SupervisorError(message)
+
+    if _is_ancestor(repo_root, marker_commit, resume_sha):
+        return marker_commit
+    if _is_ancestor(repo_root, control_baseline_sha, resume_sha):
+        return control_baseline_sha
+    raise SupervisorError("resume SHA falls outside the active delegation history")
+
+
+def _is_ancestor(repo_root: Path, ancestor: str, descendant: str) -> bool:
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    ).returncode == 0
 
 
 def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
@@ -2237,7 +2310,11 @@ def run_goal(
                 validate_historical_plan_compatibility(historical_plan, plan)
                 allowed_paths = sorted(set(allowed_paths) | RESUME_FOLLOWUP_CONTROL_PATHS)
             _resume_baseline(
-                repo_root, resume_sha or "", allowed_paths, checkpoint_ids=batch_ids
+                repo_root,
+                resume_sha or "",
+                allowed_paths,
+                checkpoint_ids=batch_ids,
+                delegation_goal=goal,
             )
             validate_resume_preconditions(
                 resume_sha=resume_sha or "",
