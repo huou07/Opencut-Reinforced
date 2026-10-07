@@ -626,12 +626,28 @@ jobs:
           set -euo pipefail
           install_root="$RUNNER_TEMP/android-ffmpeg-verification/android-ffmpeg/install"
           install_link=android/.ffmpeg-install
+          jni_root=android/app/src/main/jniLibs
+          toolchain="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64"
           test -d "$install_root"
           test ! -e "$install_link" && test ! -L "$install_link"
           ln -s "$install_root" "$install_link"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             test -f "$install_link/$abi/lib/pkgconfig/libavcodec.pc"
             test -f "$install_link/$abi/include/libavcodec/avcodec.h"
+            jni_dir="$jni_root/$abi"
+            mkdir -p "$jni_dir"
+            for library in avcodec avformat avutil swresample swscale; do
+              shared="$install_link/$abi/lib/lib$library.so"
+              soname="$("$toolchain/bin/llvm-readelf" -d "$shared" | sed -n 's/.*Library soname: \[\([^]]*\)\].*/\1/p')"
+              test -n "$soname"
+              test -f "$install_link/$abi/lib/$soname"
+              for runtime in "$install_link/$abi/lib/lib$library.so"*; do
+                test -e "$runtime" || continue
+                cp -L "$runtime" "$jni_dir/$(basename "$runtime")"
+              done
+              test -s "$jni_dir/lib$library.so"
+              test -s "$jni_dir/$soname"
+            done
           done
 
       - name: Resolve Flutter dependencies

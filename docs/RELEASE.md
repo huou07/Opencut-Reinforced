@@ -33,7 +33,8 @@ These artifacts are debug developer builds for testing only. macOS carries only 
 
 The Android preview APK reuses the FFmpeg install artifact from the successful
 Platform Verification run for the same source commit. Before publication, the
-preview job stages that install for the bridge build and checks that the APK
+preview job stages that install for the bridge build, copies its shared
+libraries into Android's `jniLibs` directories, and checks that the APK
 contains the Rust bridge and FFmpeg shared libraries for `arm64-v8a`,
 `armeabi-v7a`, and `x86_64`.
 
