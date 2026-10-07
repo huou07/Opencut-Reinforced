@@ -70,7 +70,7 @@ mod desktop {
         TransitionReference,
     };
     use or_ipc::{ExportRequestHandler, LiveProjectHost};
-    use or_media::{SnapshotQueue, SoftwareMediaDecoder};
+    use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
         process_visual_rgba,
@@ -80,7 +80,7 @@ mod desktop {
         RenderSnapshot, RuntimeBudgets,
     };
     use std::{
-        collections::HashMap,
+        collections::{HashMap, VecDeque},
         future::Future,
         num::NonZeroUsize,
         pin::Pin,
@@ -172,6 +172,7 @@ mod desktop {
                 render_resources: Arc::new(RenderResources {
                     budgets,
                     text_rasterizer: Mutex::new(TextRasterizer::new()),
+                    video_sessions: Mutex::new(VecDeque::new()),
                 }),
                 export_jobs: JobManager::new(
                     JobManagerConfig::new(1, 1, 32).expect("valid bounded export jobs"),
@@ -998,9 +999,66 @@ mod desktop {
     struct RenderResources {
         budgets: RuntimeBudgets,
         text_rasterizer: Mutex<TextRasterizer>,
+        video_sessions: Mutex<VecDeque<VideoSessionEntry>>,
+    }
+
+    const VIDEO_SESSION_CACHE_CAPACITY: usize = 4;
+
+    #[derive(Eq, PartialEq)]
+    struct VideoSessionKey {
+        program: ProgramKey,
+        generation: Option<u64>,
+        source: String,
+    }
+
+    struct VideoSessionEntry {
+        key: VideoSessionKey,
+        session: VideoDecodeSession,
     }
 
     impl RenderResources {
+        fn decode_video_frame(
+            &self,
+            program: ProgramKey,
+            generation: Option<u64>,
+            source: &MediaSourceRef,
+            source_time: RationalTime,
+            cancellation: &CancellationToken,
+        ) -> Result<Option<or_media::VideoFrame>, or_media::DecodeError> {
+            let key = VideoSessionKey {
+                program,
+                generation,
+                source: source.uri().to_owned(),
+            };
+            let entry = {
+                let mut sessions = lock(&self.video_sessions);
+                sessions.retain(|entry| {
+                    entry.key.program == program && entry.key.generation == generation
+                });
+                sessions
+                    .iter()
+                    .position(|entry| entry.key == key)
+                    .and_then(|index| sessions.remove(index))
+            };
+            let mut entry = match entry {
+                Some(entry) => entry,
+                None => VideoSessionEntry {
+                    key,
+                    session: media_decoder(source, self.budgets.clone())?
+                        .open_video_session(cancellation)?,
+                },
+            };
+            let result = entry.session.frame_at(source_time, cancellation);
+            if result.is_ok() {
+                let mut sessions = lock(&self.video_sessions);
+                sessions.push_back(entry);
+                while sessions.len() > VIDEO_SESSION_CACHE_CAPACITY {
+                    sessions.pop_front();
+                }
+            }
+            result
+        }
+
         fn render_with_size(
             &self,
             program: &PreviewProgram,
@@ -1054,14 +1112,14 @@ mod desktop {
                     .source_start
                     .checked_add(offset)
                     .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-                let decoder = match media_decoder(&clip.source, self.budgets.clone()) {
-                    Ok(decoder) => decoder,
-                    Err(error) => {
-                        decode_error.get_or_insert_with(|| error.to_string());
-                        continue;
-                    }
-                };
-                match decoder.decode_video_frame_at(source_time, cancellation) {
+                let runtime_generation = expected_generation.map(|(generation, _)| generation);
+                match self.decode_video_frame(
+                    program.key,
+                    runtime_generation,
+                    &clip.source,
+                    source_time,
+                    cancellation,
+                ) {
                     Ok(Some(frame)) => {
                         frames.push((frame, clip));
                     }

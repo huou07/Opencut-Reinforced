@@ -48,6 +48,26 @@ impl VideoFrame {
             .software_bytes()
             .expect("software decoder frames own packed pixels")
     }
+
+    fn duplicate(&self, budgets: &RuntimeBudgets) -> Result<Self, DecodeError> {
+        let descriptor = *self.descriptor();
+        let pixels = self.pixels();
+        let budget = budgets
+            .decode()
+            .try_acquire(pixels.len() as u64)
+            .map_err(DecodeError::Budget)?;
+        let descriptor = FrameDescriptor::software(
+            descriptor.width(),
+            descriptor.height(),
+            FramePixelFormat::Rgba8,
+            descriptor.timing().timestamp(),
+        )?;
+        let lease = FrameLease::from_software(descriptor, pixels.to_vec())?;
+        Ok(Self {
+            lease,
+            _budget: budget,
+        })
+    }
 }
 
 /// Interleaved stereo F32 audio at 48 kHz.
@@ -195,6 +215,44 @@ impl SoftwareMediaDecoder {
             input: format::input(&self.path).map_err(DecodeError::Ffmpeg)?,
             #[cfg(unix)]
             _io: None,
+        })
+    }
+
+    /// Opens one bounded demux/decode session for sequential preview requests.
+    pub fn open_video_session(
+        &self,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<VideoDecodeSession, DecodeError> {
+        if cancellation.is_cancelled() {
+            return Err(DecodeError::Cancelled);
+        }
+        let input = self.open_input(cancellation)?;
+        let (stream_index, time_base, context) = {
+            let stream = input
+                .streams()
+                .best(ffmpeg::media::Type::Video)
+                .ok_or(DecodeError::MissingVideoStream)?;
+            (
+                stream.index(),
+                TimestampBase::new(stream.time_base(), stream.start_time())?,
+                codec::context::Context::from_parameters(stream.parameters())
+                    .map_err(DecodeError::Ffmpeg)?,
+            )
+        };
+        let decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        Ok(VideoDecodeSession {
+            input,
+            decoder,
+            stream_index,
+            time_base,
+            budgets: self.budgets.clone(),
+            scaler: None,
+            previous_frame: None,
+            next_frame: None,
+            last_request: None,
+            sent_eof: false,
+            ended: false,
+            metrics: VideoDecodeSessionMetrics::default(),
         })
     }
 
@@ -418,6 +476,151 @@ impl SoftwareMediaDecoder {
             }
         }
         Ok(emitted)
+    }
+}
+
+/// Counters used to verify that playback reuses its demuxer and seeks only on
+/// discontinuities.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct VideoDecodeSessionMetrics {
+    pub seeks: u64,
+    pub decoded_frames: u64,
+}
+
+/// Stateful video decode for playback. It retains one preceding and one
+/// lookahead frame; both count against the shared decode budget.
+pub struct VideoDecodeSession {
+    input: MediaInput,
+    decoder: codec::decoder::Video,
+    stream_index: usize,
+    time_base: TimestampBase,
+    budgets: RuntimeBudgets,
+    scaler: Option<(Pixel, u32, u32, scaling::Context)>,
+    previous_frame: Option<VideoFrame>,
+    next_frame: Option<VideoFrame>,
+    last_request: Option<RationalTime>,
+    sent_eof: bool,
+    ended: bool,
+    metrics: VideoDecodeSessionMetrics,
+}
+
+// SAFETY: FFmpeg's demux, decode, and scaling contexts are exclusively owned
+// by this value and every operation requires `&mut self`. Moving those native
+// contexts between threads does not expose concurrent access; the custom AVIO
+// cursor is heap-owned and only called while this input context is mutably used.
+unsafe impl Send for VideoDecodeSession {}
+
+impl VideoDecodeSession {
+    pub fn metrics(&self) -> VideoDecodeSessionMetrics {
+        self.metrics
+    }
+
+    pub fn frame_at(
+        &mut self,
+        target: RationalTime,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<Option<VideoFrame>, DecodeError> {
+        if cancellation.is_cancelled() {
+            return Err(DecodeError::Cancelled);
+        }
+        let discontinuity = self.last_request.is_some_and(|previous| target < previous);
+        if self.last_request.is_none() || discontinuity {
+            self.seek(target)?;
+        }
+        self.last_request = Some(target);
+
+        while self
+            .next_frame
+            .as_ref()
+            .is_some_and(|frame| frame.descriptor().timing().timestamp() <= target)
+        {
+            self.previous_frame = self.next_frame.take();
+        }
+
+        loop {
+            if self
+                .next_frame
+                .as_ref()
+                .is_some_and(|frame| frame.descriptor().timing().timestamp() > target)
+                || self.ended
+            {
+                break;
+            }
+            if cancellation.is_cancelled() {
+                return Err(DecodeError::Cancelled);
+            }
+            let mut decoded = VideoFrameBuffer::empty();
+            match self.decoder.receive_frame(&mut decoded) {
+                Ok(()) => {
+                    let timestamp = decoded
+                        .timestamp()
+                        .ok_or(DecodeError::MissingTimestamp)
+                        .and_then(|pts| self.time_base.to_time(pts))?;
+                    let frame =
+                        make_video_frame(&decoded, timestamp, &mut self.scaler, &self.budgets)?;
+                    self.metrics.decoded_frames = self.metrics.decoded_frames.saturating_add(1);
+                    if timestamp <= target {
+                        self.previous_frame = Some(frame);
+                    } else {
+                        self.next_frame = Some(frame);
+                    }
+                }
+                Err(FfmpegError::Eof) => self.ended = true,
+                Err(error) if is_again(error) => self.read_packet(cancellation)?,
+                Err(error) => return Err(DecodeError::Ffmpeg(error)),
+            }
+        }
+
+        self.previous_frame
+            .as_ref()
+            .or(self.next_frame.as_ref())
+            .map(|frame| frame.duplicate(&self.budgets))
+            .transpose()
+    }
+
+    fn seek(&mut self, target: RationalTime) -> Result<(), DecodeError> {
+        let range = TimeRange::new(target, RationalTime::ZERO).map_err(DecodeError::Time)?;
+        seek_to_range(&mut self.input, self.stream_index, range, self.time_base)?;
+        self.decoder.flush();
+        self.scaler = None;
+        self.previous_frame = None;
+        self.next_frame = None;
+        self.sent_eof = false;
+        self.ended = false;
+        self.metrics.seeks = self.metrics.seeks.saturating_add(1);
+        Ok(())
+    }
+
+    fn read_packet(
+        &mut self,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<(), DecodeError> {
+        loop {
+            if cancellation.is_cancelled() {
+                return Err(DecodeError::Cancelled);
+            }
+            if self.sent_eof {
+                self.ended = true;
+                return Ok(());
+            }
+            let mut packet = ffmpeg::Packet::empty();
+            match packet.read(&mut self.input) {
+                Ok(()) if packet.stream() == self.stream_index => {
+                    self.decoder
+                        .send_packet(&packet)
+                        .map_err(DecodeError::Ffmpeg)?;
+                    return Ok(());
+                }
+                Ok(()) => continue,
+                Err(FfmpegError::Eof) => {
+                    self.decoder.send_eof().map_err(DecodeError::Ffmpeg)?;
+                    self.sent_eof = true;
+                    return Ok(());
+                }
+                Err(error) if is_again(error) => continue,
+                Err(error) => return Err(DecodeError::Ffmpeg(error)),
+            }
+        }
     }
 }
 

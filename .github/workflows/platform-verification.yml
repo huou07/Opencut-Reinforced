@@ -719,6 +719,20 @@ jobs:
           env -u LD_LIBRARY_PATH "$helpers/ffprobe" -hide_banner -version
           env -u LD_LIBRARY_PATH "$helpers/ffmpeg" -hide_banner -encoders | grep -q " png "
 
+      - name: Measure packaged decoder sessions
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/debug/bundle"
+          test_binary="$(find "$GITHUB_WORKSPACE/target/debug/deps" -maxdepth 1 -type f -name 'software_decode-*' -executable -print | head -n 1)"
+          test -n "$test_binary"
+          linked_runtime="$(LD_LIBRARY_PATH="$bundle/lib" ldd "$test_binary")"
+          grep -Fq "$bundle/lib/libavcodec.so" <<< "$linked_runtime"
+          output="$(LD_LIBRARY_PATH="$bundle/lib" "$test_binary" software_video_session_reuses_sequential_decode_and_seeks_on_discontinuity --exact --nocapture 2>&1)"
+          echo "$output"
+          measurement="$(grep '^OR_DECODER_SESSION_MEASUREMENT ' <<< "$output")"
+          test -n "$measurement"
+          echo "$measurement" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Preserve Linux FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

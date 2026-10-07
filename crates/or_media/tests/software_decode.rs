@@ -6,6 +6,7 @@ use or_runtime::{
     BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
 };
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 
@@ -128,6 +129,75 @@ fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
 }
 
 #[test]
+fn software_video_session_reuses_sequential_decode_and_seeks_on_discontinuity() {
+    let baseline_budgets = budgets();
+    let baseline_decoder = SoftwareMediaDecoder::new(&fixture_source(), baseline_budgets).unwrap();
+    let cancellation = CancellationToken::new();
+    let baseline_started = Instant::now();
+    for _ in 0..4 {
+        let preceding = baseline_decoder
+            .decode_video_frame_at(time(1, 4), &cancellation)
+            .unwrap()
+            .unwrap();
+        let sequential = baseline_decoder
+            .decode_video_frame_at(time(3, 10), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preceding.descriptor().timing().timestamp(), time(1, 4));
+        assert_eq!(preceding.pixels(), sequential.pixels());
+    }
+    let baseline_elapsed = baseline_started.elapsed();
+
+    let runtime_budgets = budgets();
+    let decoder = SoftwareMediaDecoder::new(&fixture_source(), runtime_budgets.clone()).unwrap();
+    let session_started = Instant::now();
+    let mut session = decoder.open_video_session(&cancellation).unwrap();
+    for _ in 0..4 {
+        let preceding = session
+            .frame_at(time(1, 4), &cancellation)
+            .unwrap()
+            .unwrap();
+        let sequential = session
+            .frame_at(time(3, 10), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preceding.descriptor().timing().timestamp(), time(1, 4));
+        assert_eq!(preceding.pixels(), sequential.pixels());
+    }
+    let session_elapsed = session_started.elapsed();
+    assert_eq!(session.metrics().seeks, 4);
+    assert_eq!(session.metrics().decoded_frames, 4);
+    eprintln!(
+        "OR_DECODER_SESSION_MEASUREMENT baseline_opens=8 baseline_seeks=8 baseline_elapsed_us={} session_opens=1 session_seeks={} session_decoded_frames={} session_elapsed_us={} session_peak_decode_bytes={}",
+        baseline_elapsed.as_micros(),
+        session.metrics().seeks,
+        session.metrics().decoded_frames,
+        session_elapsed.as_micros(),
+        runtime_budgets.decode().metrics().peak_bytes,
+    );
+
+    let forward_jump = session
+        .frame_at(time(2, 1), &cancellation)
+        .unwrap()
+        .unwrap();
+    assert_eq!(forward_jump.descriptor().timing().timestamp(), time(1, 4));
+    assert_eq!(session.metrics().seeks, 4);
+
+    let discontinuous = session
+        .frame_at(RationalTime::ZERO, &cancellation)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        discontinuous.descriptor().timing().timestamp(),
+        RationalTime::ZERO
+    );
+    assert_eq!(session.metrics().seeks, 5);
+    assert_eq!(session.metrics().decoded_frames, 6);
+    drop((forward_jump, discontinuous, session));
+    assert_eq!(runtime_budgets.decode().bytes_in_use(), 0);
+}
+
+#[test]
 fn cancelled_software_video_seek_returns_before_opening_media() {
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();
     let cancellation = CancellationToken::new();
@@ -135,6 +205,23 @@ fn cancelled_software_video_seek_returns_before_opening_media() {
 
     assert!(matches!(
         decoder.decode_video_frame_at(time(1, 4), &cancellation),
+        Err(DecodeError::Cancelled)
+    ));
+}
+
+#[test]
+fn cancelled_software_video_session_returns_before_opening_media() {
+    let missing = std::env::temp_dir().join(format!(
+        "or-missing-video-session-{}.mkv",
+        std::process::id()
+    ));
+    let source = MediaSourceRef::local_file(file_uri(&missing)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+
+    assert!(matches!(
+        decoder.open_video_session(&cancellation),
         Err(DecodeError::Cancelled)
     ));
 }
