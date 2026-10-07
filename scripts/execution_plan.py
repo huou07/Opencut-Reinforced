@@ -305,6 +305,15 @@ def _checkpoint_map(
         )
         if any(not isinstance(item, str) or not item for item in prerequisites):
             raise PlanError(f"checkpoint {checkpoint_id} has an invalid prerequisite id")
+        if "technical_dependency_checkpoint_ids" in checkpoint:
+            dependencies = _require_list(
+                checkpoint["technical_dependency_checkpoint_ids"],
+                f"checkpoint {checkpoint_id}.technical_dependency_checkpoint_ids",
+            )
+            if any(not isinstance(item, str) or not item for item in dependencies):
+                raise PlanError(f"checkpoint {checkpoint_id} has an invalid technical dependency id")
+            if len(dependencies) != len(set(dependencies)):
+                raise PlanError(f"checkpoint {checkpoint_id} has duplicate technical dependencies")
         memberships = _require_list(
             checkpoint["milestone_membership"],
             f"checkpoint {checkpoint_id}.milestone_membership",
@@ -356,6 +365,17 @@ def _checkpoint_map(
     return result
 
 
+def _technical_dependencies(checkpoint: Mapping[str, Any]) -> list[str]:
+    """Use explicit technical edges, falling back for older plan fixtures."""
+
+    return list(
+        checkpoint.get(
+            "technical_dependency_checkpoint_ids",
+            checkpoint["prerequisite_checkpoint_ids"],
+        )
+    )
+
+
 def _assert_acyclic(checkpoints: dict[str, dict[str, Any]]) -> None:
     visiting: set[str] = set()
     visited: set[str] = set()
@@ -366,7 +386,7 @@ def _assert_acyclic(checkpoints: dict[str, dict[str, Any]]) -> None:
         if checkpoint_id in visited:
             return
         visiting.add(checkpoint_id)
-        for prerequisite in checkpoints[checkpoint_id]["prerequisite_checkpoint_ids"]:
+        for prerequisite in _technical_dependencies(checkpoints[checkpoint_id]):
             visit(prerequisite)
         visiting.remove(checkpoint_id)
         visited.add(checkpoint_id)
@@ -390,13 +410,13 @@ def _validate_owner_category(
         raise PlanError(f"checkpoint {checkpoint_id}.{field} has missing owner {owner_id!r}")
 
     ancestors: set[str] = set()
-    pending = list(checkpoints[checkpoint_id]["prerequisite_checkpoint_ids"])
+    pending = _technical_dependencies(checkpoints[checkpoint_id])
     while pending:
         prerequisite = pending.pop()
         if prerequisite in ancestors:
             continue
         ancestors.add(prerequisite)
-        pending.extend(checkpoints[prerequisite]["prerequisite_checkpoint_ids"])
+        pending.extend(_technical_dependencies(checkpoints[prerequisite]))
     if owner_id not in ancestors:
         raise PlanError(
             f"checkpoint {checkpoint_id}.{field} owner {owner_id} is not an earlier prerequisite"
@@ -586,20 +606,25 @@ def validate_plan(
                 raise PlanError(
                     f"checkpoint {checkpoint_id} refers to missing prerequisite {prerequisite}"
                 )
+        for prerequisite in _technical_dependencies(checkpoint):
+            if prerequisite not in checkpoints:
+                raise PlanError(
+                    f"checkpoint {checkpoint_id} refers to missing technical dependency {prerequisite}"
+                )
+            if prerequisite == checkpoint_id:
+                raise PlanError(f"checkpoint {checkpoint_id} depends on itself")
         relation = checkpoint["next_checkpoint_relation"]
         if relation is not None:
             if relation not in checkpoints:
                 raise PlanError(f"checkpoint {checkpoint_id} refers to missing next {relation}")
-            if checkpoint_id not in checkpoints[relation]["prerequisite_checkpoint_ids"]:
-                raise PlanError(
-                    f"checkpoint {checkpoint_id}.next_checkpoint_relation {relation} "
-                    "does not depend on the current checkpoint"
-                )
-        elif any(
-            checkpoint_id in other["prerequisite_checkpoint_ids"]
-            for other in checkpoints.values()
-        ):
-            raise PlanError(f"checkpoint {checkpoint_id} has no next relation but has a successor")
+    ordered_ids = [item["id"] for item in plan["checkpoints"]]
+    for index, checkpoint_id in enumerate(ordered_ids):
+        expected_next = ordered_ids[index + 1] if index + 1 < len(ordered_ids) else None
+        if checkpoints[checkpoint_id]["next_checkpoint_relation"] != expected_next:
+            raise PlanError(
+                f"checkpoint {checkpoint_id}.next_checkpoint_relation must preserve the "
+                "plan's human-readable traceability order"
+            )
 
     _assert_acyclic(checkpoints)
 
@@ -633,14 +658,14 @@ def validate_plan(
         raise PlanError("state must have one NEXT checkpoint until all checkpoints are DONE")
     next_id = next_ids[0] if next_ids else None
     if next_id is not None:
-        for prerequisite in checkpoints[next_id]["prerequisite_checkpoint_ids"]:
+        for prerequisite in _technical_dependencies(checkpoints[next_id]):
             if statuses[prerequisite] != "DONE":
                 raise PlanError(f"NEXT checkpoint {next_id} has unfinished prerequisite {prerequisite}")
     for checkpoint_id, status in statuses.items():
         if status == "DONE":
             unfinished = [
                 prerequisite
-                for prerequisite in checkpoints[checkpoint_id]["prerequisite_checkpoint_ids"]
+                for prerequisite in _technical_dependencies(checkpoints[checkpoint_id])
                 if statuses[prerequisite] != "DONE"
             ]
             if unfinished:

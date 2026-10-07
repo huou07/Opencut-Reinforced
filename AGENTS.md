@@ -96,12 +96,12 @@ Before choosing work, run:
     python3 scripts/execution_plan.py status
     python3 scripts/execution_plan.py context <checkpoint-id>
 
-When the user says “continue”, execute only the checkpoint currently marked
-`NEXT`. When the user names a phase, follow the machine plan and its locked
-phase specification. When the user says “finish desktop MVP”, follow the
-`desktop-mvp` milestone graph. If no external fresh-process supervisor is
-active, execute one checkpoint and stop rather than chaining checkpoints in a
-single model context.
+When the user says “continue”, start from the current `NEXT` frontier. A
+bounded product delegation may select and complete several requirements in
+one coherent implementation when their real dependencies permit it; roadmap
+labels are traceability, not mandatory prompt or commit boundaries. When the
+user names a phase or milestone, preserve its complete requirement scope and
+locked specifications. Continue without asking for a new prompt at each label.
 
 The execution source-of-truth order is:
 
@@ -117,24 +117,28 @@ The execution source-of-truth order is:
 
 Feature agents may not edit the locked checkpoint specification or permanent
 architecture invariants. If repository reality conflicts with either, stop and
-report the exact conflict. Plan amendments require a separate architecture
-plan task.
+report the exact conflict. Plan amendments require an explicitly authorized
+control-plane task; a task that explicitly authorizes correcting the execution
+model may include that amendment.
 
 ### Execution evidence lock
 
-Normal checkpoint runners implement exactly one resolved `NEXT` checkpoint and
-may push implementation commits only. They must not edit `PLAN.json`,
+Normal runners implement the exact requirement set authorized by the selected
+goal. They may combine requirements into a coherent change, but may not bypass
+real schema, security, persistence, platform, or API dependencies. They may
+push implementation commits only. They must not edit `PLAN.json`,
 `STATE.json`, `EVIDENCE_POLICY.json`, phase specifications, architecture
 invariants or policy, execution validators/supervisor, protected workflows, or
 completion evidence. A runner handoff must say `IMPLEMENTED — AWAITING
 SUPERVISOR EVIDENCE`; it must never claim repository-authoritative `DONE`.
 
-The supervisor independently verifies the implementation SHA against the
-required hosted workflow runs and jobs, verifies a Developer Preview when the
-plan requires one, writes the evidence record, advances `STATE.json`, and
-pushes the state/evidence-only completion commit. A model statement is not
-completion evidence. Use `scripts/agent_supervisor.py --resume-sha` only for
-an already-pushed exact SHA that still matches the current `NEXT` state.
+The supervisor independently verifies the exact implementation SHA against
+the required hosted workflow runs and jobs for every selected requirement,
+verifies Developer Previews where required, writes one evidence record per
+requirement, advances `STATE.json` for that verified dependency-closed set,
+and pushes a state/evidence-only completion commit. A model statement is not
+completion evidence. `NEXT` is the earliest incomplete-plan cursor, not a limit
+on the selected implementation scope.
 
 ### Product acceptance and repair discipline
 

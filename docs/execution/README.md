@@ -21,6 +21,12 @@ The authority order is:
 `PLAN.json` never contains mutable completion state. `STATE.json` never adds
 checkpoints that are absent from the plan.
 
+Plan IDs remain the roadmap traceability inventory. `next_checkpoint_relation`
+preserves its display order; `technical_dependency_checkpoint_ids` records the
+actual correctness dependencies used by the supervisor. Historical
+`prerequisite_checkpoint_ids` do not by themselves block independent product
+work.
+
 ## Commands
 
 ```sh
@@ -40,12 +46,14 @@ It does not know or assume a vendor agent CLI. A runner may push only its
 implementation commit. It cannot edit the plan, state, evidence policy,
 phase contracts, validators, supervisor, workflows, or completion evidence.
 
-The supervisor is the only authority that can turn `NEXT` into `DONE`. After a
-runner pushes, it independently verifies exact-SHA push-triggered GitHub
-Actions runs and every required job, verifies a Developer Preview when the
-selected checkpoint requires one, writes the supervisor-owned evidence record,
-and then creates the state/evidence completion commit. A successful model
-message is never repository-authoritative completion evidence.
+The supervisor is the only authority that can mark requirements `DONE`. A
+single coherent implementation may cover multiple plan IDs. After a runner
+pushes, the supervisor independently verifies exact-SHA push-triggered GitHub
+Actions runs and every required job for each selected ID, verifies required
+Developer Previews, writes one evidence record per ID, and creates one
+state/evidence completion commit. `NEXT` is a progress cursor, not a mandatory
+implementation boundary. A successful model message is never
+repository-authoritative completion evidence.
 
 Evidence enforcement begins at the checkpoint named by
 `EVIDENCE_POLICY.json`. Historical checkpoints before that boundary remain

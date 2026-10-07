@@ -46,10 +46,13 @@ def checkpoint(checkpoint_id: str, prerequisites: list[str], next_id: str | None
 
 def fixture_plan_state(ids: list[str] = ["A", "B"]) -> tuple[dict[str, object], dict[str, object]]:
     plan_checkpoints = [
-        checkpoint(ids[0], [], ids[1] if len(ids) > 1 else None),
+        checkpoint(
+            checkpoint_id,
+            [ids[index - 1]] if index else [],
+            ids[index + 1] if index + 1 < len(ids) else None,
+        )
+        for index, checkpoint_id in enumerate(ids)
     ]
-    if len(ids) > 1:
-        plan_checkpoints.append(checkpoint(ids[1], [ids[0]], None))
     plan = {
         "schema_version": 1,
         "plan_id": "test-plan",
@@ -422,6 +425,33 @@ class AdvancingClock:
 
 
 class ExecutionPlanTests(unittest.TestCase):
+    def test_historical_sequence_edge_does_not_block_independent_requirement(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        checkpoint_10a = execution_plan.checkpoint_for_id(plan, "10A")
+        self.assertEqual(checkpoint_10a["prerequisite_checkpoint_ids"], ["9E"])
+        self.assertEqual(
+            execution_plan._technical_dependencies(checkpoint_10a), ["7A", "8F"]
+        )
+        resolution = execution_plan.resolve_goal(
+            plan, state, "milestone:full-roadmap", REPO_ROOT
+        )
+        self.assertEqual(
+            agent_supervisor.resolve_completion_batch(
+                plan, state, resolution, ["10A"]
+            ),
+            ["10A"],
+        )
+
+    def test_plan_dependency_rewire_does_not_change_requirement_contract(self) -> None:
+        plan, _state = execution_plan.load_plan_state(REPO_ROOT)
+        historical = json.loads(json.dumps(plan))
+        agent_supervisor.validate_historical_plan_compatibility(historical, plan)
+        historical["checkpoints"][plan["checkpoints"].index(
+            execution_plan.checkpoint_for_id(plan, "10A")
+        )]["title"] = "changed requirement"
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "product/evidence contract"):
+            agent_supervisor.validate_historical_plan_compatibility(historical, plan)
+
     def test_current_repository_plan_is_valid(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         summary = execution_plan.validate_plan(plan, state, REPO_ROOT)
@@ -1941,6 +1971,8 @@ class SupervisorBoundaryTests(unittest.TestCase):
             "baseline_is_ancestor": True,
         }
         agent_supervisor.validate_resume_preconditions(**valid)
+        historical = dict(valid, resume_is_ancestor=True, head="c" * 40, origin_main="c" * 40)
+        agent_supervisor.validate_resume_preconditions(**historical)
         for key, value in (
             ("resume_sha", "b" * 40),
             ("head", "b" * 40),
@@ -1956,6 +1988,15 @@ class SupervisorBoundaryTests(unittest.TestCase):
             invalid[key] = False
             with self.subTest(key=key), self.assertRaises(agent_supervisor.SupervisorError):
                 agent_supervisor.validate_resume_preconditions(**invalid)
+
+    def test_historical_resume_allows_only_control_plane_followups(self) -> None:
+        agent_supervisor.validate_historical_resume_paths(
+            ["scripts/agent_supervisor.py", "docs/execution/AGENT_EXECUTION.md"]
+        )
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "product files changed"):
+            agent_supervisor.validate_historical_resume_paths(
+                ["apps/or_app/lib/editor.dart"]
+            )
 
     def test_platform_path_filter_only_skips_metadata_changes(self) -> None:
         self.assertFalse(
@@ -2884,6 +2925,66 @@ class SupervisorTests(unittest.TestCase):
             agent_supervisor.SupervisorError, "do not match the exact candidate source"
         ):
             agent_supervisor.assert_state_advanced_once(before, after, plan)
+
+    def test_batch_transition_closes_dependency_chain_atomically(self) -> None:
+        plan, before = fixture_plan_state(["A", "B", "C"])
+        after = agent_supervisor.advance_state_batch(before, plan, ["A", "B"])
+        self.assertEqual(after["checkpoints"]["A"], "DONE")  # type: ignore[index]
+        self.assertEqual(after["checkpoints"]["B"], "DONE")  # type: ignore[index]
+        self.assertEqual(after["checkpoints"]["C"], "NEXT")  # type: ignore[index]
+        self.assertEqual(after["current_next"], "C")
+
+    def test_batch_transition_refuses_unclosed_prerequisites(self) -> None:
+        plan, before = fixture_plan_state(["A", "B", "C"])
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "unmet prerequisites"):
+            agent_supervisor.advance_state_batch(before, plan, ["A", "C"])
+
+    def test_batch_transition_refuses_multiple_contract_gates(self) -> None:
+        plan, before = fixture_plan_state(["A", "B"])
+        plan["checkpoints"][0]["expected_project_schema_effect_category"] = "explicit-model-gate"  # type: ignore[index]
+        plan["checkpoints"][1]["expected_ipc_effect_category"] = "explicit-contract-gate"  # type: ignore[index]
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "different checkpoints"):
+            agent_supervisor.advance_state_batch(
+                before,
+                plan,
+                ["A", "B"],
+                candidate_contract_versions=contract_versions(project=8, ipc=2),
+            )
+
+    def test_requirement_batch_must_fit_goal_and_include_next(self) -> None:
+        plan, state = fixture_plan_state(["A", "B", "C"])
+        plan["checkpoints"][1]["technical_dependency_checkpoint_ids"] = []  # type: ignore[index]
+        resolution = {"checkpoint_id": "A", "goal_checkpoint_ids": ["A", "B"]}
+        self.assertEqual(
+            agent_supervisor.resolve_completion_batch(plan, state, resolution, ["A", "B"]),
+            ["A", "B"],
+        )
+        self.assertEqual(
+            agent_supervisor.resolve_completion_batch(plan, state, resolution, ["B"]),
+            ["B"],
+        )
+        with self.assertRaisesRegex(agent_supervisor.SupervisorError, "exceed the selected goal"):
+            agent_supervisor.resolve_completion_batch(plan, state, resolution, ["A", "C"])
+
+    def test_batch_completion_commit_paths_are_exact(self) -> None:
+        agent_supervisor.validate_state_commit_paths(
+            [
+                "docs/execution/STATE.json",
+                "docs/execution/evidence/A.json",
+                "docs/execution/evidence/B.json",
+            ],
+            ["A", "B"],
+        )
+        with self.assertRaises(agent_supervisor.SupervisorError):
+            agent_supervisor.validate_state_commit_paths(
+                [
+                    "docs/execution/STATE.json",
+                    "docs/execution/evidence/A.json",
+                    "docs/execution/evidence/B.json",
+                    "README.md",
+                ],
+                ["A", "B"],
+            )
 
 
 if __name__ == "__main__":

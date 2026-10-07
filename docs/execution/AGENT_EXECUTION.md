@@ -14,8 +14,17 @@ milestone:desktop-mvp
 milestone:full-roadmap
 ```
 
-`PLAN.json` and `STATE.json` resolve the goal to the only checkpoint currently
-marked `NEXT`. A runner never chooses an arbitrary checkpoint.
+`PLAN.json` and `STATE.json` establish the requirement inventory and the
+current `NEXT` frontier. `NEXT` is the earliest incomplete-plan cursor, not a
+work-unit boundary. `--requirements <ID,...>` selects an explicit,
+dependency-closed subset within the selected goal; the supervisor verifies and
+records each ID independently against the exact same implementation SHA.
+
+In each plan entry, `prerequisite_checkpoint_ids` preserves the historical
+roadmap traversal for traceability. `technical_dependency_checkpoint_ids` is
+the correctness graph used for authorization, migrations, and dependency
+validation. New real dependencies belong in the latter. Reordering a cursor
+does not waive those edges.
 
 Before a multi-checkpoint phase is eligible for unattended execution, every
 remaining checkpoint must receive its required architecture, model, and
@@ -54,14 +63,15 @@ stops before GitHub polling and leaves state unchanged.
 
 ## Trust boundary
 
-The runner owns one locked checkpoint's source implementation, ordinary
+The runner owns the selected coherent set's source implementation, ordinary
 feature documentation, tests, local headless verification, implementation
 commit, and normal push. It does not own execution state, completion evidence,
-hosted CI truth, Developer Preview truth, or the successor checkpoint.
+hosted CI truth, or Developer Preview truth.
 
 The supervisor owns the exact implementation SHA, hosted evidence
-verification, optional preview verification, evidence record, `STATE.json`
-transition, state/evidence commit, and the decision to launch a fresh runner.
+verification for every selected requirement, optional preview verification,
+separate evidence records, the `STATE.json` transition, and the
+state/evidence-only commit.
 An LLM saying `DONE` is never repository-authoritative completion.
 
 The generated runner prompt names required evidence classes and states that
@@ -88,6 +98,7 @@ Prepare the authoritative prompt for the current checkpoint:
 ```sh
 python3 scripts/agent_supervisor.py \
   --goal checkpoint:<ID> \
+  --requirements <ID,ID,...> \
   --prepare
 ```
 
@@ -100,7 +111,7 @@ python3 scripts/agent_supervisor.py \
 ```
 
 Paste the generated prompt into one fresh Codex Desktop conversation opened on
-the repository. Desktop performs exactly the generated checkpoint: source
+the repository. Desktop performs the selected coherent requirement set: source
 implementation, local headless verification, implementation commit, and normal
 push. It must not edit `STATE.json` or completion evidence.
 
@@ -109,6 +120,7 @@ After obtaining the exact implementation SHA, resume deterministically:
 ```sh
 python3 scripts/agent_supervisor.py \
   --goal checkpoint:<ID> \
+  --requirements <ID,ID,...> \
   --resume-sha <40-character implementation SHA>
 ```
 
@@ -123,9 +135,10 @@ Before work, the supervisor requires `main`, a clean worktree, `HEAD ==
 origin/main`, and a valid plan/state graph. It captures the bytes of `PLAN.json`,
 `STATE.json`, and every protected execution-control surface.
 
-The runner then receives one generated prompt and one checkpoint. It must:
+The runner then receives one generated prompt and one bounded requirement set. It must:
 
-1. implement only that checkpoint;
+1. implement only the selected requirements as one coherent change while
+   preserving real technical dependencies;
 2. leave `PLAN.json`, `STATE.json`, policy, phase specs, validators, supervisor,
    and evidence unchanged; leave protected workflows unchanged except for
    exact paths authorized by the checkpoint's PLAN entry;
@@ -145,15 +158,15 @@ supervisor then verifies, in order:
 3. every policy-required job in both workflows;
 4. the exact Developer Preview when `PLAN.json` requires it;
 5. the evidence record and offline record validation;
-6. the single `NEXT -> DONE` plus planned-successor transition;
+6. evidence-backed completion of every selected requirement and recomputation
+   of the `NEXT` cursor;
 7. local plan, policy, and repository checks;
 8. a state/evidence-only completion commit; and
 9. Repository hygiene on the exact state-commit SHA.
 
-Only after the final hygiene gate succeeds may a new fresh runner process
-start. A phase or milestone therefore means a sequence of fresh runners,
-hosted verification, and state commits—not one model context implementing
-multiple checkpoints.
+Only after the final hygiene gate succeeds may another implementation unit
+start. A phase or milestone may span multiple coherent units; each unit retains
+exact requirement-to-commit-and-run traceability.
 
 A successful direct runner invocation must produce a new implementation
 commit. If `HEAD` is unchanged, stop immediately; it is not an implementation
