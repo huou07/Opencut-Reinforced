@@ -318,6 +318,12 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
+      // Prepare Flutter's screenshot surface before the editor registers its
+      // Android SurfaceProducer texture. The prior hosted run stalled while
+      // rebinding the activity render surface with the preview texture active.
+      debugPrint('ANDROID_SAF_SURFACE_CONVERSION_START');
+      await binding.convertFlutterSurfaceToImage();
+      debugPrint('ANDROID_SAF_SURFACE_CONVERSION_COMPLETE');
       debugPrint('ANDROID_SAF_DOCUMENTS_UI_READY');
       await tester.tap(find.byKey(const ValueKey('home-open-project')));
       // A hosted UIAutomator helper selects the separate provider's document in
@@ -330,10 +336,7 @@ void main() {
       );
       debugPrint('ANDROID_SAF_PROJECT_OPENED');
       expect(gateway.openedPath, contains('/files/or-projects/'));
-      // Convert while the Activity has a live window surface. Doing this after
-      // the app backgrounds races Android surface teardown and PixelCopy.
       debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
-      await binding.convertFlutterSurfaceToImage();
       final session = gateway.session!;
       final revision = (await gateway.summary(session)).revision;
       expect(

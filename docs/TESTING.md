@@ -710,7 +710,11 @@ hardening commit itself must pass both workflows.
   fixture APK/UID with a `MANAGE_DOCUMENTS`-protected document provider and real
   read grants. Its primary journey opens the fixture project through native
   DocumentsUI, uses the real editor Play/seek controls, and checks red pixels
-  inside the composed Flutter Texture bounds. The media stays a `content://`
+  inside the composed Flutter Texture bounds. The Android integration test
+  switches Flutter into screenshot mode on Home, before the editor registers a
+  native preview texture; performing that surface rebind after the preview had
+  opened stalled the hosted driver before the first texture assertion. The
+  media stays a `content://`
   identity through provider FD acquisition, duplication, software decode,
   shared rendering, and surface presentation. Fixture setup and revocation
   controls do not replace the app picker, gateway, renderer, or viewer.
