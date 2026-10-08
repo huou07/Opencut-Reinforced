@@ -2824,6 +2824,7 @@ class RepairResumeTests(unittest.TestCase):
             with (
                 mock.patch.object(agent_supervisor, "ensure_start_state"),
                 mock.patch.object(agent_supervisor, "_preflight_goal_data", return_value=preflight),
+                mock.patch.object(agent_supervisor, "enforce_active_mission_batch"),
                 mock.patch.object(agent_supervisor, "_run_pre_host_checks"),
                 mock.patch.object(
                     agent_supervisor,
@@ -2853,6 +2854,44 @@ class RepairResumeTests(unittest.TestCase):
 
 
 class SupervisorTests(unittest.TestCase):
+    def test_paused_legacy_mode_allows_only_explicit_current_atomic_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            execution = root / "docs" / "execution"
+            execution.mkdir(parents=True)
+            (execution / "MISSION.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "legacy_execution": "PAUSED_AFTER_ALLOWED_REQUIREMENTS",
+                        "finish_current_requirements": ["9D"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            agent_supervisor.enforce_active_mission_batch(root, ["9D"], True)
+            for selected, explicit in ((["9E"], True), (["9D"], False), (["9D", "9E"], True)):
+                with self.subTest(selected=selected, explicit=explicit), self.assertRaisesRegex(
+                    agent_supervisor.SupervisorError, "legacy roadmap execution is paused"
+                ):
+                    agent_supervisor.enforce_active_mission_batch(root, selected, explicit)
+            mission_path = execution / "MISSION.json"
+            mission_path.write_text('{"schema_version":1}', encoding="utf-8")
+            with self.assertRaisesRegex(
+                agent_supervisor.SupervisorError, "does not authorize legacy execution"
+            ):
+                agent_supervisor.enforce_active_mission_batch(root, ["9D"], True)
+
+    def test_historical_resume_allows_only_named_pivot_control_docs(self) -> None:
+        agent_supervisor.validate_historical_resume_paths(
+            ["docs/execution/MISSION.json", "docs/PRODUCT_ROADMAP.md"]
+        )
+        with self.assertRaisesRegex(
+            agent_supervisor.SupervisorError, "product files changed after the candidate"
+        ):
+            agent_supervisor.validate_historical_resume_paths(["crates/or_core/src/lib.rs"])
+
     def test_dirty_worktree_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -2890,6 +2929,7 @@ class SupervisorTests(unittest.TestCase):
 
         with (
             mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(agent_supervisor, "enforce_active_mission_batch"),
             mock.patch.object(execution_plan, "read_contract_versions", return_value=contract_versions(project=5)),
             mock.patch.object(
                 execution_plan, "load_plan_state", return_value=(plan, state)
@@ -2939,6 +2979,7 @@ class SupervisorTests(unittest.TestCase):
 
         with (
             mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(agent_supervisor, "enforce_active_mission_batch"),
             mock.patch.object(execution_plan, "read_contract_versions", return_value=contract_versions(project=5)),
             mock.patch.object(
                 execution_plan, "load_plan_state", return_value=(plan, state)
@@ -3001,6 +3042,7 @@ class SupervisorTests(unittest.TestCase):
 
         with (
             mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(agent_supervisor, "enforce_active_mission_batch"),
             mock.patch.object(execution_plan, "read_contract_versions", return_value=contract_versions(project=5)),
             mock.patch.object(
                 execution_plan, "load_plan_state", return_value=(plan, state)
@@ -3094,6 +3136,7 @@ class SupervisorTests(unittest.TestCase):
 
         with (
             mock.patch.object(agent_supervisor, "ensure_start_state"),
+            mock.patch.object(agent_supervisor, "enforce_active_mission_batch"),
             mock.patch.object(execution_plan, "read_contract_versions", return_value=contract_versions(project=5)),
             mock.patch.object(
                 execution_plan,

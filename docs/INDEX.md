@@ -21,6 +21,8 @@ This map points to the current source of truth. Read the documents relevant to y
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
 | [ROADMAP.md](ROADMAP.md) | Phased plan, dependencies, and MVP boundary |
+| [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | Active outcome-based product roadmap and legacy requirement mapping |
+| [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md) | Evidence-backed reuse/build/upstream decisions and license boundaries |
 | [TESTING.md](TESTING.md) | Current bootstrap checks, planned verification layers, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
 | [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "active_roadmap": "docs/PRODUCT_ROADMAP.md",
+  "legacy_execution": "PAUSED_AFTER_ALLOWED_REQUIREMENTS",
+  "finish_current_requirements": ["9D"],
+  "require_explicit_requirement_selection": true,
+  "authorized_by": "operator mission pivot on 2026-10-09",
+  "pivot_product_base_sha": "affc71a5bee840fed68536bfa47e7abe825b908e"
+}

@@ -1,22 +1,29 @@
 # OR Execution Lock
 
+> **Mode change:** operator authorization on 2026-10-09 paused the legacy
+> checkpoint sequence after the already-in-flight 9D requirement. See
+> [MISSION.json](MISSION.json), [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md),
+> and [OPEN_SOURCE_CONVERGENCE.md](../OPEN_SOURCE_CONVERGENCE.md). The
+> supervisor permits only an explicitly selected 9D batch to finish this
+> atomic boundary; it rejects later legacy work. PLAN/STATE/evidence remain
+> historical traceability and are not rewritten by this mode change.
+
 This directory is the repository's machine-readable execution control plane.
-It makes the approved architecture, checkpoint order, and current execution
-state inspectable without a bespoke prompt.
+It preserves the approved historical architecture, checkpoint graph, and
+execution evidence inspectable without relying on chat.
 
 ## Authority
 
-The authority order is:
+The authority order for the active product mission is:
 
 1. `AGENTS.md` — permanent safety, repository, and execution rules.
-2. `PLAN.json` — immutable checkpoint graph and milestone definitions.
-3. `STATE.json` — mutable `DONE`, `NEXT`, and `PLANNED` state.
-4. `phases/*.md` — locked implementation contracts.
-5. `docs/ARCHITECTURE.md` — human architecture source of truth.
-6. `docs/TECHNICAL_PLAN.md` — subsystem design detail.
-7. `docs/PRODUCT.md` — capability scope.
-8. `docs/ROADMAP.md` — human roadmap and status.
-9. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` — presentation and UX truth.
+2. `docs/PRODUCT_ROADMAP.md` — active outcome-based capabilities and traceability.
+3. `docs/OPEN_SOURCE_CONVERGENCE.md` — current reuse/build/upstream decisions.
+4. `docs/ARCHITECTURE.md`, `docs/TECHNICAL_PLAN.md`, and `docs/PRODUCT.md` —
+   architecture and product requirements.
+5. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` — presentation and UX truth.
+6. `PLAN.json`, `STATE.json`, and `phases/*.md` — preserved old requirements,
+   evidence, and historical status; the old `NEXT` is not the active cursor.
 
 `PLAN.json` never contains mutable completion state. `STATE.json` never adds
 checkpoints that are absent from the plan.
@@ -64,7 +71,9 @@ runner edits, and STATE advancement disables the override. This preserves one
 delegation across coherent requirement batches without making plan, evidence,
 architecture, acceptance, or verification controls mutable.
 
-The supervisor is the only authority that can mark requirements `DONE`. A
+The supervisor is the only authority that can mark historical requirements
+`DONE`. `MISSION.json` prevents a runner or manual resume from advancing past
+the operator-authorized in-flight batch while legacy execution is paused. A
 single coherent implementation may cover multiple plan IDs. After a runner
 pushes, the supervisor independently verifies exact-SHA push-triggered GitHub
 Actions runs and every required job for each selected ID, verifies required

@@ -2,13 +2,15 @@
 
 ## Execution lock and implementation order
 
-The machine-readable architecture and execution authority is
-[docs/execution/README.md](execution/README.md), with the immutable graph in
-[PLAN.json](execution/PLAN.json), mutable state in [STATE.json](execution/STATE.json),
-and locked phase contracts in [execution/phases](execution/phases). This document records architecture and subsystem contracts. For authoritative
-current checkpoint and phase status, see `docs/execution/STATE.json`; this
-document does not copy mutable `NEXT` state or authorize skipping it. Further
-runtime crates are not created ahead of their checkpoint gates.
+The active outcome-based work plan is
+[docs/PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md), with evidence-backed adoption
+decisions in [docs/OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md).
+`docs/execution/PLAN.json`, `STATE.json`, and locked phase contracts preserve
+the old roadmap requirements and evidence; their `NEXT` cursor is not active
+after the 2026 operator pivot. This document records architecture and subsystem
+contracts. Retain real schema, security, persistence, platform, and API
+dependencies; do not create speculative crates or preserve artificial phase
+ordering.
 
 The implementation order preserves the control-plane/runtime-plane boundary:
 Rust `or_core` owns canonical project/application state; `or_runtime` now

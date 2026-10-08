@@ -2,7 +2,14 @@
 
 ## Status and maturity labels
 
-This is the complete planned product scope, not a list of implemented features. The repository is in pre-MVP planning; the HTML prototype simulates selected workflows. Labels describe intended roadmap placement:
+This is the complete product requirement inventory, not a list of implemented
+features. OR has a working project/timeline/runtime foundation and remains
+pre-MVP; packaged user journeys and ordinary-editor usability are incomplete.
+Active work follows [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md), which groups these
+requirements into coherent capabilities and records evidence-backed
+convergence decisions. The old phase labels below describe provenance, not a
+mandatory implementation order. The HTML prototype simulates selected
+workflows. Labels describe intended capability depth:
 
 - **MVP FOUNDATION** — required for the initial usable editor or a product-wide foundation.
 - **PLANNED** — intended after or alongside MVP, with no claim that it exists.
@@ -11,7 +18,10 @@ This is the complete planned product scope, not a list of implemented features. 
 
 Where a product area spans stages, each group of capabilities is labeled separately.
 
-The machine-readable implementation order is [docs/execution/README.md](execution/README.md). Product labels describe scope; `PLAN.json` and `STATE.json` decide which checkpoint may execute next.
+The legacy checkpoint graph and evidence remain in
+[docs/execution/README.md](execution/README.md). They preserve requirement
+traceability; after the authorized 2026 product pivot they do not select the
+next implementation task.
 
 ## Product principles
 

@@ -1,5 +1,13 @@
 # Roadmap
 
+> **Historical requirements and traceability:** this checkpoint-by-checkpoint
+> roadmap is preserved as provenance. Active product work follows
+> [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) and the evidence-backed decisions in
+> [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md). The old `NEXT`
+> cursor and phase boundaries do not select or serialize current work. No
+> requirement or invariant is discarded by this change; the active roadmap
+> maps these phase scopes to coherent product capabilities.
+
 ## Status
 
 No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is IN PROGRESS; checkpoint 7H is the current hardening and Developer Preview gate and awaits supervisor evidence. Later phases depend on implementation capacity, platform evidence, and licensing or security review.

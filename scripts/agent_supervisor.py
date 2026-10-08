@@ -42,6 +42,7 @@ EXPLICIT_PROTECTED_PATHS = {
     "scripts/test_execution_infra.py",
     "docs/execution/AMENDMENT_BASELINE.json",
     "docs/execution/DELEGATION.json",
+    "docs/execution/MISSION.json",
 }
 AMENDMENT_MARKER = "docs/execution/AMENDMENT_BASELINE.json"
 DELEGATION_MARKER = "docs/execution/DELEGATION.json"
@@ -82,10 +83,18 @@ REPAIR_TEST_PREFIXES = (
 )
 RESUME_FOLLOWUP_CONTROL_PATHS = {
     "AGENTS.md",
+    "docs/ARCHITECTURE.md",
     "docs/execution/AGENT_EXECUTION.md",
+    "docs/execution/MISSION.json",
     "docs/execution/README.md",
     "docs/execution/PLAN.json",
     "docs/execution/EVIDENCE_POLICY.json",
+    "docs/INDEX.md",
+    "docs/OPEN_SOURCE_CONVERGENCE.md",
+    "docs/PRODUCT.md",
+    "docs/PRODUCT_ROADMAP.md",
+    "docs/ROADMAP.md",
+    "docs/TECHNICAL_PLAN.md",
     "scripts/agent_supervisor.py",
     "scripts/execution_plan.py",
     "scripts/test_execution_infra.py",
@@ -2031,6 +2040,7 @@ def repair_resume_goal(
     plan = preflight["plan"]
     state = preflight["state"]
     resolution = preflight["resolution"]
+    enforce_active_mission_batch(repo_root, [checkpoint_id], True)
     result = _run_one_checkpoint(
         repo_root,
         plan=plan,
@@ -2255,6 +2265,40 @@ def resolve_completion_batch(
     return ids
 
 
+def enforce_active_mission_batch(
+    repo_root: Path,
+    checkpoint_ids: Sequence[str],
+    explicitly_selected: bool,
+) -> None:
+    """Keep paused legacy execution bounded to the operator-authorized finish."""
+
+    mission_path = repo_root / "docs" / "execution" / "MISSION.json"
+    try:
+        mission = json.loads(mission_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SupervisorError(f"cannot load active mission mode: {exc}") from exc
+    if not isinstance(mission, dict) or mission.get("schema_version") != 1:
+        raise SupervisorError("active mission mode has an unsupported schema")
+    mode = mission.get("legacy_execution")
+    if mode == "ACTIVE":
+        return
+    if mode != "PAUSED_AFTER_ALLOWED_REQUIREMENTS":
+        raise SupervisorError("active mission mode does not authorize legacy execution")
+    allowed = mission.get("finish_current_requirements")
+    if (
+        not isinstance(allowed, list)
+        or not allowed
+        or not all(isinstance(item, str) and item for item in allowed)
+        or len(set(allowed)) != len(allowed)
+    ):
+        raise SupervisorError("active mission mode has an invalid finish-current allowlist")
+    if not explicitly_selected or list(checkpoint_ids) != allowed:
+        raise SupervisorError(
+            "legacy roadmap execution is paused by the operator; explicitly select only "
+            "the authorized in-flight requirements to finish this atomic boundary"
+        )
+
+
 def run_goal(
     repo_root: Path,
     goal: str,
@@ -2273,6 +2317,7 @@ def run_goal(
         state = preflight["state"]
         resolution = preflight["resolution"]
         batch_ids = resolve_completion_batch(plan, state, resolution, requirement_ids)
+        enforce_active_mission_batch(repo_root, batch_ids, requirement_ids is not None)
         if resume_pending:
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")

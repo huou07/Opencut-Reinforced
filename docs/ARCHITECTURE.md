@@ -2,6 +2,16 @@
 
 ## Status
 
+The active product architecture follows the 2026 convergence decision in
+[OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md); coherent user
+capabilities and real technical dependencies are planned in
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md). The older phase contracts below remain
+historical product requirements and evidence, not an instruction to build each
+planned subsystem independently. In particular, media-engine replacement is
+not approved: OR keeps its current FFmpeg/wgpu path while a bounded MLT
+comparison measures whether reuse improves the packaged product. OpenCut's
+rewrite is monitored until its promised core/API ships and can be tested.
+
 This is the canonical high-level architecture. It documents the implemented
 project/application, Flutter shell, media, and timeline foundations alongside
 planned components. The

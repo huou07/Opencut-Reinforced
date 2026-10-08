@@ -5,9 +5,10 @@
 
 Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
 
-The repository execution state is maintained in `docs/execution/STATE.json` and
-selected by `docs/execution/PLAN.json`. Do not maintain current-phase status in
-this file.
+The legacy checkpoint ledger is maintained in `docs/execution/STATE.json` and
+`docs/execution/PLAN.json`; it records historical requirement evidence and is
+not the active work cursor after the 2026 open-source convergence pivot. Active
+product priorities and status belong in `docs/PRODUCT_ROADMAP.md`.
 
 Do not assume unfinished features already exist.
 
@@ -91,35 +92,42 @@ Before making changes:
 
 Do not guess when the repository already contains the answer.
 
-Before choosing work, run:
+Before choosing work, read the active roadmap and inspect the legacy execution
+ledger for relevant evidence and dependencies. Run the execution-plan status
+and context commands when reconciling legacy checkpoint evidence, not to
+select the next product task:
 
     python3 scripts/execution_plan.py status
     python3 scripts/execution_plan.py context <checkpoint-id>
 
-When the user says “continue”, start from the current `NEXT` frontier. A
-bounded product delegation may select and complete several requirements in
-one coherent implementation when their real dependencies permit it; roadmap
-labels are traceability, not mandatory prompt or commit boundaries. When the
-user names a phase or milestone, preserve its complete requirement scope and
-locked specifications. Continue without asking for a new prompt at each label.
+When the user says “continue”, continue the highest-value incomplete capability
+in `docs/PRODUCT_ROADMAP.md`. The old `NEXT` cursor is historical and must not
+reactivate the paused checkpoint sequence. A bounded product delegation may
+combine or reorder requirements when their real dependencies permit it;
+roadmap labels are traceability, not mandatory prompt or commit boundaries.
+Honor a named legacy requirement's complete product contract and preserve its
+invariants. Continue without asking for a new prompt at each label.
 
 The execution source-of-truth order is:
 
 1. This file for permanent repository behavior, safety, and execution rules.
-2. `docs/execution/PLAN.json` for the immutable checkpoint graph.
-3. `docs/execution/STATE.json` for mutable `DONE`, `NEXT`, and `PLANNED` state.
-4. `docs/execution/phases/*.md` for locked checkpoint contracts.
-5. `docs/ARCHITECTURE.md` for human-readable architecture.
-6. `docs/TECHNICAL_PLAN.md` for detailed subsystem design.
-7. `docs/PRODUCT.md` for product capability scope.
-8. `docs/ROADMAP.md` for human-readable roadmap status.
-9. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
+2. `docs/PRODUCT_ROADMAP.md` for active product priorities and traceability.
+3. `docs/OPEN_SOURCE_CONVERGENCE.md` for current reuse/build/upstream decisions.
+4. `docs/ARCHITECTURE.md` and `docs/TECHNICAL_PLAN.md` for architecture and
+   subsystem contracts, amended only through authorized architecture decisions.
+5. `docs/PRODUCT.md` for required product capabilities.
+6. `docs/ROADMAP.md`, `docs/execution/PLAN.json`, `STATE.json`, and
+   `execution/phases/*.md` for preserved legacy requirements, evidence, and
+   historical work contracts. The old `NEXT` field does not select active
+   work after the pivot.
+7. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
 
 Feature agents may not edit the locked checkpoint specification or permanent
 architecture invariants. If repository reality conflicts with either, stop and
 report the exact conflict. Plan amendments require an explicitly authorized
-control-plane task; a task that explicitly authorizes correcting the execution
-model may include that amendment.
+control-plane task; this convergence pivot authorizes the active product
+roadmap/architecture amendments but does not authorize weakening permanent
+product, security, persistence, performance, or acceptance invariants.
 
 ### Execution evidence lock
 
@@ -140,8 +148,9 @@ the required hosted workflow runs and jobs for every selected requirement,
 verifies Developer Previews where required, writes one evidence record per
 requirement, advances `STATE.json` for that verified dependency-closed set,
 and pushes a state/evidence-only completion commit. A model statement is not
-completion evidence. `NEXT` is the earliest incomplete-plan cursor, not a limit
-on the selected implementation scope.
+completion evidence. `MISSION.json` is protected operator control state;
+runners may not change it. `NEXT` is the earliest incomplete-plan cursor, not a
+limit on the selected implementation scope.
 
 ### Product acceptance and repair discipline
 
