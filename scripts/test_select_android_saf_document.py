@@ -39,8 +39,21 @@ DRAWER = b"""<?xml version='1.0' encoding='UTF-8'?>
 
 PROVIDER = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
-  <node index="0" text="OR SAF acceptance" class="android.widget.LinearLayout"
-        package="com.android.documentsui" bounds="[0,200][1080,300]" />
+  <node index="0" text="" class="android.widget.FrameLayout"
+        package="com.google.android.documentsui" resource-id="com.google.android.documentsui:id/drawer_layout">
+    <node index="0" text="" class="android.widget.LinearLayout"
+          package="com.google.android.documentsui" resource-id="com.google.android.documentsui:id/apps_row">
+      <node index="0" text="OR SAF acceptance" class="android.widget.TextView"
+            package="com.google.android.documentsui" resource-id="android:id/title"
+            bounds="[107,216][212,233]" />
+    </node>
+    <node index="1" text="" class="android.widget.LinearLayout"
+          package="com.google.android.documentsui" resource-id="com.google.android.documentsui:id/drawer_roots">
+      <node index="0" text="OR SAF acceptance" class="android.widget.TextView"
+            package="com.google.android.documentsui" resource-id="android:id/title"
+            bounds="[64,316][264,335]" />
+    </node>
+  </node>
 </hierarchy>
 """
 
@@ -130,6 +143,11 @@ class SelectorTests(unittest.TestCase):
         # Every tap must land on a documentsui node's bounds.
         for tap in taps:
             self.assertEqual(len(tap), 2, f"unexpected tap arguments: {tap}")
+
+    def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
+        taps, selected = run(transient_dumps=0)
+        self.assertTrue(selected)
+        self.assertEqual(taps[1], ["164", "325"])
 
     def test_selection_marker_is_written(self):
         _, selected = run(transient_dumps=1)

@@ -57,7 +57,20 @@ def select(device, guest_log, output, flow="open"):
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
-        provider = next((node for node in nodes if node.get("text") == "OR SAF acceptance"), None)
+        drawer_roots = next(
+            (node for node in nodes if node.get("resource-id", "").endswith(":id/drawer_roots")),
+            None,
+        )
+        if drawer_roots is None:
+            provider = next((node for node in nodes if node.get("text") == "OR SAF acceptance"), None)
+        else:
+            # Recent can expose the provider tile behind an open navigation
+            # drawer. Prefer the clickable root in the visible drawer; tapping
+            # the obscured tile does nothing but would otherwise advance state.
+            provider = next(
+                (node for node in drawer_roots.iter("node") if node.get("text") == "OR SAF acceptance"),
+                None,
+            )
         save = next(
             (
                 node
