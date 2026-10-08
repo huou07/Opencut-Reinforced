@@ -302,6 +302,7 @@ mod tests {
             length,
             position: 0,
             cancellation: CancellationToken::new(),
+            deadline: None,
         }
     }
     #[test]
@@ -312,6 +313,7 @@ mod tests {
             length: first.length,
             position: 0,
             cancellation: CancellationToken::new(),
+            deadline: None,
         };
         std::thread::scope(|scope| {
             scope.spawn(|| {
@@ -339,6 +341,19 @@ mod tests {
     fn cancellation_aborts_reads_size_queries_and_seeks() {
         let mut input = cursor();
         input.cancellation.cancel();
+        assert_eq!(input.read(&mut [0; 16]), ffi::AVERROR_EXIT);
+        assert_eq!(
+            input.seek(0, ffi::AVSEEK_SIZE),
+            i64::from(ffi::AVERROR_EXIT)
+        );
+        assert_eq!(input.seek(0, 0), i64::from(ffi::AVERROR_EXIT));
+        assert_eq!(input.position, 0);
+    }
+
+    #[test]
+    fn expired_deadline_aborts_reads_size_queries_and_seeks() {
+        let mut input = cursor();
+        input.deadline = Some(Instant::now() - Duration::from_secs(1));
         assert_eq!(input.read(&mut [0; 16]), ffi::AVERROR_EXIT);
         assert_eq!(
             input.seek(0, ffi::AVSEEK_SIZE),
