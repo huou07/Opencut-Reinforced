@@ -565,7 +565,7 @@ void main() {
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
-    final gateway = _FakeProjectGateway()..nextImportMediaNotFound = true;
+    final gateway = _FakeProjectGateway()..nextImportSourceNotFound = true;
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/missing-media.orproj'
       ..mediaPath = '/tmp/missing.mkv';
@@ -3364,7 +3364,7 @@ class _FakeProjectGateway implements ProjectGateway {
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
-  bool nextImportMediaNotFound = false;
+  bool nextImportSourceNotFound = false;
   Set<int> failedImportCalls = {};
   String? lastCreatePath;
   String? lastCreateName;
@@ -4574,11 +4574,11 @@ class _FakeProjectGateway implements ProjectGateway {
         message: 'probe unavailable',
       );
     }
-    if (nextImportMediaNotFound) {
-      nextImportMediaNotFound = false;
+    if (nextImportSourceNotFound) {
+      nextImportSourceNotFound = false;
       return const ProjectActionResult(
         succeeded: false,
-        errorCode: 'MEDIA_NOT_FOUND',
+        errorCode: 'SOURCE_NOT_FOUND',
         message: 'media file was not found',
       );
     }
