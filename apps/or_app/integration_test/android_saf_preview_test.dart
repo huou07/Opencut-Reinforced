@@ -556,7 +556,8 @@ void main() {
       );
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
-      await OrViewerTexture.clearMediaSources();
+      // Keep the granted source descriptors alive while the project revision
+      // reconnects the viewer; project close below owns their release.
       await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
 
       // Compact transport and editing tools must remain reachable by touch.
