@@ -39,6 +39,10 @@ def verify(report):
             raise ValueError('Composed Flutter Texture pixels were not the fixture frame')
     if data['providerOpens'] <= 0 or data['uiPlayMicros'] <= 0:
         raise ValueError('Provider and actual Play measurements are required')
+    for field in ('providerProjectSha256AtSeed', 'providerProjectSha256BeforeRestart'):
+        digest = data.get(field)
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+            raise ValueError('Provider project digest observations are required')
     if data['exportBytes'] <= 4 or data['exportValidMatroska'] is not True:
         raise ValueError('Android SAF export must produce a non-empty Matroska file in the selected provider')
     for field in ('sameSourceRegistrations', 'sameSourceProviderOpens'):

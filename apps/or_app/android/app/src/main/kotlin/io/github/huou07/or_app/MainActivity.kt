@@ -264,6 +264,10 @@ class MainActivity : FlutterActivity() {
         val baselineFile = baselineFile(uri)
         val remoteDigest = digest(remote)
         if (!workingCopy.exists()) {
+            safDiagnostic(
+                "new project copy remoteBytes=${remote.size} " +
+                    "remoteDigest=${remoteDigest.take(12)}",
+            )
             writePrivateAtomically(workingCopy, remote)
             writePrivateAtomically(baselineFile, remoteDigest.toByteArray(Charsets.US_ASCII))
             return workingCopy

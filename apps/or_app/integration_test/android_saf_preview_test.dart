@@ -878,6 +878,8 @@ void main() {
           'stressResources': stress,
           'finalResources': finalResources,
           'providerOpens': providerStats['providerOpens'],
+          'providerProjectSha256AtSeed': provider['projectSha256'],
+          'providerProjectSha256BeforeRestart': providerStats['projectSha256'],
           'finalOsMediaFds': _providerFds(),
           'recoveryName': recoveryBeforeClose.recoveryName,
           'recoveryBaseRevision': recoveryBeforeClose.baseRevision.toString(),

@@ -948,3 +948,9 @@ After the Flutter driver exits, process-recovery acceptance starts the declared
 project copy and persisted SAF grant remain available for this recovery check.
 Android Monkey filters stopped packages, so it is not used to start the package
 after the force-stop.
+
+The retained SAF report includes SHA-256 values for the provider project at
+fixture seeding and immediately before process restart. Debug builds also log
+only digest-match booleans and byte counts when reopening an existing working
+copy; these observations distinguish provider changes from local-copy changes
+without logging project contents.

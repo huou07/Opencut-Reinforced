@@ -9,6 +9,7 @@ import android.provider.DocumentsContract;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -76,6 +77,7 @@ public final class ControlActivity extends Activity {
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
                     .put("projectBytes", new File(getFilesDir(), "acceptance.orproj").length())
+                    .put("projectSha256", sha256(new File(getFilesDir(), "acceptance.orproj")))
                     .put("exportBytes", exported.length())
                     .put("validMatroska", validMatroska);
                 runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });
@@ -83,5 +85,17 @@ public final class ControlActivity extends Activity {
                 runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });
             }
         }, "fixture-control").start();
+    }
+
+    private static String sha256(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream input = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count);
+        }
+        StringBuilder result = new StringBuilder(64);
+        for (byte value : digest.digest()) result.append(String.format("%02x", value));
+        return result.toString();
     }
 }
