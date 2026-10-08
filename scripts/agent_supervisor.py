@@ -2040,7 +2040,6 @@ def repair_resume_goal(
     plan = preflight["plan"]
     state = preflight["state"]
     resolution = preflight["resolution"]
-    enforce_active_mission_batch(repo_root, [checkpoint_id], True)
     result = _run_one_checkpoint(
         repo_root,
         plan=plan,
@@ -2317,7 +2316,6 @@ def run_goal(
         state = preflight["state"]
         resolution = preflight["resolution"]
         batch_ids = resolve_completion_batch(plan, state, resolution, requirement_ids)
-        enforce_active_mission_batch(repo_root, batch_ids, requirement_ids is not None)
         if resume_pending:
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")
@@ -2493,6 +2491,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.prepare:
             print(prepare_goal(REPO_ROOT, args.goal, requirements), end="")
             return 0
+        if args.runner or args.resume_sha or args.repair_resume_from:
+            preflight = _preflight_goal_data(REPO_ROOT, args.goal)
+            resolution = preflight["resolution"]
+            if args.repair_resume_from:
+                selected = [str(preflight["state"].get("current_next"))]
+            else:
+                selected = resolve_completion_batch(
+                    preflight["plan"], preflight["state"], resolution, requirements
+                )
+            enforce_active_mission_batch(
+                REPO_ROOT, selected, requirements is not None
+            )
         if args.repair_resume_from:
             reports = repair_resume_goal(REPO_ROOT, args.goal, args.repair_resume_from)
         else:
