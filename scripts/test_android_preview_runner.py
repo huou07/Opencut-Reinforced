@@ -102,11 +102,19 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             (runner_temp / "android-emulator.pid").write_text(f"{os.getpid()}\n")
 
             adb = binaries / "adb"
+            activity_queries = root / "activity-queries"
             adb.write_text(
                 "#!/usr/bin/env bash\n"
                 f'echo adb:"$*" >> "{events}"\n'
-                "if [[ \"$*\" == *' logcat -b all -v brief OrSafFixtureControl:I *:S'* ]]; then\n"
-                "  echo 'I OrSafFixtureControl: ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'\n"
+                "if [[ \"$*\" == *' shell dumpsys activity activities'* ]]; then\n"
+                f'  query_count=0; [[ -f "{activity_queries}" ]] && read -r query_count < "{activity_queries}"\n'
+                "  query_count=$((query_count + 1))\n"
+                f'  printf "%s\\n" "$query_count" > "{activity_queries}"\n'
+                "  if ((query_count < 2)); then\n"
+                "    echo 'mResumedActivity: ActivityRecord{test io.github.huou07.or_app/.MainActivity}'\n"
+                "  else\n"
+                "    echo 'mResumedActivity: ActivityRecord{test com.android.launcher3/.Launcher}'\n"
+                "  fi\n"
                 "  exit 0\n"
                 "fi\n"
                 "if [[ \"$*\" == *' logcat -b '* ]]; then sleep 60; exit; fi\n"
@@ -124,17 +132,9 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             )
             timeout = binaries / "timeout"
             timeout.write_text("#!/usr/bin/env bash\nshift\nexec \"$@\"\n")
-            stdbuf = binaries / "stdbuf"
-            stdbuf.write_text(
-                "#!/usr/bin/env bash\n"
-                f'echo stdbuf:"$*" >> "{events}"\n'
-                "[[ \"$1\" == -oL ]] || exit 2\n"
-                "shift\n"
-                "exec \"$@\"\n"
-            )
             python = binaries / "python3"
             python.write_text("#!/usr/bin/env bash\nexit 0\n")
-            for executable in (adb, flutter, timeout, stdbuf, python):
+            for executable in (adb, flutter, timeout, python):
                 executable.chmod(0o755)
 
             env = os.environ | {
@@ -170,9 +170,9 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             lifecycle_status = (
                 output / "android-lifecycle-saf.status"
             ).read_text() if (output / "android-lifecycle-saf.status").exists() else "none"
-            lifecycle_marker = (
-                output / "android-lifecycle-saf.marker"
-            ).read_text() if (output / "android-lifecycle-saf.marker").exists() else "none"
+            lifecycle_activity_log = (
+                output / "android-lifecycle-saf-activity.log"
+            ).read_text() if (output / "android-lifecycle-saf-activity.log").exists() else "none"
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
@@ -180,14 +180,12 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             result.stderr,
             f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
         )
-        self.assertIn(
-            "stdbuf:-oL adb -s emulator-5554 logcat -b all -v brief OrSafFixtureControl:I *:S",
-            event_output,
-        )
+        self.assertIn("shell dumpsys activity activities", event_output)
         self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)
-        self.assertIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", lifecycle_marker)
+        self.assertIn("io.github.huou07.or_app/.MainActivity", lifecycle_activity_log)
+        self.assertIn("com.android.launcher3/.Launcher", lifecycle_activity_log)
         self.assertEqual(lifecycle_status.strip(), "0")
 
 

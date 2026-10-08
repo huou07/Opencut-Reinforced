@@ -918,10 +918,9 @@ a location. Texture pixel assertions remain required after each successful
 capture.
 
 The API 36 lifecycle step moves the app task to the background, then the emulator
-host watches the native fixture event on a dedicated live `adb logcat` stream
-with line-buffered output and an explicit tag/priority filter, then launches OR
-through Android's launcher. It does not use redirected logcat or Flutter driver
-captures, which can buffer the lifecycle marker until after the test times out.
-This avoids asking the background app process to start an activity, which
-Android blocks under the app's target SDK, while preserving the real pause/resume
-and surface recreation journey.
+host polls bounded `dumpsys activity activities` snapshots until ActivityTaskManager
+reports a resumed activity outside OR twice in a row, then launches OR through
+Android's launcher. The one-shot snapshots avoid depending on ADB's buffered
+logcat/Flutter capture streams. This avoids asking the background app process to
+start an activity, which Android blocks under the app's target SDK, while
+preserving the real pause/resume and surface recreation journey.

@@ -20,7 +20,7 @@ guest_log="$output_directory/android-guest-$case_name.log"
 health_log="$output_directory/android-health-$case_name.log"
 picker_status_file="$output_directory/android-picker-$case_name.status"
 lifecycle_status_file="$output_directory/android-lifecycle-$case_name.status"
-lifecycle_marker_file="$output_directory/android-lifecycle-$case_name.marker"
+lifecycle_activity_log="$output_directory/android-lifecycle-$case_name-activity.log"
 : > "$picker_status_file"
 : > "$guest_log"
 adb -s "$android_device_id" logcat -c
@@ -152,24 +152,36 @@ if [[ -n "$picker_pid" ]]; then
 fi
 if [[ "$case_name" == saf && "$status" == 0 ]]; then
   : > "$lifecycle_status_file"
-  : > "$lifecycle_marker_file"
+  : > "$lifecycle_activity_log"
   (
-    # Read the native event directly from a live logcat stream. The separate
-    # logcat and Flutter driver files are buffered and can expose it only after
-    # the Flutter lifecycle assertion has already timed out.
-    if timeout 50s stdbuf -oL adb -s "$android_device_id" logcat -b all -v brief \
-      'OrSafFixtureControl:I' '*:S' | while IFS= read -r line; do
-        if [[ "$line" == *'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'* ]]; then
-          date -u '+Lifecycle marker observed: %Y-%m-%dT%H:%M:%SZ'
-          printf '%s\n' "$line"
-          printf '%s\n' "$line" > "$lifecycle_marker_file"
+    # ADB logcat stdout is buffered when piped on this runner, even with
+    # stdbuf. Use bounded one-shot ActivityTaskManager queries instead and
+    # require two consecutive states outside OR before launching it again.
+    deadline=$((SECONDS + 50))
+    external_activity_observations=0
+    resumed_activity=
+    while ((SECONDS < deadline)); do
+      resumed_activity="$(
+        timeout 2s adb -s "$android_device_id" shell dumpsys activity activities 2>/dev/null |
+          tr -d '\r' |
+          awk '/^[[:space:]]*mResumedActivity:/ { print; found = 1 } END { if (!found) exit 1 }'
+      )" || resumed_activity=
+      printf '%s\t%s\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${resumed_activity:-unavailable}" \
+        >> "$lifecycle_activity_log"
+      if [[ -n "$resumed_activity" && "$resumed_activity" != *io.github.huou07.or_app* ]]; then
+        external_activity_observations=$((external_activity_observations + 1))
+        if ((external_activity_observations >= 2)); then
           break
         fi
-      done; then
-      :
-    fi
-    if [[ ! -s "$lifecycle_marker_file" ]]; then
-      echo 'Timed out waiting for Android SAF background lifecycle event.' >&2
+      else
+        external_activity_observations=0
+      fi
+      resumed_activity=
+      sleep 0.25
+    done
+    if [[ -z "$resumed_activity" || "$resumed_activity" == *io.github.huou07.or_app* ]]; then
+      echo 'Timed out waiting for Android to move OR out of the resumed activity state.' >&2
       printf '124\n' > "$lifecycle_status_file"
       exit 1
     fi
