@@ -946,8 +946,12 @@ After the preview driver exits, process-recovery acceptance verifies that
 `am force-stop` removed its PID, then lets `flutter drive` install and start the
 recovery-targeted APK as a new process in the same package. It does not manually
 relaunch the preview APK: that embedded test entrypoint would repeat fixture
-setup and overwrite the provider project before recovery. The same package data
-and persisted SAF grant must survive the recovery APK install. The recovery PID
+setup and overwrite the provider project before recovery. After the preview
+journey's temporary-grant revocation checks, the separate-UID fixture grants
+the active `late65` media URI as a persistable SAF permission and OR retains it
+before the first process exits. Recovery verifies that grant is still
+persisted before opening the unchanged project.
+The same package data and grant must survive the recovery APK install. The recovery PID
 observer preserves transient ADB shell errors and keeps polling within a fixed
 60-second bound; failure to observe a distinct process still fails the journey.
 If recovery does not restore the preview texture, the driver retains the current

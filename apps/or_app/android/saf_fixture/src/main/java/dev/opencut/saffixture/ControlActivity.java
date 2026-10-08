@@ -51,6 +51,12 @@ public final class ControlActivity extends Activity {
                         }
                         break;
                     case "grant": grantUriPermission(OR_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); break;
+                    case "persistMediaGrant":
+                        grantUriPermission(
+                            OR_PACKAGE,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                        break;
                     case "revoke": revokeUriPermission(OR_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); break;
                     case "recoverMissing": FixtureDocumentsProvider.missingRecovered = true; break;
                     case "resetMissing": FixtureDocumentsProvider.missingRecovered = false; break;

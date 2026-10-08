@@ -780,6 +780,8 @@ void main() {
       final providerStats = await _control('status');
       expect(providerStats['providerOpens'], greaterThan(0));
       expect(tester.takeException(), isNull);
+      final retainedMedia = await _control('persistMediaGrant', uri: source);
+      expect(retainedMedia['persistedMediaUris'], contains(source));
       // Leave an unsaved, valid project change in the app-private working copy
       // and persist it using the same recovery checkpoint API the shell uses.
       // The host runner force-stops this process after the drive completes.

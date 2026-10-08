@@ -67,6 +67,11 @@ void main() {
           find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
     );
     final providerBeforeOpen = await _fixtureStatus();
+    expect(
+      providerBeforeOpen['persistedMediaUris'],
+      contains('content://dev.opencut.saffixture.documents/document/late65'),
+      reason: 'The selected media grant must survive process recovery.',
+    );
     debugPrint(
       'ANDROID_SAF_PROVIDER_BEFORE_RECOVERY_OPEN '
       'projectSha256=${providerBeforeOpen['projectSha256']} '
