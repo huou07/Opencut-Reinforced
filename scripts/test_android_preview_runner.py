@@ -105,7 +105,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             adb.write_text(
                 "#!/usr/bin/env bash\n"
                 f'echo adb:"$*" >> "{events}"\n'
-                "if [[ \"$*\" == *' logcat -b all -v brief -s OrSafFixtureControl:I'* ]]; then\n"
+                "if [[ \"$*\" == *' logcat -b all -v brief OrSafFixtureControl:I *:S'* ]]; then\n"
                 "  echo 'I OrSafFixtureControl: ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'\n"
                 "  exit 0\n"
                 "fi\n"
@@ -172,7 +172,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             result.stderr,
             f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
         )
-        self.assertIn("logcat -b all -v brief -s OrSafFixtureControl:I", event_output)
+        self.assertIn("logcat -b all -v brief OrSafFixtureControl:I *:S", event_output)
         self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)

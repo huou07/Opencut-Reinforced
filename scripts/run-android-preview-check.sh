@@ -158,7 +158,7 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     # logcat and Flutter driver files are buffered and can expose it only after
     # the Flutter lifecycle assertion has already timed out.
     if timeout 50s adb -s "$android_device_id" logcat -b all -v brief \
-      -s OrSafFixtureControl:I | while IFS= read -r line; do
+      'OrSafFixtureControl:I' '*:S' | while IFS= read -r line; do
         if [[ "$line" == *'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'* ]]; then
           printf '%s\n' "$line"
           printf '%s\n' "$line" > "$lifecycle_marker_file"
