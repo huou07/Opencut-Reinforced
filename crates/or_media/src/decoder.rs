@@ -113,6 +113,10 @@ impl SeekableMediaIoCapability {
     pub const fn len(&self) -> u64 {
         self.length as u64
     }
+
+    pub const fn is_empty(&self) -> bool {
+        self.length == 0
+    }
 }
 
 impl AudioChunk {
