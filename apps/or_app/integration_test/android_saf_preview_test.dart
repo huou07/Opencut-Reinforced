@@ -40,16 +40,23 @@ Future<Map<String, dynamic>> _control(
   String operation, {
   String? uri,
   String? projectJson,
-}) async => Map<String, dynamic>.from(
-  (await _fixture.invokeMapMethod<String, dynamic>('control', {
-    'operation': operation,
-    'uri': uri,
-    'projectJson': projectJson,
-  }))!,
+}) => _stage('fixture-control:$operation', () async {
+  return Map<String, dynamic>.from(
+    (await _fixture.invokeMapMethod<String, dynamic>('control', {
+      'operation': operation,
+      'uri': uri,
+      'projectJson': projectJson,
+    }))!,
+  );
+});
+Future<Map<String, int>> _resources() => _stage('resource-snapshot', () async {
+  return (await _presenter.invokeMapMethod<String, num>('resourceSnapshot'))!
+      .map((key, value) => MapEntry(key, value.toInt()));
+});
+Future<bool?> _frameAvailable(String stage) => _stage(
+  'frame-available:$stage',
+  () => _presenter.invokeMethod<bool>('frameAvailable'),
 );
-Future<Map<String, int>> _resources() async =>
-    (await _presenter.invokeMapMethod<String, num>('resourceSnapshot'))!
-        .map((key, value) => MapEntry(key, value.toInt()));
 
 // This counts real capabilities in OR's process, including duplicates which
 // remain readable after the provider revokes an Android URI grant.
@@ -155,7 +162,7 @@ Future<List<int>> _redTexture(
 Future<void> _settleRecreatedSurface(WidgetTester tester) async {
   for (var attempt = 0; attempt < 8; attempt++) {
     expect(
-      await _presenter.invokeMethod<bool>('frameAvailable'),
+      await _frameAvailable('recreated-surface'),
       isTrue,
       reason: 'A recreated Android surface must present a real frame.',
     );
@@ -395,20 +402,16 @@ void main() {
       expect(gateway.lastPreview!.width, 16);
       expect(gateway.lastPreview!.height, 16);
       expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
-      expect(
-        await _stage(
-          'frame-available-after-seek',
-          () => _presenter.invokeMethod<bool>('frameAvailable'),
-        ),
-        isTrue,
-      );
+      expect(await _frameAvailable('after-first-seek'), isTrue);
+      debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_START');
       expect(_providerFds(), 1);
+      debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_COMPLETE');
       final registeredBefore = (await _resources())['registrationCount'];
       final opensBefore = (await _control('status'))['providerOpens'];
       for (final position in [.3, .35, .45]) {
         await _seekUi(tester, gateway, position);
         expect(gateway.seekError, isNull);
-        expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+        expect(await _frameAvailable('after-repeat-seek'), isTrue);
       }
       final registeredAfter = (await _resources())['registrationCount'];
       final opensAfter = (await _control('status'))['providerOpens'];
@@ -434,7 +437,7 @@ void main() {
       );
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
-      expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+      expect(await _frameAvailable('after-background-resume'), isTrue);
       await _settleRecreatedSurface(tester);
       final backgroundPixels = await _redTexture(
         tester,
@@ -463,7 +466,7 @@ void main() {
       await _seekUi(tester, gateway, .5);
       expect(gateway.seekError, isNull);
       expect(find.byKey(const ValueKey('preview-error')), findsNothing);
-      expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+      expect(await _frameAvailable('after-permission-regrant'), isTrue);
       final recoveredPixels = await _redTexture(
         tester,
         binding,
@@ -638,15 +641,12 @@ void main() {
       );
       for (var i = 0; i < 8; i++) {
         expect(await _presenter.invokeMethod<bool>('recreateSurface'), isTrue);
-        expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+        expect(await _frameAvailable('surface-stress'), isTrue);
         expect((await _resources())['inFlightLeases'], 0);
         expect(_providerFds(), 1);
       }
       final presentations = await Future.wait(
-        List.generate(
-          64,
-          (_) => _presenter.invokeMethod<bool>('frameAvailable'),
-        ),
+        List.generate(64, (_) => _frameAvailable('parallel-stress')),
       );
       expect(presentations, contains(isTrue));
       final stress = await _resources();
