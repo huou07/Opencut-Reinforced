@@ -79,6 +79,8 @@ sequencing paused. Each coherent implementation explicitly selects one or
 more requirement IDs inside that goal; the supervisor enforces technical
 dependency closure, contract ownership, exact-SHA evidence, and platform
 verification without requiring the selection to start at historical `NEXT`.
+Protected workflow edits are limited to the union of exact paths authorized by
+those selected requirement contracts.
 The `NEXT` cursor remains a historical progress summary and advances only
 when the selected batch includes its current requirement. After a runner
 pushes, the supervisor independently verifies exact-SHA push-triggered GitHub

@@ -2962,6 +2962,26 @@ class SupervisorTests(unittest.TestCase):
         ):
             self.assertIn(expected, prompt)
 
+    def test_prompt_workflow_allowance_is_union_of_selected_contracts_only(self) -> None:
+        plan, _ = fixture_plan_state(["A", "B", "C"])
+        plan["checkpoints"][1]["runner_allowed_protected_paths"] = [  # type: ignore[index]
+            ".github/workflows/platform-verification.yml"
+        ]
+        plan["checkpoints"][2]["runner_allowed_protected_paths"] = [  # type: ignore[index]
+            ".github/workflows/repo-hygiene.yml"
+        ]
+        prompt = agent_supervisor.checkpoint_prompt(
+            REPO_ROOT,
+            {"goal": "milestone:test", "checkpoint_id": "A", "title": "A"},
+            ["B"],
+            plan=plan,
+        )
+        self.assertIn(".github/workflows/platform-verification.yml", prompt)
+        self.assertNotIn(".github/workflows/repo-hygiene.yml", prompt)
+        self.assertEqual(agent_supervisor.selected_runner_allowed_paths(plan, ["B"]), [
+            ".github/workflows/platform-verification.yml"
+        ])
+
     def test_dirty_worktree_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

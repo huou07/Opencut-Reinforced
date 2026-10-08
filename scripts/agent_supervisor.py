@@ -860,7 +860,7 @@ def checkpoint_prompt(
             for evidence_class in checkpoint.get("required_evidence_classes", [])
         }
     )
-    allowed_paths = resolution.get("runner_allowed_protected_paths", [])
+    allowed_paths = selected_runner_allowed_paths(plan_dict, checkpoint_ids)
     if allowed_paths:
         protection = (
             "Do not edit PLAN.json, STATE.json, architecture invariants "
@@ -2280,6 +2280,22 @@ def resolve_completion_batch(
     return ids
 
 
+def selected_runner_allowed_paths(
+    plan: Mapping[str, Any], checkpoint_ids: Sequence[str]
+) -> list[str]:
+    """Union only the protected workflow paths authorized by selected contracts."""
+
+    return sorted(
+        {
+            path
+            for checkpoint_id in checkpoint_ids
+            for path in execution_plan.checkpoint_for_id(dict(plan), checkpoint_id).get(
+                "runner_allowed_protected_paths", []
+            )
+        }
+    )
+
+
 def enforce_active_mission_batch(
     repo_root: Path,
     goal: str,
@@ -2355,7 +2371,7 @@ def run_goal(
         if resume_pending:
             head = git_output(repo_root, "rev-parse", "HEAD")
             origin = git_output(repo_root, "rev-parse", "origin/main")
-            allowed_paths = resolution["runner_allowed_protected_paths"]
+            allowed_paths = selected_runner_allowed_paths(plan, batch_ids)
             resume_is_ancestor = head != (resume_sha or "")
             if resume_is_ancestor:
                 try:
@@ -2432,7 +2448,7 @@ def run_goal(
                 raise SupervisorError("--runner is required unless --resume-sha is supplied")
             before_plan_bytes = (repo_root / "docs/execution/PLAN.json").read_bytes()
             before_state_bytes = (repo_root / "docs/execution/STATE.json").read_bytes()
-            allowed_paths = resolution["runner_allowed_protected_paths"]
+            allowed_paths = selected_runner_allowed_paths(plan, batch_ids)
             protected_before = capture_protected_surfaces(repo_root)
             baseline_head = git_output(repo_root, "rev-parse", "HEAD")
             invoke_runner(
