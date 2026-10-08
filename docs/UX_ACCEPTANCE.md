@@ -227,6 +227,9 @@ today.
   every returned document, and imports each through the same project command
   path. A failed item is reported in a combined result while other selected
   items continue; project changes already accepted remain valid.
+- If an imported source has disappeared, the user sees that the selected file
+  could not be found and that its source needs to exist; existing project media
+  stays untouched.
 - Android media import uses seekable SAF descriptors. The typed `content://`
   source remains in project data; probing uses the packaged FFmpeg runtime and
   the same import-matrix validation as desktop. Hosted acceptance selects two

@@ -263,7 +263,13 @@ Future<void> _preserveProjectAcrossFailures(
   await tester.tap(importButton);
   await _pumpUntil(
     tester,
-    () => find.text('media source path was not found').evaluate().isNotEmpty,
+    () => find
+        .text(
+          'Imported 0 of 1 selected files. 1 could not be imported. '
+          'The selected media file could not be found. Check that the source still exists.',
+        )
+        .evaluate()
+        .isNotEmpty,
     'unavailable external media feedback',
   );
   expect(find.text('tiny.mkv'), findsWidgets);

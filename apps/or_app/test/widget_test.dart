@@ -556,6 +556,29 @@ void main() {
     );
   });
 
+  testWidgets('missing media feedback explains the recovery action', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()..nextImportMediaNotFound = true;
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/missing-media.orproj'
+      ..mediaPath = '/tmp/missing.mkv';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Missing media');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Imported 0 of 1 selected files. 1 could not be imported. '
+        'The selected media file could not be found. Check that the source still exists.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('removing media requires confirmation and updates the library', (
     tester,
   ) async {
@@ -3330,6 +3353,7 @@ class _FakeProjectGateway implements ProjectGateway {
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
+  bool nextImportMediaNotFound = false;
   Set<int> failedImportCalls = {};
   String? lastCreatePath;
   String? lastCreateName;
@@ -4537,6 +4561,14 @@ class _FakeProjectGateway implements ProjectGateway {
         succeeded: false,
         errorCode: 'PROBE_BACKEND_UNAVAILABLE',
         message: 'probe unavailable',
+      );
+    }
+    if (nextImportMediaNotFound) {
+      nextImportMediaNotFound = false;
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'MEDIA_NOT_FOUND',
+        message: 'media file was not found',
       );
     }
     final session = _session(handle);
