@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.system.Os
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -191,6 +192,10 @@ class MainActivity : FlutterActivity() {
     @Deprecated("The Activity Result API is handled by FlutterActivity plugins.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        safDiagnostic(
+            "activity result request=$requestCode result=$resultCode " +
+                "pending=${pendingPick?.method ?: "none"} hasData=${data != null}",
+        )
         if (requestCode != SAF_PICK_REQUEST) return
         val pending = pendingPick ?: return
         pendingPick = null
@@ -202,6 +207,7 @@ class MainActivity : FlutterActivity() {
         }
         val resultFlags = selectedIntent.flags
         runIo(pending.result, "PROJECT_PICK_FAILED") {
+            safDiagnostic("processing ${pending.method} result")
             takePersistableGrant(uri, resultFlags, pending.requiredModes)
             when (pending.method) {
                 "openProject" -> projectLocation(uri, prepareWorkingCopy(uri))
@@ -515,15 +521,24 @@ class MainActivity : FlutterActivity() {
             val outcome = try {
                 operation() to null
             } catch (error: SafFailure) {
+                safDiagnostic("storage operation failed code=${error.code}")
                 null to error
             } catch (_: Exception) {
+                safDiagnostic("storage operation failed unexpectedly")
                 null to SafFailure(failureCode, "The project storage operation failed.")
             }
             mainHandler.post {
                 val failure = outcome.second
+                safDiagnostic("storage operation complete success=${failure == null}")
                 if (failure == null) result.success(outcome.first)
                 else result.error(failure.code, failure.message, null)
             }
+        }
+    }
+
+    private fun safDiagnostic(message: String) {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            Log.i("OR-SAF", message)
         }
     }
 }
