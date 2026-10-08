@@ -121,6 +121,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "history.redo",
             "media.add",
             "media.remove",
+            "media.relink",
             "timeline.track.add",
             "timeline.track.remove",
             "timeline.clip.insert",
