@@ -152,7 +152,9 @@ fi
 if [[ "$case_name" == saf && "$status" == 0 ]]; then
   : > "$lifecycle_status_file"
   (
-    while ! grep -Fq 'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED' "$guest_log"; do
+    # tee flushes each Flutter driver line. The redirected adb logcat capture is
+    # buffered, so its copy of the native fixture marker can arrive too late.
+    while ! grep -Fq 'ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE' "$log"; do
       sleep 0.25
     done
     # Let Android complete the move-to-background transition before simulating

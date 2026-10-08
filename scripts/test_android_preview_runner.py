@@ -117,6 +117,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED\n"
                 "LOG\n"
+                "echo ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE\n"
                 "sleep 3\n"
             )
             timeout = binaries / "timeout"
@@ -153,6 +154,9 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             guest_output = (
                 output / "android-guest-saf.log"
             ).read_text() if (output / "android-guest-saf.log").exists() else "none"
+            driver_output = (
+                output / "android-driver-saf.log"
+            ).read_text() if (output / "android-driver-saf.log").exists() else "none"
             lifecycle_status = (
                 output / "android-lifecycle-saf.status"
             ).read_text() if (output / "android-lifecycle-saf.status").exists() else "none"
@@ -165,6 +169,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
         )
         self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
         self.assertIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
+        self.assertIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)
         self.assertEqual(lifecycle_status.strip(), "0")
 
 
