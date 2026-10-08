@@ -66,6 +66,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                         "integration_test.dart",
                         "driver.dart",
                         "fixture.apk",
+                        "recovery.apk",
                     ],
                     cwd=ROOT,
                     env=env,
@@ -79,9 +80,92 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                     f"runner did not stop promptly: {error.stdout!r} {error.stderr!r}; "
                     f"events={events.read_text() if events.exists() else 'none'}"
                 )
+            event_output = events.read_text() if events.exists() else "none"
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("picker diagnostic", result.stderr)
+        self.assertIn(
+            "picker diagnostic",
+            result.stderr,
+            f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
+        )
+
+    def test_background_resume_uses_the_emulator_launcher(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="or-android-resume-test-") as temp:
+            root = Path(temp)
+            binaries = root / "bin"
+            binaries.mkdir()
+            runner_temp = root / "runner-temp"
+            runner_temp.mkdir()
+            output = root / "acceptance"
+            output.mkdir()
+            events = root / "events.log"
+            (runner_temp / "android-emulator.pid").write_text(f"{os.getpid()}\n")
+
+            adb = binaries / "adb"
+            adb.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo adb:"$*" >> "{events}"\n'
+                "if [[ \"$*\" == *' logcat -b '* ]]; then sleep 60; exit; fi\n"
+                "if [[ \"$*\" == *' shell echo or-ready'* ]]; then echo or-ready; exit; fi\n"
+                "if [[ \"$*\" == *' get-state'* ]]; then echo device; exit; fi\n"
+                "exit 0\n"
+            )
+            flutter = binaries / "flutter"
+            flutter.write_text(
+                "#!/usr/bin/env bash\n"
+                f'cat >> "$OR_ANDROID_ACCEPTANCE_OUTPUT/android-guest-saf.log" <<\'LOG\'\n'
+                "ANDROID_SAF_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED\n"
+                "LOG\n"
+                "sleep 3\n"
+            )
+            timeout = binaries / "timeout"
+            timeout.write_text("#!/usr/bin/env bash\nshift\nexec \"$@\"\n")
+            python = binaries / "python3"
+            python.write_text("#!/usr/bin/env bash\nexit 0\n")
+            for executable in (adb, flutter, timeout, python):
+                executable.chmod(0o755)
+
+            env = os.environ | {
+                "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
+                "RUNNER_TEMP": str(runner_temp),
+                "GITHUB_WORKSPACE": str(ROOT),
+                "OR_ANDROID_ACCEPTANCE_OUTPUT": str(output),
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(ROOT / "scripts/run-android-preview-check.sh"),
+                    "saf",
+                    "integration_test.dart",
+                    "driver.dart",
+                    "fixture.apk",
+                    "recovery.apk",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            event_output = events.read_text() if events.exists() else "none"
+            guest_output = (
+                output / "android-guest-saf.log"
+            ).read_text() if (output / "android-guest-saf.log").exists() else "none"
+            lifecycle_status = (
+                output / "android-lifecycle-saf.status"
+            ).read_text() if (output / "android-lifecycle-saf.status").exists() else "none"
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "process recovery APK is missing",
+            result.stderr,
+            f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
+        )
+        self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
+        self.assertIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
+        self.assertEqual(lifecycle_status.strip(), "0")
 
 
 if __name__ == "__main__":

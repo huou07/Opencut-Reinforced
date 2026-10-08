@@ -19,6 +19,7 @@ log="$output_directory/android-driver-$case_name.log"
 guest_log="$output_directory/android-guest-$case_name.log"
 health_log="$output_directory/android-health-$case_name.log"
 picker_status_file="$output_directory/android-picker-$case_name.status"
+lifecycle_status_file="$output_directory/android-lifecycle-$case_name.status"
 : > "$picker_status_file"
 : > "$guest_log"
 adb -s "$android_device_id" logcat -c
@@ -42,9 +43,10 @@ guest_pid=$!
 ) > "$health_log" 2>&1 &
 health_pid=$!
 picker_pid=
+lifecycle_pid=
 cleanup() {
-  kill "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} 2>/dev/null || true
-  wait "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} 2>/dev/null || true
+  kill "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
+  wait "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
 }
 stop_process_tree() {
   local process_id="$1" child
@@ -120,8 +122,10 @@ fi
 # Gradle and the Kotlin daemons out of the software-rendered emulator phase,
 # where ~4 GiB of build JVMs was competing for the runner's vCPUs.
 echo "Starting Android Flutter driver for $case_name."
-flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
-  --use-application-binary="$apk" "$@" 2>&1 | tee "$log" &
+(
+  flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
+    --use-application-binary="$apk" "$@" 2>&1 | tee "$log"
+) &
 drive_pid=$!
 if [[ -n "$picker_pid" ]]; then
   while [[ ! -s "$picker_status_file" ]] &&
@@ -145,6 +149,24 @@ if [[ -n "$picker_pid" ]]; then
     fi
   fi
 fi
+if [[ "$case_name" == saf && "$status" == 0 ]]; then
+  : > "$lifecycle_status_file"
+  (
+    while ! grep -Fq 'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED' "$guest_log"; do
+      sleep 0.25
+    done
+    # Let Android complete the move-to-background transition before simulating
+    # the launcher action. Starting an activity from OR's background process is
+    # blocked on API 36; the host shell launches through Android's real launcher.
+    sleep 1.5
+    if timeout 30s adb -s "$android_device_id" shell monkey -p io.github.huou07.or_app 1; then
+      printf '0\n' > "$lifecycle_status_file"
+    else
+      printf '%s\n' "$?" > "$lifecycle_status_file"
+    fi
+  ) > "$output_directory/android-lifecycle-$case_name.log" 2>&1 &
+  lifecycle_pid=$!
+fi
 wait "$drive_pid" || status=$?
 echo "Android Flutter driver for $case_name exited with status $status."
 if [[ -n "$picker_pid" ]]; then
@@ -155,6 +177,20 @@ if [[ -n "$picker_pid" ]]; then
     wait "$picker_pid" || { cat "$RUNNER_TEMP/android-documents-ui.log" >&2; status=1; }
   fi
   picker_pid=
+fi
+if [[ -n "$lifecycle_pid" ]]; then
+  if [[ "$status" == 0 ]]; then
+    wait "$lifecycle_pid" || status=1
+    if [[ ! -s "$lifecycle_status_file" ]] ||
+      [[ "$(cat "$lifecycle_status_file")" != 0 ]]; then
+      cat "$output_directory/android-lifecycle-$case_name.log" >&2
+      status=1
+    fi
+  else
+    kill "$lifecycle_pid" 2>/dev/null || true
+    wait "$lifecycle_pid" 2>/dev/null || true
+  fi
+  lifecycle_pid=
 fi
 {
   date -u

@@ -2,9 +2,8 @@ package io.github.huou07.or_app
 
 import android.app.Activity
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.os.Process
+import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -27,22 +26,9 @@ class SafFixtureControl : FlutterPlugin, ActivityAware, PluginRegistry.ActivityR
                     val operation = (call.arguments as? Map<*, *>)?.get("operation")
                     if (activity == null) result.error("FIXTURE_DETACHED", "Fixture activity unavailable.", null)
                     else if (operation == "backgroundAndResume") {
-                        val launchIntent = activity.packageManager
-                            .getLaunchIntentForPackage(activity.packageName)
-                        if (launchIntent == null) {
-                            result.error("FIXTURE_UNAVAILABLE", "The app launch activity is unavailable.", null)
-                        } else {
-                            launchIntent.addFlags(
-                                Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                            )
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                activity.startActivity(launchIntent)
-                            }, BACKGROUND_MILLIS)
-                            activity.moveTaskToBack(true)
-                            result.success(mapOf("backgrounded" to true))
-                        }
+                        activity.moveTaskToBack(true)
+                        Log.i("OrSafFixtureControl", "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED")
+                        result.success(mapOf("backgrounded" to true))
                     } else try {
                         val intent = Intent().setClassName("dev.opencut.saffixture", "dev.opencut.saffixture.ControlActivity")
                         (call.arguments as? Map<*, *>)?.forEach { (key, value) -> if (key is String && value is String) intent.putExtra(key, value) }
@@ -71,8 +57,5 @@ class SafFixtureControl : FlutterPlugin, ActivityAware, PluginRegistry.ActivityR
         }
         return true
     }
-    companion object {
-        private const val REQUEST = 0x5346
-        private const val BACKGROUND_MILLIS = 1500L
-    }
+    companion object { private const val REQUEST = 0x5346 }
 }

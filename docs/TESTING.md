@@ -916,3 +916,8 @@ timeout so a blocked platform bridge or test-driver pump reports its exact stage
 in the retained driver log instead of leaving the hosted job to time out without
 a location. Texture pixel assertions remain required after each successful
 capture.
+
+The API 36 lifecycle step moves the app task to the background, then the emulator
+host launches OR through Android's launcher. This avoids asking the background
+app process to start an activity, which Android blocks under the app's target
+SDK, while preserving the real pause/resume and surface recreation journey.
