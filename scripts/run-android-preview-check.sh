@@ -128,40 +128,31 @@ echo "Starting Android Flutter driver for $case_name."
     --use-application-binary="$apk" "$@" 2>&1 | tee "$log"
 ) &
 drive_pid=$!
-if [[ -n "$picker_pid" ]]; then
-  while [[ ! -s "$picker_status_file" ]] &&
-    kill -0 "$drive_pid" 2>/dev/null && kill -0 "$picker_pid" 2>/dev/null; do
-    sleep 1
-  done
-  if [[ ! -s "$picker_status_file" ]] && ! kill -0 "$picker_pid" 2>/dev/null; then
-    echo "Android DocumentsUI selector exited without a status." >&2
-    cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
-    stop_process_tree "$drive_pid"
-    status=1
-  fi
-  if [[ -s "$picker_status_file" ]]; then
-    read -r picker_status < "$picker_status_file"
-    if [[ "$picker_status" != 0 ]]; then
-      cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
-      stop_process_tree "$drive_pid"
-      status=1
-    else
-      echo 'Android SAF DocumentsUI selector completed.'
-    fi
-  fi
-fi
-if [[ "$case_name" == saf && "$status" == 0 ]]; then
+if [[ "$case_name" == saf ]]; then
   : > "$lifecycle_status_file"
   : > "$lifecycle_signal_log"
   (
-    # Read an app-owned debug signal through run-as. Logcat is buffered by ADB
-    # and ActivityManager snapshots can stall while the emulator is rendering.
+    # Start observing as soon as the drive starts: the DocumentsUI selector may
+    # remain active for a later picker that occurs after the lifecycle step.
     app_id=io.github.huou07.or_app
     signal_file=or-saf-background-requested
-    if ! timeout 5s adb -s "$android_device_id" shell run-as "$app_id" \
-      rm -f "files/$signal_file"; then
-      echo 'Could not clear the Android SAF lifecycle signal.' >&2
-      printf '1\n' > "$lifecycle_status_file"
+    install_deadline=$((SECONDS + 30))
+    signal_ready=0
+    while ((SECONDS < install_deadline)); do
+      if timeout 3s adb -s "$android_device_id" shell run-as "$app_id" \
+        rm -f "files/$signal_file" >/dev/null 2>&1; then
+        signal_ready=1
+        printf '%s\tcleared\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+          >> "$lifecycle_signal_log"
+        break
+      fi
+      printf '%s\twaiting-for-debug-app\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+        >> "$lifecycle_signal_log"
+      sleep 0.25
+    done
+    if ((signal_ready == 0)); then
+      echo 'Timed out waiting for the Android SAF debug app to install.' >&2
+      printf '124\n' > "$lifecycle_status_file"
       exit 1
     fi
     deadline=$((SECONDS + 50))
@@ -188,13 +179,35 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     # blocked on API 36; the host shell launches through Android's real launcher.
     sleep 1.5
     date -u '+Launcher request started: %Y-%m-%dT%H:%M:%SZ'
-    if timeout 30s adb -s "$android_device_id" shell monkey -p io.github.huou07.or_app 1; then
+    if timeout 30s adb -s "$android_device_id" shell monkey -p "$app_id" 1; then
       printf '0\n' > "$lifecycle_status_file"
     else
       printf '%s\n' "$?" > "$lifecycle_status_file"
     fi
   ) > "$output_directory/android-lifecycle-$case_name.log" 2>&1 &
   lifecycle_pid=$!
+fi
+if [[ -n "$picker_pid" ]]; then
+  while [[ ! -s "$picker_status_file" ]] &&
+    kill -0 "$drive_pid" 2>/dev/null && kill -0 "$picker_pid" 2>/dev/null; do
+    sleep 1
+  done
+  if [[ ! -s "$picker_status_file" ]] && ! kill -0 "$picker_pid" 2>/dev/null; then
+    echo "Android DocumentsUI selector exited without a status." >&2
+    cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
+    stop_process_tree "$drive_pid"
+    status=1
+  fi
+  if [[ -s "$picker_status_file" ]]; then
+    read -r picker_status < "$picker_status_file"
+    if [[ "$picker_status" != 0 ]]; then
+      cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selector.log" >&2
+      stop_process_tree "$drive_pid"
+      status=1
+    else
+      echo 'Android SAF DocumentsUI selector completed.'
+    fi
+  fi
 fi
 wait "$drive_pid" || status=$?
 echo "Android Flutter driver for $case_name exited with status $status."

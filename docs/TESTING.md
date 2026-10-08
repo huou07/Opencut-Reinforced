@@ -917,10 +917,13 @@ in the retained driver log instead of leaving the hosted job to time out without
 a location. Texture pixel assertions remain required after each successful
 capture.
 
-The API 36 lifecycle step moves the app task to the background. The debug-only
-fixture bridge writes a marker to OR's private app files after requesting that
-transition; the host polls it with `adb shell run-as`, then launches OR through
-Android's launcher. This avoids depending on delayed ADB logcat/Flutter output
-or ActivityManager snapshots that can stall under emulator load. Android itself
-still backgrounds and resumes the real app task, and the journey checks the
-resulting surface recreation and frame presentation.
+The API 36 lifecycle observer starts with the Flutter drive, while the native
+DocumentsUI selector may remain active for a later export picker. It waits for
+the debug app to install, clears a stale marker, then polls OR's private app
+files through `adb shell run-as`. After the debug-only fixture bridge requests
+the background transition and writes the marker, the host launches OR through
+Android's launcher. Starting the observer before the selector exits avoids a
+circular wait when export follows the resume check. This avoids delayed ADB
+logcat/Flutter output and ActivityManager snapshots that can stall under
+emulator load. Android backgrounds and resumes the real task, and the journey
+checks surface recreation and frame presentation.

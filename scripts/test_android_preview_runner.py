@@ -125,13 +125,23 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 f'cat >> "$OR_ANDROID_ACCEPTANCE_OUTPUT/android-guest-saf.log" <<\'LOG\'\n'
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
                 "LOG\n"
-                "sleep 3\n"
+                "/bin/sleep 15\n"
             )
             timeout = binaries / "timeout"
             timeout.write_text("#!/usr/bin/env bash\nshift\nexec \"$@\"\n")
             python = binaries / "python3"
-            python.write_text("#!/usr/bin/env bash\nexit 0\n")
-            for executable in (adb, flutter, timeout, python):
+            python.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo python:"$*" >> "{events}"\n'
+                "if [[ \"$1\" == */select_android_saf_document.py ]]; then\n"
+                "  /bin/sleep 12\n"
+                f'  echo selector-finished >> "{events}"\n'
+                "fi\n"
+                "exit 0\n"
+            )
+            stub_sleep = binaries / "sleep"
+            stub_sleep.write_text("#!/usr/bin/env bash\nexit 0\n")
+            for executable in (adb, flutter, timeout, python, stub_sleep):
                 executable.chmod(0o755)
 
             env = os.environ | {
@@ -154,7 +164,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 env=env,
                 text=True,
                 capture_output=True,
-                timeout=20,
+                    timeout=20,
                 check=False,
             )
             event_output = events.read_text() if events.exists() else "none"
@@ -184,6 +194,8 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
         self.assertIn(read_event, event_output)
         self.assertIn(launch_event, event_output)
         self.assertLess(event_output.index(read_event), event_output.index(launch_event))
+        self.assertIn("selector-finished", event_output)
+        self.assertLess(event_output.index(launch_event), event_output.index("selector-finished"))
         self.assertNotIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)
         self.assertIn("pending", lifecycle_signal_log)
