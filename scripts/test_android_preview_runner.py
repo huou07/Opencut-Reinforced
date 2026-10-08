@@ -124,9 +124,17 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             )
             timeout = binaries / "timeout"
             timeout.write_text("#!/usr/bin/env bash\nshift\nexec \"$@\"\n")
+            stdbuf = binaries / "stdbuf"
+            stdbuf.write_text(
+                "#!/usr/bin/env bash\n"
+                f'echo stdbuf:"$*" >> "{events}"\n'
+                "[[ \"$1\" == -oL ]] || exit 2\n"
+                "shift\n"
+                "exec \"$@\"\n"
+            )
             python = binaries / "python3"
             python.write_text("#!/usr/bin/env bash\nexit 0\n")
-            for executable in (adb, flutter, timeout, python):
+            for executable in (adb, flutter, timeout, stdbuf, python):
                 executable.chmod(0o755)
 
             env = os.environ | {
@@ -172,7 +180,10 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             result.stderr,
             f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
         )
-        self.assertIn("logcat -b all -v brief OrSafFixtureControl:I *:S", event_output)
+        self.assertIn(
+            "stdbuf:-oL adb -s emulator-5554 logcat -b all -v brief OrSafFixtureControl:I *:S",
+            event_output,
+        )
         self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
         self.assertNotIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)

@@ -157,9 +157,10 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     # Read the native event directly from a live logcat stream. The separate
     # logcat and Flutter driver files are buffered and can expose it only after
     # the Flutter lifecycle assertion has already timed out.
-    if timeout 50s adb -s "$android_device_id" logcat -b all -v brief \
+    if timeout 50s stdbuf -oL adb -s "$android_device_id" logcat -b all -v brief \
       'OrSafFixtureControl:I' '*:S' | while IFS= read -r line; do
         if [[ "$line" == *'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'* ]]; then
+          date -u '+Lifecycle marker observed: %Y-%m-%dT%H:%M:%SZ'
           printf '%s\n' "$line"
           printf '%s\n' "$line" > "$lifecycle_marker_file"
           break
@@ -176,6 +177,7 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     # the launcher action. Starting an activity from OR's background process is
     # blocked on API 36; the host shell launches through Android's real launcher.
     sleep 1.5
+    date -u '+Launcher request started: %Y-%m-%dT%H:%M:%SZ'
     if timeout 30s adb -s "$android_device_id" shell monkey -p io.github.huou07.or_app 1; then
       printf '0\n' > "$lifecycle_status_file"
     else
