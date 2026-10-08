@@ -910,8 +910,9 @@ acceptance report requires each interaction assertion before it records the
 
 The Android preview acceptance test logs project reads, fixture-control calls,
 resource snapshots, transport and seek actions, frame-availability requests,
-and screenshot captures as named stages. Cross-platform calls and screenshot
-capture have a 60-second per-operation timeout so a blocked platform bridge
-reports its exact stage in the retained driver log instead of leaving the hosted
-job to time out without a location. Texture pixel assertions remain required
-after each successful capture.
+background pause/resume waits, and screenshot captures as named stages.
+Cross-platform calls, lifecycle waits, and screenshot capture have a 60-second
+timeout so a blocked platform bridge or test-driver pump reports its exact stage
+in the retained driver log instead of leaving the hosted job to time out without
+a location. Texture pixel assertions remain required after each successful
+capture.

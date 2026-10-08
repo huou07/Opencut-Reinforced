@@ -429,12 +429,22 @@ void main() {
         () => gateway.playCalls == playCallsBeforeBackground + 1,
       );
       expect(gateway.lastPreview!.playing, isTrue);
+      debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_START');
       expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
-      await _until(tester, () => gateway.lastPreview?.playing == false);
-      await _until(
-        tester,
-        () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+      debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE');
+      await _stage(
+        'wait-for-background-pause',
+        () => _until(tester, () => gateway.lastPreview?.playing == false),
       );
+      debugPrint('ANDROID_SAF_BACKGROUND_PAUSE_OBSERVED');
+      await _stage(
+        'wait-for-activity-resume',
+        () => _until(
+          tester,
+          () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+        ),
+      );
+      debugPrint('ANDROID_SAF_ACTIVITY_RESUME_OBSERVED');
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
       expect(await _frameAvailable('after-background-resume'), isTrue);
