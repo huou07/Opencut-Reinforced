@@ -59,9 +59,11 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
         row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : "export.mkv");
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : "video/x-matroska");
-        row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("export")
-            ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
-            : 0);
+        row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root")
+            ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
+            : id.equals("export")
+                ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
+                : 0);
         File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : "tiny.mkv");
         row.add(DocumentsContract.Document.COLUMN_SIZE, file.length());
     }

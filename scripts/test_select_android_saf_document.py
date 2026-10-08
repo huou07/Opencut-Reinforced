@@ -53,10 +53,17 @@ DOCUMENT = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+SAVE_DISABLED = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="SAVE" class="android.widget.Button"
+        package="com.android.documentsui" enabled="false" bounds="[900,700][1080,800]" />
+</hierarchy>
+"""
+
 SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="SAVE" class="android.widget.Button"
-        package="com.android.documentsui" bounds="[900,700][1080,800]" />
+        package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
 </hierarchy>
 """
 
@@ -70,8 +77,8 @@ class FakeAdb:
         self.taps = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
-            "export": [DRAWER, PROVIDER, SAVE],
-            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, SAVE],
+            "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
+            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -132,6 +139,11 @@ class SelectorTests(unittest.TestCase):
         taps, selected = run(transient_dumps=1, flow="export")
         self.assertTrue(selected)
         self.assertEqual(len(taps), 3, f"expected drawer, provider, Save taps; got {taps}")
+
+    def test_disabled_save_action_is_never_tapped_or_reported_as_selected(self):
+        taps, selected = run(transient_dumps=0, flow="export")
+        self.assertTrue(selected)
+        self.assertEqual(len(taps), 3, f"expected disabled Save to be skipped; got {taps}")
 
     def test_both_export_and_import_use_documentsui(self):
         taps, selected = run(transient_dumps=0, flow="both")

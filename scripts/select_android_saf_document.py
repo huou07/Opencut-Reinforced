@@ -67,6 +67,8 @@ def select(device, guest_log, output, flow="open"):
             ),
             None,
         )
+        if save is not None and save.get("enabled") != "true":
+            save = None
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None

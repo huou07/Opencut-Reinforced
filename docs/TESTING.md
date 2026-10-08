@@ -927,3 +927,7 @@ circular wait when export follows the resume check. This avoids delayed ADB
 logcat/Flutter output and ActivityManager snapshots that can stall under
 emulator load. Android backgrounds and resumes the real task, and the journey
 checks surface recreation and frame presentation.
+
+The separate SAF acceptance provider advertises directory creation on both its
+root and root document. The DocumentsUI export selector waits for an enabled
+Save action; a disabled button is not counted as a completed picker handoff.
