@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -37,6 +38,11 @@ class _RecoveryGateway extends RustProjectGateway {
   }
 }
 
+const _fixtureChannel = MethodChannel('or_saf_acceptance_fixture');
+
+Future<Map<String, Object?>> _fixtureStatus() async => (await _fixtureChannel
+    .invokeMapMethod<String, Object?>('control', {'operation': 'status'}))!;
+
 Future<void> _until(WidgetTester tester, bool Function() ready) async {
   for (var i = 0; i < 600 && !ready(); i++) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -59,6 +65,12 @@ void main() {
       tester,
       () =>
           find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
+    );
+    final providerBeforeOpen = await _fixtureStatus();
+    debugPrint(
+      'ANDROID_SAF_PROVIDER_BEFORE_RECOVERY_OPEN '
+      'projectSha256=${providerBeforeOpen['projectSha256']} '
+      'projectBytes=${providerBeforeOpen['projectBytes']}',
     );
     debugPrint('ANDROID_SAF_DOCUMENTS_UI_READY');
     await tester.tap(find.byKey(const ValueKey('home-open-project')));
@@ -118,6 +130,7 @@ void main() {
           'noFlutterException': noFlutterError,
         },
         'projectPath': gateway.openedPath,
+        'providerProjectSha256BeforeOpen': providerBeforeOpen['projectSha256'],
         'projectName': summary.name,
         'projectRevision': summary.revision.toString(),
         'recoveryKindAfterApply': recovery.kind.name,

@@ -32,6 +32,7 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
                     "noFlutterException": True,
                 },
                 "projectPath": "/data/user/0/io.github.huou07.or_app/files/or-projects/project.orproj",
+                "providerProjectSha256BeforeOpen": "a" * 64,
                 "projectName": "Process recovery acceptance",
                 "projectRevision": "3",
                 "recoveryKindAfterApply": "none",

@@ -58,6 +58,11 @@ def verify(relaunch: dict[str, Any], prepared: dict[str, Any], recovered: dict[s
     }
     if not isinstance(checks, dict) or any(checks.get(name) is not True for name in required_checks):
         raise ValueError("post-restart recovery journey is missing a required product assertion")
+    provider_digest = recovered_report.get("providerProjectSha256BeforeOpen")
+    if not isinstance(provider_digest, str) or len(provider_digest) != 64 or any(
+        character not in "0123456789abcdef" for character in provider_digest
+    ):
+        raise ValueError("post-restart provider project digest is missing")
     if not str(recovered_report.get("projectPath", "")).startswith("/data/user/0/io.github.huou07.or_app/files/or-projects/"):
         raise ValueError("post-restart journey did not reopen the app-private SAF working copy")
     if recovered_report.get("projectName") != "Process recovery acceptance":

@@ -954,3 +954,6 @@ fixture seeding and immediately before process restart. Debug builds also log
 only digest-match booleans and byte counts when reopening an existing working
 copy; these observations distinguish provider changes from local-copy changes
 without logging project contents.
+The recovery driver reads and reports the provider digest again before opening
+the picker, isolating changes introduced by process relaunch from the picker
+handoff itself.
