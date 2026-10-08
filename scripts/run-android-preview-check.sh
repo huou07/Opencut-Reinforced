@@ -56,18 +56,6 @@ stop_process_tree() {
   done
   kill "$process_id" 2>/dev/null || true
 }
-launch_product_main_activity() {
-  local output
-  output="$(adb -s "$android_device_id" shell am start -W \
-    -a android.intent.action.MAIN \
-    -c android.intent.category.LAUNCHER \
-    -n "$app_id/.MainActivity" 2>&1)" || {
-    printf '%s\n' "$output" >&2
-    return 1
-  }
-  printf '%s\n' "$output"
-  [[ "$output" == *'Status: ok'* ]]
-}
 trap cleanup EXIT
 if [[ "$case_name" == saf ]]; then
   rm -f "$picker_status_file"
@@ -292,9 +280,9 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
   mkdir -p "$recovery_output"
 
   # Flutter drive is configured to leave this installed app running. Capture
-  # its process, force-stop it through Android, prove it disappeared, then
-  # relaunch the same app without clearing private files or SAF grants. Android
-  # Monkey filters stopped packages, so use the declared MAIN/LAUNCHER activity.
+  # its process, force-stop it through Android, and prove it disappeared. The
+  # recovery drive then installs and launches the same package with the recovery
+  # test entrypoint while preserving its private files and SAF grants.
   old_pid=
   for _ in $(seq 1 60); do
     old_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
@@ -318,33 +306,10 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     echo 'Android did not terminate the app process after force-stop.' >&2
     exit 1
   fi
-  launch_product_main_activity
-  new_pid=
-  for _ in $(seq 1 60); do
-    new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
-    [[ -n "$new_pid" ]] && break
-    sleep 1
-  done
-  if [[ -z "$new_pid" || "$new_pid" == "$old_pid" ]]; then
-    echo "The app did not restart as a new process (old=$old_pid new=$new_pid)." >&2
-    exit 1
-  fi
-  python3 - "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" "$old_pid" "$new_pid" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(json.dumps({
-    "package": "io.github.huou07.or_app",
-    "oldPid": int(sys.argv[2]),
-    "emptyAfterForceStop": True,
-    "newPid": int(sys.argv[3]),
-    "result": "PASS",
-}, indent=2) + "\n")
-PY
-
-  # Reopen the same persisted SAF document through DocumentsUI. This second
-  # journey must apply the on-disk checkpoint and preview from recovered state.
+  # Reopen the same persisted SAF document through the recovery APK. The
+  # preview APK embeds its integration-test setup in MainActivity, so manually
+  # relaunching it would rerun seedProject and replace the provider document.
+  # flutter drive installs and starts the recovery APK after the force-stop.
   kill "$guest_pid" 2>/dev/null || true
   wait "$guest_pid" 2>/dev/null || true
   adb -s "$android_device_id" logcat -c
@@ -355,7 +320,7 @@ PY
   export OR_ANDROID_ACCEPTANCE_OUTPUT
   picker_status_file="$recovery_output/android-picker-saf-recovery.status"
   : > "$picker_status_file"
-  echo "Android app process restarted ($old_pid -> $new_pid); starting recovery DocumentsUI selector."
+  echo 'Starting recovery DocumentsUI selector.'
   (
     if python3 "$GITHUB_WORKSPACE/scripts/select_android_saf_document.py" \
       --device "$android_device_id" --guest-log "$guest_log" \
@@ -376,6 +341,30 @@ PY
     -d "$android_device_id" --no-dds \
     --use-application-binary="$recovery_apk" 2>&1 | tee "$log" &
   drive_pid=$!
+  new_pid=
+  for _ in $(seq 1 60); do
+    new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
+    [[ -n "$new_pid" && "$new_pid" != "$old_pid" ]] && break
+    sleep 1
+  done
+  if [[ -z "$new_pid" || "$new_pid" == "$old_pid" ]]; then
+    echo "The recovery driver did not relaunch the app as a new process (old=$old_pid new=$new_pid)." >&2
+    exit 1
+  fi
+  python3 - "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" "$old_pid" "$new_pid" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "package": "io.github.huou07.or_app",
+    "oldPid": int(sys.argv[2]),
+    "emptyAfterForceStop": True,
+    "newPid": int(sys.argv[3]),
+    "result": "PASS",
+}, indent=2) + "\n")
+PY
+  echo "Android recovery driver restarted the app ($old_pid -> $new_pid)."
   recovery_status=0
   while [[ ! -s "$picker_status_file" ]] &&
     kill -0 "$drive_pid" 2>/dev/null && kill -0 "$picker_pid" 2>/dev/null; do

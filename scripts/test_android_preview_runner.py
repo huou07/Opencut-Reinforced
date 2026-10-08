@@ -12,26 +12,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AndroidPreviewRunnerTests(unittest.TestCase):
-    def test_process_recovery_relaunches_the_stopped_main_activity(self) -> None:
+    def test_recovery_driver_relaunches_without_rerunning_preview_setup(self) -> None:
         runner = (ROOT / "scripts/run-android-preview-check.sh").read_text()
-        helper_start = runner.index("launch_product_main_activity() {")
-        helper_end = runner.index("\n}", helper_start)
-        helper = runner[helper_start:helper_end]
-        self.assertIn("shell am start -W", helper)
-        self.assertIn("android.intent.action.MAIN", helper)
-        self.assertIn("android.intent.category.LAUNCHER", helper)
-        self.assertIn('-n "$app_id/.MainActivity"', helper)
-        self.assertIn("Status: ok", helper)
-
         self.assertIn('drive_args+=(--keep-app-running)', runner)
         force_stop = runner.index('shell am force-stop "$app_id"')
-        launches = [
-            index
-            for index in range(len(runner))
-            if runner.startswith("  launch_product_main_activity", index)
-        ]
-        self.assertEqual(len(launches), 1)
-        self.assertGreater(launches[0], force_stop)
+        recovery_drive = runner.index("--driver=test_driver/android_saf_recovery.dart")
+        new_pid = runner.index('new_pid="$(adb -s "$android_device_id" shell pidof')
+        self.assertGreater(recovery_drive, force_stop)
+        self.assertGreater(new_pid, recovery_drive)
+        self.assertNotIn("launch_product_main_activity", runner)
+        self.assertIn("preview APK embeds its integration-test setup", runner)
 
     def test_picker_failure_stops_a_stalled_flutter_drive(self) -> None:
         with tempfile.TemporaryDirectory(prefix="or-android-runner-test-") as temp:

@@ -942,12 +942,12 @@ root and root document. The DocumentsUI export selector waits for an enabled
 Save action; a disabled button is not counted as a completed picker handoff.
 The end-to-end export check then requires the selected document to contain a
 valid Matroska result after the Android method-channel publish operation.
-After the Flutter driver exits, process-recovery acceptance starts the declared
-`.MainActivity` with its `MAIN`/`LAUNCHER` intent and requires a fresh PID after
-`am force-stop`. The SAF Flutter drive uses `--keep-app-running` so its private
-project copy and persisted SAF grant remain available for this recovery check.
-Android Monkey filters stopped packages, so it is not used to start the package
-after the force-stop.
+After the preview driver exits, process-recovery acceptance verifies that
+`am force-stop` removed its PID, then lets `flutter drive` install and start the
+recovery-targeted APK as a new process in the same package. It does not manually
+relaunch the preview APK: that embedded test entrypoint would repeat fixture
+setup and overwrite the provider project before recovery. The same package data
+and persisted SAF grant must survive the recovery APK install.
 
 The retained SAF report includes SHA-256 values for the provider project at
 fixture seeding and immediately before process restart. Debug builds also log
