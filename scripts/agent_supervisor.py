@@ -839,10 +839,27 @@ def checkpoint_prompt(
     repo_root: Path,
     resolution: dict[str, Any],
     checkpoint_ids: Sequence[str] | None = None,
+    plan: Mapping[str, Any] | None = None,
 ) -> str:
     checkpoint_ids = list(checkpoint_ids or [resolution["checkpoint_id"]])
     batched = len(checkpoint_ids) > 1
-    target = "\n".join(f"  - {item}" for item in checkpoint_ids)
+    if plan is None:
+        plan, _ = execution_plan.load_plan_state(repo_root)
+    plan_dict = dict(plan)
+    checkpoints = [
+        execution_plan.checkpoint_for_id(plan_dict, item) for item in checkpoint_ids
+    ]
+    target = "\n".join(
+        f"  - {item['id']} — {item['title']} ({item['spec_document']})"
+        for item in checkpoints
+    )
+    required_evidence_classes = sorted(
+        {
+            evidence_class
+            for checkpoint in checkpoints
+            for evidence_class in checkpoint.get("required_evidence_classes", [])
+        }
+    )
     allowed_paths = resolution.get("runner_allowed_protected_paths", [])
     if allowed_paths:
         protection = (
@@ -867,9 +884,8 @@ def checkpoint_prompt(
         "You are executing an externally authorized Opencut Reinforced product scope.\n"
         f"Repository root: {repo_root}\n"
         f"Goal: {resolution['goal']}\n"
-        f"Checkpoint: {resolution['checkpoint_id']} — {resolution['title']}\n"
-        f"Current specification: {resolution['spec_document']}\n"
-        f"Requirements selected for this verified implementation: {target}\n\n"
+        f"Current historical NEXT: {resolution['checkpoint_id']} — {resolution['title']}\n"
+        f"Requirements selected for this verified implementation:\n{target}\n\n"
         + (
             "These requirement IDs are traceability labels, not separate job boundaries. "
             "Implement one coherent product change across them, preserving their full "
@@ -888,16 +904,16 @@ def checkpoint_prompt(
         "After two speculative fixes to one failing gate, stop. Another repair needs exact "
         "failure evidence, a falsifiable hypothesis, a discriminating reproduction, and a "
         "causal explanation. No generic retry or timeout tuning.\n"
-        f"Required evidence classes: {', '.join(resolution.get('required_evidence_classes', []))}.\n"
+        f"Required evidence classes across this selected batch: {', '.join(required_evidence_classes)}.\n"
         + protection
         + "Push implementation commits only; do not create a state/evidence "
         "completion commit. Do not claim DONE. The supervisor owns hosted verification and "
         "state advancement.\n\n"
         "Your final handoff must begin with:\n"
         "IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE\n\n"
-        "and include these sections: CHECKPOINT, BASELINE, IMPLEMENTATION, TESTS, LOCAL "
+        "and include these sections: SELECTED REQUIREMENTS, BASELINE, IMPLEMENTATION, TESTS, LOCAL "
         "VERIFICATION, IMPLEMENTATION COMMIT, HOSTED EVIDENCE (AWAITING SUPERVISOR), STATE "
-        "(checkpoint remains NEXT and successor remains PLANNED), and BLOCKERS. Report native "
+        "(supervisor-owned statuses and NEXT cursor unchanged by the runner), and BLOCKERS. Report native "
         "Flutter runtime as NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY. Stop on a "
         "conflict instead of repairing the plan creatively.\n"
     )
@@ -1052,7 +1068,7 @@ def prepare_goal(
         execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"]), evidence_policy
     )
     selected = resolve_completion_batch(plan, state, resolution, requirement_ids)
-    return checkpoint_prompt(repo_root, resolution, selected)
+    return checkpoint_prompt(repo_root, resolution, selected, plan=plan)
 
 
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
@@ -2266,35 +2282,55 @@ def resolve_completion_batch(
 
 def enforce_active_mission_batch(
     repo_root: Path,
+    goal: str,
     checkpoint_ids: Sequence[str],
     explicitly_selected: bool,
 ) -> None:
-    """Keep paused legacy execution bounded to the operator-authorized finish."""
+    """Authorize explicit, traceable batches within the operator's product goal."""
 
     mission_path = repo_root / "docs" / "execution" / "MISSION.json"
     try:
         mission = json.loads(mission_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SupervisorError(f"cannot load active mission mode: {exc}") from exc
-    if not isinstance(mission, dict) or mission.get("schema_version") != 1:
+    if not isinstance(mission, dict) or mission.get("schema_version") != 2:
         raise SupervisorError("active mission mode has an unsupported schema")
-    mode = mission.get("legacy_execution")
-    if mode == "ACTIVE":
-        return
-    if mode != "PAUSED_AFTER_ALLOWED_REQUIREMENTS":
-        raise SupervisorError("active mission mode does not authorize legacy execution")
-    allowed = mission.get("finish_current_requirements")
+    expected_fields = {
+        "schema_version",
+        "objective",
+        "active_roadmap",
+        "active_goal",
+        "legacy_execution",
+        "require_explicit_requirement_selection",
+        "authorized_by",
+        "pivot_product_base_sha",
+    }
+    if set(mission) != expected_fields:
+        raise SupervisorError("active mission mode has an invalid field set")
     if (
-        not isinstance(allowed, list)
-        or not allowed
-        or not all(isinstance(item, str) and item for item in allowed)
-        or len(set(allowed)) != len(allowed)
+        mission.get("active_roadmap") != "docs/PRODUCT_ROADMAP.md"
+        or not isinstance(mission.get("objective"), str)
+        or not mission["objective"].strip()
+        or not isinstance(mission.get("authorized_by"), str)
+        or not mission["authorized_by"].strip()
+        or execution_evidence.SHA_PATTERN.fullmatch(
+            str(mission.get("pivot_product_base_sha", ""))
+        ) is None
     ):
-        raise SupervisorError("active mission mode has an invalid finish-current allowlist")
-    if not explicitly_selected or list(checkpoint_ids) != allowed:
+        raise SupervisorError("active mission mode has invalid authorization metadata")
+    if mission.get("legacy_execution") != "PAUSED":
+        raise SupervisorError("legacy checkpoint sequencing must remain paused")
+    authorized_goal = mission.get("active_goal")
+    if not isinstance(authorized_goal, str) or not authorized_goal:
+        raise SupervisorError("active mission mode has no authorized product goal")
+    if goal != authorized_goal:
+        raise SupervisorError(f"goal {goal!r} is outside the authorized product goal")
+    if mission.get("require_explicit_requirement_selection") is not True:
+        raise SupervisorError("active mission must require explicit requirement selection")
+    if not checkpoint_ids or not explicitly_selected:
         raise SupervisorError(
-            "legacy roadmap execution is paused by the operator; explicitly select only "
-            "the authorized in-flight requirements to finish this atomic boundary"
+            "legacy checkpoint sequencing is paused; explicitly select the dependency-closed "
+            "requirements for each coherent product change"
         )
 
 
@@ -2402,7 +2438,7 @@ def run_goal(
             invoke_runner(
                 repo_root,
                 runner,
-                checkpoint_prompt(repo_root, resolution, batch_ids),
+                checkpoint_prompt(repo_root, resolution, batch_ids, plan=plan),
             )
             git_output(repo_root, "fetch", "--prune", "origin")
             if (repo_root / "docs/execution/PLAN.json").read_bytes() != before_plan_bytes:
@@ -2495,14 +2531,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             preflight = _preflight_goal_data(REPO_ROOT, args.goal)
             resolution = preflight["resolution"]
             if args.repair_resume_from:
+                if requirements is not None or args.goal != f"checkpoint:{preflight['state'].get('current_next')}":
+                    raise SupervisorError(
+                        "repair-resume requires the exact current checkpoint and no requirement batch"
+                    )
                 selected = [str(preflight["state"].get("current_next"))]
             else:
                 selected = resolve_completion_batch(
                     preflight["plan"], preflight["state"], resolution, requirements
                 )
-            enforce_active_mission_batch(
-                REPO_ROOT, selected, requirements is not None
-            )
+                enforce_active_mission_batch(
+                    REPO_ROOT, args.goal, selected, requirements is not None
+                )
         if args.repair_resume_from:
             reports = repair_resume_goal(REPO_ROOT, args.goal, args.repair_resume_from)
         else:

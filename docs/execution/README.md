@@ -1,11 +1,12 @@
 # OR Execution Lock
 
 > **Mode change:** operator authorization on 2026-10-09 paused the legacy
-> checkpoint sequence after the already-in-flight 9D requirement. See
+> checkpoint-by-checkpoint sequence and authorized the full product outcome
+> through the active roadmap. See
 > [MISSION.json](MISSION.json), [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md),
 > and [OPEN_SOURCE_CONVERGENCE.md](../OPEN_SOURCE_CONVERGENCE.md). The
-> supervisor permits only an explicitly selected 9D batch to finish this
-> atomic boundary; it rejects later legacy work. PLAN/STATE/evidence remain
+> supervisor permits explicitly selected, dependency-closed batches from the
+> authorized full-product goal; legacy sequencing remains paused. PLAN/STATE/evidence remain
 > historical traceability and are not rewritten by this mode change.
 
 This directory is the repository's machine-readable execution control plane.
@@ -48,7 +49,8 @@ python3 scripts/test_execution_infra.py
 ```
 
 The optional `scripts/agent_supervisor.py` runs one fresh external runner
-process per valid checkpoint and refuses dirty or diverged direct-main state.
+process per coherent, explicitly selected requirement batch and refuses dirty
+or diverged direct-main state.
 It does not know or assume a vendor agent CLI. A runner may push only its
 implementation commit. It cannot edit the plan, state, phase contracts,
 validators, supervisor, workflows, or completion evidence. It may only add
@@ -72,9 +74,13 @@ delegation across coherent requirement batches without making plan, evidence,
 architecture, acceptance, or verification controls mutable.
 
 The supervisor is the only authority that can mark historical requirements
-`DONE`. `MISSION.json` prevents a runner or manual resume from advancing past
-the operator-authorized in-flight batch while legacy execution is paused. A
-single coherent implementation may cover multiple plan IDs. After a runner
+`DONE`. `MISSION.json` authorizes the active product goal and keeps the old
+sequencing paused. Each coherent implementation explicitly selects one or
+more requirement IDs inside that goal; the supervisor enforces technical
+dependency closure, contract ownership, exact-SHA evidence, and platform
+verification without requiring the selection to start at historical `NEXT`.
+The `NEXT` cursor remains a historical progress summary and advances only
+when the selected batch includes its current requirement. After a runner
 pushes, the supervisor independently verifies exact-SHA push-triggered GitHub
 Actions runs and every required job for each selected ID, verifies required
 Developer Previews, writes one evidence record per ID, and creates one

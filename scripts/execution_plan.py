@@ -739,7 +739,7 @@ def checkpoint_for_id(plan: dict[str, Any], checkpoint_id: str) -> dict[str, Any
 def resolve_goal(
     plan: dict[str, Any], state: dict[str, Any], goal: str, repo_root: Path = REPO_ROOT
 ) -> dict[str, Any]:
-    """Resolve a goal to the only checkpoint the next runner may execute."""
+    """Resolve a goal and historical cursor; the supervisor separately selects a batch."""
 
     summary = validate_plan(plan, state, repo_root)
     current_next = summary["next_checkpoint"]

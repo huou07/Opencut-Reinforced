@@ -999,7 +999,7 @@ class QualityEvidenceTests(unittest.TestCase):
             "actual product boundary", "bridge-only calls", "system-installed tools",
             "in-process-only tests", "disabled enforcement", "synthetic equivalent",
             "After two speculative fixes", "falsifiable hypothesis", "No generic retry",
-            "Required evidence classes: STATIC, UNIT, INTEGRATION, NATIVE_RUNTIME, USER_JOURNEY, PERFORMANCE, RESOURCE_STRESS.",
+            "Required evidence classes across this selected batch: INTEGRATION, NATIVE_RUNTIME, PERFORMANCE, RESOURCE_STRESS, STATIC, UNIT, USER_JOURNEY.",
         ):
             self.assertIn(requirement, prompt)
 
@@ -2332,7 +2332,9 @@ class GuardTests:
             prompt = agent_supervisor.prepare_goal(REPO_ROOT, "checkpoint:7A")
 
         resolution = execution_plan.resolve_goal(plan, state, "checkpoint:7A", REPO_ROOT)
-        self.assertEqual(prompt, agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution))
+        self.assertEqual(
+            prompt, agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution, plan=plan)
+        )
         ensure_start_state.assert_called_once_with(REPO_ROOT)
 
     def test_prepare_goal_does_not_invoke_a_runner(self) -> None:
@@ -2371,7 +2373,7 @@ class GuardTests:
         }
 
         self.assertEqual(before, after)
-        self.assertIn("Checkpoint: 9B", prompt)
+        self.assertIn("Current historical NEXT: 9B", prompt)
         self.assertTrue((evidence_dir / "9A.json").is_file())
 
     def test_prepare_cli_prints_prompt_without_running_a_runner(self) -> None:
@@ -2853,7 +2855,7 @@ class RepairResumeTests(unittest.TestCase):
 
 
 class SupervisorTests(unittest.TestCase):
-    def test_paused_legacy_mode_allows_only_explicit_current_atomic_batch(self) -> None:
+    def test_product_mission_authorizes_explicit_batches_without_legacy_cursor_gating(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             execution = root / "docs" / "execution"
@@ -2861,26 +2863,38 @@ class SupervisorTests(unittest.TestCase):
             (execution / "MISSION.json").write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
-                        "legacy_execution": "PAUSED_AFTER_ALLOWED_REQUIREMENTS",
-                        "finish_current_requirements": ["9D"],
+                        "schema_version": 2,
+                        "objective": "Finish the product",
+                        "active_roadmap": "docs/PRODUCT_ROADMAP.md",
+                        "active_goal": "milestone:full-roadmap",
+                        "legacy_execution": "PAUSED",
+                        "require_explicit_requirement_selection": True,
+                        "authorized_by": "operator",
+                        "pivot_product_base_sha": "a" * 40,
                     }
                 ),
                 encoding="utf-8",
             )
 
-            agent_supervisor.enforce_active_mission_batch(root, ["9D"], True)
-            for selected, explicit in ((["9E"], True), (["9D"], False), (["9D", "9E"], True)):
-                with self.subTest(selected=selected, explicit=explicit), self.assertRaisesRegex(
-                    agent_supervisor.SupervisorError, "legacy roadmap execution is paused"
-                ):
-                    agent_supervisor.enforce_active_mission_batch(root, selected, explicit)
+            agent_supervisor.enforce_active_mission_batch(
+                root, "milestone:full-roadmap", ["9E", "10A"], True
+            )
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, "outside the authorized"):
+                agent_supervisor.enforce_active_mission_batch(
+                    root, "milestone:desktop-mvp", ["9E"], True
+                )
+            with self.assertRaisesRegex(agent_supervisor.SupervisorError, "explicitly select"):
+                agent_supervisor.enforce_active_mission_batch(
+                    root, "milestone:full-roadmap", ["9E"], False
+                )
             mission_path = execution / "MISSION.json"
             mission_path.write_text('{"schema_version":1}', encoding="utf-8")
             with self.assertRaisesRegex(
-                agent_supervisor.SupervisorError, "does not authorize legacy execution"
+                agent_supervisor.SupervisorError, "unsupported schema"
             ):
-                agent_supervisor.enforce_active_mission_batch(root, ["9D"], True)
+                agent_supervisor.enforce_active_mission_batch(
+                    root, "milestone:full-roadmap", ["9E"], True
+                )
 
     def test_historical_resume_allows_only_named_pivot_control_docs(self) -> None:
         agent_supervisor.validate_historical_resume_paths(
@@ -2891,7 +2905,7 @@ class SupervisorTests(unittest.TestCase):
         ):
             agent_supervisor.validate_historical_resume_paths(["crates/or_core/src/lib.rs"])
 
-    def test_cli_blocks_unselected_legacy_execution_after_operator_pause(self) -> None:
+    def test_cli_requires_explicit_product_requirement_selection(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         resolution = execution_plan.resolve_goal(
             plan, state, "milestone:full-roadmap", REPO_ROOT
@@ -2907,10 +2921,10 @@ class SupervisorTests(unittest.TestCase):
                 ["--goal", "milestone:full-roadmap", "--runner", "/runner"]
             )
         self.assertEqual(result, 1)
-        self.assertIn("legacy roadmap execution is paused", stderr.getvalue())
+        self.assertIn("explicitly select", stderr.getvalue())
         run_goal.assert_not_called()
 
-    def test_cli_can_resume_only_the_selected_inflight_9d_batch(self) -> None:
+    def test_cli_authorizes_a_coherent_cross_checkpoint_resume_batch(self) -> None:
         plan, state = execution_plan.load_plan_state(REPO_ROOT)
         resolution = execution_plan.resolve_goal(
             plan, state, "milestone:full-roadmap", REPO_ROOT
@@ -2925,14 +2939,28 @@ class SupervisorTests(unittest.TestCase):
                     "--goal",
                     "milestone:full-roadmap",
                     "--requirements",
-                    "9D",
+                    "9E,10A",
                     "--resume-sha",
                     "4261f43cd03b78e445c3f278ebb53dec15843cb3",
                 ]
             )
         self.assertEqual(result, 0)
         self.assertEqual(run_goal.call_args.args[1:3], ("milestone:full-roadmap", None))
-        self.assertEqual(run_goal.call_args.args[4], ["9D"])
+        self.assertEqual(run_goal.call_args.args[4], ["9E", "10A"])
+
+    def test_prompt_lists_each_selected_contract_and_union_of_evidence(self) -> None:
+        plan, state = execution_plan.load_plan_state(REPO_ROOT)
+        resolution = execution_plan.resolve_goal(
+            plan, state, "milestone:full-roadmap", REPO_ROOT
+        )
+        prompt = agent_supervisor.checkpoint_prompt(REPO_ROOT, resolution, ["9E", "10A"])
+        for expected in (
+            "9E — Android resource and device hardening",
+            "10A — AI runtime and provider foundation",
+            "Required evidence classes across this selected batch:",
+            "These requirement IDs are traceability labels, not separate job boundaries.",
+        ):
+            self.assertIn(expected, prompt)
 
     def test_dirty_worktree_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3202,7 +3230,7 @@ class SupervisorTests(unittest.TestCase):
                 next(
                     checkpoint_id
                     for checkpoint_id in expected_checkpoints
-                    if f"Checkpoint: {checkpoint_id} —" in prompt
+                    if f"Current historical NEXT: {checkpoint_id} —" in prompt
                 )
                 for prompt in prompts
             ],
@@ -3269,6 +3297,14 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(after["checkpoints"]["B"], "DONE")  # type: ignore[index]
         self.assertEqual(after["checkpoints"]["C"], "NEXT")  # type: ignore[index]
         self.assertEqual(after["current_next"], "C")
+
+    def test_batch_transition_can_verify_independent_work_ahead_of_historical_next(self) -> None:
+        plan, before = fixture_plan_state(["A", "B", "C"])
+        plan["checkpoints"][1]["technical_dependency_checkpoint_ids"] = []  # type: ignore[index]
+        after = agent_supervisor.advance_state_batch(before, plan, ["B"])
+        self.assertEqual(after["checkpoints"]["B"], "DONE")  # type: ignore[index]
+        self.assertEqual(after["checkpoints"]["A"], "NEXT")  # type: ignore[index]
+        self.assertEqual(after["current_next"], "A")
 
     def test_batch_transition_refuses_unclosed_prerequisites(self) -> None:
         plan, before = fixture_plan_state(["A", "B", "C"])
