@@ -907,3 +907,11 @@ tool dock, selects a timeline clip, and opens its Inspector sheet. The Inspector
 must load the selected clip's setting through the typed project gateway. The
 acceptance report requires each interaction assertion before it records the
 9C integration and user-journey evidence.
+
+The Android preview acceptance test logs the project summary and media-page
+reads, initial transport and seek actions, frame-availability request, and
+screenshot capture as named stages. Project reads, frame availability, and
+screenshot capture have a 60-second per-operation timeout so a blocked platform
+bridge reports its exact stage in the retained driver log instead of leaving the
+hosted job to time out without a location. Texture pixel assertions remain
+required after each successful capture.

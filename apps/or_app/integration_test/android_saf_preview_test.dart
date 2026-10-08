@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -17,6 +18,23 @@ const _fixture = MethodChannel('or_saf_acceptance_fixture');
 const _presenter = MethodChannel('or_viewer_texture');
 String _source(String id) =>
     'content://dev.opencut.saffixture.documents/document/$id';
+
+Future<T> _stage<T>(String name, Future<T> Function() operation) async {
+  debugPrint('ANDROID_SAF_STAGE_START $name');
+  try {
+    final value = await operation().timeout(
+      const Duration(seconds: 60),
+      onTimeout: () => throw TimeoutException(
+        'Android SAF acceptance stage timed out: $name',
+      ),
+    );
+    debugPrint('ANDROID_SAF_STAGE_COMPLETE $name');
+    return value;
+  } catch (error) {
+    debugPrint('ANDROID_SAF_STAGE_FAILED $name: $error');
+    rethrow;
+  }
+}
 
 Future<Map<String, dynamic>> _control(
   String operation, {
@@ -107,7 +125,10 @@ Future<List<int>> _redTexture(
   expect(texture, findsOneWidget);
   final center = tester.getCenter(texture) * tester.view.devicePixelRatio;
   await tester.pump(const Duration(milliseconds: 100));
-  final bytes = await binding.takeScreenshot(name);
+  final bytes = await _stage(
+    'screenshot:$name',
+    () => binding.takeScreenshot(name),
+  );
   final codec = await ui.instantiateImageCodec(Uint8List.fromList(bytes));
   final frame = await codec.getNextFrame();
   final image = frame.image;
@@ -338,19 +359,26 @@ void main() {
       expect(gateway.openedPath, contains('/files/or-projects/'));
       debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
       final session = gateway.session!;
-      final revision = (await gateway.summary(session)).revision;
+      final revision = (await _stage(
+        'project-summary',
+        () => gateway.summary(session),
+      )).revision;
+      debugPrint('ANDROID_SAF_PROJECT_SUMMARY_READ');
       expect(
-        (await gateway.listMediaPage(
-          session,
-          offset: 64,
-          limit: 1,
+        (await _stage(
+          'project-media-page',
+          () => gateway.listMediaPage(session, offset: 64, limit: 1),
         )).items.single.sourceUri,
         source,
       );
+      debugPrint('ANDROID_SAF_PROJECT_MEDIA_PAGE_READ');
 
       // The first explicit user transport action is Play, followed by real seek.
+      debugPrint('ANDROID_SAF_PLAY_TAP_START');
       await tester.tap(find.byKey(const ValueKey('preview-play')));
+      debugPrint('ANDROID_SAF_PLAY_TAP_COMPLETE');
       await _until(tester, () => gateway.playCalls == 1);
+      debugPrint('ANDROID_SAF_PLAY_COMMAND_COMPLETE');
       expect(gateway.playResult!.frameSequence, greaterThan(BigInt.zero));
       expect(gateway.playResult!.errorCode, isNull);
       if (tester
@@ -360,12 +388,20 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('preview-play')));
       }
       await _until(tester, () => gateway.lastPreview?.playing == false);
+      debugPrint('ANDROID_SAF_PLAYBACK_PAUSED');
       await _seekUi(tester, gateway, .25);
+      debugPrint('ANDROID_SAF_FIRST_SEEK_COMPLETE');
       expect(gateway.seekError, isNull);
       expect(gateway.lastPreview!.width, 16);
       expect(gateway.lastPreview!.height, 16);
       expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
-      expect(await _presenter.invokeMethod<bool>('frameAvailable'), isTrue);
+      expect(
+        await _stage(
+          'frame-available-after-seek',
+          () => _presenter.invokeMethod<bool>('frameAvailable'),
+        ),
+        isTrue,
+      );
       expect(_providerFds(), 1);
       final registeredBefore = (await _resources())['registrationCount'];
       final opensBefore = (await _control('status'))['providerOpens'];
