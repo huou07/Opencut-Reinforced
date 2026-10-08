@@ -86,6 +86,8 @@ MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+MEDIA_SELECT = MEDIA_OPEN.replace(b'text="Open"', b'text="Select"')
+
 SAVE_DISABLED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="SAVE" class="android.widget.Button"
@@ -104,14 +106,20 @@ SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 class FakeAdb:
     """An `adb` that fails like a cold guest, then serves the real tree."""
 
-    def __init__(self, transient_dumps, flow="open"):
+    def __init__(self, transient_dumps, flow="open", media_confirmation="Open"):
         self.transient = transient_dumps
         self.tree_index = 0
         self.taps = []
         self.actions = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
-            "media": [DRAWER, PROVIDER, MEDIA, MEDIA, MEDIA_OPEN],
+            "media": [
+                DRAWER,
+                PROVIDER,
+                MEDIA,
+                MEDIA,
+                MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
+            ],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA, MEDIA,
@@ -193,6 +201,23 @@ class SelectorTests(unittest.TestCase):
             )
             self.assertEqual(adb.taps[2], ["540", "370"])
             self.assertEqual(adb.taps[3], ["990", "750"])
+
+    def test_media_flow_accepts_select_confirmation_on_current_documentsui(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(
+                transient_dumps=0,
+                flow="media",
+                media_confirmation="Select",
+            )
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(adb.actions[-1], ("tap", 4))
+            self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
         taps, selected = run(transient_dumps=0)

@@ -100,6 +100,17 @@ def select(device, guest_log, output, flow="open"):
         )
         if open_action is not None and open_action.get("enabled") != "true":
             open_action = None
+        media_action = next(
+            (
+                node
+                for node in nodes
+                if (node.get("text") or "").casefold() in {"open", "select"}
+                or (node.get("content-desc") or "").casefold() in {"open", "select"}
+            ),
+            None,
+        )
+        if media_action is not None and media_action.get("enabled") != "true":
+            media_action = None
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
@@ -114,8 +125,8 @@ def select(device, guest_log, output, flow="open"):
             if next_media is not None:
                 target = media[next_media]
                 pending_media = next_media
-            elif len(selected_media) == 2 and open_action is not None:
-                target = open_action
+            elif len(selected_media) == 2 and media_action is not None:
+                target = media_action
         elif selected_root and flow == "export" and save is not None:
             target = save
         elif not selected_root and provider is not None:
@@ -140,7 +151,7 @@ def select(device, guest_log, output, flow="open"):
                 continue
             if pending_media is not None:
                 selected_media.add(pending_media)
-            if target is document or target is save or (flow == "media" and target is open_action):
+            if target is document or target is save or (flow == "media" and target is media_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = "two media documents" if flow == "media" else "OR SAF acceptance"
                     record.write(f"Selected {detail} for {flow} through native DocumentsUI.\n")
