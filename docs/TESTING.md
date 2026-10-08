@@ -697,8 +697,8 @@ hardening commit itself must pass both workflows.
   results and queued worker operations are each capped at eight. Concurrent
   frame requests share a pending result, with at most one follow-up copy. A
   successful presentation result requires a surface post; screenshots below
-  additionally verify visible composition. Android export and native audio
-  output remain unavailable in this checkpoint.
+  additionally verify visible composition. Android export is covered by the
+  SAF journey below; native audio output remains unavailable on Android.
 - The existing API 36 x86_64 SwiftShader bridge/surface acceptance retains the
   local-file FFV1 Matroska decode, concurrent presentation, dimensions, explicit
   error, and unchanged-revision assertions. It is lower-level integration

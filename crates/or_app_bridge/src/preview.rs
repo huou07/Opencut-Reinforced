@@ -1348,18 +1348,7 @@ mod desktop {
             session: &ProjectSession,
             request: ExportRequest,
         ) -> ExportResponse {
-            #[cfg(target_os = "android")]
-            {
-                let _ = (session, request);
-                ExportResponse::failure(
-                    "EXPORT_UNAVAILABLE",
-                    "Android export is not available in this checkpoint.",
-                )
-            }
-            #[cfg(not(target_os = "android"))]
-            {
-                PreviewRuntime::handle_export_request(self, session, request)
-            }
+            PreviewRuntime::handle_export_request(self, session, request)
         }
     }
 

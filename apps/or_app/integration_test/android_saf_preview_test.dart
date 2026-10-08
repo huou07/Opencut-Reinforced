@@ -92,6 +92,12 @@ Future<void> _until(WidgetTester tester, bool Function() ready) async {
   expect(ready(), isTrue, reason: 'The real product action did not complete.');
 }
 
+String? _exportStatus(WidgetTester tester) {
+  final status = find.byKey(const ValueKey('export-status'));
+  if (status.evaluate().isEmpty) return null;
+  return tester.widget<Tooltip>(status).message;
+}
+
 Future<void> _seekUi(
   WidgetTester tester,
   _ObservedGateway gateway,
@@ -489,9 +495,19 @@ void main() {
       await tester.tap(exportButton);
       await tester.pump();
       debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
-      await _until(
-        tester,
-        () => find.byTooltip('Export complete').evaluate().isNotEmpty,
+      await _until(tester, () {
+        final status = _exportStatus(tester);
+        return status != null &&
+            status != 'Export queued' &&
+            status != 'Exporting' &&
+            !RegExp(r'^Export \d+/\d+$').hasMatch(status) &&
+            status != 'Saving export to the selected location…';
+      });
+      final exportStatus = _exportStatus(tester);
+      expect(
+        exportStatus,
+        'Export complete',
+        reason: 'Android export ended with status: $exportStatus',
       );
       final exported = await _control('exportStatus');
       expect(exported['exportBytes'], greaterThan(4));

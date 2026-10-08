@@ -216,6 +216,9 @@ today.
 - At 320 px width, the mobile top bar keeps project, export, cancel, and command
   controls usable without overflow. Save/export status remains available through
   an accessible tooltip when its full text does not fit.
+- Android export uses the shared project/timeline semantics, reports progress
+  and failure in that status area, supports cancellation while active, and
+  publishes a completed Matroska file to the selected DocumentsUI destination.
 - Android recovery acceptance writes a valid unsaved edit to the app-private
   project working copy, closes the live session, force-stops the app process,
   and reopens the same persisted SAF document through DocumentsUI. The actual

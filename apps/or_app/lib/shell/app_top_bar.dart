@@ -102,6 +102,7 @@ class AppTopBar extends StatelessWidget {
               ),
               if (statusLabel != null) ...[
                 Tooltip(
+                  key: const ValueKey('export-status'),
                   message: statusLabel!,
                   child: Icon(
                     statusIsError

@@ -97,6 +97,7 @@ void main() {
       );
 
       expect(find.byTooltip(status), findsOneWidget);
+      expect(find.byKey(const ValueKey('export-status')), findsOneWidget);
       expect(find.text(status), findsNothing);
       expect(tester.takeException(), isNull);
     },
