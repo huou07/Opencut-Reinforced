@@ -20,6 +20,9 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
         new_pid = runner.index('new_pid="$(adb -s "$android_device_id" shell pidof')
         self.assertGreater(recovery_drive, force_stop)
         self.assertGreater(new_pid, recovery_drive)
+        recovery_probe = runner[new_pid : runner.index("done", new_pid)]
+        self.assertIn("|| true)", recovery_probe)
+        self.assertIn('process_observer_log="$recovery_output/android-process-observer.log"', runner)
         self.assertNotIn("launch_product_main_activity", runner)
         self.assertIn("preview APK embeds its integration-test setup", runner)
 

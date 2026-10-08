@@ -342,8 +342,13 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     --use-application-binary="$recovery_apk" 2>&1 | tee "$log" &
   drive_pid=$!
   new_pid=
+  process_observer_log="$recovery_output/android-process-observer.log"
+  : > "$process_observer_log"
   for _ in $(seq 1 60); do
-    new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
+    # Installation can briefly make the guest shell unavailable even after
+    # flutter drive has started. Preserve each probe error and keep the bounded
+    # observation alive; a missing process still fails closed after 60 seconds.
+    new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>>"$process_observer_log" | tr -d '\r' | awk '{print $1}' || true)"
     [[ -n "$new_pid" && "$new_pid" != "$old_pid" ]] && break
     sleep 1
   done
