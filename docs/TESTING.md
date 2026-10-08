@@ -943,6 +943,8 @@ Save action; a disabled button is not counted as a completed picker handoff.
 The end-to-end export check then requires the selected document to contain a
 valid Matroska result after the Android method-channel publish operation.
 After the Flutter driver exits, process-recovery acceptance starts the declared
-`.MainActivity` with its `MAIN`/`LAUNCHER` intent and waits for a fresh PID
-before and after `am force-stop`. Android Monkey filters stopped packages, so it
-is not used to start the package after Flutter driver teardown.
+`.MainActivity` with its `MAIN`/`LAUNCHER` intent and requires a fresh PID after
+`am force-stop`. The SAF Flutter drive uses `--keep-app-running` so its private
+project copy and persisted SAF grant remain available for this recovery check.
+Android Monkey filters stopped packages, so it is not used to start the package
+after the force-stop.

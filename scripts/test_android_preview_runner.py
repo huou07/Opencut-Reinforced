@@ -23,15 +23,15 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
         self.assertIn('-n "$app_id/.MainActivity"', helper)
         self.assertIn("Status: ok", helper)
 
+        self.assertIn('drive_args+=(--keep-app-running)', runner)
         force_stop = runner.index('shell am force-stop "$app_id"')
         launches = [
             index
             for index in range(len(runner))
             if runner.startswith("  launch_product_main_activity", index)
         ]
-        self.assertEqual(len(launches), 2)
-        self.assertLess(launches[0], force_stop)
-        self.assertGreater(launches[1], force_stop)
+        self.assertEqual(len(launches), 1)
+        self.assertGreater(launches[0], force_stop)
 
     def test_picker_failure_stops_a_stalled_flutter_drive(self) -> None:
         with tempfile.TemporaryDirectory(prefix="or-android-runner-test-") as temp:

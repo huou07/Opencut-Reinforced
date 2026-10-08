@@ -135,9 +135,15 @@ fi
 # Gradle and the Kotlin daemons out of the software-rendered emulator phase,
 # where ~4 GiB of build JVMs was competing for the runner's vCPUs.
 echo "Starting Android Flutter driver for $case_name."
+drive_args=(--use-application-binary="$apk")
+if [[ "$case_name" == saf ]]; then
+  # The process-recovery acceptance below needs the same installed app and its
+  # private SAF state after Flutter drive returns.
+  drive_args+=(--keep-app-running)
+fi
 (
   flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
-    --use-application-binary="$apk" "$@" 2>&1 | tee "$log"
+    "${drive_args[@]}" "$@" 2>&1 | tee "$log"
 ) &
 drive_pid=$!
 if [[ "$case_name" == saf ]]; then
@@ -285,12 +291,10 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
   recovery_output="${OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT:-$OR_ANDROID_ACCEPTANCE_OUTPUT-recovery}"
   mkdir -p "$recovery_output"
 
-  # The first journey has saved a real recovery sidecar. Capture a live process,
-  # force-stop it through Android, prove it disappeared, then relaunch the same
-  # installed app without clearing its private files or SAF grants. Flutter drive
-  # stops the package when it exits, and Monkey cannot resolve stopped packages;
-  # a MAIN/LAUNCHER start launches the declared product activity.
-  launch_product_main_activity
+  # Flutter drive is configured to leave this installed app running. Capture
+  # its process, force-stop it through Android, prove it disappeared, then
+  # relaunch the same app without clearing private files or SAF grants. Android
+  # Monkey filters stopped packages, so use the declared MAIN/LAUNCHER activity.
   old_pid=
   for _ in $(seq 1 60); do
     old_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
