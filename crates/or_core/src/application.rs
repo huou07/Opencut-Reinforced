@@ -8923,7 +8923,10 @@ mod tests {
             .execute_command(media_relink(replacement.clone(), 1))
             .unwrap();
         assert_eq!(result.after_revision, ProjectRevision::new(2));
-        assert_eq!(session.project().media_items(), &[replacement.clone()]);
+        assert_eq!(
+            session.project().media_items(),
+            std::slice::from_ref(&replacement)
+        );
         assert!(session.project().timeline().references_media(media_id));
         assert!(matches!(
             result.change_set.changes(),
@@ -8932,7 +8935,10 @@ mod tests {
         ));
 
         let undone = session.execute_command(undo(2)).unwrap();
-        assert_eq!(session.project().media_items(), &[original.clone()]);
+        assert_eq!(
+            session.project().media_items(),
+            std::slice::from_ref(&original)
+        );
         assert!(session.project().timeline().references_media(media_id));
         assert!(matches!(
             undone.change_set.changes(),
