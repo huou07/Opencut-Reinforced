@@ -63,7 +63,12 @@ def verify(relaunch: dict[str, Any], prepared: dict[str, Any], recovered: dict[s
         character not in "0123456789abcdef" for character in provider_digest
     ):
         raise ValueError("post-restart provider project digest is missing")
-    if not str(recovered_report.get("projectPath", "")).startswith("/data/user/0/io.github.huou07.or_app/files/or-projects/"):
+    project_path = str(recovered_report.get("projectPath", ""))
+    app_private_project_prefixes = (
+        "/data/user/0/io.github.huou07.or_app/files/or-projects/",
+        "/data/data/io.github.huou07.or_app/files/or-projects/",
+    )
+    if not project_path.startswith(app_private_project_prefixes):
         raise ValueError("post-restart journey did not reopen the app-private SAF working copy")
     if recovered_report.get("projectName") != "Process recovery acceptance":
         raise ValueError("reopened project does not contain the recovered unsaved edit")

@@ -43,6 +43,19 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
     def test_complete_process_recovery_journey_is_accepted(self):
         verify(self.process, self.prepared, self.recovered)
 
+    def test_android_data_alias_is_accepted_for_app_private_working_copy(self):
+        self.recovered["androidSafRecoveryAcceptance"]["projectPath"] = (
+            "/data/data/io.github.huou07.or_app/files/or-projects/project.orproj"
+        )
+        verify(self.process, self.prepared, self.recovered)
+
+    def test_working_copy_outside_app_private_project_directory_is_rejected(self):
+        self.recovered["androidSafRecoveryAcceptance"]["projectPath"] = (
+            "/storage/emulated/0/project.orproj"
+        )
+        with self.assertRaisesRegex(ValueError, "app-private SAF working copy"):
+            verify(self.process, self.prepared, self.recovered)
+
     def test_missing_force_stop_disappearance_is_rejected(self):
         self.process["emptyAfterForceStop"] = False
         with self.assertRaisesRegex(ValueError, "force-stop"):

@@ -954,6 +954,8 @@ persisted before opening the unchanged project.
 The same package data and grant must survive the recovery APK install. The recovery PID
 observer preserves transient ADB shell errors and keeps polling within a fixed
 60-second bound; failure to observe a distinct process still fails the journey.
+The report verifier accepts Android's `/data/user/0` and `/data/data` aliases
+only when they resolve to OR's exact app-private `files/or-projects` directory.
 If recovery does not restore the preview texture, the driver retains the current
 screen capture and logs whether the project session opened, its name/revision,
 and visible UI text. The compact viewer uses an accessible icon status when its
