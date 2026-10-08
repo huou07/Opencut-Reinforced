@@ -637,6 +637,20 @@ void main() {
             find.byKey(const ValueKey('inspector-visual-x')).evaluate().isEmpty,
       );
 
+      // Importing media and seeking dirties the project. Save through the
+      // editor before closing so the journey verifies provider cleanup while
+      // preserving the normal unsaved-work guard.
+      final saveButton = find.byKey(const ValueKey('workspace-save'));
+      await tester.ensureVisible(saveButton);
+      await _until(
+        tester,
+        () =>
+            saveButton.evaluate().isNotEmpty &&
+            saveButton.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.tap(saveButton);
+      await _until(tester, () => find.text('Saved').evaluate().isNotEmpty);
+
       final journey = await _resources();
       // The close control lives on the Projects workspace. Tapping nav-home
       // landed on Home, which has no active-project card, so the close step
