@@ -8,7 +8,7 @@ abstract interface class ProjectFilePicker {
   bool get supportsMediaImport;
   bool get supportsExport;
   Future<String?> openProjectPath();
-  Future<String?> openMediaPath();
+  Future<String?> openMediaSource();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({required String suggestedName});
   Future<void> publishExportPath(String path);
@@ -59,7 +59,7 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaPath() async {
+  Future<String?> openMediaSource() async {
     if (!isSupported) return null;
     final file = await openFile();
     return file?.path;
@@ -115,7 +115,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   bool get isSupported => Platform.isAndroid;
 
   @override
-  bool get supportsMediaImport => false;
+  bool get supportsMediaImport => true;
 
   @override
   bool get supportsExport => true;
@@ -162,7 +162,33 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaPath() async => null;
+  Future<String?> openMediaSource() async {
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'openMedia',
+      );
+      if (response == null) return null;
+      final source = response['sourceUri'];
+      if (source is! String) {
+        throw const ProjectSafStorageException(
+          'The selected media source is invalid.',
+        );
+      }
+      final uri = Uri.tryParse(source);
+      if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+        throw const ProjectSafStorageException(
+          'The selected media source is invalid.',
+        );
+      }
+      return source;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android media storage is unavailable.',
+      );
+    }
+  }
 
   @override
   Future<String?> saveExportPath({required String suggestedName}) async {

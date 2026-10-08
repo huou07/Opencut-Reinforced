@@ -137,6 +137,17 @@ pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
     Ok(metadata)
 }
 
+/// Validates probe output produced by an in-process media backend against the
+/// same metadata limits and minimum container/codec import matrix as ffprobe.
+pub fn parse_media_probe_output(
+    bytes: &[u8],
+    file_size_bytes: u64,
+) -> Result<MediaMetadata, MediaProbeError> {
+    let metadata = parse_probe_json(bytes, file_size_bytes)?;
+    enforce_import_matrix(&metadata)?;
+    Ok(metadata)
+}
+
 struct FfprobeBackend {
     executable: PathBuf,
     timeout: Duration,

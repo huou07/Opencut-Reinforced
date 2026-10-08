@@ -13,6 +13,13 @@ pub use decoder::{
 pub use encoder::{ExportEncodeError, MatroskaFfv1PcmS16leWriter};
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
+#[cfg(unix)]
+pub fn probe_seekable_media(
+    capability: &SeekableMediaIoCapability,
+) -> Result<Vec<u8>, ffmpeg_the_third::Error> {
+    seekable_io::probe(capability)
+}
+
 /// Initializes the dynamically linked FFmpeg runtime and verifies its license.
 pub fn verify_ffmpeg_runtime() -> bool {
     ffmpeg_the_third::init().is_ok()

@@ -9,6 +9,8 @@ def report():
     return {'androidSafAcceptance': {
         'checks': dict.fromkeys(CHECKS, True), 'providerUid': 10001, 'appUid': 10002,
         'sourceUri': 'content://dev.opencut.saffixture.documents/document/late65',
+        'mediaImportSourceUri': 'content://dev.opencut.saffixture.documents/document/media',
+        'mediaImportMicros': 1000, 'mediaImportRevision': '2', 'projectRevision': '1',
         'providerProjectSha256AtSeed': 'a' * 64,
         'providerProjectSha256BeforeRestart': 'a' * 64,
         'visiblePixelRgba': [254, 0, 0, 255], 'backgroundResumePixelRgba': [254, 0, 0, 255],

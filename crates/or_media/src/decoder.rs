@@ -84,8 +84,8 @@ pub struct AudioChunk {
 #[cfg(unix)]
 #[derive(Clone)]
 pub struct SeekableMediaIoCapability {
-    file: Arc<File>,
-    length: i64,
+    pub(super) file: Arc<File>,
+    pub(super) length: i64,
 }
 
 #[cfg(unix)]
@@ -108,6 +108,10 @@ impl SeekableMediaIoCapability {
             file: Arc::new(file),
             length,
         })
+    }
+
+    pub const fn len(&self) -> u64 {
+        self.length as u64
     }
 }
 

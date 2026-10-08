@@ -1480,6 +1480,7 @@ jobs:
             "$case_apks/saf.apk" "$case_apks/saf-recovery.apk"
           test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for open through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
+          grep -Fq 'for media through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for export through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           for image in saf-editor-texture saf-editor-permission-recovered saf-surface-recreated; do
             test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/$image.png"

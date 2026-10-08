@@ -56,8 +56,10 @@ pub use media_helpers::{
     FFMPEG_PATH_ENVIRONMENT_VARIABLE, FFPROBE_PATH_ENVIRONMENT_VARIABLE, ffmpeg_executable,
     ffprobe_executable, packaged_helper_directory, resolve_helper_executable,
 };
-pub use media_import::{MediaImportError, prepare_media_import};
-pub use media_probe::{MediaProbeError, MediaProbeErrorCode, probe_media_file};
+pub use media_import::{MediaImportError, prepare_media_import, prepare_media_import_from_probe};
+pub use media_probe::{
+    MediaProbeError, MediaProbeErrorCode, parse_media_probe_output, probe_media_file,
+};
 pub use project::{
     ProjectId, ProjectInstanceId, ProjectRevision, ProjectRevisionOverflow, UuidV4ParseError,
 };

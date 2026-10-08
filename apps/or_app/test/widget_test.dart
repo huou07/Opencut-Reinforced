@@ -438,7 +438,7 @@ void main() {
 
     expect(picker.mediaOpenCalls, 1);
     expect(gateway.importMediaCalls, 1);
-    expect(gateway.lastImportPath, '/tmp/imported.mov');
+    expect(gateway.lastImportSource, '/tmp/imported.mov');
     expect(gateway.mediaListCalls, greaterThan(queriesBeforeImport));
     expect(find.text('imported.mov'), findsOneWidget);
     expect(find.text('Unsaved changes'), findsOneWidget);
@@ -3206,7 +3206,7 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaPath() async {
+  Future<String?> openMediaSource() async {
     mediaOpenCalls++;
     return mediaPath;
   }
@@ -3345,7 +3345,7 @@ class _FakeProjectGateway implements ProjectGateway {
   final List<int> timelineMarkerOffsets = [];
   int importMediaCalls = 0;
   int removeMediaCalls = 0;
-  String? lastImportPath;
+  String? lastImportSource;
   String? lastRemovedMediaId;
   int saveCalls = 0;
   int autosaveCalls = 0;
@@ -4468,10 +4468,10 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle handle,
     ProjectReadModel current,
-    String path,
+    String source,
   ) async {
     importMediaCalls++;
-    lastImportPath = path;
+    lastImportSource = source;
     if (nextImportBackendUnavailable) {
       nextImportBackendUnavailable = false;
       return const ProjectActionResult(
@@ -4488,7 +4488,7 @@ class _FakeProjectGateway implements ProjectGateway {
         message: 'revision changed',
       );
     }
-    final item = _mediaFixture('media-imported', path);
+    final item = _mediaFixture('media-imported', source);
     session.media.add(item);
     session.view = _copyView(
       session.view,

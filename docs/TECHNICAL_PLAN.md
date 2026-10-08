@@ -824,6 +824,10 @@ opaque seekable capability, such as a duplicated descriptor or bounded custom
 FFmpeg I/O; copy only to a bounded, cancellable, disposable materialization
 when a provider is non-seekable or a component requires a local file. 9D uses
 the same storage boundary and the mandatory software FFV1/PCM S16LE profile.
+Android media import probes the granted descriptor with the packaged FFmpeg
+library and sends bounded probe output through the same core metadata and
+codec-matrix validator as desktop. It never passes a SAF URI through
+filesystem canonicalization or path-based ffprobe.
 
 The 9B Android preview adapter prepares an exact shared render request before
 binding its evaluated active SAF video sources. The request carries cancellation

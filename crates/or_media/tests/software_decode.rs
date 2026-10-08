@@ -114,6 +114,42 @@ fn software_decoder_uses_transient_seekable_io_for_a_saf_source() {
     assert_eq!(frame.pixels().len(), 16 * 16 * 4);
 }
 
+#[cfg(unix)]
+#[test]
+fn seekable_saf_probe_returns_metadata_accepted_by_the_core_import_matrix() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FIXTURE);
+    let capability =
+        SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
+    let size = capability.len();
+    let output = or_media::probe_seekable_media(&capability).unwrap();
+    let metadata = or_core::parse_media_probe_output(&output, size).unwrap();
+
+    assert!(
+        metadata
+            .format_names()
+            .iter()
+            .any(|name| name == "matroska")
+    );
+    assert_eq!(metadata.streams().len(), 2);
+    assert_eq!(metadata.duration().unwrap().numerator(), 1);
+    assert_eq!(metadata.duration().unwrap().denominator(), 2);
+    match &metadata.streams()[0] {
+        or_core::MediaStreamMetadata::Video(video) => {
+            assert_eq!(video.codec_name(), Some("ffv1"));
+            assert_eq!((video.width(), video.height()), (16, 16));
+        }
+        _ => panic!("expected fixture video stream"),
+    }
+    match &metadata.streams()[1] {
+        or_core::MediaStreamMetadata::Audio(audio) => {
+            assert_eq!(audio.codec_name(), Some("pcm_s16le"));
+            assert_eq!(audio.sample_rate(), Some(8_000));
+            assert_eq!(audio.channels(), Some(1));
+        }
+        _ => panic!("expected fixture audio stream"),
+    }
+}
+
 #[test]
 fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();

@@ -918,7 +918,7 @@ abstract interface class ProjectGateway {
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String path,
+    String source,
   );
   Future<ProjectActionResult> removeMedia(
     ProjectSessionHandle session,

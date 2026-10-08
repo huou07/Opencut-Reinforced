@@ -18,6 +18,7 @@ def center(bounds):
 def select(device, guest_log, output, flow="open"):
     if flow == "both":
         select(device, guest_log, output, "open")
+        select(device, guest_log, output, "media")
         select(device, guest_log, output, "export")
         return
     output.mkdir(parents=True, exist_ok=True)
@@ -25,6 +26,7 @@ def select(device, guest_log, output, flow="open"):
     # action bound starts only when the in-app test reaches its native picker.
     marker = {
         "open": "ANDROID_SAF_DOCUMENTS_UI_READY",
+        "media": "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
         "export": "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
     }[flow]
     while marker not in guest_log.read_text(errors="replace"):
@@ -57,6 +59,7 @@ def select(device, guest_log, output, flow="open"):
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
+        media = next((node for node in nodes if node.get("text") == "tiny.mkv"), None)
         drawer_roots = next(
             (node for node in nodes if node.get("resource-id", "").endswith(":id/drawer_roots")),
             None,
@@ -87,6 +90,8 @@ def select(device, guest_log, output, flow="open"):
         target = None
         if selected_root and flow == "open" and document is not None:
             target = document
+        elif selected_root and flow == "media" and media is not None:
+            target = media
         elif selected_root and flow == "export" and save is not None:
             target = save
         elif not selected_root and provider is not None:
@@ -102,7 +107,7 @@ def select(device, guest_log, output, flow="open"):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.
                 continue
-            if target is document or target is save:
+            if target is document or target is media or target is save:
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     record.write(f"Selected OR SAF acceptance for {flow} through native DocumentsUI.\n")
                 return
@@ -119,6 +124,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", required=True)
     parser.add_argument("--guest-log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--flow", choices=("open", "export", "both"), default="open")
+    parser.add_argument("--flow", choices=("open", "media", "export", "both"), default="open")
     args = parser.parse_args()
     select(args.device, args.guest_log, args.output, args.flow)

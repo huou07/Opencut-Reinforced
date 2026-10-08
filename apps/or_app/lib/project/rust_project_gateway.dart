@@ -972,13 +972,13 @@ class RustProjectGateway implements ProjectGateway {
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String path,
+    String source,
   ) async => _action(
     await _host(session).importMedia(
       projectId: current.projectId,
       projectInstanceId: current.projectInstanceId,
       expectedRevision: current.revision,
-      path: path,
+      path: source,
     ),
   );
 

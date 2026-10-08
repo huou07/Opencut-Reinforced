@@ -222,6 +222,11 @@ today.
 - Android export uses the shared project/timeline semantics, reports progress
   and failure in that status area, supports cancellation while active, and
   publishes a completed Matroska file to the selected DocumentsUI destination.
+- Android media import uses DocumentsUI's read grant and a seekable SAF
+  descriptor. The typed `content://` source remains in project data; probing
+  uses the packaged FFmpeg runtime and the same import-matrix validation as
+  desktop. Hosted acceptance selects a real provider document and measures the
+  import call.
 - Android recovery acceptance writes a valid unsaved edit to the app-private
   project working copy, closes the live session, force-stops the app process,
   and reopens the same persisted SAF document through DocumentsUI. The actual

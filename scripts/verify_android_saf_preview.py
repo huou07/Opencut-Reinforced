@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 CHECKS = {
-    'nativeDocumentsUiAndEditorControls', 'visibleTexturePixels', 'externalUidPermissionEnforcement',
+    'nativeDocumentsUiAndEditorControls', 'safMediaImportThroughDocumentsUi', 'visibleTexturePixels', 'externalUidPermissionEnforcement',
     'activeLateSourceBeyond64', 'unchangedProjectRevision', 'playWithoutSeek', 'revokedPermissionUiRecovery',
     'missingPartialOpenRollbackAndRecovery', 'nonseekableNativeRegistrationRejected', 'clearDuringOpenDropsStaleBinding',
     'editAndGenerationDropPreparedFrame', 'surfaceRecreationAndRelease', 'osMediaFdsAndNativeLeasesReleased',
@@ -45,6 +45,10 @@ def verify(report):
             raise ValueError('Provider project digest observations are required')
     if data['exportBytes'] <= 4 or data['exportValidMatroska'] is not True:
         raise ValueError('Android SAF export must produce a non-empty Matroska file in the selected provider')
+    if (data.get('mediaImportSourceUri') != 'content://dev.opencut.saffixture.documents/document/media'
+            or data.get('mediaImportMicros', 0) <= 0
+            or int(data.get('mediaImportRevision', 0)) <= int(data['projectRevision'])):
+        raise ValueError('Android SAF import must persist the selected source and report its runtime measurement')
     for field in ('sameSourceRegistrations', 'sameSourceProviderOpens'):
         before, after = data[field]
         if before <= 0 or before != after:
@@ -68,5 +72,5 @@ if __name__ == '__main__':
     parser.add_argument('report', type=Path)
     args = parser.parse_args()
     data = verify(json.loads(args.report.read_text()))
-    print('Android SAF picker/editor/export/pixel/resource assertions verified.')
-    print(json.dumps({key: data[key] for key in ('uiPlayMicros', 'exportBytes', 'journeyResources', 'stressResources', 'finalResources')}, indent=2))
+    print('Android SAF picker/import/editor/export/pixel/resource assertions verified.')
+    print(json.dumps({key: data[key] for key in ('uiPlayMicros', 'mediaImportMicros', 'exportBytes', 'journeyResources', 'stressResources', 'finalResources')}, indent=2))

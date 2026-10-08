@@ -268,6 +268,7 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectPreviewState? playResult;
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
+  int importCalls = 0, importMicros = 0;
   bool closed = false;
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
@@ -299,6 +300,21 @@ class _ObservedGateway extends RustProjectGateway {
     } finally {
       playCalls++;
       playMicros = watch.elapsedMicroseconds;
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> importMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String source,
+  ) async {
+    final watch = Stopwatch()..start();
+    try {
+      return await super.importMedia(session, current, source);
+    } finally {
+      importCalls++;
+      importMicros = watch.elapsedMicroseconds;
     }
   }
 
@@ -513,6 +529,29 @@ void main() {
       expect(exported['exportBytes'], greaterThan(4));
       expect(exported['validMatroska'], isTrue);
       expect((await gateway.summary(session)).revision, revision);
+
+      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      await tester.tap(find.byKey(const ValueKey('media-import')));
+      debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
+      await _until(tester, () => gateway.importCalls == 1);
+      final imported = await gateway.listMediaPage(
+        session,
+        offset: 65,
+        limit: 1,
+      );
+      expect(imported.items.single.sourceUri, _source('media'));
+      expect(imported.items.single.formatNames, contains('matroska'));
+      final importedRevision = (await gateway.summary(session)).revision;
+      expect(importedRevision, greaterThan(revision));
+      await OrViewerTexture.clearMediaSources();
+      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
 
       // Compact transport and editing tools must remain reachable by touch.
       await _dragSeekUi(tester, gateway, .65);
@@ -843,6 +882,7 @@ void main() {
           'checks': {
             for (final name in [
               'nativeDocumentsUiAndEditorControls',
+              'safMediaImportThroughDocumentsUi',
               'visibleTexturePixels',
               'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
               'externalUidPermissionEnforcement',
@@ -870,6 +910,9 @@ void main() {
           'providerUid': provider['providerUid'],
           'appUid': provider['appUid'],
           'projectRevision': revision.toString(),
+          'mediaImportRevision': importedRevision.toString(),
+          'mediaImportMicros': gateway.importMicros,
+          'mediaImportSourceUri': imported.items.single.sourceUri,
           'exportBytes': exported['exportBytes'],
           'exportValidMatroska': exported['validMatroska'],
           'visiblePixelRgba': pixels,

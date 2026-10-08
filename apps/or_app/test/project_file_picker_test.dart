@@ -12,6 +12,44 @@ void main() {
   });
 
   test(
+    'Android media picker returns a validated SAF URI without a fake path',
+    () async {
+      var pickerCalled = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'openMedia');
+            pickerCalled = true;
+            return {
+              'sourceUri':
+                  'content://com.example.documents/document/video%3A42',
+            };
+          });
+      final picker = AndroidSafProjectPicker(channel: channel);
+
+      expect(picker.supportsMediaImport, isTrue);
+      expect(
+        await picker.openMediaSource(),
+        'content://com.example.documents/document/video%3A42',
+      );
+      expect(pickerCalled, isTrue);
+    },
+  );
+
+  test('Android media picker rejects non-content selections', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (call) async => {'sourceUri': '/data/user/0/or_app/cache/media.mkv'},
+        );
+    final picker = AndroidSafProjectPicker(channel: channel);
+
+    await expectLater(
+      picker.openMediaSource(),
+      throwsA(isA<ProjectSafStorageException>()),
+    );
+  });
+
+  test(
     'SAF working copy sync carries its URI only as runtime metadata',
     () async {
       final calls = <MethodCall>[];

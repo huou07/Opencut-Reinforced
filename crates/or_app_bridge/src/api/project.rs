@@ -1,3 +1,5 @@
+#[cfg(target_os = "android")]
+use crate::android_media_io::capability_for;
 use crate::frb_generated::StreamSink;
 use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, PreviewSnapshot};
 use flutter_rust_bridge::frb;
@@ -18,6 +20,8 @@ use or_core::{
     apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
     inspect_project_recovery, prepare_media_import,
 };
+#[cfg(target_os = "android")]
+use or_core::{MediaSourceRef, prepare_media_import_from_probe};
 use or_ipc::{
     ExportRequestHandler, LiveProjectHost, LiveProjectHostError, ProjectHostEvent,
     ProjectHostEventKind,
@@ -1838,7 +1842,7 @@ impl ProjectHostHandle {
                 Ok(identity) => identity,
                 Err(error) => return action_error(error),
             };
-        let item = match prepare_media_import(Path::new(&path)) {
+        let item = match prepare_import_source(&path) {
             Ok(item) => item,
             Err(error) => {
                 return ProjectActionResult {
@@ -2336,6 +2340,20 @@ impl ProjectHostHandle {
             self.host.descriptor_path(),
         ))
     }
+}
+
+fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
+    #[cfg(target_os = "android")]
+    if source.starts_with("content://") {
+        let source = MediaSourceRef::android_saf_document_uri(source)
+            .map_err(|error| or_core::MediaImportError::InvalidSourceUri(error))?;
+        let capability =
+            capability_for(&source).ok_or(or_core::MediaImportError::SourceUnavailable)?;
+        let probe_output = or_media::probe_seekable_media(&capability)
+            .map_err(|_| or_core::MediaImportError::SourceUnavailable)?;
+        return prepare_media_import_from_probe(source, &probe_output, capability.len());
+    }
+    prepare_media_import(Path::new(source))
 }
 
 impl MediaArtifactRequestView {

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
 import '../design/or_colors.dart';
@@ -1649,15 +1651,32 @@ class _AppShellState extends State<AppShell> {
   Future<void> _importMedia() async {
     final session = _activeSession;
     if (session == null || _busy) return;
-    String? path;
+    String? source;
     try {
-      path = await widget.projectFilePicker.openMediaPath();
+      source = await widget.projectFilePicker.openMediaSource();
     } catch (_) {
       _showUnavailable('A media file could not be selected.');
       return;
     }
-    if (path == null || !mounted || !identical(session, _activeSession)) {
+    if (source == null || !mounted || !identical(session, _activeSession)) {
       return;
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        if (!await OrViewerTexture.setMediaSources([source])) {
+          _showUnavailable('Android media access could not be opened.');
+          return;
+        }
+      } on PlatformException catch (error) {
+        _showUnavailable(
+          error.message ?? 'Android media access is unavailable.',
+        );
+        return;
+      } on MissingPluginException {
+        _showUnavailable('Android media access is unavailable.');
+        return;
+      }
     }
 
     await _runProjectAction((session, _) async {
@@ -1672,7 +1691,7 @@ class _AppShellState extends State<AppShell> {
         );
       }
       setState(() => _activeProject = current);
-      return widget.projectGateway.importMedia(session, current, path!);
+      return widget.projectGateway.importMedia(session, current, source!);
     });
   }
 

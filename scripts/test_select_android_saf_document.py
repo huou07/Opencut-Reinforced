@@ -2,7 +2,7 @@
 """Behavioural tests for the native DocumentsUI selection helper.
 
 The helper drives real Android DocumentsUI, so these tests stub `adb` and prove
-the two properties that matter:
+the picker stays within DocumentsUI and selects only after its ready marker.
 
 1. a transient UIAutomator startup race is retried rather than killing the
    helper, and
@@ -66,6 +66,13 @@ DOCUMENT = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+MEDIA = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,200][1080,300]" />
+</hierarchy>
+"""
+
 SAVE_DISABLED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="SAVE" class="android.widget.Button"
@@ -90,8 +97,10 @@ class FakeAdb:
         self.taps = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
+            "media": [DRAWER, PROVIDER, MEDIA],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
-            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
+            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, MEDIA,
+                     DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -120,7 +129,7 @@ def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
         adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
@@ -144,6 +153,11 @@ class SelectorTests(unittest.TestCase):
         for tap in taps:
             self.assertEqual(len(tap), 2, f"unexpected tap arguments: {tap}")
 
+    def test_media_flow_selects_the_fixture_video(self):
+        taps, selected = run(transient_dumps=0, flow="media")
+        self.assertTrue(selected)
+        self.assertEqual(len(taps), 3)
+
     def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
         taps, selected = run(transient_dumps=0)
         self.assertTrue(selected)
@@ -163,10 +177,10 @@ class SelectorTests(unittest.TestCase):
         self.assertTrue(selected)
         self.assertEqual(len(taps), 3, f"expected disabled Save to be skipped; got {taps}")
 
-    def test_both_export_and_import_use_documentsui(self):
+    def test_all_saf_flows_use_documentsui(self):
         taps, selected = run(transient_dumps=0, flow="both")
         self.assertTrue(selected)
-        self.assertEqual(len(taps), 6, f"expected two native picker flows; got {taps}")
+        self.assertEqual(len(taps), 9, f"expected three native picker flows; got {taps}")
 
 
 if __name__ == "__main__":

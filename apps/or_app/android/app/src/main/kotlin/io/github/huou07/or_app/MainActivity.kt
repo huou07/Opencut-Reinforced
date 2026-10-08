@@ -58,6 +58,14 @@ class MainActivity : FlutterActivity() {
 
     private fun handleSafCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "openMedia" -> launchPicker(
+                Intent.ACTION_OPEN_DOCUMENT,
+                "openMedia",
+                result,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                mimeType = "video/*",
+            )
             "openProject" -> launchPicker(
                 Intent.ACTION_OPEN_DOCUMENT,
                 "openProject",
@@ -213,6 +221,7 @@ class MainActivity : FlutterActivity() {
                 "openProject" -> projectLocation(uri, prepareWorkingCopy(uri))
                 "createProject" -> projectLocation(uri, prepareNewWorkingCopy(uri))
                 "createExport" -> exportLocation(uri)
+                "openMedia" -> mapOf("sourceUri" to uri.toString())
                 else -> throw SafFailure("PROJECT_PICK_FAILED", "The project selection is invalid.")
             }
         }

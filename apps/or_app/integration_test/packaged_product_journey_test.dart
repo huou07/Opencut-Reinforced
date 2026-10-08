@@ -403,7 +403,7 @@ class _JourneyPicker implements ProjectFilePicker {
   Future<String?> openProjectPath() async => openPath ?? projectPath;
 
   @override
-  Future<String?> openMediaPath() async => nextMediaPath;
+  Future<String?> openMediaSource() async => nextMediaPath;
 
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>

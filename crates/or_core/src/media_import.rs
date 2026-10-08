@@ -32,8 +32,8 @@ impl MediaImportError {
 
     pub const fn message(&self) -> &'static str {
         match self {
-            Self::SourceNotFound => "media source path was not found",
-            Self::SourceUnavailable => "media source path could not be resolved",
+            Self::SourceNotFound => "media source was not found",
+            Self::SourceUnavailable => "media source could not be opened",
             Self::Probe(error) => error.message(),
             Self::InvalidSourceUri(
                 MediaSourceUriError::Invalid
@@ -89,10 +89,22 @@ pub fn prepare_media_import(path: &Path) -> Result<MediaItem, MediaImportError> 
     MediaItem::new(MediaId::generate(), source, metadata).map_err(MediaImportError::InvalidMetadata)
 }
 
+/// Builds a candidate library item from a previously probed, already-validated
+/// source reference. The caller must submit it through `media.add`.
+pub fn prepare_media_import_from_probe(
+    source: MediaSourceRef,
+    probe_output: &[u8],
+    file_size_bytes: u64,
+) -> Result<MediaItem, MediaImportError> {
+    let metadata = crate::parse_media_probe_output(probe_output, file_size_bytes)
+        .map_err(MediaImportError::Probe)?;
+    MediaItem::new(MediaId::generate(), source, metadata).map_err(MediaImportError::InvalidMetadata)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MediaImportError, prepare_media_import};
-    use crate::MediaId;
+    use super::{MediaImportError, prepare_media_import, prepare_media_import_from_probe};
+    use crate::{MediaId, MediaSourceRef};
     use std::env;
 
     #[test]
@@ -113,5 +125,23 @@ mod tests {
             error,
             MediaImportError::Probe(ref probe) if probe.code_str() == "MEDIA_NOT_REGULAR_FILE"
         ));
+    }
+
+    #[test]
+    fn probed_saf_source_stays_a_document_uri_in_the_candidate_item() {
+        let source = MediaSourceRef::android_saf_document_uri(
+            "content://com.example.documents/document/video%3A42",
+        )
+        .unwrap();
+        let output = br#"{"format":{"format_name":"matroska,webm","duration":"1.000000"},"streams":[{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16,"pix_fmt":null,"avg_frame_rate":"24/1","duration":null},{"index":1,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":48000,"channels":2,"channel_layout":null,"duration":null}]}"#;
+
+        let item = prepare_media_import_from_probe(source, output, 128).unwrap();
+
+        assert!(matches!(
+            item.source(),
+            MediaSourceRef::AndroidSafDocumentUri { .. }
+        ));
+        assert!(item.source().to_file_path().is_err());
+        assert_eq!(item.metadata().file_size_bytes(), 128);
     }
 }
