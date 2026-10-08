@@ -723,6 +723,10 @@ hardening commit itself must pass both workflows.
   than four bytes of a valid Matroska file. The tooltip assertion follows the
   compact UI contract; provider bytes and container validation prove the actual
   export completed.
+- It then selects two fixture videos in one native DocumentsUI multi-select
+  action and verifies both SAF references reach the real media library. The
+  selector long-presses the first file to enter selection mode, then selects
+  the second file and confirms the picker.
 - The fixture hands that project to the separate-UID provider through the setup
   Intent, so its transport bound must admit the document OR itself saves. The
   journey proves more than a successful seed: the provider reports the byte count
@@ -890,8 +894,9 @@ bundle. The path is seeded before CMake's first configure and refreshed from
 the patched package before the integration test runs. macOS restores the
 framework's Flutter Rust Bridge library alias after its native integration
 builds, which otherwise replace that framework directory.
-The packaged journey runs three separate macOS Flutter test processes, each of
-which rebuilds the app and can remove this alias. After the final process, the
+The packaged journey runs four separate macOS Flutter test processes for
+create, reopen/export, missing-source, and missing-probe checks; each rebuilds
+the app and can remove this alias. After the final process, the
 journey restores the framework symlink before hashing the package report.
 The journey waits for the frame-rate control to become enabled and its menu
 item to appear, and brings Save and media import into view before requiring
@@ -900,10 +905,11 @@ callback as proof that a real pointer can reach the control. It blocks
 host FFmpeg lookup through
 `PATH` with inert failure guards while preserving system utilities.
 Separate app processes create/import/edit/save, relaunch and
-reopen/export over an existing destination, then exercise unsupported media,
-missing sources, an unavailable packaged probe, failed replacement, and failed
-project reopen. It verifies transient failure messages finish clearing before
-continuing navigation, with a bounded wait rather than a fixed delay. The
+reopen/export over an existing destination, verify a missing source while the
+packaged probe is available, then verify an unavailable packaged probe against
+an existing source, failed replacement, and failed project reopen. It verifies
+transient failure messages finish clearing before continuing navigation, with
+a bounded wait rather than a fixed delay. The
 acceptance step checks that failures preserve the saved
 project and the failed destination, then uses the packaged `ffprobe` to validate
 FFV1 video and PCM S16LE audio in the export.

@@ -244,34 +244,34 @@ def main() -> int:
         if phase == "reopen" and not export.is_file():
             raise SystemExit("The relaunched app did not write its export.")
 
-    # Missing-runtime and persistence failures are exercised in a third, fresh
-    # app process after the successful save/reopen/export journey.
-    before_failed_reopen = _sha256(project)
-    failure_env = env | {
-        "OR_PACKAGED_JOURNEY_PHASE": "failures",
-        "OR_FFPROBE_PATH": str(work / "missing-packaged-ffprobe"),
-    }
-    command = [
-        flutter,
-        "--ci",
-        "test",
-        TEST_FILE,
-        "-d",
-        device,
-        "--plain-name",
-        TEST_NAME,
-    ]
-    if xvfb is not None:
-        command = [xvfb, "-a", *command]
-    completed = _run(command, ROOT / "apps/or_app", failure_env)
-    invocations.append({"phase": "failures", "exit_code": completed.returncode})
-    if completed.returncode != 0:
-        return completed.returncode
+    # Failure paths use fresh processes so the missing source can be checked
+    # with the shipped probe before the missing-probe override is introduced.
+    before_failures = _sha256(project)
+    for phase in ("missing-source", "missing-probe"):
+        phase_env = env | {"OR_PACKAGED_JOURNEY_PHASE": phase}
+        if phase == "missing-probe":
+            phase_env["OR_FFPROBE_PATH"] = str(work / "missing-packaged-ffprobe")
+        command = [
+            flutter,
+            "--ci",
+            "test",
+            TEST_FILE,
+            "-d",
+            device,
+            "--plain-name",
+            TEST_NAME,
+        ]
+        if xvfb is not None:
+            command = [xvfb, "-a", *command]
+        completed = _run(command, ROOT / "apps/or_app", phase_env)
+        invocations.append({"phase": phase, "exit_code": completed.returncode})
+        if completed.returncode != 0:
+            return completed.returncode
     if device == "macos":
         # Flutter rebuilds the framework during each test phase and removes the
         # unversioned alias restored by the workflow before this journey.
         _restore_macos_bridge_alias(bridge)
-    if _sha256(project) != before_failed_reopen:
+    if _sha256(project) != before_failures:
         raise SystemExit("A failed import or reopen changed the saved project.")
     if not failure_sentinel.is_file() or failure_sentinel.read_text(
         encoding="utf-8"
@@ -326,7 +326,10 @@ def main() -> int:
         with open(summary, "a", encoding="utf-8") as output:
             output.write(f"\n### Packaged desktop journey — {device}\n\n")
             output.write("- PATH resolves `ffmpeg` and `ffprobe` only to inert failure guards.\n")
-            output.write("- The app was started in separate create, reopen/export, and failure-check processes.\n")
+            output.write(
+                "- The app was started in separate create, reopen/export, "
+                "missing-source, and missing-probe processes.\n"
+            )
             output.write(f"- Export: `{export.stat().st_size}` bytes; validated with the packaged `ffprobe`.\n")
             output.write(f"- Evidence report: `{report_path}`\n")
     return 0

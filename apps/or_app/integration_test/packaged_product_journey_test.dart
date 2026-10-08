@@ -42,7 +42,7 @@ void main() {
     }
     expect(
       Platform.environment.containsKey('OR_FFPROBE_PATH'),
-      phase == 'failures',
+      phase == 'missing-probe',
     );
 
     final projectPath = _requiredEnvironment('OR_PACKAGED_JOURNEY_PROJECT');
@@ -82,8 +82,11 @@ void main() {
       case 'reopen':
         await _reopenAndExport(tester, picker);
         break;
-      case 'failures':
-        await _preserveProjectAcrossFailures(tester, picker);
+      case 'missing-source':
+        await _preserveProjectAcrossMissingSource(tester, picker);
+        break;
+      case 'missing-probe':
+        await _preserveProjectAcrossMissingProbe(tester, picker);
         break;
       default:
         fail('Unknown OR_PACKAGED_JOURNEY_PHASE: $phase');
@@ -244,7 +247,7 @@ Future<void> _reopenAndExport(
   expect(File(picker.exportPath).lengthSync(), greaterThan(0));
 }
 
-Future<void> _preserveProjectAcrossFailures(
+Future<void> _preserveProjectAcrossMissingSource(
   WidgetTester tester,
   _JourneyPicker picker,
 ) async {
@@ -273,14 +276,29 @@ Future<void> _preserveProjectAcrossFailures(
     'unavailable external media feedback',
   );
   expect(find.text('tiny.mkv'), findsWidgets);
+}
 
+Future<void> _preserveProjectAcrossMissingProbe(
+  WidgetTester tester,
+  _JourneyPicker picker,
+) async {
+  await tester.tap(find.byKey(const ValueKey('home-open-project')));
+  await _pumpUntil(
+    tester,
+    () =>
+        find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
+        find.text('tiny.mkv').evaluate().isNotEmpty,
+    'project reopen before missing-probe check',
+  );
+
+  final importButton = find.byKey(const ValueKey('media-import'));
   picker.nextMediaPath = picker.mediaPaths[0];
   await _waitForImportButton(tester, importButton);
   await tester.tap(importButton);
   await _pumpUntil(
     tester,
     () => find
-        .text(
+        .textContaining(
           'The packaged media inspector could not start. Check the app installation and try again.',
         )
         .evaluate()

@@ -125,8 +125,15 @@ def select(device, guest_log, output, flow="open"):
             target = drawer
             opened_roots = True
         if target is not None:
+            x, y = center(target.get("bounds", ""))
             try:
-                adb("shell", "input", "tap", *map(str, center(target.get("bounds", ""))))
+                if pending_media is not None and not selected_media:
+                    # DocumentsUI opens a file on a normal first tap. Long-press
+                    # the first item to enter multi-select mode before tapping
+                    # the remaining documents.
+                    adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
+                else:
+                    adb("shell", "input", "tap", str(x), str(y))
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.

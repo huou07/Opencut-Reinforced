@@ -253,6 +253,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String? _selectedClipId;
   ProjectTimelineTrackKind? _selectedTrackKind;
   bool _snapEnabled = true;
+  bool _mobileSheetRefreshScheduled = false;
   late final ValueNotifier<ProjectPreviewState?> _previewState;
   final ValueNotifier<int> _mobileSheetRevision = ValueNotifier(0);
 
@@ -265,7 +266,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   @override
   void didUpdateWidget(covariant EditorShellPreviewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _mobileSheetRevision.value++;
+    _scheduleMobileSheetRefresh();
     final projectIdentityChanged =
         oldWidget.project?.projectId != widget.project?.projectId ||
         oldWidget.project?.projectInstanceId !=
@@ -281,6 +282,15 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         oldWidget.project?.revision != widget.project?.revision) {
       _previewState.value = null;
     }
+  }
+
+  void _scheduleMobileSheetRefresh() {
+    if (_mobileSheetRefreshScheduled) return;
+    _mobileSheetRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mobileSheetRefreshScheduled = false;
+      if (mounted) _mobileSheetRevision.value++;
+    });
   }
 
   @override

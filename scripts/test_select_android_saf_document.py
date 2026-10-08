@@ -108,7 +108,7 @@ class FakeAdb:
         self.transient = transient_dumps
         self.tree_index = 0
         self.taps = []
-        self.tap_tree_indexes = []
+        self.actions = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
             "media": [DRAWER, PROVIDER, MEDIA, MEDIA, MEDIA_OPEN],
@@ -133,8 +133,15 @@ class FakeAdb:
             self.tree_index += 1
             return raw
         if command[:2] == ["shell", "input"]:
-            self.taps.append(command[-2:])
-            self.tap_tree_indexes.append(self.tree_index - 1)
+            action = command[2]
+            tree_index = self.tree_index - 1
+            self.actions.append((action, tree_index))
+            if action == "tap":
+                self.taps.append(command[-2:])
+            elif action == "swipe":
+                pass
+            else:
+                raise AssertionError(f"unexpected input action: {command}")
             return b""
         if command[:1] == ["exec-out"]:
             return b"\x89PNG"
@@ -170,12 +177,22 @@ class SelectorTests(unittest.TestCase):
             self.assertEqual(len(tap), 2, f"unexpected tap arguments: {tap}")
 
     def test_media_flow_selects_the_fixture_video(self):
-        taps, selected = run(transient_dumps=0, flow="media")
-        self.assertTrue(selected)
-        self.assertEqual(len(taps), 5)
-        self.assertEqual(taps[2], ["540", "250"])
-        self.assertEqual(taps[3], ["540", "370"])
-        self.assertEqual(taps[4], ["990", "750"])
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media")
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(
+                adb.actions,
+                [("tap", 0), ("tap", 1), ("swipe", 2), ("tap", 3), ("tap", 4)],
+                "media selection must long-press once, tap the other file, then Open",
+            )
+            self.assertEqual(adb.taps[2], ["540", "370"])
+            self.assertEqual(adb.taps[3], ["990", "750"])
 
     def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
         taps, selected = run(transient_dumps=0)
@@ -197,9 +214,21 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(len(taps), 3, f"expected disabled Save to be skipped; got {taps}")
 
     def test_all_saf_flows_use_documentsui(self):
-        taps, selected = run(transient_dumps=0, flow="both")
-        self.assertTrue(selected)
-        self.assertEqual(len(taps), 11, f"expected open, multi-media and export picker flows; got {taps}")
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text(
+                "ANDROID_SAF_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n"
+            )
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="both")
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "both")
+
+            self.assertEqual(len(adb.actions), 11)
+            self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
         with tempfile.TemporaryDirectory() as work:
@@ -221,8 +250,20 @@ class SelectorTests(unittest.TestCase):
                 selector.select("emulator-5554", guest, output, "both")
 
             self.assertEqual(
-                adb.tap_tree_indexes,
-                [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11],
+                adb.actions,
+                [
+                    ("tap", 0),
+                    ("tap", 1),
+                    ("tap", 2),
+                    ("tap", 3),
+                    ("tap", 4),
+                    ("tap", 6),
+                    ("tap", 7),
+                    ("tap", 8),
+                    ("swipe", 9),
+                    ("tap", 10),
+                    ("tap", 11),
+                ],
                 "DocumentsUI selections must follow open, export, then media",
             )
 

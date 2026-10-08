@@ -2755,6 +2755,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('project-media-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+    picker.mediaPath = '/tmp/compact-import.mkv';
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+    expect(gateway.importMediaCalls, 1);
+    expect(find.text('compact-import.mkv'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Close tool panel'), findsNothing);
