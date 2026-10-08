@@ -931,3 +931,5 @@ checks surface recreation and frame presentation.
 The separate SAF acceptance provider advertises directory creation on both its
 root and root document. The DocumentsUI export selector waits for an enabled
 Save action; a disabled button is not counted as a completed picker handoff.
+The end-to-end export check then requires the selected document to contain a
+valid Matroska result after the Android method-channel publish operation.

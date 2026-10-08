@@ -122,6 +122,7 @@ class MainActivity : FlutterActivity() {
                         runIo(result, "EXPORT_SAVE_FAILED") {
                             try {
                                 publishExport(workingPath, documentUri, cancelled)
+                                null
                             } finally {
                                 exportTransfers.remove(workingPath, cancelled)
                             }
@@ -146,6 +147,7 @@ class MainActivity : FlutterActivity() {
                     exportTransfers[workingPath]?.set(true)
                     runIo(result, "EXPORT_CLEANUP_FAILED") {
                         discardExport(workingPath, documentUri)
+                        null
                     }
                 }
             }
