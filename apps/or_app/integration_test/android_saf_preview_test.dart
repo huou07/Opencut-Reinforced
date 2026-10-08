@@ -578,6 +578,11 @@ void main() {
         '0',
       );
       await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+      await _until(
+        tester,
+        () =>
+            find.byKey(const ValueKey('inspector-visual-x')).evaluate().isEmpty,
+      );
 
       final journey = await _resources();
       // The close control lives on the Projects workspace. Tapping nav-home

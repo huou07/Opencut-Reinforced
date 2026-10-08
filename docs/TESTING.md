@@ -913,7 +913,9 @@ drags the real preview scrubber, opens the project media library from the mobile
 tool dock, selects a timeline clip, and opens its Inspector sheet. The Inspector
 must load the selected clip's setting through the typed project gateway. The
 acceptance report requires each interaction assertion before it records the
-9C integration and user-journey evidence.
+9C integration and user-journey evidence. It waits for the Inspector modal to
+finish dismissing before tapping the Projects navigation item to close the
+project and verify media-handle release.
 
 The Android preview acceptance test logs project reads, fixture-control calls,
 resource snapshots, transport and seek actions, frame-availability requests,
