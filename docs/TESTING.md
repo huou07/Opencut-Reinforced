@@ -745,7 +745,9 @@ hardening commit itself must pass both workflows.
   Repeated same-source seeks also require unchanged provider-open and native
   registration counters, proving the cached capability is reused.
 - `apps/or_app/test_driver/android_saf_preview.dart` saves `report.json` and
-  three composed screenshots under `OR_ANDROID_ACCEPTANCE_OUTPUT`. Preserve
+  all four composed screenshots under `OR_ANDROID_ACCEPTANCE_OUTPUT`, writing
+  the captured PNGs from the final integration-test response as well as the
+  live screenshot callback. Preserve
   these with the API/ABI/GPU path, approved FFmpeg configuration, main draw
   timings, frame/resource counters, streamed Flutter driver output, DocumentsUI
   selector trace, guest logcat, and resource-health samples. These diagnostics
