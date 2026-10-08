@@ -120,6 +120,7 @@ Future<void> _dragSeekUi(
 ) async {
   final before = gateway.seekCalls;
   final slider = find.byKey(const ValueKey('preview-scrub-ruler'));
+  await _until(tester, () => slider.evaluate().isNotEmpty);
   await tester.ensureVisible(slider);
   final rect = tester.getRect(slider);
   await tester.dragFrom(
