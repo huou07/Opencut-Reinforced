@@ -42,6 +42,16 @@ import, edit, preview, save/recover, and export a useful project. Optional AI
 must arrive as explicit, reviewable tasks that produce proposals/assets and
 apply through the same validated project commands.
 
+Decision vocabulary outcome: **KEEP** the working OR state/command/UI and
+media-runtime contracts; **REUSE** FFmpeg and optional provider capabilities;
+**BUILD** only missing user-facing workflows on those boundaries; **DEFER or
+REMOVE** speculative plugin/marketplace/model-manager scope. No code is
+approved to **PORT** or **REPLACE** an OR subsystem today because no candidate
+has shown a product-level win under OR's platform, license, and runtime
+requirements. **UPSTREAM** a generic fix when a reproducible OR issue is found
+in a healthy project and that upstream accepts contributions; no speculative
+patch is justified by this audit alone.
+
 ## Subsystem decisions
 
 | OR subsystem | Decision | Evidence and rationale | Next action / boundary |
@@ -66,6 +76,7 @@ apply through the same validated project commands.
 | Packaging | **KEEP and complete** | OR already builds platform packages and records FFmpeg source/configuration provenance, but Developer Preview artifacts are debug builds, not stable releases. Shotcut/Kdenlive/LosslessCut show mature packaging expectations; their packages are not OR's license/product. | Finish clean-machine install/update/uninstall and signed-release paths per target. Use hosted native/runtime verification. |
 | Persistence/recovery | **KEEP** | Exact-base atomic storage, schema migrations, dirty guards, and recovery sidecars are OR's demonstrated data-safety advantage. None of the candidates proves drop-in recovery compatibility with `.orproj`. | Preserve migrations and adversarial recovery tests; add Android SAF/media import as an explicit real product gap where unsupported. |
 | Collaboration/community extensibility | **BUILD small, defer services** | OR is MIT and can accept contributions, but no backend/community service is required for local editing. OpenCut currently says it is not ready for outside code contributions while its rewrite architecture is designed; OpenMontage is AGPL. | Prioritize documented formats, contribution guide, reproducible builds, optional static registries, and upstream contributions where a healthy upstream accepts them. No account/backend/marketplace until a real use case justifies it. |
+| Generic upstream fixes | **UPSTREAM when evidence identifies one** | MLT, FFmpeg, and established NLE projects are maintained upstreams. The audit found no independently reproduced defect where an OR change would be more appropriate than a focused upstream fix. OpenCut's current rewrite is not accepting outside code contributions. | For a reproducible upstream defect, check contribution policy and send a minimal tested patch; avoid maintaining an unnecessary fork. |
 
 ## Candidate evidence and license boundaries
 
