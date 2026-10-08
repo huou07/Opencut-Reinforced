@@ -6,6 +6,7 @@ import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.DocumentsProvider;
+import android.util.Log;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -70,6 +71,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
 
     @Override public String createDocument(String parentId, String mimeType, String displayName) throws FileNotFoundException {
         if (!parentId.equals("root") || !mimeType.equals("video/x-matroska")) throw new FileNotFoundException("Unsupported fixture document");
+        Log.i("OrSafFixture", "createDocument parent=" + parentId + " mime=" + mimeType);
         File output = new File(getContext().getFilesDir(), "export.mkv");
         if (output.exists() && !output.delete()) throw new FileNotFoundException("Existing export could not be replaced");
         try {
@@ -79,11 +81,13 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     }
 
     @Override public void deleteDocument(String documentId) throws FileNotFoundException {
+        Log.i("OrSafFixture", "deleteDocument id=" + documentId);
         if (!documentId.equals("export") || !new File(getContext().getFilesDir(), "export.mkv").delete()) {
             throw new FileNotFoundException("Export document could not be deleted");
         }
     }
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
+        Log.i("OrSafFixture", "openDocument id=" + id + " mode=" + mode);
         if (id.equals("export") && (mode.contains("w") || mode.contains("t"))) {
             return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), "export.mkv"),
                 ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE);

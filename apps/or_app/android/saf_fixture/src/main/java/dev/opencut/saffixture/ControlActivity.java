@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
 import android.provider.DocumentsContract;
+import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -66,6 +67,12 @@ public final class ControlActivity extends Activity {
                     case "exportStatus": break;
                     default: throw new IllegalArgumentException("Unknown fixture operation");
                 }
+                File projectFile = new File(getFilesDir(), "acceptance.orproj");
+                Log.i(
+                    "OrSafFixture",
+                    "control operation=" + (operation == null ? "status" : operation)
+                        + " projectSha256=" + sha256(projectFile),
+                );
                 File exported = new File(getFilesDir(), "export.mkv");
                 boolean validMatroska = false;
                 if (exported.isFile() && exported.length() >= 4) {
@@ -76,8 +83,8 @@ public final class ControlActivity extends Activity {
                 }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
-                    .put("projectBytes", new File(getFilesDir(), "acceptance.orproj").length())
-                    .put("projectSha256", sha256(new File(getFilesDir(), "acceptance.orproj")))
+                    .put("projectBytes", projectFile.length())
+                    .put("projectSha256", sha256(projectFile))
                     .put("exportBytes", exported.length())
                     .put("validMatroska", validMatroska);
                 runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });

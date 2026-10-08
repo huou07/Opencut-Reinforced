@@ -957,3 +957,6 @@ without logging project contents.
 The recovery driver reads and reports the provider digest again before opening
 the picker, isolating changes introduced by process relaunch from the picker
 handoff itself.
+The debug-only fixture provider also logs document create, delete, and open
+modes plus control-operation hashes, making provider-side writes visible in the
+retained guest log.
