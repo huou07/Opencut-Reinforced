@@ -71,7 +71,7 @@ public final class ControlActivity extends Activity {
                 Log.i(
                     "OrSafFixture",
                     "control operation=" + (operation == null ? "status" : operation)
-                        + " projectSha256=" + sha256(projectFile),
+                        + " projectSha256=" + sha256(projectFile)
                 );
                 File exported = new File(getFilesDir(), "export.mkv");
                 boolean validMatroska = false;
