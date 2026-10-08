@@ -105,6 +105,10 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             adb.write_text(
                 "#!/usr/bin/env bash\n"
                 f'echo adb:"$*" >> "{events}"\n'
+                "if [[ \"$*\" == *' logcat -b all -v brief -s OrSafFixtureControl:I'* ]]; then\n"
+                "  echo 'I OrSafFixtureControl: ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'\n"
+                "  exit 0\n"
+                "fi\n"
                 "if [[ \"$*\" == *' logcat -b '* ]]; then sleep 60; exit; fi\n"
                 "if [[ \"$*\" == *' shell echo or-ready'* ]]; then echo or-ready; exit; fi\n"
                 "if [[ \"$*\" == *' get-state'* ]]; then echo device; exit; fi\n"
@@ -115,9 +119,7 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 f'cat >> "$OR_ANDROID_ACCEPTANCE_OUTPUT/android-guest-saf.log" <<\'LOG\'\n'
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
-                "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED\n"
                 "LOG\n"
-                "echo ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE\n"
                 "sleep 3\n"
             )
             timeout = binaries / "timeout"
@@ -160,6 +162,9 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             lifecycle_status = (
                 output / "android-lifecycle-saf.status"
             ).read_text() if (output / "android-lifecycle-saf.status").exists() else "none"
+            lifecycle_marker = (
+                output / "android-lifecycle-saf.marker"
+            ).read_text() if (output / "android-lifecycle-saf.marker").exists() else "none"
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
@@ -167,9 +172,11 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
             result.stderr,
             f"code={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r} events={event_output!r}",
         )
+        self.assertIn("logcat -b all -v brief -s OrSafFixtureControl:I", event_output)
         self.assertIn("shell monkey -p io.github.huou07.or_app 1", event_output)
-        self.assertIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
-        self.assertIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)
+        self.assertNotIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", guest_output)
+        self.assertNotIn("ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE", driver_output)
+        self.assertIn("ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED", lifecycle_marker)
         self.assertEqual(lifecycle_status.strip(), "0")
 
 

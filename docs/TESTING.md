@@ -918,9 +918,9 @@ a location. Texture pixel assertions remain required after each successful
 capture.
 
 The API 36 lifecycle step moves the app task to the background, then the emulator
-host launches OR through Android's launcher after the Flutter driver reports the
-fixture control completed. It uses the flushed driver log rather than the
-redirected logcat capture, which can buffer the native marker. This avoids asking
-the background app process to start an activity, which Android blocks under the
-app's target SDK, while preserving the real pause/resume and surface recreation
-journey.
+host watches the native fixture event on a dedicated live `adb logcat` stream
+and launches OR through Android's launcher. It does not use the redirected
+logcat or Flutter driver captures, which can buffer the lifecycle marker until
+after the test times out. This avoids asking the background app process to start
+an activity, which Android blocks under the app's target SDK, while preserving
+the real pause/resume and surface recreation journey.

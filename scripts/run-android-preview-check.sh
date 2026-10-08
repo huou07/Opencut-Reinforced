@@ -20,6 +20,7 @@ guest_log="$output_directory/android-guest-$case_name.log"
 health_log="$output_directory/android-health-$case_name.log"
 picker_status_file="$output_directory/android-picker-$case_name.status"
 lifecycle_status_file="$output_directory/android-lifecycle-$case_name.status"
+lifecycle_marker_file="$output_directory/android-lifecycle-$case_name.marker"
 : > "$picker_status_file"
 : > "$guest_log"
 adb -s "$android_device_id" logcat -c
@@ -151,12 +152,26 @@ if [[ -n "$picker_pid" ]]; then
 fi
 if [[ "$case_name" == saf && "$status" == 0 ]]; then
   : > "$lifecycle_status_file"
+  : > "$lifecycle_marker_file"
   (
-    # tee flushes each Flutter driver line. The redirected adb logcat capture is
-    # buffered, so its copy of the native fixture marker can arrive too late.
-    while ! grep -Fq 'ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE' "$log"; do
-      sleep 0.25
-    done
+    # Read the native event directly from a live logcat stream. The separate
+    # logcat and Flutter driver files are buffered and can expose it only after
+    # the Flutter lifecycle assertion has already timed out.
+    if timeout 50s adb -s "$android_device_id" logcat -b all -v brief \
+      -s OrSafFixtureControl:I | while IFS= read -r line; do
+        if [[ "$line" == *'ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED'* ]]; then
+          printf '%s\n' "$line"
+          printf '%s\n' "$line" > "$lifecycle_marker_file"
+          break
+        fi
+      done; then
+      :
+    fi
+    if [[ ! -s "$lifecycle_marker_file" ]]; then
+      echo 'Timed out waiting for Android SAF background lifecycle event.' >&2
+      printf '124\n' > "$lifecycle_status_file"
+      exit 1
+    fi
     # Let Android complete the move-to-background transition before simulating
     # the launcher action. Starting an activity from OR's background process is
     # blocked on API 36; the host shell launches through Android's real launcher.
