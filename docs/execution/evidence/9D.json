@@ -1,0 +1,128 @@
+{
+  "checkpoint_id": "9D",
+  "contract_versions": {
+    "ipc_protocol": 1,
+    "project_schema": 7,
+    "recovery_schema": 1
+  },
+  "developer_preview": {
+    "required": false
+  },
+  "evidence_classes": [
+    {
+      "class": "STATIC",
+      "conclusion": "success",
+      "gate_id": "repository_hygiene",
+      "job_id": 113469800274,
+      "job_name": "Repository hygiene",
+      "run_id": 37823364838,
+      "status": "completed",
+      "step_name": "Run repository checks",
+      "step_number": 3
+    },
+    {
+      "class": "UNIT",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 113470413952,
+      "job_name": "Flutter static and widget checks",
+      "run_id": 37823364900,
+      "status": "completed",
+      "step_name": "Run Flutter widget tests",
+      "step_number": 9
+    },
+    {
+      "class": "INTEGRATION",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 113470414066,
+      "job_name": "Android APK build",
+      "run_id": 37823364900,
+      "status": "completed",
+      "step_name": "Verify Android SAF preview user journey and resource bounds",
+      "step_number": 22
+    },
+    {
+      "class": "USER_JOURNEY",
+      "conclusion": "success",
+      "gate_id": "platform_verification",
+      "job_id": 113470414066,
+      "job_name": "Android APK build",
+      "run_id": 37823364900,
+      "status": "completed",
+      "step_name": "Verify Android SAF preview user journey and resource bounds",
+      "step_number": 22
+    }
+  ],
+  "gates": [
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "repository_hygiene",
+      "head_branch": "main",
+      "head_sha": "4261f43cd03b78e445c3f278ebb53dec15843cb3",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/37823364838",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Repository hygiene",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 37823364838,
+      "status": "completed",
+      "workflow_file": ".github/workflows/repo-hygiene.yml",
+      "workflow_name": "Repository hygiene"
+    },
+    {
+      "conclusion": "success",
+      "event": "push",
+      "gate_id": "platform_verification",
+      "head_branch": "main",
+      "head_sha": "4261f43cd03b78e445c3f278ebb53dec15843cb3",
+      "html_url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/37823364900",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "name": "Rust checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Flutter static and widget checks",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "macOS native build and bridge smoke",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Linux native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Windows native build",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Android APK build",
+          "status": "completed"
+        }
+      ],
+      "run_attempt": 1,
+      "run_id": 37823364900,
+      "status": "completed",
+      "workflow_file": ".github/workflows/platform-verification.yml",
+      "workflow_name": "Platform verification"
+    }
+  ],
+  "implementation_sha": "4261f43cd03b78e445c3f278ebb53dec15843cb3",
+  "implementation_subject": "fix(ci): verify SAF recovery from its artifact directory",
+  "schema_version": 2,
+  "verified_at_utc": "2026-10-08T18:45:59Z"
+}
