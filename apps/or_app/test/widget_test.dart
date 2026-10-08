@@ -73,7 +73,7 @@ void main() {
     'compact top bar keeps export status accessible without overflow',
     (tester) async {
       _setViewport(tester, const Size(320, 640));
-      const status = 'Saving export to the selected location…';
+      const status = 'Export complete';
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -97,6 +97,7 @@ void main() {
       );
 
       expect(find.byTooltip(status), findsOneWidget);
+      expect(find.text(status), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

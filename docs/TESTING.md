@@ -718,6 +718,11 @@ hardening commit itself must pass both workflows.
   identity through provider FD acquisition, duplication, software decode,
   shared rendering, and surface presentation. Fixture setup and revocation
   controls do not replace the app picker, gateway, renderer, or viewer.
+- The same journey exports through DocumentsUI, waits for the compact top-bar
+  `Export complete` tooltip, then checks the separate provider received more
+  than four bytes of a valid Matroska file. The tooltip assertion follows the
+  compact UI contract; provider bytes and container validation prove the actual
+  export completed.
 - The fixture hands that project to the separate-UID provider through the setup
   Intent, so its transport bound must admit the document OR itself saves. The
   journey proves more than a successful seed: the provider reports the byte count

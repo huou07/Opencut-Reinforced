@@ -491,7 +491,7 @@ void main() {
       debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
       await _until(
         tester,
-        () => find.text('Export complete').evaluate().isNotEmpty,
+        () => find.byTooltip('Export complete').evaluate().isNotEmpty,
       );
       final exported = await _control('exportStatus');
       expect(exported['exportBytes'], greaterThan(4));
