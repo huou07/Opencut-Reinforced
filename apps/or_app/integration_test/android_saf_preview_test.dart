@@ -118,9 +118,15 @@ Future<void> _dragSeekUi(
   _ObservedGateway gateway,
   double fraction,
 ) async {
-  final before = gateway.seekCalls;
   final slider = find.byKey(const ValueKey('preview-scrub-ruler'));
-  await _until(tester, () => slider.evaluate().isNotEmpty);
+  final play = find.byKey(const ValueKey('preview-play'));
+  await _until(
+    tester,
+    () =>
+        slider.evaluate().isNotEmpty &&
+        tester.widget<IconButton>(play).onPressed != null,
+  );
+  final before = gateway.seekCalls;
   await tester.ensureVisible(slider);
   final rect = tester.getRect(slider);
   await tester.dragFrom(
