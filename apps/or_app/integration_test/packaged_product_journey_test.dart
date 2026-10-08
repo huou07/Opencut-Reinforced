@@ -128,7 +128,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await _pumpUntil(
     tester,
     () => find
-        .text('the media container is not in the import matrix')
+        .textContaining('the media container is not in the import matrix')
         .evaluate()
         .isNotEmpty,
     'unsupported media feedback',

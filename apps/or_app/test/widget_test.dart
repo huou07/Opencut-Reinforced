@@ -30,6 +30,11 @@ void main() {
     expect(find.text('New Project'), findsOneWidget);
     expect(find.text('Open Project'), findsOneWidget);
     expect(find.text('No recent projects yet'), findsOneWidget);
+    expect(
+      find.textContaining('import media, edit a timeline'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Matroska export workflows'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('nav-projects')));
     await tester.pumpAndSettle();

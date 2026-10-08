@@ -275,13 +275,15 @@ separately gated.
 
 ## Media import
 
-**MVP FOUNDATION:** import validates one selected local file against the
-minimum import matrix below and adds it through `media.add`. Files outside the
-matrix fail at import with an accurate machine-readable unsupported-format
-reason; the project is unchanged. Normal import, thumbnails, waveforms, proxies,
-preview, and export run on the packaged FFmpeg 8.1.3 runtime that ships with the
-application: no system `ffmpeg`/`ffprobe` and no developer `PATH` entries or
-`OR_FFMPEG_PATH`/`OR_FFPROBE_PATH` overrides are required.
+**MVP FOUNDATION:** import validates one or more selected local files or
+Android SAF documents against the minimum import matrix below and adds each
+successful source through the existing `media.add` command. Sources are probed
+independently; a failed item leaves project state unchanged while successful
+items remain imported and the user receives a combined result. Files outside
+the matrix fail with an accurate machine-readable unsupported-format reason.
+Normal import, thumbnails, waveforms, proxies, preview, and export run on the
+packaged FFmpeg 8.1.3 runtime in supported packages: no system `ffmpeg`/`ffprobe`
+or developer `PATH` override is required for a packaged user journey.
 
 The 9B1 minimum import matrix is exactly the mandatory correctness profile the
 packaged runtime can decode:

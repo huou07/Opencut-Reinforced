@@ -4,16 +4,9 @@
 
 Stable releases: **none**.
 
-Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are for contributors and testers to inspect the native shell and architecture progress. OR remains a pre-MVP editor; timeline editing and desktop video preview are available, while several editing tools and export remain planned.
+Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are unsigned or ad-hoc-signed testing builds, not production releases. OR remains pre-MVP: projects, media import, timeline editing, preview, and a limited Matroska export path are implemented, but supported formats, editing tools, audio/effects, text, and AI workflows remain incomplete.
 
-The current Phase 7 hardening checkpoint updates hosted verification and Developer Preview packaging. It does not publish a release; the supervisor owns hosted evidence and checkpoint advancement.
-
-Checkpoint completion is separate from release publication. From the evidence
-policy boundary onward, a checkpoint is not repository-authoritative `DONE`
-until the supervisor records exact-SHA hosted CI evidence, verifies all
-required jobs, verifies a required preview when `PLAN.json` demands it, and
-performs the protected state transition. A runner cannot create release or
-completion evidence. This checkpoint prepares the existing preview workflow but does not publish a Developer Preview itself.
+The legacy checkpoint/evidence process is preserved in `docs/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
 
 ## Developer Preview
 
@@ -38,9 +31,9 @@ libraries into Android's `jniLibs` directories, and checks that the APK
 contains the Rust bridge and FFmpeg shared libraries for `arm64-v8a`,
 `armeabi-v7a`, and `x86_64`.
 
-The current preview includes the production-direction native Flutter shell using OR Focused Monochrome, Home, Projects, Templates, Asset Library, and Settings, responsive desktop and mobile navigation, and an Editor Shell Preview for visual evaluation. On macOS, Windows, and Linux, Flutter creates/opens real `.orproj` projects and hosts one Rust-owned live session shared with attached CLI clients. Users can rename, undo/redo, explicitly save, close, inspect/apply/discard recovery, and see dirty state. CLI clients use the visible descriptor path under Settings → Advanced / Developer; the token and descriptor contents are never displayed. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients. Android builds, but project New/Open are unavailable pending Storage Access Framework integration. There is no periodic recovery checkpoint scheduler or autosave. The non-project Editor Shell Preview remains a layout preview.
+The current preview includes the native Flutter application using OR Focused Monochrome, Home, Projects, Templates, Asset Library, Settings, responsive desktop/mobile navigation, and a non-project Editor Shell Preview for layout evaluation. On macOS, Windows, and Linux, users create/open `.orproj` projects, import multiple media files, edit a shared Rust-owned session, preview video, and export the currently supported Matroska profile. Attached CLI clients use the same live session and command path. Android uses SAF to create/open project documents, media import, preview, and export through an app-private working copy and explicit document synchronization. Project changes can be saved explicitly; dirty projects also update a recovery sidecar periodically without overwriting the canonical file. Users can inspect, apply, or discard recovery state. CLI descriptor credentials are not displayed; Unix endpoints use owner-only permissions and Windows endpoints use protected owner-only DACLs and reject remote clients. The editor has materially incomplete features and formats; these packages are not production-ready.
 
-Phase 5B adds a persistent `.orproj` schema v2 media library with v1 loading/migration, paginated CLI list, and headless/attached CLI add/remove operations. Desktop users can import and remove media from the Media panel; import requires a system-provided `ffprobe`. Phase 5D adds generated cached PNG thumbnails for video media and a combined waveform preview for audio-only media, displayed read-only in the desktop Media panel. Preview generation uses bounded background jobs and disposable cache storage; it requires a system-provided `ffmpeg`. Sources may be offline after import because loading does not open or probe them, and media bytes and preview artifacts are not stored in the project. Library thumbnail/waveform generation still uses system-provided `ffmpeg` and `ffprobe`; desktop viewer playback uses the separately linked FFmpeg runtime packaged with the application. Phase 5E adds persistent disposable cache indexing and bounded LRU eviction of old media-preview artifacts when the global cache budget needs space; Phase 5F adds a core-only file-backed proxy-generation foundation that is not exposed by the UI, CLI, or IPC.
+The current media library supports multiple-file import on desktop and multiple-document import through Android SAF. Packaged desktop apps carry FFmpeg helpers for media inspection and generated previews; Android uses the shared FFmpeg libraries and SAF descriptors. Sources remain external to project documents. Preview thumbnails and waveforms use bounded background work and disposable cache storage with a persistent LRU index; proxy generation remains a core foundation and is not exposed as a user workflow.
 
 **Phase 6D — Trim, split, and ripple editing**
 
@@ -49,9 +42,9 @@ Phase 5B adds a persistent `.orproj` schema v2 media library with v1 loading/mig
 - Trim uses an absolute timeline edge, split uses an exact interior point with Rust-generated right-clip IDs, and ripple delete shifts only later clips on the selected track. Each operation uses the existing Rust command and session-history system; attached CLI edits update the open Flutter view through shared host events.
 - Flutter loads at most 100 clips per track page and offers explicit Load more for additional clips. Exact timeline values remain Rust-owned; the UI uses doubles only for display layout and never applies optimistic edit geometry.
 
-Phase 6E adds pointer move/trim, marker-aware snapping, and persistent timeline markers. Phase 7 adds desktop video preview with exact seek, play/pause, scrubbing, and frame stepping; play and frame step require an explicit sequence rate. Desktop decoding is software-only on macOS, Windows, and Linux. Android playback is not enabled. Transforms, crop, opacity, text/captions, effects, transitions, export, and audio device output remain future work. OR remains a pre-MVP project, not a full video editor.
+The timeline supports canonical track and clip editing, pointer move/trim, marker-aware snapping, typed transforms, basic text/captions, selected audio controls, and a closed set of effects/transitions. Desktop playback uses exact seek, scrubbing, play/pause, frame stepping, software decode, and the shared render path; Android has a software preview path with SAF media. Export currently writes Matroska with FFV1 video and PCM S16LE audio. Playback and frame stepping require an explicit sequence rate. The codec profile, editing depth, accessibility/usability evidence, and production packaging remain below a general-purpose release bar.
 
-The attached CLI archives contain `or`/`or.exe` plus safe usage examples, but no descriptor or project-session credential. The macOS CLI is a universal Apple silicon and Intel binary. The SHA-256 manifest covers all ten other release assets.
+The attached CLI archives contain `or`/`or.exe` plus safe usage examples, but no descriptor or project-session credential. The macOS CLI is a universal Apple silicon and Intel binary. The SHA-256 manifest covers all ten other release assets. The current debug package and hosted journey do not establish production signing, broad user-perceived performance, or a complete codec profile.
 
 ## Future Stable Release
 

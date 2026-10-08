@@ -4,35 +4,31 @@ A free and open-source cross-platform video editor designed around one structure
 
 ## Status
 
-**Pre-MVP.** The current checkpoint and allowed execution order are defined by
-[docs/execution/STATE.json](docs/execution/STATE.json) and
-[PLAN.json](docs/execution/PLAN.json). The desktop app creates and opens real
-projects, hosts one Rust-owned session shared with Flutter and authenticated
-local IPC, and supports project lifecycle, recovery, media workflows, timeline
-editing, and persistent markers. The core now defines `.orproj` schema v5 with
-an explicit nullable sequence frame rate, exact frame-lattice timing, and the
-shared viewer transport contract. The product viewer and playback controls are
-not implemented; the editor is not yet a usable video editor.
+**Pre-MVP, with an active cross-platform editor implementation.** The current
+application creates, opens, edits, saves, and recovers `.orproj` projects on
+macOS, Windows, Linux, and Android. A Rust-owned project session serves the
+Flutter UI and attached CLI through shared validated commands. Users can import
+multiple local media files on desktop and multiple Android SAF documents,
+preview media, assemble and revise timeline clips, and export the supported
+Matroska profile. Android projects use SAF documents and an app-private working
+copy with explicit synchronization. Dirty work periodically updates a recovery
+checkpoint without overwriting the canonical project file; Save remains
+explicit.
 
-The Rust core and CLI provide the shared project, media, timeline, history,
-recovery, cache, proxy-foundation, and command/query paths. CLI operations
-include sequence settings and exact rate set/clear in addition to project,
-media, marker, and clip operations. Project loading does not open or probe
-referenced media. `ffprobe` and `ffmpeg` remain external system executables.
-Android builds, but project New/Open remains unavailable until Storage Access
-Framework support is implemented. There is no autosave or export.
+The product is not yet a complete general-purpose editor: the current export
+profile and editing tools are limited, and captions, richer audio/effects,
+relinking, and focused AI workflows remain incomplete. Stable application
+releases: none. Debug Developer Preview prereleases are available from
+[GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); they
+are for testing, not production distribution. See the active outcome-based
+[product roadmap](docs/PRODUCT_ROADMAP.md) and
+[release limitations](docs/RELEASE.md).
 
-Stable application releases: none. Debug Developer Preview prereleases are
-available from [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases)
-for native shell, project lifecycle, CLI, and architecture evaluation. The
-interactive HTML prototype remains a frozen product and UX reference, not the
-final application or its production architecture.
-
-The machine-readable architecture and execution authority is
-[docs/execution/README.md](docs/execution/README.md), with the immutable
-checkpoint graph in [PLAN.json](docs/execution/PLAN.json) and mutable progress
-in [STATE.json](docs/execution/STATE.json). This README does not override the
-checkpoint state or locked specifications.
+The former checkpoint plan and state remain preserved for traceability in
+[docs/execution/README.md](docs/execution/README.md); they do not select active
+product work. The [convergence audit](docs/OPEN_SOURCE_CONVERGENCE.md) records
+which components OR should keep, reuse, evaluate, or defer based on inspected
+upstream evidence.
 
 ## Vision
 
@@ -52,7 +48,7 @@ The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFil
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-The project format has bounded filesystem load, race-safe no-clobber creation, and atomic save. Migrations from schemas v1–v4 preserve existing project content, leave the optional sequence rate unset, and write v5 only on explicit save without a conversion-only revision change. Recovery checkpoints retain envelope v1 and include v5 project snapshots. The bounded background Job Manager and disposable CacheStore generate read-only thumbnails and waveforms through system `ffmpeg`; Phase 5E adds a rebuildable SQLite index and automatic LRU eviction, and Phase 5F adds a file-backed Matroska proxy generation foundation under the same cache. Artifacts, index data, and source fingerprints are not project state. Phase 6E1 implements pointer timeline move/trim editing and canonical drop-time clip-boundary snapping; Phase 6E2B adds the marker UI and core/CLI Snap V2 integration. Phase 7B provides the headless wgpu render spine and 7C linked software decode; 7F0 adds the canonical explicit sequence-rate setting and frame-step timing contract. Product playback, viewer/texture integration, audio-device output, export, autosave, Android Storage Access Framework integration, media-to-timeline drag insertion, track reorder, multi-select, linked clips, zoom, and AI are not implemented. `ffprobe` and `ffmpeg` remain external system executables and are not bundled.
+The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, clip insert/move/trim/split/ripple delete, markers, snapping, history, desktop preview, and a limited Matroska export profile. Proxies remain a cache foundation rather than an exposed workflow. Supported codec/container choices, advanced editing, audio tools, effects, captions, offline relinking, and AI assistance remain limited or incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
 
 ## Product direction
 

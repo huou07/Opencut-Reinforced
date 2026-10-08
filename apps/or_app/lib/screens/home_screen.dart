@@ -22,8 +22,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const androidMessage =
-        'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
+    const androidMessage = 'Project file access is unavailable in this build.';
 
     return OrPageLayout(
       title: 'Home',
@@ -94,7 +93,7 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'The production visual shell is ready for evaluation.',
+                      'Create a project, import media, edit a timeline, preview, and export a video.',
                       style: TextStyle(
                         color: OrColors.text,
                         fontSize: 14,
@@ -103,7 +102,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(height: OrSpacing.x2),
                     Text(
-                      'Project and core foundations exist. Editing, media, playback, and export are not connected.',
+                      'This preview supports project, media, timeline, playback, recovery, and Matroska export workflows. More formats and editing tools are still in development.',
                       style: TextStyle(
                         color: OrColors.textSecondary,
                         fontSize: 13,

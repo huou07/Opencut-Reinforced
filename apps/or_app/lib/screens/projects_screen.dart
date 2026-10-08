@@ -29,8 +29,7 @@ class ProjectsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const androidMessage =
-        'Project file access on Android requires Storage Access Framework integration and is not available in this Developer Preview.';
+    const androidMessage = 'Project file access is unavailable in this build.';
 
     return OrPageLayout(
       title: 'Projects',

@@ -56,7 +56,7 @@ patch is justified by this audit alone.
 
 | OR subsystem | Decision | Evidence and rationale | Next action / boundary |
 |---|---|---|---|
-| Project/document model | **KEEP** | OR has strict versioned `.orproj` schemas, explicit migrations, exact rational time, bounded atomic save, recovery ancestry checks, and Android SAF identities. Candidate editors do not demonstrate equal OR compatibility or a shared human/CLI/agent mutation contract. | Preserve schema and recovery tests. Add interoperability only through previewable, bounded import/export adapters. |
+| Project/document model | **KEEP canonical model; REUSE OTIO interchange** | OR has strict versioned `.orproj` schemas, explicit migrations, exact rational time, bounded atomic save, recovery ancestry checks, and Android SAF identities. OpenTimelineIO provides a maintained Apache-2.0 editorial interchange format and tested adapters, but it deliberately does not contain media and its C++/Python APIs are not a drop-in Rust/mobile project store. | Preserve `.orproj` as canonical state. Add a bounded OTIO import/export mapping when interoperability is implemented; preview and explain unsupported/lossy fields before import. Keep history, recovery, media identity, and OR-only settings in `.orproj`. |
 | Timeline/editing core | **KEEP** | Rust owns typed tracks/clips, revision-checked commands, undo/redo, and deterministic CLI parity. MLT, Shotcut, Kdenlive, and OpenShot have mature editing engines but their project semantics and UI are not directly compatible with OR/mobile. | Finish ordinary editing interactions; later measure an OTIO subset for exchange, not as canonical state. |
 | Media ingest/probing | **REUSE** | FFmpeg/ffprobe are established format tools and already underlie OR's packaged runtime/probe path. OpenShot/libopenshot and MLT add alternate media stacks rather than removing the need for codecs. | Keep FFmpeg as the media compatibility layer. Keep source permission/SAF behavior platform-owned and tested. |
 | Decode/playback | **BUILD + COMPARE** | OR already has a bounded FFmpeg software decode path, immutable frame snapshots, cancellation/queue limits, and wgpu preview. MLT provides a mature LGPL alternative, but adapter cost, Android, latency, seek behavior, and runtime packaging are unmeasured. | Build a narrow MLT evaluation adapter against representative OR fixtures and compare seek, playback, memory, packaging, and Android feasibility. Do not replace until it wins materially. |
@@ -256,3 +256,72 @@ trees, tagged releases, release metadata, and project documentation. It was not
 treated as equivalent to an independent clean-machine application test; that
 distinction is why the MLT replacement decision remains an experiment rather
 than a conclusion.
+
+## Follow-up review after the operator pivot
+
+This follow-up was recorded on 2026-10-09 at product SHA
+`8648be7ee03eed75a345c45cca6299a9cd1ae1d5`. It preserves the first audit's
+starting snapshot and conclusions while checking the current OpenCut rewrite
+and refreshing upstream state. The legacy execution cursor now points to 9E;
+it is preserved as history and is not the active product work selector. Active
+work follows `PRODUCT_ROADMAP.md`.
+
+### OpenCut: distinguish the rewrite from the released classic editor
+
+The latest [OpenCut-app/OpenCut default-branch commit checked here](https://github.com/OpenCut-app/OpenCut/commit/e668010778568641babef2cc40be4703ae6916d6)
+is `e668010778568641babef2cc40be4703ae6916d6` (2026-09-24). Its MIT workspace
+contains only `apps/desktop` as an active Cargo member; the proposed `crates/*`
+workspace membership is commented out. The desktop crate depends on GPUI and
+its README explicitly describes the app as an early window with no features.
+The checked tree has FFmpeg media-build setup, but no project/editing core,
+stable Editor API, plugin host, MCP server, or headless editor implementation.
+The official rewrite tracker issue #811 still labels the core, Editor API,
+plugin design/host, web UI, project storage, headless/MCP, Android, iOS, and
+public beta as unchecked; its last update was 2026-09-08. The README says
+architecture docs are still being written before outside contributions are
+opened. The repo reports 375 open issues. Those counts are activity context,
+not quality scores.
+
+OpenCut's [`v0.3.0` release](https://github.com/OpenCut-app/OpenCut/releases/tag/v0.3.0)
+from 2026-04-15 is from the classic web editor era;
+its release notes describe already-shipped Rust/WASM time and wgpu compositor
+work. That is useful evidence about the old editor, but it is not evidence
+that the current rewrite has carried those modules, project semantics, or
+cross-platform runtime into its GPUI shell. Keep the projects and releases
+separate in future comparisons.
+
+**Decision remains KEEP OR and monitor OpenCut.** There is strategic overlap
+in the intended Rust engine, multiple frontends, API, plugins, MCP, and
+headless workflows, but no current rewrite implementation to integrate or
+upstream against. Do not duplicate features in anticipation of the design:
+re-audit when OpenCut publishes an actual engine/API, tests, usable packages,
+and a contribution path, then prototype only a narrow boundary that meets
+OR's invariants. If OpenCut accepts a generic fix later, prefer contributing
+there over maintaining an OR fork.
+
+### Refreshed candidate evidence and new interchange option
+
+| Candidate | Current source/release observation at this review | Concrete convergence decision |
+|---|---|---|
+| OpenCut rewrite | MIT; [`e6680107`](https://github.com/OpenCut-app/OpenCut/commit/e668010778568641babef2cc40be4703ae6916d6); FFmpeg 8.1.3 prerelease assets appeared 2026-09-24, but no rewrite application release or editor core is present in the checked workspace. The older classic [`v0.3.0`](https://github.com/OpenCut-app/OpenCut/releases/tag/v0.3.0) is a separate product state. | Monitor; no adoption/port yet. |
+| Open Generative AI | MIT top-level repository; [`55e02f0b`](https://github.com/Anil-matcha/Open-Generative-AI/commit/55e02f0b301fd971839588125096cdfbdd93cdbd) pushed 2026-10-08; v2.0.0 release; Electron/Next/web studio, BYOK/API proxy, provider catalogue, submodules, and optional local models. Repository-level MIT does not decide individual model, submodule, API, or generated-asset terms. | Reuse provider/task ideas only; do not embed the app or its model/service stack. Verify each provider's data path and license before a thin adapter. |
+| MoneyPrinterTurbo | MIT; [`9887b459`](https://github.com/harry0703/MoneyPrinterTurbo/commit/9887b459e754ee073c056d988499b91136af9662) pushed 2026-10-08; [v1.3.8](https://github.com/harry0703/MoneyPrinterTurbo/releases/tag/v1.3.8) released 2026-10-03; active Python/FastAPI/Streamlit and CLI pipeline. It can generate finished short-video compositions but does not provide a normal editable NLE timeline. | Optional external generation/import workflow; no runtime adoption. Check generated stock/music/voice rights and privacy per provider. |
+| Authentic OpenMontage | AGPL-3.0; [`9327439d`](https://github.com/calesthio/OpenMontage/commit/9327439db69021ab4b0e2776729bf3b58fdb5a87) pushed 2026-10-03; active production-pipeline code and tests, with no GitHub release. It is agent-oriented production automation, not a cross-platform interactive editor. | Learn workflow patterns; no code incorporation into MIT OR. |
+| Motion Canvas | MIT; [`7b91435c`](https://github.com/motion-canvas/motion-canvas/commit/7b91435c301d530351dcf5ebb91dd139c002e405) pushed 2026-07-02; latest stable release v3.17.2 (2024-12) and v3.18 alpha (2025-02). It is code-driven vector animation with a preview/editor workflow, not an NLE or native mobile editor. | Keep as a reference/possible asset interchange; do not replace OR's timeline or renderer. |
+| Remotion | [`a6d662f1`](https://github.com/remotion-dev/remotion/commit/a6d662f16c9d21a34c41ee5afba9f3908125988c); current v4.0.534 release and active React/Chromium render system. Its [current core license](https://github.com/remotion-dev/remotion/blob/main/packages/core/LICENSE.md) is custom and distinguishes individual/small-company free use from a required company license for larger organizations; redistribution/relicensing of a derivative is disallowed by its free terms. | No embedded runtime or copied code. Use only as an external production/reference tool after license and rendering needs are checked. |
+| MLT / Shotcut | MLT LGPL-2.1 [v7.42.0](https://github.com/mltframework/mlt/releases/tag/v7.42.0), active modules and CTest; Shotcut GPL-3.0 [v26.9.27](https://github.com/mltframework/shotcut/releases/tag/v26.9.27), actively packaged for desktop. | Continue a narrow MLT adapter comparison; do not import GPL Shotcut code or its full Qt product stack. Exact MLT module/runtime licensing remains a per-build review. |
+| OpenShot / libopenshot | libopenshot LGPL-3.0 [v1.0.1](https://github.com/OpenShot/libopenshot/releases/tag/v1.0.1), C++/FFmpeg/OpenCV/audio stack with unit and platform CI; OpenShot Qt remains GPL-3.0 and desktop-focused. | Secondary media-engine candidate only for a demonstrated gap; no current mobile/shared-command advantage over OR. |
+| LosslessCut | GPL-2.0; [v3.69.0](https://github.com/mifi/lossless-cut/releases/tag/v3.69.0) (2026-06-04), maintained Electron package for macOS, Windows, and Linux; current code continues to fix precise stream-copy/keyframe/audio behavior. | Strong focused UX/runtime reference for fast trimming/remuxing; too narrow and license-incompatible as OR foundation. |
+| OpenTimelineIO | Apache-2.0; [`dcf9ac17`](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/commit/dcf9ac17698db2e13c094abf54a636fec1cb8e14), ASWF-governed interchange API with an active core and tested native `.otio`/`.otiod`/`.otioz` formats. AAF/EDL/FCP and other adapters are independently packaged plugins after v0.16; it has C++ and Python APIs, not a shipped Rust/mobile runtime. | Reuse the interchange format for an explicit supported subset; keep canonical project/recovery/edit commands in OR. Keep adapter licenses and maturity separate. |
+
+MLT's [upstream site](https://www.mltframework.org/) mentions Android `mlt++`
+build fixes, so the framework should not be dismissed as desktop-only. That is
+build evidence, not evidence of a packaged Flutter/Android editor integration or acceptable device
+latency/resource use. A future MLT experiment must compile and package only the
+needed LGPL modules, exercise the Android path where feasible, and measure the
+same fixture and operations as OR. This follow-up is source and release
+inspection, not a new application-runtime benchmark. It strengthens the
+OpenCut non-adoption decision but does not close the MLT comparison. The next
+media architecture decision remains a small, fixture-based adapter experiment;
+use actual packaged measurements before replacing any OR path. OTIO is a
+separate interoperability capability and does not depend on the MLT experiment.
