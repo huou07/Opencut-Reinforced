@@ -272,6 +272,13 @@ class MainActivity : FlutterActivity() {
         val local = readPrivateFile(workingCopy)
         val localDigest = digest(local)
         val baseline = readBaseline(baselineFile)
+        safDiagnostic(
+            "project copies remoteBytes=${remote.size} localBytes=${local.size} " +
+                "baselinePresent=${baseline != null} " +
+                "localMatchesRemote=${localDigest == remoteDigest} " +
+                "baselineMatchesRemote=${baseline == remoteDigest} " +
+                "localMatchesBaseline=${baseline == localDigest}",
+        )
         when {
             baseline == null && localDigest == remoteDigest ->
                 writePrivateAtomically(baselineFile, remoteDigest.toByteArray(Charsets.US_ASCII))
