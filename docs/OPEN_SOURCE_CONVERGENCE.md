@@ -325,3 +325,43 @@ OpenCut non-adoption decision but does not close the MLT comparison. The next
 media architecture decision remains a small, fixture-based adapter experiment;
 use actual packaged measurements before replacing any OR path. OTIO is a
 separate interoperability capability and does not depend on the MLT experiment.
+
+## Current product decision check
+
+This check follows the safely checkpointed in-flight media-relink work and
+records OR at `010f4ebd4433be035c9b15a232ac23273240ab14`. The previous upstream
+source snapshot remains current: the exact OpenCut default-branch head is
+`e668010778568641babef2cc40be4703ae6916d6`, independently fetched and
+inspected from its Cargo workspace and desktop README on 2026-10-09. Its
+workspace still contains only `apps/desktop`; the README describes a window
+that opens without editor features. The Rust core, editing API, plugins, MCP,
+and headless operation remain tracker proposals. No adoption decision changes.
+
+OR's desktop local-file relink is now a working example of a narrow product
+capability worth retaining: `media.relink` re-probes a replacement source,
+preserves the canonical MediaId and timeline references, and participates in
+revision-checked undo/redo. The implementation is `d313a13`; the packaged
+desktop journey was added in `e40c1ef`. This does not justify retaining OR's
+entire media stack if a compatible upstream later wins measured integration;
+it demonstrates why the current project and command contract has user value
+that no checked candidate supplies as a drop-in. The combined exact-SHA
+Android SAF and desktop relink workflow is pending hosted run
+`37861461557` on `010f4eb`; no platform acceptance is claimed until that run
+completes successfully.
+
+OpenTimelineIO's checked upstream head remains
+`dcf9ac17698db2e13c094abf54a636fec1cb8e14`. Its current documentation
+distinguishes native lossless OTIO formats from other adapters, which are
+lossy and separately packaged/maintained. This strengthens the existing
+**REUSE for explicit interchange, KEEP as canonical project state** decision:
+import/export must report unsupported mappings and cannot substitute for OR
+project identity, recovery, history, or permission handling.
+
+No local MLT runtime was available on the verification host (`melt` and MLT
+pkg-config metadata are absent), and the repository's platform policy
+prohibits installing native toolchains for local acceptance. Thus the audit
+still has no measured MLT-versus-OR packaged result. Keep the current
+FFmpeg/wgpu implementation for the active product journey and treat MLT as an
+optional hosted comparison only if it can answer a concrete runtime or
+maintenance-cost question. This limits replacement evidence; it is not a
+claim that MLT is inferior or a reason to block user-facing work.
