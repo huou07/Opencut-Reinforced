@@ -157,6 +157,8 @@ def main() -> int:
     source = ROOT / "crates/or_media/tests/fixtures/tiny.mkv"
     media = work / "tiny.mkv"
     shutil.copyfile(source, media)
+    replacement_media = work / "tiny-relinked.mkv"
+    shutil.copyfile(source, replacement_media)
     unsupported = work / "unsupported.mp4"
     unsupported.write_bytes(b"not an OR supported media file\n")
     missing = work / "missing-source.mkv"
@@ -200,6 +202,7 @@ def main() -> int:
         {
             "OR_PACKAGED_JOURNEY_PROJECT": str(project),
             "OR_PACKAGED_JOURNEY_MEDIA": str(media),
+            "OR_PACKAGED_JOURNEY_REPLACEMENT_MEDIA": str(replacement_media),
             "OR_PACKAGED_JOURNEY_UNSUPPORTED_MEDIA": str(unsupported),
             "OR_PACKAGED_JOURNEY_MISSING_MEDIA": str(missing),
             "OR_PACKAGED_JOURNEY_BAD_PROJECT": str(bad_project),

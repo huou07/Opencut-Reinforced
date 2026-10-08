@@ -53,6 +53,9 @@ void main() {
     final missingMediaPath = _requiredEnvironment(
       'OR_PACKAGED_JOURNEY_MISSING_MEDIA',
     );
+    final replacementMediaPath = _requiredEnvironment(
+      'OR_PACKAGED_JOURNEY_REPLACEMENT_MEDIA',
+    );
     final badProjectPath = _requiredEnvironment(
       'OR_PACKAGED_JOURNEY_BAD_PROJECT',
     );
@@ -60,6 +63,7 @@ void main() {
     final picker = _JourneyPicker(
       projectPath: projectPath,
       mediaPaths: [mediaPath, unsupportedMediaPath, missingMediaPath],
+      replacementMediaPath: replacementMediaPath,
       exportPath: exportPath,
       badProjectPath: badProjectPath,
     );
@@ -233,6 +237,28 @@ Future<void> _reopenAndExport(
     attempts: 900,
   );
 
+  final mediaId = _singleKeySuffix(tester, 'media-actions-');
+  await tester.tap(find.byKey(ValueKey('media-actions-$mediaId')));
+  await tester.pumpAndSettle();
+  picker.nextMediaPath = picker.replacementMediaPath;
+  await tester.tap(find.byKey(ValueKey('media-relink-$mediaId')));
+  await _pumpUntil(
+    tester,
+    () =>
+        find.text('tiny-relinked.mkv').evaluate().isNotEmpty &&
+        find.byKey(ValueKey('media-actions-$mediaId')).evaluate().isNotEmpty,
+    'relink source while preserving its MediaId',
+  );
+  expect(_hasKeyPrefix(tester, 'timeline-clip-'), isTrue);
+  final saveButton = find.byKey(const ValueKey('workspace-save'));
+  await tester.ensureVisible(saveButton);
+  await tester.tap(saveButton);
+  await _pumpUntil(
+    tester,
+    () => find.text('Saved').evaluate().isNotEmpty,
+    'save relinked media source',
+  );
+
   await tester.tap(find.byKey(const ValueKey('preview-play')));
   await tester.pump(const Duration(milliseconds: 300));
   await tester.tap(find.byKey(const ValueKey('preview-play')));
@@ -256,7 +282,7 @@ Future<void> _preserveProjectAcrossMissingSource(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('tiny.mkv').evaluate().isNotEmpty,
+        find.text('tiny-relinked.mkv').evaluate().isNotEmpty,
     'project reopen before failure checks',
   );
 
@@ -275,7 +301,7 @@ Future<void> _preserveProjectAcrossMissingSource(
         .isNotEmpty,
     'unavailable external media feedback',
   );
-  expect(find.text('tiny.mkv'), findsWidgets);
+  expect(find.text('tiny-relinked.mkv'), findsWidgets);
 }
 
 Future<void> _preserveProjectAcrossMissingProbe(
@@ -287,7 +313,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('tiny.mkv').evaluate().isNotEmpty,
+        find.text('tiny-relinked.mkv').evaluate().isNotEmpty,
     'project reopen before missing-probe check',
   );
 
@@ -305,7 +331,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
         .isNotEmpty,
     'missing packaged probe feedback',
   );
-  expect(find.text('tiny.mkv'), findsWidgets);
+  expect(find.text('tiny-relinked.mkv'), findsWidgets);
 
   picker.nextExportPath = _requiredEnvironment(
     'OR_PACKAGED_JOURNEY_FAILED_EXPORT',
@@ -401,6 +427,7 @@ class _JourneyPicker implements ProjectFilePicker {
   _JourneyPicker({
     required this.projectPath,
     required this.mediaPaths,
+    required this.replacementMediaPath,
     required this.exportPath,
     required this.badProjectPath,
   }) : nextMediaPath = mediaPaths.first,
@@ -408,6 +435,7 @@ class _JourneyPicker implements ProjectFilePicker {
 
   final String projectPath;
   final List<String> mediaPaths;
+  final String replacementMediaPath;
   final String exportPath;
   final String badProjectPath;
   String? openPath;
