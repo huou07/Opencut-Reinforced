@@ -12,6 +12,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AndroidPreviewRunnerTests(unittest.TestCase):
+    def test_process_recovery_relaunches_the_stopped_main_activity(self) -> None:
+        runner = (ROOT / "scripts/run-android-preview-check.sh").read_text()
+        helper_start = runner.index("launch_product_main_activity() {")
+        helper_end = runner.index("\n}", helper_start)
+        helper = runner[helper_start:helper_end]
+        self.assertIn("shell am start -W", helper)
+        self.assertIn("android.intent.action.MAIN", helper)
+        self.assertIn("android.intent.category.LAUNCHER", helper)
+        self.assertIn('-n "$app_id/.MainActivity"', helper)
+        self.assertIn("Status: ok", helper)
+
+        force_stop = runner.index('shell am force-stop "$app_id"')
+        launches = [
+            index
+            for index in range(len(runner))
+            if runner.startswith("  launch_product_main_activity", index)
+        ]
+        self.assertEqual(len(launches), 2)
+        self.assertLess(launches[0], force_stop)
+        self.assertGreater(launches[1], force_stop)
+
     def test_picker_failure_stops_a_stalled_flutter_drive(self) -> None:
         with tempfile.TemporaryDirectory(prefix="or-android-runner-test-") as temp:
             root = Path(temp)

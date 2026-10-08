@@ -56,6 +56,18 @@ stop_process_tree() {
   done
   kill "$process_id" 2>/dev/null || true
 }
+launch_product_main_activity() {
+  local output
+  output="$(adb -s "$android_device_id" shell am start -W \
+    -a android.intent.action.MAIN \
+    -c android.intent.category.LAUNCHER \
+    -n "$app_id/.MainActivity" 2>&1)" || {
+    printf '%s\n' "$output" >&2
+    return 1
+  }
+  printf '%s\n' "$output"
+  [[ "$output" == *'Status: ok'* ]]
+}
 trap cleanup EXIT
 if [[ "$case_name" == saf ]]; then
   rm -f "$picker_status_file"
@@ -275,8 +287,10 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
 
   # The first journey has saved a real recovery sidecar. Capture a live process,
   # force-stop it through Android, prove it disappeared, then relaunch the same
-  # installed app without clearing its private files or SAF grants.
-  adb -s "$android_device_id" shell monkey -p "$app_id" 1 >/dev/null
+  # installed app without clearing its private files or SAF grants. Flutter drive
+  # stops the package when it exits, and Monkey cannot resolve stopped packages;
+  # a MAIN/LAUNCHER start launches the declared product activity.
+  launch_product_main_activity
   old_pid=
   for _ in $(seq 1 60); do
     old_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
@@ -300,7 +314,7 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     echo 'Android did not terminate the app process after force-stop.' >&2
     exit 1
   fi
-  adb -s "$android_device_id" shell monkey -p "$app_id" 1 >/dev/null
+  launch_product_main_activity
   new_pid=
   for _ in $(seq 1 60); do
     new_pid="$(adb -s "$android_device_id" shell pidof "$app_id" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
