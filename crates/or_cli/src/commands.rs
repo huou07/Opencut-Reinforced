@@ -1,10 +1,10 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
     CommandResult, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId,
-    MediaItem, OperationError, ProjectFileMediaImportError, ProjectFileSession,
-    ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting, TrackId,
-    TrackKind, TrackState, VisualSettings, apply_project_recovery, command_catalog,
+    MediaItem, OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError,
+    ProjectFileSession, ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate,
+    RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
+    TrackId, TrackKind, TrackState, VisualSettings, apply_project_recovery, command_catalog,
     discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
 };
 use or_ipc::{
@@ -325,17 +325,18 @@ fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
         return Err(CliError::usage(
             json,
-            "expected media probe, list, add, or remove",
+            "expected media probe, list, add, relink, or remove",
         ));
     };
     match action {
         "probe" => run_media_probe(&args[1..], json),
         "list" => run_media_list(&args[1..], json),
         "add" => run_media_add(&args[1..], json),
+        "relink" => run_media_relink(&args[1..], json),
         "remove" => run_media_remove(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown media action; expected probe, list, add, or remove",
+            "unknown media action; expected probe, list, add, relink, or remove",
         )),
     }
 }
@@ -396,6 +397,26 @@ fn run_media_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
         headless_media_remove(&path, id, json)?
     };
     Ok(render_media_remove(id, &result, attached, json))
+}
+
+fn run_media_relink(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--project", "--attach", "--id", "--source"],
+        &[],
+        json,
+    )?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let id = required_name(&options, "--id", json)?
+        .parse::<MediaId>()
+        .map_err(|_| CliError::usage(json, "--id must be a UUIDv4 media ID"))?;
+    let source = required_path(&options, "--source", json)?;
+    let (item, result) = if attached {
+        attached_media_relink(&path, id, &source, json)?
+    } else {
+        headless_media_relink(&path, id, &source, json)?
+    };
+    Ok(render_media_relink(&item, &result, attached, json))
 }
 
 fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
@@ -1503,6 +1524,80 @@ fn attached_media_add(
     Ok((item, result))
 }
 
+fn headless_media_relink(
+    project_path: &Path,
+    media_id: MediaId,
+    source_path: &Path,
+    json: bool,
+) -> Result<(MediaItem, CommandResult), CliError> {
+    let mut session =
+        ProjectFileSession::open(project_path).map_err(|error| CliError::file(error, json))?;
+    let (item, result) =
+        session
+            .relink_media(media_id, source_path)
+            .map_err(|error| match error {
+                ProjectFileMediaRelinkError::Preparation(error) => {
+                    CliError::media_import(error, json)
+                }
+                ProjectFileMediaRelinkError::Operation(error) => CliError::operation(error, json),
+            })?;
+    if result.changed {
+        session
+            .save()
+            .map_err(|error| CliError::file(error, json))?;
+    }
+    Ok((item, result))
+}
+
+fn attached_media_relink(
+    descriptor_path: &Path,
+    media_id: MediaId,
+    source_path: &Path,
+    json: bool,
+) -> Result<(MediaItem, CommandResult), CliError> {
+    let client =
+        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let query = QueryEnvelope::media_get(
+        description.project_id,
+        description.project_instance_id,
+        media_id,
+    );
+    let existing = expect_remote_query(
+        client
+            .application(ApplicationRequest::Query(query))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )?
+    .media_item
+    .ok_or_else(|| CliError::operation_message(json, "media.get returned no media item"))?;
+    let prepared =
+        prepare_media_import(source_path).map_err(|error| CliError::media_import(error, json))?;
+    let item = MediaItem::new(
+        existing.id(),
+        prepared.source().clone(),
+        prepared.metadata().clone(),
+    )
+    .map_err(|error| CliError::operation_message(json, error.to_string()))?;
+    let request = command_request(
+        "media.relink",
+        description.project_id,
+        description.project_instance_id,
+        description.project_revision,
+        json!({"item": item}),
+        json,
+    )?;
+    let result = expect_remote_command(
+        client
+            .application(ApplicationRequest::Command(request))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )?;
+    Ok((item, result))
+}
+
 fn headless_media_remove(
     project_path: &Path,
     id: MediaId,
@@ -1682,6 +1777,30 @@ fn render_media_add(
     } else {
         format!(
             "Imported and saved media {} at revision {}.",
+            item.id(),
+            result.after_revision
+        )
+    }
+}
+
+fn render_media_relink(
+    item: &MediaItem,
+    result: &CommandResult,
+    attached: bool,
+    json: bool,
+) -> String {
+    if json {
+        return json_string(json!({"media": item, "command": result}));
+    }
+    if attached {
+        format!(
+            "Relinked media {} at revision {}. Save the live project explicitly to persist it.",
+            item.id(),
+            result.after_revision
+        )
+    } else {
+        format!(
+            "Relinked and saved media {} at revision {}.",
             item.id(),
             result.after_revision
         )

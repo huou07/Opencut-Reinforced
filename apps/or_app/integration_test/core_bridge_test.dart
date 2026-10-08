@@ -172,6 +172,28 @@ void main() {
       limit: 10,
     )).items.single;
 
+    final replacementAudioPath = '${directory.path}/replacement-audio.wav';
+    await File(replacementAudioPath)
+        .writeAsBytes(_silentWave(sampleRate: 48000, frames: 24000));
+    final relinked = await gateway.relinkMedia(
+      session,
+      current,
+      media.mediaId,
+      replacementAudioPath,
+    );
+    expect(relinked.succeeded, isTrue);
+    current = relinked.view!;
+    final relinkedMedia = (await gateway.listMediaPage(
+      session,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(relinkedMedia.mediaId, media.mediaId);
+    expect(
+      Uri.parse(relinkedMedia.sourceUri).toFilePath(),
+      replacementAudioPath,
+    );
+
     final addedTrack = await gateway.addTimelineTrack(
       session,
       current,
@@ -1687,6 +1709,14 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String path,
   ) => _gateway.importMedia(session, current, path);
+
+  @override
+  Future<ProjectActionResult> relinkMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+    String path,
+  ) => _gateway.relinkMedia(session, current, mediaId, path);
 
   @override
   Future<ProjectActionResult> removeMedia(

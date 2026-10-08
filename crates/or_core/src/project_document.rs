@@ -108,6 +108,17 @@ impl ProjectDocument {
         item
     }
 
+    /// Replaces a media source and its probed metadata at an index checked by the command path.
+    pub(crate) fn replace_media_for_command(
+        &mut self,
+        index: usize,
+        item: MediaItem,
+        revision: ProjectRevision,
+    ) {
+        self.media[index] = item;
+        self.revision = revision;
+    }
+
     pub(crate) fn try_reserve_timeline_tracks(
         &mut self,
         additional: usize,

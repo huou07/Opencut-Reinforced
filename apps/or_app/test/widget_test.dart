@@ -378,6 +378,8 @@ void main() {
     expect(gateway.waveformRequests, 1);
     expect(gateway.lastSession!.view.revision, BigInt.zero);
 
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-video')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-remove-media-video')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('confirm-remove-media')));
@@ -584,6 +586,65 @@ void main() {
     );
   });
 
+  testWidgets('relinking replaces a source while keeping the media identity', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final media = _mediaFixture('media-relink', '/tmp/missing/original.wav');
+    final gateway = _FakeProjectGateway()..initialMedia = [media];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/relink.orproj'
+      ..mediaPath = '/tmp/recovered/replacement.wav';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Relink Media');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-relink')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('media-relink-media-relink')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.relinkMediaCalls, 1);
+    expect(gateway.lastRelinkMediaId, media.mediaId);
+    expect(gateway.lastRelinkSource, '/tmp/recovered/replacement.wav');
+    expect(gateway.lastSession!.media.single.mediaId, media.mediaId);
+    expect(
+      gateway.lastSession!.media.single.sourceUri,
+      '/tmp/recovered/replacement.wav',
+    );
+    expect(find.text('replacement.wav'), findsOneWidget);
+    expect(find.text('original.wav'), findsNothing);
+  });
+
+  testWidgets('relink requires exactly one replacement source', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-relink-many', '/tmp/offline.wav')];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/relink-many.orproj'
+      ..mediaPaths = ['/tmp/one.wav', '/tmp/two.wav'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Relink Many');
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-actions-media-relink-many')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('media-relink-media-relink-many')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.relinkMediaCalls, 0);
+    expect(
+      find.text('Select exactly one replacement media file.'),
+      findsOneWidget,
+    );
+    expect(
+      gateway.lastSession!.media.single.sourceUri,
+      'file:///tmp/offline.wav',
+    );
+  });
+
   testWidgets('removing media requires confirmation and updates the library', (
     tester,
   ) async {
@@ -594,6 +655,8 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Remove Media');
 
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-remove')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-remove-media-remove')));
     await tester.pumpAndSettle();
     expect(
@@ -3435,8 +3498,11 @@ class _FakeProjectGateway implements ProjectGateway {
   final List<int> timelineClipOffsets = [];
   final List<int> timelineMarkerOffsets = [];
   int importMediaCalls = 0;
+  int relinkMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportSource;
+  String? lastRelinkMediaId;
+  String? lastRelinkSource;
   final List<String> importMediaSources = [];
   String? lastRemovedMediaId;
   int saveCalls = 0;
@@ -4592,6 +4658,53 @@ class _FakeProjectGateway implements ProjectGateway {
     }
     final item = _mediaFixture('media-imported-$importMediaCalls', source);
     session.media.add(item);
+    session.view = _copyView(
+      session.view,
+      revision: session.view.revision + BigInt.one,
+      dirty: true,
+    );
+    session.emit('project_changed');
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> relinkMedia(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String mediaId,
+    String source,
+  ) async {
+    relinkMediaCalls++;
+    lastRelinkMediaId = mediaId;
+    lastRelinkSource = source;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) {
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'REVISION_CONFLICT',
+        message: 'revision changed',
+      );
+    }
+    final index = session.media.indexWhere((item) => item.mediaId == mediaId);
+    if (index < 0) {
+      return const ProjectActionResult(
+        succeeded: false,
+        errorCode: 'MEDIA_NOT_FOUND',
+        message: 'media not found',
+      );
+    }
+    final previous = session.media[index];
+    session.media[index] = ProjectMediaItem(
+      mediaId: previous.mediaId,
+      sourceUri: source,
+      formatNames: previous.formatNames,
+      duration: previous.duration,
+      videoDetails: previous.videoDetails,
+      audioDetails: previous.audioDetails,
+      containerDuration: previous.containerDuration,
+      firstVideoDuration: previous.firstVideoDuration,
+      firstAudioDuration: previous.firstAudioDuration,
+    );
     session.view = _copyView(
       session.view,
       revision: session.view.revision + BigInt.one,

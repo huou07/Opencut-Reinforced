@@ -1,9 +1,10 @@
 use crate::project_storage::create_project_file_new;
 use crate::{
-    ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaImportError,
-    MediaItem, OperationError, ProjectDocument, ProjectSession, ProjectStorageError,
-    RecoveryInspection, discard_project_recovery, inspect_project_recovery, load_project_file,
-    prepare_media_import, save_project_file_atomic, write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, CommandEnvelope, CommandResult, MediaId,
+    MediaImportError, MediaItem, MediaMetadataValidationError, OperationError, OperationErrorCode,
+    ProjectDocument, ProjectSession, ProjectStorageError, RecoveryInspection,
+    discard_project_recovery, inspect_project_recovery, load_project_file, prepare_media_import,
+    save_project_file_atomic, write_recovery_checkpoint,
 };
 use serde::Serialize;
 use std::{
@@ -60,6 +61,30 @@ impl fmt::Display for ProjectFileMediaImportError {
 }
 
 impl Error for ProjectFileMediaImportError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Preparation(error) => Some(error),
+            Self::Operation(error) => Some(error),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ProjectFileMediaRelinkError {
+    Preparation(MediaImportError),
+    Operation(OperationError),
+}
+
+impl fmt::Display for ProjectFileMediaRelinkError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Preparation(error) => write!(formatter, "{error}"),
+            Self::Operation(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
+impl Error for ProjectFileMediaRelinkError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Preparation(error) => Some(error),
@@ -209,6 +234,49 @@ impl ProjectFileSession {
             .session
             .execute_command(command)
             .map_err(ProjectFileMediaImportError::Operation)?;
+        Ok((item, result))
+    }
+
+    pub fn relink_media(
+        &mut self,
+        media_id: MediaId,
+        path: impl AsRef<Path>,
+    ) -> Result<(MediaItem, CommandResult), ProjectFileMediaRelinkError> {
+        if !self
+            .session
+            .project()
+            .media_items()
+            .iter()
+            .any(|item| item.id() == media_id)
+        {
+            return Err(ProjectFileMediaRelinkError::Operation(OperationError::new(
+                OperationErrorCode::MediaNotFound,
+            )));
+        }
+        let project_id = self.session.project_id();
+        let project_instance_id = self.session.project_instance_id();
+        let expected_revision = self.session.project_revision();
+        let prepared = prepare_media_import(path.as_ref())
+            .map_err(ProjectFileMediaRelinkError::Preparation)?;
+        let item = MediaItem::new(
+            media_id,
+            prepared.source().clone(),
+            prepared.metadata().clone(),
+        )
+        .map_err(|_: MediaMetadataValidationError| {
+            ProjectFileMediaRelinkError::Operation(OperationError::new(
+                OperationErrorCode::InvalidArguments,
+            ))
+        })?;
+        let result = self
+            .session
+            .execute_command(CommandEnvelope::relink_media(
+                project_id,
+                project_instance_id,
+                expected_revision,
+                item.clone(),
+            ))
+            .map_err(ProjectFileMediaRelinkError::Operation)?;
         Ok((item, result))
     }
 

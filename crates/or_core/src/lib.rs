@@ -68,8 +68,8 @@ pub use project_document::{
     encode_project,
 };
 pub use project_file_session::{
-    ProjectFileMediaImportError, ProjectFileSession, ProjectFileSessionError,
-    ProjectFileSessionErrorCode,
+    ProjectFileMediaImportError, ProjectFileMediaRelinkError, ProjectFileSession,
+    ProjectFileSessionError, ProjectFileSessionErrorCode,
 };
 pub use project_recovery::{
     CURRENT_RECOVERY_SCHEMA_VERSION, MAX_RECOVERY_FILE_BYTES, ProjectRecoveryError,

@@ -39,7 +39,7 @@ next implementation task.
 
 **MVP FOUNDATION:** create and open projects with initial project options; recent project access; periodic recovery checkpoints; explicit crash-safe atomic Save and recovery; clear saved or unsaved state; reliable save and reopen. Autosave updates a recovery checkpoint and never silently overwrites the canonical project file.
 
-**PLANNED:** pinned and archived project organization; full project settings; manual snapshots; before-agent and before-template snapshots; version history; backup; project migrations; collect project and consolidate media; relink and replace media; offline-media state; proxy and optimized media; disposable cache; workspace presets; Simple and Advanced workspace modes.
+**PLANNED:** pinned and archived project organization; full project settings; manual snapshots; before-agent and before-template snapshots; version history; backup; project migrations; collect project and consolidate media; offline-media detection and bulk relink; proxy and optimized media; disposable cache; workspace presets; Simple and Advanced workspace modes. The media library supports replacing one item's source through a re-probed, undoable `media.relink` command while preserving its MediaId and timeline references.
 
 **Workflow references:** Home and Projects support quick create, open, recent work, pinning, archive state, search, filters, sort, and grid or list presentation. Project-safety workflows include snapshot preview, restore, and duplicate. Import media and folders, template entry, and return-to-project navigation are represented as product workflows.
 

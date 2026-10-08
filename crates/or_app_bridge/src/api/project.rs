@@ -1861,6 +1861,61 @@ impl ProjectHostHandle {
         ))
     }
 
+    /// Re-probes a replacement source without changing the target media identity.
+    pub fn relink_media(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        media_id: String,
+        path: String,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        let media_id = match MediaId::from_str(&media_id) {
+            Ok(media_id) => media_id,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_MEDIA_ID".to_owned(),
+                    message: error.to_string(),
+                });
+            }
+        };
+        let prepared = match prepare_import_source(&path) {
+            Ok(item) => item,
+            Err(error) => {
+                return ProjectActionResult {
+                    succeeded: false,
+                    error_code: error.code_str().to_owned(),
+                    message: error.to_string(),
+                    view: None,
+                };
+            }
+        };
+        let item = match MediaItem::new(
+            media_id,
+            prepared.source().clone(),
+            prepared.metadata().clone(),
+        ) {
+            Ok(item) => item,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_MEDIA_METADATA".to_owned(),
+                    message: error.to_string(),
+                });
+            }
+        };
+        self.dispatch_command(CommandEnvelope::relink_media(
+            project_id,
+            project_instance_id,
+            revision,
+            item,
+        ))
+    }
+
     pub fn remove_media(
         &self,
         project_id: String,

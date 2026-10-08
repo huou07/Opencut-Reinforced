@@ -14,6 +14,7 @@ const HISTORY_UNDO_ID: &str = "history.undo";
 const HISTORY_REDO_ID: &str = "history.redo";
 const MEDIA_ADD_ID: &str = "media.add";
 const MEDIA_REMOVE_ID: &str = "media.remove";
+const MEDIA_RELINK_ID: &str = "media.relink";
 const MEDIA_LIST_ID: &str = "media.list";
 const MEDIA_GET_ID: &str = "media.get";
 const TIMELINE_TRACK_ADD_ID: &str = "timeline.track.add";
@@ -59,7 +60,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 21] = [
+const COMMANDS: [CommandDescriptor; 22] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -86,6 +87,12 @@ const COMMANDS: [CommandDescriptor; 21] = [
     },
     CommandDescriptor {
         id: MEDIA_REMOVE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: MEDIA_RELINK_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -291,6 +298,22 @@ impl CommandEnvelope {
             project_instance_id,
             expected_project_revision,
             arguments: serde_json::json!({ "id": id }),
+        }
+    }
+
+    pub fn relink_media(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        item: MediaItem,
+    ) -> Self {
+        Self {
+            command_id: MEDIA_RELINK_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "item": item }),
         }
     }
 
@@ -974,6 +997,11 @@ pub enum ProjectChange {
         item: MediaItem,
         index: usize,
     },
+    MediaRelinked {
+        before: MediaItem,
+        after: MediaItem,
+        index: usize,
+    },
     TimelineTrackAdded {
         track_id: TrackId,
         track_kind: TrackKind,
@@ -1185,6 +1213,39 @@ impl ChangeSet {
                     ))
                 }
             }
+            ProjectChange::MediaRelinked {
+                before,
+                after,
+                index,
+            } => {
+                let (expected, target) = if reverse {
+                    (after, before)
+                } else {
+                    (before, after)
+                };
+                ensure_media_matches_at(project, *index, expected)?;
+                if project
+                    .media_items()
+                    .iter()
+                    .enumerate()
+                    .any(|(candidate_index, item)| {
+                        candidate_index != *index && item.source() == target.source()
+                    })
+                    || project
+                        .timeline()
+                        .validate_replacing_media(project.media_items(), target)
+                        .is_err()
+                {
+                    return Err(OperationError::new(OperationErrorCode::HistoryConflict));
+                }
+                Ok((
+                    StagedHistoryChange::ReplaceMedia {
+                        item: target.clone(),
+                        index: *index,
+                    },
+                    Self::media_relinked(expected.clone(), target.clone(), *index)?,
+                ))
+            }
             ProjectChange::TimelineTrackAdded {
                 track_id,
                 track_kind,
@@ -1350,6 +1411,21 @@ impl ChangeSet {
             ripple_history_guard: None,
         }
     }
+
+    fn media_relinked(
+        before: MediaItem,
+        after: MediaItem,
+        index: usize,
+    ) -> Result<Self, OperationError> {
+        if before.id() != after.id() {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        Self::try_single(ProjectChange::MediaRelinked {
+            before,
+            after,
+            index,
+        })
+    }
 }
 
 enum StagedHistoryChange {
@@ -1360,6 +1436,10 @@ enum StagedHistoryChange {
         index: usize,
     },
     RemoveMedia {
+        index: usize,
+    },
+    ReplaceMedia {
+        item: MediaItem,
         index: usize,
     },
     InsertTimelineTrack {
@@ -1646,7 +1726,7 @@ pub struct OperationError {
 }
 
 impl OperationError {
-    fn new(code: OperationErrorCode) -> Self {
+    pub(crate) fn new(code: OperationErrorCode) -> Self {
         Self {
             code,
             current_revision: None,
@@ -1946,6 +2026,7 @@ impl ProjectSession {
             }
             MEDIA_ADD_ID => self.apply_media_add(envelope.arguments)?,
             MEDIA_REMOVE_ID => self.apply_media_remove(envelope.arguments)?,
+            MEDIA_RELINK_ID => self.apply_media_relink(envelope.arguments)?,
             TIMELINE_TRACK_ADD_ID => {
                 self.apply_timeline_track_add(envelope.arguments, schema_version)?
             }
@@ -2171,6 +2252,59 @@ impl ProjectSession {
         let change_set = ChangeSet::media_removed(item, index);
         // All validation, revision checks, and history allocation are complete.
         self.project.remove_media_for_command(index, after_revision);
+        self.history.undo.push(change_set.clone());
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_media_relink(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: MediaRelinkArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if arguments.item.metadata().validate().is_err() {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let Some(index) = self
+            .project
+            .media_items()
+            .iter()
+            .position(|item| item.id() == arguments.item.id())
+        else {
+            return Err(OperationError::new(OperationErrorCode::MediaNotFound));
+        };
+        let before = &self.project.media_items()[index];
+        if before == &arguments.item {
+            return Ok(ChangeSet::default());
+        }
+        if self
+            .project
+            .media_items()
+            .iter()
+            .enumerate()
+            .any(|(candidate_index, item)| {
+                candidate_index != index && item.source() == arguments.item.source()
+            })
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::MediaSourceAlreadyExists,
+            ));
+        }
+        self.project
+            .timeline()
+            .validate_replacing_media(self.project.media_items(), &arguments.item)
+            .map_err(|_| OperationError::new(OperationErrorCode::TimelineMediaIncompatible))?;
+
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        let change_set = ChangeSet::media_relinked(before.clone(), arguments.item.clone(), index)?;
+        self.project
+            .replace_media_for_command(index, arguments.item, after_revision);
         self.history.undo.push(change_set.clone());
         self.history.redo.clear();
         Ok(change_set)
@@ -3405,6 +3539,10 @@ impl ProjectSession {
             StagedHistoryChange::RemoveMedia { index } => {
                 self.project.remove_media_for_command(index, after_revision);
             }
+            StagedHistoryChange::ReplaceMedia { item, index } => {
+                self.project
+                    .replace_media_for_command(index, item, after_revision);
+            }
             StagedHistoryChange::InsertTimelineTrack {
                 track_id,
                 kind,
@@ -3506,6 +3644,12 @@ struct MediaAddArguments {
 #[serde(deny_unknown_fields)]
 struct MediaRemoveArguments {
     id: MediaId,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaRelinkArguments {
+    item: MediaItem,
 }
 
 #[derive(Deserialize)]
@@ -5225,6 +5369,15 @@ mod tests {
         )
     }
 
+    fn media_relink(item: MediaItem, revision: u64) -> CommandEnvelope {
+        CommandEnvelope::relink_media(
+            ProjectId::from_str(PROJECT_ID).unwrap(),
+            ProjectInstanceId::from_str(INSTANCE_ID).unwrap(),
+            ProjectRevision::new(revision),
+            item,
+        )
+    }
+
     fn session_with_state(name: &str, revision: u64) -> ProjectSession {
         let project = decode_project(&format!(
             r#"{{"format":"opencut-reinforced-project","schema_version":1,"project":{{"id":"{PROJECT_ID}","revision":{revision},"name":"{name}"}}}}"#
@@ -5522,6 +5675,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "media.relink",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.track.add",
                     schema_version: 2,
                     mutates_project: true,
@@ -5657,7 +5816,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 21);
+        assert_eq!(COMMANDS.len(), 22);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -8727,6 +8886,113 @@ mod tests {
             OperationErrorCode::MediaNotFound
         );
         assert_eq!(session.project_revision(), ProjectRevision::new(2));
+    }
+
+    #[test]
+    fn media_relink_preserves_identity_and_timeline_references_through_history() {
+        let mut session = fixed_session();
+        let original = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/original.mkv",
+        );
+        let replacement = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/relinked.mkv",
+        );
+        let media_id = original.id();
+        session
+            .execute_command(media_add(original.clone(), 0))
+            .unwrap();
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::from_tracks_for_codec(vec![
+                TimelineTrack::from_parts_for_codec(
+                    TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap(),
+                    TrackKind::Video,
+                    vec![TimelineClip::from_parts_for_codec(
+                        ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap(),
+                        media_id,
+                        RationalTime::ZERO,
+                        TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 1).unwrap())
+                            .unwrap(),
+                    )],
+                ),
+            ]));
+
+        let result = session
+            .execute_command(media_relink(replacement.clone(), 1))
+            .unwrap();
+        assert_eq!(result.after_revision, ProjectRevision::new(2));
+        assert_eq!(session.project().media_items(), &[replacement.clone()]);
+        assert!(session.project().timeline().references_media(media_id));
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::MediaRelinked { before, after, index: 0 }]
+                if before == &original && after == &replacement
+        ));
+
+        let undone = session.execute_command(undo(2)).unwrap();
+        assert_eq!(session.project().media_items(), &[original.clone()]);
+        assert!(session.project().timeline().references_media(media_id));
+        assert!(matches!(
+            undone.change_set.changes(),
+            [ProjectChange::MediaRelinked { before, after, index: 0 }]
+                if before == &replacement && after == &original
+        ));
+
+        session.execute_command(redo(3)).unwrap();
+        assert_eq!(session.project().media_items(), &[replacement]);
+        assert_eq!(session.project_revision(), ProjectRevision::new(4));
+    }
+
+    #[test]
+    fn media_relink_rejects_incompatible_or_duplicate_sources_atomically() {
+        let mut session = fixed_session();
+        let original = media_item(
+            "00000000-0000-4000-8000-000000000001",
+            "file:///media/original.mkv",
+        );
+        let other = media_item(
+            "00000000-0000-4000-8000-000000000002",
+            "file:///media/other.mkv",
+        );
+        session
+            .execute_command(media_add(original.clone(), 0))
+            .unwrap();
+        session
+            .execute_command(media_add(other.clone(), 1))
+            .unwrap();
+        session
+            .project
+            .set_timeline_for_test(ProjectTimeline::from_tracks_for_codec(vec![
+                TimelineTrack::from_parts_for_codec(
+                    TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap(),
+                    TrackKind::Video,
+                    vec![TimelineClip::from_parts_for_codec(
+                        ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap(),
+                        original.id(),
+                        RationalTime::ZERO,
+                        TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 1).unwrap())
+                            .unwrap(),
+                    )],
+                ),
+            ]));
+        let before_project = session.project().clone();
+        let before_undo = session.history.undo.clone();
+
+        let incompatible =
+            audio_media_item(&original.id().to_string(), "file:///media/audio-only.mkv");
+        assert_eq!(
+            code(&session.execute_command(media_relink(incompatible, 2))),
+            OperationErrorCode::TimelineMediaIncompatible
+        );
+        let duplicate = media_item(&original.id().to_string(), other.source().uri());
+        assert_eq!(
+            code(&session.execute_command(media_relink(duplicate, 2))),
+            OperationErrorCode::MediaSourceAlreadyExists
+        );
+        assert_eq!(session.project(), &before_project);
+        assert_eq!(session.history.undo, before_undo);
     }
 
     #[test]

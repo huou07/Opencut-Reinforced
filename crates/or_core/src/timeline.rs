@@ -917,6 +917,21 @@ impl ProjectTimeline {
         )
     }
 
+    pub(crate) fn validate_replacing_media(
+        &self,
+        media: &[MediaItem],
+        replacement: &MediaItem,
+    ) -> Result<(), TimelineValidationError> {
+        self.validate_with_limits_and_replacement(
+            media,
+            MAX_TIMELINE_TRACKS,
+            MAX_TIMELINE_CLIPS,
+            MAX_TIMELINE_CLIPS_PER_TRACK,
+            MAX_TIMELINE_MARKERS,
+            Some(replacement),
+        )
+    }
+
     fn validate_with_limits(
         &self,
         media: &[MediaItem],
@@ -924,6 +939,25 @@ impl ProjectTimeline {
         max_clips: usize,
         max_clips_per_track: usize,
         max_markers: usize,
+    ) -> Result<(), TimelineValidationError> {
+        self.validate_with_limits_and_replacement(
+            media,
+            max_tracks,
+            max_clips,
+            max_clips_per_track,
+            max_markers,
+            None,
+        )
+    }
+
+    fn validate_with_limits_and_replacement(
+        &self,
+        media: &[MediaItem],
+        max_tracks: usize,
+        max_clips: usize,
+        max_clips_per_track: usize,
+        max_markers: usize,
+        replacement: Option<&MediaItem>,
     ) -> Result<(), TimelineValidationError> {
         if self.tracks.len() > max_tracks {
             return Err(TimelineValidationError);
@@ -935,6 +969,9 @@ impl ProjectTimeline {
 
         let mut media_by_id = HashMap::with_capacity(media.len());
         for item in media {
+            let item = replacement
+                .filter(|replacement| replacement.id() == item.id())
+                .unwrap_or(item);
             media_by_id.insert(item.id(), item);
         }
 

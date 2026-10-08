@@ -38,6 +38,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onLoadMoreMedia,
     this.onRefreshMedia,
     this.onRemoveMedia,
+    this.onRelinkMedia,
     this.onAddVideoTrack,
     this.onAddAudioTrack,
     this.onAddTextTrack,
@@ -93,6 +94,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
+  final ValueChanged<ProjectMediaItem>? onRelinkMedia;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
@@ -406,6 +408,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onLoadMoreMedia: widget.onLoadMoreMedia,
                   onRefreshMedia: widget.onRefreshMedia,
                   onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
+                  onRelinkMedia: widget.busy ? null : widget.onRelinkMedia,
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -654,6 +657,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onLoadMoreMedia: widget.onLoadMoreMedia,
                 onRefreshMedia: widget.onRefreshMedia,
                 onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
+                onRelinkMedia: widget.busy ? null : widget.onRelinkMedia,
                 onAddMediaToTimeline: widget.busy
                     ? null
                     : widget.onAddMediaToTimeline,
@@ -1004,6 +1008,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onLoadMoreMedia,
     required this.onRefreshMedia,
     required this.onRemoveMedia,
+    required this.onRelinkMedia,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1021,6 +1026,7 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
+  final ValueChanged<ProjectMediaItem>? onRelinkMedia;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1047,6 +1053,7 @@ class _EditorToolPanel extends StatelessWidget {
         onLoadMore: onLoadMoreMedia,
         onRefresh: onRefreshMedia,
         onRemove: onRemoveMedia,
+        onRelink: onRelinkMedia,
         onAddMediaToTimeline: onAddMediaToTimeline,
         onClose: onClose,
       );
@@ -1102,6 +1109,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onLoadMore,
     required this.onRefresh,
     required this.onRemove,
+    required this.onRelink,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1117,6 +1125,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   final VoidCallback? onLoadMore;
   final VoidCallback? onRefresh;
   final ValueChanged<ProjectMediaItem>? onRemove;
+  final ValueChanged<ProjectMediaItem>? onRelink;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1233,6 +1242,9 @@ class _MediaLibraryPanel extends StatelessWidget {
                         onRemove: onRemove == null
                             ? null
                             : () => onRemove!(item),
+                        onRelink: onRelink == null
+                            ? null
+                            : () => onRelink!(item),
                       ),
                     ),
                   if (error != null) ...[
@@ -1277,12 +1289,14 @@ class _MediaLibraryItem extends StatelessWidget {
     required this.item,
     required this.preview,
     required this.onAddToTimeline,
+    required this.onRelink,
     required this.onRemove,
   });
 
   final ProjectMediaItem item;
   final ProjectMediaPreview? preview;
   final VoidCallback? onAddToTimeline;
+  final VoidCallback? onRelink;
   final VoidCallback? onRemove;
 
   @override
@@ -1388,13 +1402,38 @@ class _MediaLibraryItem extends StatelessWidget {
                 icon: const Icon(Icons.playlist_add_outlined, size: 18),
                 color: OrColors.textMuted,
               ),
-            IconButton(
-              key: ValueKey('media-remove-${item.mediaId}'),
-              tooltip: 'Remove from Project',
-              onPressed: onRemove,
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.remove_circle_outline, size: 17),
-              color: OrColors.textMuted,
+            PopupMenuButton<String>(
+              key: ValueKey('media-actions-${item.mediaId}'),
+              tooltip: 'Media actions',
+              onSelected: onRelink == null && onRemove == null
+                  ? null
+                  : (action) {
+                      if (action == 'relink') onRelink?.call();
+                      if (action == 'remove') onRemove?.call();
+                    },
+              itemBuilder: (context) => [
+                if (onRelink != null)
+                  PopupMenuItem(
+                    key: ValueKey('media-relink-${item.mediaId}'),
+                    value: 'relink',
+                    child: const Text('Relink Source'),
+                  ),
+                if (onRemove != null)
+                  PopupMenuItem(
+                    key: ValueKey('media-remove-${item.mediaId}'),
+                    value: 'remove',
+                    child: const Text('Remove from Project'),
+                  ),
+              ],
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(
+                  Icons.more_vert,
+                  size: 17,
+                  color: OrColors.textMuted,
+                ),
+              ),
             ),
           ],
         ),

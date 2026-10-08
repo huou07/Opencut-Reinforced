@@ -920,6 +920,12 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String source,
   );
+  Future<ProjectActionResult> relinkMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+    String source,
+  );
   Future<ProjectActionResult> removeMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,

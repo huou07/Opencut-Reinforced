@@ -644,6 +644,55 @@ fn headless_media_commands_import_page_remove_and_save() {
 }
 
 #[test]
+fn media_relink_preserves_identity_for_file_and_attached_sessions() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Relink CLI");
+    let original_source = directory.media_path("cli sample café.mkv");
+    let replacement_source = directory.media_path("path with spaces-媒体.mkv");
+    let probe_stub = directory.probe_stub();
+
+    let mut add_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    add_args.extend(words(&["--source"]));
+    add_args.push(original_source.as_os_str().to_owned());
+    add_args.push("--json".into());
+    let (added, _) = json_success_with_probe(add_args, &probe_stub);
+    let media_id = added["media"]["id"].as_str().unwrap();
+
+    let mut relink_args = path_args(&["media", "relink"], "--project", &project_path, &[]);
+    relink_args.extend(words(&["--id", media_id, "--source"]));
+    relink_args.push(replacement_source.as_os_str().to_owned());
+    relink_args.push("--json".into());
+    let (relinked, _) = json_success_with_probe(relink_args, &probe_stub);
+    assert_eq!(relinked["media"]["id"], media_id);
+    assert_eq!(relinked["command"]["command_id"], "media.relink");
+    assert_eq!(relinked["command"]["after_revision"], 2);
+    assert_ne!(
+        relinked["media"]["source"]["uri"],
+        added["media"]["source"]["uri"]
+    );
+
+    let host =
+        LiveProjectHost::start(ProjectFileSession::open(&project_path).unwrap(), None).unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let mut attached_args = attach_args(&["media", "relink"], &descriptor, &[]);
+    attached_args.extend(words(&["--id", media_id, "--source"]));
+    attached_args.push(original_source.as_os_str().to_owned());
+    attached_args.push("--json".into());
+    let (attached, _) = json_success_with_probe(attached_args, &probe_stub);
+    assert_eq!(attached["media"]["id"], media_id);
+    assert_eq!(attached["command"]["command_id"], "media.relink");
+    assert_eq!(attached["command"]["after_revision"], 3);
+    assert!(host.is_dirty().unwrap());
+    let (listed, _) = json_success(attach_args(&["media", "list"], &descriptor, &["--json"]));
+    assert_eq!(listed["media_page"]["items"][0]["id"], media_id);
+    assert_eq!(
+        listed["media_page"]["items"][0]["source"]["uri"],
+        attached["media"]["source"]["uri"]
+    );
+}
+
+#[test]
 fn attached_media_commands_share_history_and_wait_for_explicit_save() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();

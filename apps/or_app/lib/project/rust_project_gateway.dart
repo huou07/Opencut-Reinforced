@@ -983,6 +983,22 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> relinkMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+    String source,
+  ) async => _action(
+    await _host(session).relinkMedia(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      mediaId: mediaId,
+      path: source,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> removeMedia(
     ProjectSessionHandle session,
     ProjectReadModel current,

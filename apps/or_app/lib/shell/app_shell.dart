@@ -307,6 +307,7 @@ class _AppShellState extends State<AppShell> {
               onLoadMoreMedia: _loadMoreMedia,
               onRefreshMedia: _refreshMediaLibrary,
               onRemoveMedia: _removeMedia,
+              onRelinkMedia: _relinkMedia,
               onAddVideoTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.video),
               onAddAudioTrack: () =>
@@ -1775,6 +1776,59 @@ class _AppShellState extends State<AppShell> {
       (session, current) =>
           widget.projectGateway.removeMedia(session, current, item.mediaId),
     );
+  }
+
+  Future<void> _relinkMedia(ProjectMediaItem item) async {
+    final session = _activeSession;
+    if (session == null || _activeProject == null || _busy) return;
+    List<String> sources;
+    try {
+      sources = await widget.projectFilePicker.openMediaSources();
+    } catch (_) {
+      _showUnavailable('A replacement media file could not be selected.');
+      return;
+    }
+    sources = sources.toSet().toList(growable: false);
+    if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
+      return;
+    }
+    if (sources.length != 1) {
+      _showUnavailable('Select exactly one replacement media file.');
+      return;
+    }
+    if (Platform.isAndroid) {
+      try {
+        if (!await OrViewerTexture.setMediaSources(sources)) {
+          _showUnavailable('Android media access could not be opened.');
+          return;
+        }
+      } on PlatformException catch (error) {
+        _showUnavailable(
+          error.message ?? 'Android media access is unavailable.',
+        );
+        return;
+      } on MissingPluginException {
+        _showUnavailable('Android media access is unavailable.');
+        return;
+      }
+    }
+    await _runProjectAction((session, current) {
+      if (!identical(session, _activeSession)) {
+        return Future.value(
+          const ProjectActionResult(
+            succeeded: false,
+            errorCode: 'PROJECT_CLOSING',
+            message: 'The project is closing.',
+          ),
+        );
+      }
+      return widget.projectGateway.relinkMedia(
+        session,
+        current,
+        item.mediaId,
+        sources.single,
+      );
+    });
   }
 
   Future<void> _loadMoreMedia() async {
