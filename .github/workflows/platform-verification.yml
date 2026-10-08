@@ -806,7 +806,7 @@ jobs:
           $source = Join-Path $env:RUNNER_TEMP 'zlib-1.3.2'
           $build = Join-Path $env:RUNNER_TEMP 'zlib-1.3.2-build'
           $prefix = Join-Path $env:RUNNER_TEMP 'zlib-1.3.2-install'
-          Invoke-WebRequest -Uri 'https://zlib.net/fossils/zlib-1.3.2.tar.gz' -OutFile $archive
+          Invoke-WebRequest -Uri 'https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz' -OutFile $archive
           $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actualHash -ne 'bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16') { throw "zlib source hash mismatch: $actualHash" }
           tar -xzf $archive -C $env:RUNNER_TEMP
@@ -952,7 +952,7 @@ jobs:
             echo "Target: Windows x86_64 (MSVC)"
             echo "FFmpeg release: 8.1.3"
             echo "zlib release: 1.3.2 (statically linked into Windows ffmpeg.exe; zs.lib exposed as zlib.lib for FFmpeg configure)"
-            echo "zlib source URL: https://zlib.net/fossils/zlib-1.3.2.tar.gz"
+            echo "zlib source URL: https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz"
             echo "zlib source SHA-256: bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
             echo "Rust binding: ffmpeg-the-third 6.0.0"
             echo "Official source URL: https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz"

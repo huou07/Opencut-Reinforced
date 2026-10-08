@@ -61,7 +61,9 @@ The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify
 runtime packaging and loading. The Windows probe uses MSYS2 for `pkg-config`
 path handling, so Visual Studio's `link.exe` must take precedence over
 MSYS2's `/usr/bin/link.exe` when Cargo links the MSVC target. The Windows
-texture adapter also parenthesizes `numeric_limits::max()` to avoid the
+build fetches zlib 1.3.2 from the upstream release asset and checks its pinned
+SHA-256 before building the static helper dependency. The Windows texture
+adapter also parenthesizes `numeric_limits::max()` to avoid the
 function-like `max` macro from Windows headers. Its callback follows Flutter
 3.47.5's C++ `(width, height)` signature rather than the C callback's extra
 `user_data` parameter. Plugin registration creates its `unique_ptr` inside the
