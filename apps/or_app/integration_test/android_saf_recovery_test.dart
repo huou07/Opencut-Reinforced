@@ -10,8 +10,16 @@ import 'package:or_app_bridge/or_app_bridge.dart' as rust;
 class _RecoveryGateway extends RustProjectGateway {
   ProjectSessionHandle? session;
   String? openedPath;
+  String? inspectedPath;
+  ProjectRecoveryInspection? inspection;
   ProjectPreviewState? playResult;
   int playCalls = 0;
+
+  @override
+  Future<ProjectRecoveryInspection> inspectRecovery(String path) async {
+    inspectedPath = path;
+    return inspection = await super.inspectRecovery(path);
+  }
 
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
@@ -54,10 +62,29 @@ void main() {
     );
     debugPrint('ANDROID_SAF_DOCUMENTS_UI_READY');
     await tester.tap(find.byKey(const ValueKey('home-open-project')));
-    await _until(
-      tester,
-      () => find.text('Recovery checkpoint found').evaluate().isNotEmpty,
-    );
+    try {
+      await _until(
+        tester,
+        () => find.text('Recovery checkpoint found').evaluate().isNotEmpty,
+      );
+    } catch (_) {
+      final visibleText = find
+          .byType(Text)
+          .evaluate()
+          .map((element) => (element.widget as Text).data)
+          .whereType<String>()
+          .join(' | ');
+      debugPrint(
+        'ANDROID_SAF_RECOVERY_DIAGNOSTIC '
+        'inspectedPath=${gateway.inspectedPath} '
+        'kind=${gateway.inspection?.kind} '
+        'baseRevision=${gateway.inspection?.baseRevision} '
+        'recoveryRevision=${gateway.inspection?.recoveryRevision} '
+        'recoveryName=${gateway.inspection?.recoveryName} '
+        'visibleText=$visibleText',
+      );
+      rethrow;
+    }
     expect(find.textContaining('Process recovery acceptance'), findsOneWidget);
     await tester.tap(find.text('Recover'));
     await _until(
