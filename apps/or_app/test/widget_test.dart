@@ -2731,6 +2731,42 @@ void main() {
     );
   });
 
+  testWidgets('compact recovery opens with a readable unavailable viewer', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(320, 640));
+    final gateway = _FakeProjectGateway()
+      ..recoveryInspection = _inspection(ProjectRecoveryKind.candidate)
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()
+      ..openPath = '/tmp/compact-recovery.orproj'
+      ..syncFailureMessage =
+          'The project is saved on this device, but could not be synchronized.';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    await tester.tap(find.byKey(const ValueKey('home-open-project')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Recover'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.applyRecoveryCalls, 1);
+    expect(gateway.openCalls, 1);
+    expect(
+      find.byKey(const ValueKey('workspace-project-name')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('editor-shell-preview')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'recovery conflict needs confirmed discard and never offers recover',
     (tester) async {

@@ -99,11 +99,44 @@ void main() {
     }
     expect(find.textContaining('Process recovery acceptance'), findsOneWidget);
     await tester.tap(find.text('Recover'));
-    await _until(
-      tester,
-      () =>
-          gateway.session != null && find.byType(Texture).evaluate().isNotEmpty,
-    );
+    try {
+      await _until(
+        tester,
+        () =>
+            gateway.session != null &&
+            find.byType(Texture).evaluate().isNotEmpty,
+      );
+    } catch (_) {
+      final visibleText = find
+          .byType(Text)
+          .evaluate()
+          .map((element) => (element.widget as Text).data)
+          .whereType<String>()
+          .join(' | ');
+      ProjectReadModel? openedProject;
+      if (gateway.session != null) {
+        try {
+          openedProject = await gateway.summary(gateway.session!);
+        } catch (_) {
+          // Keep the recovery-state diagnostic even if the session is stale.
+        }
+      }
+      debugPrint(
+        'ANDROID_SAF_RECOVERY_AFTER_APPLY_DIAGNOSTIC '
+        'openedPath=${gateway.openedPath} '
+        'sessionOpened=${gateway.session != null} '
+        'projectName=${openedProject?.name} '
+        'projectRevision=${openedProject?.revision} '
+        'textureVisible=${find.byType(Texture).evaluate().isNotEmpty} '
+        'visibleText=$visibleText',
+      );
+      try {
+        await binding.takeScreenshot('saf-recovery-after-apply-failure');
+      } catch (_) {
+        // The log diagnostic remains useful when the platform cannot capture.
+      }
+      rethrow;
+    }
 
     expect(gateway.openedPath, contains('/files/or-projects/'));
     final summary = await gateway.summary(gateway.session!);

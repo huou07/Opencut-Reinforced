@@ -216,6 +216,9 @@ today.
 - At 320 px width, the mobile top bar keeps project, export, cancel, and command
   controls usable without overflow. Save/export status remains available through
   an accessible tooltip when its full text does not fit.
+- The compact viewer's loading and unavailable states fit their allocated space
+  during recovery and surface initialization, including very small transient
+  viewports; status stays available to screen readers without a clipped message.
 - Android export uses the shared project/timeline semantics, reports progress
   and failure in that status area, supports cancellation while active, and
   publishes a completed Matroska file to the selected DocumentsUI destination.

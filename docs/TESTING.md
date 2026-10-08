@@ -950,6 +950,10 @@ setup and overwrite the provider project before recovery. The same package data
 and persisted SAF grant must survive the recovery APK install. The recovery PID
 observer preserves transient ADB shell errors and keeps polling within a fixed
 60-second bound; failure to observe a distinct process still fails the journey.
+If recovery does not restore the preview texture, the driver retains the current
+screen capture and logs whether the project session opened, its name/revision,
+and visible UI text. The compact viewer uses an accessible icon status when its
+allocated surface is too small for the full unavailable message.
 
 The retained SAF report includes SHA-256 values for the provider project at
 fixture seeding and immediately before process restart. Debug builds also log

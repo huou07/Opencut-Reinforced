@@ -1795,27 +1795,41 @@ class _ViewerPanelState extends State<_ViewerPanel>
                   )
                 else
                   Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          hasSession
-                              ? Icons.error_outline
-                              : Icons.movie_outlined,
-                          size: 22,
-                          color: OrColors.textMuted,
-                        ),
-                        const SizedBox(height: OrSpacing.x2),
-                        Text(
-                          hasSession
-                              ? 'Viewer texture unavailable'
-                              : 'Open a project to preview',
-                          style: const TextStyle(
-                            color: OrColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final message = hasSession
+                            ? 'Viewer texture unavailable'
+                            : 'Open a project to preview';
+                        final icon = hasSession
+                            ? Icons.error_outline
+                            : Icons.movie_outlined;
+                        if (constraints.maxHeight < 56 ||
+                            constraints.maxWidth < 120) {
+                          return Semantics(
+                            label: message,
+                            liveRegion: true,
+                            child: Icon(
+                              icon,
+                              size: 18,
+                              color: OrColors.textMuted,
+                            ),
+                          );
+                        }
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, size: 22, color: OrColors.textMuted),
+                            const SizedBox(height: OrSpacing.x2),
+                            Text(
+                              message,
+                              style: const TextStyle(
+                                color: OrColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 if (_busy)
