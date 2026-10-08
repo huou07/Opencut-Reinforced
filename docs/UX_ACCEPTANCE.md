@@ -213,6 +213,9 @@ today.
   touch scrubbing, and tool sheets require the real Android product journey;
   prototype behavior is not evidence. Playback pauses when the app leaves the
   foreground and remains paused when it resumes.
+- At 320 px width, the mobile top bar keeps project, export, cancel, and command
+  controls usable without overflow. Save/export status remains available through
+  an accessible tooltip when its full text does not fit.
 - Android recovery acceptance writes a valid unsaved edit to the app-private
   project working copy, closes the live session, force-stops the app process,
   and reopens the same persisted SAF document through DocumentsUI. The actual

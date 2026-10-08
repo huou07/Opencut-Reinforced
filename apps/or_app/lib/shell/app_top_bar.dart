@@ -101,24 +101,32 @@ class AppTopBar extends StatelessWidget {
                 ),
               ),
               if (statusLabel != null) ...[
-                Icon(
-                  statusIsError
-                      ? Icons.warning_amber_outlined
-                      : Icons.save_outlined,
-                  size: 15,
-                  color: statusIsError ? OrColors.warning : OrColors.textMuted,
-                ),
-                const SizedBox(width: OrSpacing.x1),
-                Text(
-                  statusLabel!,
-                  style: TextStyle(
+                Tooltip(
+                  message: statusLabel!,
+                  child: Icon(
+                    statusIsError
+                        ? Icons.warning_amber_outlined
+                        : Icons.save_outlined,
+                    size: 15,
                     color: statusIsError
                         ? OrColors.warning
                         : OrColors.textMuted,
-                    fontSize: 11,
                   ),
                 ),
-                const SizedBox(width: OrSpacing.x3),
+                if (!compact) ...[
+                  const SizedBox(width: OrSpacing.x1),
+                  Text(
+                    statusLabel!,
+                    style: TextStyle(
+                      color: statusIsError
+                          ? OrColors.warning
+                          : OrColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: OrSpacing.x3),
+                ] else
+                  const SizedBox(width: OrSpacing.x1),
               ],
               if (onExport != null) ...[
                 if (compact)

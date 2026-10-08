@@ -13,6 +13,7 @@ import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
+import 'package:or_app/shell/app_top_bar.dart';
 
 void main() {
   testWidgets('wide shell shows OR navigation and project destinations', (
@@ -67,6 +68,38 @@ void main() {
     expect(find.text('Projects'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'compact top bar keeps export status accessible without overflow',
+    (tester) async {
+      _setViewport(tester, const Size(320, 640));
+      const status = 'Saving export to the selected location…';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                AppTopBar(
+                  title: 'SAF preview acceptance',
+                  compact: true,
+                  onOpenCommandPalette: () {},
+                  onHome: () {},
+                  onExport: () {},
+                  onCancelExport: () {},
+                  exportIsActive: true,
+                  statusLabel: status,
+                ),
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byTooltip(status), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('Focused Monochrome tokens and responsive policy are centralized', () {
     expect(OrColors.background.toARGB32(), 0xFF090909);
