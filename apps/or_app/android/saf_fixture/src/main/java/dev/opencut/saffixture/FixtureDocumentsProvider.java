@@ -52,6 +52,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         if (parent.equals("root")) {
             addDocument(cursor, "project");
             addDocument(cursor, "media");
+            addDocument(cursor, "media-second");
             if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
         }
         return cursor;
@@ -59,7 +60,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
-        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : "export.mkv");
+        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "tiny-second.mkv" : "export.mkv");
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : "video/x-matroska");
         row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root")
             ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE

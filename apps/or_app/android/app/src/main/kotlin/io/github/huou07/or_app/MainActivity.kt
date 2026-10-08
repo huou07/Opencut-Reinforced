@@ -65,6 +65,7 @@ class MainActivity : FlutterActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 mimeType = "video/*",
+                allowMultiple = true,
             )
             "openProject" -> launchPicker(
                 Intent.ACTION_OPEN_DOCUMENT,
@@ -172,6 +173,7 @@ class MainActivity : FlutterActivity() {
         suggestedName: String? = null,
         requiredModes: Int = modes,
         mimeType: String = "*/*",
+        allowMultiple: Boolean = false,
     ) {
         if (pendingPick != null) {
             result.error("PROJECT_PICKER_BUSY", "A document request is already open.", null)
@@ -186,6 +188,7 @@ class MainActivity : FlutterActivity() {
                 else arrayOf(mimeType),
             )
             if (suggestedName != null) putExtra(Intent.EXTRA_TITLE, suggestedName)
+            if (allowMultiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             addFlags(modes or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         try {
@@ -208,12 +211,34 @@ class MainActivity : FlutterActivity() {
         val pending = pendingPick ?: return
         pendingPick = null
         val selectedIntent = data
-        val uri = selectedIntent?.data
-        if (resultCode != RESULT_OK || selectedIntent == null || uri == null) {
+        if (resultCode != RESULT_OK || selectedIntent == null) {
             pending.result.success(null)
             return
         }
         val resultFlags = selectedIntent.flags
+        if (pending.method == "openMedia") {
+            val uris = buildList {
+                selectedIntent.clipData?.let { clips ->
+                    for (index in 0 until clips.itemCount) add(clips.getItemAt(index).uri)
+                }
+                selectedIntent.data?.let { add(it) }
+            }.distinctBy(Uri::toString)
+            if (uris.isEmpty()) {
+                pending.result.success(null)
+                return
+            }
+            runIo(pending.result, "PROJECT_PICK_FAILED") {
+                safDiagnostic("processing ${pending.method} result count=${uris.size}")
+                uris.forEach { takePersistableGrant(it, resultFlags, pending.requiredModes) }
+                mapOf("sourceUris" to uris.map(Uri::toString))
+            }
+            return
+        }
+        val uri = selectedIntent.data
+        if (uri == null) {
+            pending.result.success(null)
+            return
+        }
         runIo(pending.result, "PROJECT_PICK_FAILED") {
             safDiagnostic("processing ${pending.method} result")
             takePersistableGrant(uri, resultFlags, pending.requiredModes)

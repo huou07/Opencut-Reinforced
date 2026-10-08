@@ -70,6 +70,19 @@ MEDIA = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,200][1080,300]" />
+  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,320][1080,420]" />
+</hierarchy>
+"""
+
+MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,200][1080,300]" selected="true" />
+  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
+  <node index="2" text="Open" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
 </hierarchy>
 """
 
@@ -97,9 +110,10 @@ class FakeAdb:
         self.taps = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
-            "media": [DRAWER, PROVIDER, MEDIA],
+            "media": [DRAWER, PROVIDER, MEDIA, MEDIA, MEDIA_OPEN],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
-            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, MEDIA,
+            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, MEDIA, MEDIA,
+                     MEDIA_OPEN,
                      DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
         }[flow]
 
@@ -156,7 +170,10 @@ class SelectorTests(unittest.TestCase):
     def test_media_flow_selects_the_fixture_video(self):
         taps, selected = run(transient_dumps=0, flow="media")
         self.assertTrue(selected)
-        self.assertEqual(len(taps), 3)
+        self.assertEqual(len(taps), 5)
+        self.assertEqual(taps[2], ["540", "250"])
+        self.assertEqual(taps[3], ["540", "370"])
+        self.assertEqual(taps[4], ["990", "750"])
 
     def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
         taps, selected = run(transient_dumps=0)
@@ -180,7 +197,7 @@ class SelectorTests(unittest.TestCase):
     def test_all_saf_flows_use_documentsui(self):
         taps, selected = run(transient_dumps=0, flow="both")
         self.assertTrue(selected)
-        self.assertEqual(len(taps), 9, f"expected three native picker flows; got {taps}")
+        self.assertEqual(len(taps), 11, f"expected open, multi-media and export picker flows; got {taps}")
 
 
 if __name__ == "__main__":

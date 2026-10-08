@@ -11,40 +11,41 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  test(
-    'Android media picker returns a validated SAF URI without a fake path',
-    () async {
-      var pickerCalled = false;
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-            expect(call.method, 'openMedia');
-            pickerCalled = true;
-            return {
-              'sourceUri':
-                  'content://com.example.documents/document/video%3A42',
-            };
-          });
-      final picker = AndroidSafProjectPicker(channel: channel);
+  test('Android media picker returns multiple validated SAF URIs', () async {
+    var pickerCalled = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'openMedia');
+          pickerCalled = true;
+          return {
+            'sourceUris': [
+              'content://com.example.documents/document/video%3A42',
+              'content://com.example.documents/document/video%3A43',
+            ],
+          };
+        });
+    final picker = AndroidSafProjectPicker(channel: channel);
 
-      expect(picker.supportsMediaImport, isTrue);
-      expect(
-        await picker.openMediaSource(),
-        'content://com.example.documents/document/video%3A42',
-      );
-      expect(pickerCalled, isTrue);
-    },
-  );
+    expect(picker.supportsMediaImport, isTrue);
+    expect(await picker.openMediaSources(), [
+      'content://com.example.documents/document/video%3A42',
+      'content://com.example.documents/document/video%3A43',
+    ]);
+    expect(pickerCalled, isTrue);
+  });
 
   test('Android media picker rejects non-content selections', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           channel,
-          (call) async => {'sourceUri': '/data/user/0/or_app/cache/media.mkv'},
+          (call) async => {
+            'sourceUris': ['/data/user/0/or_app/cache/media.mkv'],
+          },
         );
     final picker = AndroidSafProjectPicker(channel: channel);
 
     await expectLater(
-      picker.openMediaSource(),
+      picker.openMediaSources(),
       throwsA(isA<ProjectSafStorageException>()),
     );
   });

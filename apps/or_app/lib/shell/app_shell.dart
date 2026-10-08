@@ -855,18 +855,24 @@ class _AppShellState extends State<AppShell> {
 
   Future<ProjectReadModel?> _runProjectAction(
     Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
-    operation,
-  ) {
+    operation, {
+    ValueChanged<String>? onFailure,
+  }) {
     final current = _activeProject;
     if (current == null) return Future.value(null);
-    return _runProjectActionAtSnapshot(current, operation);
+    return _runProjectActionAtSnapshot(
+      current,
+      operation,
+      onFailure: onFailure,
+    );
   }
 
   Future<ProjectReadModel?> _runProjectActionAtSnapshot(
     ProjectReadModel expected,
     Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
-    operation,
-  ) async {
+    operation, {
+    ValueChanged<String>? onFailure,
+  }) async {
     final session = _activeSession;
     final current = _activeProject;
     if (session == null || current == null || _busy) return null;
@@ -883,22 +889,26 @@ class _AppShellState extends State<AppShell> {
       if (!result.succeeded) {
         if (result.errorCode == 'REVISION_CONFLICT') {
           await _refreshProjectState(session);
-          _showUnavailable(
+          _reportProjectActionFailure(
             'The project changed while this action was open. The current state is refreshed; this action was not retried.',
+            onFailure,
           );
         } else if (result.errorCode == 'PROBE_BACKEND_UNAVAILABLE') {
-          _showUnavailable(
+          _reportProjectActionFailure(
             'The packaged media inspector could not start. Check the app installation and try again.',
+            onFailure,
           );
         } else if (result.errorCode == 'PROJECT_FILE_CHANGED') {
-          _showUnavailable(
+          _reportProjectActionFailure(
             'The project file changed outside OR. The save was blocked to protect those changes.',
+            onFailure,
           );
         } else {
-          _showUnavailable(
+          _reportProjectActionFailure(
             result.message.isEmpty
                 ? 'The project action failed.'
                 : result.message,
+            onFailure,
           );
         }
         return null;
@@ -919,13 +929,24 @@ class _AppShellState extends State<AppShell> {
       }
       return updated;
     } on ProjectGatewayException catch (error) {
-      _showProjectError(error);
+      _reportProjectActionFailure(error.message, onFailure);
       return null;
     } catch (_) {
-      _showUnavailable('The project action failed.');
+      _reportProjectActionFailure('The project action failed.', onFailure);
       return null;
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _reportProjectActionFailure(
+    String message,
+    ValueChanged<String>? onFailure,
+  ) {
+    if (onFailure == null) {
+      _showUnavailable(message);
+    } else {
+      onFailure(message);
     }
   }
 
@@ -1651,20 +1672,21 @@ class _AppShellState extends State<AppShell> {
   Future<void> _importMedia() async {
     final session = _activeSession;
     if (session == null || _busy) return;
-    String? source;
+    List<String> sources;
     try {
-      source = await widget.projectFilePicker.openMediaSource();
+      sources = await widget.projectFilePicker.openMediaSources();
     } catch (_) {
       _showUnavailable('A media file could not be selected.');
       return;
     }
-    if (source == null || !mounted || !identical(session, _activeSession)) {
+    sources = sources.toSet().toList(growable: false);
+    if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
       return;
     }
 
     if (Platform.isAndroid) {
       try {
-        if (!await OrViewerTexture.setMediaSources([source])) {
+        if (!await OrViewerTexture.setMediaSources(sources)) {
           _showUnavailable('Android media access could not be opened.');
           return;
         }
@@ -1679,20 +1701,38 @@ class _AppShellState extends State<AppShell> {
       }
     }
 
-    await _runProjectAction((session, _) async {
-      // Capture the identity and revision immediately before Rust probes the
-      // file. The bridge keeps this pre-probe revision for the add command.
-      final current = await widget.projectGateway.summary(session);
-      if (!mounted || !identical(session, _activeSession)) {
-        return const ProjectActionResult(
-          succeeded: false,
-          errorCode: 'PROJECT_CLOSING',
-          message: 'The project is closing.',
-        );
+    var imported = 0;
+    final failures = <String>[];
+    for (final source in sources) {
+      if (!mounted || !identical(session, _activeSession)) return;
+      final updated = await _runProjectAction((session, _) async {
+        // Capture identity and revision immediately before Rust probes each file.
+        final current = await widget.projectGateway.summary(session);
+        if (!mounted || !identical(session, _activeSession)) {
+          return const ProjectActionResult(
+            succeeded: false,
+            errorCode: 'PROJECT_CLOSING',
+            message: 'The project is closing.',
+          );
+        }
+        setState(() => _activeProject = current);
+        return widget.projectGateway.importMedia(session, current, source);
+      }, onFailure: failures.add);
+      if (updated == null) {
+        if (!mounted || !identical(session, _activeSession)) return;
+        continue;
       }
-      setState(() => _activeProject = current);
-      return widget.projectGateway.importMedia(session, current, source!);
-    });
+      imported++;
+    }
+    if (failures.isNotEmpty) {
+      final failureSummary = failures.first.length > 180
+          ? '${failures.first.substring(0, 177)}…'
+          : failures.first;
+      _showUnavailable(
+        'Imported $imported of ${sources.length} selected files. '
+        '${failures.length} could not be imported. $failureSummary',
+      );
+    }
   }
 
   Future<void> _removeMedia(ProjectMediaItem item) async {

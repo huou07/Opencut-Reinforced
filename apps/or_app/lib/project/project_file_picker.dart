@@ -8,7 +8,7 @@ abstract interface class ProjectFilePicker {
   bool get supportsMediaImport;
   bool get supportsExport;
   Future<String?> openProjectPath();
-  Future<String?> openMediaSource();
+  Future<List<String>> openMediaSources();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({required String suggestedName});
   Future<void> publishExportPath(String path);
@@ -59,10 +59,10 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaSource() async {
-    if (!isSupported) return null;
-    final file = await openFile();
-    return file?.path;
+  Future<List<String>> openMediaSources() async {
+    if (!isSupported) return const [];
+    final files = await openFiles();
+    return files.map((file) => file.path).toList(growable: false);
   }
 
   @override
@@ -162,25 +162,34 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaSource() async {
+  Future<List<String>> openMediaSources() async {
     try {
       final response = await _channel.invokeMapMethod<String, Object?>(
         'openMedia',
       );
-      if (response == null) return null;
-      final source = response['sourceUri'];
-      if (source is! String) {
+      if (response == null) return const [];
+      final rawSources = response['sourceUris'];
+      if (rawSources is! List<Object?> || rawSources.isEmpty) {
         throw const ProjectSafStorageException(
-          'The selected media source is invalid.',
+          'The selected media sources are invalid.',
         );
       }
-      final uri = Uri.tryParse(source);
-      if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
-        throw const ProjectSafStorageException(
-          'The selected media source is invalid.',
-        );
+      final sources = <String>[];
+      for (final rawSource in rawSources) {
+        if (rawSource is! String) {
+          throw const ProjectSafStorageException(
+            'The selected media sources are invalid.',
+          );
+        }
+        final uri = Uri.tryParse(rawSource);
+        if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+          throw const ProjectSafStorageException(
+            'The selected media sources are invalid.',
+          );
+        }
+        if (!sources.contains(rawSource)) sources.add(rawSource);
       }
-      return source;
+      return sources;
     } on PlatformException catch (error) {
       throw _storageError(error.code);
     } on MissingPluginException {

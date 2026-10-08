@@ -540,14 +540,20 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('media-import')));
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.importCalls == 1);
+      await _until(tester, () => gateway.importCalls == 2);
       final imported = await gateway.listMediaPage(
         session,
         offset: 65,
-        limit: 1,
+        limit: 2,
       );
-      expect(imported.items.single.sourceUri, _source('media'));
-      expect(imported.items.single.formatNames, contains('matroska'));
+      expect(imported.items.map((item) => item.sourceUri), [
+        _source('media'),
+        _source('media-second'),
+      ]);
+      expect(
+        imported.items.every((item) => item.formatNames.contains('matroska')),
+        isTrue,
+      );
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
       await OrViewerTexture.clearMediaSources();

@@ -36,6 +36,7 @@ def select(device, guest_log, output, flow="open"):
     # instead of hanging, not to race a cold window.
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
+    selected_media = set()
 
     def adb(*args):
         return subprocess.check_output(["adb", "-s", device, *args], timeout=10)
@@ -59,7 +60,10 @@ def select(device, guest_log, output, flow="open"):
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
-        media = next((node for node in nodes if node.get("text") == "tiny.mkv"), None)
+        media = {
+            name: next((node for node in nodes if node.get("text") == name), None)
+            for name in ("tiny.mkv", "tiny-second.mkv")
+        }
         drawer_roots = next(
             (node for node in nodes if node.get("resource-id", "").endswith(":id/drawer_roots")),
             None,
@@ -85,13 +89,33 @@ def select(device, guest_log, output, flow="open"):
         )
         if save is not None and save.get("enabled") != "true":
             save = None
+        open_action = next(
+            (
+                node
+                for node in nodes
+                if (node.get("text") or "").casefold() == "open"
+                or (node.get("content-desc") or "").casefold() == "open"
+            ),
+            None,
+        )
+        if open_action is not None and open_action.get("enabled") != "true":
+            open_action = None
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
+        pending_media = None
         if selected_root and flow == "open" and document is not None:
             target = document
-        elif selected_root and flow == "media" and media is not None:
-            target = media
+        elif selected_root and flow == "media":
+            next_media = next(
+                (name for name in media if name not in selected_media and media[name] is not None),
+                None,
+            )
+            if next_media is not None:
+                target = media[next_media]
+                pending_media = next_media
+            elif len(selected_media) == 2 and open_action is not None:
+                target = open_action
         elif selected_root and flow == "export" and save is not None:
             target = save
         elif not selected_root and provider is not None:
@@ -107,9 +131,12 @@ def select(device, guest_log, output, flow="open"):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.
                 continue
-            if target is document or target is media or target is save:
+            if pending_media is not None:
+                selected_media.add(pending_media)
+            if target is document or target is save or (flow == "media" and target is open_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
-                    record.write(f"Selected OR SAF acceptance for {flow} through native DocumentsUI.\n")
+                    detail = "two media documents" if flow == "media" else "OR SAF acceptance"
+                    record.write(f"Selected {detail} for {flow} through native DocumentsUI.\n")
                 return
         time.sleep(0.25)
     try:

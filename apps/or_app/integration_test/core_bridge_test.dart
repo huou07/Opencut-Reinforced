@@ -1226,7 +1226,7 @@ class _NativeProjectPicker implements ProjectFilePicker {
   Future<String?> openProjectPath() async => openPath;
 
   @override
-  Future<String?> openMediaSource() async => null;
+  Future<List<String>> openMediaSources() async => const [];
 
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>

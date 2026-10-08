@@ -445,6 +445,28 @@ void main() {
     expect(find.text('No media loaded'), findsOneWidget);
   });
 
+  testWidgets('Import Media adds each selected source through the gateway', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-batch.orproj'
+      ..mediaPaths = ['/tmp/first.mkv', '/tmp/second.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import Media Batch');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaCalls, 2);
+    expect(gateway.importMediaSources, ['/tmp/first.mkv', '/tmp/second.mkv']);
+    expect(gateway.lastSession!.view.revision, BigInt.from(2));
+    expect(find.text('first.mkv'), findsOneWidget);
+    expect(find.text('second.mkv'), findsOneWidget);
+  });
+
   testWidgets('media library loads later items through bounded pages', (
     tester,
   ) async {
@@ -495,11 +517,43 @@ void main() {
     expect(gateway.importMediaCalls, 1);
     expect(
       find.text(
+        'Imported 0 of 1 selected files. 1 could not be imported. '
         'The packaged media inspector could not start. Check the app installation and try again.',
       ),
       findsOneWidget,
     );
     expect(find.text('clip.mp4'), findsNothing);
+  });
+
+  testWidgets('media import continues after one selected source fails', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()..failedImportCalls = {2};
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/partial-media.orproj'
+      ..mediaPaths = ['/tmp/first.mkv', '/tmp/bad.mkv', '/tmp/last.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Partial import');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.importMediaCalls, 3);
+    expect(gateway.importMediaSources, [
+      '/tmp/first.mkv',
+      '/tmp/bad.mkv',
+      '/tmp/last.mkv',
+    ]);
+    expect(find.text('first.mkv'), findsOneWidget);
+    expect(find.text('last.mkv'), findsOneWidget);
+    expect(find.text('bad.mkv'), findsNothing);
+    expect(
+      find.textContaining(
+        'Imported 2 of 3 selected files. 1 could not be imported.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('removing media requires confirmation and updates the library', (
@@ -3179,6 +3233,7 @@ class _FakeProjectPicker implements ProjectFilePicker {
   final bool supported;
   String? openPath;
   String? mediaPath;
+  List<String>? mediaPaths;
   String? savePath;
   String? exportPath;
   String? syncFailureMessage;
@@ -3206,9 +3261,9 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> openMediaSource() async {
+  Future<List<String>> openMediaSources() async {
     mediaOpenCalls++;
-    return mediaPath;
+    return mediaPaths ?? [?mediaPath];
   }
 
   @override
@@ -3275,6 +3330,7 @@ class _FakeProjectGateway implements ProjectGateway {
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
+  Set<int> failedImportCalls = {};
   String? lastCreatePath;
   String? lastCreateName;
   String? lastOpenPath;
@@ -3346,6 +3402,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int importMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportSource;
+  final List<String> importMediaSources = [];
   String? lastRemovedMediaId;
   int saveCalls = 0;
   int autosaveCalls = 0;
@@ -4472,7 +4529,9 @@ class _FakeProjectGateway implements ProjectGateway {
   ) async {
     importMediaCalls++;
     lastImportSource = source;
-    if (nextImportBackendUnavailable) {
+    importMediaSources.add(source);
+    if (nextImportBackendUnavailable ||
+        failedImportCalls.contains(importMediaCalls)) {
       nextImportBackendUnavailable = false;
       return const ProjectActionResult(
         succeeded: false,
@@ -4488,7 +4547,7 @@ class _FakeProjectGateway implements ProjectGateway {
         message: 'revision changed',
       );
     }
-    final item = _mediaFixture('media-imported', source);
+    final item = _mediaFixture('media-imported-$importMediaCalls', source);
     session.media.add(item);
     session.view = _copyView(
       session.view,
