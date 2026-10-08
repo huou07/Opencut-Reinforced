@@ -1,6 +1,7 @@
 package io.github.huou07.or_app
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.util.Log
@@ -27,6 +28,10 @@ class SafFixtureControl : FlutterPlugin, ActivityAware, PluginRegistry.ActivityR
                     if (activity == null) result.error("FIXTURE_DETACHED", "Fixture activity unavailable.", null)
                     else if (operation == "backgroundAndResume") {
                         activity.moveTaskToBack(true)
+                        activity.applicationContext.openFileOutput(
+                            BACKGROUND_SIGNAL_FILE,
+                            Context.MODE_PRIVATE,
+                        ).use { it.write(BACKGROUND_SIGNAL.toByteArray(Charsets.UTF_8)) }
                         Log.i("OrSafFixtureControl", "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED")
                         result.success(mapOf("backgrounded" to true))
                     } else try {
@@ -57,5 +62,9 @@ class SafFixtureControl : FlutterPlugin, ActivityAware, PluginRegistry.ActivityR
         }
         return true
     }
-    companion object { private const val REQUEST = 0x5346 }
+    companion object {
+        const val BACKGROUND_SIGNAL_FILE = "or-saf-background-requested"
+        private const val BACKGROUND_SIGNAL = "ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED"
+        private const val REQUEST = 0x5346
+    }
 }

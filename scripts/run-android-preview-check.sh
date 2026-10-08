@@ -20,7 +20,7 @@ guest_log="$output_directory/android-guest-$case_name.log"
 health_log="$output_directory/android-health-$case_name.log"
 picker_status_file="$output_directory/android-picker-$case_name.status"
 lifecycle_status_file="$output_directory/android-lifecycle-$case_name.status"
-lifecycle_activity_log="$output_directory/android-lifecycle-$case_name-activity.log"
+lifecycle_signal_log="$output_directory/android-lifecycle-$case_name-signal.log"
 : > "$picker_status_file"
 : > "$guest_log"
 adb -s "$android_device_id" logcat -c
@@ -152,36 +152,34 @@ if [[ -n "$picker_pid" ]]; then
 fi
 if [[ "$case_name" == saf && "$status" == 0 ]]; then
   : > "$lifecycle_status_file"
-  : > "$lifecycle_activity_log"
+  : > "$lifecycle_signal_log"
   (
-    # ADB logcat stdout is buffered when piped on this runner, even with
-    # stdbuf. Use bounded one-shot ActivityTaskManager queries instead and
-    # require two consecutive states outside OR before launching it again.
+    # Read an app-owned debug signal through run-as. Logcat is buffered by ADB
+    # and ActivityManager snapshots can stall while the emulator is rendering.
+    app_id=io.github.huou07.or_app
+    signal_file=or-saf-background-requested
+    if ! timeout 5s adb -s "$android_device_id" shell run-as "$app_id" \
+      rm -f "files/$signal_file"; then
+      echo 'Could not clear the Android SAF lifecycle signal.' >&2
+      printf '1\n' > "$lifecycle_status_file"
+      exit 1
+    fi
     deadline=$((SECONDS + 50))
-    external_activity_observations=0
-    resumed_activity=
+    background_signal=
     while ((SECONDS < deadline)); do
-      resumed_activity="$(
-        timeout 2s adb -s "$android_device_id" shell dumpsys activity activities 2>/dev/null |
-          tr -d '\r' |
-          awk '/^[[:space:]]*mResumedActivity:/ { print; found = 1 } END { if (!found) exit 1 }'
-      )" || resumed_activity=
+      background_signal="$(
+        timeout 3s adb -s "$android_device_id" shell run-as "$app_id" \
+          cat "files/$signal_file" 2>/dev/null | tr -d '\r\n'
+      )" || background_signal=
       printf '%s\t%s\n' \
-        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${resumed_activity:-unavailable}" \
-        >> "$lifecycle_activity_log"
-      if [[ -n "$resumed_activity" && "$resumed_activity" != *io.github.huou07.or_app* ]]; then
-        external_activity_observations=$((external_activity_observations + 1))
-        if ((external_activity_observations >= 2)); then
-          break
-        fi
-      else
-        external_activity_observations=0
-      fi
-      resumed_activity=
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${background_signal:-pending}" \
+        >> "$lifecycle_signal_log"
+      [[ "$background_signal" == ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED ]] && break
+      background_signal=
       sleep 0.25
     done
-    if [[ -z "$resumed_activity" || "$resumed_activity" == *io.github.huou07.or_app* ]]; then
-      echo 'Timed out waiting for Android to move OR out of the resumed activity state.' >&2
+    if [[ "$background_signal" != ANDROID_SAF_BACKGROUND_RELAUNCH_REQUESTED ]]; then
+      echo 'Timed out waiting for the Android SAF background lifecycle signal.' >&2
       printf '124\n' > "$lifecycle_status_file"
       exit 1
     fi

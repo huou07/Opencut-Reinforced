@@ -917,10 +917,10 @@ in the retained driver log instead of leaving the hosted job to time out without
 a location. Texture pixel assertions remain required after each successful
 capture.
 
-The API 36 lifecycle step moves the app task to the background, then the emulator
-host polls bounded `dumpsys activity activities` snapshots until ActivityTaskManager
-reports a resumed activity outside OR twice in a row, then launches OR through
-Android's launcher. The one-shot snapshots avoid depending on ADB's buffered
-logcat/Flutter capture streams. This avoids asking the background app process to
-start an activity, which Android blocks under the app's target SDK, while
-preserving the real pause/resume and surface recreation journey.
+The API 36 lifecycle step moves the app task to the background. The debug-only
+fixture bridge writes a marker to OR's private app files after requesting that
+transition; the host polls it with `adb shell run-as`, then launches OR through
+Android's launcher. This avoids depending on delayed ADB logcat/Flutter output
+or ActivityManager snapshots that can stall under emulator load. Android itself
+still backgrounds and resumes the real app task, and the journey checks the
+resulting surface recreation and frame presentation.
