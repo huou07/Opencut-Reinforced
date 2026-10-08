@@ -18,8 +18,8 @@ def center(bounds):
 def select(device, guest_log, output, flow="open"):
     if flow == "both":
         select(device, guest_log, output, "open")
-        select(device, guest_log, output, "media")
         select(device, guest_log, output, "export")
+        select(device, guest_log, output, "media")
         return
     output.mkdir(parents=True, exist_ok=True)
     # Building/installing belongs to the owning drive/workflow lifecycle. The

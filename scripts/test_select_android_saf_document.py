@@ -108,13 +108,14 @@ class FakeAdb:
         self.transient = transient_dumps
         self.tree_index = 0
         self.taps = []
+        self.tap_tree_indexes = []
         self.trees = {
             "open": [DRAWER, PROVIDER, DOCUMENT],
             "media": [DRAWER, PROVIDER, MEDIA, MEDIA, MEDIA_OPEN],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
-            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER, MEDIA, MEDIA,
-                     MEDIA_OPEN,
-                     DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
+            "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
+                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA, MEDIA,
+                     MEDIA_OPEN],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -133,6 +134,7 @@ class FakeAdb:
             return raw
         if command[:2] == ["shell", "input"]:
             self.taps.append(command[-2:])
+            self.tap_tree_indexes.append(self.tree_index - 1)
             return b""
         if command[:1] == ["exec-out"]:
             return b"\x89PNG"
@@ -198,6 +200,31 @@ class SelectorTests(unittest.TestCase):
         taps, selected = run(transient_dumps=0, flow="both")
         self.assertTrue(selected)
         self.assertEqual(len(taps), 11, f"expected open, multi-media and export picker flows; got {taps}")
+
+    def test_combined_flow_matches_project_export_then_media_journey(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text(
+                "\n".join(
+                    [
+                        "ANDROID_SAF_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                    ]
+                )
+                + "\n"
+            )
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="both")
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "both")
+
+            self.assertEqual(
+                adb.tap_tree_indexes,
+                [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11],
+                "DocumentsUI selections must follow open, export, then media",
+            )
 
 
 if __name__ == "__main__":
