@@ -898,6 +898,11 @@ class _AppShellState extends State<AppShell> {
             'The packaged media inspector could not start. Check the app installation and try again.',
             onFailure,
           );
+        } else if (result.errorCode == 'SOURCE_NOT_FOUND') {
+          _reportProjectActionFailure(
+            'The selected media file could not be found. Check that the source still exists.',
+            onFailure,
+          );
         } else if (result.errorCode == 'MEDIA_NOT_FOUND') {
           _reportProjectActionFailure(
             'The selected media file could not be found. Check that the source still exists.',
