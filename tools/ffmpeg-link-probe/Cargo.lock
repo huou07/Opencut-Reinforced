@@ -460,6 +460,7 @@ dependencies = [
  "ffmpeg-the-third",
  "or_core",
  "or_runtime",
+ "serde_json",
 ]
 
 [[package]]
