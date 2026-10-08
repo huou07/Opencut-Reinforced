@@ -954,6 +954,8 @@ persisted before opening the unchanged project.
 The same package data and grant must survive the recovery APK install. The recovery PID
 observer preserves transient ADB shell errors and keeps polling within a fixed
 60-second bound; failure to observe a distinct process still fails the journey.
+The process-relaunch record is stored with the recovery report, and the hosted
+verifier reads it from that same artifact directory.
 The report verifier accepts Android's `/data/user/0` and `/data/data` aliases
 only when they resolve to OR's exact app-private `files/or-projects` directory.
 If recovery does not restore the preview texture, the driver retains the current

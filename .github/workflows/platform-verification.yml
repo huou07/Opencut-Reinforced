@@ -1488,7 +1488,7 @@ jobs:
             | tee "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt"
           cat "$OR_ANDROID_ACCEPTANCE_OUTPUT/verification.txt" >> "$GITHUB_STEP_SUMMARY"
           python3 scripts/verify_android_saf_recovery.py \
-            --process "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" \
+            --process "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/process-relaunch.json" \
             --prepared "$OR_ANDROID_ACCEPTANCE_OUTPUT/report.json" \
             --recovered "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/report.json" \
             | tee "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/verification.txt"

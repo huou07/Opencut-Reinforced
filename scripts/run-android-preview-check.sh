@@ -277,6 +277,7 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
   fi
   app_id=io.github.huou07.or_app
   recovery_output="${OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT:-$OR_ANDROID_ACCEPTANCE_OUTPUT-recovery}"
+  process_relaunch_report="$recovery_output/process-relaunch.json"
   mkdir -p "$recovery_output"
 
   # Flutter drive is configured to leave this installed app running. Capture
@@ -356,7 +357,7 @@ if [[ "$case_name" == saf && "$status" == 0 ]]; then
     echo "The recovery driver did not relaunch the app as a new process (old=$old_pid new=$new_pid)." >&2
     exit 1
   fi
-  python3 - "$OR_ANDROID_ACCEPTANCE_OUTPUT/process-relaunch.json" "$old_pid" "$new_pid" <<'PY'
+  python3 - "$process_relaunch_report" "$old_pid" "$new_pid" <<'PY'
 import json
 import sys
 from pathlib import Path
