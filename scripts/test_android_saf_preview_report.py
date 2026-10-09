@@ -28,6 +28,13 @@ def report():
         'captionImportRevision': '3', 'captionImportCalls': 1,
         'captionExportCalls': 1, 'captionExportBytes': 128,
         'captionExportValidSrt': True,
+        'mediaRelinkCalls': 1,
+        'mediaRelinkMediaIdBefore': '00000041-2222-4222-8222-222222222222',
+        'mediaRelinkMediaIdAfter': '00000041-2222-4222-8222-222222222222',
+        'mediaRelinkSourceBefore': 'content://dev.opencut.saffixture.documents/document/late65',
+        'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/media-second',
+        'mediaRelinkTimelineReferencePreserved': True,
+        'mediaRelinkRevision': '4',
         'finalOsMediaFds': 0, 'softwareFallback': 'packaged_ffmpeg_shared_render_bounded_bgra', 'hardware': 'UNVERIFIED',
     }}
 
@@ -75,6 +82,18 @@ class ReportTest(unittest.TestCase):
         value = report()
         value['androidSafAcceptance']['captionExportValidSrt'] = False
         with self.assertRaises(ValueError): verify(value)
+
+    def test_android_relink_requires_persisted_source_and_timeline_identity(self):
+        for mutation in (
+            {'mediaRelinkCalls': 0},
+            {'mediaRelinkMediaIdBefore': '00000001-2222-4222-8222-222222222222'},
+            {'mediaRelinkMediaIdAfter': '00000002-2222-4222-8222-222222222222'},
+            {'mediaRelinkTimelineReferencePreserved': False},
+            {'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/late65'},
+        ):
+            value = report()
+            value['androidSafAcceptance'].update(mutation)
+            with self.assertRaises(ValueError): verify(value)
 
 
 if __name__ == '__main__': unittest.main()

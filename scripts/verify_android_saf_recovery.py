@@ -54,10 +54,18 @@ def verify(relaunch: dict[str, Any], prepared: dict[str, Any], recovered: dict[s
         "explicitRecoveryApplied",
         "recoverySidecarRemovedAfterApply",
         "previewPlaybackResumedFromRecoveredProject",
+        "relinkedMediaAndTimelineRecovered",
+        "relinkedMediaGrantSurvivedProcessRestart",
         "noFlutterException",
     }
     if not isinstance(checks, dict) or any(checks.get(name) is not True for name in required_checks):
         raise ValueError("post-restart recovery journey is missing a required product assertion")
+    if (
+        recovered_report.get("relinkedMediaId") != "00000041-2222-4222-8222-222222222222"
+        or recovered_report.get("relinkedMediaSource")
+        != "content://dev.opencut.saffixture.documents/document/media-second"
+    ):
+        raise ValueError("post-restart project lost the relinked media identity or source")
     provider_digest = recovered_report.get("providerProjectSha256BeforeOpen")
     if not isinstance(provider_digest, str) or len(provider_digest) != 64 or any(
         character not in "0123456789abcdef" for character in provider_digest

@@ -16,6 +16,7 @@ CHECKS = {
     'mobileSelectedClipInspectorSheet',
     'androidSafExportToDocumentsUi',
     'androidSafCaptionImportAndExportThroughDocumentsUi',
+    'androidSafMediaRelinkThroughDocumentsUi',
     'recoveryCheckpointPersistedBeforeProcessStop',
 }
 
@@ -58,6 +59,16 @@ def verify(report):
             or data.get('captionExportBytes', 0) <= 0
             or data.get('captionExportValidSrt') is not True):
         raise ValueError('Android caption SRT import and provider export must complete through the real app')
+    relink_id = data.get('mediaRelinkMediaIdBefore')
+    if (data.get('mediaRelinkCalls') != 1
+            or not isinstance(relink_id, str)
+            or relink_id != '00000041-2222-4222-8222-222222222222'
+            or relink_id != data.get('mediaRelinkMediaIdAfter')
+            or data.get('mediaRelinkSourceBefore') != 'content://dev.opencut.saffixture.documents/document/late65'
+            or data.get('mediaRelinkSourceAfter') != 'content://dev.opencut.saffixture.documents/document/media-second'
+            or data.get('mediaRelinkTimelineReferencePreserved') is not True
+            or int(data.get('mediaRelinkRevision', 0)) <= int(data.get('captionImportRevision', 0))):
+        raise ValueError('Android SAF relink must preserve the media and timeline identity and persist a new source')
     for field in ('sameSourceRegistrations', 'sameSourceProviderOpens'):
         before, after = data[field]
         if before <= 0 or before != after:

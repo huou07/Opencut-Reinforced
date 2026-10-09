@@ -23,12 +23,17 @@ def select(device, guest_log, output, flow="open"):
         select(device, guest_log, output, "caption-import")
         select(device, guest_log, output, "caption-export")
         return
+    if flow == "both-relink":
+        select(device, guest_log, output, "both")
+        select(device, guest_log, output, "media-relink")
+        return
     output.mkdir(parents=True, exist_ok=True)
     # Building/installing belongs to the owning drive/workflow lifecycle. The
     # action bound starts only when the in-app test reaches its native picker.
     marker = {
         "open": "ANDROID_SAF_DOCUMENTS_UI_READY",
         "media": "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+        "media-relink": "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
         "export": "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
         "caption-import": "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
         "caption-export": "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
@@ -46,10 +51,19 @@ def select(device, guest_log, output, flow="open"):
     last_reported_selection = None
     selector_log = output / "documents-ui-selector.log"
 
+    def complete_relink_if_ready():
+        if flow != "media-relink" or "ANDROID_SAF_MEDIA_RELINK_COMPLETE" not in guest_log.read_text(errors="replace"):
+            return False
+        with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
+            record.write("Selected tiny-second.mkv for media-relink through native DocumentsUI.\n")
+        return True
+
     def adb(*args):
         return subprocess.check_output(["adb", "-s", device, *args], timeout=10)
 
     while time.monotonic() < deadline:
+        if complete_relink_if_ready():
+            return
         # UIAutomator transiently answers "null root node returned by
         # UiTestAutomationBridge" while DocumentsUI is still animating in, and
         # `adb shell cat` fails until the dump file exists. Those are ordinary
@@ -78,7 +92,7 @@ def select(device, guest_log, output, flow="open"):
             for name, node in media.items()
             if node is not None and node.get("selected") == "true"
         }
-        if flow == "media" and selected_media != last_reported_selection:
+        if flow in {"media", "media-relink"} and selected_media != last_reported_selection:
             with selector_log.open("a", encoding="utf-8") as record:
                 record.write(f"selected={','.join(sorted(selected_media)) or 'none'}\n")
             last_reported_selection = selected_media
@@ -141,22 +155,24 @@ def select(device, guest_log, output, flow="open"):
             target = document
         elif selected_root and flow == "caption-import" and caption_file is not None:
             target = caption_file
-        elif selected_root and flow == "media":
+        elif selected_root and flow in {"media", "media-relink"}:
             available_media = {name for name, node in media.items() if node is not None}
+            expected_media = set(media) if flow == "media" else {"tiny-second.mkv"}
             next_media = next(
                 (
                     name
                     for name in media
-                    if name not in selected_media and media[name] is not None
+                    if name in expected_media
+                    and name not in selected_media
+                    and media[name] is not None
                 ),
                 None,
             )
-            expected_media = set(media)
             # DocumentsUI can briefly expose only part of its provider listing
             # while loading/relayout is in progress. Do not infer that a
             # partial set is the whole acceptance selection; the known fixture
             # names are the completion contract for this journey.
-            listing_complete = available_media == expected_media
+            listing_complete = available_media == set(media)
             if not listing_complete and list_view is not None and not list_view_requested:
                 # The acceptance provider can place one tile below the fold in
                 # DocumentsUI's default grid at compact emulator sizes. List
@@ -164,7 +180,7 @@ def select(device, guest_log, output, flow="open"):
                 # card coordinates or scrolling.
                 target = list_view
             elif listing_complete and next_media is not None:
-                action = "long-press" if not selected_media else "tap"
+                action = "long-press" if flow == "media" and not selected_media else "tap"
                 retry_wait = time.monotonic() - last_media_action_at < 1.5
                 if last_media_action != (next_media, action) or not retry_wait:
                     target = media[next_media]
@@ -186,7 +202,7 @@ def select(device, guest_log, output, flow="open"):
         if target is not None:
             x, y = center(target.get("bounds", ""))
             try:
-                if pending_media is not None and not selected_media:
+                if pending_media is not None and flow == "media" and not selected_media:
                     # DocumentsUI opens a file on a normal first tap. Long-press
                     # the first item to enter multi-select mode.
                     adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
@@ -197,7 +213,11 @@ def select(device, guest_log, output, flow="open"):
                 # decide again from the fresh tree.
                 continue
             if pending_media is not None:
-                action = "long-press" if not selected_media else "tap"
+                action = (
+                    "long-press"
+                    if flow == "media" and not selected_media
+                    else "tap"
+                )
                 last_media_action = (pending_media, action)
                 last_media_action_at = time.monotonic()
                 with selector_log.open("a", encoding="utf-8") as record:
@@ -206,10 +226,16 @@ def select(device, guest_log, output, flow="open"):
                 list_view_requested = True
                 with selector_log.open("a", encoding="utf-8") as record:
                     record.write("action=tap target=list-view\n")
-            if target is document or target is caption_file or target is save or (flow == "media" and target is media_action):
+            if (
+                target is document
+                or target is caption_file
+                or target is save
+                or (flow == "media" and target is media_action)
+            ):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = (
                         ",".join(sorted(selected_media)) if flow == "media" else
+                        "tiny-second.mkv" if flow == "media-relink" else
                         "caption file" if flow == "caption-import" else
                         "caption export" if flow == "caption-export" else
                         "OR SAF acceptance"
@@ -229,6 +255,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", required=True)
     parser.add_argument("--guest-log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--flow", choices=("open", "media", "export", "caption-import", "caption-export", "both"), default="open")
+    parser.add_argument("--flow", choices=("open", "media", "media-relink", "export", "caption-import", "caption-export", "both", "both-relink"), default="open")
     args = parser.parse_args()
     select(args.device, args.guest_log, args.output, args.flow)

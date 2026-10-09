@@ -69,8 +69,10 @@ void main() {
     final providerBeforeOpen = await _fixtureStatus();
     expect(
       providerBeforeOpen['persistedMediaUris'],
-      contains('content://dev.opencut.saffixture.documents/document/late65'),
-      reason: 'The selected media grant must survive process recovery.',
+      contains(
+        'content://dev.opencut.saffixture.documents/document/media-second',
+      ),
+      reason: 'The relinked media grant must survive process recovery.',
     );
     debugPrint(
       'ANDROID_SAF_PROVIDER_BEFORE_RECOVERY_OPEN '
@@ -147,6 +149,26 @@ void main() {
     final summary = await gateway.summary(gateway.session!);
     expect(summary.name, 'Process recovery acceptance');
     expect(summary.revision, greaterThan(BigInt.zero));
+    final relinked = (await gateway.listMediaPage(
+      gateway.session!,
+      offset: 64,
+      limit: 1,
+    )).items.single;
+    expect(relinked.mediaId, '00000041-2222-4222-8222-222222222222');
+    expect(
+      relinked.sourceUri,
+      'content://dev.opencut.saffixture.documents/document/media-second',
+    );
+    final videoTrack = (await gateway.listTimelineTracks(gateway.session!))
+        .items
+        .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
+    final clips = await gateway.listTimelineClips(
+      gateway.session!,
+      trackId: videoTrack.trackId,
+      offset: 0,
+      limit: 20,
+    );
+    expect(clips.items.any((clip) => clip.mediaId == relinked.mediaId), isTrue);
     final recovery = await gateway.inspectRecovery(gateway.openedPath!);
     expect(recovery.kind, ProjectRecoveryKind.none);
 
@@ -165,8 +187,19 @@ void main() {
           'explicitRecoveryApplied': true,
           'recoverySidecarRemovedAfterApply': true,
           'previewPlaybackResumedFromRecoveredProject': true,
+          'relinkedMediaAndTimelineRecovered':
+              relinked.mediaId == '00000041-2222-4222-8222-222222222222' &&
+              relinked.sourceUri ==
+                  'content://dev.opencut.saffixture.documents/document/media-second' &&
+              clips.items.any((clip) => clip.mediaId == relinked.mediaId),
+          'relinkedMediaGrantSurvivedProcessRestart':
+              (providerBeforeOpen['persistedMediaUris'] as List).contains(
+                relinked.sourceUri,
+              ),
           'noFlutterException': noFlutterError,
         },
+        'relinkedMediaId': relinked.mediaId,
+        'relinkedMediaSource': relinked.sourceUri,
         'projectPath': gateway.openedPath,
         'providerProjectSha256BeforeOpen': providerBeforeOpen['projectSha256'],
         'projectName': summary.name,

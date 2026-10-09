@@ -30,8 +30,12 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
                     "explicitRecoveryApplied": True,
                     "recoverySidecarRemovedAfterApply": True,
                     "previewPlaybackResumedFromRecoveredProject": True,
+                    "relinkedMediaAndTimelineRecovered": True,
+                    "relinkedMediaGrantSurvivedProcessRestart": True,
                     "noFlutterException": True,
                 },
+                "relinkedMediaId": "00000041-2222-4222-8222-222222222222",
+                "relinkedMediaSource": "content://dev.opencut.saffixture.documents/document/media-second",
                 "projectPath": "/data/user/0/io.github.huou07.or_app/files/or-projects/project.orproj",
                 "providerProjectSha256BeforeOpen": "a" * 64,
                 "projectName": "Process recovery acceptance",
@@ -92,6 +96,19 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
     def test_missing_recovered_preview_frame_is_rejected(self):
         self.recovered["androidSafRecoveryAcceptance"]["frameSequence"] = "0"
         with self.assertRaisesRegex(ValueError, "did not present"):
+            verify(self.process, self.prepared, self.recovered)
+
+    def test_relinked_media_and_permission_must_survive_real_process_restart(self):
+        checks = self.recovered["androidSafRecoveryAcceptance"]["checks"]
+        checks["relinkedMediaGrantSurvivedProcessRestart"] = False
+        with self.assertRaisesRegex(ValueError, "product assertion"):
+            verify(self.process, self.prepared, self.recovered)
+
+        checks["relinkedMediaGrantSurvivedProcessRestart"] = True
+        self.recovered["androidSafRecoveryAcceptance"]["relinkedMediaId"] = (
+            "00000001-2222-4222-8222-222222222222"
+        )
+        with self.assertRaisesRegex(ValueError, "relinked media identity"):
             verify(self.process, self.prepared, self.recovered)
 
 

@@ -1458,7 +1458,7 @@ jobs:
         env:
           OR_ANDROID_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-acceptance
           OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT: ${{ runner.temp }}/android-saf-recovery-acceptance
-          OR_ANDROID_SAF_FLOW: both
+          OR_ANDROID_SAF_FLOW: both-relink
         run: |
           set -euo pipefail
           export OR_AVD_NAME=or-api36-x86_64

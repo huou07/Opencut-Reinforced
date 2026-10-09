@@ -66,7 +66,8 @@ int _providerFds() {
     try {
       final target = Link(entry.path).targetSync();
       if (target.contains('/dev.opencut.saffixture/') &&
-          target.endsWith('/tiny.mkv')) {
+          (target.endsWith('/tiny.mkv') ||
+              target.endsWith('/tiny-second.mkv'))) {
         count++;
       }
     } on FileSystemException {
@@ -249,18 +250,17 @@ Future<String> _project(Directory directory, String name, String source) async {
     offset: 64,
     limit: 1,
   )).items.single;
-  expect(
-    (await gateway.insertTimelineClip(
-      session,
-      current,
-      trackId: track.trackId,
-      mediaId: media.mediaId,
-      timelineStart: ProjectRationalTime(BigInt.zero, 1),
-      sourceStart: ProjectRationalTime(BigInt.zero, 1),
-      duration: ProjectRationalTime(BigInt.one, 1),
-    )).succeeded,
-    isTrue,
+  final insertedActiveClip = await gateway.insertTimelineClip(
+    session,
+    current,
+    trackId: track.trackId,
+    mediaId: media.mediaId,
+    timelineStart: ProjectRationalTime(BigInt.zero, 1),
+    sourceStart: ProjectRationalTime(BigInt.zero, 1),
+    duration: ProjectRationalTime(BigInt.one, 1),
   );
+  expect(insertedActiveClip.succeeded, isTrue);
+  current = insertedActiveClip.view!;
   expect((await gateway.save(session)).succeeded, isTrue);
   await gateway.close(session, discardUnsaved: false);
   return path;
@@ -276,6 +276,8 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
   int importCalls = 0, importMicros = 0;
+  int relinkCalls = 0;
+  String? lastRelinkMediaId, lastRelinkSource;
   int saveCalls = 0;
   int captionImportCalls = 0,
       captionExportStartedCalls = 0,
@@ -335,6 +337,22 @@ class _ObservedGateway extends RustProjectGateway {
     } finally {
       importCalls++;
       importMicros = watch.elapsedMicroseconds;
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> relinkMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+    String source,
+  ) async {
+    try {
+      return await super.relinkMedia(session, current, mediaId, source);
+    } finally {
+      relinkCalls++;
+      lastRelinkMediaId = mediaId;
+      lastRelinkSource = source;
     }
   }
 
@@ -687,6 +705,70 @@ void main() {
       );
       expect(captionPage.items.single.text, 'Imported SAF caption');
 
+      final activeMedia = (await gateway.listMediaPage(
+        session,
+        offset: 64,
+        limit: 1,
+      )).items.single;
+      expect(activeMedia.mediaId, '00000041-2222-4222-8222-222222222222');
+      expect(activeMedia.sourceUri, source);
+      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      final loadMore = find.byKey(const ValueKey('media-load-more'));
+      await tester.ensureVisible(loadMore);
+      await tester.tap(loadMore);
+      final mediaActions = find.byKey(
+        ValueKey('media-actions-${activeMedia.mediaId}'),
+      );
+      await _until(tester, () => mediaActions.evaluate().isNotEmpty);
+      await tester.ensureVisible(mediaActions);
+      await tester.tap(mediaActions);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey('media-relink-${activeMedia.mediaId}')),
+      );
+      debugPrint('ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY');
+      await _until(tester, () => gateway.relinkCalls == 1);
+      debugPrint('ANDROID_SAF_MEDIA_RELINK_COMPLETE');
+      final relinkedMedia = (await gateway.listMediaPage(
+        session,
+        offset: 64,
+        limit: 1,
+      )).items.single;
+      expect(gateway.lastRelinkMediaId, activeMedia.mediaId);
+      expect(gateway.lastRelinkSource, _source('media-second'));
+      expect(relinkedMedia.mediaId, activeMedia.mediaId);
+      expect(relinkedMedia.sourceUri, _source('media-second'));
+      final videoTrack = (await gateway.listTimelineTracks(session)).items
+          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
+      final relinkedClips = await gateway.listTimelineClips(
+        session,
+        trackId: videoTrack.trackId,
+        offset: 0,
+        limit: 20,
+      );
+      expect(
+        relinkedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
+        isTrue,
+        reason: 'Relinking must retain the timeline clip identity.',
+      );
+      final mediaRelinkRevision = (await gateway.summary(session)).revision;
+      expect(mediaRelinkRevision, greaterThan(captionImportRevision));
+      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isEmpty,
+      );
+
       // Compact transport and editing tools must remain reachable by touch.
       await _dragSeekUi(tester, gateway, .65);
       expect(gateway.seekError, isNull);
@@ -857,6 +939,26 @@ void main() {
       const secondGateway = RustProjectGateway();
       final second = await secondGateway.openProject(path);
       final before = await secondGateway.summary(second);
+      final reopenedRelink = (await secondGateway.listMediaPage(
+        second,
+        offset: 64,
+        limit: 1,
+      )).items.single;
+      expect(reopenedRelink.mediaId, activeMedia.mediaId);
+      expect(reopenedRelink.sourceUri, _source('media-second'));
+      final reopenedTrack = (await secondGateway.listTimelineTracks(second))
+          .items
+          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
+      final reopenedClips = await secondGateway.listTimelineClips(
+        second,
+        trackId: reopenedTrack.trackId,
+        offset: 0,
+        limit: 20,
+      );
+      expect(
+        reopenedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
+        isTrue,
+      );
       final played = await secondGateway.previewPlay(
         second,
       ); // No preceding seek.
@@ -981,8 +1083,11 @@ void main() {
       final providerStats = await _control('status');
       expect(providerStats['providerOpens'], greaterThan(0));
       expect(tester.takeException(), isNull);
-      final retainedMedia = await _control('persistMediaGrant', uri: source);
-      expect(retainedMedia['persistedMediaUris'], contains(source));
+      final retainedMedia = await _control('status');
+      expect(
+        retainedMedia['persistedMediaUris'],
+        contains(relinkedMedia.sourceUri),
+      );
       // Leave an unsaved, valid project change in the app-private working copy
       // and persist it using the same recovery checkpoint API the shell uses.
       // The host runner force-stops this process after the drive completes.
@@ -1065,6 +1170,7 @@ void main() {
               'mobileSelectedClipInspectorSheet',
               'androidSafExportToDocumentsUi',
               'androidSafCaptionImportAndExportThroughDocumentsUi',
+              'androidSafMediaRelinkThroughDocumentsUi',
               'recoveryCheckpointPersistedBeforeProcessStop',
             ])
               name: true,
@@ -1083,6 +1189,15 @@ void main() {
           'mediaImportSourceUris': imported.items
               .map((item) => item.sourceUri)
               .toList(growable: false),
+          'mediaRelinkCalls': gateway.relinkCalls,
+          'mediaRelinkMediaIdBefore': activeMedia.mediaId,
+          'mediaRelinkMediaIdAfter': relinkedMedia.mediaId,
+          'mediaRelinkSourceBefore': activeMedia.sourceUri,
+          'mediaRelinkSourceAfter': relinkedMedia.sourceUri,
+          'mediaRelinkTimelineReferencePreserved': relinkedClips.items.any(
+            (clip) => clip.mediaId == activeMedia.mediaId,
+          ),
+          'mediaRelinkRevision': mediaRelinkRevision.toString(),
           'exportBytes': exported['exportBytes'],
           'exportValidMatroska': exported['validMatroska'],
           'visiblePixelRgba': pixels,

@@ -145,8 +145,10 @@ SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 class FakeAdb:
     """An `adb` that fails like a cold guest, then serves the real tree."""
 
-    def __init__(self, transient_dumps, flow="open", media_confirmation="Open"):
+    def __init__(self, transient_dumps, flow="open", media_confirmation="Open", guest_log=None):
         self.transient = transient_dumps
+        self.flow = flow
+        self.guest_log = guest_log
         self.tree_index = 0
         self.taps = []
         self.actions = []
@@ -160,6 +162,13 @@ class FakeAdb:
                 MEDIA_FIRST_SELECTED,
                 MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
             ],
+            "media-relink": [
+                DRAWER,
+                PROVIDER,
+                MEDIA_GRID_PARTIAL,
+                MEDIA_LIST,
+                MEDIA_SECOND_SELECTED,
+            ],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "caption-import": [DRAWER, PROVIDER, CAPTION],
             "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
@@ -170,6 +179,14 @@ class FakeAdb:
                      MEDIA_FIRST_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
+            "both-relink": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
+                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
+                     MEDIA_GRID_PARTIAL,
+                     MEDIA_LIST,
+                     MEDIA_FIRST_SELECTED,
+                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
+                     MEDIA_GRID_PARTIAL, MEDIA_LIST, MEDIA_SECOND_SELECTED],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -192,6 +209,15 @@ class FakeAdb:
             self.actions.append((action, tree_index))
             if action == "tap":
                 self.taps.append(command[-2:])
+                tree_index = self.tree_index - 1
+                is_relink_selection = (
+                    self.flow == "media-relink"
+                    or (self.flow == "both-relink" and tree_index >= 20)
+                )
+                if (is_relink_selection and command[-2:] == ["160", "302"]
+                        and self.guest_log is not None):
+                    with self.guest_log.open("a", encoding="utf-8") as guest:
+                        guest.write("ANDROID_SAF_MEDIA_RELINK_COMPLETE\n")
             elif action == "swipe":
                 pass
             else:
@@ -206,7 +232,7 @@ def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
         adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
@@ -256,6 +282,30 @@ class SelectorTests(unittest.TestCase):
             self.assertIn(
                 "Selected tiny-second.mkv,tiny.mkv for media through native DocumentsUI.",
                 selected_report,
+            )
+
+    def test_media_relink_selects_exactly_one_replacement_video(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media-relink", guest_log=guest)
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media-relink")
+
+            self.assertEqual(
+                adb.actions,
+                [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3)],
+                "relink opens the list view and selects only tiny-second.mkv",
+            )
+            self.assertIn(
+                "action=tap target=tiny-second.mkv",
+                (output / "documents-ui-selector.log").read_text(),
+            )
+            self.assertIn(
+                "Selected tiny-second.mkv for media-relink through native DocumentsUI.",
+                (output / "documents-ui-selection.txt").read_text(),
             )
 
     def test_media_flow_adds_missing_file_after_a_prior_selection(self):
@@ -376,6 +426,32 @@ class SelectorTests(unittest.TestCase):
                 ],
                 "DocumentsUI selections must follow open, export, media, caption import and caption export",
             )
+
+    def test_combined_relink_flow_waits_for_the_real_relink_picker(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text(
+                "\n".join(
+                    [
+                        "ANDROID_SAF_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
+                    ]
+                )
+                + "\n"
+            )
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="both-relink", guest_log=guest)
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "both-relink")
+
+            self.assertEqual(len(adb.actions), 22)
+            selections = (output / "documents-ui-selection.txt").read_text()
+            self.assertIn("Selected tiny-second.mkv for media-relink", selections)
 
 
 if __name__ == "__main__":
