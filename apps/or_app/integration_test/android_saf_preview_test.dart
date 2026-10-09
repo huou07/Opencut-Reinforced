@@ -565,7 +565,28 @@ void main() {
         tester,
         () => gateway.playCalls == playCallsBeforeBackground + 1,
       );
-      expect(gateway.lastPreview!.playing, isTrue);
+      final playResult = gateway.playResult!;
+      final polledPreview = gateway.lastPreview!;
+      String time(ProjectRationalTime? value) =>
+          value == null ? 'none' : '${value.numerator}/${value.denominator}';
+      debugPrint(
+        'ANDROID_SAF_BACKGROUND_PLAY_STATE '
+        'resultPlaying=${playResult.playing} '
+        'resultPosition=${time(playResult.position)} '
+        'resultEnd=${time(playResult.contentEnd)} '
+        'resultFrame=${playResult.frameSequence} '
+        'polledPlaying=${polledPreview.playing} '
+        'polledPosition=${time(polledPreview.position)} '
+        'polledEnd=${time(polledPreview.contentEnd)} '
+        'polledFrame=${polledPreview.frameSequence} '
+        'playMicros=${gateway.playMicros}',
+      );
+      expect(
+        polledPreview.playing,
+        isTrue,
+        reason:
+            'Preview was not actively playing before Android backgrounding.',
+      );
       debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_START');
       expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
       debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE');

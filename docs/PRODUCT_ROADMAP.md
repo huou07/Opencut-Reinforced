@@ -509,9 +509,20 @@ background/resume transition, so no cleanup callback was due. The acceptance
 had incorrectly required a cleanup/restoration pair on every such transition.
 The correction now preserves the real post-resume pixel assertion and records
 the actual callback counters, requiring restoration only when cleanup is
-reported. Its hosted rerun is pending. The trace also recorded a 184-frame
-startup stall (plus smaller stalls); Android performance remains unaccepted
-and needs a measured diagnosis.
+reported. Run [37967821791](https://github.com/huou07/Opencut-Reinforced/actions/runs/37967821791)
+on `457c1a0cc5221f27ef90516571aa0417481581c2` passed every non-Android job,
+including macOS lifecycle/package verification, but Android failed earlier at
+the assertion that playback remains active immediately before backgrounding.
+The native Play command returned without an error, while the observed preview
+state was `playing=false`; the test stopped before reaching the surface
+lifecycle assertion. Therefore this run does not verify the revised surface
+condition. A new diagnostic records both returned and polled play state, exact
+position/content end, frame sequence, and call duration; the Android SAF gate
+remains open. This run's logs also recorded a 328-frame stall and other long
+frame gaps. The 328-frame record is on PID 1107 before the OR
+process starts, so its ownership is not established; the SAF journey later
+logged 160 skipped frames on the OR process. Android performance remains
+unaccepted and needs a measured diagnosis.
 
 ## Traceability from the preserved roadmap
 
