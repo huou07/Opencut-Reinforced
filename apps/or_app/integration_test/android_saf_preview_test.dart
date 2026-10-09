@@ -1100,7 +1100,14 @@ void main() {
       final oldTexture = (await OrViewerTexture.textureId())!;
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: Texture(textureId: oldTexture)),
+          home: Scaffold(
+            body: Center(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Texture(textureId: oldTexture),
+              ),
+            ),
+          ),
         ),
       );
       for (var i = 0; i < 8; i++) {
@@ -1136,7 +1143,14 @@ void main() {
       expect(recreated, isNot(oldTexture));
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: Texture(textureId: recreated)),
+          home: Scaffold(
+            body: Center(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Texture(textureId: recreated),
+              ),
+            ),
+          ),
         ),
       );
       await _settleRecreatedSurface(tester);

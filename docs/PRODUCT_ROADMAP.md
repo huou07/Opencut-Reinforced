@@ -435,6 +435,19 @@ guard intentionally has no preceding seek; the 0.5-second video can finish
 while its caption remains visible. Keep that no-seek Play assertion, then seek
 to exact time zero before using the source frame to assess surface resets.
 
+Exact-SHA run `37949628216` on `de33051` passed Rust, Flutter static/widget,
+descriptor-boundary, Linux and Windows checks; the Android SAF journey passed
+provider sync/readback, fresh-session reopen/play, and the exact-zero frame
+wait, then failed the texture pixel assertion after eight forced surface
+recreations. The preserved capture is 320×640: the solid-red source is red at
+both sides but has a white vertical band across the center. The regular editor
+captures from the same journey show the red source in its square preview. The
+stress-only harness had replaced the editor with a bare `Texture` stretched
+over the full portrait viewport, so the acceptance now retains a square
+preview aspect ratio for both existing- and recreated-producer checks while
+keeping the center-pixel assertion unchanged. This tests the Android surface in
+the same geometry as the product; the hypothesis requires a hosted rerun.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
