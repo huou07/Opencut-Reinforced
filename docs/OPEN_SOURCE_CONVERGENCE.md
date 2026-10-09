@@ -426,7 +426,12 @@ optional hosted comparison only if it can answer a concrete runtime or
 maintenance-cost question. This limits replacement evidence; it is not a
 claim that MLT is inferior or a reason to block user-facing work.
 
-## Mission continuation at current live `main`
+## Historical mission snapshot at `cf5542a` (2026-10-09)
+
+The following record is retained as an immutable historical snapshot; its
+"current live main" wording described the repository on 2026-10-09 and is no
+longer current. The dated live-state follow-up below records subsequent
+evidence without rewriting this snapshot.
 
 The operator's reference SHA `affc71a5bee840fed68536bfa47e7abe825b908e`
 is an ancestor of the live repository, not its current head. At this mission

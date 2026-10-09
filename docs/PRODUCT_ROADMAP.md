@@ -475,6 +475,29 @@ does not claim that arbitrary forced surface replacement is product behavior.
 [Flutter SurfaceProducer API](https://api.flutter.dev/javadoc/io/flutter/view/TextureRegistry.SurfaceProducer.html),
 [Flutter Android surface lifecycle guidance](https://docs.flutter.dev/release/breaking-changes/android-surface-plugins).
 
+## Next high-value product gap: everyday media compatibility
+
+The current shipped FFmpeg profile accepts only Matroska with FFV1 video and
+PCM S16LE audio; the export writer emits that same profile. This is a
+correctness fixture profile, not useful general-purpose media support for
+normal phone and camera footage. The source requirements already identify
+MP4/MOV, H.264, H.265, WebM, VP9, and AV1 as future profiles subject to legal,
+platform, and exact-build review. Treat this as one connected product
+capability spanning probing/import, package configuration, decode/preview,
+and export, rather than isolated roadmap checkpoints.
+
+Before shipping a profile, inspect actual decoder/encoder support and build
+flags for every target; review component licenses, patent/distribution
+constraints and FFmpeg notices/source provenance; exercise generated legal
+fixtures through clean packaged desktop and Android paths; and measure decode,
+preview, export time, output size, CPU, memory, and failure behavior. Preserve
+structured unsupported-format reporting and keep the existing Matroska
+lossless path available. Do not select a delivery codec from familiarity or
+README claims alone, and do not promote any candidate to supported until its
+real package and user journey pass. The audit keeps FFmpeg as the current
+media foundation; MLT remains an optional measured comparison, not a
+prerequisite or assumed replacement.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
