@@ -146,15 +146,21 @@ def select(device, guest_log, output, flow="open"):
                 ),
                 None,
             )
-            if next_media is not None:
+            expected_media = set(media)
+            # DocumentsUI can briefly expose only part of its provider listing
+            # while loading/relayout is in progress. Do not infer that a
+            # partial set is the whole acceptance selection; the known fixture
+            # names are the completion contract for this journey.
+            listing_complete = available_media == expected_media
+            if listing_complete and next_media is not None:
                 action = "long-press" if not selected_media else "tap"
                 retry_wait = time.monotonic() - last_media_action_at < 1.5
                 if last_media_action != (next_media, action) or not retry_wait:
                     target = media[next_media]
                     pending_media = next_media
             elif (
-                available_media
-                and available_media.issubset(selected_media)
+                listing_complete
+                and expected_media.issubset(selected_media)
                 and media_action is not None
             ):
                 target = media_action
@@ -188,7 +194,7 @@ def select(device, guest_log, output, flow="open"):
             if target is document or target is caption_file or target is save or (flow == "media" and target is media_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = (
-                        "two media documents" if flow == "media" else
+                        ",".join(sorted(selected_media)) if flow == "media" else
                         "caption file" if flow == "caption-import" else
                         "caption export" if flow == "caption-export" else
                         "OR SAF acceptance"

@@ -131,6 +131,20 @@ a fixture reproducing the observed one-file selection. All ten selector and
 seven report tests pass locally; Android caption acceptance still requires a
 hosted rerun.
 
+Run `37874871831` passed Rust, Flutter static/widget, Linux and Windows
+packaged-product checks, and the descriptor boundary. Android built the
+all-ABI APK and passed the packaged FFmpeg/Flutter bridge check, but the real
+SAF journey failed at the two-file media import assertion. The preserved
+DocumentsUI tree and provider log show that the picker returned one source
+(`count=1`); the driver had treated the currently visible filenames as the
+complete expected set while DocumentsUI was still loading its provider list.
+This was a selector false-positive, and the product correctly exposed that
+only one document had been imported. The selector now requires both known
+fixture filenames to be present together before it can complete the selection,
+and its regression fixture models the partial-list state. All ten selector
+tests pass locally. The macOS job from this run is still completing; the next
+exact-SHA run must verify the revised selector and caption journey on Android.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final

@@ -66,15 +66,6 @@ DOCUMENT = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
-MEDIA = b"""<?xml version='1.0' encoding='UTF-8'?>
-<hierarchy rotation="0">
-  <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
-        package="com.android.documentsui" bounds="[0,200][1080,300]" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
-        package="com.android.documentsui" bounds="[0,320][1080,420]" />
-</hierarchy>
-"""
-
 MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
@@ -82,6 +73,15 @@ MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
   <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
   <node index="2" text="Select" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
+</hierarchy>
+"""
+
+MEDIA_LIST_PARTIAL = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
+  <node index="1" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
 </hierarchy>
 """
@@ -134,7 +134,7 @@ class FakeAdb:
             "media": [
                 DRAWER,
                 PROVIDER,
-                MEDIA,
+                MEDIA_LIST_PARTIAL,
                 MEDIA_SECOND_SELECTED,
                 MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
             ],
@@ -142,7 +142,8 @@ class FakeAdb:
             "caption-import": [DRAWER, PROVIDER, CAPTION],
             "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
-                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA,
+                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
+                     MEDIA_LIST_PARTIAL,
                      MEDIA_SECOND_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
@@ -218,14 +219,19 @@ class SelectorTests(unittest.TestCase):
 
             self.assertEqual(
                 adb.actions,
-                [("tap", 0), ("tap", 1), ("swipe", 2), ("tap", 3), ("tap", 4)],
-                "selection must follow the UI state, add the missing media, then Open",
+                [("tap", 0), ("tap", 1), ("tap", 3), ("tap", 4)],
+                "an incomplete listing must not finish selection; add the missing media, then Open",
             )
             self.assertEqual(adb.taps[2], ["540", "250"])
             self.assertEqual(adb.taps[3], ["990", "750"])
             selection_log = (output / "documents-ui-selector.log").read_text()
             self.assertIn("selected=tiny-second.mkv", selection_log)
             self.assertIn("action=tap target=tiny.mkv", selection_log)
+            selected_report = (output / "documents-ui-selection.txt").read_text()
+            self.assertIn(
+                "Selected tiny-second.mkv,tiny.mkv for media through native DocumentsUI.",
+                selected_report,
+            )
 
     def test_media_flow_accepts_select_confirmation_on_current_documentsui(self):
         with tempfile.TemporaryDirectory() as work:
@@ -279,7 +285,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both")
 
-            self.assertEqual(len(adb.actions), 17)
+            self.assertEqual(len(adb.actions), 16)
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
@@ -314,7 +320,6 @@ class SelectorTests(unittest.TestCase):
                     ("tap", 6),
                     ("tap", 7),
                     ("tap", 8),
-                    ("swipe", 9),
                     ("tap", 10),
                     ("tap", 11),
                     ("tap", 12),
