@@ -1115,6 +1115,13 @@ void main() {
         expect(await _frameAvailable('surface-stress'), isTrue);
         expect((await _resources())['inFlightLeases'], 0);
         expect(_providerFds(), 1);
+        if (i == 0) {
+          await _redTexture(
+            tester,
+            binding,
+            'saf-existing-surface-after-first-reset',
+          );
+        }
       }
       final presentations = await Future.wait(
         List.generate(64, (_) => _frameAvailable('parallel-stress')),

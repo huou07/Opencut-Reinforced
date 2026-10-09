@@ -442,11 +442,21 @@ wait, then failed the texture pixel assertion after eight forced surface
 recreations. The preserved capture is 320×640: the solid-red source is red at
 both sides but has a white vertical band across the center. The regular editor
 captures from the same journey show the red source in its square preview. The
-stress-only harness had replaced the editor with a bare `Texture` stretched
-over the full portrait viewport, so the acceptance now retains a square
-preview aspect ratio for both existing- and recreated-producer checks while
-keeping the center-pixel assertion unchanged. This tests the Android surface in
-the same geometry as the product; the hypothesis requires a hosted rerun.
+stress-only harness now retains a square preview aspect ratio for both
+existing- and recreated-producer checks, but the next hosted run disproved the
+layout hypothesis: the center band remained. The strict source-pixel check is
+unchanged. The next run separates a single `getForcedNewSurface` reset from
+damage that accumulates across eight resets by capturing immediately after the
+first reset.
+
+Exact-SHA run `37953579159` on `4cf79ed` passed the hosted Rust, Flutter,
+descriptor-boundary, Linux and Windows jobs. Its Android APK built and emulator
+bridge check passed, then SAF acceptance again failed at the white center pixel
+after the surface stress sequence. The square-aspect screenshot confirms a
+red/white/red band inside the preview itself, so incorrect portrait stretching
+does not explain the result. The Android job evidence is preserved in the
+[workflow run](https://github.com/huou07/Opencut-Reinforced/actions/runs/37953579159);
+the macOS lifecycle job was still running when this diagnostic was prepared.
 
 ## Traceability from the preserved roadmap
 
