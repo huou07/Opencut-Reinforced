@@ -560,6 +560,23 @@ the strict pixel assertion is unchanged. The run also recorded 173 skipped
 frames on OR PID 3639 during the SAF journey. Android performance remains
 unaccepted.
 
+Run [37982658035](https://github.com/huou07/Opencut-Reinforced/actions/runs/37982658035)
+on exact SHA `44eb9b527476ae6f057ae7a42089b55b9ff750ac` passed Rust, Flutter
+static/widget, descriptor-boundary, Linux, Windows, and macOS packaged/
+lifecycle jobs. Android failed at the same reopened raw-texture center-pixel
+assertion after all eight post-mount frame submissions succeeded. The added
+geometry diagnostic confirms the sample is correctly inside the texture:
+`Rect(0,160,320,480)` in a `320x640` screenshot at DPR 1. Horizontal RGBA
+samples across the texture center row are red at 10% and 25%, white at 50%,
+pale red at 75%, and red at 90%. The coordinates are therefore correct, but
+the reopened raw texture is not a uniform red frame. Normal editor and
+background-resume screenshots from this journey remain solid red. The next
+diagnostic will inspect sampled colors in the copied native Android bitmap
+before it is posted to `SurfaceProducer`, separating the bridge/decoder output
+from Android surface composition. Keep the strict screenshot assertion. The
+run also recorded 146 skipped UI frames on OR PID 3664 and 122 skipped frames
+on PID 2895 during the SAF journey; Android performance remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

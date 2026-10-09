@@ -43,6 +43,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private val surfaceEpoch = AtomicLong(0)
     private val bindingEpoch = AtomicLong(0)
     private val staleDrops = AtomicLong(0)
+    private val lastLoggedBitmapGeneration = AtomicLong(-1)
     private val pendingFrameResults = mutableListOf<MethodChannel.Result>()
     private var frameRequestedWhilePending = false
     private var surfaceAvailable = false // Main thread only, including callbacks and drawing.
@@ -305,6 +306,17 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                             bitmap?.recycle(); bitmap = it
                                         }
                                     copyBgraIntoArgb8888(target, frame)
+                                    if (lastLoggedBitmapGeneration.getAndSet(frame.generation) != frame.generation) {
+                                        val y = target.height / 2
+                                        val samples = listOf(0.1, 0.25, 0.5, 0.75, 0.9).joinToString(",") { fraction ->
+                                            val x = (target.width * fraction).toInt().coerceIn(0, target.width - 1)
+                                            "$x:${Integer.toHexString(target.getPixel(x, y))}"
+                                        }
+                                        android.util.Log.i(
+                                            "OrViewerTexture",
+                                            "ANDROID_BITMAP_PIXELS generation=${frame.generation} size=${target.width}x${target.height} row=$y samples=$samples",
+                                        )
+                                    }
                                     copiedGeneration = frame.generation
                                 } else staleDrops.incrementAndGet()
                             } finally { nativeReleaseFrame(frame.releaseContext) }
