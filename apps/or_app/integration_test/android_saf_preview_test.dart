@@ -276,6 +276,7 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
   int importCalls = 0, importMicros = 0;
+  int captionImportCalls = 0, captionExportCalls = 0;
   bool closed = false;
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
@@ -322,6 +323,38 @@ class _ObservedGateway extends RustProjectGateway {
     } finally {
       importCalls++;
       importMicros = watch.elapsedMicroseconds;
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> importTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  ) async {
+    try {
+      return await super.importTimelineCaptions(session, current, path);
+    } finally {
+      captionImportCalls++;
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> exportTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String path,
+    required ProjectCaptionFileFormat format,
+  }) async {
+    try {
+      return await super.exportTimelineCaptions(
+        session,
+        current,
+        path: path,
+        format: format,
+      );
+    } finally {
+      captionExportCalls++;
     }
   }
 
@@ -566,6 +599,60 @@ void main() {
       // Keep the granted source descriptors alive while the project revision
       // reconnects the viewer; project close below owns their release.
       await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+
+      final importCaptionsButton = find.byKey(
+        const ValueKey('timeline-import-captions'),
+      );
+      await tester.ensureVisible(importCaptionsButton);
+      await tester.tap(importCaptionsButton);
+      debugPrint('ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY');
+      await _until(
+        tester,
+        () => find.text('Import SubRip captions?').evaluate().isNotEmpty,
+      );
+      await tester.tap(find.text('Import').last);
+      await _until(tester, () => gateway.captionImportCalls == 1);
+      var captionTracks = (await gateway.listTimelineTracks(session)).items
+          .where((track) => track.kind == ProjectTimelineTrackKind.caption)
+          .toList();
+      expect(captionTracks, hasLength(1));
+      var captionPage = await gateway.listTimelineClips(
+        session,
+        trackId: captionTracks.single.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(captionPage.items.single.text, 'Imported SAF caption');
+      final captionImportRevision = (await gateway.summary(session)).revision;
+
+      final exportCaptionsButton = find.byKey(
+        const ValueKey('timeline-export-captions'),
+      );
+      await tester.ensureVisible(exportCaptionsButton);
+      await tester.tap(exportCaptionsButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      debugPrint('ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY');
+      await _until(tester, () => gateway.captionExportCalls == 1);
+      await _until(
+        tester,
+        () => find.text('Caption file exported.').evaluate().isNotEmpty,
+      );
+      final captionExport = await _control('status');
+      expect(captionExport['captionExportBytes'], greaterThan(0));
+      expect(captionExport['validSrtCaption'], isTrue);
+
+      captionTracks = (await gateway.listTimelineTracks(session)).items
+          .where((track) => track.kind == ProjectTimelineTrackKind.caption)
+          .toList();
+      expect(captionTracks, hasLength(1));
+      captionPage = await gateway.listTimelineClips(
+        session,
+        trackId: captionTracks.single.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(captionPage.items.single.text, 'Imported SAF caption');
 
       // Compact transport and editing tools must remain reachable by touch.
       await _dragSeekUi(tester, gateway, .65);
@@ -937,6 +1024,7 @@ void main() {
               'mobileMediaLibrarySheet',
               'mobileSelectedClipInspectorSheet',
               'androidSafExportToDocumentsUi',
+              'androidSafCaptionImportAndExportThroughDocumentsUi',
               'recoveryCheckpointPersistedBeforeProcessStop',
             ])
               name: true,
@@ -946,8 +1034,15 @@ void main() {
           'appUid': provider['appUid'],
           'projectRevision': revision.toString(),
           'mediaImportRevision': importedRevision.toString(),
+          'captionImportRevision': captionImportRevision.toString(),
+          'captionImportCalls': gateway.captionImportCalls,
+          'captionExportCalls': gateway.captionExportCalls,
+          'captionExportBytes': captionExport['captionExportBytes'],
+          'captionExportValidSrt': captionExport['validSrtCaption'],
           'mediaImportMicros': gateway.importMicros,
-          'mediaImportSourceUri': imported.items.single.sourceUri,
+          'mediaImportSourceUris': imported.items
+              .map((item) => item.sourceUri)
+              .toList(growable: false),
           'exportBytes': exported['exportBytes'],
           'exportValidMatroska': exported['validMatroska'],
           'visiblePixelRgba': pixels,

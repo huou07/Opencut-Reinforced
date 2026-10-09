@@ -74,20 +74,26 @@ real engine migration dependency.
 
 ## Next coherent implementation slice
 
-The bounded `subtitler` SRT/WebVTT core codec and atomic
-`timeline.captions.import` command are implemented and tested. One command adds
-the complete validated Caption track at one project revision and creates one
-undo/redo entry; invalid overlaps and duplicate IDs reject the whole import.
-This is still not an end-user product capability: there is no picker,
-save/reopen journey, or export UI. The published crate adds 29 unique packages
-to the OR workspace graph and currently brings `clap` and
-`tracing-subscriber` into `or_core`; upstream PR #8 proposes removing that
-library-only cost but is not merged. Continue with the canonical timeline
-command/history and a package-size measurement. Keep or remove the dependency
-based on the complete user journey and measured package cost. Then wire the
-same SRT/WebVTT semantics to desktop and Android file selection, save/reopen,
-and export. Imported cue boundaries must remain exact rational times, and
-unsupported styling/placement must be reported before applying the import.
+SRT/WebVTT caption interchange now has a bounded core codec, one-revision
+atomic `timeline.captions.import`, desktop file selection, Android file-backed
+SAF staging, pre-import cue/loss preview, and caption export through the same
+exact-time codec. Export pages caption tracks under one captured revision and
+uses an atomic destination write. Desktop bridge coverage now imports, saves,
+reopens, and exports a real SRT fixture. Android DocumentsUI acceptance has
+been extended to exercise real SAF import/export and validate provider bytes;
+that hosted journey is still pending. The generic provider harness also had a
+pre-existing report bug: it imported two media files but called `.single` when
+recording their URIs. Run `37864682420` exposed this at
+`android_saf_preview_test.dart:950`; the report and verifier now retain both
+URIs and assert both selected files.
+
+The published `subtitler` crate still adds 29 unique packages to the OR graph
+and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
+proposes removing that library-only cost but is not merged. Measure the final
+packaged runtime size and run the completed desktop and Android caption
+journeys before deciding whether to keep the dependency. Imported cue
+boundaries remain exact rational times, and unsupported styling/placement is
+reported for confirmation before applying the import.
 
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition

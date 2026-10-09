@@ -142,6 +142,22 @@ class ProjectActionResult {
   final ProjectReadModel? view;
 }
 
+class ProjectCaptionImportPreview {
+  const ProjectCaptionImportPreview({
+    required this.formatName,
+    required this.cueCount,
+    required this.formattingLossCount,
+    required this.emptyCuesSkipped,
+  });
+
+  final String formatName;
+  final BigInt cueCount;
+  final BigInt formattingLossCount;
+  final BigInt emptyCuesSkipped;
+}
+
+enum ProjectCaptionFileFormat { srt, webVtt }
+
 class ProjectExportJob {
   const ProjectExportJob({
     required this.succeeded,
@@ -810,6 +826,21 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     ProjectTimelineTrackKind kind,
   );
+  Future<ProjectActionResult> importTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  );
+  Future<ProjectCaptionImportPreview> previewTimelineCaptions(
+    ProjectSessionHandle session,
+    String path,
+  );
+  Future<ProjectActionResult> exportTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String path,
+    required ProjectCaptionFileFormat format,
+  });
   Future<ProjectActionResult> removeTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current,

@@ -316,6 +316,8 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.text),
               onAddCaptionTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
+              onImportCaptions: _importTimelineCaptions,
+              onExportCaptions: _exportTimelineCaptions,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
@@ -858,6 +860,7 @@ class _AppShellState extends State<AppShell> {
     Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
     operation, {
     ValueChanged<String>? onFailure,
+    ValueChanged<String>? onSuccess,
   }) {
     final current = _activeProject;
     if (current == null) return Future.value(null);
@@ -865,6 +868,7 @@ class _AppShellState extends State<AppShell> {
       current,
       operation,
       onFailure: onFailure,
+      onSuccess: onSuccess,
     );
   }
 
@@ -873,6 +877,7 @@ class _AppShellState extends State<AppShell> {
     Future<ProjectActionResult> Function(ProjectSessionHandle, ProjectReadModel)
     operation, {
     ValueChanged<String>? onFailure,
+    ValueChanged<String>? onSuccess,
   }) async {
     final session = _activeSession;
     final current = _activeProject;
@@ -924,6 +929,7 @@ class _AppShellState extends State<AppShell> {
         }
         return null;
       }
+      if (result.message.isNotEmpty) onSuccess?.call(result.message);
       final updated =
           result.view ?? await widget.projectGateway.summary(session);
       final changed = updated.revision != expected.revision;
@@ -1294,6 +1300,169 @@ class _AppShellState extends State<AppShell> {
           widget.projectGateway.addTimelineTrack(session, current, kind),
     );
   }
+
+  Future<void> _importTimelineCaptions() async {
+    final session = _activeSession;
+    final snapshot = _activeProject;
+    if (session == null || snapshot == null || _busy) return;
+    String? path;
+    try {
+      path = await widget.projectFilePicker.openCaptionFile();
+      if (path == null || !mounted) return;
+      final preview = await widget.projectGateway.previewTimelineCaptions(
+        session,
+        path,
+      );
+      if (!mounted) return;
+      final confirmed = await _confirmCaptionImport(preview);
+      if (confirmed != true || !mounted) return;
+      await _runProjectActionAtSnapshot(
+        snapshot,
+        (session, current) => widget.projectGateway.importTimelineCaptions(
+          session,
+          current,
+          path!,
+        ),
+        onSuccess: (message) => setState(() => _projectNotice = message),
+      );
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+    } catch (_) {
+      _showUnavailable('The selected caption file could not be imported.');
+    } finally {
+      if (path != null) {
+        try {
+          await widget.projectFilePicker.cleanupCaptionFile(path);
+        } on Object {
+          if (mounted) {
+            _showUnavailable(
+              'The temporary caption copy could not be removed.',
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<bool?> _confirmCaptionImport(
+    ProjectCaptionImportPreview preview,
+  ) => showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Import ${preview.formatName} captions?'),
+      content: Text(
+        [
+          '${preview.cueCount} ${preview.cueCount == BigInt.one ? 'caption' : 'captions'} will be added to a new caption track.',
+          if (preview.formattingLossCount > BigInt.zero)
+            '${preview.formattingLossCount} cues contain styling or placement that will be simplified to plain text.',
+          if (preview.emptyCuesSkipped > BigInt.zero)
+            '${preview.emptyCuesSkipped} empty cues will be skipped.',
+        ].join('\n\n'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Import'),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _exportTimelineCaptions() async {
+    final session = _activeSession;
+    final snapshot = _activeProject;
+    if (session == null || snapshot == null || _busy) return;
+    final format = await _chooseCaptionExportFormat();
+    if (format == null || !mounted) return;
+    final extension = format == ProjectCaptionFileFormat.webVtt ? 'vtt' : 'srt';
+    String? path;
+    try {
+      path = await widget.projectFilePicker.saveCaptionPath(
+        suggestedName: 'captions.$extension',
+      );
+      if (path == null || !mounted) return;
+      final result = await _runProjectActionAtSnapshot(
+        snapshot,
+        (session, current) => widget.projectGateway.exportTimelineCaptions(
+          session,
+          current,
+          path: path!,
+          format: format,
+        ),
+      );
+      if (result == null || !mounted) return;
+      await widget.projectFilePicker.publishCaptionPath(path);
+      if (mounted) {
+        setState(() => _projectNotice = 'Caption file exported.');
+      }
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+    } catch (_) {
+      _showUnavailable('The caption file could not be exported.');
+    } finally {
+      if (path != null) {
+        try {
+          await widget.projectFilePicker.discardCaptionPath(path);
+        } on Object {
+          if (mounted) {
+            _showUnavailable(
+              'The temporary caption export could not be removed.',
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<ProjectCaptionFileFormat?> _chooseCaptionExportFormat() =>
+      showDialog<ProjectCaptionFileFormat>(
+        context: context,
+        builder: (context) {
+          var selected = ProjectCaptionFileFormat.srt;
+          return StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Export captions'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    onTap: () => setDialogState(
+                      () => selected = ProjectCaptionFileFormat.srt,
+                    ),
+                    title: const Text('SubRip (.srt)'),
+                    trailing: selected == ProjectCaptionFileFormat.srt
+                        ? const Icon(Icons.check)
+                        : null,
+                  ),
+                  ListTile(
+                    onTap: () => setDialogState(
+                      () => selected = ProjectCaptionFileFormat.webVtt,
+                    ),
+                    title: const Text('WebVTT (.vtt)'),
+                    trailing: selected == ProjectCaptionFileFormat.webVtt
+                        ? const Icon(Icons.check)
+                        : null,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(selected),
+                  child: const Text('Continue'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
 
   Future<void> _removeTimelineTrack(
     ProjectReadModel expected,

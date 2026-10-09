@@ -1482,6 +1482,8 @@ jobs:
           grep -Fq 'for open through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for media through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           grep -Fq 'for export through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
+          grep -Fq 'for caption-import through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
+          grep -Fq 'for caption-export through native DocumentsUI' "$OR_ANDROID_ACCEPTANCE_OUTPUT/documents-ui-selection.txt"
           for image in saf-editor-texture saf-editor-permission-recovered saf-surface-recreated; do
             test -s "$OR_ANDROID_ACCEPTANCE_OUTPUT/$image.png"
           done

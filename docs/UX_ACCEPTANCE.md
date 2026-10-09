@@ -188,6 +188,12 @@ today.
   Move, duplicate, and delete continue through the canonical timeline command
   path. Preview text is rasterized from bundled Inter rather than Flutter text
   widgets or host-installed fonts.
+- SRT/WebVTT caption import previews cue count and any styling/placement loss
+  before confirmation, then adds one editable Caption track through one
+  canonical project revision. Caption export offers SRT or WebVTT and saves
+  through the platform file boundary. Exact subtitle millisecond times are
+  preserved; packaged macOS, Windows, Linux, and Android journeys must verify
+  these controls before this capability is marked accepted.
 - For 8E, selecting an unlocked Audio clip exposes gain in dB, pan in percent,
   and exact rational fade-in/fade-out times in the Inspector. Apply and Reset
   use the canonical clip-update command and preserve exact clip timing. Desktop

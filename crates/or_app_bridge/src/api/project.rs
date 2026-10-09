@@ -5,20 +5,21 @@ use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, Pre
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
-    CacheStoreConfig, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, EffectReference,
-    ExportRequest, ExportResponse, FontIdentity, JobId, JobManagerConfig, JobSnapshot, JobState,
-    MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
-    MediaArtifactRequestState, MediaArtifactService, MediaArtifactServiceConfig, MediaId,
-    MediaItem, MediaStreamMetadata, Opacity, OperationError, OperationErrorCode,
-    ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError, ProjectRevision,
-    QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
+    CacheStoreConfig, CaptionFileFormat, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop,
+    EffectReference, ExportRequest, ExportResponse, FontIdentity, ImportedCaption, JobId,
+    JobManagerConfig, JobSnapshot, JobState, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
+    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
+    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, Opacity, OperationError,
+    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
+    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
     RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
     TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
     TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
     TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
     TrackState, Transform, TransitionKind, TransitionReference, VisualSettings,
-    apply_project_recovery, discard_project_recovery, ffmpeg_executable_from_environment,
-    inspect_project_recovery, prepare_media_import,
+    apply_project_recovery, discard_project_recovery, encode_caption_file,
+    ffmpeg_executable_from_environment, inspect_project_recovery, parse_caption_file,
+    prepare_media_import,
 };
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
@@ -27,11 +28,23 @@ use or_ipc::{
     ProjectHostEventKind,
 };
 use std::{
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
     thread,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CaptionFileFormatView {
+    Srt,
+    WebVtt,
+}
 
 #[derive(Clone, Debug)]
 pub struct ProjectView {
@@ -49,6 +62,14 @@ pub struct ProjectActionResult {
     pub error_code: String,
     pub message: String,
     pub view: Option<ProjectView>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectCaptionImportPreviewView {
+    pub format_name: String,
+    pub cue_count: u64,
+    pub formatting_loss_count: u64,
+    pub empty_cues_skipped: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -648,6 +669,128 @@ pub fn discard_recovery(path: String) -> RecoveryActionResult {
 }
 
 impl ProjectHostHandle {
+    pub fn export_timeline_captions(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        path: String,
+        format: CaptionFileFormatView,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        match self.export_captions_at_revision(
+            project_id,
+            project_instance_id,
+            revision.value(),
+            Path::new(&path),
+            match format {
+                CaptionFileFormatView::Srt => CaptionFileFormat::Srt,
+                CaptionFileFormatView::WebVtt => CaptionFileFormat::WebVtt,
+            },
+        ) {
+            Ok(count) => ProjectActionResult {
+                succeeded: true,
+                error_code: String::new(),
+                message: format!("Exported {count} captions."),
+                view: self.project_view().ok(),
+            },
+            Err(error) => action_error(error),
+        }
+    }
+
+    fn export_captions_at_revision(
+        &self,
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_revision: u64,
+        path: &Path,
+        format: CaptionFileFormat,
+    ) -> Result<usize, ProjectBridgeError> {
+        let tracks_result = self.query(QueryEnvelope::timeline_tracks_v2(
+            project_id,
+            project_instance_id,
+        ))?;
+        if tracks_result.summary.project_revision.value() != expected_revision {
+            return Err(revision_conflict_error());
+        }
+        let tracks = tracks_result
+            .timeline_tracks_v2
+            .ok_or_else(unexpected_response_error)?;
+        let mut captions = Vec::new();
+        for track in tracks
+            .into_iter()
+            .filter(|track| track.kind == TrackKind::Caption)
+        {
+            let mut offset = 0usize;
+            loop {
+                let page_result = self.query(QueryEnvelope::timeline_clips_v2(
+                    tracks_result.summary.project_id,
+                    tracks_result.summary.project_instance_id,
+                    track.track_id,
+                    offset,
+                    100,
+                ))?;
+                if page_result.summary.project_revision.value() != expected_revision {
+                    return Err(revision_conflict_error());
+                }
+                let page = page_result
+                    .timeline_clip_page_v2
+                    .ok_or_else(unexpected_response_error)?;
+                for clip in page.items {
+                    if let ClipContent::Caption { text, .. } = clip.content {
+                        captions.push(ImportedCaption {
+                            start: clip.timeline_start,
+                            duration: clip.timeline_duration,
+                            text,
+                        });
+                    }
+                }
+                match page.next_offset {
+                    Some(next) => offset = next,
+                    None => break,
+                }
+            }
+        }
+        captions.sort_by_key(|caption| caption.start);
+        if captions.is_empty() {
+            return Err(ProjectBridgeError {
+                code: "CAPTION_TRACK_EMPTY".to_owned(),
+                message: "The project has no captions to export.".to_owned(),
+            });
+        }
+        let bytes = encode_caption_file(format, &captions).map_err(|error| ProjectBridgeError {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+        })?;
+        write_caption_file_atomically(path, &bytes)?;
+        Ok(captions.len())
+    }
+
+    pub fn preview_timeline_captions(
+        &self,
+        path: String,
+    ) -> Result<ProjectCaptionImportPreviewView, ProjectBridgeError> {
+        let bytes = read_bounded_caption_file(Path::new(&path))?;
+        let plan = parse_caption_file(&bytes).map_err(|error| ProjectBridgeError {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+        })?;
+        Ok(ProjectCaptionImportPreviewView {
+            format_name: match plan.format {
+                or_core::CaptionFileFormat::Srt => "SubRip",
+                or_core::CaptionFileFormat::WebVtt => "WebVTT",
+            }
+            .to_owned(),
+            cue_count: plan.captions.len() as u64,
+            formatting_loss_count: plan.cues_with_formatting_loss as u64,
+            empty_cues_skipped: plan.empty_cues_skipped as u64,
+        })
+    }
+
     pub fn summary(&self) -> Result<ProjectView, ProjectBridgeError> {
         self.project_view().map_err(host_error)
     }
@@ -1131,6 +1274,75 @@ impl ProjectHostHandle {
             .as_deref()
             .ok_or_else(unexpected_response_error)?;
         Ok(timeline_snap_view(&result, snap))
+    }
+
+    pub fn import_timeline_captions(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        path: String,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        let bytes = match read_bounded_caption_file(Path::new(&path)) {
+            Ok(bytes) => bytes,
+            Err(error) => return action_error(error),
+        };
+        let plan = match parse_caption_file(&bytes) {
+            Ok(plan) => plan,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: error.code().to_owned(),
+                    message: error.to_string(),
+                });
+            }
+        };
+        let format_name = match plan.format {
+            or_core::CaptionFileFormat::Srt => "SubRip",
+            or_core::CaptionFileFormat::WebVtt => "WebVTT",
+        };
+        let imported_count = plan.captions.len();
+        let formatting_loss_count = plan.cues_with_formatting_loss;
+        let empty_count = plan.empty_cues_skipped;
+        let clips = plan
+            .captions
+            .into_iter()
+            .map(|caption| TimelineClipState {
+                clip_id: ClipId::generate(),
+                timeline_start: caption.start,
+                timeline_duration: caption.duration,
+                content: ClipContent::Caption {
+                    text: caption.text,
+                    formatting: TextFormatting::DEFAULT,
+                },
+                settings: ClipSettings::Visual(VisualSettings::default()),
+            })
+            .collect();
+        let mut result = self.dispatch_command(CommandEnvelope::import_timeline_captions(
+            project_id,
+            project_instance_id,
+            revision,
+            TrackId::generate(),
+            clips,
+        ));
+        if result.succeeded {
+            result.message = format!("Imported {imported_count} {format_name} captions.");
+            if formatting_loss_count > 0 {
+                result.message.push_str(&format!(
+                    " Styling or placement was simplified for {formatting_loss_count} cues."
+                ));
+            }
+            if empty_count > 0 {
+                result
+                    .message
+                    .push_str(&format!(" Skipped {empty_count} empty cues."));
+            }
+        }
+        result
     }
 
     pub fn add_timeline_track(
@@ -2486,6 +2698,83 @@ fn parse_session_identity(
         project_instance_id,
         ProjectRevision::new(expected_revision),
     ))
+}
+
+fn read_bounded_caption_file(path: &Path) -> Result<Vec<u8>, ProjectBridgeError> {
+    let read_error = || ProjectBridgeError {
+        code: "CAPTION_FILE_READ_FAILED".to_owned(),
+        message: "The selected subtitle file could not be read.".to_owned(),
+    };
+    let file = File::open(path).map_err(|_| read_error())?;
+    let max_bytes = or_core::MAX_CAPTION_FILE_BYTES;
+    if file.metadata().map_err(|_| read_error())?.len() > max_bytes as u64 {
+        return Err(ProjectBridgeError {
+            code: "CAPTION_FILE_TOO_LARGE".to_owned(),
+            message: "The subtitle file exceeds the 8 MiB import limit.".to_owned(),
+        });
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve(max_bytes.min(file.metadata().map_err(|_| read_error())?.len() as usize))
+        .map_err(|_| ProjectBridgeError {
+            code: "CAPTION_FILE_READ_FAILED".to_owned(),
+            message: "There is not enough memory to read the selected subtitle file.".to_owned(),
+        })?;
+    file.take(max_bytes as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| read_error())?;
+    if bytes.len() > max_bytes {
+        return Err(ProjectBridgeError {
+            code: "CAPTION_FILE_TOO_LARGE".to_owned(),
+            message: "The subtitle file exceeds the 8 MiB import limit.".to_owned(),
+        });
+    }
+    Ok(bytes)
+}
+
+fn revision_conflict_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "REVISION_CONFLICT".to_owned(),
+        message: "The project changed while captions were being exported.".to_owned(),
+    }
+}
+
+fn write_caption_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), ProjectBridgeError> {
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| ProjectBridgeError {
+            code: "CAPTION_EXPORT_PATH_INVALID".to_owned(),
+            message: "Choose a valid caption export location.".to_owned(),
+        })?;
+    let name = path.file_name().ok_or_else(|| ProjectBridgeError {
+        code: "CAPTION_EXPORT_PATH_INVALID".to_owned(),
+        message: "Choose a valid caption export location.".to_owned(),
+    })?;
+    let temporary = parent.join(format!(
+        ".{}.or-caption-{}-{}.tmp",
+        name.to_string_lossy(),
+        std::process::id(),
+        NEXT_TEMP.fetch_add(1, Ordering::Relaxed),
+    ));
+    let operation = || -> std::io::Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)
+    };
+    if let Err(error) = operation() {
+        let _ = fs::remove_file(&temporary);
+        return Err(ProjectBridgeError {
+            code: "CAPTION_EXPORT_FAILED".to_owned(),
+            message: format!("The caption file could not be saved: {error}"),
+        });
+    }
+    Ok(())
 }
 
 fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {

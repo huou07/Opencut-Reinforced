@@ -137,7 +137,70 @@ void main() {
       expect(captions.items.single.text, 'A manual caption');
       expect(captions.items.single.timelineStart.canonical, '4/1');
       expect(captions.items.single.timelineDuration.canonical, '1/1');
-      await gateway.close(session, discardUnsaved: true);
+
+      final captionFile = File('${directory.path}/imported-captions.srt');
+      await captionFile.writeAsString(
+        '1\n00:00:00,125 --> 00:00:02,375\nImported caption\n',
+      );
+      final importPreview = await gateway.previewTimelineCaptions(
+        session,
+        captionFile.path,
+      );
+      expect(importPreview.formatName, 'SubRip');
+      expect(importPreview.cueCount, BigInt.one);
+      expect(importPreview.formattingLossCount, BigInt.zero);
+      final imported = await gateway.importTimelineCaptions(
+        session,
+        current,
+        captionFile.path,
+      );
+      expect(imported.succeeded, isTrue, reason: imported.message);
+      expect(imported.message, contains('Imported 1 SubRip captions'));
+      current = imported.view!;
+      final importedTrack = (await gateway.listTimelineTracks(session))
+          .items
+          .last;
+      expect(importedTrack.kind, ProjectTimelineTrackKind.caption);
+      final importedPage = await gateway.listTimelineClips(
+        session,
+        trackId: importedTrack.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(importedPage.items.single.text, 'Imported caption');
+      expect(importedPage.items.single.timelineStart.canonical, '1/8');
+      expect(importedPage.items.single.timelineDuration.canonical, '9/4');
+      final saved = await gateway.save(session);
+      expect(saved.succeeded, isTrue);
+      await gateway.close(session, discardUnsaved: false);
+      final reopened = await gateway.openProject(
+        '${directory.path}/text-project.orproj',
+      );
+      final reopenedTrack = (await gateway.listTimelineTracks(reopened))
+          .items
+          .last;
+      final reopenedPage = await gateway.listTimelineClips(
+        reopened,
+        trackId: reopenedTrack.trackId,
+        offset: 0,
+        limit: 10,
+      );
+      expect(reopenedPage.items.single.text, 'Imported caption');
+      expect(reopenedPage.items.single.timelineStart.canonical, '1/8');
+      final reopenedSummary = await gateway.summary(reopened);
+      final exportedPath = '${directory.path}/captions.srt';
+      final exported = await gateway.exportTimelineCaptions(
+        reopened,
+        reopenedSummary,
+        path: exportedPath,
+        format: ProjectCaptionFileFormat.srt,
+      );
+      expect(exported.succeeded, isTrue, reason: exported.message);
+      expect(
+        await File(exportedPath).readAsString(),
+        contains('00:00:00,125 --> 00:00:02,375'),
+      );
+      await gateway.close(reopened, discardUnsaved: true);
     },
   );
 
@@ -1258,6 +1321,22 @@ class _NativeProjectPicker implements ProjectFilePicker {
   Future<String?> saveExportPath({required String suggestedName}) async => null;
 
   @override
+  Future<String?> openCaptionFile() async => null;
+
+  @override
+  Future<void> cleanupCaptionFile(String path) async {}
+
+  @override
+  Future<String?> saveCaptionPath({required String suggestedName}) async =>
+      null;
+
+  @override
+  Future<void> publishCaptionPath(String path) async {}
+
+  @override
+  Future<void> discardCaptionPath(String path) async {}
+
+  @override
   Future<void> publishExportPath(String path) async {}
 
   @override
@@ -1502,6 +1581,32 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     ProjectTimelineTrackKind kind,
   ) => _gateway.addTimelineTrack(session, current, kind);
+
+  @override
+  Future<ProjectActionResult> importTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  ) => _gateway.importTimelineCaptions(session, current, path);
+
+  @override
+  Future<ProjectCaptionImportPreview> previewTimelineCaptions(
+    ProjectSessionHandle session,
+    String path,
+  ) => _gateway.previewTimelineCaptions(session, path);
+
+  @override
+  Future<ProjectActionResult> exportTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String path,
+    required ProjectCaptionFileFormat format,
+  }) => _gateway.exportTimelineCaptions(
+    session,
+    current,
+    path: path,
+    format: format,
+  );
 
   @override
   Future<ProjectActionResult> removeTimelineTrack(

@@ -581,8 +581,13 @@ hardening commit itself must pass both workflows.
   values through the generated Flutter Rust Bridge.
 - Flutter widget tests add text and caption tracks, create a title at the
   preview playhead, edit its content and exact duration, and create a manual
-  caption through the fake gateway. `flutter analyze` checks the generated
-  binding consumer and integration-test adapter.
+  caption through the fake gateway. Caption interchange tests preview style
+  loss before confirming an import, verify Android's bounded SAF staging and
+  publication calls, and round-trip a real SRT through the native bridge with
+  project save/reopen. Hosted Android acceptance selects an SRT and destination
+  through DocumentsUI and validates the bytes written to a separate-UID
+  provider. `flutter analyze` checks the generated binding consumer and
+  integration-test adapter.
 - Active preview overlays use the shared bundled-font rasterizer with bounded
   canvas memory; no automatic transcription, arbitrary font path, or font scan
   is introduced. Export reuses this text path when 8F implements the exporter.

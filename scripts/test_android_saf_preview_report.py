@@ -9,7 +9,10 @@ def report():
     return {'androidSafAcceptance': {
         'checks': dict.fromkeys(CHECKS, True), 'providerUid': 10001, 'appUid': 10002,
         'sourceUri': 'content://dev.opencut.saffixture.documents/document/late65',
-        'mediaImportSourceUri': 'content://dev.opencut.saffixture.documents/document/media',
+        'mediaImportSourceUris': [
+            'content://dev.opencut.saffixture.documents/document/media',
+            'content://dev.opencut.saffixture.documents/document/media-second',
+        ],
         'mediaImportMicros': 1000, 'mediaImportRevision': '2', 'projectRevision': '1',
         'providerProjectSha256AtSeed': 'a' * 64,
         'providerProjectSha256BeforeRestart': 'a' * 64,
@@ -22,6 +25,9 @@ def report():
                             'peakQueuedOperations': 8, 'pendingPresentations': 0, 'inFlightLeases': 0, 'duplicatedMediaFds': 1},
         'finalResources': {'duplicatedMediaFds': 0, 'inFlightLeases': 0, 'latestFrameBytes': 0},
         'exportBytes': 4096, 'exportValidMatroska': True,
+        'captionImportRevision': '3', 'captionImportCalls': 1,
+        'captionExportCalls': 1, 'captionExportBytes': 128,
+        'captionExportValidSrt': True,
         'finalOsMediaFds': 0, 'softwareFallback': 'packaged_ffmpeg_shared_render_bounded_bgra', 'hardware': 'UNVERIFIED',
     }}
 
@@ -63,6 +69,11 @@ class ReportTest(unittest.TestCase):
     def test_android_export_requires_valid_provider_matroska(self):
         value = report()
         value['androidSafAcceptance']['exportValidMatroska'] = False
+        with self.assertRaises(ValueError): verify(value)
+
+    def test_android_caption_interchange_requires_real_import_and_export(self):
+        value = report()
+        value['androidSafAcceptance']['captionExportValidSrt'] = False
         with self.assertRaises(ValueError): verify(value)
 
 

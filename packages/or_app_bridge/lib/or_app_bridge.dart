@@ -3,7 +3,9 @@ export 'src/rust/api.dart'
 export 'src/rust/api/project.dart'
     show
         ProjectActionResult,
+        ProjectCaptionImportPreviewView,
         ProjectBridgeError,
+        CaptionFileFormatView,
         MediaArtifactBytesView,
         MediaArtifactEventStateView,
         MediaArtifactEventView,

@@ -9,6 +9,7 @@ import android.provider.DocumentsContract;
 import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
@@ -46,6 +47,9 @@ public final class ControlActivity extends Activity {
                         if (encoded.length > MAX_PROJECT_BYTES) throw new IllegalArgumentException(
                             "Bounded fixture project required: " + encoded.length + " bytes exceeds " + MAX_PROJECT_BYTES);
                         try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "acceptance.orproj"))) { output.write(encoded); }
+                        try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "captions.srt"))) {
+                            output.write("1\n00:00:00,000 --> 00:00:01,000\nImported SAF caption\n".getBytes(StandardCharsets.UTF_8));
+                        }
                         for (String id : new String[]{"good", "late65", "missing", "pipe", "blocked"}) {
                             grantUriPermission(OR_PACKAGE, DocumentsContract.buildDocumentUri(FixtureDocumentsProvider.AUTHORITY, id), Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         }
@@ -87,12 +91,29 @@ public final class ControlActivity extends Activity {
                             && input.read() == 0xdf && input.read() == 0xa3;
                     }
                 }
+                File captionExport = new File(getFilesDir(), "caption-export.srt");
+                String captionText = "";
+                if (captionExport.isFile && captionExport.length() <= 1024 * 1024) {
+                    byte[] captionBytes = new byte[(int) captionExport.length()];
+                    try (FileInputStream input = new FileInputStream(captionExport)) {
+                        int offset = 0;
+                        while (offset < captionBytes.length) {
+                            int count = input.read(captionBytes, offset, captionBytes.length - offset);
+                            if (count < 0) break;
+                            offset += count;
+                        }
+                        captionText = new String(captionBytes, 0, offset, StandardCharsets.UTF_8);
+                    }
+                }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
                     .put("projectBytes", projectFile.length())
                     .put("projectSha256", sha256(projectFile))
                     .put("exportBytes", exported.length())
-                    .put("validMatroska", validMatroska);
+                    .put("validMatroska", validMatroska)
+                    .put("captionExportBytes", captionExport.length())
+                    .put("validSrtCaption", captionText.contains("Imported SAF caption")
+                        && captionText.contains("00:00:00,000 --> 00:00:01,000"));
                 runOnUiThread(() -> { setResult(RESULT_OK, new Intent().putExtra("data", result.toString())); finish(); });
             } catch (Exception error) {
                 runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });

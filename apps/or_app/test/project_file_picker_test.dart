@@ -34,6 +34,70 @@ void main() {
     expect(pickerCalled, isTrue);
   });
 
+  test(
+    'Android caption picker stages and cleans a private working file',
+    () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return switch (call.method) {
+              'openCaptionFile' => {
+                'workingPath': '/data/user/0/or_app/cache/or-captions/cue.srt',
+              },
+              _ => null,
+            };
+          });
+      final picker = AndroidSafProjectPicker(channel: channel);
+
+      final path = await picker.openCaptionFile();
+      await picker.cleanupCaptionFile(path!);
+
+      expect(path, '/data/user/0/or_app/cache/or-captions/cue.srt');
+      expect(calls.map((call) => call.method), [
+        'openCaptionFile',
+        'deleteCaptionFile',
+      ]);
+      expect(calls.last.arguments, {'workingPath': path});
+    },
+  );
+
+  test(
+    'Android caption export stages locally and publishes through SAF',
+    () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return switch (call.method) {
+              'createCaptionExport' => {
+                'workingPath':
+                    '/data/user/0/or_app/cache/or-caption-exports/captions.vtt',
+                'documentUri':
+                    'content://com.example.documents/document/captions',
+              },
+              _ => null,
+            };
+          });
+      final picker = AndroidSafProjectPicker(channel: channel);
+
+      final path = await picker.saveCaptionPath(suggestedName: 'captions.vtt');
+      await picker.publishCaptionPath(path!);
+
+      expect(path, '/data/user/0/or_app/cache/or-caption-exports/captions.vtt');
+      expect(calls.map((call) => call.method), [
+        'createCaptionExport',
+        'publishCaptionExport',
+      ]);
+      expect(calls.first.arguments, {
+        'suggestedName': 'captions.vtt',
+        'extension': 'vtt',
+        'mimeType': 'text/vtt',
+      });
+      expect(calls.last.arguments, {'workingPath': path});
+    },
+  );
+
   test('Android media picker rejects non-content selections', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(

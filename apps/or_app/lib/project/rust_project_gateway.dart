@@ -637,6 +637,53 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> importTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String path,
+  ) async => _action(
+    await _host(session).importTimelineCaptions(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      path: path,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> exportTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String path,
+    required ProjectCaptionFileFormat format,
+  }) async => _action(
+    await _host(session).exportTimelineCaptions(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      path: path,
+      format: switch (format) {
+        ProjectCaptionFileFormat.srt => rust.CaptionFileFormatView.srt,
+        ProjectCaptionFileFormat.webVtt => rust.CaptionFileFormatView.webVtt,
+      },
+    ),
+  );
+
+  @override
+  Future<ProjectCaptionImportPreview> previewTimelineCaptions(
+    ProjectSessionHandle session,
+    String path,
+  ) async {
+    final preview = await _host(session).previewTimelineCaptions(path: path);
+    return ProjectCaptionImportPreview(
+      formatName: preview.formatName,
+      cueCount: preview.cueCount,
+      formattingLossCount: preview.formattingLossCount,
+      emptyCuesSkipped: preview.emptyCuesSkipped,
+    );
+  }
+
+  @override
   Future<ProjectActionResult> removeTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current,

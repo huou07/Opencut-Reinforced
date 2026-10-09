@@ -20,6 +20,8 @@ def select(device, guest_log, output, flow="open"):
         select(device, guest_log, output, "open")
         select(device, guest_log, output, "export")
         select(device, guest_log, output, "media")
+        select(device, guest_log, output, "caption-import")
+        select(device, guest_log, output, "caption-export")
         return
     output.mkdir(parents=True, exist_ok=True)
     # Building/installing belongs to the owning drive/workflow lifecycle. The
@@ -28,6 +30,8 @@ def select(device, guest_log, output, flow="open"):
         "open": "ANDROID_SAF_DOCUMENTS_UI_READY",
         "media": "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
         "export": "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
+        "caption-import": "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
+        "caption-export": "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
     }[flow]
     while marker not in guest_log.read_text(errors="replace"):
         time.sleep(0.25)
@@ -60,6 +64,7 @@ def select(device, guest_log, output, flow="open"):
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
+        caption_file = next((node for node in nodes if node.get("text") == "captions.srt"), None)
         media = {
             name: next((node for node in nodes if node.get("text") == name), None)
             for name in ("tiny.mkv", "tiny-second.mkv")
@@ -117,6 +122,8 @@ def select(device, guest_log, output, flow="open"):
         pending_media = None
         if selected_root and flow == "open" and document is not None:
             target = document
+        elif selected_root and flow == "caption-import" and caption_file is not None:
+            target = caption_file
         elif selected_root and flow == "media":
             next_media = next(
                 (name for name in media if name not in selected_media and media[name] is not None),
@@ -127,7 +134,7 @@ def select(device, guest_log, output, flow="open"):
                 pending_media = next_media
             elif len(selected_media) == 2 and media_action is not None:
                 target = media_action
-        elif selected_root and flow == "export" and save is not None:
+        elif selected_root and flow in {"export", "caption-export"} and save is not None:
             target = save
         elif not selected_root and provider is not None:
             target = provider
@@ -151,9 +158,14 @@ def select(device, guest_log, output, flow="open"):
                 continue
             if pending_media is not None:
                 selected_media.add(pending_media)
-            if target is document or target is save or (flow == "media" and target is media_action):
+            if target is document or target is caption_file or target is save or (flow == "media" and target is media_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
-                    detail = "two media documents" if flow == "media" else "OR SAF acceptance"
+                    detail = (
+                        "two media documents" if flow == "media" else
+                        "caption file" if flow == "caption-import" else
+                        "caption export" if flow == "caption-export" else
+                        "OR SAF acceptance"
+                    )
                     record.write(f"Selected {detail} for {flow} through native DocumentsUI.\n")
                 return
         time.sleep(0.25)
@@ -169,6 +181,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", required=True)
     parser.add_argument("--guest-log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--flow", choices=("open", "media", "export", "both"), default="open")
+    parser.add_argument("--flow", choices=("open", "media", "export", "caption-import", "caption-export", "both"), default="open")
     args = parser.parse_args()
     select(args.device, args.guest_log, args.output, args.flow)

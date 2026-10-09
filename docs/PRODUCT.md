@@ -119,9 +119,9 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Captions and transcript
 
-**MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting.
+**MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting. SRT and WebVTT import/export now use the shared caption command model, preserve exact millisecond boundaries, and report unsupported styling or placement before import. This interchange implementation is awaiting hosted desktop and Android acceptance.
 
-**PLANNED:** automatic captions; local transcription; word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; SRT, VTT, and ASS import or export.
+**PLANNED:** automatic captions; local transcription; word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; ASS import or export.
 
 The transcript and caption workflow includes searching, replacing, jumping from a transcript segment to its timeline position, and reviewing translated text. Recognition and translation remain editable outputs, not authoritative project instructions.
 
@@ -307,7 +307,7 @@ delivery profiles.
 
 ## Interchange
 
-**PLANNED:** SRT, VTT, ASS, audio stems, and OpenTimelineIO import or export as appropriate.
+SRT and WebVTT import/export are implemented through caption tracks; the packaged desktop and Android journeys are pending hosted acceptance. **PLANNED:** ASS, audio stems, and OpenTimelineIO import or export as appropriate.
 
 OpenTimelineIO is a bounded Rust/serde JSON interchange adapter over a documented subset, not the native OR project format or a media container. Unsupported content receives explicit diagnostics.
 

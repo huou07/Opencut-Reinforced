@@ -1062,6 +1062,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('caption import explains formatting loss before applying', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..captionImportPreview = ProjectCaptionImportPreview(
+        formatName: 'WebVTT',
+        cueCount: BigInt.from(2),
+        formattingLossCount: BigInt.one,
+        emptyCuesSkipped: BigInt.one,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/caption-import.orproj'
+      ..captionPath = '/tmp/captions.vtt';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Caption import');
+
+    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
+    await tester.ensureVisible(importButton);
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Import WebVTT captions?'), findsOneWidget);
+    expect(
+      find.textContaining('styling or placement that will be simplified'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('empty cues will be skipped'), findsOneWidget);
+    expect(gateway.captionImportCalls, 0);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(gateway.captionImportCalls, 0);
+    expect(picker.captionCleanupCalls, 1);
+
+    await tester.ensureVisible(importButton);
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Import').last);
+    await tester.pumpAndSettle();
+    expect(gateway.captionImportCalls, 1);
+    expect(gateway.importedCaptionPath, '/tmp/captions.vtt');
+    expect(picker.captionCleanupCalls, 2);
+    expect(find.textContaining('Imported captions from'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('timeline duplicate preserves exact source range', (
     tester,
   ) async {
@@ -3333,11 +3379,14 @@ class _FakeProjectPicker implements ProjectFilePicker {
   List<String>? mediaPaths;
   String? savePath;
   String? exportPath;
+  String? captionPath;
   String? syncFailureMessage;
   int openCalls = 0;
   int mediaOpenCalls = 0;
   int saveCalls = 0;
   int exportPathCalls = 0;
+  int captionOpenCalls = 0;
+  int captionCleanupCalls = 0;
   int publishExportCalls = 0;
   int discardExportCalls = 0;
   int syncCalls = 0;
@@ -3376,6 +3425,27 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<String?> openCaptionFile() async {
+    captionOpenCalls++;
+    return captionPath;
+  }
+
+  @override
+  Future<void> cleanupCaptionFile(String path) async {
+    captionCleanupCalls++;
+  }
+
+  @override
+  Future<String?> saveCaptionPath({required String suggestedName}) async =>
+      null;
+
+  @override
+  Future<void> publishCaptionPath(String path) async {}
+
+  @override
+  Future<void> discardCaptionPath(String path) async {}
+
+  @override
   Future<void> publishExportPath(String path) async {
     publishExportCalls++;
   }
@@ -3412,6 +3482,15 @@ class _FakeProjectGateway implements ProjectGateway {
     width: 0,
     height: 0,
   );
+  int captionImportCalls = 0;
+  String? importedCaptionPath;
+  ProjectCaptionImportPreview captionImportPreview =
+      ProjectCaptionImportPreview(
+        formatName: 'SubRip',
+        cueCount: BigInt.one,
+        formattingLossCount: BigInt.zero,
+        emptyCuesSkipped: BigInt.zero,
+      );
   int previewSeekCalls = 0;
   int previewStateCalls = 0;
   int previewStepCalls = 0;
@@ -4027,6 +4106,39 @@ class _FakeProjectGateway implements ProjectGateway {
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }
+
+  @override
+  Future<ProjectActionResult> importTimelineCaptions(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    String path,
+  ) async {
+    captionImportCalls++;
+    importedCaptionPath = path;
+    return ProjectActionResult(
+      succeeded: true,
+      message: 'Imported captions from $path.',
+      view: _session(handle).view,
+    );
+  }
+
+  @override
+  Future<ProjectCaptionImportPreview> previewTimelineCaptions(
+    ProjectSessionHandle handle,
+    String path,
+  ) async => captionImportPreview;
+
+  @override
+  Future<ProjectActionResult> exportTimelineCaptions(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String path,
+    required ProjectCaptionFileFormat format,
+  }) async => ProjectActionResult(
+    succeeded: true,
+    message: 'Exported captions.',
+    view: _session(handle).view,
+  );
 
   @override
   Future<ProjectActionResult> removeTimelineTrack(

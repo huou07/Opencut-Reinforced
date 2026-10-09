@@ -43,6 +43,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddAudioTrack,
     this.onAddTextTrack,
     this.onAddCaptionTrack,
+    this.onImportCaptions,
+    this.onExportCaptions,
     this.onRemoveTimelineTrack,
     this.onSetTimelineTrackState,
     this.onLoadMoreTimelineClips,
@@ -99,6 +101,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
+  final VoidCallback? onImportCaptions;
+  final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTimelineTrack;
   final Future<void> Function(
@@ -456,6 +460,8 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onAddAudioTrack: widget.onAddAudioTrack,
           onAddTextTrack: widget.onAddTextTrack,
           onAddCaptionTrack: widget.onAddCaptionTrack,
+          onImportCaptions: widget.onImportCaptions,
+          onExportCaptions: widget.onExportCaptions,
           onAddTitle: () =>
               _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
           onAddCaption: () =>
@@ -537,6 +543,8 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           onAddAudioTrack: widget.onAddAudioTrack,
           onAddTextTrack: widget.onAddTextTrack,
           onAddCaptionTrack: widget.onAddCaptionTrack,
+          onImportCaptions: widget.onImportCaptions,
+          onExportCaptions: widget.onExportCaptions,
           onAddTitle: () =>
               _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
           onAddCaption: () =>
@@ -3086,6 +3094,8 @@ class _TimelineToolbar extends StatelessWidget {
     required this.onAddAudioTrack,
     required this.onAddTextTrack,
     required this.onAddCaptionTrack,
+    required this.onImportCaptions,
+    required this.onExportCaptions,
     required this.onAddTitle,
     required this.onAddCaption,
     required this.onAddMarker,
@@ -3101,6 +3111,8 @@ class _TimelineToolbar extends StatelessWidget {
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
+  final VoidCallback? onImportCaptions;
+  final VoidCallback? onExportCaptions;
   final VoidCallback? onAddTitle;
   final VoidCallback? onAddCaption;
   final VoidCallback? onAddMarker;
@@ -3202,6 +3214,18 @@ class _TimelineToolbar extends StatelessWidget {
                 onPressed: busy ? null : onAddCaptionTrack,
                 icon: const Icon(Icons.subtitles_outlined, size: 16),
                 label: Text(compact ? 'Add Captions' : 'Add Caption Track'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-import-captions'),
+                onPressed: busy ? null : onImportCaptions,
+                icon: const Icon(Icons.file_open_outlined, size: 16),
+                label: const Text('Import Captions'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('timeline-export-captions'),
+                onPressed: busy ? null : onExportCaptions,
+                icon: const Icon(Icons.file_download_outlined, size: 16),
+                label: const Text('Export Captions'),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-title'),

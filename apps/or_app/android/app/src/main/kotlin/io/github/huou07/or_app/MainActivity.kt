@@ -2,6 +2,7 @@ package io.github.huou07.or_app
 
 import android.content.Intent
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -26,6 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val SAF_CHANNEL = "io.github.huou07.or_app/saf_storage"
 private const val SAF_PICK_REQUEST = 0x4f52
 private const val MAX_PROJECT_BYTES = 64L * 1024 * 1024
+private const val MAX_CAPTION_BYTES = 8L * 1024 * 1024
+private const val MAX_CAPTION_EXPORT_BYTES = 16L * 1024 * 1024
 
 class MainActivity : FlutterActivity() {
     private data class PendingPick(
@@ -39,6 +42,7 @@ class MainActivity : FlutterActivity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val exportTransfers = ConcurrentHashMap<String, AtomicBoolean>()
+    private val captionExportUris = ConcurrentHashMap<String, Uri>()
     private var pendingPick: PendingPick? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -58,6 +62,74 @@ class MainActivity : FlutterActivity() {
 
     private fun handleSafCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "openCaptionFile" -> launchPicker(
+                Intent.ACTION_OPEN_DOCUMENT,
+                "openCaptionFile",
+                result,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                mimeType = "*/*",
+                allowMultiple = false,
+            )
+            "deleteCaptionFile" -> {
+                val workingPath = call.argument<String>("workingPath")
+                if (workingPath == null) {
+                    result.error("CAPTION_PICK_FAILED", "The temporary caption file is invalid.", null)
+                } else {
+                    runIo(result, "CAPTION_PICK_FAILED") {
+                        requireManagedCaptionFile(workingPath).delete()
+                        null
+                    }
+                }
+            }
+            "createCaptionExport" -> {
+                val extension = call.argument<String>("extension")
+                    ?.lowercase()
+                    ?.takeIf { it == "srt" || it == "vtt" }
+                val mimeType = call.argument<String>("mimeType")
+                val expectedMimeType = if (extension == "vtt") "text/vtt" else "application/x-subrip"
+                if (extension == null || mimeType != expectedMimeType) {
+                    result.error("CAPTION_EXPORT_PATH_INVALID", "The caption export format is invalid.", null)
+                } else {
+                    val suggestedName = call.argument<String>("suggestedName")
+                        ?.substringAfterLast('/')
+                        ?.substringAfterLast('\\')
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { if (it.endsWith(".$extension", ignoreCase = true)) it else "$it.$extension" }
+                        ?: "captions.$extension"
+                    launchPicker(
+                        Intent.ACTION_CREATE_DOCUMENT,
+                        "createCaptionExport",
+                        result,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        suggestedName,
+                        requiredModes = Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        mimeType = mimeType,
+                    )
+                }
+            }
+            "publishCaptionExport" -> {
+                val workingPath = call.argument<String>("workingPath")
+                if (workingPath == null) {
+                    result.error("CAPTION_EXPORT_FAILED", "The caption export location is invalid.", null)
+                } else {
+                    runIo(result, "CAPTION_EXPORT_FAILED") {
+                        publishCaptionExport(workingPath)
+                        null
+                    }
+                }
+            }
+            "discardCaptionExport" -> {
+                val workingPath = call.argument<String>("workingPath")
+                if (workingPath == null) {
+                    result.error("CAPTION_EXPORT_FAILED", "The caption export location is invalid.", null)
+                } else {
+                    runIo(result, "CAPTION_EXPORT_FAILED") {
+                        discardCaptionExport(workingPath)
+                        null
+                    }
+                }
+            }
             "openMedia" -> launchPicker(
                 Intent.ACTION_OPEN_DOCUMENT,
                 "openMedia",
@@ -184,7 +256,11 @@ class MainActivity : FlutterActivity() {
             type = mimeType
             putExtra(
                 Intent.EXTRA_MIME_TYPES,
-                if (mimeType == "*/*") arrayOf("application/octet-stream", "application/json")
+                if (method == "openCaptionFile") {
+                    arrayOf("application/x-subrip", "text/vtt", "text/plain")
+                } else if (mimeType == "*/*") {
+                    arrayOf("application/octet-stream", "application/json")
+                }
                 else arrayOf(mimeType),
             )
             if (suggestedName != null) putExtra(Intent.EXTRA_TITLE, suggestedName)
@@ -243,9 +319,22 @@ class MainActivity : FlutterActivity() {
             safDiagnostic("processing ${pending.method} result")
             takePersistableGrant(uri, resultFlags, pending.requiredModes)
             when (pending.method) {
+                "openCaptionFile" -> try {
+                    captionLocation(uri)
+                } finally {
+                    try {
+                        contentResolver.releasePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    } catch (_: SecurityException) {
+                        // The selected file is already copied into bounded private staging.
+                    }
+                }
                 "openProject" -> projectLocation(uri, prepareWorkingCopy(uri))
                 "createProject" -> projectLocation(uri, prepareNewWorkingCopy(uri))
                 "createExport" -> exportLocation(uri)
+                "createCaptionExport" -> captionExportLocation(uri)
                 "openMedia" -> mapOf("sourceUri" to uri.toString())
                 else -> throw SafFailure("PROJECT_PICK_FAILED", "The project selection is invalid.")
             }
@@ -379,6 +468,178 @@ class MainActivity : FlutterActivity() {
         requireDocumentUri(uri)
         val file = File.createTempFile("or-export-", ".mkv", exportStagingDirectory())
         return mapOf("workingPath" to file.absolutePath, "documentUri" to uri.toString())
+    }
+
+    private fun captionExportLocation(uri: Uri): Map<String, String> {
+        requireDocumentUri(uri)
+        val displayName = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: throw SafFailure("CAPTION_EXPORT_PATH_INVALID", "The caption destination is invalid.")
+        val extension = displayName.substringAfterLast('.', "").lowercase()
+        if (extension != "srt" && extension != "vtt") {
+            throw SafFailure("CAPTION_EXPORT_PATH_INVALID", "Choose an SRT or WebVTT destination.")
+        }
+        val directory = captionExportStagingDirectory()
+        val file = File.createTempFile("or-caption-export-", ".$extension", directory)
+        captionExportUris[file.canonicalPath] = uri
+        return mapOf("workingPath" to file.canonicalPath)
+    }
+
+    private fun publishCaptionExport(workingPath: String) {
+        val source = requireManagedCaptionExportFile(workingPath)
+        val uri = captionExportUris[workingPath]
+            ?: throw SafFailure("CAPTION_EXPORT_FAILED", "The selected caption destination is no longer available.")
+        val expectedBytes = source.length()
+        if (expectedBytes <= 0L || expectedBytes > MAX_CAPTION_EXPORT_BYTES) {
+            throw SafFailure("CAPTION_EXPORT_FAILED", "The caption export is empty or exceeds its size limit.")
+        }
+        try {
+            val output = contentResolver.openOutputStream(uri, "wt")
+                ?: throw SafFailure("CAPTION_EXPORT_PERMISSION_REQUIRED", "The selected location cannot be written.")
+            FileInputStream(source).use { input ->
+                output.use { destination ->
+                    val buffer = ByteArray(32 * 1024)
+                    var copied = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (count == 0) throw IOException("The caption export returned an empty read.")
+                        copied += count
+                        if (copied > MAX_CAPTION_EXPORT_BYTES) {
+                            throw SafFailure("CAPTION_EXPORT_FAILED", "The caption export exceeds its size limit.")
+                        }
+                        destination.write(buffer, 0, count)
+                    }
+                    destination.flush()
+                    if (copied != expectedBytes) {
+                        throw SafFailure("CAPTION_EXPORT_FAILED", "The caption export could not be fully saved.")
+                    }
+                }
+            }
+            captionExportUris.remove(workingPath)
+            source.delete()
+        } catch (error: Exception) {
+            try {
+                DocumentsContract.deleteDocument(contentResolver, uri)
+            } catch (_: Exception) {
+                // Some providers cannot delete a partially written item.
+            }
+            if (error is SafFailure) throw error
+            if (error is SecurityException) {
+                throw SafFailure("CAPTION_EXPORT_PERMISSION_REQUIRED", "Access to the selected location is unavailable.")
+            }
+            throw SafFailure("CAPTION_EXPORT_FAILED", "The caption export could not be saved.")
+        }
+    }
+
+    private fun discardCaptionExport(workingPath: String) {
+        val source = requireManagedCaptionExportFile(workingPath)
+        val uri = captionExportUris.remove(workingPath)
+        source.delete()
+        if (uri != null) {
+            try {
+                DocumentsContract.deleteDocument(contentResolver, uri)
+            } catch (_: Exception) {
+                // A provider may not support deletion of a newly created item.
+            }
+        }
+    }
+
+    private fun captionLocation(uri: Uri): Map<String, String> {
+        requireDocumentUri(uri)
+        val displayName = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+        val name = displayName ?: uri.lastPathSegment.orEmpty()
+        val extension = when (name.substringAfterLast('.', "").lowercase()) {
+            "srt" -> ".srt"
+            "vtt" -> ".vtt"
+            else -> throw SafFailure("CAPTION_PICK_FAILED", "Choose an SRT or WebVTT caption file.")
+        }
+        val source = contentResolver.openInputStream(uri)
+            ?: throw SafFailure("CAPTION_PICK_FAILED", "The selected caption file could not be opened.")
+        val directory = captionStagingDirectory()
+        val destination = File.createTempFile("or-caption-", extension, directory)
+        try {
+            source.use { input ->
+                FileOutputStream(destination).use { output ->
+                    val buffer = ByteArray(32 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (count == 0) throw IOException("The caption provider returned an empty read.")
+                        total += count
+                        if (total > MAX_CAPTION_BYTES) {
+                            throw SafFailure("CAPTION_FILE_TOO_LARGE", "The caption file exceeds the 8 MiB limit.")
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                    output.flush()
+                    output.fd.sync()
+                }
+            }
+            return mapOf("workingPath" to destination.canonicalPath)
+        } catch (error: Exception) {
+            destination.delete()
+            if (error is SafFailure) throw error
+            throw SafFailure("CAPTION_PICK_FAILED", "The selected caption file could not be copied safely.")
+        }
+    }
+
+    private fun captionStagingDirectory(): File {
+        val directory = File(cacheDir, "or-captions")
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw SafFailure("CAPTION_PICK_FAILED", "Temporary caption storage is unavailable.")
+        }
+        if (!directory.isDirectory) {
+            throw SafFailure("CAPTION_PICK_FAILED", "Temporary caption storage is unavailable.")
+        }
+        return directory.canonicalFile
+    }
+
+    private fun captionExportStagingDirectory(): File {
+        val directory = File(cacheDir, "or-caption-exports")
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw SafFailure("CAPTION_EXPORT_FAILED", "Temporary caption export storage is unavailable.")
+        }
+        if (!directory.isDirectory) {
+            throw SafFailure("CAPTION_EXPORT_FAILED", "Temporary caption export storage is unavailable.")
+        }
+        return directory.canonicalFile
+    }
+
+    private fun requireManagedCaptionExportFile(path: String): File {
+        val directory = captionExportStagingDirectory()
+        val requested = File(path).canonicalFile
+        if (requested.parentFile != directory ||
+            (!requested.name.endsWith(".srt", ignoreCase = true) &&
+                !requested.name.endsWith(".vtt", ignoreCase = true)) ||
+            !requested.isFile || requested.length() > MAX_CAPTION_EXPORT_BYTES
+        ) {
+            throw SafFailure("CAPTION_EXPORT_FAILED", "The temporary caption export path is invalid.")
+        }
+        return requested
+    }
+
+    private fun requireManagedCaptionFile(path: String): File {
+        val directory = captionStagingDirectory()
+        val requested = File(path).canonicalFile
+        if (requested.parentFile != directory || !requested.isFile || requested.length() > MAX_CAPTION_BYTES) {
+            throw SafFailure("CAPTION_PICK_FAILED", "The temporary caption file is invalid.")
+        }
+        return requested
     }
 
     private fun publishExport(workingPath: String, documentUri: String, cancelled: AtomicBoolean) {

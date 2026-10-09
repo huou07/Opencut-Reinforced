@@ -108,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Capability dco_decode_capability(dynamic raw);
 
   @protected
+  CaptionFileFormatView dco_decode_caption_file_format_view(dynamic raw);
+
+  @protected
   FontIdentityView dco_decode_font_identity_view(dynamic raw);
 
   @protected
@@ -210,6 +213,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectBridgeError dco_decode_project_bridge_error(dynamic raw);
+
+  @protected
+  ProjectCaptionImportPreviewView
+  dco_decode_project_caption_import_preview_view(dynamic raw);
 
   @protected
   ProjectExportJobView dco_decode_project_export_job_view(dynamic raw);
@@ -446,6 +453,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Capability sse_decode_capability(SseDeserializer deserializer);
 
   @protected
+  CaptionFileFormatView sse_decode_caption_file_format_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer);
 
   @protected
@@ -570,6 +582,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectBridgeError sse_decode_project_bridge_error(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ProjectCaptionImportPreviewView
+  sse_decode_project_caption_import_preview_view(SseDeserializer deserializer);
 
   @protected
   ProjectExportJobView sse_decode_project_export_job_view(
@@ -852,6 +868,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_capability(Capability self, SseSerializer serializer);
 
   @protected
+  void sse_encode_caption_file_format_view(
+    CaptionFileFormatView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_font_identity_view(
     FontIdentityView self,
     SseSerializer serializer,
@@ -1001,6 +1023,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_bridge_error(
     ProjectBridgeError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_caption_import_preview_view(
+    ProjectCaptionImportPreviewView self,
     SseSerializer serializer,
   );
 

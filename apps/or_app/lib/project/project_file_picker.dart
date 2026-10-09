@@ -11,6 +11,11 @@ abstract interface class ProjectFilePicker {
   Future<List<String>> openMediaSources();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({required String suggestedName});
+  Future<String?> openCaptionFile();
+  Future<void> cleanupCaptionFile(String path);
+  Future<String?> saveCaptionPath({required String suggestedName});
+  Future<void> publishCaptionPath(String path);
+  Future<void> discardCaptionPath(String path);
   Future<void> publishExportPath(String path);
   Future<void> discardExportPath(String path);
   Future<void> cancelExportPublish(String path);
@@ -39,6 +44,10 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   static const _exportType = XTypeGroup(
     label: 'Matroska video',
     extensions: ['mkv'],
+  );
+  static const _captionType = XTypeGroup(
+    label: 'SubRip or WebVTT captions',
+    extensions: ['srt', 'vtt'],
   );
 
   @override
@@ -86,6 +95,32 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<String?> openCaptionFile() async {
+    if (!isSupported) return null;
+    final file = await openFile(acceptedTypeGroups: [_captionType]);
+    return file?.path;
+  }
+
+  @override
+  Future<void> cleanupCaptionFile(String path) async {}
+
+  @override
+  Future<String?> saveCaptionPath({required String suggestedName}) async {
+    if (!isSupported) return null;
+    final location = await getSaveLocation(
+      acceptedTypeGroups: [_captionType],
+      suggestedName: suggestedName,
+    );
+    return location?.path;
+  }
+
+  @override
+  Future<void> publishCaptionPath(String path) async {}
+
+  @override
+  Future<void> discardCaptionPath(String path) async {}
+
+  @override
   Future<void> publishExportPath(String path) async {}
 
   @override
@@ -110,6 +145,8 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   final MethodChannel _channel;
   final Map<String, String> _documentUrisByWorkingPath = {};
   final Map<String, String> _exportUrisByWorkingPath = {};
+  final Set<String> _captionPaths = {};
+  final Map<String, String> _captionExportUrisByWorkingPath = {};
 
   @override
   bool get isSupported => Platform.isAndroid;
@@ -232,6 +269,110 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<String?> openCaptionFile() async {
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'openCaptionFile',
+      );
+      if (response == null) return null;
+      final path = response['workingPath'];
+      if (path is! String || path.isEmpty) {
+        throw const ProjectSafStorageException(
+          'The selected caption file is invalid.',
+        );
+      }
+      _captionPaths.add(path);
+      return path;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android caption storage is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<void> cleanupCaptionFile(String path) async {
+    if (!_captionPaths.remove(path)) return;
+    try {
+      await _channel.invokeMethod<void>('deleteCaptionFile', {
+        'workingPath': path,
+      });
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
+
+  @override
+  Future<String?> saveCaptionPath({required String suggestedName}) async {
+    final extension = suggestedName.toLowerCase().endsWith('.vtt')
+        ? 'vtt'
+        : 'srt';
+    final mimeType = extension == 'vtt' ? 'text/vtt' : 'application/x-subrip';
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'createCaptionExport',
+        {
+          'suggestedName': suggestedName,
+          'extension': extension,
+          'mimeType': mimeType,
+        },
+      );
+      if (response == null) return null;
+      final path = response['workingPath'];
+      final documentUri = response['documentUri'];
+      final uri = documentUri is String ? Uri.tryParse(documentUri) : null;
+      if (path is! String ||
+          uri == null ||
+          uri.scheme != 'content' ||
+          uri.authority.isEmpty) {
+        throw const ProjectSafStorageException(
+          'The selected caption export location is invalid.',
+        );
+      }
+      _captionExportUrisByWorkingPath[path] = documentUri as String;
+      return path;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android caption storage is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<void> publishCaptionPath(String path) async {
+    final uri = _captionExportUrisByWorkingPath[path];
+    if (uri == null) {
+      throw const ProjectSafStorageException(
+        'The selected caption export location is no longer available.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>('publishCaptionExport', {
+        'workingPath': path,
+      });
+      _captionExportUrisByWorkingPath.remove(path);
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
+
+  @override
+  Future<void> discardCaptionPath(String path) async {
+    if (_captionExportUrisByWorkingPath.remove(path) == null) return;
+    try {
+      await _channel.invokeMethod<void>('discardCaptionExport', {
+        'workingPath': path,
+      });
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    }
+  }
+
+  @override
   Future<void> publishExportPath(String path) async {
     final documentUri = _exportUrisByWorkingPath[path];
     if (documentUri == null) {
@@ -302,6 +443,13 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   static ProjectSafStorageException _storageError(
     String code,
   ) => ProjectSafStorageException(switch (code) {
+    'CAPTION_FILE_TOO_LARGE' => 'Caption files must be 8 MiB or smaller.',
+    'CAPTION_PICK_FAILED' => 'The selected caption file could not be opened.',
+    'CAPTION_EXPORT_PERMISSION_REQUIRED' =>
+      'The selected caption location cannot be written.',
+    'CAPTION_EXPORT_PATH_INVALID' =>
+      'Choose a valid SRT or WebVTT caption location.',
+    'CAPTION_EXPORT_FAILED' => 'The caption file could not be saved.',
     'EXPORT_CANCELLED' => 'Export cancelled',
     'EXPORT_PERMISSION_REQUIRED' =>
       'Access to the selected export location is unavailable.',

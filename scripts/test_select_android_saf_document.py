@@ -88,6 +88,13 @@ MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
 
 MEDIA_SELECT = MEDIA_OPEN.replace(b'text="Open"', b'text="Select"')
 
+CAPTION = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="captions.srt" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,200][1080,300]" />
+</hierarchy>
+"""
+
 SAVE_DISABLED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="SAVE" class="android.widget.Button"
@@ -121,9 +128,12 @@ class FakeAdb:
                 MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
             ],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
+            "caption-import": [DRAWER, PROVIDER, CAPTION],
+            "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA, MEDIA,
-                     MEDIA_OPEN],
+                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     SAVE_DISABLED, SAVE],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -160,7 +170,7 @@ def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
         adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
@@ -246,13 +256,15 @@ class SelectorTests(unittest.TestCase):
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n"
             )
             output = root / "out"
             adb = FakeAdb(transient_dumps=0, flow="both")
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both")
 
-            self.assertEqual(len(adb.actions), 11)
+            self.assertEqual(len(adb.actions), 17)
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
@@ -265,6 +277,8 @@ class SelectorTests(unittest.TestCase):
                         "ANDROID_SAF_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
                     ]
                 )
                 + "\n"
@@ -288,8 +302,14 @@ class SelectorTests(unittest.TestCase):
                     ("swipe", 9),
                     ("tap", 10),
                     ("tap", 11),
+                    ("tap", 12),
+                    ("tap", 13),
+                    ("tap", 14),
+                    ("tap", 15),
+                    ("tap", 16),
+                    ("tap", 18),
                 ],
-                "DocumentsUI selections must follow open, export, then media",
+                "DocumentsUI selections must follow open, export, media, caption import and caption export",
             )
 
 

@@ -466,6 +466,22 @@ class _JourneyPicker implements ProjectFilePicker {
       nextExportPath;
 
   @override
+  Future<String?> openCaptionFile() async => null;
+
+  @override
+  Future<void> cleanupCaptionFile(String path) async {}
+
+  @override
+  Future<String?> saveCaptionPath({required String suggestedName}) async =>
+      null;
+
+  @override
+  Future<void> publishCaptionPath(String path) async {}
+
+  @override
+  Future<void> discardCaptionPath(String path) async {}
+
+  @override
   Future<void> publishExportPath(String path) async {}
 
   @override

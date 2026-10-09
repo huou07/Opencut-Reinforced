@@ -15,6 +15,7 @@ CHECKS = {
     'mobileTouchScrubbingAndTransport', 'mobileMediaLibrarySheet',
     'mobileSelectedClipInspectorSheet',
     'androidSafExportToDocumentsUi',
+    'androidSafCaptionImportAndExportThroughDocumentsUi',
     'recoveryCheckpointPersistedBeforeProcessStop',
 }
 
@@ -45,10 +46,18 @@ def verify(report):
             raise ValueError('Provider project digest observations are required')
     if data['exportBytes'] <= 4 or data['exportValidMatroska'] is not True:
         raise ValueError('Android SAF export must produce a non-empty Matroska file in the selected provider')
-    if (data.get('mediaImportSourceUri') != 'content://dev.opencut.saffixture.documents/document/media'
+    if (data.get('mediaImportSourceUris') != [
+                'content://dev.opencut.saffixture.documents/document/media',
+                'content://dev.opencut.saffixture.documents/document/media-second',
+            ]
             or data.get('mediaImportMicros', 0) <= 0
             or int(data.get('mediaImportRevision', 0)) <= int(data['projectRevision'])):
         raise ValueError('Android SAF import must persist the selected source and report its runtime measurement')
+    if (data.get('captionImportCalls') != 1 or data.get('captionExportCalls') != 1
+            or int(data.get('captionImportRevision', 0)) <= int(data.get('mediaImportRevision', 0))
+            or data.get('captionExportBytes', 0) <= 0
+            or data.get('captionExportValidSrt') is not True):
+        raise ValueError('Android caption SRT import and provider export must complete through the real app')
     for field in ('sameSourceRegistrations', 'sameSourceProviderOpens'):
         before, after = data[field]
         if before <= 0 or before != after:
