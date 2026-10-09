@@ -110,6 +110,15 @@ Java `isFile()` method. The APK itself built successfully, but Android SAF
 acceptance did not run. The fixture compile error is corrected in the current
 working tree; the Android journey still needs a fresh hosted run.
 
+Run `37869690548` completed with Linux and Windows clean packaged product
+journeys and FFmpeg runtime provenance passing, together with Rust, Flutter
+static/widget, and descriptor-boundary checks. Its only failing jobs were the
+macOS stale-revision assertion and Android fixture compile described above.
+The test and fixture corrections are committed at
+`f88d674e8bb37ee78b01c465d9df48ea5d8ecaf1` and
+`9b16806b4302e685a5baff01b718921311a57ac4`; the corrected desktop caption
+bridge and Android SAF caption journeys have not yet run on a hosted platform.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final
