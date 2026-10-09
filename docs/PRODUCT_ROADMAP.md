@@ -545,6 +545,21 @@ acceptance remains open. Android logs also recorded 226 skipped frames on PID
 frames on OR PID 3702 during the journey. Android performance remains
 unaccepted pending measured diagnosis.
 
+Run [37979354142](https://github.com/huou07/Opencut-Reinforced/actions/runs/37979354142)
+on exact SHA `7f001265169017ce140eafe51bbbc73fa4c191f1` passed Rust, Flutter
+static/widget, descriptor-boundary, Linux, Windows, and macOS packaged/
+lifecycle jobs. Android again built the all-ABI package and passed its bridge
+check, then failed at the same center-pixel assertion with white after the
+test mounted the raw `Texture` and completed all eight bounded frame
+submissions. This falsifies the simple compositor-settling hypothesis. The
+preserved fresh-session screenshot again shows red on both sides of a white
+center band, while the editor-view screenshots show a solid-red frame. The
+acceptance therefore remains open pending evidence that distinguishes a
+second-session preview/surface defect from a raw-texture test-layout mismatch;
+the strict pixel assertion is unchanged. The run also recorded 173 skipped
+frames on OR PID 3639 during the SAF journey. Android performance remains
+unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

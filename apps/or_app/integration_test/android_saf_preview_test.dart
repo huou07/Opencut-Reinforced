@@ -146,7 +146,9 @@ Future<List<int>> _redTexture(
 ) async {
   final texture = find.byType(Texture);
   expect(texture, findsOneWidget);
-  final center = tester.getCenter(texture) * tester.view.devicePixelRatio;
+  final rect = tester.getRect(texture);
+  final devicePixelRatio = tester.view.devicePixelRatio;
+  final center = tester.getCenter(texture) * devicePixelRatio;
   await tester.pump(const Duration(milliseconds: 100));
   final bytes = await _stage(
     'screenshot:$name',
@@ -158,6 +160,24 @@ Future<List<int>> _redTexture(
   final rgba = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
   final offset = (center.dy.floor() * image.width + center.dx.floor()) * 4;
   final pixel = List.generate(4, (i) => rgba.getUint8(offset + i));
+  if (name == 'saf-fresh-session-texture') {
+    final horizontalSamples = [0.1, 0.25, 0.5, 0.75, 0.9].map((fraction) {
+      final x = ((rect.left + rect.width * fraction) * devicePixelRatio)
+          .floor()
+          .clamp(0, image.width - 1);
+      final sampleOffset = (center.dy.floor() * image.width + x) * 4;
+      return List.generate(
+        4,
+        (channel) => rgba.getUint8(sampleOffset + channel),
+      );
+    }).toList();
+    debugPrint(
+      'ANDROID_SAF_TEXTURE_PIXEL_GEOMETRY '
+      'rect=$rect dpr=$devicePixelRatio '
+      'image=${image.width}x${image.height} center=$pixel '
+      'horizontal=$horizontalSamples',
+    );
+  }
   image.dispose();
   codec.dispose();
   expect(pixel[0], greaterThanOrEqualTo(200), reason: 'Red channel of $pixel');
