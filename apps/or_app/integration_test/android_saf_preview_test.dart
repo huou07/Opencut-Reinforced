@@ -139,10 +139,11 @@ Future<void> _dragSeekUi(
   await _until(tester, () => gateway.seekCalls > before);
 }
 
-Future<List<int>> _redTexture(
+Future<List<List<int>>> _textureSamples(
   WidgetTester tester,
   IntegrationTestWidgetsFlutterBinding binding,
   String name,
+  List<double> fractions,
 ) async {
   final texture = find.byType(Texture);
   expect(texture, findsOneWidget);
@@ -158,33 +159,64 @@ Future<List<int>> _redTexture(
   final frame = await codec.getNextFrame();
   final image = frame.image;
   final rgba = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
-  final offset = (center.dy.floor() * image.width + center.dx.floor()) * 4;
-  final pixel = List.generate(4, (i) => rgba.getUint8(offset + i));
-  if (name == 'saf-fresh-session-texture') {
-    final horizontalSamples = [0.1, 0.25, 0.5, 0.75, 0.9].map((fraction) {
-      final x = ((rect.left + rect.width * fraction) * devicePixelRatio)
-          .floor()
-          .clamp(0, image.width - 1);
-      final sampleOffset = (center.dy.floor() * image.width + x) * 4;
-      return List.generate(
-        4,
-        (channel) => rgba.getUint8(sampleOffset + channel),
-      );
-    }).toList();
-    debugPrint(
-      'ANDROID_SAF_TEXTURE_PIXEL_GEOMETRY '
-      'rect=$rect dpr=$devicePixelRatio '
-      'image=${image.width}x${image.height} center=$pixel '
-      'horizontal=$horizontalSamples',
-    );
-  }
+  final samples = fractions.map((fraction) {
+    final x = ((rect.left + rect.width * fraction) * devicePixelRatio)
+        .floor()
+        .clamp(0, image.width - 1);
+    final offset = (center.dy.floor() * image.width + x) * 4;
+    return List.generate(4, (channel) => rgba.getUint8(offset + channel));
+  }).toList();
   image.dispose();
   codec.dispose();
+  return samples;
+}
+
+Future<List<int>> _redTexture(
+  WidgetTester tester,
+  IntegrationTestWidgetsFlutterBinding binding,
+  String name,
+) async {
+  final pixel = (await _textureSamples(tester, binding, name, [0.5])).single;
   expect(pixel[0], greaterThanOrEqualTo(200), reason: 'Red channel of $pixel');
   expect(pixel[1], lessThanOrEqualTo(40), reason: 'Green channel of $pixel');
   expect(pixel[2], lessThanOrEqualTo(40), reason: 'Blue channel of $pixel');
   expect(pixel[3], 255, reason: 'Alpha channel of $pixel');
   return pixel;
+}
+
+Future<void> _captionedRedTexture(
+  WidgetTester tester,
+  IntegrationTestWidgetsFlutterBinding binding,
+  String name,
+) async {
+  final samples = await _textureSamples(tester, binding, name, [0.1, 0.5, 0.9]);
+  for (final pixel in [samples.first, samples.last]) {
+    expect(
+      pixel[0],
+      greaterThanOrEqualTo(200),
+      reason: 'Red video pixel: $pixel',
+    );
+    expect(pixel[1], lessThanOrEqualTo(40), reason: 'Red video pixel: $pixel');
+    expect(pixel[2], lessThanOrEqualTo(40), reason: 'Red video pixel: $pixel');
+    expect(pixel[3], 255, reason: 'Opaque video pixel: $pixel');
+  }
+  final caption = samples[1];
+  expect(
+    caption[0],
+    greaterThanOrEqualTo(220),
+    reason: 'Caption pixel: $caption',
+  );
+  expect(
+    caption[1],
+    greaterThanOrEqualTo(220),
+    reason: 'Caption pixel: $caption',
+  );
+  expect(
+    caption[2],
+    greaterThanOrEqualTo(220),
+    reason: 'Caption pixel: $caption',
+  );
+  expect(caption[3], 255, reason: 'Opaque caption pixel: $caption');
 }
 
 // SurfaceProducer can accept a frame before Flutter has composed it into a
@@ -1168,8 +1200,8 @@ void main() {
         tester,
         stage: 'fresh-session-texture-surface',
       );
-      await _redTexture(tester, binding, 'saf-fresh-session-texture');
-      await _redTexture(tester, binding, 'saf-fresh-session-texture');
+      await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
+      await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
       for (var i = 0; i < 8; i++) {
         expect(await _frameAvailable('preview-frame-stress'), isTrue);
         expect((await _resources())['inFlightLeases'], 0);

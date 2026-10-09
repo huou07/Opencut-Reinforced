@@ -577,6 +577,21 @@ from Android surface composition. Keep the strict screenshot assertion. The
 run also recorded 146 skipped UI frames on OR PID 3664 and 122 skipped frames
 on PID 2895 during the SAF journey; Android performance remains unaccepted.
 
+Run [37987749155](https://github.com/huou07/Opencut-Reinforced/actions/runs/37987749155)
+on exact SHA `c56be4bb44d3308e000de18639e3f94e99e0211a` confirmed the Android
+pixel mismatch was the expected caption overlay. The imported SRT cue starts
+at zero and lasts one second, covering the full 0.5-second red fixture clip.
+Native bitmap samples before caption import were red; samples after import and
+after project reopen had a white center with red video pixels on both sides.
+This proves the reopened shared renderer preserved and rendered the caption;
+the test incorrectly expected an uncaptioned red center. The test now checks
+opaque red pixels on either side and an opaque bright caption pixel at center,
+while retaining strict red-center assertions for uncaptioned preview paths.
+Temporary native pixel logging has been removed. The exact-SHA Android journey
+must pass this corrected assertion before SAF acceptance closes. Android
+performance remains unaccepted: the run recorded 108 skipped UI frames on OR
+PID 3883 during the SAF journey.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
