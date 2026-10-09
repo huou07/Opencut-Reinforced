@@ -1216,7 +1216,11 @@ void main() {
       expect(stress['peakQueuedOperations'], lessThanOrEqualTo(8));
       expect(stress['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
       expect(stress['inFlightLeases'], 0);
-      await _redTexture(tester, binding, 'saf-texture-after-frame-stress');
+      await _captionedRedTexture(
+        tester,
+        binding,
+        'saf-texture-after-frame-stress',
+      );
       await secondGateway.close(second, discardUnsaved: false);
       expect(_providerFds(), 0);
 

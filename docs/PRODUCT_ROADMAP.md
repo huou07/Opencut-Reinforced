@@ -592,6 +592,19 @@ must pass this corrected assertion before SAF acceptance closes. Android
 performance remains unaccepted: the run recorded 108 skipped UI frames on OR
 PID 3883 during the SAF journey.
 
+Run [37990736878](https://github.com/huou07/Opencut-Reinforced/actions/runs/37990736878)
+on exact SHA `76b99fcdb9674fb45878ec731b04505de69c2620` confirmed that both
+fresh-session caption-aware checks passed, including red pixels on both sides
+of the white center cue. The Android journey then reached the post-stress
+texture capture and failed because that third capture still used the
+uncaptioned red-center helper, even though the same t=0 frame retained the
+one-second caption. This is the same stale test expectation, not a renderer or
+stress regression. The post-stress capture now uses the same strict
+caption-aware red/white/red assertions. Rust, Flutter static/widget, and the
+descriptor-boundary jobs passed; native/package jobs were still running when
+this record was written. Android performance remains unaccepted; this run's
+artifact/log indicates 108 skipped frames during the SAF journey.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
