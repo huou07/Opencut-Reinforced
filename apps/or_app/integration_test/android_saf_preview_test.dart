@@ -720,8 +720,22 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
+      final mediaPanel = find.byKey(const ValueKey('project-media-panel'));
+      final mediaList = find.descendant(
+        of: mediaPanel,
+        matching: find.byType(ListView),
+      );
+      await _until(tester, () => mediaList.evaluate().isNotEmpty);
       final loadMore = find.byKey(const ValueKey('media-load-more'));
-      await _until(tester, () => loadMore.evaluate().isNotEmpty);
+      for (
+        var attempt = 0;
+        attempt < 20 && loadMore.evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(mediaList, const Offset(0, -600));
+        await tester.pumpAndSettle();
+      }
+      expect(loadMore, findsOneWidget);
       await tester.ensureVisible(loadMore);
       await tester.tap(loadMore);
       final mediaActions = find.byKey(

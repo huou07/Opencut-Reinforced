@@ -292,6 +292,16 @@ DocumentsUI relink and process-recovery path remain unverified pending a new
 exact-SHA hosted run. The macOS job was still running when this correction was
 prepared.
 
+Run `37901750115` on exact product SHA
+`c77f9ccb425bc82e8c08d8ea9b575c45f0ac6001` passed Linux, Rust, Flutter
+static/widget and descriptor checks, and Android packaging/bridge setup. The
+Android journey then timed out waiting for “Load more” at the same test line.
+The panel uses a lazy `ListView`, so an offscreen paging control does not exist
+in the widget tree until the actual list scroll reaches it. The acceptance now
+scrolls that panel with a bounded loop before loading the final page. Its
+DocumentsUI selection log contains no relink action, so the real relink path
+remains unverified pending a new exact-SHA hosted run.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
