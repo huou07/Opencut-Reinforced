@@ -278,6 +278,7 @@ class _ObservedGateway extends RustProjectGateway {
   int importCalls = 0, importMicros = 0;
   int relinkCalls = 0;
   String? lastRelinkMediaId, lastRelinkSource;
+  ProjectActionResult? lastRelinkResult;
   int saveCalls = 0;
   int captionImportCalls = 0,
       captionExportStartedCalls = 0,
@@ -348,7 +349,12 @@ class _ObservedGateway extends RustProjectGateway {
     String source,
   ) async {
     try {
-      return await super.relinkMedia(session, current, mediaId, source);
+      return lastRelinkResult = await super.relinkMedia(
+        session,
+        current,
+        mediaId,
+        source,
+      );
     } finally {
       relinkCalls++;
       lastRelinkMediaId = mediaId;
@@ -756,7 +762,22 @@ void main() {
         find.byKey(ValueKey('media-relink-${activeMedia.mediaId}')),
       );
       debugPrint('ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.relinkCalls == 1);
+      await _until(tester, () => gateway.lastRelinkResult != null);
+      final relinkResult = gateway.lastRelinkResult!;
+      debugPrint(
+        'ANDROID_SAF_MEDIA_RELINK_RESULT '
+        'succeeded=${relinkResult.succeeded} '
+        'errorCode=${relinkResult.errorCode} '
+        'message=${relinkResult.message} '
+        'revision=${relinkResult.view?.revision}',
+      );
+      expect(
+        relinkResult.succeeded,
+        isTrue,
+        reason:
+            'The real SAF relink command must succeed: '
+            '${relinkResult.errorCode} ${relinkResult.message}',
+      );
       debugPrint('ANDROID_SAF_MEDIA_RELINK_COMPLETE');
       final relinkedMedia = (await gateway.listMediaPage(
         session,
@@ -1212,6 +1233,9 @@ void main() {
               .map((item) => item.sourceUri)
               .toList(growable: false),
           'mediaRelinkCalls': gateway.relinkCalls,
+          'mediaRelinkSucceeded': relinkResult.succeeded,
+          'mediaRelinkErrorCode': relinkResult.errorCode,
+          'mediaRelinkResultRevision': relinkResult.view?.revision.toString(),
           'mediaRelinkMediaIdBefore': activeMedia.mediaId,
           'mediaRelinkMediaIdAfter': relinkedMedia.mediaId,
           'mediaRelinkSourceBefore': activeMedia.sourceUri,

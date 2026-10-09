@@ -29,6 +29,9 @@ def report():
         'captionExportCalls': 1, 'captionExportBytes': 128,
         'captionExportValidSrt': True,
         'mediaRelinkCalls': 1,
+        'mediaRelinkSucceeded': True,
+        'mediaRelinkErrorCode': '',
+        'mediaRelinkResultRevision': '4',
         'mediaRelinkMediaIdBefore': '00000041-2222-4222-8222-222222222222',
         'mediaRelinkMediaIdAfter': '00000041-2222-4222-8222-222222222222',
         'mediaRelinkSourceBefore': 'content://dev.opencut.saffixture.documents/document/late65',
@@ -86,6 +89,9 @@ class ReportTest(unittest.TestCase):
     def test_android_relink_requires_persisted_source_and_timeline_identity(self):
         for mutation in (
             {'mediaRelinkCalls': 0},
+            {'mediaRelinkSucceeded': False},
+            {'mediaRelinkErrorCode': 'REVISION_CONFLICT'},
+            {'mediaRelinkResultRevision': '3'},
             {'mediaRelinkMediaIdBefore': '00000001-2222-4222-8222-222222222222'},
             {'mediaRelinkMediaIdAfter': '00000002-2222-4222-8222-222222222222'},
             {'mediaRelinkTimelineReferencePreserved': False},

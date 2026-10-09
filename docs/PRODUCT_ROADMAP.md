@@ -313,6 +313,22 @@ hit-testable before interacting with them.
 The picker/relink and recovery behavior remain unverified pending a new
 exact-SHA hosted run.
 
+Run `37908656472` on exact product SHA
+`707f3a940537c444e4cb3c9f46dda55c5136733b` passed Linux, Windows, macOS,
+Rust, Flutter static/widget, descriptor-boundary, Android all-ABI packaging,
+and the Android packaged bridge smoke. Android reached the real DocumentsUI
+picker and selected `tiny-second.mkv`; the persisted-grant check and picker
+selection succeeded. The final source assertion still read `late65` instead
+of `media-second`. That run is not evidence of a successful relink: the test
+only counted gateway invocation and did not record the returned
+`ProjectActionResult`. The acceptance now captures and logs the command's
+success, error code, message, and returned revision, requires command success
+before checking persisted state, and the report verifier requires that result
+evidence. This distinguishes a rejected command (including a stale-revision
+conflict) from a post-command read/refresh defect; no product mutation is
+justified until the exact command result is observed. Android relink and
+recovery remain unverified pending the exact-SHA rerun.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
