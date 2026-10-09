@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "objective": "Finish Opencut Reinforced as a useful, high-quality open-source video editor; product requirements and invariants remain authoritative while historical checkpoint order does not dictate implementation batches.",
+  "objective": "Complete the operator-authorized open-source convergence audit, adopt the smallest evidence-backed architecture and roadmap, then deliver a useful, high-quality Opencut Reinforced product. Preserve product requirements and invariants; legacy checkpoint order is traceability only.",
   "active_roadmap": "docs/PRODUCT_ROADMAP.md",
   "active_goal": "milestone:full-roadmap",
   "legacy_execution": "PAUSED",
   "require_explicit_requirement_selection": true,
-  "authorized_by": "operator product mission pivot on 2026-10-09",
+  "authorized_by": "operator convergence and product mission pivot on 2026-10-09",
   "pivot_product_base_sha": "affc71a5bee840fed68536bfa47e7abe825b908e"
 }

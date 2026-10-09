@@ -170,6 +170,25 @@ journeys before deciding whether to keep the dependency. Imported cue
 boundaries remain exact rational times, and unsupported styling/placement is
 reported for confirmation before applying the import.
 
+Run `37880371173` on exact product SHA
+`cf5542af6070dafae0009ae009da635afe2af3db` passed Rust, Flutter static/widget,
+descriptor-boundary, Linux, Windows and macOS checks. Android built the
+all-ABI package, passed the emulator bridge, and selected both known media
+files through DocumentsUI; `MainActivity` recorded `openMedia count=2` and a
+successful storage operation. The journey then stopped at
+`android_saf_preview_test.dart:609`, before caption import. The saved Flutter
+log says the tap on `timeline-import-captions` missed the target and hit only
+the root view; the native activity log has no `openCaptionFile` result. This
+is test-action evidence, not proof that Android caption import passed or that
+the product picker failed. The exact-run artifact is preserved at
+[`37880371173`](https://github.com/huou07/Opencut-Reinforced/actions/runs/37880371173).
+Next diagnosis: reproduce the hit-test miss, settle the mobile tool sheet and
+verify the caption control is hit-testable before tapping; then require a real
+DocumentsUI selection and exact-SHA hosted rerun. The selector correction at
+`cf5542a` remains a verified improvement; the full Android SAF/caption journey
+remains open. No old-roadmap implementation should resume while this mission's
+convergence pivot is active.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter

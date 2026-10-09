@@ -425,3 +425,29 @@ FFmpeg/wgpu implementation for the active product journey and treat MLT as an
 optional hosted comparison only if it can answer a concrete runtime or
 maintenance-cost question. This limits replacement evidence; it is not a
 claim that MLT is inferior or a reason to block user-facing work.
+
+## Mission continuation at current live `main`
+
+The operator's reference SHA `affc71a5bee840fed68536bfa47e7abe825b908e`
+is an ancestor of the live repository, not its current head. At this mission
+handoff, `origin/main` and `HEAD` both equal
+`cf5542af6070dafae0009ae009da635afe2af3db`; the preserved execution state is
+`9D = DONE`, `9E = NEXT`. The active mission explicitly keeps that historical
+cursor paused. The audit and capability roadmap remain active because the
+subsequent commits extend the verified product candidate without changing the
+upstream comparison or the subsystem decisions above.
+
+On that exact current SHA, hosted run
+[`37880371173`](https://github.com/huou07/Opencut-Reinforced/actions/runs/37880371173)
+passed Rust, Flutter static/widget, descriptor-boundary, Linux, Windows, and
+macOS jobs. Android built the all-ABI package and passed the emulator bridge.
+The repaired native DocumentsUI selector switched to list view and selected
+both expected media files; the app log recorded `openMedia count=2` and a
+successful storage operation. The following caption-import check failed
+because Flutter's tap missed the caption control and hit only the root view;
+there is no native `openCaptionFile` activity result. This run does not prove
+the Android caption journey. The acceptance harness must settle the mobile
+tool sheet and establish a successful hit test before waiting for the real
+SAF chooser. Preserve the existing KEEP/REUSE/BUILD/DEFER decisions; no
+upstream has demonstrated a product-level replacement since the audited
+baseline, and there is still no packaged MLT comparison.
