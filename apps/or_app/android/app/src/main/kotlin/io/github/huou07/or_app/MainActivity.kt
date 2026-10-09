@@ -487,7 +487,10 @@ class MainActivity : FlutterActivity() {
         val directory = captionExportStagingDirectory()
         val file = File.createTempFile("or-caption-export-", ".$extension", directory)
         captionExportUris[file.canonicalPath] = uri
-        return mapOf("workingPath" to file.canonicalPath)
+        return mapOf(
+            "workingPath" to file.canonicalPath,
+            "documentUri" to uri.toString(),
+        )
     }
 
     private fun publishCaptionExport(workingPath: String) {

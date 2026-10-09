@@ -200,6 +200,22 @@ next exact-SHA run will distinguish an app busy-state short circuit from a
 stalled Rust export. The Android SAF and caption journey remains open, and the
 legacy roadmap stays paused.
 
+Run `37885867632` on exact product SHA
+`d08683131d6fa4dc2a757cd912c6311ce69e2003` passed Rust, Flutter static/widget,
+descriptor-boundary, Linux and macOS packaged journeys, and Windows packaged
+journey. Android built the all-ABI APK and passed its emulator bridge check,
+then failed the SAF journey at `android_saf_preview_test.dart:658` before the
+caption export gateway was entered. DocumentsUI selected the destination and
+native storage logged `createCaptionExport` success. The Dart method-channel
+contract requires `workingPath` and `documentUri`, but
+`MainActivity.captionExportLocation()` returned only `workingPath`; Flutter
+therefore rejected the valid native result before invoking the export gateway.
+The Kotlin result now includes the already-held content URI. The next hosted
+run must verify actual gateway entry, caption bytes published to the chosen
+provider document, the rest of the SAF journey, and recovery. This run also
+reported 138 skipped Android UI frames during cold startup; that performance
+signal is separate from the caption contract failure and remains unresolved.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
