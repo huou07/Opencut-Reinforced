@@ -405,6 +405,18 @@ also recorded Android main-thread stalls (140, 103, and 73 skipped frames at
 startup/bridge/surface phases); measure and investigate these separately from
 the persistence assertion.
 
+Exact-SHA run `37932093237` on `94cd320` confirms the corrected Android
+acceptance reopened the DocumentsUI working copy and proceeded through the
+fresh-session relink, save, provider readback, and project reopen checks. It
+then failed the final pixel assertion after the test released the Android
+texture producer and registered a new texture ID: the center pixel was white,
+and captured `saf-surface-recreated.png` shows only part of the red frame. The
+source fixture is a solid red frame. In-place SurfaceProducer reset and
+fresh-session playback checks had passed earlier in the same journey. A capture
+immediately before producer release now distinguishes repeated surface-reset
+damage from new-producer restoration; preserve the pixel check and investigate
+the renderer lifecycle before changing it.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

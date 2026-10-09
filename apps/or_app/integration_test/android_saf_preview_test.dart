@@ -1107,6 +1107,14 @@ void main() {
       expect(stress['peakQueuedOperations'], lessThanOrEqualTo(8));
       expect(stress['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
       expect(stress['inFlightLeases'], 0);
+      final existingSurfacePixels = await _redTexture(
+        tester,
+        binding,
+        'saf-existing-surface-after-stress',
+      );
+      debugPrint(
+        'ANDROID_SAF_EXISTING_SURFACE_PIXEL=${existingSurfacePixels.join(',')}',
+      );
       final inFlightPresentation = _presenter.invokeMethod<bool>(
         'frameAvailable',
       );
