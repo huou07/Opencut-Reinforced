@@ -232,7 +232,22 @@ All other completed checks passed: Rust, Flutter static/widget, descriptor
 boundary, Linux and Windows packaged journeys. The macOS packaged journey also
 passed. The platform run's Android failure is limited to the stale acceptance
 expectation described above; packaged Android caption export itself is now
-verified, while the complete Android SAF journey and performance remain open.
+verified, and the complete Android SAF journey and process recovery now pass.
+Android packaged performance remains open.
+
+Run `37891034387` on exact product SHA
+`4d0aa122beaf377eb194bfaa1a250b7ef7f8c979` passed Android all-ABI packaging,
+the complete SAF editor journey and process recovery, Rust, Flutter
+static/widget, descriptor-boundary, Linux, and macOS checks. Windows built and
+launched both packaged journey phases; project creation/save/reopen passed.
+The reopen/relink phase updated the visible replacement media row, then failed
+at line 252 while immediately checking for a timeline clip. `_refreshProjectState`
+reloads media and timeline concurrently, so the harness could observe the new
+row before the timeline refresh completed. The Rust command and existing core
+regression test preserve the same MediaId and timeline references. The Windows
+journey now waits for the clip to reappear and the save control to become
+available before proceeding; the packaged Windows relink/save/export path still
+requires a hosted rerun. Do not close desktop relink parity until it passes.
 
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition

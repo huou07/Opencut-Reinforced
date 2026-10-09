@@ -246,12 +246,20 @@ Future<void> _reopenAndExport(
     tester,
     () =>
         find.text('tiny-relinked.mkv').evaluate().isNotEmpty &&
-        find.byKey(ValueKey('media-actions-$mediaId')).evaluate().isNotEmpty,
+        find.byKey(ValueKey('media-actions-$mediaId')).evaluate().isNotEmpty &&
+        _hasKeyPrefix(tester, 'timeline-clip-'),
     'relink source while preserving its MediaId',
   );
   expect(_hasKeyPrefix(tester, 'timeline-clip-'), isTrue);
   final saveButton = find.byKey(const ValueKey('workspace-save'));
   await tester.ensureVisible(saveButton);
+  await _pumpUntil(
+    tester,
+    () =>
+        tester.widget<TextButton>(saveButton).onPressed != null &&
+        saveButton.hitTestable().evaluate().isNotEmpty,
+    'relinked project save control readiness',
+  );
   await tester.tap(saveButton);
   await _pumpUntil(
     tester,
