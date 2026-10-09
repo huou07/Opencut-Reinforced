@@ -247,7 +247,37 @@ row before the timeline refresh completed. The Rust command and existing core
 regression test preserve the same MediaId and timeline references. The Windows
 journey now waits for the clip to reappear and the save control to become
 available before proceeding; the packaged Windows relink/save/export path still
-requires a hosted rerun. Do not close desktop relink parity until it passes.
+required a hosted rerun at that point. Run `37893752172` below closes that
+acceptance.
+
+Run `37893752172` on exact product SHA
+`dffa88e948e3b42b0e6d5c0ddadb53c59ca5de8f` completed successfully. Rust,
+Flutter static/widget, the granted-descriptor boundary, and native/package
+verification passed on Linux, Windows, macOS, and Android. The clean packaged
+Linux and Windows project journeys passed; macOS project lifecycle and preview
+transport passed. Android's real DocumentsUI SAF journey verified multi-file
+media import, visible pixels, touch editing surfaces, SRT import/export,
+Matroska video export (193,191 bytes), persisted project synchronization,
+permission recovery, surface recreation, and process-death recovery. The
+recovery checker independently verified the prepared and relaunched project
+reports. The exact run's
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/37893752172)
+contains the guest/provider logs, report, screenshots, and process evidence.
+
+Android measurements are from this debug APK on the API 36 x86_64 SwiftShader
+emulator, using the acceptance fixture's 16×16 video. The recorded play call
+was 99,402 µs; the slowest main-thread surface draw was 90,386 µs during the
+bounded-presentation stress; media import was 2,706 µs. Stress reached the
+configured eight pending-result limit, rejected excess requests, and ended
+with zero pending work, frame leases, media descriptors, or OS media FDs. The
+guest log also contains 30–87 skipped-frame reports and HWUI `Davey` frames of
+828–1,274 ms during the multi-app journey. These measurements flag an Android
+latency issue, but do not yet separate OR work from debug instrumentation,
+SwiftShader, or system-picker scheduling. They are not release-performance
+evidence. Keep Android performance open until a profile/release measurement on
+representative device hardware identifies the responsible path and shows
+acceptable playback and interaction latency. The current run proves journey
+correctness and resource release, not performance acceptance.
 
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
