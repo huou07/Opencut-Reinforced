@@ -40,7 +40,10 @@ def select(device, guest_log, output, flow="open"):
     # instead of hanging, not to race a cold window.
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
-    selected_media = set()
+    last_media_action = None
+    last_media_action_at = 0.0
+    last_reported_selection = None
+    selector_log = output / "documents-ui-selector.log"
 
     def adb(*args):
         return subprocess.check_output(["adb", "-s", device, *args], timeout=10)
@@ -69,6 +72,15 @@ def select(device, guest_log, output, flow="open"):
             name: next((node for node in nodes if node.get("text") == name), None)
             for name in ("tiny.mkv", "tiny-second.mkv")
         }
+        selected_media = {
+            name
+            for name, node in media.items()
+            if node is not None and node.get("selected") == "true"
+        }
+        if flow == "media" and selected_media != last_reported_selection:
+            with selector_log.open("a", encoding="utf-8") as record:
+                record.write(f"selected={','.join(sorted(selected_media)) or 'none'}\n")
+            last_reported_selection = selected_media
         drawer_roots = next(
             (node for node in nodes if node.get("resource-id", "").endswith(":id/drawer_roots")),
             None,
@@ -125,14 +137,26 @@ def select(device, guest_log, output, flow="open"):
         elif selected_root and flow == "caption-import" and caption_file is not None:
             target = caption_file
         elif selected_root and flow == "media":
+            available_media = {name for name, node in media.items() if node is not None}
             next_media = next(
-                (name for name in media if name not in selected_media and media[name] is not None),
+                (
+                    name
+                    for name in media
+                    if name not in selected_media and media[name] is not None
+                ),
                 None,
             )
             if next_media is not None:
-                target = media[next_media]
-                pending_media = next_media
-            elif len(selected_media) == 2 and media_action is not None:
+                action = "long-press" if not selected_media else "tap"
+                retry_wait = time.monotonic() - last_media_action_at < 1.5
+                if last_media_action != (next_media, action) or not retry_wait:
+                    target = media[next_media]
+                    pending_media = next_media
+            elif (
+                available_media
+                and available_media.issubset(selected_media)
+                and media_action is not None
+            ):
                 target = media_action
         elif selected_root and flow in {"export", "caption-export"} and save is not None:
             target = save
@@ -147,8 +171,7 @@ def select(device, guest_log, output, flow="open"):
             try:
                 if pending_media is not None and not selected_media:
                     # DocumentsUI opens a file on a normal first tap. Long-press
-                    # the first item to enter multi-select mode before tapping
-                    # the remaining documents.
+                    # the first item to enter multi-select mode.
                     adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
                 else:
                     adb("shell", "input", "tap", str(x), str(y))
@@ -157,7 +180,11 @@ def select(device, guest_log, output, flow="open"):
                 # decide again from the fresh tree.
                 continue
             if pending_media is not None:
-                selected_media.add(pending_media)
+                action = "long-press" if not selected_media else "tap"
+                last_media_action = (pending_media, action)
+                last_media_action_at = time.monotonic()
+                with selector_log.open("a", encoding="utf-8") as record:
+                    record.write(f"action={action} target={pending_media}\n")
             if target is document or target is caption_file or target is save or (flow == "media" and target is media_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = (

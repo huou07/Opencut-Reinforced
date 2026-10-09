@@ -119,6 +119,18 @@ The test and fixture corrections are committed at
 `9b16806b4302e685a5baff01b718921311a57ac4`; the corrected desktop caption
 bridge and Android SAF caption journeys have not yet run on a hosted platform.
 
+Run `37871818918` passed macOS native caption import/save/reopen/export,
+Linux/Windows packaged product journeys, Rust, Flutter static/widget, and the
+descriptor boundary. Android built the all-ABI APK and passed its emulator
+bridge check, then its SAF selector timed out before media import completed.
+The preserved native DocumentsUI image showed one file selected, while the
+selector had assumed its earlier gestures selected both; the device guest log
+has no OR crash or ANR signature. The selector now derives its actions from
+the filenames actually marked selected and records those states/actions, with
+a fixture reproducing the observed one-file selection. All ten selector and
+seven report tests pass locally; Android caption acceptance still requires a
+hosted rerun.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final

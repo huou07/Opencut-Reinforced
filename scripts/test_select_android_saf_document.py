@@ -75,6 +75,17 @@ MEDIA = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,200][1080,300]" selected="false" />
+  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
+  <node index="2" text="Select" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
+</hierarchy>
+"""
+
 MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
@@ -124,14 +135,15 @@ class FakeAdb:
                 DRAWER,
                 PROVIDER,
                 MEDIA,
-                MEDIA,
+                MEDIA_SECOND_SELECTED,
                 MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
             ],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "caption-import": [DRAWER, PROVIDER, CAPTION],
             "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "both": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
-                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA, MEDIA,
+                     SAVE_DISABLED, SAVE, DRAWER, PROVIDER, MEDIA,
+                     MEDIA_SECOND_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
         }[flow]
@@ -207,10 +219,13 @@ class SelectorTests(unittest.TestCase):
             self.assertEqual(
                 adb.actions,
                 [("tap", 0), ("tap", 1), ("swipe", 2), ("tap", 3), ("tap", 4)],
-                "media selection must long-press once, tap the other file, then Open",
+                "selection must follow the UI state, add the missing media, then Open",
             )
-            self.assertEqual(adb.taps[2], ["540", "370"])
+            self.assertEqual(adb.taps[2], ["540", "250"])
             self.assertEqual(adb.taps[3], ["990", "750"])
+            selection_log = (output / "documents-ui-selector.log").read_text()
+            self.assertIn("selected=tiny-second.mkv", selection_log)
+            self.assertIn("action=tap target=tiny.mkv", selection_log)
 
     def test_media_flow_accepts_select_confirmation_on_current_documentsui(self):
         with tempfile.TemporaryDirectory() as work:
