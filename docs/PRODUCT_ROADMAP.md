@@ -524,6 +524,27 @@ process starts, so its ownership is not established; the SAF journey later
 logged 160 skipped frames on the OR process. Android performance remains
 unaccepted and needs a measured diagnosis.
 
+Run [37975542884](https://github.com/huou07/Opencut-Reinforced/actions/runs/37975542884)
+on exact SHA `ab0a8fc01abf58420a997c5bb45c1075eac2ecbd` passed Rust,
+Flutter static/widget, descriptor-boundary, Linux, Windows, and macOS
+packaged/lifecycle jobs. Android built all FFmpeg ABIs and passed its emulator
+bridge check; the full SAF journey then passed backgrounding, resume, real
+texture reacquisition, captions, relink, save synchronization, and project
+reopen through the point where a fresh-session raw `Texture` screenshot was
+sampled. The strict center-pixel check read white (`[255,255,255,255]`) even
+though the preserved image shows red frame pixels on either side of a narrow
+white center band; the earlier in-editor and resumed-texture screenshots in
+the same artifact show a solid red preview. `frameAvailable` only confirms a
+frame was posted to Android's producer surface, and this fresh-session check
+mounted the Flutter `Texture` after its frame request, then sampled after one
+100 ms pump. The harness now requests bounded real frames after mounting
+before keeping the same strict pixel assertion. This compositor-settling
+hypothesis still requires an exact-SHA hosted rerun; Android user-journey
+acceptance remains open. Android logs also recorded 226 skipped frames on PID
+1107 before the OR process (ownership unestablished), plus 129 and 107 skipped
+frames on OR PID 3702 during the journey. Android performance remains
+unaccepted pending measured diagnosis.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

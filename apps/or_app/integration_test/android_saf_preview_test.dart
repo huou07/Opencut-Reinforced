@@ -167,13 +167,16 @@ Future<List<int>> _redTexture(
   return pixel;
 }
 
-// A resumed SurfaceProducer receives callbacks before Flutter has composed its
-// first frame. Keep requesting real plugin frames for a bounded settling window
-// so the pixel assertion measures the lifecycle surface, not compositor delay.
-Future<void> _settleLifecycleSurface(WidgetTester tester) async {
+// SurfaceProducer can accept a frame before Flutter has composed it into a
+// newly mounted Texture. Request frames for a bounded settling window so pixel
+// assertions measure displayed output, not compositor scheduling delay.
+Future<void> _settleTextureSurface(
+  WidgetTester tester, {
+  required String stage,
+}) async {
   for (var attempt = 0; attempt < 8; attempt++) {
     expect(
-      await _frameAvailable('background-resumed-surface'),
+      await _frameAvailable(stage),
       isTrue,
       reason: 'The resumed Android surface must present a real frame.',
     );
@@ -606,7 +609,7 @@ void main() {
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
       expect(await _frameAvailable('after-background-resume'), isTrue);
-      await _settleLifecycleSurface(tester);
+      await _settleTextureSurface(tester, stage: 'background-resumed-surface');
       final afterBackground = await _resources();
       final surfaceCleanupDelta =
           afterBackground['surfaceCleanups']! -
@@ -1140,6 +1143,10 @@ void main() {
             ),
           ),
         ),
+      );
+      await _settleTextureSurface(
+        tester,
+        stage: 'fresh-session-texture-surface',
       );
       await _redTexture(tester, binding, 'saf-fresh-session-texture');
       await _redTexture(tester, binding, 'saf-fresh-session-texture');
