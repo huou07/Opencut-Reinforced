@@ -70,7 +70,7 @@ void main() {
     expect(
       providerBeforeOpen['persistedMediaUris'],
       contains(
-        'content://dev.opencut.saffixture.documents/document/media-second',
+        'content://dev.opencut.saffixture.documents/document/relink-replacement',
       ),
       reason: 'The relinked media grant must survive process recovery.',
     );
@@ -157,7 +157,7 @@ void main() {
     expect(relinked.mediaId, '00000041-2222-4222-8222-222222222222');
     expect(
       relinked.sourceUri,
-      'content://dev.opencut.saffixture.documents/document/media-second',
+      'content://dev.opencut.saffixture.documents/document/relink-replacement',
     );
     final videoTrack = (await gateway.listTimelineTracks(gateway.session!))
         .items
@@ -190,7 +190,7 @@ void main() {
           'relinkedMediaAndTimelineRecovered':
               relinked.mediaId == '00000041-2222-4222-8222-222222222222' &&
               relinked.sourceUri ==
-                  'content://dev.opencut.saffixture.documents/document/media-second' &&
+                  'content://dev.opencut.saffixture.documents/document/relink-replacement' &&
               clips.items.any((clip) => clip.mediaId == relinked.mediaId),
           'relinkedMediaGrantSurvivedProcessRestart':
               (providerBeforeOpen['persistedMediaUris'] as List).contains(

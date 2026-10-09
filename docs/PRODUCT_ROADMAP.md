@@ -605,6 +605,19 @@ descriptor-boundary jobs passed; native/package jobs were still running when
 this record was written. Android performance remains unaccepted; this run's
 artifact/log indicates 108 skipped frames during the SAF journey.
 
+Exact-SHA run [37997313827](https://github.com/huou07/Opencut-Reinforced/actions/runs/37997313827)
+on `90e0ea4384c1722cdc714fdd474245c103c81fe6` passed the main Android SAF
+editor journey, including all three strict caption-aware preview captures and
+the resource stress checks. Its separate real process-stop/relaunch test then
+recovered the project but failed at `android_saf_recovery_test.dart:158`: the
+fixture expected the pre-relink `media-second` source after the same journey
+had saved `relink-replacement`. The independent recovery verifier and its test
+already require `relink-replacement`, so this is a stale Dart fixture
+expectation; the integration test now checks the replacement source and its
+persisted SAF grant. Windows packaging was still running when this finding was
+recorded. Android release acceptance remains open until the exact-SHA process
+recovery test passes. Android performance remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
