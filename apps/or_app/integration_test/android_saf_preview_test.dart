@@ -419,6 +419,7 @@ class _ObservedGateway extends RustProjectGateway {
 class _ObservedSafProjectPicker extends AndroidSafProjectPicker {
   ProjectFileSyncResult? lastSyncResult;
   Object? lastSyncError;
+  bool syncCompleted = false;
   String? selectedProjectPath;
   String? synchronizedProjectPath;
   int syncCalls = 0;
@@ -436,6 +437,8 @@ class _ObservedSafProjectPicker extends AndroidSafProjectPicker {
     } catch (error) {
       lastSyncError = error;
       rethrow;
+    } finally {
+      syncCompleted = true;
     }
   }
 }
@@ -933,6 +936,12 @@ void main() {
       );
       await tester.tap(saveButton);
       await _until(tester, () => gateway.saveCalls == 1);
+      expect(
+        projectPicker.syncCalls,
+        1,
+        reason: 'Saving a SAF project must invoke its document synchronizer.',
+      );
+      await _until(tester, () => projectPicker.syncCompleted);
       debugPrint(
         'ANDROID_SAF_PROJECT_SAVE_RESULT '
         'succeeded=${gateway.lastSaveResult?.succeeded} '
@@ -951,11 +960,6 @@ void main() {
             'The project command must save successfully before SAF sync: '
             '${gateway.lastSaveResult?.errorCode} '
             '${gateway.lastSaveResult?.message}',
-      );
-      expect(
-        projectPicker.syncCalls,
-        1,
-        reason: 'Saving a SAF project must invoke its document synchronizer.',
       );
       expect(
         projectPicker.synchronizedProjectPath,

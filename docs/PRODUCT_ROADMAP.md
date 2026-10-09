@@ -417,6 +417,15 @@ immediately before producer release now distinguishes repeated surface-reset
 damage from new-producer restoration; preserve the pixel check and investigate
 the renderer lifecycle before changing it.
 
+Exact-SHA run `37938319509` on `230b083` passed Linux, Windows, Rust, Flutter,
+descriptor-boundary, and macOS packaged/lifecycle checks, but Android stopped
+before the new surface capture. The test awaited the gateway Save call, then
+read `lastSyncResult` before the separately awaited SAF synchronization had
+completed; the log showed one sync call and `syncVerified=null`. The
+acceptance now waits for the synchronizer's completion and still requires a
+verified provider readback. This run supplies no new evidence about the
+recreated-surface pixel; that rendering failure remains open.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
