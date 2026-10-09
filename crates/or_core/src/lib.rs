@@ -13,6 +13,7 @@ mod project_document;
 mod project_file_session;
 mod project_recovery;
 mod project_storage;
+mod subtitle_io;
 mod time;
 mod timeline;
 
@@ -80,6 +81,11 @@ pub use project_recovery::{
 pub use project_storage::{
     MAX_PROJECT_FILE_BYTES, ProjectStorageError, TempFileOperation, load_project_file,
     replace_published_file, save_project_file_atomic,
+};
+pub use subtitle_io::{
+    CaptionExportError, CaptionFileFormat, CaptionImportError, CaptionImportPlan, ImportedCaption,
+    MAX_CAPTION_EXPORT_BYTES, MAX_CAPTION_FILE_BYTES, MAX_IMPORTED_CAPTIONS, encode_caption_file,
+    parse_caption_file,
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{

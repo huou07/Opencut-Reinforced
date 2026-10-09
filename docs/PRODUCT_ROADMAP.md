@@ -74,16 +74,17 @@ real engine migration dependency.
 
 ## Next coherent implementation slice
 
-First finish the exact-SHA hosted acceptance already exercising Android SAF
-resource cleanup and desktop local-file relinking. After that boundary is
-verified, make captions interoperable as one user journey: import SRT/WebVTT
-cues into the canonical Caption track, edit them with existing timeline tools,
-save/reopen, and export them back to the chosen format. Use the tested
-`subtitler` parser only after the OR mapping check handles cue limits,
-overflow, unsupported style/placement loss, one-step undo, and any material
-shipped-package size impact. The imported cue boundaries must remain exact rational times. The user
-must see the same caption commands and semantics on desktop and Android, with
-the platform's native file selection/grant behavior at the edges.
+The bounded `subtitler` SRT/WebVTT core codec is implemented and tested, but is
+not yet a product capability: it has no timeline command, undo entry, picker,
+save/reopen journey, or export UI. The published crate adds 29 unique packages
+to the OR workspace graph and currently brings `clap` and
+`tracing-subscriber` into `or_core`; upstream PR #8 proposes removing that
+library-only cost but is not merged. Continue with the canonical timeline
+command/history and a package-size measurement. Keep or remove the dependency
+based on the complete user journey and measured package cost. Then wire the
+same SRT/WebVTT semantics to desktop and Android file selection, save/reopen,
+and export. Imported cue boundaries must remain exact rational times, and
+unsupported styling/placement must be reported before applying the import.
 
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition

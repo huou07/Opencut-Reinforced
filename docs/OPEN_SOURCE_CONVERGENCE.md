@@ -75,7 +75,7 @@ patch is justified by this audit alone.
 | Proxies/cache | **KEEP** | OR already has bounded background jobs, disposable indexed cache, LRU eviction, and proxy-generation primitives; cache does not enter canonical project state. No inspected project justifies replacing this with an unmeasured service. | Expose only user-valued proxy controls after real media measurements and cleanup/recovery checks. |
 | Thumbnails/waveforms | **KEEP** | OR generates bounded FFmpeg artifacts through its existing job/cache path. This is small, compatible work with no proven superior drop-in. | Preserve limits and packaged dependency tests; improve only with observed UX/performance gaps. |
 | Effects/transitions | **KEEP semantics; REUSE selectively** | OR has typed brightness/contrast/saturation/blur and transition semantics shared by preview/export. MLT/Frei0r contain mature effect implementations but have module-by-module license and behavior differences. | Compare selected filters through MLT/FFmpeg/wgpu proof fixtures. Preserve OR parameter semantics and preview/export parity; no wholesale effect ABI yet. |
-| Captions/text | **KEEP canonical model; REUSE SRT/VTT parser** | OR's typed caption/text clips and deterministic bundled-font rendering align with project and export invariants. The Apache-2.0 `subtitle-rs/subtitler` Rust library parses and generates common subtitle formats; its feature-trimmed SRT/VTT test suite passes 162 unit tests. Its API uses integer milliseconds, exactly mappable to OR rational time for these formats. A feature-trimmed normal dependency graph still adds 29 packages not active elsewhere in the OR workspace, including CLI/logging support. | Keep OR's typed model, project commands, timing and deterministic renderer. Prototype only SRT/VTT cue mapping with explicit malformed/overflow/unsupported-style behavior and measure dependency/package cost before adoption. Do not import its CLI, provider/network, transcript or model workflow. |
+| Captions/text | **KEEP canonical model; REUSE SRT/VTT codec provisionally** | OR's typed caption/text clips and deterministic bundled-font rendering align with project and export invariants. `subtitle-rs/subtitler` v2.9.0 is Apache-2.0 and its feature-trimmed SRT/VTT suite passed 162 upstream tests. OR's bounded codec now maps integer milliseconds exactly to rational time, strips unsupported styling with an explicit loss count, bounds input/cues/output, and refuses lossy export rounding. Its current library dependency still compiles CLI/logging support (`clap`, `tracing-subscriber`) and adds 29 packages not active elsewhere in the OR workspace. | Keep OR's typed model, project commands, timing and deterministic renderer. Finish one-command import/history, platform pickers, save/reopen, export, and packaged dependency/size checks before approving full adoption. Do not import its CLI, provider/network, transcript or model workflow. |
 | UI/editor interaction | **KEEP; improve** | OR's Flutter workspace and Focused Monochrome design are the only checked candidate UI intended to share desktop and touch concepts. Shotcut/Kdenlive/LosslessCut are mature desktop references, not reusable UI code; Palmier is closed for contribution and Mac-only. | Make visible journeys complete and understandable. Use mature editors as interaction references, not as a reason to replace the shared product shell. |
 | Desktop/mobile shells | **KEEP Flutter; retain iOS contract only** | OR currently packages macOS, Windows, Linux, and Android through a shared Flutter product surface. OpenCut's rewrite multi-platform direction is not implemented; OpenTake and inspected mature NLEs do not prove this parity. iOS is not currently a supported target. | Verify shared semantics on all current targets. Keep iOS as an architectural intent, not an acceptance claim, until toolchain, packaging, and native journey exist. |
 | CLI/application API | **KEEP** | OR's typed Rust application requests and local IPC let GUI and CLI use one project host with revision checks and no TCP fallback. OpenCut's Editor API is a planned capability in the checked rewrite, not shipped evidence. | Keep commands semantic, discoverable, stable, and secret-safe. Use end-to-end parity tests. |
@@ -210,12 +210,18 @@ after the OR product integration gate below; contribute generic dependency
 improvements upstream rather than carrying a parser fork.** Keep OR's caption
 clips, one-command project mutation/history, timeline timing, and renderer.
 
-A scratch integration proof linked that exact library checkout to
-`or_core::RationalTime` and passed two checks: SRT and WebVTT cues at 125 ms
-mapped to exact `1/8`-second starts and `9/4`-second durations; an input beyond
-OR's signed time range was rejected. This confirms the timestamp boundary
-only. It did not insert clips, preserve or report rich cue styling, exercise
-undo, or measure packaged size, so it is not yet an adoption approval.
+OR now depends on the published crate with only `srt` and `vtt` features and
+has a bounded core codec with unit coverage for SRT/WebVTT parse and export,
+exact rational timestamp mapping, overflow, malformed timing, styling-loss
+reporting, and file/cue/output limits. `cargo tree -p or_core --edges normal`
+confirms that `clap` and `tracing-subscriber` still enter the graph through the
+published crate; the OR graph is currently 185 package nodes, with 29 nodes
+unique to this dependency relative to the workspace baseline. The separate
+upstream PR #8 proposes removing those CLI/logging dependencies from
+library-only consumers and remains unmerged. This is a parser/codec integration
+proof, not approval of the end-user feature: canonical track insertion,
+one-step undo, platform file selection, save/reopen, export, and shipped
+package-size impact remain unverified.
 
 Provenance warning: a separate
 [Open-Montage-app/OpenMontage](https://github.com/Open-Montage-app/OpenMontage)

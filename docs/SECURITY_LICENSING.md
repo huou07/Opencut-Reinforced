@@ -40,6 +40,7 @@ These are the current direct dependencies for the executable architecture and fo
 | [rusqlite](https://github.com/rusqlite/rusqlite) | 0.40.1 | Private disposable cache index only (`default-features = false`, `bundled` feature) | MIT |
 | [windows-sys](https://docs.rs/crate/windows-sys/0.61.2) | 0.61.2 | Windows-only atomic project-file replacement, named pipes, and owner-only endpoint ACLs (`cfg(windows)` target dependency) | MIT OR Apache-2.0 |
 | [cosmic-text](https://crates.io/crates/cosmic-text/0.19.0) | 0.19.0 | Bundled-font shaping and rasterization in `or_render` (`default-features = false`, `std` and `swash`) | MIT OR Apache-2.0 |
+| [subtitler](https://github.com/subtitle-rs/subtitler) | 2.9.0 | Bounded SRT/WebVTT parsing and serialization for the core caption codec (`default-features = false`, `srt` and `vtt`) | Apache-2.0 |
 | [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge/versions/2.13.0) | 2.13.0 | Generated typed Dart/Rust bridge bindings | MIT |
 | [flutter_rust_bridge_hooks](https://pub.dev/packages/flutter_rust_bridge_hooks/versions/2.13.0) | 2.13.0 | Native-assets hook and Rust library packaging | MIT |
 | [file_selector](https://pub.dev/packages/file_selector/versions/1.1.0/license) | 1.1.0 | Flutter-ecosystem native open/save location selection for desktop projects | BSD-3-Clause |
