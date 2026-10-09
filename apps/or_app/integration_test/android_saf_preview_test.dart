@@ -729,14 +729,13 @@ void main() {
       final loadMore = find.byKey(const ValueKey('media-load-more'));
       for (
         var attempt = 0;
-        attempt < 20 && loadMore.evaluate().isEmpty;
+        attempt < 20 && loadMore.hitTestable().evaluate().isEmpty;
         attempt++
       ) {
         await tester.drag(mediaList, const Offset(0, -600));
         await tester.pumpAndSettle();
       }
-      expect(loadMore, findsOneWidget);
-      await tester.ensureVisible(loadMore);
+      expect(loadMore.hitTestable(), findsOneWidget);
       await tester.tap(loadMore);
       final mediaActions = find.byKey(
         ValueKey('media-actions-${activeMedia.mediaId}'),

@@ -302,6 +302,16 @@ scrolls that panel with a bounded loop before loading the final page. Its
 DocumentsUI selection log contains no relink action, so the real relink path
 remains unverified pending a new exact-SHA hosted run.
 
+Run `37905372511` on exact product SHA
+`7ec839651be7c408fd6f99904c1cc1f227ce9d6b` passed Linux, Windows, macOS,
+Rust, Flutter static/widget, and descriptor-boundary checks. Android reached
+the paging control, but its center was at y=644 on a 640-pixel viewport. The
+test attempted a tap before that lazy child was hit-testable and the control
+action did not run; no DocumentsUI relink picker opened. The acceptance now
+scrolls until the control is hit-testable and asserts that state before tap.
+The picker/relink and recovery behavior remain unverified pending a new
+exact-SHA hosted run.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
