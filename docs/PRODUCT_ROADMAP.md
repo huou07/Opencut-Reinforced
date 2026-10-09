@@ -449,14 +449,16 @@ unchanged. The next run separates a single `getForcedNewSurface` reset from
 damage that accumulates across eight resets by capturing immediately after the
 first reset.
 
-Exact-SHA run `37953579159` on `4cf79ed` passed the hosted Rust, Flutter,
-descriptor-boundary, Linux and Windows jobs. Its Android APK built and emulator
-bridge check passed, then SAF acceptance again failed at the white center pixel
-after the surface stress sequence. The square-aspect screenshot confirms a
-red/white/red band inside the preview itself, so incorrect portrait stretching
-does not explain the result. The Android job evidence is preserved in the
-[workflow run](https://github.com/huou07/Opencut-Reinforced/actions/runs/37953579159);
-the macOS lifecycle job was still running when this diagnostic was prepared.
+Exact-SHA run `37953579159` on `4cf79ed` passed Flutter static/widget,
+descriptor-boundary, Linux, Windows, and macOS build, lifecycle, preview, and
+packaged-product checks. Rust checks did not run: the hosted runner could not
+resolve `ffmpeg.org` while fetching the pinned FFmpeg source (`curl: (6) Could
+not resolve host`). Its Android APK built and emulator bridge check passed,
+then SAF acceptance again failed at the white center pixel after the surface
+stress sequence. The square-aspect screenshot confirms a red/white/red band
+inside the preview itself, so incorrect portrait stretching does not explain
+the result. The Android job evidence is preserved in the
+[workflow run](https://github.com/huou07/Opencut-Reinforced/actions/runs/37953579159).
 
 ## Traceability from the preserved roadmap
 
