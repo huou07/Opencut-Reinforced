@@ -55,7 +55,7 @@ def select(device, guest_log, output, flow="open"):
         if flow != "media-relink" or "ANDROID_SAF_MEDIA_RELINK_COMPLETE" not in guest_log.read_text(errors="replace"):
             return False
         with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
-            record.write("Selected tiny-second.mkv for media-relink through native DocumentsUI.\n")
+            record.write("Selected relink-replacement.mkv for media-relink through native DocumentsUI.\n")
         return True
 
     def adb(*args):
@@ -87,9 +87,20 @@ def select(device, guest_log, output, flow="open"):
             name: next((node for node in nodes if node.get("text") == name), None)
             for name in ("tiny.mkv", "tiny-second.mkv")
         }
+        relink_media = next(
+            (node for node in nodes if node.get("text") == "relink-replacement.mkv"),
+            None,
+        )
+        selectable_media = (
+            media
+            if flow == "media"
+            else {"relink-replacement.mkv": relink_media}
+            if flow == "media-relink"
+            else {}
+        )
         selected_media = {
             name
-            for name, node in media.items()
+            for name, node in selectable_media.items()
             if node is not None and node.get("selected") == "true"
         }
         if flow in {"media", "media-relink"} and selected_media != last_reported_selection:
@@ -156,15 +167,17 @@ def select(device, guest_log, output, flow="open"):
         elif selected_root and flow == "caption-import" and caption_file is not None:
             target = caption_file
         elif selected_root and flow in {"media", "media-relink"}:
-            available_media = {name for name, node in media.items() if node is not None}
-            expected_media = set(media) if flow == "media" else {"tiny-second.mkv"}
+            available_media = {
+                name for name, node in selectable_media.items() if node is not None
+            }
+            expected_media = set(selectable_media)
             next_media = next(
                 (
                     name
-                    for name in media
+                    for name in selectable_media
                     if name in expected_media
                     and name not in selected_media
-                    and media[name] is not None
+                    and selectable_media[name] is not None
                 ),
                 None,
             )
@@ -172,7 +185,7 @@ def select(device, guest_log, output, flow="open"):
             # while loading/relayout is in progress. Do not infer that a
             # partial set is the whole acceptance selection; the known fixture
             # names are the completion contract for this journey.
-            listing_complete = available_media == set(media)
+            listing_complete = available_media == expected_media
             if not listing_complete and list_view is not None and not list_view_requested:
                 # The acceptance provider can place one tile below the fold in
                 # DocumentsUI's default grid at compact emulator sizes. List
@@ -183,7 +196,7 @@ def select(device, guest_log, output, flow="open"):
                 action = "long-press" if flow == "media" and not selected_media else "tap"
                 retry_wait = time.monotonic() - last_media_action_at < 1.5
                 if last_media_action != (next_media, action) or not retry_wait:
-                    target = media[next_media]
+                    target = selectable_media[next_media]
                     pending_media = next_media
             elif (
                 listing_complete
@@ -235,7 +248,7 @@ def select(device, guest_log, output, flow="open"):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = (
                         ",".join(sorted(selected_media)) if flow == "media" else
-                        "tiny-second.mkv" if flow == "media-relink" else
+                        "relink-replacement.mkv" if flow == "media-relink" else
                         "caption file" if flow == "caption-import" else
                         "caption export" if flow == "caption-export" else
                         "OR SAF acceptance"

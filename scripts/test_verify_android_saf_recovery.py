@@ -35,7 +35,7 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
                     "noFlutterException": True,
                 },
                 "relinkedMediaId": "00000041-2222-4222-8222-222222222222",
-                "relinkedMediaSource": "content://dev.opencut.saffixture.documents/document/media-second",
+                "relinkedMediaSource": "content://dev.opencut.saffixture.documents/document/relink-replacement",
                 "projectPath": "/data/user/0/io.github.huou07.or_app/files/or-projects/project.orproj",
                 "providerProjectSha256BeforeOpen": "a" * 64,
                 "projectName": "Process recovery acceptance",

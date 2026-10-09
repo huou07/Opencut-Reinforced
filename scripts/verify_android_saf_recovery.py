@@ -63,7 +63,7 @@ def verify(relaunch: dict[str, Any], prepared: dict[str, Any], recovered: dict[s
     if (
         recovered_report.get("relinkedMediaId") != "00000041-2222-4222-8222-222222222222"
         or recovered_report.get("relinkedMediaSource")
-        != "content://dev.opencut.saffixture.documents/document/media-second"
+        != "content://dev.opencut.saffixture.documents/document/relink-replacement"
     ):
         raise ValueError("post-restart project lost the relinked media identity or source")
     provider_digest = recovered_report.get("providerProjectSha256BeforeOpen")

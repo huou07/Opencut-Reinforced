@@ -334,6 +334,20 @@ create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
 the same validated command/history path and remain reviewable before apply.
 
+Run `37911913906` on exact product SHA
+`1356ee8c6e060f7c9399c5e80cde9bb99bfa1ffa` confirmed the prior source
+mismatch was caused by the acceptance choosing `media-second`, a document it
+had already imported into the same project. The Rust command returned
+`MEDIA_SOURCE_ALREADY_EXISTS`, correctly preserving the unique-source
+invariant. The acceptance now selects a separate provider document,
+`relink-replacement`, and the DocumentsUI helper identifies it independently
+from the two-file import set. Its list-completion condition also now uses the
+expected selection for each picker flow; it previously compared the relink
+listing against the two-file import list and could loop forever. The report
+and recovery verifiers now require the unique replacement URI. This is a
+fixture/selector correction; Android SAF relink and process recovery remain
+unverified until the corrected exact-SHA journey passes.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

@@ -96,6 +96,13 @@ MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+RELINK_MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="relink-replacement.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
+</hierarchy>
+"""
+
 MEDIA_FIRST_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
@@ -166,8 +173,7 @@ class FakeAdb:
                 DRAWER,
                 PROVIDER,
                 MEDIA_GRID_PARTIAL,
-                MEDIA_LIST,
-                MEDIA_SECOND_SELECTED,
+                RELINK_MEDIA_LIST,
             ],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "caption-import": [DRAWER, PROVIDER, CAPTION],
@@ -186,7 +192,7 @@ class FakeAdb:
                      MEDIA_FIRST_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
-                     MEDIA_GRID_PARTIAL, MEDIA_LIST, MEDIA_SECOND_SELECTED],
+                     MEDIA_GRID_PARTIAL, RELINK_MEDIA_LIST],
         }[flow]
 
     def check_output(self, args, timeout=None):
@@ -297,14 +303,14 @@ class SelectorTests(unittest.TestCase):
             self.assertEqual(
                 adb.actions,
                 [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3)],
-                "relink opens the list view and selects only tiny-second.mkv",
+                "relink opens the list view and selects a new replacement source",
             )
             self.assertIn(
-                "action=tap target=tiny-second.mkv",
+                "action=tap target=relink-replacement.mkv",
                 (output / "documents-ui-selector.log").read_text(),
             )
             self.assertIn(
-                "Selected tiny-second.mkv for media-relink through native DocumentsUI.",
+                "Selected relink-replacement.mkv for media-relink through native DocumentsUI.",
                 (output / "documents-ui-selection.txt").read_text(),
             )
 
@@ -451,7 +457,7 @@ class SelectorTests(unittest.TestCase):
 
             self.assertEqual(len(adb.actions), 22)
             selections = (output / "documents-ui-selection.txt").read_text()
-            self.assertIn("Selected tiny-second.mkv for media-relink", selections)
+            self.assertIn("Selected relink-replacement.mkv for media-relink", selections)
 
 
 if __name__ == "__main__":

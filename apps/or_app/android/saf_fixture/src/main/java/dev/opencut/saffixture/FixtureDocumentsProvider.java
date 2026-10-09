@@ -53,6 +53,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
             addDocument(cursor, "project");
             addDocument(cursor, "media");
             addDocument(cursor, "media-second");
+            addDocument(cursor, "relink-replacement");
             addDocument(cursor, "captions");
             if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
             if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) addDocument(cursor, "caption-export");
@@ -63,7 +64,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
-        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "tiny-second.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : "export.mkv");
+        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "tiny-second.mkv" : id.equals("relink-replacement") ? "relink-replacement.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : "export.mkv");
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : id.equals("captions") || id.equals("caption-export") ? "application/x-subrip" : id.equals("caption-export-vtt") ? "text/vtt" : "video/x-matroska");
         row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root")
             ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE

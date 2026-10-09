@@ -67,7 +67,8 @@ int _providerFds() {
       final target = Link(entry.path).targetSync();
       if (target.contains('/dev.opencut.saffixture/') &&
           (target.endsWith('/tiny.mkv') ||
-              target.endsWith('/tiny-second.mkv'))) {
+              target.endsWith('/tiny-second.mkv') ||
+              target.endsWith('/relink-replacement.mkv'))) {
         count++;
       }
     } on FileSystemException {
@@ -785,9 +786,9 @@ void main() {
         limit: 1,
       )).items.single;
       expect(gateway.lastRelinkMediaId, activeMedia.mediaId);
-      expect(gateway.lastRelinkSource, _source('media-second'));
+      expect(gateway.lastRelinkSource, _source('relink-replacement'));
       expect(relinkedMedia.mediaId, activeMedia.mediaId);
-      expect(relinkedMedia.sourceUri, _source('media-second'));
+      expect(relinkedMedia.sourceUri, _source('relink-replacement'));
       final videoTrack = (await gateway.listTimelineTracks(session)).items
           .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
       final relinkedClips = await gateway.listTimelineClips(
@@ -988,7 +989,7 @@ void main() {
         limit: 1,
       )).items.single;
       expect(reopenedRelink.mediaId, activeMedia.mediaId);
-      expect(reopenedRelink.sourceUri, _source('media-second'));
+      expect(reopenedRelink.sourceUri, _source('relink-replacement'));
       final reopenedTrack = (await secondGateway.listTimelineTracks(second))
           .items
           .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);

@@ -35,7 +35,7 @@ def report():
         'mediaRelinkMediaIdBefore': '00000041-2222-4222-8222-222222222222',
         'mediaRelinkMediaIdAfter': '00000041-2222-4222-8222-222222222222',
         'mediaRelinkSourceBefore': 'content://dev.opencut.saffixture.documents/document/late65',
-        'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/media-second',
+        'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/relink-replacement',
         'mediaRelinkTimelineReferencePreserved': True,
         'mediaRelinkRevision': '4',
         'finalOsMediaFds': 0, 'softwareFallback': 'packaged_ffmpeg_shared_render_bounded_bgra', 'hardware': 'UNVERIFIED',
@@ -95,6 +95,7 @@ class ReportTest(unittest.TestCase):
             {'mediaRelinkMediaIdBefore': '00000001-2222-4222-8222-222222222222'},
             {'mediaRelinkMediaIdAfter': '00000002-2222-4222-8222-222222222222'},
             {'mediaRelinkTimelineReferencePreserved': False},
+            {'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/media-second'},
             {'mediaRelinkSourceAfter': 'content://dev.opencut.saffixture.documents/document/late65'},
         ):
             value = report()

@@ -67,7 +67,7 @@ def verify(report):
             or relink_id != '00000041-2222-4222-8222-222222222222'
             or relink_id != data.get('mediaRelinkMediaIdAfter')
             or data.get('mediaRelinkSourceBefore') != 'content://dev.opencut.saffixture.documents/document/late65'
-            or data.get('mediaRelinkSourceAfter') != 'content://dev.opencut.saffixture.documents/document/media-second'
+            or data.get('mediaRelinkSourceAfter') != 'content://dev.opencut.saffixture.documents/document/relink-replacement'
             or data.get('mediaRelinkTimelineReferencePreserved') is not True
             or int(data.get('mediaRelinkResultRevision', 0)) <= int(data.get('captionImportRevision', 0))
             or int(data.get('mediaRelinkRevision', 0)) <= int(data.get('captionImportRevision', 0))):
