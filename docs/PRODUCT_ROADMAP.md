@@ -74,8 +74,11 @@ real engine migration dependency.
 
 ## Next coherent implementation slice
 
-The bounded `subtitler` SRT/WebVTT core codec is implemented and tested, but is
-not yet a product capability: it has no timeline command, undo entry, picker,
+The bounded `subtitler` SRT/WebVTT core codec and atomic
+`timeline.captions.import` command are implemented and tested. One command adds
+the complete validated Caption track at one project revision and creates one
+undo/redo entry; invalid overlaps and duplicate IDs reject the whole import.
+This is still not an end-user product capability: there is no picker,
 save/reopen journey, or export UI. The published crate adds 29 unique packages
 to the OR workspace graph and currently brings `clap` and
 `tracing-subscriber` into `or_core`; upstream PR #8 proposes removing that

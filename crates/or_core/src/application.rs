@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{cmp::Ordering, error::Error, fmt};
+use std::{cmp::Ordering, collections::HashSet, error::Error, fmt};
 
 const PROJECT_RENAME_ID: &str = "project.rename";
 const PROJECT_SUMMARY_ID: &str = "project.summary";
@@ -22,6 +22,7 @@ const TIMELINE_TRACK_REMOVE_ID: &str = "timeline.track.remove";
 const TIMELINE_TRACK_SET_STATE_ID: &str = "timeline.track.set_state";
 const TIMELINE_CLIP_INSERT_ID: &str = "timeline.clip.insert";
 const TIMELINE_CLIP_INSERT_CONTENT_ID: &str = "timeline.clip.insert_content";
+const TIMELINE_CAPTIONS_IMPORT_ID: &str = "timeline.captions.import";
 const TIMELINE_CLIP_MOVE_ID: &str = "timeline.clip.move";
 const TIMELINE_CLIP_UPDATE_ID: &str = "timeline.clip.update";
 const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
@@ -60,7 +61,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 22] = [
+const COMMANDS: [CommandDescriptor; 23] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -123,6 +124,12 @@ const COMMANDS: [CommandDescriptor; 22] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_INSERT_CONTENT_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CAPTIONS_IMPORT_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -420,6 +427,24 @@ impl CommandEnvelope {
                 "content": content,
                 "settings": settings,
             }),
+        }
+    }
+
+    /// Imports a complete caption track as one revision-checked, undoable command.
+    pub fn import_timeline_captions(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+        clips: Vec<TimelineClipState>,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CAPTIONS_IMPORT_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "track_id": track_id, "clips": clips }),
         }
     }
 
@@ -1014,6 +1039,16 @@ pub enum ProjectChange {
         track_state: TrackState,
         index: usize,
     },
+    TimelineCaptionTrackAdded {
+        track_id: TrackId,
+        index: usize,
+        clips: Vec<TimelineClipState>,
+    },
+    TimelineCaptionTrackRemoved {
+        track_id: TrackId,
+        index: usize,
+        clips: Vec<TimelineClipState>,
+    },
     TimelineTrackStateChanged {
         track_id: TrackId,
         before: TrackState,
@@ -1274,6 +1309,20 @@ impl ChangeSet {
                 reverse,
                 false,
             ),
+            ProjectChange::TimelineCaptionTrackAdded {
+                track_id,
+                index,
+                clips,
+            } => {
+                stage_caption_track_history_change(project, *track_id, *index, clips, reverse, true)
+            }
+            ProjectChange::TimelineCaptionTrackRemoved {
+                track_id,
+                index,
+                clips,
+            } => stage_caption_track_history_change(
+                project, *track_id, *index, clips, reverse, false,
+            ),
             ProjectChange::TimelineTrackStateChanged {
                 track_id,
                 before,
@@ -1446,6 +1495,10 @@ enum StagedHistoryChange {
         track_id: TrackId,
         kind: TrackKind,
         state: TrackState,
+        index: usize,
+    },
+    InsertCaptionTrack {
+        track: TimelineTrack,
         index: usize,
     },
     RemoveTimelineTrack {
@@ -2038,6 +2091,9 @@ impl ProjectSession {
             TIMELINE_CLIP_INSERT_CONTENT_ID => {
                 self.apply_timeline_clip_insert_content(envelope.arguments)?
             }
+            TIMELINE_CAPTIONS_IMPORT_ID => {
+                self.apply_timeline_captions_import(envelope.arguments)?
+            }
             TIMELINE_CLIP_MOVE_ID => self.apply_timeline_clip_move(envelope.arguments)?,
             TIMELINE_CLIP_UPDATE_ID => self.apply_timeline_clip_update(envelope.arguments)?,
             TIMELINE_CLIP_DELETE_ID => self.apply_timeline_clip_delete(envelope.arguments)?,
@@ -2306,6 +2362,97 @@ impl ProjectSession {
         self.project
             .replace_media_for_command(index, arguments.item, after_revision);
         self.history.undo.push(change_set.clone());
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    fn apply_timeline_captions_import(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineCaptionsImportArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if arguments.clips.is_empty()
+            || arguments.clips.len() > crate::subtitle_io::MAX_IMPORTED_CAPTIONS
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineLimitExceeded,
+            ));
+        }
+        let tracks = self.project.timeline().tracks();
+        if tracks.iter().any(|track| track.id() == arguments.track_id) {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineTrackIdAlreadyExists,
+            ));
+        }
+        if tracks.len() >= crate::MAX_TIMELINE_TRACKS {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineLimitExceeded,
+            ));
+        }
+        let current_clip_count = timeline_clip_count(&self.project)
+            .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineLimitExceeded))?;
+        if current_clip_count
+            .checked_add(arguments.clips.len())
+            .is_none_or(|count| count > crate::MAX_TIMELINE_CLIPS)
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineLimitExceeded,
+            ));
+        }
+
+        let mut clip_ids = HashSet::new();
+        clip_ids
+            .try_reserve(arguments.clips.len())
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        for clip in &arguments.clips {
+            if find_timeline_clip(&self.project, clip.clip_id).is_some()
+                || !clip_ids.insert(clip.clip_id)
+            {
+                return Err(OperationError::new(
+                    OperationErrorCode::TimelineClipIdAlreadyExists,
+                ));
+            }
+        }
+        validate_track_states(&self.project, TrackKind::Caption, &arguments.clips)?;
+
+        let index = tracks.len();
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineCaptionTrackAdded {
+                track_id: arguments.track_id,
+                index,
+                clips: arguments.clips.clone(),
+            })?;
+        self.project
+            .try_reserve_timeline_tracks(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        let mut domain_clips = Vec::new();
+        domain_clips
+            .try_reserve(arguments.clips.len())
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        domain_clips.extend(
+            arguments
+                .clips
+                .into_iter()
+                .map(TimelineClipState::into_domain),
+        );
+        let track = TimelineTrack::from_parts_for_codec(
+            arguments.track_id,
+            TrackKind::Caption,
+            domain_clips,
+        );
+        self.project
+            .insert_timeline_track_for_command(index, track, after_revision);
+        self.history.undo.push(history_entry);
         self.history.redo.clear();
         Ok(change_set)
     }
@@ -3489,7 +3636,8 @@ impl ProjectSession {
 
         match &staged_change {
             StagedHistoryChange::InsertMedia { .. } => self.project.try_reserve_media_items(1),
-            StagedHistoryChange::InsertTimelineTrack { .. } => {
+            StagedHistoryChange::InsertTimelineTrack { .. }
+            | StagedHistoryChange::InsertCaptionTrack { .. } => {
                 self.project.try_reserve_timeline_tracks(1)
             }
             StagedHistoryChange::InsertTimelineClip { track_index, .. } => self
@@ -3553,6 +3701,9 @@ impl ProjectSession {
                 TimelineTrack::empty_for_command(track_id, kind).with_state_for_command(state),
                 after_revision,
             ),
+            StagedHistoryChange::InsertCaptionTrack { track, index } => self
+                .project
+                .insert_timeline_track_for_command(index, track, after_revision),
             StagedHistoryChange::RemoveTimelineTrack { index } => {
                 self.project
                     .remove_timeline_track_for_command(index, after_revision);
@@ -3687,6 +3838,25 @@ where
 struct TimelineTrackAddArguments {
     track_id: TrackId,
     kind: TrackKind,
+}
+
+fn deserialize_caption_clips<'de, D>(deserializer: D) -> Result<Vec<TimelineClipState>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    crate::media::deserialize_limited_vec(
+        deserializer,
+        crate::subtitle_io::MAX_IMPORTED_CAPTIONS,
+        "caption clips",
+    )
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineCaptionsImportArguments {
+    track_id: TrackId,
+    #[serde(deserialize_with = "deserialize_caption_clips")]
+    clips: Vec<TimelineClipState>,
 }
 
 #[derive(Deserialize)]
@@ -4282,6 +4452,83 @@ fn stage_track_history_change(
                 track_state: state,
                 index,
             })?,
+        ))
+    }
+}
+
+fn stage_caption_track_history_change(
+    project: &ProjectDocument,
+    track_id: TrackId,
+    index: usize,
+    clips: &[TimelineClipState],
+    reverse: bool,
+    was_added: bool,
+) -> Result<(StagedHistoryChange, ChangeSet), OperationError> {
+    let remove = reverse == was_added;
+    let mut domain_clips = Vec::new();
+    domain_clips
+        .try_reserve(clips.len())
+        .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+    domain_clips.extend(clips.iter().cloned().map(TimelineClipState::into_domain));
+    let track = TimelineTrack::from_parts_for_codec(track_id, TrackKind::Caption, domain_clips);
+
+    if remove {
+        if project.timeline().tracks().get(index) != Some(&track) {
+            return Err(history_conflict());
+        }
+        let change = if was_added {
+            ProjectChange::TimelineCaptionTrackRemoved {
+                track_id,
+                index,
+                clips: clips.to_vec(),
+            }
+        } else {
+            ProjectChange::TimelineCaptionTrackAdded {
+                track_id,
+                index,
+                clips: clips.to_vec(),
+            }
+        };
+        Ok((
+            StagedHistoryChange::RemoveTimelineTrack { index },
+            ChangeSet::try_single(change)?,
+        ))
+    } else {
+        let tracks = project.timeline().tracks();
+        if index > tracks.len()
+            || tracks.len() >= crate::MAX_TIMELINE_TRACKS
+            || tracks.iter().any(|candidate| candidate.id() == track_id)
+            || clips
+                .iter()
+                .any(|clip| find_timeline_clip(project, clip.clip_id).is_some())
+        {
+            return Err(history_conflict());
+        }
+        let existing_count = timeline_clip_count(project).ok_or_else(history_conflict)?;
+        if existing_count
+            .checked_add(clips.len())
+            .is_none_or(|count| count > crate::MAX_TIMELINE_CLIPS)
+        {
+            return Err(history_conflict());
+        }
+        validate_track_states(project, TrackKind::Caption, clips)
+            .map_err(|_| history_conflict())?;
+        let change = if was_added {
+            ProjectChange::TimelineCaptionTrackAdded {
+                track_id,
+                index,
+                clips: clips.to_vec(),
+            }
+        } else {
+            ProjectChange::TimelineCaptionTrackRemoved {
+                track_id,
+                index,
+                clips: clips.to_vec(),
+            }
+        };
+        Ok((
+            StagedHistoryChange::InsertCaptionTrack { track, index },
+            ChangeSet::try_single(change)?,
         ))
     }
 }
@@ -5711,6 +5958,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "timeline.captions.import",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.clip.update",
                     schema_version: 1,
                     mutates_project: true,
@@ -5816,7 +6069,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 22);
+        assert_eq!(COMMANDS.len(), 23);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -5948,6 +6201,113 @@ mod tests {
             TRACK_A
         );
         assert_eq!(session.project_revision(), ProjectRevision::new(3));
+    }
+
+    fn caption_clip_state(
+        id: &str,
+        start: (i64, u32),
+        duration: (i64, u32),
+        text: &str,
+    ) -> TimelineClipState {
+        TimelineClipState {
+            clip_id: ClipId::from_str(id).unwrap(),
+            timeline_start: RationalTime::new(start.0, start.1).unwrap(),
+            timeline_duration: RationalTime::new(duration.0, duration.1).unwrap(),
+            content: ClipContent::Caption {
+                text: text.to_owned(),
+                formatting: crate::TextFormatting::DEFAULT,
+            },
+            settings: ClipSettings::Visual(crate::VisualSettings::default()),
+        }
+    }
+
+    #[test]
+    fn caption_track_import_is_one_atomic_revision_and_one_undo_entry() {
+        let mut session = fixed_session();
+        let track_id = TrackId::from_str(TRACK_A).unwrap();
+        let clips = vec![
+            caption_clip_state(CLIP_A, (125, 1000), (9, 4), "First caption"),
+            caption_clip_state(CLIP_B, (5, 2), (1, 2), "Second caption"),
+        ];
+        let result = session
+            .execute_command(CommandEnvelope::import_timeline_captions(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                track_id,
+                clips,
+            ))
+            .unwrap();
+
+        assert_eq!(result.before_revision, ProjectRevision::new(0));
+        assert_eq!(result.after_revision, ProjectRevision::new(1));
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::TimelineCaptionTrackAdded { track_id: added_id, clips, .. }]
+                if *added_id == track_id && clips.len() == 2
+        ));
+        assert_eq!(session.project().timeline().tracks().len(), 1);
+        let track = &session.project().timeline().tracks()[0];
+        assert_eq!(track.id(), track_id);
+        assert_eq!(track.kind(), TrackKind::Caption);
+        assert_eq!(track.clips().len(), 2);
+        assert_eq!(session.history.undo.len(), 1);
+
+        let undone = session.execute_command(undo(1)).unwrap();
+        assert!(session.project().timeline().tracks().is_empty());
+        assert!(matches!(
+            undone.change_set.changes(),
+            [ProjectChange::TimelineCaptionTrackRemoved { .. }]
+        ));
+        assert!(matches!(
+            session.history.redo[0].changes(),
+            [ProjectChange::TimelineCaptionTrackAdded { .. }]
+        ));
+        session.execute_command(redo(2)).unwrap();
+        assert_eq!(session.project().timeline().tracks()[0].clips().len(), 2);
+        assert_eq!(session.project_revision(), ProjectRevision::new(3));
+    }
+
+    #[test]
+    fn caption_track_import_rejects_overlap_and_duplicate_ids_without_partial_change() {
+        let mut session = fixed_session();
+        let import = |session: &ProjectSession, track: &str, clips| {
+            CommandEnvelope::import_timeline_captions(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                TrackId::from_str(track).unwrap(),
+                clips,
+            )
+        };
+        let before = session.project().clone();
+        let error = session
+            .execute_command(import(
+                &session,
+                TRACK_A,
+                vec![
+                    caption_clip_state(CLIP_A, (0, 1), (2, 1), "one"),
+                    caption_clip_state(CLIP_B, (1, 1), (2, 1), "two"),
+                ],
+            ))
+            .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::TimelineOverlap);
+        assert_eq!(session.project(), &before);
+        assert!(session.history.undo.is_empty());
+
+        let error = session
+            .execute_command(import(
+                &session,
+                TRACK_A,
+                vec![
+                    caption_clip_state(CLIP_A, (0, 1), (1, 2), "one"),
+                    caption_clip_state(CLIP_A, (1, 1), (1, 2), "two"),
+                ],
+            ))
+            .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::TimelineClipIdAlreadyExists);
+        assert_eq!(session.project(), &before);
+        assert!(session.history.undo.is_empty());
     }
 
     #[test]

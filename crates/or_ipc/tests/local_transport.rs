@@ -127,6 +127,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.clip.insert",
             "timeline.track.set_state",
             "timeline.clip.insert_content",
+            "timeline.captions.import",
             "timeline.clip.update",
             "timeline.clip.move",
             "timeline.clip.delete",

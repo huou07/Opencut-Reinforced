@@ -211,9 +211,11 @@ improvements upstream rather than carrying a parser fork.** Keep OR's caption
 clips, one-command project mutation/history, timeline timing, and renderer.
 
 OR now depends on the published crate with only `srt` and `vtt` features and
-has a bounded core codec with unit coverage for SRT/WebVTT parse and export,
-exact rational timestamp mapping, overflow, malformed timing, styling-loss
-reporting, and file/cue/output limits. `cargo tree -p or_core --edges normal`
+has a bounded core codec plus a semantic command that adds a complete caption
+track atomically with one revision and one undo/redo entry. Unit coverage
+includes SRT/WebVTT parse and export, exact rational timestamp mapping,
+overflow, malformed timing, styling-loss reporting, file/cue/output limits,
+overlap rejection, duplicate IDs, and whole-track history. `cargo tree -p or_core --edges normal`
 confirms that `clap` and `tracing-subscriber` still enter the graph through the
 published crate; the OR graph is currently 185 package nodes, with 29 nodes
 unique to this dependency relative to the workspace baseline. The separate
@@ -221,7 +223,7 @@ upstream PR #8 proposes removing those CLI/logging dependencies from
 library-only consumers and remains unmerged. This is a parser/codec integration
 proof, not approval of the end-user feature: canonical track insertion,
 one-step undo, platform file selection, save/reopen, export, and shipped
-package-size impact remain unverified.
+package-size impact, persistence round-trip, and UI journey remain unverified.
 
 Provenance warning: a separate
 [Open-Montage-app/OpenMontage](https://github.com/Open-Montage-app/OpenMontage)
