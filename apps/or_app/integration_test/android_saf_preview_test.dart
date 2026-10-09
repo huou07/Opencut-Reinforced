@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
@@ -280,6 +281,7 @@ class _ObservedGateway extends RustProjectGateway {
   int relinkCalls = 0;
   String? lastRelinkMediaId, lastRelinkSource;
   ProjectActionResult? lastRelinkResult;
+  ProjectActionResult? lastSaveResult;
   int saveCalls = 0;
   int captionImportCalls = 0,
       captionExportStartedCalls = 0,
@@ -294,7 +296,7 @@ class _ObservedGateway extends RustProjectGateway {
   @override
   Future<ProjectActionResult> save(ProjectSessionHandle session) async {
     try {
-      return await super.save(session);
+      return lastSaveResult = await super.save(session);
     } finally {
       saveCalls++;
     }
@@ -414,6 +416,23 @@ class _ObservedGateway extends RustProjectGateway {
   }
 }
 
+class _ObservedSafProjectPicker extends AndroidSafProjectPicker {
+  ProjectFileSyncResult? lastSyncResult;
+  Object? lastSyncError;
+  int syncCalls = 0;
+
+  @override
+  Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
+    syncCalls++;
+    try {
+      return lastSyncResult = await super.synchronizeProjectPath(path);
+    } catch (error) {
+      lastSyncError = error;
+      rethrow;
+    }
+  }
+}
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(rust.RustLib.init);
@@ -437,8 +456,13 @@ void main() {
       );
       expect(_providerFds(), 0);
       final gateway = _ObservedGateway();
+      final projectPicker = _ObservedSafProjectPicker();
       await tester.pumpWidget(
-        OrApp(gateway: const RustCoreGateway(), projectGateway: gateway),
+        OrApp(
+          gateway: const RustCoreGateway(),
+          projectGateway: gateway,
+          projectFilePicker: projectPicker,
+        ),
       );
       await _until(
         tester,
@@ -896,6 +920,35 @@ void main() {
       );
       await tester.tap(saveButton);
       await _until(tester, () => gateway.saveCalls == 1);
+      debugPrint(
+        'ANDROID_SAF_PROJECT_SAVE_RESULT '
+        'succeeded=${gateway.lastSaveResult?.succeeded} '
+        'errorCode=${gateway.lastSaveResult?.errorCode} '
+        'revision=${gateway.lastSaveResult?.view?.revision} '
+        'syncCalls=${projectPicker.syncCalls} '
+        'syncVerified=${projectPicker.lastSyncResult?.verified} '
+        'syncError=${projectPicker.lastSyncError}',
+      );
+      expect(
+        gateway.lastSaveResult?.succeeded,
+        isTrue,
+        reason:
+            'The project command must save successfully before SAF sync: '
+            '${gateway.lastSaveResult?.errorCode} '
+            '${gateway.lastSaveResult?.message}',
+      );
+      expect(
+        projectPicker.syncCalls,
+        1,
+        reason: 'Saving a SAF project must invoke its document synchronizer.',
+      );
+      expect(
+        projectPicker.lastSyncResult?.verified,
+        isTrue,
+        reason:
+            'SAF save synchronization must verify its provider readback: '
+            '${projectPicker.lastSyncError}',
+      );
       Map<String, dynamic>? syncedProject;
       for (var attempt = 0; attempt < 60; attempt++) {
         syncedProject = await _control('status');

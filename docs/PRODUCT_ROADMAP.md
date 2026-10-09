@@ -359,6 +359,21 @@ acceptance now records the actual half-second media and clip duration. Android
 relink/recovery remain unverified pending a new exact-SHA hosted run; macOS was
 still running when this correction was prepared.
 
+Run `37917915879` on exact product SHA
+`34157138170d631632fee5cd1ff1d0a0fccfd1fb` passed Linux, Windows, macOS,
+Rust, Flutter static/widget, descriptor-boundary, and Android packaging/bridge
+checks. The hosted Android DocumentsUI relink command now succeeds on the
+unique replacement and returns revision 6, confirming the half-second fixture
+correction. Later in the same real user journey, the writable project document
+SHA-256 remained equal to its pre-edit value after the Save UI action. The run
+therefore does not establish SAF save/recovery acceptance. Android logs also
+recorded a 108-frame main-thread stall during the journey. The acceptance now
+records the canonical save result and the actual picker synchronizer's call,
+readback result, or error so the next run distinguishes command-save, picker
+state, and provider-write failures. Keep the provider hash assertion and
+investigate the stall from the hosted trace; do not treat the successful
+relink alone as completion.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
