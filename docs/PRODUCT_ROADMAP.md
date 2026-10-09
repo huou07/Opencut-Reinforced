@@ -498,6 +498,21 @@ real package and user journey pass. The audit keeps FFmpeg as the current
 media foundation; MLT remains an optional measured comparison, not a
 prerequisite or assumed replacement.
 
+Run [37962108563](https://github.com/huou07/Opencut-Reinforced/actions/runs/37962108563)
+on exact product SHA `e6f2afb6c808a8bea073829b17128e0b3116720e` passed Rust,
+Flutter static/widget, descriptor-boundary, Linux, Windows, and macOS
+packaged/lifecycle checks. Android built the all-ABI APK and passed the
+packaged FFmpeg/Flutter bridge check, but the SAF journey stopped at the
+surface callback assertion. The app resumed and a frame remained available;
+the emulator did not destroy the Flutter surface during its ordinary
+background/resume transition, so no cleanup callback was due. The acceptance
+had incorrectly required a cleanup/restoration pair on every such transition.
+The correction now preserves the real post-resume pixel assertion and records
+the actual callback counters, requiring restoration only when cleanup is
+reported. Its hosted rerun is pending. The trace also recorded a 184-frame
+startup stall (plus smaller stalls); Android performance remains unaccepted
+and needs a measured diagnosis.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

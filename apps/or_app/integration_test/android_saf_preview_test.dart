@@ -587,13 +587,18 @@ void main() {
       expect(await _frameAvailable('after-background-resume'), isTrue);
       await _settleLifecycleSurface(tester);
       final afterBackground = await _resources();
+      final surfaceCleanupDelta =
+          afterBackground['surfaceCleanups']! -
+          beforeBackground['surfaceCleanups']!;
+      final surfaceRestorationDelta =
+          afterBackground['surfaceRestorations']! -
+          beforeBackground['surfaceRestorations']!;
+      expect(surfaceCleanupDelta, greaterThanOrEqualTo(0));
+      expect(surfaceRestorationDelta, greaterThanOrEqualTo(0));
       expect(
-        afterBackground['surfaceCleanups'],
-        greaterThan(beforeBackground['surfaceCleanups']!),
-      );
-      expect(
-        afterBackground['surfaceRestorations'],
-        greaterThan(beforeBackground['surfaceRestorations']!),
+        surfaceCleanupDelta == 0 || surfaceRestorationDelta > 0,
+        isTrue,
+        reason: 'A destroyed Android surface must be restored before reuse.',
       );
       final backgroundPixels = await _redTexture(
         tester,
@@ -1287,7 +1292,7 @@ void main() {
               'nonseekableNativeRegistrationRejected',
               'clearDuringOpenDropsStaleBinding',
               'editAndGenerationDropPreparedFrame',
-              'surfaceCleanupAndRestoration',
+              'surfaceLifecycleCallbacksConsistent',
               'osMediaFdsAndNativeLeasesReleased',
               'boundedPresentationStress',
               'sameSourceSeeksReuseProviderCapability',
@@ -1333,6 +1338,8 @@ void main() {
           'backgroundResumePixelRgba': backgroundPixels,
           'recoveredPixelRgba': recoveredPixels,
           'surfaceLifecycleResources': {
+            'cleanupDelta': surfaceCleanupDelta,
+            'restorationDelta': surfaceRestorationDelta,
             'cleanups': afterBackground['surfaceCleanups'],
             'restorations': afterBackground['surfaceRestorations'],
           },

@@ -8,7 +8,7 @@ CHECKS = {
     'nativeDocumentsUiAndEditorControls', 'safMediaImportThroughDocumentsUi', 'visibleTexturePixels', 'externalUidPermissionEnforcement',
     'activeLateSourceBeyond64', 'unchangedProjectRevision', 'playWithoutSeek', 'revokedPermissionUiRecovery',
     'missingPartialOpenRollbackAndRecovery', 'nonseekableNativeRegistrationRejected', 'clearDuringOpenDropsStaleBinding',
-    'editAndGenerationDropPreparedFrame', 'surfaceCleanupAndRestoration', 'osMediaFdsAndNativeLeasesReleased',
+    'editAndGenerationDropPreparedFrame', 'surfaceLifecycleCallbacksConsistent', 'osMediaFdsAndNativeLeasesReleased',
     'boundedPresentationStress',
     'sameSourceSeeksReuseProviderCapability',
     'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
@@ -39,8 +39,12 @@ def verify(report):
         if not (200 <= r <= 255 and 0 <= g <= 40 and 0 <= b <= 40 and a == 255):
             raise ValueError('Composed Flutter Texture pixels were not the fixture frame')
     lifecycle = data.get('surfaceLifecycleResources', {})
-    if lifecycle.get('cleanups', 0) <= 0 or lifecycle.get('restorations', 0) <= 0:
-        raise ValueError('The real Android surface cleanup and restoration callbacks were not observed')
+    cleanup_delta = lifecycle.get('cleanupDelta')
+    restoration_delta = lifecycle.get('restorationDelta')
+    if (not isinstance(cleanup_delta, int) or cleanup_delta < 0
+            or not isinstance(restoration_delta, int) or restoration_delta < 0
+            or (cleanup_delta > 0 and restoration_delta == 0)):
+        raise ValueError('An Android surface cleanup was not followed by restoration')
     if data['providerOpens'] <= 0 or data['uiPlayMicros'] <= 0:
         raise ValueError('Provider and actual Play measurements are required')
     for field in ('providerProjectSha256AtSeed', 'providerProjectSha256BeforeRestart'):
