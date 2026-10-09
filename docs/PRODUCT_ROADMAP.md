@@ -477,10 +477,13 @@ does not claim that arbitrary forced surface replacement is product behavior.
 
 ## Next high-value product gap: everyday media compatibility
 
-The current shipped FFmpeg profile accepts only Matroska with FFV1 video and
-PCM S16LE audio; the export writer emits that same profile. This is a
-correctness fixture profile, not useful general-purpose media support for
-normal phone and camera footage. The source requirements already identify
+The currently verified profile accepts Matroska with FFV1 video and PCM S16LE
+audio; the export writer emits that same profile. It is a correctness fixture
+profile, not useful general-purpose media support for normal phone and camera
+footage. A local, not-yet-host-verified capability slice adds audio-only PCM
+S16LE RIFF/RF64 WAV import through the shared probe, decoder, timeline, and
+Android SAF paths. Do not count it as shipped until the exact-SHA packaged
+platform journey passes. The source requirements already identify
 MP4/MOV, H.264, H.265, WebM, VP9, and AV1 as future profiles subject to legal,
 platform, and exact-build review. Treat this as one connected product
 capability spanning probing/import, package configuration, decode/preview,

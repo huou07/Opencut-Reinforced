@@ -276,7 +276,7 @@ separately gated.
 ## Media import
 
 **MVP FOUNDATION:** import validates one or more selected local files or
-Android SAF documents against the minimum import matrix below and adds each
+Android SAF documents against the supported import profiles below and adds each
 successful source through the existing `media.add` command. Sources are probed
 independently; a failed item leaves project state unchanged while successful
 items remain imported and the user receives a combined result. Files outside
@@ -285,16 +285,20 @@ Normal import, thumbnails, waveforms, proxies, preview, and export run on the
 packaged FFmpeg 8.1.3 runtime in supported packages: no system `ffmpeg`/`ffprobe`
 or developer `PATH` override is required for a packaged user journey.
 
-The 9B1 minimum import matrix is exactly the mandatory correctness profile the
-packaged runtime can decode:
+The mandatory correctness profile supports Matroska video and audio, plus
+standalone PCM WAV audio:
 
-| Container | Video stream | Audio stream |
-| --- | --- | --- |
-| Matroska (`.mkv`) | FFV1 | PCM S16LE |
+| Container | Supported streams |
+| --- | --- |
+| Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
+| RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
 
-A non-Matroska container is rejected as an unsupported container before
-probing; a Matroska file whose streams fall outside FFV1/PCM S16LE is rejected
-as an unsupported codec after probing. Neither case is reported as corruption.
+A file whose signature is outside Matroska or RIFF/RF64 WAV is rejected as an
+unsupported container before probing. WAV video or non-PCM audio, and Matroska
+streams outside FFV1/PCM S16LE, are rejected as unsupported codecs after
+probing. Neither case is reported as corruption. Audio-only WAV can be placed
+on an audio track and decoded by the same software preview path as Matroska
+audio.
 MP4, MOV, WebM, H.264, H.265, VP9, and AV1 remain future formats requiring the
 same legal, platform, and build-configuration review as the optional export
 delivery profiles.

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
+const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {
     RationalTime::new(numerator, denominator).unwrap()
@@ -283,6 +284,30 @@ fn software_audio_seek_resamples_and_clips_to_the_exact_requested_range() {
         sample_frames += chunk.sample_frames();
     }
     assert_eq!(sample_frames, 12_000);
+}
+
+#[test]
+fn software_decoder_reads_audio_only_pcm_wav() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(AUDIO_FIXTURE);
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let snapshot = snapshot(time(0, 1), time(1, 4));
+    let queue = SnapshotQueue::new(snapshot, 16).unwrap();
+    let cancellation = CancellationToken::new();
+    assert!(
+        decoder
+            .decode_audio(snapshot, &queue, &cancellation)
+            .unwrap()
+            > 0
+    );
+    let mut decoded_sample_frames = 0;
+    while let Some(item) = queue.try_pop_current().unwrap() {
+        let chunk = item.into_value();
+        assert_eq!(chunk.sample_rate(), 48_000);
+        assert_eq!(chunk.channels(), 2);
+        decoded_sample_frames += chunk.sample_frames();
+    }
+    assert_eq!(decoded_sample_frames, 12_000);
 }
 
 #[cfg(unix)]

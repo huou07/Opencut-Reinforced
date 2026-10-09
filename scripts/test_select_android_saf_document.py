@@ -72,7 +72,9 @@ MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="false" />
   <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
-  <node index="2" text="Select" class="android.widget.Button"
+  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,440][1080,540]" selected="false" />
+  <node index="3" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
 </hierarchy>
 """
@@ -93,6 +95,8 @@ MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="false" />
   <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
+  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
 </hierarchy>
 """
 
@@ -109,7 +113,22 @@ MEDIA_FIRST_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
   <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
-  <node index="2" text="Select" class="android.widget.Button"
+  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
+  <node index="3" text="Select" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[208,24][272,72]" />
+</hierarchy>
+"""
+
+MEDIA_FIRST_TWO_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
+  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,272][296,332]" selected="true" />
+  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
+  <node index="3" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[208,24][272,72]" />
 </hierarchy>
 """
@@ -120,7 +139,9 @@ MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="true" />
   <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
-  <node index="2" text="Open" class="android.widget.Button"
+  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[0,440][1080,540]" selected="true" />
+  <node index="3" text="Open" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
 </hierarchy>
 """
@@ -167,6 +188,7 @@ class FakeAdb:
                 MEDIA_GRID_PARTIAL,
                 MEDIA_LIST,
                 MEDIA_FIRST_SELECTED,
+                MEDIA_FIRST_TWO_SELECTED,
                 MEDIA_SELECT if media_confirmation == "Select" else MEDIA_OPEN,
             ],
             "media-relink": [
@@ -183,6 +205,7 @@ class FakeAdb:
                      MEDIA_GRID_PARTIAL,
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
+                     MEDIA_FIRST_TWO_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
             "both-relink": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
@@ -190,6 +213,7 @@ class FakeAdb:
                      MEDIA_GRID_PARTIAL,
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
+                     MEDIA_FIRST_TWO_SELECTED,
                      MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
                      MEDIA_GRID_PARTIAL, RELINK_MEDIA_LIST],
@@ -262,7 +286,7 @@ class SelectorTests(unittest.TestCase):
         for tap in taps:
             self.assertEqual(len(tap), 2, f"unexpected tap arguments: {tap}")
 
-    def test_media_flow_selects_the_fixture_video(self):
+    def test_media_flow_selects_video_and_audio_fixtures(self):
         with tempfile.TemporaryDirectory() as work:
             root = Path(work)
             guest = root / "guest.log"
@@ -274,19 +298,21 @@ class SelectorTests(unittest.TestCase):
 
             self.assertEqual(
                 adb.actions,
-                [("tap", 0), ("tap", 1), ("tap", 2), ("swipe", 3), ("tap", 4), ("tap", 5)],
-                "switch from a partial grid to list view, select both files, then Open",
+                [("tap", 0), ("tap", 1), ("tap", 2), ("swipe", 3), ("tap", 4), ("tap", 5), ("tap", 6)],
+                "switch from a partial grid to list view, select video and audio files, then Open",
             )
             self.assertEqual(adb.taps[2], ["272", "150"])
             self.assertEqual(adb.taps[3], ["160", "302"])
-            self.assertEqual(adb.taps[4], ["990", "750"])
+            self.assertEqual(adb.taps[4], ["160", "374"])
+            self.assertEqual(adb.taps[5], ["990", "750"])
             selection_log = (output / "documents-ui-selector.log").read_text()
             self.assertIn("action=tap target=list-view", selection_log)
             self.assertIn("action=long-press target=tiny.mkv", selection_log)
             self.assertIn("action=tap target=tiny-second.mkv", selection_log)
+            self.assertIn("action=tap target=tiny.wav", selection_log)
             selected_report = (output / "documents-ui-selection.txt").read_text()
             self.assertIn(
-                "Selected tiny-second.mkv,tiny.mkv for media through native DocumentsUI.",
+                "Selected tiny-second.mkv,tiny.mkv,tiny.wav for media through native DocumentsUI.",
                 selected_report,
             )
 
@@ -321,13 +347,14 @@ class SelectorTests(unittest.TestCase):
             guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
             output = root / "out"
             adb = FakeAdb(transient_dumps=0, flow="media")
-            adb.trees = [DRAWER, PROVIDER, MEDIA_GRID_PARTIAL, MEDIA_SECOND_SELECTED, MEDIA_OPEN]
+            adb.trees = [DRAWER, PROVIDER, MEDIA_GRID_PARTIAL, MEDIA_SECOND_SELECTED,
+                         MEDIA_FIRST_TWO_SELECTED, MEDIA_OPEN]
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "media")
 
             self.assertEqual(
                 adb.actions,
-                [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3), ("tap", 4)],
+                [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3), ("tap", 4), ("tap", 5)],
             )
             selection_log = (output / "documents-ui-selector.log").read_text()
             self.assertIn("action=tap target=tiny.mkv", selection_log)
@@ -346,7 +373,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "media")
 
-            self.assertEqual(adb.actions[-1], ("tap", 5))
+            self.assertEqual(adb.actions[-1], ("tap", 6))
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_open_drawer_prefers_provider_root_over_obscured_recent_tile(self):
@@ -384,7 +411,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both")
 
-            self.assertEqual(len(adb.actions), 18)
+            self.assertEqual(len(adb.actions), 19)
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
@@ -428,7 +455,8 @@ class SelectorTests(unittest.TestCase):
                     ("tap", 15),
                     ("tap", 16),
                     ("tap", 17),
-                    ("tap", 19),
+                    ("tap", 18),
+                    ("tap", 20),
                 ],
                 "DocumentsUI selections must follow open, export, media, caption import and caption export",
             )
@@ -455,7 +483,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both-relink")
 
-            self.assertEqual(len(adb.actions), 22)
+            self.assertEqual(len(adb.actions), 23)
             selections = (output / "documents-ui-selection.txt").read_text()
             self.assertIn("Selected relink-replacement.mkv for media-relink", selections)
 

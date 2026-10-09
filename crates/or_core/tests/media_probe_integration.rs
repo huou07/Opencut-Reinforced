@@ -65,6 +65,30 @@ fn ffprobe_inspects_generated_video_and_audio_media() {
 
 #[test]
 #[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
+fn ffprobe_imports_pcm_wav_as_audio_only_media() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../or_media/tests/fixtures/tiny.wav");
+
+    let metadata = probe_media_file(&path).expect("probe generated PCM WAV with real ffprobe");
+    assert!(metadata.format_names().iter().any(|name| name == "wav"));
+    assert!(
+        metadata
+            .duration()
+            .is_some_and(|duration| duration.is_positive())
+    );
+    assert_eq!(metadata.streams().len(), 1);
+    assert!(matches!(
+        &metadata.streams()[0],
+        MediaStreamMetadata::Audio(audio)
+            if audio.codec_name() == Some("pcm_s16le") && audio.sample_rate() == Some(48_000)
+    ));
+
+    let prepared = prepare_media_import(&path).expect("prepare generated PCM WAV import");
+    assert_eq!(prepared.metadata(), &metadata);
+}
+
+#[test]
+#[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
 fn prepared_import_persists_and_reopens_after_source_goes_offline() {
     let directory = TestDirectory::new();
     let media_path = directory.media_path();

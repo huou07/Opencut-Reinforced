@@ -1386,7 +1386,7 @@ void main() {
     );
     await tester.ensureVisible(audioLane);
     final validStart = tester.getCenter(
-      find.byKey(const ValueKey('media-drag-handle-av-media')),
+      find.byKey(const ValueKey('media-drag-handle-audio-only-media')),
     );
     final audioRect = tester.getRect(audioLane);
     final validTarget = Offset(audioRect.left + 64, audioRect.center.dy);
@@ -1404,7 +1404,7 @@ void main() {
     expect(
       _sameRational(
         gateway.lastInsertDuration!,
-        ProjectRationalTime(BigInt.from(5), 2),
+        ProjectRationalTime(BigInt.from(9), 1),
       ),
       isTrue,
     );

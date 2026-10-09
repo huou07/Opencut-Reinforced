@@ -128,9 +128,9 @@ impl Error for MediaProbeError {}
 /// Inspects one local filesystem file through the packaged-first `ffprobe`.
 ///
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
-/// a project, or mutate project revision/history. Files outside the 9B1 minimum
-/// import matrix (Matroska container, FFV1 video, PCM S16LE audio) are rejected
-/// with an unsupported-format code instead of probed as corrupt media.
+/// a project, or mutate project revision/history. Files outside the supported
+/// import profiles (Matroska with FFV1 video and/or PCM S16LE audio, or
+/// audio-only PCM S16LE WAV) are rejected as unsupported formats.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
     let metadata = FfprobeBackend::from_environment().probe(path)?;
     enforce_import_matrix(&metadata)?;
@@ -190,7 +190,7 @@ impl FfprobeBackend {
                 MediaProbeError::new(MediaProbeErrorCode::ProbeFailed)
             }
         })?;
-        reject_non_matroska_container(&resolved_path)?;
+        reject_unsupported_container(&resolved_path)?;
         let stdout = self.run(&resolved_path)?;
         parse_probe_json(&stdout, metadata.len())
     }
@@ -510,27 +510,36 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
 
 /// EBML header shared by Matroska and WebM.
 const EBML_HEADER: &[u8; 4] = b"\x1a\x45\xdf\xa3";
+const RIFF_HEADER: &[u8; 4] = b"RIFF";
+const RF64_HEADER: &[u8; 4] = b"RF64";
+const WAVE_HEADER: &[u8; 4] = b"WAVE";
 
-/// Video codec in the 9B1 minimum import matrix.
+/// Video codec retained by the Matroska import profile.
 const MATRIX_VIDEO_CODEC: &str = "ffv1";
-/// Audio codec in the 9B1 minimum import matrix.
+/// Audio codec accepted by both Matroska and WAV import profiles.
 const MATRIX_AUDIO_CODEC: &str = "pcm_s16le";
 
-/// Rejects a non-EBML file before spawning the probe backend.
-///
-/// The packaged `ffprobe` only demuxes Matroska, so anything without an EBML
-/// header cannot be a supported container. This keeps MP4/MOV-style files on
-/// the accurate unsupported-container path instead of a generic probe failure.
-fn reject_non_matroska_container(path: &Path) -> Result<(), MediaProbeError> {
+/// Rejects containers outside the shipped Matroska and RIFF/RF64 WAV profiles
+/// before spawning the probe backend.
+fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     use std::io::Read as _;
-    let mut header = [0_u8; 4];
+    let mut header = [0_u8; 12];
     let mut file =
         fs::File::open(path).map_err(|_| MediaProbeError::new(MediaProbeErrorCode::ProbeFailed))?;
-    let bytes = file
-        .read(&mut header)
-        .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::ProbeFailed))?;
-    if bytes == header.len() && &header == EBML_HEADER {
+    file.read_exact(&mut header[..4])
+        .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
+    if &header[..4] == EBML_HEADER {
         Ok(())
+    } else if &header[..4] == RIFF_HEADER || &header[..4] == RF64_HEADER {
+        file.read_exact(&mut header[4..])
+            .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
+        if &header[8..12] == WAVE_HEADER {
+            Ok(())
+        } else {
+            Err(MediaProbeError::new(
+                MediaProbeErrorCode::UnsupportedContainer,
+            ))
+        }
     } else {
         Err(MediaProbeError::new(
             MediaProbeErrorCode::UnsupportedContainer,
@@ -538,34 +547,45 @@ fn reject_non_matroska_container(path: &Path) -> Result<(), MediaProbeError> {
     }
 }
 
-/// Rejects probed streams outside the 9B1 minimum import matrix.
+/// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// A Matroska file carrying any other video or audio codec is unsupported, not
-/// corrupt.
+/// WAV is limited to audio-only PCM S16LE. Unsupported streams are reported as
+/// unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
-    if !metadata
+    let is_matroska = metadata
         .format_names()
         .iter()
-        .any(|name| name == "matroska")
-    {
+        .any(|name| name == "matroska");
+    let is_wav = metadata.format_names().iter().any(|name| name == "wav");
+    if !is_matroska && !is_wav {
         return Err(MediaProbeError::new(
             MediaProbeErrorCode::UnsupportedContainer,
         ));
     }
+    let mut has_audio = false;
     for stream in metadata.streams() {
         let supported = match stream {
-            MediaStreamMetadata::Video(video) => video
-                .codec_name()
-                .is_some_and(|codec| codec == MATRIX_VIDEO_CODEC),
-            MediaStreamMetadata::Audio(audio) => audio
-                .codec_name()
-                .is_some_and(|codec| codec == MATRIX_AUDIO_CODEC),
+            MediaStreamMetadata::Video(video) => {
+                is_matroska
+                    && video
+                        .codec_name()
+                        .is_some_and(|codec| codec == MATRIX_VIDEO_CODEC)
+            }
+            MediaStreamMetadata::Audio(audio) => {
+                has_audio = true;
+                audio
+                    .codec_name()
+                    .is_some_and(|codec| codec == MATRIX_AUDIO_CODEC)
+            }
             MediaStreamMetadata::Other(_) => true,
         };
         if !supported {
             return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
         }
+    }
+    if is_wav && !has_audio {
+        return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
     Ok(())
 }
@@ -679,6 +699,7 @@ mod tests {
     use super::{
         FfprobeBackend, MAX_DIAGNOSTIC_CHARS, MediaProbeErrorCode, RationalRateParseError,
         enforce_import_matrix, parse_probe_json, parse_rational_rate, probe_media_file,
+        reject_unsupported_container,
     };
     use crate::{MediaStreamMetadata, RationalRate};
     use std::{
@@ -855,15 +876,16 @@ mod tests {
     }
 
     #[test]
-    fn non_ebml_files_are_rejected_as_unsupported_without_spawning() {
+    fn unsupported_file_signatures_are_rejected_without_spawning() {
         let directory = TestDirectory::new();
-        for name in ["empty.mkv", "text.mp4"] {
+        for (name, bytes) in [
+            ("empty.mkv", b"".as_slice()),
+            ("text.mp4", b"not a media container".as_slice()),
+            ("not-wave.wav", b"RIFF1234NOPE".as_slice()),
+            ("short-riff.wav", b"RIFF".as_slice()),
+        ] {
             let path = directory.0.join(name);
-            if name.starts_with("empty") {
-                fs::write(&path, b"").unwrap();
-            } else {
-                fs::write(&path, b"not a media container").unwrap();
-            }
+            fs::write(&path, bytes).unwrap();
             assert_eq!(
                 probe_media_file(&path).unwrap_err().code(),
                 MediaProbeErrorCode::UnsupportedContainer,
@@ -884,6 +906,39 @@ mod tests {
         }"#;
         let metadata = parse_probe_json(json, 2048).unwrap();
         enforce_import_matrix(&metadata).unwrap();
+    }
+
+    #[test]
+    fn import_matrix_accepts_audio_only_pcm_wav_and_rejects_non_audio_wav() {
+        let audio = br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"48000","channels":2}]}"#;
+        enforce_import_matrix(&parse_probe_json(audio, 1024).unwrap()).unwrap();
+
+        for json in [
+            br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16}]}"#.as_slice(),
+            br#"{"format":{"format_name":"wav"},"streams":[]}"#.as_slice(),
+        ] {
+            assert_eq!(
+                enforce_import_matrix(&parse_probe_json(json, 1024).unwrap())
+                    .unwrap_err()
+                    .code(),
+                MediaProbeErrorCode::UnsupportedCodec,
+            );
+        }
+    }
+
+    #[test]
+    fn riff_and_rf64_wave_headers_are_accepted_but_other_riff_is_not() {
+        let directory = TestDirectory::new();
+        for (name, signature, supported) in [
+            ("pcm.wav", b"RIFF0000WAVE".as_slice(), true),
+            ("large.wav", b"RF640000WAVE".as_slice(), true),
+            ("riff.avi", b"RIFF0000AVI ".as_slice(), false),
+        ] {
+            let path = directory.0.join(name);
+            fs::write(&path, signature).unwrap();
+            assert_eq!(reject_unsupported_container(&path).is_ok(), supported);
+        }
     }
 
     #[test]

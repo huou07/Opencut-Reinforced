@@ -69,6 +69,7 @@ int _providerFds() {
       if (target.contains('/dev.opencut.saffixture/') &&
           (target.endsWith('/tiny.mkv') ||
               target.endsWith('/tiny-second.mkv') ||
+              target.endsWith('/tiny.wav') ||
               target.endsWith('/relink-replacement.mkv'))) {
         count++;
       }
@@ -749,16 +750,18 @@ void main() {
       final imported = await gateway.listMediaPage(
         session,
         offset: 65,
-        limit: 2,
+        limit: 3,
       );
       expect(imported.items.map((item) => item.sourceUri), [
         _source('media'),
         _source('media-second'),
+        _source('media-audio'),
       ]);
-      expect(
-        imported.items.every((item) => item.formatNames.contains('matroska')),
-        isTrue,
-      );
+      expect(imported.items[0].formatNames, contains('matroska'));
+      expect(imported.items[1].formatNames, contains('matroska'));
+      expect(imported.items[2].formatNames, contains('wav'));
+      expect(imported.items[2].videoDetails, isNull);
+      expect(imported.items[2].audioDetails, isNotNull);
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
       // Keep the granted source descriptors alive while the project revision
@@ -1401,6 +1404,11 @@ void main() {
           'captionExportBytes': captionExport['captionExportBytes'],
           'captionExportValidSrt': captionExport['validSrtCaption'],
           'mediaImportMicros': gateway.importMicros,
+          'mediaImportAudioOnlyPcmWav': imported.items[2].formatNames.contains(
+                'wav',
+              ) &&
+              imported.items[2].videoDetails == null &&
+              imported.items[2].audioDetails != null,
           'mediaImportSourceUris': imported.items
               .map((item) => item.sourceUri)
               .toList(growable: false),

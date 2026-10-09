@@ -14,7 +14,9 @@ def report():
         'mediaImportSourceUris': [
             'content://dev.opencut.saffixture.documents/document/media',
             'content://dev.opencut.saffixture.documents/document/media-second',
+            'content://dev.opencut.saffixture.documents/document/media-audio',
         ],
+        'mediaImportAudioOnlyPcmWav': True,
         'mediaImportMicros': 1000, 'mediaImportRevision': '2', 'projectRevision': '1',
         'providerProjectSha256AtSeed': 'a' * 64,
         'providerProjectSha256BeforeRestart': 'a' * 64,
@@ -99,6 +101,15 @@ class ReportTest(unittest.TestCase):
     def test_android_export_requires_valid_provider_matroska(self):
         value = report()
         value['androidSafAcceptance']['exportValidMatroska'] = False
+        with self.assertRaises(ValueError): verify(value)
+
+    def test_android_media_import_requires_audio_only_pcm_wav(self):
+        for invalid in (False, None):
+            value = report()
+            value['androidSafAcceptance']['mediaImportAudioOnlyPcmWav'] = invalid
+            with self.assertRaises(ValueError): verify(value)
+        value = report()
+        value['androidSafAcceptance']['mediaImportSourceUris'].pop()
         with self.assertRaises(ValueError): verify(value)
 
     def test_android_caption_interchange_requires_real_import_and_export(self):

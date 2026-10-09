@@ -143,11 +143,11 @@ pinned zlib 1.3.2 source (SHA-256
 license notice; macOS and Linux use system zlib with no extra bundled file. No GPL, version3, nonfree,
 or external codec library is enabled; the LGPL-2.1-or-later posture, source
 archive, configure record, license notices, and library-replacement terms are
-unchanged. Android is unaffected: it has no artifact service and keeps the
-linked-only runtime. This review does not determine patent or codec licensing obligations;
-the shipped codec set stays FFV1/PCM S16LE plus proxy/display encodings, and
-wider capture/delivery codecs still require the separate legal, platform, and
-build-configuration review. The helper programs additionally load `libavfilter`
+unchanged. Android enables the WAV demuxer in its linked-only runtime. The
+expanded import profile accepts audio-only WAV with PCM S16LE; it adds no
+compressed codec. This review does not determine patent or codec licensing
+obligations; wider capture/delivery codecs still require separate legal,
+platform, and build-configuration review. The helper programs additionally load `libavfilter`
 from beside the other staged libraries; the Rust binding keeps linking only
 the original five libraries, whose dependency closure is unchanged.
 

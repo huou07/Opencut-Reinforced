@@ -29,7 +29,7 @@ env:
     --disable-avdevice
     --disable-avfilter
     --enable-protocol=file
-    --enable-demuxer=matroska
+    --enable-demuxer=matroska,wav
     --enable-muxer=matroska
     --enable-decoder=ffv1,pcm_s16le
     --enable-encoder=ffv1,pcm_s16le

@@ -42,6 +42,12 @@ public final class ControlActivity extends Activity {
                             int count;
                             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                         }
+                        File audio = new File(getFilesDir(), "tiny.wav");
+                        try (InputStream input = getAssets().open("tiny.wav"); FileOutputStream output = new FileOutputStream(audio)) {
+                            byte[] buffer = new byte[4096];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                        }
                         String project = getIntent().getStringExtra("projectJson");
                         byte[] encoded = project == null ? new byte[0] : project.getBytes(StandardCharsets.UTF_8);
                         if (encoded.length > MAX_PROJECT_BYTES) throw new IllegalArgumentException(
@@ -107,6 +113,7 @@ public final class ControlActivity extends Activity {
                 }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
+                    .put("audioBytes", new File(getFilesDir(), "tiny.wav").length())
                     .put("projectBytes", projectFile.length())
                     .put("projectSha256", sha256(projectFile))
                     .put("exportBytes", exported.length())
