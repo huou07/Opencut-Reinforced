@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Negative checks of report validation; these synthetic reports are not acceptance."""
 import copy
+import re
 import unittest
+from pathlib import Path
 from verify_android_saf_preview import CHECKS, verify
 
 
@@ -43,6 +45,17 @@ def report():
 
 
 class ReportTest(unittest.TestCase):
+    def test_workflow_requires_screenshots_emitted_by_the_real_saf_journey(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/platform-verification.yml').read_text()
+        journey = (root / 'apps/or_app/integration_test/android_saf_preview_test.dart').read_text()
+        match = re.search(r'for image in ([a-z0-9 -]+); do', workflow)
+        self.assertIsNotNone(match)
+        required = set(match.group(1).split())
+        emitted = set(re.findall(r"['\"](saf-[a-z0-9-]+)['\"]", journey))
+        self.assertTrue(required <= emitted)
+        self.assertIn('saf-background-resumed-texture', required)
+
     def test_complete_report_shape(self):
         self.assertIs(verify(report())['checks']['visibleTexturePixels'], True)
 

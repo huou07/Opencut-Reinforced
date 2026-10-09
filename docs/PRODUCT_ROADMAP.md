@@ -618,6 +618,21 @@ persisted SAF grant. Windows packaging was still running when this finding was
 recorded. Android release acceptance remains open until the exact-SHA process
 recovery test passes. Android performance remains unaccepted.
 
+Exact-SHA run [38001123678](https://github.com/huou07/Opencut-Reinforced/actions/runs/38001123678)
+on `e100e7247fc0d987446096f11b18cb11bc0ca130` passed both Android Flutter
+journeys and their independent report verifiers. The recovery report confirms
+same-project force-stop/relaunch, explicit checkpoint recovery, restored
+`relink-replacement` SAF source, preserved timeline reference, and preview
+playback. The job still failed at its final required-image check because the
+workflow demanded `saf-surface-recreated.png`, a synthetic screenshot no longer
+produced after removing the forced surface-replacement test path. The real OS
+background/resume capture `saf-background-resumed-texture.png` is present and
+the report verifies that lifecycle. The workflow now requires that actual
+capture, and a regression test ties required screenshots to names emitted by
+the SAF journey. Android performance remains unaccepted; this run measured
+104,141 µs for Play and a 117,018 µs slowest main-thread draw in the 16×16
+emulator fixture.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
