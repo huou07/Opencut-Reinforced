@@ -186,7 +186,11 @@ Next diagnosis: reproduce the hit-test miss, settle the mobile tool sheet and
 verify the caption control is hit-testable before tapping; then require a real
 DocumentsUI selection and exact-SHA hosted rerun. The selector correction at
 `cf5542a` remains a verified improvement; the full Android SAF/caption journey
-remains open. No old-roadmap implementation should resume while this mission's
+remains open. The acceptance harness now waits for the media sheet route to
+leave the widget tree and requires the caption button to be hit-testable before
+it emits the DocumentsUI readiness marker. This targets the recorded root-view
+hit-test miss; real caption import/export remains unverified pending hosted
+execution. No old-roadmap implementation should resume while this mission's
 convergence pivot is active.
 
 Only after manual caption interchange works end to end should transcription

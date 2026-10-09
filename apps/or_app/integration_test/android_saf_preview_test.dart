@@ -599,12 +599,25 @@ void main() {
       // Keep the granted source descriptors alive while the project revision
       // reconnects the viewer; project close below owns their release.
       await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+      // The mobile tool sheet is a route. Do not search for or tap timeline
+      // controls while its dismissal barrier is still intercepting input.
+      await _until(
+        tester,
+        () => find
+            .byKey(const ValueKey('project-media-panel'))
+            .evaluate()
+            .isEmpty,
+      );
 
       final importCaptionsButton = find.byKey(
         const ValueKey('timeline-import-captions'),
       );
       await tester.ensureVisible(importCaptionsButton);
-      await tester.tap(importCaptionsButton);
+      await _until(
+        tester,
+        () => importCaptionsButton.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.tap(importCaptionsButton.hitTestable());
       debugPrint('ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY');
       await _until(
         tester,
