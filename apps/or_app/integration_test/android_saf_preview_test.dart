@@ -1090,6 +1090,13 @@ void main() {
       expect(played.errorCode, isNull);
       await secondGateway.previewPause(second);
       expect((await secondGateway.summary(second)).revision, before.revision);
+      final firstFrame = await secondGateway.previewSeek(
+        second,
+        ProjectRationalTime(BigInt.zero, 1),
+      );
+      expect(firstFrame.errorCode, isNull);
+      expect(firstFrame.position.numerator, BigInt.zero);
+      expect(await _frameAvailable('fresh-session-zero-frame'), isTrue);
       final oldTexture = (await OrViewerTexture.textureId())!;
       await tester.pumpWidget(
         MaterialApp(

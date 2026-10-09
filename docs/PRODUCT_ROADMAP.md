@@ -426,6 +426,15 @@ acceptance now waits for the synchronizer's completion and still requires a
 verified provider readback. This run supplies no new evidence about the
 recreated-surface pixel; that rendering failure remains open.
 
+Exact-SHA run `37941319421` on `2005d5d` confirmed the synchronization wait:
+Save completed with `syncVerified=true`, and the journey advanced through
+fresh-session reopen and playback. The new pre-release texture capture then
+failed because the center pixel was black. Its screenshot shows the imported
+caption on black, not the fixture's red source frame. The fresh-session Play
+guard intentionally has no preceding seek; the 0.5-second video can finish
+while its caption remains visible. Keep that no-seek Play assertion, then seek
+to exact time zero before using the source frame to assess surface resets.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
