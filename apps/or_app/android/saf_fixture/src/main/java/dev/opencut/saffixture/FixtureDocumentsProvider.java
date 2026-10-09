@@ -66,7 +66,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
             ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
             : id.equals("export")
                 ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
-                : 0);
+                : id.equals("project") ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE : 0);
         File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : "tiny.mkv");
         row.add(DocumentsContract.Document.COLUMN_SIZE, file.length());
     }
@@ -92,6 +92,10 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         Log.i("OrSafFixture", "openDocument id=" + id + " mode=" + mode);
         if (id.equals("export") && (mode.contains("w") || mode.contains("t"))) {
             return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), "export.mkv"),
+                ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE);
+        }
+        if (id.equals("project") && (mode.contains("w") || mode.contains("t"))) {
+            return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), "acceptance.orproj"),
                 ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE);
         }
         if (!mode.equals("r")) throw new FileNotFoundException("Read-only acceptance source");

@@ -42,6 +42,15 @@ import, edit, preview, save/recover, and export a useful project. Optional AI
 must arrive as explicit, reviewable tasks that produce proposals/assets and
 apply through the same validated project commands.
 
+OR's demonstrated product-specific value is the shared, revision-checked
+project contract used by its Flutter editor, semantic CLI, and local automation,
+including exact-time state, explicit undo/recovery, and Android SAF source
+identity. That justifies retaining and finishing the contract while it provides
+a real cross-platform user path. It does not establish that OR's timeline
+feature depth, wgpu renderer, cpal audio path, or media performance is better
+than mature desktop engines; those claims remain measured product questions,
+not reasons to preserve code on their own.
+
 Decision vocabulary outcome: **KEEP** the working OR state/command/UI and
 media-runtime contracts; **REUSE** FFmpeg and optional provider capabilities;
 **BUILD** only missing user-facing workflows on those boundaries; **DEFER or
@@ -66,7 +75,7 @@ patch is justified by this audit alone.
 | Proxies/cache | **KEEP** | OR already has bounded background jobs, disposable indexed cache, LRU eviction, and proxy-generation primitives; cache does not enter canonical project state. No inspected project justifies replacing this with an unmeasured service. | Expose only user-valued proxy controls after real media measurements and cleanup/recovery checks. |
 | Thumbnails/waveforms | **KEEP** | OR generates bounded FFmpeg artifacts through its existing job/cache path. This is small, compatible work with no proven superior drop-in. | Preserve limits and packaged dependency tests; improve only with observed UX/performance gaps. |
 | Effects/transitions | **KEEP semantics; REUSE selectively** | OR has typed brightness/contrast/saturation/blur and transition semantics shared by preview/export. MLT/Frei0r contain mature effect implementations but have module-by-module license and behavior differences. | Compare selected filters through MLT/FFmpeg/wgpu proof fixtures. Preserve OR parameter semantics and preview/export parity; no wholesale effect ABI yet. |
-| Captions/text | **KEEP** | OR's typed caption/text clips and deterministic bundled-font rendering align with project and export invariants. OpenMontage/MoneyPrinterTurbo generate subtitle workflows, not a directly compatible editor text model. | Prioritize normal caption creation/edit/import/export and optional transcription proposals after the core edit journey is solid. |
+| Captions/text | **KEEP canonical model; REUSE SRT/VTT parser** | OR's typed caption/text clips and deterministic bundled-font rendering align with project and export invariants. The Apache-2.0 `subtitle-rs/subtitler` Rust library parses and generates common subtitle formats; its feature-trimmed SRT/VTT test suite passes 162 unit tests. Its API uses integer milliseconds, exactly mappable to OR rational time for these formats. A feature-trimmed normal dependency graph still adds 29 packages not active elsewhere in the OR workspace, including CLI/logging support. | Keep OR's typed model, project commands, timing and deterministic renderer. Prototype only SRT/VTT cue mapping with explicit malformed/overflow/unsupported-style behavior and measure dependency/package cost before adoption. Do not import its CLI, provider/network, transcript or model workflow. |
 | UI/editor interaction | **KEEP; improve** | OR's Flutter workspace and Focused Monochrome design are the only checked candidate UI intended to share desktop and touch concepts. Shotcut/Kdenlive/LosslessCut are mature desktop references, not reusable UI code; Palmier is closed for contribution and Mac-only. | Make visible journeys complete and understandable. Use mature editors as interaction references, not as a reason to replace the shared product shell. |
 | Desktop/mobile shells | **KEEP Flutter; retain iOS contract only** | OR currently packages macOS, Windows, Linux, and Android through a shared Flutter product surface. OpenCut's rewrite multi-platform direction is not implemented; OpenTake and inspected mature NLEs do not prove this parity. iOS is not currently a supported target. | Verify shared semantics on all current targets. Keep iOS as an architectural intent, not an acceptance claim, until toolchain, packaging, and native journey exist. |
 | CLI/application API | **KEEP** | OR's typed Rust application requests and local IPC let GUI and CLI use one project host with revision checks and no TCP fallback. OpenCut's Editor API is a planned capability in the checked rewrite, not shipped evidence. | Keep commands semantic, discoverable, stable, and secret-safe. Use end-to-end parity tests. |
@@ -173,6 +182,40 @@ The authentic [calesthio/OpenMontage](https://github.com/calesthio/OpenMontage)
 is AGPL-3.0 Python/FFmpeg/Remotion-oriented production automation with tests;
 it is not a normal interactive NLE. Use it as an AI-assisted production
 workflow reference; do not incorporate its code into the MIT product.
+
+### Subtitle interchange library
+
+[`subtitle-rs/subtitler`](https://github.com/subtitle-rs/subtitler) is a
+maintained Rust library, Apache-2.0 at
+[`4a63317dc001fc09fe2aec71d92d9cd26693de31`](https://github.com/subtitle-rs/subtitler/commit/4a63317dc001fc09fe2aec71d92d9cd26693de31), with v2.9.0 released on
+2026-10-02. Its source contains format-specific SRT, WebVTT, ASS/SSA and other
+parsers, 12 integration-test files, fuzz/property tests and CI. Running its
+upstream library suite with only `srt,vtt` features enabled passed 162 tests.
+The SRT/VTT model stores cue boundaries as integer milliseconds, which can
+map exactly to OR's rational seconds at denominator 1000; richer frame-based
+formats need an explicit project-rate mapping and are outside this decision.
+GitHub showed three contributors, zero open issues, and six pull requests at
+this snapshot: recent release and merged community work are positive signals,
+but this remains a small upstream rather than a broad ecosystem dependency.
+
+An active dependency-tree check with HTTP disabled and only SRT/VTT enabled
+showed 61 normal dependency package nodes before the CLI split. `clap` and
+`tracing-subscriber` were unconditional even for library-only consumers. A
+small upstream PR, [#8](https://github.com/subtitle-rs/subtitler/pull/8), makes
+those dependencies optional behind `cli`, keeps the feature enabled by
+default, and requires it for the binary. The same library-only graph then has
+39 nodes, 22 fewer. The default upstream feature set and CLI remain unchanged;
+the PR is awaiting upstream review. **Decision: REUSE the parser for SRT/VTT
+after the OR product integration gate below; contribute generic dependency
+improvements upstream rather than carrying a parser fork.** Keep OR's caption
+clips, one-command project mutation/history, timeline timing, and renderer.
+
+A scratch integration proof linked that exact library checkout to
+`or_core::RationalTime` and passed two checks: SRT and WebVTT cues at 125 ms
+mapped to exact `1/8`-second starts and `9/4`-second durations; an input beyond
+OR's signed time range was rejected. This confirms the timestamp boundary
+only. It did not insert clips, preserve or report rich cue styling, exercise
+undo, or measure packaged size, so it is not yet an adoption approval.
 
 Provenance warning: a separate
 [Open-Montage-app/OpenMontage](https://github.com/Open-Montage-app/OpenMontage)
@@ -329,7 +372,9 @@ separate interoperability capability and does not depend on the MLT experiment.
 ## Current product decision check
 
 This check follows the safely checkpointed in-flight media-relink work and
-records OR at `010f4ebd4433be035c9b15a232ac23273240ab14`. The previous upstream
+records the current OR tree at `3678792d2b8e4cd9d4cf36f694ea0d6e3393e2fe`;
+the product-code boundary was `010f4ebd4433be035c9b15a232ac23273240ab14`.
+The previous upstream
 source snapshot remains current: the exact OpenCut default-branch head is
 `e668010778568641babef2cc40be4703ae6916d6`, independently fetched and
 inspected from its Cargo workspace and desktop README on 2026-10-09. Its
@@ -345,9 +390,16 @@ desktop journey was added in `e40c1ef`. This does not justify retaining OR's
 entire media stack if a compatible upstream later wins measured integration;
 it demonstrates why the current project and command contract has user value
 that no checked candidate supplies as a drop-in. The combined exact-SHA
-Android SAF and desktop relink workflow is pending hosted run
-`37861461557` on `010f4eb`; no platform acceptance is claimed until that run
-completes successfully.
+Android SAF and desktop relink workflow is being verified by hosted run
+`37861883543` on `3678792`. Linux, Windows, Rust, Flutter, and the descriptor
+boundary passed, and macOS completed its packaged product journey
+successfully. Android failed when the test fixture's selected project
+document rejected writes; the app kept the project locally saved and reported
+provider sync failure. The fixture now advertises and implements writable
+project documents, and the journey checks that a real editor save changes the
+provider document digest. The run is overall failed because of the Android
+journey. No Android acceptance is claimed until a rerun with this fixture fix
+succeeds.
 
 OpenTimelineIO's checked upstream head remains
 `dcf9ac17698db2e13c094abf54a636fec1cb8e14`. Its current documentation

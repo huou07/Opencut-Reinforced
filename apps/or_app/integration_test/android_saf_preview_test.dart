@@ -650,6 +650,13 @@ void main() {
       );
       await tester.tap(saveButton);
       await _until(tester, () => find.text('Saved').evaluate().isNotEmpty);
+      final syncedProject = await _control('status');
+      expect(
+        syncedProject['projectSha256'],
+        isNot(provider['projectSha256']),
+        reason:
+            'Save must sync the edited project to its writable SAF document.',
+      );
 
       final journey = await _resources();
       // The close control lives on the Projects workspace. Tapping nav-home

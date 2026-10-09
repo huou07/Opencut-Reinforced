@@ -727,6 +727,11 @@ hardening commit itself must pass both workflows.
   action and verifies both SAF references reach the real media library. The
   selector long-presses the first file to enter selection mode, then selects
   the second file and confirms the picker.
+- The project fixture advertises and implements write access for the selected
+  `.orproj`. After media import, the journey saves through the real editor and
+  requires the separate provider's project digest to change before testing
+  session close and descriptor cleanup. Read-only provider behavior remains
+  covered by the picker/widget sync-failure regression.
 - The fixture hands that project to the separate-UID provider through the setup
   Intent, so its transport bound must admit the document OR itself saves. The
   journey proves more than a successful seed: the provider reports the byte count
