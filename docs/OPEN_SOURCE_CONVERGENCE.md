@@ -254,6 +254,21 @@ execute those binaries, and do not attribute them to the authentic project.
   upstream contribution when the change is generic and the upstream accepts
   it.
 
+Codec patents are a separate distribution question from FFmpeg's source
+license. FFmpeg's own [legal guidance](https://www.ffmpeg.org/legal.html)
+warns that LGPL status does not clear patent or codec royalties. The
+[AVC/H.264 patent-pool terms](https://www.via-la.com/licensing-programs/avc-h-264/)
+describe licensing categories for decoder/encoder products; exact obligations
+depend on product, distribution, geography, and use. Cisco's
+[OpenH264 FAQ](https://www.openh264.org/faq.html) says its source is BSD-2-Clause
+but Cisco's patent-fee coverage applies to Cisco-packaged binary modules under
+listed conditions; a team building and distributing from source is responsible
+for applicable fees. This is not legal advice or proof of a general exemption.
+Do not infer that enabling FFmpeg's native H.264 decoder, or using BSD source,
+settles OR's distribution obligations. The first compatibility profile must
+document a specific lawful distribution route for each packaged target, or
+leave that profile unshipped while a non-patent-encumbered route is evaluated.
+
 ## Evidence gaps and explicit experiments
 
 This audit is not a runtime benchmark. No project was installed or run locally
