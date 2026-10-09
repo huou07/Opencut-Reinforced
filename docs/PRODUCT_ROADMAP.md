@@ -87,6 +87,14 @@ recording their URIs. Run `37864682420` exposed this at
 `android_saf_preview_test.dart:950`; the report and verifier now retain both
 URIs and assert both selected files.
 
+The first hosted run for the caption journey, `37868974276` on
+`2a931eae5a89be3d629544b21c42547702728152`, exposed a stale isolated
+`tools/ffmpeg-link-probe/Cargo.lock`: Rust, Linux, and Android stopped before
+product verification because their `--locked` probe builds needed the new
+`or_core` subtitle dependency graph. The probe lockfile now resolves under
+`--locked`; a follow-up exact-SHA hosted run is required. Windows and macOS
+jobs from the first run were still in progress when this repair was prepared.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final
