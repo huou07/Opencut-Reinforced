@@ -179,19 +179,26 @@ successful storage operation. The journey then stopped at
 `android_saf_preview_test.dart:609`, before caption import. The saved Flutter
 log says the tap on `timeline-import-captions` missed the target and hit only
 the root view; the native activity log has no `openCaptionFile` result. This
-is test-action evidence, not proof that Android caption import passed or that
-the product picker failed. The exact-run artifact is preserved at
-[`37880371173`](https://github.com/huou07/Opencut-Reinforced/actions/runs/37880371173).
-Next diagnosis: reproduce the hit-test miss, settle the mobile tool sheet and
-verify the caption control is hit-testable before tapping; then require a real
-DocumentsUI selection and exact-SHA hosted rerun. The selector correction at
-`cf5542a` remains a verified improvement; the full Android SAF/caption journey
-remains open. The acceptance harness now waits for the media sheet route to
-leave the widget tree and requires the caption button to be hit-testable before
-it emits the DocumentsUI readiness marker. This targets the recorded root-view
-hit-test miss; real caption import/export remains unverified pending hosted
-execution. No old-roadmap implementation should resume while this mission's
-convergence pivot is active.
+was a test-action miss, not evidence of a product picker defect. The selector
+correction at `cf5542a` remains a verified improvement.
+
+Run `37883136736` on exact product SHA
+`5c7d6120ceb66ae8dd9d6c8785ffdc0cbe97f52d` passed Rust, Flutter static/widget,
+descriptor-boundary, Linux and Windows checks. Android built the all-ABI
+package and passed its FFmpeg bridge check. DocumentsUI selected both media
+files, imported `captions.srt`, then selected a destination for caption export.
+The journey stopped at `android_saf_preview_test.dart:649` because the
+acceptance gateway's completed-export counter remained zero. The logs confirm
+`openCaptionFile` and `createCaptionExport` both returned successfully, but no
+export gateway completion was recorded. The saved selector log proves both
+caption picker flows completed. The preserved
+[`37883136736` Android evidence](https://github.com/huou07/Opencut-Reinforced/actions/runs/37883136736)
+includes the SAF process-recovery bundle and guest/provider logs. This run does
+not prove caption interchange end to end. The harness now waits for the export control to become enabled
+after caption import and logs gateway entry separately from completion; the
+next exact-SHA run will distinguish an app busy-state short circuit from a
+stalled Rust export. The Android SAF and caption journey remains open, and the
+legacy roadmap stays paused.
 
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition

@@ -276,7 +276,9 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
   int importCalls = 0, importMicros = 0;
-  int captionImportCalls = 0, captionExportCalls = 0;
+  int captionImportCalls = 0,
+      captionExportStartedCalls = 0,
+      captionExportCalls = 0;
   bool closed = false;
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
@@ -346,6 +348,8 @@ class _ObservedGateway extends RustProjectGateway {
     required String path,
     required ProjectCaptionFileFormat format,
   }) async {
+    captionExportStartedCalls++;
+    debugPrint('ANDROID_SAF_CAPTION_EXPORT_GATEWAY_STARTED');
     try {
       return await super.exportTimelineCaptions(
         session,
@@ -642,10 +646,16 @@ void main() {
         const ValueKey('timeline-export-captions'),
       );
       await tester.ensureVisible(exportCaptionsButton);
+      await _until(tester, () {
+        if (exportCaptionsButton.evaluate().isEmpty) return false;
+        return tester.widget<TextButton>(exportCaptionsButton).onPressed !=
+            null;
+      });
       await tester.tap(exportCaptionsButton);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Continue'));
       debugPrint('ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY');
+      await _until(tester, () => gateway.captionExportStartedCalls == 1);
       await _until(tester, () => gateway.captionExportCalls == 1);
       await _until(
         tester,
