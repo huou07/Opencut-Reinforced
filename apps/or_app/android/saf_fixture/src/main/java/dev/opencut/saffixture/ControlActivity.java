@@ -93,7 +93,7 @@ public final class ControlActivity extends Activity {
                 }
                 File captionExport = new File(getFilesDir(), "caption-export.srt");
                 String captionText = "";
-                if (captionExport.isFile && captionExport.length() <= 1024 * 1024) {
+                if (captionExport.isFile() && captionExport.length() <= 1024 * 1024) {
                     byte[] captionBytes = new byte[(int) captionExport.length()];
                     try (FileInputStream input = new FileInputStream(captionExport)) {
                         int offset = 0;

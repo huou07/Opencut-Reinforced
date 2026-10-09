@@ -104,6 +104,12 @@ view; the production revision guard is unchanged. Android and Windows were
 still running when this correction was prepared, and a new exact-SHA run is
 required before closing caption interchange.
 
+That run's Android job subsequently failed while compiling the SAF fixture:
+`ControlActivity.java` used `File.isFile` as a field instead of calling the
+Java `isFile()` method. The APK itself built successfully, but Android SAF
+acceptance did not run. The fixture compile error is corrected in the current
+working tree; the Android journey still needs a fresh hosted run.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final
