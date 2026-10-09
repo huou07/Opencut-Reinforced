@@ -95,6 +95,15 @@ product verification because their `--locked` probe builds needed the new
 `--locked`; a follow-up exact-SHA hosted run is required. Windows and macOS
 jobs from the first run were still in progress when this repair was prepared.
 
+Run `37869690548` on the lockfile repair passed Rust, Flutter static/widget,
+descriptor-boundary, and Linux packaged product checks. Its macOS native
+bridge test exposed a stale revision in the new SRT integration test: the test
+did not use the view returned by its preceding manual-caption insertion, so
+the import was correctly rejected. The acceptance test now refreshes that
+view; the production revision guard is unchanged. Android and Windows were
+still running when this correction was prepared, and a new exact-SHA run is
+required before closing caption interchange.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final

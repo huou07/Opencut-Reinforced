@@ -124,6 +124,7 @@ void main() {
         ),
       );
       expect(insertCaption.succeeded, isTrue);
+      current = insertCaption.view!;
       final captions = await gateway.listTimelineClips(
         session,
         trackId: captionTrack.trackId,
