@@ -40,6 +40,7 @@ def select(device, guest_log, output, flow="open"):
     # instead of hanging, not to race a cold window.
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
+    list_view_requested = False
     last_media_action = None
     last_media_action_at = 0.0
     last_reported_selection = None
@@ -128,6 +129,10 @@ def select(device, guest_log, output, flow="open"):
         )
         if media_action is not None and media_action.get("enabled") != "true":
             media_action = None
+        list_view = next(
+            (node for node in nodes if node.get("content-desc") == "List view"),
+            None,
+        )
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
@@ -152,7 +157,13 @@ def select(device, guest_log, output, flow="open"):
             # partial set is the whole acceptance selection; the known fixture
             # names are the completion contract for this journey.
             listing_complete = available_media == expected_media
-            if listing_complete and next_media is not None:
+            if not listing_complete and list_view is not None and not list_view_requested:
+                # The acceptance provider can place one tile below the fold in
+                # DocumentsUI's default grid at compact emulator sizes. List
+                # view exposes the actual filename nodes without guessing at
+                # card coordinates or scrolling.
+                target = list_view
+            elif listing_complete and next_media is not None:
                 action = "long-press" if not selected_media else "tap"
                 retry_wait = time.monotonic() - last_media_action_at < 1.5
                 if last_media_action != (next_media, action) or not retry_wait:
@@ -191,6 +202,10 @@ def select(device, guest_log, output, flow="open"):
                 last_media_action_at = time.monotonic()
                 with selector_log.open("a", encoding="utf-8") as record:
                     record.write(f"action={action} target={pending_media}\n")
+            if target is list_view:
+                list_view_requested = True
+                with selector_log.open("a", encoding="utf-8") as record:
+                    record.write("action=tap target=list-view\n")
             if target is document or target is caption_file or target is save or (flow == "media" and target is media_action):
                 with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
                     detail = (

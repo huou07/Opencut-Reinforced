@@ -145,6 +145,23 @@ and its regression fixture models the partial-list state. All ten selector
 tests pass locally. The macOS job from this run is still completing; the next
 exact-SHA run must verify the revised selector and caption journey on Android.
 
+Run `37877882018` passed Rust, Flutter static/widget, Linux, Windows, macOS,
+and the descriptor boundary on `ee416c2355973f64349acac2839ea04157b9d987`.
+Android built its all-ABI APK and passed the emulator bridge, but the revised
+selector correctly refused to complete from a partial tree and timed out. The
+failure screenshot shows DocumentsUI's grid view at 320×640: the `tiny.mkv`
+tile is clipped below the viewport and its filename is absent from the
+accessibility tree, although its preview icon is visible. DocumentsUI exposes
+a native `List view` control. The selector now switches through that control
+when a required filename is absent, then verifies both names and selected
+states before finishing. A regression test models the clipped grid, the list
+view transition, and both selection states. Eleven selector tests pass
+locally; a fresh hosted run must verify the Android journey. The same guest
+log reports 143 skipped UI frames during cold Android startup. That did not
+cause the picker selection timeout, but it is a separate runtime performance
+signal and must be measured against the product's Android frame-time/resource
+budgets before Android performance can be accepted.
+
 The published `subtitler` crate still adds 29 unique packages to the OR graph
 and brings `clap` and `tracing-subscriber` into `or_core`; upstream PR #8
 proposes removing that library-only cost but is not merged. Measure the final
