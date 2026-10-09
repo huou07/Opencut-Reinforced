@@ -276,6 +276,7 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
   int importCalls = 0, importMicros = 0;
+  int saveCalls = 0;
   int captionImportCalls = 0,
       captionExportStartedCalls = 0,
       captionExportCalls = 0;
@@ -284,6 +285,15 @@ class _ObservedGateway extends RustProjectGateway {
   Future<ProjectSessionHandle> openProject(String path) async {
     openedPath = path;
     return session = await super.openProject(path);
+  }
+
+  @override
+  Future<ProjectActionResult> save(ProjectSessionHandle session) async {
+    try {
+      return await super.save(session);
+    } finally {
+      saveCalls++;
+    }
   }
 
   @override
@@ -759,10 +769,17 @@ void main() {
             saveButton.hitTestable().evaluate().isNotEmpty,
       );
       await tester.tap(saveButton);
-      await _until(tester, () => find.text('Saved').evaluate().isNotEmpty);
-      final syncedProject = await _control('status');
+      await _until(tester, () => gateway.saveCalls == 1);
+      Map<String, dynamic>? syncedProject;
+      for (var attempt = 0; attempt < 60; attempt++) {
+        syncedProject = await _control('status');
+        if (syncedProject['projectSha256'] != provider['projectSha256']) {
+          break;
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(
-        syncedProject['projectSha256'],
+        syncedProject?['projectSha256'],
         isNot(provider['projectSha256']),
         reason:
             'Save must sync the edited project to its writable SAF document.',

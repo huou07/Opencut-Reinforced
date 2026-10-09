@@ -216,6 +216,24 @@ provider document, the rest of the SAF journey, and recovery. This run also
 reported 138 skipped Android UI frames during cold startup; that performance
 signal is separate from the caption contract failure and remains unresolved.
 
+Run `37888323616` on exact product SHA
+`ca5eddc9b59643dd8995387a8f5209ca2d3a40b8` proves the URI response fix: the
+Android real editor journey entered and completed `exportTimelineCaptions`,
+showed `Caption file exported.`, and the isolated SAF provider verified
+nonempty valid SRT bytes. After caption export, media-panel interaction,
+caption/clip checks, seeking, and Inspector access, the journey failed at
+`android_saf_preview_test.dart:762` because the test waited for literal
+`Saved` text. The user-facing save action does not provide that snackbar; its
+success contract is the gateway save plus a changed provider project digest.
+The acceptance now observes both. The run also reported cold-start and
+surface-conversion stalls, including 125 and 123 skipped frames; these remain
+separate performance evidence to analyze and measure rather than suppress.
+All other completed checks passed: Rust, Flutter static/widget, descriptor
+boundary, Linux and Windows packaged journeys. The macOS packaged journey also
+passed. The platform run's Android failure is limited to the stale acceptance
+expectation described above; packaged Android caption export itself is now
+verified, while the complete Android SAF journey and performance remain open.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter
