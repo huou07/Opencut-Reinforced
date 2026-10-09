@@ -385,9 +385,17 @@ exact checkpoint in `last_autosaved_project`, but save only accepted a
 checkpoint equal to the newest live state. Save now accepts the session's own
 recorded checkpoint while retaining canonical-base equality and rejecting
 unrelated recovery candidates. A core regression test covers saving newer live
-state after autosave. This product fix and the SAF journey still require a new
-exact-SHA hosted run. Android also recorded a 118-frame foreground-app startup
-stall; measure and investigate it as a separate performance item.
+state after autosave. Exact-SHA run `37923946991` on `e6d1d9c` passed Linux,
+Windows, macOS, Rust, Flutter, and descriptor-boundary jobs. Android relink and
+Save both succeeded; Save invoked the picker synchronizer once, but the picker
+returned `null` before calling native SAF synchronization. The provider-readback
+assertion therefore failed. The captured report classifies Android main-thread
+stalls, including 281 skipped frames during startup and several 37–105-frame
+stalls in the journey. The next acceptance run records and compares the
+DocumentsUI-selected working path with the path sent for Save synchronization
+to identify why the picker association is missing; do not claim provider save
+or recovery acceptance until the readback passes. Measure and investigate the
+Android startup and interaction stalls as separate performance work.
 
 ## Traceability from the preserved roadmap
 

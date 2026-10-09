@@ -419,11 +419,18 @@ class _ObservedGateway extends RustProjectGateway {
 class _ObservedSafProjectPicker extends AndroidSafProjectPicker {
   ProjectFileSyncResult? lastSyncResult;
   Object? lastSyncError;
+  String? selectedProjectPath;
+  String? synchronizedProjectPath;
   int syncCalls = 0;
+
+  @override
+  Future<String?> openProjectPath() async =>
+      selectedProjectPath = await super.openProjectPath();
 
   @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async {
     syncCalls++;
+    synchronizedProjectPath = path;
     try {
       return lastSyncResult = await super.synchronizeProjectPath(path);
     } catch (error) {
@@ -489,6 +496,12 @@ void main() {
       );
       debugPrint('ANDROID_SAF_PROJECT_OPENED');
       expect(gateway.openedPath, contains('/files/or-projects/'));
+      debugPrint(
+        'ANDROID_SAF_PROJECT_PATHS '
+        'selected=${projectPicker.selectedProjectPath} '
+        'opened=${gateway.openedPath}',
+      );
+      expect(projectPicker.selectedProjectPath, gateway.openedPath);
       debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
       final session = gateway.session!;
       final revision = (await _stage(
@@ -926,6 +939,8 @@ void main() {
         'errorCode=${gateway.lastSaveResult?.errorCode} '
         'revision=${gateway.lastSaveResult?.view?.revision} '
         'syncCalls=${projectPicker.syncCalls} '
+        'selectedPath=${projectPicker.selectedProjectPath} '
+        'syncPath=${projectPicker.synchronizedProjectPath} '
         'syncVerified=${projectPicker.lastSyncResult?.verified} '
         'syncError=${projectPicker.lastSyncError}',
       );
@@ -941,6 +956,11 @@ void main() {
         projectPicker.syncCalls,
         1,
         reason: 'Saving a SAF project must invoke its document synchronizer.',
+      );
+      expect(
+        projectPicker.synchronizedProjectPath,
+        projectPicker.selectedProjectPath,
+        reason: 'Save must synchronize the exact DocumentsUI working copy.',
       );
       expect(
         projectPicker.lastSyncResult?.verified,
