@@ -279,6 +279,19 @@ representative device hardware identifies the responsible path and shows
 acceptable playback and interaction latency. The current run proves journey
 correctness and resource release, not performance acceptance.
 
+Run `37898610367` on exact product SHA
+`eee5d2413cbf5334c27a05a6523fc09a9b6acf41` passed Rust, Flutter static/widget,
+descriptor-boundary, Linux and Windows packaged verification. Android built
+the all-ABI APK and passed the packaged FFmpeg/Rust bridge smoke, but its SAF
+journey failed before opening the relink picker: the test mounted the Media
+panel and called `ensureVisible` on “Load more” before its asynchronous first
+media page rendered the control (`StateError: Bad state: No element` at
+`android_saf_preview_test.dart:724`). The test now waits for that control. This
+is an acceptance-harness readiness race, not a relink result; the Android
+DocumentsUI relink and process-recovery path remain unverified pending a new
+exact-SHA hosted run. The macOS job was still running when this correction was
+prepared.
+
 Only after manual caption interchange works end to end should transcription
 create editable caption proposals. Review the selected speech-recognition
 upstreams and model licenses as part of that task; provider output must enter

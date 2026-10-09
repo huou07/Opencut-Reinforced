@@ -721,6 +721,7 @@ void main() {
             .isNotEmpty,
       );
       final loadMore = find.byKey(const ValueKey('media-load-more'));
+      await _until(tester, () => loadMore.evaluate().isNotEmpty);
       await tester.ensureVisible(loadMore);
       await tester.tap(loadMore);
       final mediaActions = find.byKey(
