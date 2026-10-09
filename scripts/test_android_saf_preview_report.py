@@ -18,7 +18,7 @@ def report():
         'providerProjectSha256BeforeRestart': 'a' * 64,
         'visiblePixelRgba': [254, 0, 0, 255], 'backgroundResumePixelRgba': [254, 0, 0, 255],
         'recoveredPixelRgba': [254, 0, 0, 255],
-        'recreatedPixelRgba': [254, 0, 0, 255],
+        'surfaceLifecycleResources': {'cleanups': 1, 'restorations': 1},
         'providerOpens': 4, 'uiPlayMicros': 100,
         'sameSourceRegistrations': [1, 1], 'sameSourceProviderOpens': [2, 2],
         'stressResources': {'presentedFrames': 1, 'bitmapBytes': 1024, 'peakPendingFrameResults': 8,
@@ -71,9 +71,9 @@ class ReportTest(unittest.TestCase):
             value['androidSafAcceptance'].update(mutation)
             with self.assertRaises(ValueError): verify(value)
 
-    def test_recreated_surface_must_present_the_frame_not_the_backdrop(self):
+    def test_real_surface_cleanup_and_restoration_are_required(self):
         value = report()
-        value['androidSafAcceptance']['recreatedPixelRgba'] = [254, 247, 255, 255]
+        value['androidSafAcceptance']['surfaceLifecycleResources']['restorations'] = 0
         with self.assertRaises(ValueError): verify(value)
 
     def test_android_export_requires_valid_provider_matroska(self):

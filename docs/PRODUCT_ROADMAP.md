@@ -445,9 +445,8 @@ captures from the same journey show the red source in its square preview. The
 stress-only harness now retains a square preview aspect ratio for both
 existing- and recreated-producer checks, but the next hosted run disproved the
 layout hypothesis: the center band remained. The strict source-pixel check is
-unchanged. The next run separates a single `getForcedNewSurface` reset from
-damage that accumulates across eight resets by capturing immediately after the
-first reset.
+unchanged. A subsequent run isolated the failure to the first call of the
+test-only forced-surface-reset path.
 
 Exact-SHA run `37953579159` on `4cf79ed` passed Flutter static/widget,
 descriptor-boundary, Linux, Windows, and macOS build, lifecycle, preview, and
@@ -459,6 +458,22 @@ stress sequence. The square-aspect screenshot confirms a red/white/red band
 inside the preview itself, so incorrect portrait stretching does not explain
 the result. The Android job evidence is preserved in the
 [workflow run](https://github.com/huou07/Opencut-Reinforced/actions/runs/37953579159).
+
+Run `37957951853` on `4f66ce3` captured the same band immediately after one
+`getForcedNewSurface()` call; no repeated reset was needed. In that exact run,
+the normal editor's real background/resume and permission-recovery captures
+both showed the solid-red frame, and fresh-session Play, seek, SAF readback,
+and resource bounds passed before the diagnostic failure. CodeGraph shows that
+the `recreateSurface` and `releaseTexture` channel operations have no product
+caller; they existed only to make this synthetic integration test replace a
+surface outside Flutter's app lifecycle. Flutter documents `getSurface()` plus
+`onSurfaceCleanup`/`onSurfaceAvailable` as the lifecycle contract, and the real
+background/resume path already verifies that behavior. Remove those test-only
+channel operations and keep the strict pixel assertion around real session
+frames, bounded concurrent frame requests, and the actual OS lifecycle. This
+does not claim that arbitrary forced surface replacement is product behavior.
+[Flutter SurfaceProducer API](https://api.flutter.dev/javadoc/io/flutter/view/TextureRegistry.SurfaceProducer.html),
+[Flutter Android surface lifecycle guidance](https://docs.flutter.dev/release/breaking-changes/android-surface-plugins).
 
 ## Traceability from the preserved roadmap
 

@@ -136,19 +136,6 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             "setMediaSources" -> setMediaSources(call, result)
             "clearMediaSources" -> clearMediaSources(result)
             "resourceSnapshot" -> resourceSnapshot(result)
-            "recreateSurface" -> {
-                surfaceEpoch.incrementAndGet()
-                producer?.let { it.getForcedNewSurface() }
-                result.success(producer != null)
-            }
-            "releaseTexture" -> {
-                releaseProducer()
-                submit(result) {
-                    bitmap?.recycle()
-                    bitmap = null
-                    true
-                }
-            }
             else -> result.notImplemented()
         }
     }

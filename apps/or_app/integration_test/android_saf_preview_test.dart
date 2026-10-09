@@ -167,20 +167,15 @@ Future<List<int>> _redTexture(
   return pixel;
 }
 
-// The two editor captures above are of a texture that had been presenting for
-// seconds, so a single posted frame was already on screen. A brand-new
-// SurfaceTexture is different: the engine has to acquire the first buffer the
-// plugin posts before the layer carries it, and this SwiftShader guest drops
-// hundreds of frames doing that. Keep asking the real plugin for real frames
-// and let the platform settle, so the capture measures the surface and not how
-// fast this guest composites. Bounded, so a genuinely blank surface still
-// fails on the unchanged pixel assertion.
-Future<void> _settleRecreatedSurface(WidgetTester tester) async {
+// A resumed SurfaceProducer receives callbacks before Flutter has composed its
+// first frame. Keep requesting real plugin frames for a bounded settling window
+// so the pixel assertion measures the lifecycle surface, not compositor delay.
+Future<void> _settleLifecycleSurface(WidgetTester tester) async {
   for (var attempt = 0; attempt < 8; attempt++) {
     expect(
-      await _frameAvailable('recreated-surface'),
+      await _frameAvailable('background-resumed-surface'),
       isTrue,
-      reason: 'A recreated Android surface must present a real frame.',
+      reason: 'The resumed Android surface must present a real frame.',
     );
     await tester.pump(const Duration(milliseconds: 500));
   }
@@ -563,6 +558,7 @@ void main() {
         reason: 'Unchanged active-source seeks must reuse the duplicated capability.',
       );
 
+      final beforeBackground = await _resources();
       final playCallsBeforeBackground = gateway.playCalls;
       await tester.tap(find.byKey(const ValueKey('preview-play')));
       await _until(
@@ -589,7 +585,16 @@ void main() {
       expect(_providerFds(), 1);
       expect((await gateway.summary(session)).revision, revision);
       expect(await _frameAvailable('after-background-resume'), isTrue);
-      await _settleRecreatedSurface(tester);
+      await _settleLifecycleSurface(tester);
+      final afterBackground = await _resources();
+      expect(
+        afterBackground['surfaceCleanups'],
+        greaterThan(beforeBackground['surfaceCleanups']!),
+      );
+      expect(
+        afterBackground['surfaceRestorations'],
+        greaterThan(beforeBackground['surfaceRestorations']!),
+      );
       final backgroundPixels = await _redTexture(
         tester,
         binding,
@@ -1097,31 +1102,25 @@ void main() {
       expect(firstFrame.errorCode, isNull);
       expect(firstFrame.position.numerator, BigInt.zero);
       expect(await _frameAvailable('fresh-session-zero-frame'), isTrue);
-      final oldTexture = (await OrViewerTexture.textureId())!;
+      final textureId = (await OrViewerTexture.textureId())!;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Center(
               child: AspectRatio(
                 aspectRatio: 1,
-                child: Texture(textureId: oldTexture),
+                child: Texture(textureId: textureId),
               ),
             ),
           ),
         ),
       );
+      await _redTexture(tester, binding, 'saf-fresh-session-texture');
+      await _redTexture(tester, binding, 'saf-fresh-session-texture');
       for (var i = 0; i < 8; i++) {
-        expect(await _presenter.invokeMethod<bool>('recreateSurface'), isTrue);
-        expect(await _frameAvailable('surface-stress'), isTrue);
+        expect(await _frameAvailable('preview-frame-stress'), isTrue);
         expect((await _resources())['inFlightLeases'], 0);
         expect(_providerFds(), 1);
-        if (i == 0) {
-          await _redTexture(
-            tester,
-            binding,
-            'saf-existing-surface-after-first-reset',
-          );
-        }
       }
       final presentations = await Future.wait(
         List.generate(64, (_) => _frameAvailable('parallel-stress')),
@@ -1132,40 +1131,7 @@ void main() {
       expect(stress['peakQueuedOperations'], lessThanOrEqualTo(8));
       expect(stress['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
       expect(stress['inFlightLeases'], 0);
-      final existingSurfacePixels = await _redTexture(
-        tester,
-        binding,
-        'saf-existing-surface-after-stress',
-      );
-      debugPrint(
-        'ANDROID_SAF_EXISTING_SURFACE_PIXEL=${existingSurfacePixels.join(',')}',
-      );
-      final inFlightPresentation = _presenter.invokeMethod<bool>(
-        'frameAvailable',
-      );
-      expect(await _presenter.invokeMethod<bool>('releaseTexture'), isTrue);
-      expect(await inFlightPresentation, anyOf(isTrue, isFalse));
-      expect((await _resources())['bitmapBytes'], 0);
-      final recreated = (await OrViewerTexture.textureId())!;
-      expect(recreated, isNot(oldTexture));
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Texture(textureId: recreated),
-              ),
-            ),
-          ),
-        ),
-      );
-      await _settleRecreatedSurface(tester);
-      final recreatedPixels = await _redTexture(
-        tester,
-        binding,
-        'saf-surface-recreated',
-      );
+      await _redTexture(tester, binding, 'saf-texture-after-frame-stress');
       await secondGateway.close(second, discardUnsaved: false);
       expect(_providerFds(), 0);
 
@@ -1295,7 +1261,8 @@ void main() {
           'saf-editor-texture',
           'saf-background-resumed-texture',
           'saf-editor-permission-recovered',
-          'saf-surface-recreated',
+          'saf-fresh-session-texture',
+          'saf-texture-after-frame-stress',
         },
         reason: 'Every asserted capture must reach the acceptance artifact.',
       );
@@ -1320,7 +1287,7 @@ void main() {
               'nonseekableNativeRegistrationRejected',
               'clearDuringOpenDropsStaleBinding',
               'editAndGenerationDropPreparedFrame',
-              'surfaceRecreationAndRelease',
+              'surfaceCleanupAndRestoration',
               'osMediaFdsAndNativeLeasesReleased',
               'boundedPresentationStress',
               'sameSourceSeeksReuseProviderCapability',
@@ -1365,7 +1332,10 @@ void main() {
           'visiblePixelRgba': pixels,
           'backgroundResumePixelRgba': backgroundPixels,
           'recoveredPixelRgba': recoveredPixels,
-          'recreatedPixelRgba': recreatedPixels,
+          'surfaceLifecycleResources': {
+            'cleanups': afterBackground['surfaceCleanups'],
+            'restorations': afterBackground['surfaceRestorations'],
+          },
           'journeyResources': journey,
           'stressResources': stress,
           'finalResources': finalResources,
