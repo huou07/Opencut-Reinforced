@@ -374,6 +374,21 @@ state, and provider-write failures. Keep the provider hash assertion and
 investigate the stall from the hosted trace; do not treat the successful
 relink alone as completion.
 
+Run `37920881547` on exact product SHA
+`091a9eafccf36d7cf3f402d6ab640b69aa1f05cd` passed Linux, Windows, macOS,
+Rust, Flutter static/widget, descriptor-boundary, and Android packaging/bridge
+checks. Android again completed relink at revision 6. Added telemetry then
+showed the canonical save itself failed with `RECOVERY_REQUIRED` before the
+picker synchronizer was called. The recovery candidate was produced by this
+same live session's earlier autosave; `ProjectFileSession` already tracks that
+exact checkpoint in `last_autosaved_project`, but save only accepted a
+checkpoint equal to the newest live state. Save now accepts the session's own
+recorded checkpoint while retaining canonical-base equality and rejecting
+unrelated recovery candidates. A core regression test covers saving newer live
+state after autosave. This product fix and the SAF journey still require a new
+exact-SHA hosted run. Android also recorded a 118-frame foreground-app startup
+stall; measure and investigate it as a separate performance item.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

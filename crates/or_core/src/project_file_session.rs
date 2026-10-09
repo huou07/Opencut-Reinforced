@@ -296,7 +296,9 @@ impl ProjectFileSession {
         {
             RecoveryInspection::None | RecoveryInspection::Stale(_) => {}
             RecoveryInspection::Candidate(candidate)
-                if candidate.recovery_project() == current_project => {}
+                if candidate.recovery_project() == current_project
+                    || self.last_autosaved_project.as_ref()
+                        == Some(candidate.recovery_project()) => {}
             RecoveryInspection::Candidate(_) | RecoveryInspection::Conflict { .. } => {
                 return Err(recovery_error(
                     "a recovery checkpoint needs explicit attention",
@@ -673,6 +675,36 @@ mod tests {
         let mut session = ProjectFileSession::open(&path).unwrap();
         session.handle_application_request(rename(session.session(), "B"));
         assert!(session.autosave_checkpoint().unwrap());
+
+        session.save().unwrap();
+
+        assert!(!session.is_dirty());
+        assert_eq!(
+            load_project_file(&path).unwrap(),
+            *session.session().project()
+        );
+        assert!(matches!(
+            inspect_project_recovery(&path).unwrap(),
+            RecoveryInspection::Stale(_)
+        ));
+    }
+
+    #[test]
+    fn explicit_save_promotes_newer_live_state_over_its_own_autosave_checkpoint() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        save_project_file_atomic(&path, &base).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "B"));
+        assert!(session.autosave_checkpoint().unwrap());
+        let checkpoint = match inspect_project_recovery(&path).unwrap() {
+            RecoveryInspection::Candidate(candidate) => candidate.recovery_project().clone(),
+            inspection => panic!("expected candidate, got {inspection:?}"),
+        };
+
+        session.handle_application_request(rename(session.session(), "C"));
+        assert_ne!(session.session().project(), &checkpoint);
 
         session.save().unwrap();
 
