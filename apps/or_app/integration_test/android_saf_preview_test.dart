@@ -737,11 +737,19 @@ void main() {
       }
       expect(loadMore.hitTestable(), findsOneWidget);
       await tester.tap(loadMore);
+      await _until(tester, () => loadMore.evaluate().isEmpty);
       final mediaActions = find.byKey(
         ValueKey('media-actions-${activeMedia.mediaId}'),
       );
-      await _until(tester, () => mediaActions.evaluate().isNotEmpty);
-      await tester.ensureVisible(mediaActions);
+      for (
+        var attempt = 0;
+        attempt < 20 && mediaActions.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(mediaList, const Offset(0, -600));
+        await tester.pumpAndSettle();
+      }
+      expect(mediaActions.hitTestable(), findsOneWidget);
       await tester.tap(mediaActions);
       await tester.pumpAndSettle();
       await tester.tap(

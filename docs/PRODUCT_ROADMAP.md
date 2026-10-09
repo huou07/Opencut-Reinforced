@@ -308,7 +308,8 @@ Rust, Flutter static/widget, and descriptor-boundary checks. Android reached
 the paging control, but its center was at y=644 on a 640-pixel viewport. The
 test attempted a tap before that lazy child was hit-testable and the control
 action did not run; no DocumentsUI relink picker opened. The acceptance now
-scrolls until the control is hit-testable and asserts that state before tap.
+scrolls until both the paging control and the index-64 media action are
+hit-testable before interacting with them.
 The picker/relink and recovery behavior remain unverified pending a new
 exact-SHA hosted run.
 
