@@ -456,3 +456,35 @@ tool sheet and establish a successful hit test before waiting for the real
 SAF chooser. Preserve the existing KEEP/REUSE/BUILD/DEFER decisions; no
 upstream has demonstrated a product-level replacement since the audited
 baseline, and there is still no packaged MLT comparison.
+
+## Upstream refresh at OR `main` `457c1a0` (2026-10-10)
+
+The current origin head is `457c1a0cc5221f27ef90516571aa0417481581c2`; its
+Platform Verification run `37967821791` is in progress, so this entry records
+source/release revalidation only, not a product acceptance claim. GitHub's
+default-branch API confirms OpenCut remains at
+[`e6680107`](https://github.com/OpenCut-app/OpenCut/commit/e668010778568641babef2cc40be4703ae6916d6)
+(2026-09-24). Its current [desktop README](https://github.com/OpenCut-app/OpenCut/blob/main/apps/desktop/README.md)
+still says the app is an early window with no editor features, and its
+[rewrite tracker](https://github.com/OpenCut-app/OpenCut/issues/811) remains a
+plan for the Rust core, Editor API, plugin host, MCP/headless path, and mobile
+targets. No new editor implementation, package, or contribution path changes
+the **KEEP OR / monitor OpenCut** decision.
+
+MLT remains at [`77ae5f8`](https://github.com/mltframework/mlt/commit/77ae5f8f8cb4e2f502c5dc868d6c7cf7b45bfc54)
+(2026-10-06), and its latest v7.42.0 release is dated 2026-10-03. This confirms
+active framework maintenance and a current LGPL-2.1 candidate; it does not
+measure OR adapter cost, runtime latency, package footprint, Android behavior,
+or whether its module graph satisfies the needed features. The decision
+therefore remains **BUILD on current FFmpeg/wgpu; compare MLT only against a
+specific measured gap before replacing a working path**.
+
+The default branches queried on 2026-10-10 for authentic OpenMontage,
+Open Generative AI, Palmier Pro, Remotion, MoneyPrinterTurbo, LosslessCut,
+Motion Canvas, Shotcut, and libopenshot matched the exact heads already listed
+in the 2026-10-09 snapshot ledger. Their previously recorded licensing,
+architecture, release, and maturity boundaries remain unchanged. This is a
+source/release revalidation, not a claim that the audit installed or benchmarked
+those products. Upstream runtime evidence is not sufficient to compare against
+OR's cross-platform packaged journey; no replacement decision is made without
+that comparison.
