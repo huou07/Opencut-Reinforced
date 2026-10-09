@@ -720,6 +720,65 @@ mod tests {
     }
 
     #[test]
+    fn media_relink_is_preserved_after_save_and_fresh_session_reopen() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let mut session = ProjectFileSession::create_new(&path, "Relink").unwrap();
+        let media_id = MediaId::generate();
+        let metadata = MediaMetadata::from_probe(vec!["matroska".to_owned()], None, 123, vec![]);
+        let original = MediaItem::new(
+            media_id,
+            MediaSourceRef::android_saf_document_uri(
+                "content://com.android.providers.media.documents/document/original",
+            )
+            .unwrap(),
+            metadata.clone(),
+        )
+        .unwrap();
+        let replacement = MediaItem::new(
+            media_id,
+            MediaSourceRef::android_saf_document_uri(
+                "content://com.android.providers.media.documents/document/replacement",
+            )
+            .unwrap(),
+            metadata,
+        )
+        .unwrap();
+
+        let add = CommandEnvelope::add_media(
+            session.session.project_id(),
+            session.session.project_instance_id(),
+            session.session.project_revision(),
+            original,
+        );
+        assert!(matches!(
+            session.handle_application_request(ApplicationRequest::Command(add)),
+            ApplicationResponse::Command(_)
+        ));
+        let relink = CommandEnvelope::relink_media(
+            session.session.project_id(),
+            session.session.project_instance_id(),
+            session.session.project_revision(),
+            replacement.clone(),
+        );
+        assert!(matches!(
+            session.handle_application_request(ApplicationRequest::Command(relink)),
+            ApplicationResponse::Command(_)
+        ));
+
+        session.save().unwrap();
+        assert_eq!(
+            load_project_file(&path).unwrap().media_items().first(),
+            Some(&replacement)
+        );
+        let reopened = ProjectFileSession::open(path).unwrap();
+        assert_eq!(
+            reopened.session().project().media_items().first(),
+            Some(&replacement)
+        );
+    }
+
+    #[test]
     fn autosave_preserves_an_unrelated_recovery_candidate() {
         let directory = TestDirectory::new();
         let path = directory.project_path();

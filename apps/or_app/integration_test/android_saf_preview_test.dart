@@ -1054,7 +1054,9 @@ void main() {
 
       // Supplemental fresh-session Play guard and bounded surface stress.
       const secondGateway = RustProjectGateway();
-      final second = await secondGateway.openProject(path);
+      final selectedProjectPath = projectPicker.selectedProjectPath!;
+      expect(selectedProjectPath, gateway.openedPath);
+      final second = await secondGateway.openProject(selectedProjectPath);
       final before = await secondGateway.summary(second);
       final reopenedRelink = (await secondGateway.listMediaPage(
         second,

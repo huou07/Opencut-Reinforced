@@ -391,11 +391,19 @@ Save both succeeded; Save invoked the picker synchronizer once, but the picker
 returned `null` before calling native SAF synchronization. The provider-readback
 assertion therefore failed. The captured report classifies Android main-thread
 stalls, including 281 skipped frames during startup and several 37–105-frame
-stalls in the journey. The next acceptance run records and compares the
-DocumentsUI-selected working path with the path sent for Save synchronization
-to identify why the picker association is missing; do not claim provider save
-or recovery acceptance until the readback passes. Measure and investigate the
-Android startup and interaction stalls as separate performance work.
+stalls in the journey. Exact-SHA run `37928517402` on `a2e99a7` passed the
+Linux, macOS, and Windows packaged jobs, Rust, Flutter static/widget, and
+descriptor-boundary checks. Android now confirmed identical DocumentsUI
+selected/opened/synchronized working paths and a verified SAF provider
+readback. The later fresh-session assertion failed because the acceptance
+reopened its original temporary fixture seed instead of the selected working
+copy; this was a test-path error, not evidence of a lost relink. A Rust
+save/reopen regression independently confirms that relinked SAF URIs survive
+project-file persistence. The corrected acceptance reopens the selected
+working path and still checks media identity and timeline references. The run
+also recorded Android main-thread stalls (140, 103, and 73 skipped frames at
+startup/bridge/surface phases); measure and investigate these separately from
+the persistence assertion.
 
 ## Traceability from the preserved roadmap
 
