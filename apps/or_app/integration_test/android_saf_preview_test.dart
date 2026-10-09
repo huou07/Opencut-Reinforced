@@ -208,7 +208,7 @@ Future<String> _project(Directory directory, String name, String source) async {
             },
             'metadata': {
               'format_names': ['matroska'],
-              'duration': {'numerator': 1, 'denominator': 1},
+              'duration': {'numerator': 1, 'denominator': 2},
               'file_size_bytes': 9045,
               'streams': [
                 {
@@ -220,7 +220,7 @@ Future<String> _project(Directory directory, String name, String source) async {
                     'height': 16,
                     'pixel_format': 'bgra',
                     'average_frame_rate': {'numerator': 4, 'denominator': 1},
-                    'duration': {'numerator': 1, 'denominator': 1},
+                    'duration': {'numerator': 1, 'denominator': 2},
                   },
                 },
               ],
@@ -258,7 +258,7 @@ Future<String> _project(Directory directory, String name, String source) async {
     mediaId: media.mediaId,
     timelineStart: ProjectRationalTime(BigInt.zero, 1),
     sourceStart: ProjectRationalTime(BigInt.zero, 1),
-    duration: ProjectRationalTime(BigInt.one, 1),
+    duration: ProjectRationalTime(BigInt.one, 2),
   );
   expect(insertedActiveClip.succeeded, isTrue);
   current = insertedActiveClip.view!;

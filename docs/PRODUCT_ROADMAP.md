@@ -348,6 +348,17 @@ and recovery verifiers now require the unique replacement URI. This is a
 fixture/selector correction; Android SAF relink and process recovery remain
 unverified until the corrected exact-SHA journey passes.
 
+Run `37915335465` on exact product SHA
+`e65f349cd7596d66d0cabce4de683b04d689c9a7` passed Linux, Windows, Rust,
+Flutter static/widget, and descriptor-boundary checks. Android reached the real
+relink command with the unique document selected, which correctly rejected the
+replacement as timeline-incompatible. The acceptance project had declared a
+one-second source stream and clip while its actual `tiny.mkv` fixture is 0.5
+seconds; relink's source-range validation exposed that fixture mismatch. The
+acceptance now records the actual half-second media and clip duration. Android
+relink/recovery remain unverified pending a new exact-SHA hosted run; macOS was
+still running when this correction was prepared.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
