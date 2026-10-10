@@ -209,15 +209,14 @@ impl ProjectFileSession {
     /// Removes this session's recovery snapshot when the user explicitly discards its edits.
     /// An unrelated or conflicting checkpoint is never removed.
     pub fn discard_unsaved_recovery_checkpoint(&mut self) -> Result<(), ProjectFileSessionError> {
-        if let Some(autosaved) = &self.last_autosaved_project {
-            if let RecoveryInspection::Candidate(candidate) =
+        if let Some(autosaved) = &self.last_autosaved_project
+            && let RecoveryInspection::Candidate(candidate) =
                 inspect_project_recovery(&self.project_path)
                     .map_err(|error| recovery_error(&error.to_string()))?
-                && candidate.recovery_project() == autosaved
-            {
-                discard_project_recovery(&self.project_path)
-                    .map_err(|error| recovery_error(&error.to_string()))?;
-            }
+            && candidate.recovery_project() == autosaved
+        {
+            discard_project_recovery(&self.project_path)
+                .map_err(|error| recovery_error(&error.to_string()))?;
         }
         self.last_autosaved_project = None;
         Ok(())
