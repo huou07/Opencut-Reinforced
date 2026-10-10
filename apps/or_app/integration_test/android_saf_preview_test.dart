@@ -1031,6 +1031,7 @@ void main() {
       );
       await tester.tap(saveButton);
       await _until(tester, () => gateway.saveCalls == 1);
+      await _until(tester, () => projectPicker.syncCalls == 1);
       expect(
         projectPicker.syncCalls,
         1,
