@@ -668,6 +668,20 @@ reproduces the clipped tile. Fourteen local selector tests pass. Android WAV
 import remains unverified until the exact-SHA packaged journey imports and
 checks all three media sources. Android performance remains unaccepted.
 
+Exact-SHA run [38012735537](https://github.com/huou07/Opencut-Reinforced/actions/runs/38012735537)
+on `4fd142faa8861a83915d44a54bc72d1763baa78d` passed Rust, Flutter static and
+widget, descriptor-boundary, Linux, and Windows jobs. macOS lifecycle checks
+are still running. Android built the all-ABI package and passed the emulator
+bridge, preview, background/resume, project recovery, permission recovery, and
+export portions before its real media picker stopped at `tiny.wav`. The
+preserved DocumentsUI tree showed the WAV row fully visible but disabled while
+two video items remained selected. Inspection traced this to the product
+intent: Android `openMedia` requested only `video/*`, so the picker excluded
+audio files. This is an Android product import defect, not a WAV decoder or
+scrolling failure. The candidate correction requests both `video/*` and
+`audio/*`; WAV remains unaccepted on Android until a new exact-SHA journey
+imports all three sources. Android performance remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

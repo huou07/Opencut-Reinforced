@@ -136,7 +136,7 @@ class MainActivity : FlutterActivity() {
                 result,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                mimeType = "video/*",
+                mimeType = "*/*",
                 allowMultiple = true,
             )
             "openProject" -> launchPicker(
@@ -256,7 +256,9 @@ class MainActivity : FlutterActivity() {
             type = mimeType
             putExtra(
                 Intent.EXTRA_MIME_TYPES,
-                if (method == "openCaptionFile") {
+                if (method == "openMedia") {
+                    arrayOf("video/*", "audio/*")
+                } else if (method == "openCaptionFile") {
                     arrayOf("application/x-subrip", "text/vtt", "text/plain")
                 } else if (mimeType == "*/*") {
                     arrayOf("application/octet-stream", "application/json")
