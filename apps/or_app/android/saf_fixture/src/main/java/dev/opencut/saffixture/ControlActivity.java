@@ -48,6 +48,12 @@ public final class ControlActivity extends Activity {
                             int count;
                             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                         }
+                        File phone = new File(getFilesDir(), "tiny_h264_aac.mp4");
+                        try (InputStream input = getAssets().open("tiny_h264_aac.mp4"); FileOutputStream output = new FileOutputStream(phone)) {
+                            byte[] buffer = new byte[4096];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                        }
                         String project = getIntent().getStringExtra("projectJson");
                         byte[] encoded = project == null ? new byte[0] : project.getBytes(StandardCharsets.UTF_8);
                         if (encoded.length > MAX_PROJECT_BYTES) throw new IllegalArgumentException(

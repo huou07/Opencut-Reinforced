@@ -101,9 +101,16 @@ optional GPL components change FFmpeg's license to GPL-2-or-later, and its
 nonfree configuration is not redistributable. The CI probe checks the linked
 `libavutil` license string is exactly `LGPL version 2.1 or later`.
 The 7C0 probe used `--disable-everything` to keep that gate limited to API,
-ABI, and shared-link verification. The 7C production CI prefix enables only
-the `file` protocol, Matroska demuxer, and FFV1/PCM S16LE decoders for its
-generated fixture; this does not select the product codec set.
+ABI, and shared-link verification. The production profile now additionally
+enables FFmpeg's built-in H.264 and AAC decoders and MOV demuxer; it does not
+enable GPL/nonfree modules or link libx264. This codec-library license review
+does not resolve patent or distribution obligations. FFmpeg's
+[legal guidance](https://www.ffmpeg.org/legal.html) says patent rules vary by
+jurisdiction and warns commercial redistributors to assess patent licensing.
+Treat H.264 distribution as an open release review item; do not describe the
+LGPL build configuration as patent clearance. The Android and desktop packages
+must use the same pinned FFmpeg source, exact configure provenance, and notices
+when the profile is promoted beyond a verified preview.
 
 For each release, distribute the exact corresponding FFmpeg source and
 configuration, local patch diff, license notices, and a source download

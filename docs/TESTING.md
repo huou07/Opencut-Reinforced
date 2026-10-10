@@ -486,7 +486,7 @@ GitHub-hosted CI is authoritative for build correctness, automated tests, platfo
 
 ## Fixtures and results
 
-Use tiny, self-created or legally safe media fixtures. Keep fixture provenance and rights clear. Avoid shipping downloaded models or copyrighted media as test data.
+Use tiny, self-created or legally safe media fixtures. Keep fixture provenance and rights clear. Avoid shipping downloaded models or copyrighted media as test data. `crates/or_media/tests/fixtures/tiny_h264_aac.mp4` is one second of generated color and sine audio (32×24 H.264 Baseline + AAC, no third-party footage); it exists only as synthetic import/decode coverage. Its H.264 bitstream does not establish patent clearance for redistributing the decoder.
 
 A check that did not run must never be reported as passing. Report its exact status and reason. Keep a failing or unavailable check visible rather than silently omitting it. Prototype simulation tests are not production application tests.
 

@@ -70,7 +70,7 @@ MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="false" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
   <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,440][1080,540]" selected="false" />
@@ -81,7 +81,7 @@ MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 
 MEDIA_GRID_PARTIAL = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
-  <node index="0" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="0" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[214,516][284,535]" selected="false" />
   <node index="1" text="" class="android.widget.Button"
         package="com.android.documentsui" content-desc="List view"
@@ -93,7 +93,7 @@ MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="false" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
   <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
@@ -111,7 +111,7 @@ MEDIA_FIRST_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
   <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
@@ -124,7 +124,7 @@ MEDIA_FIRST_TWO_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="true" />
   <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
@@ -141,7 +141,7 @@ MEDIA_WAV_CLIPPED = b"""<?xml version='1.0' encoding='UTF-8'?>
   <node index="1" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.google.android.documentsui" bounds="[72,486][187,508]"
         selected="true" />
-  <node index="2" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="2" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.google.android.documentsui" bounds="[72,559][187,581]"
         selected="true" />
   <node index="3" text="tiny.wav" class="android.widget.LinearLayout"
@@ -157,7 +157,7 @@ MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="true" />
-  <node index="1" text="tiny-second.mkv" class="android.widget.LinearLayout"
+  <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
   <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,440][1080,540]" selected="true" />
@@ -328,11 +328,11 @@ class SelectorTests(unittest.TestCase):
             selection_log = (output / "documents-ui-selector.log").read_text()
             self.assertIn("action=tap target=list-view", selection_log)
             self.assertIn("action=long-press target=tiny.mkv", selection_log)
-            self.assertIn("action=tap target=tiny-second.mkv", selection_log)
+            self.assertIn("action=tap target=phone.mp4", selection_log)
             self.assertIn("action=tap target=tiny.wav", selection_log)
             selected_report = (output / "documents-ui-selection.txt").read_text()
             self.assertIn(
-                "Selected tiny-second.mkv,tiny.mkv,tiny.wav for media through native DocumentsUI.",
+                "Selected phone.mp4,tiny.mkv,tiny.wav for media through native DocumentsUI.",
                 selected_report,
             )
 

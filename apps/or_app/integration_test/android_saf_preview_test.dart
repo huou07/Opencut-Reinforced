@@ -68,7 +68,7 @@ int _providerFds() {
       final target = Link(entry.path).targetSync();
       if (target.contains('/dev.opencut.saffixture/') &&
           (target.endsWith('/tiny.mkv') ||
-              target.endsWith('/tiny-second.mkv') ||
+              target.endsWith('/tiny_h264_aac.mp4') ||
               target.endsWith('/tiny.wav') ||
               target.endsWith('/relink-replacement.mkv'))) {
         count++;
@@ -793,7 +793,9 @@ void main() {
         _source('media-audio'),
       ]);
       expect(imported.items[0].formatNames, contains('matroska'));
-      expect(imported.items[1].formatNames, contains('matroska'));
+      expect(imported.items[1].formatNames, contains('mov'));
+      expect(imported.items[1].videoDetails, contains('h264'));
+      expect(imported.items[1].audioDetails, contains('aac'));
       expect(imported.items[2].formatNames, contains('wav'));
       expect(imported.items[2].videoDetails, isNull);
       expect(imported.items[2].audioDetails, isNotNull);
@@ -1504,6 +1506,10 @@ void main() {
               imported.items[2].formatNames.contains('wav') &&
               imported.items[2].videoDetails == null &&
               imported.items[2].audioDetails != null,
+          'mediaImportH264AacMp4':
+              imported.items[1].formatNames.contains('mov') &&
+              imported.items[1].videoDetails?.contains('h264') == true &&
+              imported.items[1].audioDetails?.contains('aac') == true,
           'audioPlaybackClockNumerator': audioClockTick.position.numerator
               .toString(),
           'audioPlaybackErrorCode': audioClockTick.errorCode ?? '',

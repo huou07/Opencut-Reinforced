@@ -29,9 +29,10 @@ env:
     --disable-avdevice
     --disable-avfilter
     --enable-protocol=file
-    --enable-demuxer=matroska,wav
+    --enable-demuxer=matroska,mov,wav
     --enable-muxer=matroska
-    --enable-decoder=ffv1,pcm_s16le
+    --enable-decoder=ffv1,pcm_s16le,h264,aac
+    --enable-parser=h264,aac
     --enable-encoder=ffv1,pcm_s16le
   # Desktop-only additions for the packaged 9B1 media helpers. These arrive
   # after the common arguments so the program, filter-library, and component
@@ -319,8 +320,9 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska"
-            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled demuxers: matroska, mov"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Enabled muxers: matroska, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
@@ -623,8 +625,9 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska"
-            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled demuxers: matroska, mov"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Enabled muxers: matroska, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
@@ -964,8 +967,9 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska"
-            echo "Enabled decoders: ffv1, pcm_s16le"
+            echo "Enabled demuxers: matroska, mov"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Enabled muxers: matroska, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
@@ -1255,8 +1259,9 @@ jobs:
               echo "Configure arguments: ${configure_args[*]}"
               echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
               echo "Enabled protocols: file"
-              echo "Enabled demuxers: matroska"
-              echo "Enabled decoders: ffv1, pcm_s16le"
+              echo "Enabled demuxers: matroska, mov"
+              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+              echo "Enabled parsers: h264, aac"
               echo "Enabled encoders: ffv1, pcm_s16le"
               echo "Enabled muxers: matroska"
               echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"

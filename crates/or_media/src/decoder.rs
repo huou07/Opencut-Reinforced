@@ -394,16 +394,20 @@ impl SoftwareMediaDecoder {
         let range = snapshot.requested_range();
         validate_range(range)?;
         let mut input = self.open_input(cancellation)?;
-        let (stream_index, time_base, context) = {
+        let (stream_index, time_base, context, preroll_samples) = {
             let stream = input
                 .streams()
                 .best(ffmpeg::media::Type::Audio)
                 .ok_or(DecodeError::MissingAudioStream)?;
+            let parameters = stream.parameters();
+            let preroll = parameters.initial_padding().max(parameters.seek_preroll());
+            let context = codec::context::Context::from_parameters(parameters)
+                .map_err(DecodeError::Ffmpeg)?;
             (
                 stream.index(),
                 TimestampBase::new(stream.time_base(), stream.start_time())?,
-                codec::context::Context::from_parameters(stream.parameters())
-                    .map_err(DecodeError::Ffmpeg)?,
+                context,
+                preroll,
             )
         };
         let mut decoder = context.decoder().audio().map_err(DecodeError::Ffmpeg)?;
@@ -426,7 +430,13 @@ impl SoftwareMediaDecoder {
             OUTPUT_AUDIO_RATE,
         )
         .map_err(DecodeError::Ffmpeg)?;
-        seek_to_range(&mut input, stream_index, range, time_base)?;
+        let preroll = RationalTime::new(i64::from(preroll_samples), decoder.rate())
+            .map_err(DecodeError::Time)?;
+        let seek_start = range
+            .start()
+            .checked_sub(preroll)
+            .map_err(DecodeError::Time)?;
+        seek_to_time(&mut input, stream_index, seek_start, time_base)?;
 
         let job = DecodeJob {
             snapshot,
@@ -657,9 +667,18 @@ fn seek_to_range(
     } else {
         range.start()
     };
+    seek_to_time(input, stream_index, relative_start, time_base)
+}
+
+fn seek_to_time(
+    input: &mut format::context::Input,
+    stream_index: usize,
+    time: RationalTime,
+    time_base: TimestampBase,
+) -> Result<(), DecodeError> {
     let seek_pts = time_base
         .origin_pts
-        .checked_add(time_to_rate_units_floor(relative_start, time_base.rate)?)
+        .checked_add(time_to_rate_units_floor(time, time_base.rate)?)
         .ok_or(DecodeError::TimestampOverflow)?;
     let stream_index = i32::try_from(stream_index).map_err(|_| DecodeError::TimestampOverflow)?;
     // The wrapper's seek method only targets the global time base. Stream PTS

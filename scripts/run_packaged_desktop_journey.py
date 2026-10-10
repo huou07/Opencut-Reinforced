@@ -154,11 +154,11 @@ def main() -> int:
         if guarded.returncode == 0:
             raise SystemExit(f"The inert host {helper} guard unexpectedly succeeded.")
 
-    source = ROOT / "crates/or_media/tests/fixtures/tiny.mkv"
-    media = work / "tiny.mkv"
+    source = ROOT / "crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+    media = work / "phone.mp4"
     shutil.copyfile(source, media)
     replacement_media = work / "tiny-relinked.mkv"
-    shutil.copyfile(source, replacement_media)
+    shutil.copyfile(ROOT / "crates/or_media/tests/fixtures/tiny.mkv", replacement_media)
     unsupported = work / "unsupported.mp4"
     unsupported.write_bytes(b"not an OR supported media file\n")
     missing = work / "missing-source.mkv"

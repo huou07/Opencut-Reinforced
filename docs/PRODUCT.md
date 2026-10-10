@@ -285,7 +285,7 @@ Normal import, thumbnails, waveforms, proxies, preview, and export run on the
 packaged FFmpeg 8.1.3 runtime in supported packages: no system `ffmpeg`/`ffprobe`
 or developer `PATH` override is required for a packaged user journey.
 
-The mandatory correctness profile supports Matroska video and audio, plus
+The previously verified profile supports Matroska video and audio, plus
 standalone PCM WAV audio:
 
 | Container | Supported streams |
@@ -293,15 +293,23 @@ standalone PCM WAV audio:
 | Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
 | RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
 
-A file whose signature is outside Matroska or RIFF/RF64 WAV is rejected as an
+An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
+audio import through the same FFmpeg decoder and Rust import path. The candidate
+is not yet a supported release profile: hosted package builds and real packaged
+desktop and Android user journeys must pass first. It does not add MP4 export;
+the lossless Matroska export remains available.
+
+A file whose signature is outside Matroska, RIFF/RF64 WAV, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska
 streams outside FFV1/PCM S16LE, are rejected as unsupported codecs after
 probing. Neither case is reported as corruption. Audio-only WAV can be placed
 on an audio track and decoded by the same software preview path as Matroska
 audio.
-MP4, MOV, WebM, H.264, H.265, VP9, and AV1 remain future formats requiring the
-same legal, platform, and build-configuration review as the optional export
-delivery profiles.
+WebM, H.265, VP9, and AV1 remain future import profiles. MP4/MOV H.264/AAC
+import is pending exact-SHA package and user-journey verification, and every
+distribution must separately review codec patent obligations. MP4/MOV export
+remains future work requiring the same legal, platform, and build-configuration
+review as other optional delivery profiles.
 
 ## Export
 

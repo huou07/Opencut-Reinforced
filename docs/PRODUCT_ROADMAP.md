@@ -520,17 +520,18 @@ does not claim that arbitrary forced surface replacement is product behavior.
 
 ## Next high-value product gap: everyday media compatibility
 
-The currently verified profile accepts Matroska with FFV1 video and PCM S16LE
-audio; the export writer emits that same profile. It is a correctness fixture
-profile, not useful general-purpose media support for normal phone and camera
-footage. A local, not-yet-host-verified capability slice adds audio-only PCM
-S16LE RIFF/RF64 WAV import through the shared probe, decoder, timeline, and
-Android SAF paths. Do not count it as shipped until the exact-SHA packaged
-platform journey passes. The source requirements already identify
-MP4/MOV, H.264, H.265, WebM, VP9, and AV1 as future profiles subject to legal,
-platform, and exact-build review. Treat this as one connected product
-capability spanning probing/import, package configuration, decode/preview,
-and export, rather than isolated roadmap checkpoints.
+The verified lossless export profile emits Matroska with FFV1 video and PCM
+S16LE audio; that is a correctness profile, not useful general-purpose media
+support for normal phone and camera footage. PCM WAV import already uses the
+shared probe, decoder, timeline, and Android SAF paths. A new implementation
+candidate adds ISO BMFF/MP4-family H.264 video and AAC audio import to the same
+path, with focused synthetic media fixtures. The package flags, native decoder
+path, and codec patent/distribution review are in progress; do not count this
+profile as shipped until exact-SHA desktop and Android journeys pass. MP4
+export remains separate future work because the current LGPL-only runtime does
+not include a supported H.264 encoder. Treat format support as a connected
+product capability spanning probing/import, package configuration,
+decode/preview, and usable delivery rather than isolated roadmap checkpoints.
 
 Before shipping a profile, inspect actual decoder/encoder support and build
 flags for every target; review component licenses, patent/distribution

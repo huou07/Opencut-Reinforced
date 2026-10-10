@@ -89,6 +89,27 @@ fn ffprobe_imports_pcm_wav_as_audio_only_media() {
 
 #[test]
 #[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
+fn ffprobe_imports_generated_h264_aac_mp4() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../or_media/tests/fixtures/tiny_h264_aac.mp4");
+
+    let metadata = probe_media_file(&path).expect("probe generated H.264/AAC MP4");
+    assert!(metadata.format_names().iter().any(|name| name == "mov"));
+    assert!(metadata.streams().iter().any(|stream| matches!(
+        stream,
+        MediaStreamMetadata::Video(video)
+            if video.codec_name() == Some("h264") && video.width() == 32 && video.height() == 24
+    )));
+    assert!(metadata.streams().iter().any(|stream| matches!(
+        stream,
+        MediaStreamMetadata::Audio(audio)
+            if audio.codec_name() == Some("aac") && audio.sample_rate() == Some(48_000)
+    )));
+    assert_eq!(prepare_media_import(&path).unwrap().metadata(), &metadata);
+}
+
+#[test]
+#[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
 fn prepared_import_persists_and_reopens_after_source_goes_offline() {
     let directory = TestDirectory::new();
     let media_path = directory.media_path();

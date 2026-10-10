@@ -92,7 +92,7 @@ def select(device, guest_log, output, flow="open"):
         caption_file = next((node for node in nodes if node.get("text") == "captions.srt"), None)
         media = {
             name: next((node for node in nodes if node.get("text") == name), None)
-            for name in ("tiny.mkv", "tiny-second.mkv", "tiny.wav")
+            for name in ("tiny.mkv", "phone.mp4", "tiny.wav")
         }
         relink_media = next(
             (node for node in nodes if node.get("text") == "relink-replacement.mkv"),

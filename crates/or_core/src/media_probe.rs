@@ -514,12 +514,14 @@ const RIFF_HEADER: &[u8; 4] = b"RIFF";
 const RF64_HEADER: &[u8; 4] = b"RF64";
 const WAVE_HEADER: &[u8; 4] = b"WAVE";
 
-/// Video codec retained by the Matroska import profile.
+/// Video and audio codecs retained by the lossless Matroska profile.
 const MATRIX_VIDEO_CODEC: &str = "ffv1";
-/// Audio codec accepted by both Matroska and WAV import profiles.
 const MATRIX_AUDIO_CODEC: &str = "pcm_s16le";
+const MOV_VIDEO_CODEC: &str = "h264";
+const MOV_AUDIO_CODEC: &str = "aac";
+const MOV_FORMAT_NAMES: &[&str] = &["mov", "mp4", "m4a", "3gp", "3g2", "mj2"];
 
-/// Rejects containers outside the shipped Matroska and RIFF/RF64 WAV profiles
+/// Rejects containers outside the shipped Matroska, WAV, and ISO BMFF profiles
 /// before spawning the probe backend.
 fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     use std::io::Read as _;
@@ -541,6 +543,12 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
             ))
         }
     } else {
+        file.read_exact(&mut header[4..])
+            .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
+        let declared_size = u32::from_be_bytes(header[..4].try_into().expect("four-byte size"));
+        if &header[4..8] == b"ftyp" && declared_size >= 16 {
+            return Ok(());
+        }
         Err(MediaProbeError::new(
             MediaProbeErrorCode::UnsupportedContainer,
         ))
@@ -550,15 +558,19 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
 /// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// WAV is limited to audio-only PCM S16LE. Unsupported streams are reported as
-/// unsupported, not corrupt.
+/// WAV is audio-only PCM S16LE; MOV/MP4 is H.264 video and/or AAC audio.
+/// Unsupported streams are reported as unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
     let is_matroska = metadata
         .format_names()
         .iter()
         .any(|name| name == "matroska");
     let is_wav = metadata.format_names().iter().any(|name| name == "wav");
-    if !is_matroska && !is_wav {
+    let is_mov = metadata
+        .format_names()
+        .iter()
+        .any(|name| MOV_FORMAT_NAMES.contains(&name.as_str()));
+    if !is_matroska && !is_wav && !is_mov {
         return Err(MediaProbeError::new(
             MediaProbeErrorCode::UnsupportedContainer,
         ));
@@ -566,17 +578,15 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
     let mut has_audio = false;
     for stream in metadata.streams() {
         let supported = match stream {
-            MediaStreamMetadata::Video(video) => {
-                is_matroska
-                    && video
-                        .codec_name()
-                        .is_some_and(|codec| codec == MATRIX_VIDEO_CODEC)
-            }
+            MediaStreamMetadata::Video(video) => video.codec_name().is_some_and(|codec| {
+                (is_matroska && codec == MATRIX_VIDEO_CODEC) || (is_mov && codec == MOV_VIDEO_CODEC)
+            }),
             MediaStreamMetadata::Audio(audio) => {
                 has_audio = true;
-                audio
-                    .codec_name()
-                    .is_some_and(|codec| codec == MATRIX_AUDIO_CODEC)
+                audio.codec_name().is_some_and(|codec| {
+                    (is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC
+                        || is_mov && codec == MOV_AUDIO_CODEC
+                })
             }
             MediaStreamMetadata::Other(_) => true,
         };
@@ -585,6 +595,16 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
         }
     }
     if is_wav && !has_audio {
+        return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
+    }
+    if is_mov
+        && !metadata.streams().iter().any(|stream| {
+            matches!(
+                stream,
+                MediaStreamMetadata::Video(_) | MediaStreamMetadata::Audio(_)
+            )
+        })
+    {
         return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
     Ok(())
@@ -942,6 +962,43 @@ mod tests {
     }
 
     #[test]
+    fn iso_bmff_ftyp_header_is_accepted_but_truncated_or_invalid_boxes_are_not() {
+        let directory = TestDirectory::new();
+        for (name, header, supported) in [
+            ("phone.mp4", b"\0\0\0\x10ftypisom0000".as_slice(), true),
+            ("short.mp4", b"\0\0\0\x10ftyp".as_slice(), false),
+            ("not-mp4.bin", b"\0\0\0\x18freeisom0000".as_slice(), false),
+        ] {
+            let path = directory.0.join(name);
+            fs::write(&path, header).unwrap();
+            assert_eq!(reject_unsupported_container(&path).is_ok(), supported);
+        }
+    }
+
+    #[test]
+    fn import_matrix_accepts_h264_aac_iso_bmff_and_audio_only_aac() {
+        for json in [
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":32,"height":24},{"index":1,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":1}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+        ] {
+            enforce_import_matrix(&parse_probe_json(json, 2048).unwrap()).unwrap();
+        }
+
+        for json in [
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":32,"height":24}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"opus","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[]}"#.as_slice(),
+        ] {
+            assert_eq!(
+                enforce_import_matrix(&parse_probe_json(json, 2048).unwrap())
+                    .unwrap_err()
+                    .code(),
+                MediaProbeErrorCode::UnsupportedCodec,
+            );
+        }
+    }
+
+    #[test]
     fn import_matrix_rejects_foreign_codecs_and_containers() {
         let video = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":16,"height":16}]}"#;
         let audio = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#;
@@ -958,7 +1015,7 @@ mod tests {
         let metadata = parse_probe_json(container, 64).unwrap();
         assert_eq!(
             enforce_import_matrix(&metadata).unwrap_err().code(),
-            MediaProbeErrorCode::UnsupportedContainer,
+            MediaProbeErrorCode::UnsupportedCodec,
         );
     }
 

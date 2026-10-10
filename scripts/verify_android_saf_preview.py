@@ -59,6 +59,7 @@ def verify(report):
                 'content://dev.opencut.saffixture.documents/document/media-audio',
             ]
             or data.get('mediaImportAudioOnlyPcmWav') is not True
+            or data.get('mediaImportH264AacMp4') is not True
             or data.get('mediaImportMicros', 0) <= 0
             or int(data.get('mediaImportRevision', 0)) <= int(data['projectRevision'])):
         raise ValueError('Android SAF import must persist the selected source and report its runtime measurement')
