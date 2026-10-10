@@ -856,15 +856,17 @@ prepared Play request includes active visual SAF
 sources and audio SAF sources whose timeline clips extend beyond the playhead.
 The bridge registers that bounded source set before starting CPAL, so the audio
 worker cannot race ahead of permission-checked seekable descriptor registration.
-Unchanged source sets reuse their native capabilities. Android converts the
-published BGRA frame into its reusable bitmap with a native-order 32-bit
-channel swap rather than per-channel byte-buffer reads and writes. Android hardware
+Unchanged source sets reuse their native capabilities. Android copies the
+published premultiplied BGRA frame directly into its reusable bitmap, then
+uses one reusable color-matrix paint on the hardware canvas to restore the
+bitmap's red/blue channel order without a per-pixel CPU loop. Android hardware
 acceleration and physical-device acoustic output remain unavailable/unverified;
 emulator frame skips mean Android performance remains unaccepted.
 Android SAF journey diagnostics separately report native latest-frame
-acquisition, CPU bitmap channel conversion/copy, bitmap allocation count and
-maximum allocation time. Main-thread timing splits `SurfaceProducer` resize,
-canvas lock, bitmap draw, and `unlockCanvasAndPost` within its total draw
+acquisition, CPU bitmap byte copy, bitmap allocation count and maximum
+allocation time. Main-thread timing splits `SurfaceProducer` resize, canvas
+lock, bitmap draw (including the red/blue channel filter), and
+`unlockCanvasAndPost` within its total draw
 duration. The presenter redraws every pixel on every frame, which satisfies
 Android's hardware-canvas full-surface contract. It therefore uses
 `Surface.lockHardwareCanvas()` for the bitmap presentation path. These bounded

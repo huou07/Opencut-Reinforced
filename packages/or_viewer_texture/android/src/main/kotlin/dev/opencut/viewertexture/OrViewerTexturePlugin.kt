@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
@@ -13,8 +15,6 @@ import android.os.SystemClock
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -55,7 +55,16 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     // Worker owns the bitmap. workPending retains exclusive ownership until
     // the main draw completes, so no copy/resize/recycle can race with drawing.
     private var bitmap: Bitmap? = null
-    private var bgraSwapScratch: ByteBuffer? = null
+    private val bitmapPaint = Paint().apply {
+        colorFilter = ColorMatrixColorFilter(
+            floatArrayOf(
+                0f, 0f, 1f, 0f, 0f,
+                0f, 1f, 0f, 0f, 0f,
+                1f, 0f, 0f, 0f, 0f,
+                0f, 0f, 0f, 1f, 0f,
+            ),
+        )
+    }
     private var registeredMediaSources: List<String>? = null
     private var registeredOwner: String? = null
     private var registrationCount = 0L
@@ -280,32 +289,9 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         presentScheduledFrame(allowFollowUp = true)
     }
 
-    /**
-     * Rust publishes premultiplied BGRA, which is the byte order a Flutter
-     * external texture expects. `Bitmap.Config.ARGB_8888` stores bytes as
-     * R, G, B, A, so `copyPixelsFromBuffer` would swap red and blue and show
-     * red content as blue. Swap while copying instead, reusing one scratch
-     * buffer so the present path stays allocation-free after the first frame.
-     */
-    private fun copyBgraIntoArgb8888(target: android.graphics.Bitmap, frame: AndroidViewerFrame) {
-        val source = frame.pixels.duplicate().order(ByteOrder.nativeOrder()).apply { position(0) }
-        val count = target.width * target.height
-        val scratch = bgraSwapScratch
-            ?.takeIf { it.capacity() >= count * 4 }
-            ?: ByteBuffer.allocateDirect(count * 4).also { bgraSwapScratch = it }
-        val sourcePixels = source.asIntBuffer()
-        scratch.clear()
-        val outputPixels = scratch.order(ByteOrder.nativeOrder()).asIntBuffer()
-        repeat(count) {
-            val pixel = sourcePixels.get()
-            outputPixels.put(
-                (pixel and 0xFF00FF00.toInt()) or
-                    ((pixel and 0x00FF0000) ushr 16) or
-                    ((pixel and 0x000000FF) shl 16),
-            )
-        }
-        outputPixels.flip()
-        target.copyPixelsFromBuffer(outputPixels)
+    // Bitmap expects RGBA bytes, so the hardware-canvas paint restores BGRA channel order.
+    private fun copyBgraIntoBitmap(target: Bitmap, frame: AndroidViewerFrame) {
+        target.copyPixelsFromBuffer(frame.pixels.duplicate().apply { position(0) })
     }
 
     private fun presentScheduledFrame(allowFollowUp: Boolean) {
@@ -337,7 +323,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                             }
                                         }
                                     val copyStarted = SystemClock.elapsedRealtimeNanos()
-                                    copyBgraIntoArgb8888(target, frame)
+                                    copyBgraIntoBitmap(target, frame)
                                     val copyMicros = (SystemClock.elapsedRealtimeNanos() - copyStarted) / 1000
                                     maxBitmapCopyMicros = maxOf(maxBitmapCopyMicros, copyMicros)
                                     totalBitmapCopyMicros += copyMicros
@@ -376,7 +362,12 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                     )
                                     try {
                                         val drawStarted = SystemClock.elapsedRealtimeNanos()
-                                        canvas.drawBitmap(target, null, Rect(0, 0, canvas.width, canvas.height), null)
+                                        canvas.drawBitmap(
+                                            target,
+                                            null,
+                                            Rect(0, 0, canvas.width, canvas.height),
+                                            bitmapPaint,
+                                        )
                                         maxCanvasDrawMicros = maxOf(
                                             maxCanvasDrawMicros,
                                             (SystemClock.elapsedRealtimeNanos() - drawStarted) / 1000,
