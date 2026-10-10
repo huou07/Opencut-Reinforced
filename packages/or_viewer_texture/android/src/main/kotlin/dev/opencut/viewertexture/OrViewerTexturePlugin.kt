@@ -365,7 +365,11 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                 val surface = surfaceProducer.surface
                                 if (surface.isValid) {
                                     val lockStarted = SystemClock.elapsedRealtimeNanos()
-                                    val canvas = surface.lockCanvas(null)
+                                    // Every preview frame covers the entire surface. Hardware
+                                    // canvas buffers are not preserved between frames, so this
+                                    // satisfies the Android contract while avoiding the software
+                                    // canvas path for bitmap presentation.
+                                    val canvas = surface.lockHardwareCanvas()
                                     maxCanvasLockMicros = maxOf(
                                         maxCanvasLockMicros,
                                         (SystemClock.elapsedRealtimeNanos() - lockStarted) / 1000,
