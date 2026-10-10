@@ -545,6 +545,20 @@ real package and user journey pass. The audit keeps FFmpeg as the current
 media foundation; MLT/GES remain measured comparison candidates, not
 prerequisites or assumed replacements.
 
+Exact-SHA run [38051317718](https://github.com/huou07/Opencut-Reinforced/actions/runs/38051317718)
+on `6d9d1854111cc81140e4f3b45b7e1b1e8a74e16a` verified Android's packaged
+H.264/AAC SAF import, caption and audio journeys, recovery, relink, and export;
+the report records bounded queues, zero final media descriptors/frame leases,
+and `hardware=UNVERIFIED`. The x86_64 emulator reported a 35,947µs maximum main
+draw and 194 skipped frames on the OR process; this is not physical-device
+performance evidence. Linux, Windows, and macOS packaged journeys reached
+relink but used a 1.0s MP4 clip with a 0.5s replacement, which the core
+correctly rejected to preserve the saved source range. This is a fixture
+mismatch, not evidence to weaken relink validation. The desktop candidate
+remains unaccepted pending a duration-compatible journey rerun; MP4 decoding
+also remains a candidate pending codec patent/distribution review and
+representative-media verification.
+
 Run [37962108563](https://github.com/huou07/Opencut-Reinforced/actions/runs/37962108563)
 on exact product SHA `e6f2afb6c808a8bea073829b17128e0b3116720e` passed Rust,
 Flutter static/widget, descriptor-boundary, Linux, Windows, and macOS

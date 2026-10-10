@@ -322,7 +322,7 @@ fn software_decoder_reads_h264_video_and_aac_audio_from_phone_mp4() {
     let cancellation = CancellationToken::new();
 
     let frame = decoder
-        .decode_video_frame_at(time(1, 2), &cancellation)
+        .decode_video_frame_at(time(1, 4), &cancellation)
         .unwrap()
         .unwrap();
     assert_eq!(
