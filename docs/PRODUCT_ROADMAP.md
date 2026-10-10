@@ -696,6 +696,28 @@ the exact-SHA hosted Android journey remains required. macOS lifecycle tests
 were still running when this evidence was captured. Android performance
 remains unaccepted.
 
+Exact-SHA run [38016755374](https://github.com/huou07/Opencut-Reinforced/actions/runs/38016755374)
+on `172dee37dbb7683d6034d884ee22614805ab8095` passed the Android SAF
+preview/import/export/recovery job. The required report confirms all 24
+picker/editor/resource checks, including `mediaImportAudioOnlyPcmWav=true`
+and the three exact source URIs for both MKV fixtures and the WAV fixture.
+The imported project reached revision 5; the WAV import call measured
+1,267 µs. The packaged MKV export was valid at 96,963 bytes. Process-recovery
+acceptance reports the checkpoint as a candidate before restart, then explicit
+recovery at revision 8 after relaunch from PID 3577 to PID 5760; relinked media
+identity and its timeline reference survived. The preview Play call measured
+74,018 µs, with a 13,550 µs maximum main draw during the base journey and a
+62,418 µs maximum under resource stress. Final OS media descriptors and
+native leases returned to zero. The journey verifies video frames and WAV
+library import, not audible Android audio playback; that mobile audio-output
+path remains unaccepted. Android reports `hardware=UNVERIFIED`, and
+the guest log still contains Choreographer warnings for 111, 89, 65, 62, 38,
+37, and 36 skipped frames. Thus bounded-resource and functional checks pass,
+but Android performance is not accepted; profile the jank on representative
+hardware before making a release claim. Linux, Windows, and macOS packaged
+journeys/lifecycle checks, Rust, Flutter static/widget, and descriptor-boundary
+jobs all passed on this SHA; workflow run 38016755374 completed successfully.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
