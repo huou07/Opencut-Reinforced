@@ -76,7 +76,12 @@ for all product work. Do not let it block project usability, Android import,
 or finishing the existing preview/export journey unless results establish a
 real engine migration dependency.
 
-## Next coherent implementation slice
+## Packaged journey implementation and verification history
+
+The reports below preserve earlier media, caption, and Android journey
+failures and repairs. Statements that hosted acceptance is pending reflect the
+status at that point in the sequence. Current accepted results are summarized
+after the log.
 
 SRT/WebVTT caption interchange now has a bounded core codec, one-revision
 atomic `timeline.captions.import`, desktop file selection, Android file-backed
@@ -831,6 +836,24 @@ draw peaked at 168,227 µs; Choreographer still reported up to 79 skipped frames
 Android performance remains unaccepted pending representative-hardware
 profiling and better-isolated surface-draw measurements. No acoustic-device
 output claim is made from the emulator.
+
+Caption interchange was subsequently verified in exact-SHA run
+[38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020)
+on product SHA `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2`. All seven hosted jobs
+passed, including macOS caption import/save/reopen/export, Linux and Windows
+packaged journeys, and Android SAF caption, relink, recovery, audio playback,
+and export acceptance. The earlier pending statements in this section are
+historical. Cue/style fidelity boundaries and the cost/benefit of adopting the
+external `subtitler` parser remain open; the passing journeys do not prove
+those separate integration claims.
+
+Explicit user discard and host teardown now have distinct policies in one
+atomic close operation. Under the host lock, the UI may remove only a recovery
+candidate still matching its last autosaved snapshot; ordinary shutdown,
+including process-death simulation, preserves recovery. Tests cover user
+discard, replacement by another session, and dirty teardown retaining
+recovery. The local Rust and widget checks pass; the latest exact-SHA hosted
+verification remains pending.
 
 ## Traceability from the preserved roadmap
 

@@ -1112,8 +1112,12 @@ class RustProjectGateway implements ProjectGateway {
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,
+    bool discardRecoveryCheckpoint = false,
   }) async {
-    final result = await _host(session).close(discardUnsaved: discardUnsaved);
+    final result = await _host(session).close(
+      discardUnsaved: discardUnsaved,
+      discardRecoveryCheckpoint: discardRecoveryCheckpoint,
+    );
     if (!result.succeeded) {
       throw ProjectGatewayException(result.errorCode, result.message);
     }

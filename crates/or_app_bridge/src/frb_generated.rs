@@ -309,6 +309,7 @@ fn wire__crate__api__project__ProjectHostHandle_close_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
             >>::sse_decode(&mut deserializer);
             let api_discard_unsaved = <bool>::sse_decode(&mut deserializer);
+            let api_discard_recovery_checkpoint = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -329,6 +330,7 @@ fn wire__crate__api__project__ProjectHostHandle_close_impl(
                     let output_ok = Ok::<_, ()>(crate::api::project::ProjectHostHandle::close(
                         &mut *api_that_guard,
                         api_discard_unsaved,
+                        api_discard_recovery_checkpoint,
                     ))?;
                     std::result::Result::Ok(output_ok)
                 })())

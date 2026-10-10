@@ -119,7 +119,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 ## Captions and transcript
 
-**MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting. SRT and WebVTT import/export now use the shared caption command model, preserve exact millisecond boundaries, and report unsupported styling or placement before import. This interchange implementation is awaiting hosted desktop and Android acceptance.
+**MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting. SRT and WebVTT import/export now use the shared caption command model, preserve exact millisecond boundaries, and report unsupported styling or placement before import. Packaged desktop and Android SAF caption journeys passed hosted verification at exact SHA `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2` in run [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020). Broader caption fidelity and any parser-library adoption remain subject to the explicit interoperability checks in the active roadmap.
 
 **PLANNED:** automatic captions; local transcription; word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; ASS import or export.
 
@@ -311,7 +311,7 @@ delivery profiles.
 
 ## Interchange
 
-SRT and WebVTT import/export are implemented through caption tracks; the packaged desktop and Android journeys are pending hosted acceptance. **PLANNED:** ASS, audio stems, and OpenTimelineIO import or export as appropriate.
+SRT and WebVTT import/export are implemented through caption tracks; packaged desktop and Android SAF journeys passed hosted verification in run [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020) on exact product SHA `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2`. **PLANNED:** ASS, audio stems, and OpenTimelineIO import or export as appropriate.
 
 OpenTimelineIO is a bounded Rust/serde JSON interchange adapter over a documented subset, not the native OR project format or a media container. Unsupported content receives explicit diagnostics.
 

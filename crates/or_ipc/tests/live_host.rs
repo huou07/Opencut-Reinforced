@@ -498,7 +498,7 @@ fn in_process_host_keeps_the_shared_command_path_without_an_ipc_descriptor() {
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
-fn dirty_host_refuses_implicit_shutdown_and_explicit_discard_keeps_disk_unchanged() {
+fn dirty_host_refuses_implicit_shutdown_and_teardown_preserves_recovery_checkpoint() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     let descriptor_path = directory.descriptor_path();
@@ -524,8 +524,34 @@ fn dirty_host_refuses_implicit_shutdown_and_explicit_discard_keeps_disk_unchange
     assert_eq!(fs::read(&project_path).unwrap(), original);
     assert!(matches!(
         inspect_project_recovery(&project_path).unwrap(),
+        RecoveryInspection::Candidate(_)
+    ));
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn explicit_session_discard_removes_its_checkpoint_before_shutdown() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    let session = ProjectFileSession::create_new(&project_path, "Saved").unwrap();
+    let original = fs::read(&project_path).unwrap();
+    let mut host = LiveProjectHost::start(session, Some(&descriptor_path)).unwrap();
+    let summary = host.describe().unwrap();
+    host.handle_application_request(command(&summary, "project.rename", Some("Unsaved")))
+        .unwrap();
+    host.autosave_checkpoint().unwrap();
+    assert!(matches!(
+        inspect_project_recovery(&project_path).unwrap(),
+        RecoveryInspection::Candidate(_)
+    ));
+
+    host.shutdown_with_recovery_policy(true, true).unwrap();
+    assert!(matches!(
+        inspect_project_recovery(&project_path).unwrap(),
         RecoveryInspection::None
     ));
+    assert_eq!(fs::read(&project_path).unwrap(), original);
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]

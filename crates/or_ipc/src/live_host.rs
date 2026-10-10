@@ -202,6 +202,15 @@ impl LiveProjectHost {
 
     /// Stops IPC and releases this host only after the caller permits any dirty discard.
     pub fn shutdown(&mut self, discard_unsaved: bool) -> Result<(), LiveProjectHostError> {
+        self.shutdown_with_recovery_policy(discard_unsaved, false)
+    }
+
+    /// Stops IPC, optionally removing only this session's matching recovery snapshot.
+    pub fn shutdown_with_recovery_policy(
+        &mut self,
+        discard_unsaved: bool,
+        discard_recovery_checkpoint: bool,
+    ) -> Result<(), LiveProjectHostError> {
         {
             let mut state = self
                 .shared
@@ -210,7 +219,7 @@ impl LiveProjectHost {
             if state.session.is_dirty() && !discard_unsaved {
                 return Err(LiveProjectHostError::UnsavedChanges);
             }
-            if state.session.is_dirty() && discard_unsaved {
+            if state.session.is_dirty() && discard_recovery_checkpoint {
                 state.session.discard_unsaved_recovery_checkpoint()?;
             }
             if !state.closing {

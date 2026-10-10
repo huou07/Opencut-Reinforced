@@ -1719,6 +1719,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.closeCalls, 1);
     expect(gateway.lastCloseDiscard, isTrue);
+    expect(gateway.lastCloseDiscardRecoveryCheckpoint, isTrue);
     expect(find.text('No recent projects yet'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-new-project')));
@@ -1737,6 +1738,7 @@ void main() {
     expect(gateway.saveCalls, 1);
     expect(gateway.closeCalls, 2);
     expect(gateway.lastCloseDiscard, isFalse);
+    expect(gateway.lastCloseDiscardRecoveryCheckpoint, isFalse);
     expect(find.text('No recent projects yet'), findsOneWidget);
   });
 
@@ -3607,6 +3609,7 @@ class _FakeProjectGateway implements ProjectGateway {
 
   int closeCalls = 0;
   bool? lastCloseDiscard;
+  bool? lastCloseDiscardRecoveryCheckpoint;
   int inspectCalls = 0;
   int applyRecoveryCalls = 0;
   int discardRecoveryCalls = 0;
@@ -4942,6 +4945,7 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<void> close(
     ProjectSessionHandle handle, {
     required bool discardUnsaved,
+    bool discardRecoveryCheckpoint = false,
   }) async {
     final session = _session(handle);
     if (session.view.dirty && !discardUnsaved) {
@@ -4949,6 +4953,7 @@ class _FakeProjectGateway implements ProjectGateway {
     }
     closeCalls++;
     lastCloseDiscard = discardUnsaved;
+    lastCloseDiscardRecoveryCheckpoint = discardRecoveryCheckpoint;
     session.closed = true;
     session.emit('session_closing');
   }

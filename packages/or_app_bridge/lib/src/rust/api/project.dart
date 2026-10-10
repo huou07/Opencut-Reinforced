@@ -54,7 +54,10 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String jobId,
   });
 
-  Future<ProjectActionResult> close({required bool discardUnsaved});
+  Future<ProjectActionResult> close({
+    required bool discardUnsaved,
+    required bool discardRecoveryCheckpoint,
+  });
 
   Future<ProjectActionResult> deleteTimelineClip({
     required String projectId,

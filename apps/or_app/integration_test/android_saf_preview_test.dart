@@ -464,8 +464,13 @@ class _ObservedGateway extends RustProjectGateway {
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,
+    bool discardRecoveryCheckpoint = false,
   }) async {
-    await super.close(session, discardUnsaved: discardUnsaved);
+    await super.close(
+      session,
+      discardUnsaved: discardUnsaved,
+      discardRecoveryCheckpoint: discardRecoveryCheckpoint,
+    );
     closed = true;
   }
 }
@@ -1374,7 +1379,13 @@ void main() {
           ),
         ),
       );
-      expect((await host.close(discardUnsaved: true)).succeeded, isTrue);
+      expect(
+        (await host.close(
+          discardUnsaved: true,
+          discardRecoveryCheckpoint: false,
+        )).succeeded,
+        isTrue,
+      );
       await OrViewerTexture.clearMediaSources();
       final finalResources = await _resources();
       expect(finalResources['duplicatedMediaFds'], 0);

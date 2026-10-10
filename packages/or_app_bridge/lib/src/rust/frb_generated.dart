@@ -114,6 +114,7 @@ abstract class RustLibApi extends BaseApi {
   Future<ProjectActionResult> crateApiProjectProjectHostHandleClose({
     required ProjectHostHandle that,
     required bool discardUnsaved,
+    required bool discardRecoveryCheckpoint,
   });
 
   Future<ProjectActionResult>
@@ -769,6 +770,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<ProjectActionResult> crateApiProjectProjectHostHandleClose({
     required ProjectHostHandle that,
     required bool discardUnsaved,
+    required bool discardRecoveryCheckpoint,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -779,6 +781,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_bool(discardUnsaved, serializer);
+          sse_encode_bool(discardRecoveryCheckpoint, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -791,7 +794,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiProjectProjectHostHandleCloseConstMeta,
-        argValues: [that, discardUnsaved],
+        argValues: [that, discardUnsaved, discardRecoveryCheckpoint],
         apiImpl: this,
       ),
     );
@@ -800,7 +803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiProjectProjectHostHandleCloseConstMeta =>
       const TaskConstMeta(
         debugName: "ProjectHostHandle_close",
-        argNames: ["that", "discardUnsaved"],
+        argNames: ["that", "discardUnsaved", "discardRecoveryCheckpoint"],
       );
 
   @override
@@ -6949,11 +6952,14 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     jobId: jobId,
   );
 
-  Future<ProjectActionResult> close({required bool discardUnsaved}) =>
-      RustLib.instance.api.crateApiProjectProjectHostHandleClose(
-        that: this,
-        discardUnsaved: discardUnsaved,
-      );
+  Future<ProjectActionResult> close({
+    required bool discardUnsaved,
+    required bool discardRecoveryCheckpoint,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleClose(
+    that: this,
+    discardUnsaved: discardUnsaved,
+    discardRecoveryCheckpoint: discardRecoveryCheckpoint,
+  );
 
   Future<ProjectActionResult> deleteTimelineClip({
     required String projectId,

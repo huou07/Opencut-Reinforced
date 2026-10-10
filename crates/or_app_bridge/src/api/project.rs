@@ -2332,8 +2332,15 @@ impl ProjectHostHandle {
         }
     }
 
-    pub fn close(&mut self, discard_unsaved: bool) -> ProjectActionResult {
-        match self.host.shutdown(discard_unsaved) {
+    pub fn close(
+        &mut self,
+        discard_unsaved: bool,
+        discard_recovery_checkpoint: bool,
+    ) -> ProjectActionResult {
+        match self
+            .host
+            .shutdown_with_recovery_policy(discard_unsaved, discard_recovery_checkpoint)
+        {
             Ok(()) => {
                 let preview_shutdown = self.preview_runtime.shutdown();
                 if let Some(service) = self.media_artifact_service.take() {

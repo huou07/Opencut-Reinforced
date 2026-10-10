@@ -982,6 +982,7 @@ abstract interface class ProjectGateway {
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,
+    bool discardRecoveryCheckpoint = false,
   });
   Stream<ProjectHostEvent> watch(ProjectSessionHandle session);
   Future<ProjectRecoveryInspection> inspectRecovery(String path);

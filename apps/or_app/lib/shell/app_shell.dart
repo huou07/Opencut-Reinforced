@@ -726,6 +726,7 @@ class _AppShellState extends State<AppShell> {
     await widget.projectGateway.close(
       session,
       discardUnsaved: choice == _LeaveChoice.discard,
+      discardRecoveryCheckpoint: choice == _LeaveChoice.discard,
     );
     _clearActiveProject(session);
     return true;

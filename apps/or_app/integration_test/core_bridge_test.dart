@@ -337,6 +337,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('explicit discard removes only the live session checkpoint', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('or-discard-bridge-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    const gateway = RustProjectGateway();
+    final path = '${directory.path}/discard-project.orproj';
+    final session = await gateway.createProject(path, 'Saved');
+    final current = await gateway.summary(session);
+    final renamed = await gateway.rename(session, current, 'Unsaved');
+    expect(renamed.succeeded, isTrue);
+    expect((await gateway.autosaveCheckpoint(session)).succeeded, isTrue);
+    expect(
+      (await gateway.inspectRecovery(path)).kind,
+      ProjectRecoveryKind.candidate,
+    );
+
+    await gateway.close(
+      session,
+      discardUnsaved: true,
+      discardRecoveryCheckpoint: true,
+    );
+    expect(
+      (await gateway.inspectRecovery(path)).kind,
+      ProjectRecoveryKind.none,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('native Flutter project lifecycle uses one Rust host', (
     tester,
   ) async {
@@ -1841,6 +1870,7 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.autosaveCheckpoint(session);
 
   @override
+  @override
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1865,8 +1895,13 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   Future<void> close(
     ProjectSessionHandle session, {
     required bool discardUnsaved,
+    bool discardRecoveryCheckpoint = false,
   }) async {
-    await _gateway.close(session, discardUnsaved: discardUnsaved);
+    await _gateway.close(
+      session,
+      discardUnsaved: discardUnsaved,
+      discardRecoveryCheckpoint: discardRecoveryCheckpoint,
+    );
     if (identical(activeSession, session)) activeSession = null;
   }
 

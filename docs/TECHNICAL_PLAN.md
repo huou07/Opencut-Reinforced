@@ -178,7 +178,7 @@ Inspection reads and classifies without changing files or project state. If the 
 
 Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. Phase 8F uses this snapshot foundation for periodic autosave and explicit recovery UI; it is not event sourcing, command replay, or persistent history.
 
-When a user explicitly discards a dirty live session, shutdown removes a recovery candidate only if its contents still match the snapshot last autosaved by that session. A replaced, unrelated, or conflicting sidecar is preserved; a sidecar removal failure keeps the session open and reports the failure.
+The UI passes a separate recovery-discard policy with shutdown. Under the host lock, it removes a candidate only when its contents still match that session's last autosaved snapshot; replaced, unrelated, or conflicting sidecars are preserved, and cleanup failure keeps the session open. Host shutdown's `discard_unsaved` permission alone only allows dirty session teardown and preserves recovery data, including during process-death simulation.
 
 ### Phase 4F file-backed session and shared dispatch
 
