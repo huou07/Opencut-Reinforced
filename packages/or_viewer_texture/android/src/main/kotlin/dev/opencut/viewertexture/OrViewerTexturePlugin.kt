@@ -12,8 +12,9 @@ import android.os.Process
 import android.os.SystemClock
 import android.system.ErrnoException
 import android.system.Os
-import java.nio.ByteBuffer
 import android.system.OsConstants
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -281,19 +282,23 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
      * buffer so the present path stays allocation-free after the first frame.
      */
     private fun copyBgraIntoArgb8888(target: android.graphics.Bitmap, frame: AndroidViewerFrame) {
-        val source = frame.pixels.duplicate().apply { position(0) }
+        val source = frame.pixels.duplicate().order(ByteOrder.nativeOrder()).apply { position(0) }
         val count = target.width * target.height
         val scratch = bgraSwapScratch
             ?.takeIf { it.capacity() >= count * 4 }
             ?: ByteBuffer.allocateDirect(count * 4).also { bgraSwapScratch = it }
-        scratch.clear()
-        val bytes = ByteArray(4)
-        for (index in 0 until count) {
-            source.get(bytes)
-            scratch.put(bytes[2]).put(bytes[1]).put(bytes[0]).put(bytes[3])
+        val sourcePixels = source.asIntBuffer()
+        val outputPixels = scratch.clear().order(ByteOrder.nativeOrder()).asIntBuffer()
+        repeat(count) {
+            val pixel = sourcePixels.get()
+            outputPixels.put(
+                (pixel and 0xFF00FF00.toInt()) or
+                    ((pixel and 0x00FF0000) ushr 16) or
+                    ((pixel and 0x000000FF) shl 16),
+            )
         }
-        scratch.flip()
-        target.copyPixelsFromBuffer(scratch)
+        outputPixels.flip()
+        target.copyPixelsFromBuffer(outputPixels)
     }
 
     private fun presentScheduledFrame(allowFollowUp: Boolean) {

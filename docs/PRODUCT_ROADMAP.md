@@ -759,6 +759,20 @@ report. These counters are diagnostic only and do not declare performance
 acceptable; a hosted run must first report them for ordinary preview and under
 resource stress.
 
+Exact-SHA run [38028004390](https://github.com/huou07/Opencut-Reinforced/actions/runs/38028004390)
+on `71254777be99b9b16d06fc5caa7d9fd1f5e86049` passed all hosted platforms
+and emitted the first stage-level data. For a 921,600-byte presented frame,
+native acquisition peaked at 501 µs, bitmap conversion/copy at 68,474 µs,
+bitmap allocation at 288 µs, and main-thread surface drawing at 26,556 µs in
+the ordinary journey. Under resource stress, surface drawing peaked at
+100,379 µs; Choreographer reported up to 153 skipped frames. The largest
+measured normal-path stage is the current per-pixel byte-channel conversion
+plus bitmap copy, so the candidate improvement replaces eight byte-buffer
+operations per pixel with a 32-bit channel swap while retaining the bounded
+reusable buffers. Exact-SHA Android visual and stress measurements must
+confirm the change before performance can be accepted; emulator-only evidence
+still cannot establish physical-device performance.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |
