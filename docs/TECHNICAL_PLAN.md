@@ -850,9 +850,11 @@ decoder includes the source PTS, origin PTS, and time-base rate when an FFmpeg
 timestamp cannot be represented by the project's exact rational clock; audio
 range/cursor overflows identify the operation and exact operands. Audio clip
 boundaries compute offsets directly in the 48 kHz sample clock so unrelated
-stream and clip denominators do not need to fit one rational denominator. The
-bounded BGRA lease is copied to one reusable bitmap and presented through
-Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
+stream, clip, and playback-block denominators do not need to fit one rational
+denominator. The mixer resolves chunk placement directly to sample frames
+instead of constructing a rational-time difference that the sample clock will
+immediately round. The bounded BGRA lease is copied to one reusable bitmap and
+presented through Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
 both copy and drawing, including cleanup/recreation/release. Android output now
 uses the shared `or_audio` CPAL path. Exact-SHA hosted run
 [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020)

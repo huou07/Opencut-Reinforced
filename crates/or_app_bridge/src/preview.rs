@@ -2404,12 +2404,8 @@ mod desktop {
             .timeline_start
             .checked_add(clip_offset)
             .map_err(|_| "audio chunk timeline time overflowed".to_owned())?;
-        let output_offset = audio_frames_floor(
-            chunk_timeline
-                .checked_sub(block_start)
-                .map_err(|_| "audio chunk offset overflowed".to_owned())?,
-        )
-        .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
+        let output_offset = audio_frame_difference_floor(chunk_timeline, block_start)
+            .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
         let mut samples = chunk.samples().to_vec();
         process_audio_clip(&mut samples, clip_offset, clip.duration, clip.settings)
             .map_err(|error| error.to_string())?;
@@ -2444,6 +2440,14 @@ mod desktop {
         let frames = (i128::from(time.numerator()) * i128::from(AUDIO_SAMPLE_RATE))
             .div_euclid(i128::from(time.denominator()));
         i64::try_from(frames).map_err(|_| ())
+    }
+
+    fn audio_frame_difference_floor(time: RationalTime, origin: RationalTime) -> Result<i64, ()> {
+        let numerator = (i128::from(time.numerator()) * i128::from(origin.denominator())
+            - i128::from(origin.numerator()) * i128::from(time.denominator()))
+            * i128::from(AUDIO_SAMPLE_RATE);
+        let denominator = i128::from(time.denominator()) * i128::from(origin.denominator());
+        i64::try_from(numerator.div_euclid(denominator)).map_err(|_| ())
     }
 
     fn set_audio_error(error: &Mutex<Option<String>>, message: &str) {
@@ -2494,6 +2498,18 @@ mod desktop {
             time::{SystemTime, UNIX_EPOCH},
         };
         static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+        #[test]
+        fn audio_chunk_offset_uses_sample_clock_when_exact_rational_difference_overflows() {
+            let chunk_timeline = RationalTime::new(741, 500_000_000).unwrap();
+            let block_start = RationalTime::new(-221, 8_820).unwrap();
+
+            assert!(chunk_timeline.checked_sub(block_start).is_err());
+            assert_eq!(
+                audio_frame_difference_floor(chunk_timeline, block_start),
+                Ok(1_202)
+            );
+        }
 
         fn late_source_project() -> or_core::ProjectDocument {
             let video_media = (1..=65)
