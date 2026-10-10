@@ -217,6 +217,44 @@ fn software_decoder_reads_mp3_audio_through_seekable_saf_io() {
     assert!(decoded_sample_frames > 0);
 }
 
+#[cfg(unix)]
+#[test]
+fn software_decoder_reads_successive_mp3_preview_windows_through_seekable_saf_io() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MP3_FIXTURE);
+    let capability =
+        SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
+    let decoder = SoftwareMediaDecoder::new_with_seekable_io(capability, budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+
+    // Android playback prepares 250 ms buffers and decodes the next buffer
+    // while the current one plays. Exercise those independent seeks while
+    // consuming bounded output as the real audio mixer does.
+    for window in 0..4 {
+        let start = time(i64::from(window), 4);
+        let snapshot = snapshot(start, time(1, 4));
+        let queue = SnapshotQueue::new(snapshot, 16).unwrap();
+        let emitted = std::thread::scope(|scope| {
+            let decoder = decoder.clone();
+            let queue_for_decode = queue.clone();
+            let cancellation = &cancellation;
+            let decode = scope
+                .spawn(move || decoder.decode_audio(snapshot, &queue_for_decode, cancellation));
+            let mut consumed = 0;
+            while !decode.is_finished() {
+                if queue.try_pop_current().unwrap().is_some() {
+                    consumed += 1;
+                } else {
+                    std::thread::yield_now();
+                }
+            }
+            decode.join().unwrap().map(|emitted| emitted + consumed)
+        })
+        .unwrap();
+        assert!(emitted > 0, "MP3 preview window {window} produced no audio");
+        while queue.try_pop_current().unwrap().is_some() {}
+    }
+}
+
 #[test]
 fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();

@@ -846,6 +846,8 @@ bounded decoder-session cache so a cached decoder cannot keep a revoked SAF
 descriptor alive. Preview shutdown drains that cache after taking the render
 lock, releasing duplicated SAF descriptors when the project closes.
 Software decode uses the packaged FFmpeg profile and shared render path; the
+decoder includes the source PTS, origin PTS, and time-base rate when an FFmpeg
+timestamp cannot be represented by the project's exact rational clock. The
 bounded BGRA lease is copied to one reusable bitmap and presented through
 Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
 both copy and drawing, including cleanup/recreation/release. Android output now

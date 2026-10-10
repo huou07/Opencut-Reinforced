@@ -856,7 +856,14 @@ impl TimestampBase {
         let relative_pts = pts
             .checked_sub(self.origin_pts)
             .ok_or(DecodeError::TimestampOverflow)?;
-        RationalTime::from_units(relative_pts, self.rate).map_err(DecodeError::Time)
+        RationalTime::from_units(relative_pts, self.rate).map_err(|source| {
+            DecodeError::TimestampConversion {
+                pts,
+                origin_pts: self.origin_pts,
+                units_per_second: self.rate,
+                source,
+            }
+        })
     }
 }
 
@@ -1342,6 +1349,12 @@ pub enum DecodeError {
     MissingAudioStream,
     MissingTimestamp,
     InvalidTimeBase,
+    TimestampConversion {
+        pts: i64,
+        origin_pts: i64,
+        units_per_second: RationalRate,
+        source: TimeError,
+    },
     InvalidAudioRate,
     InvalidAudioFrame,
     InvalidFrameData,
@@ -1370,6 +1383,17 @@ impl fmt::Display for DecodeError {
                 formatter.write_str("decoded frame has no presentation timestamp")
             }
             Self::InvalidTimeBase => formatter.write_str("media stream has an invalid time base"),
+            Self::TimestampConversion {
+                pts,
+                origin_pts,
+                units_per_second,
+                source,
+            } => write!(
+                formatter,
+                "media timestamp conversion failed (pts={pts}, origin_pts={origin_pts}, time_base_rate={}/{}): {source}",
+                units_per_second.numerator(),
+                units_per_second.denominator()
+            ),
             Self::InvalidAudioRate => {
                 formatter.write_str("audio stream has an invalid sample rate")
             }
@@ -1409,6 +1433,7 @@ impl Error for DecodeError {
             Self::Budget(error) => Some(error),
             Self::FrameDescriptor(error) => Some(error),
             Self::FrameLease(error) => Some(error),
+            Self::TimestampConversion { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -1441,6 +1466,21 @@ mod tests {
         assert_eq!(ceil_sample_offset(time(1, 44_100)).unwrap(), 2);
         assert_eq!(floor_sample_offset(time(1, 44_100)).unwrap(), 1);
         assert_eq!(sample_offset_time(48_000).unwrap(), time(1, 1));
+    }
+
+    #[test]
+    fn invalid_stream_timestamp_reports_the_pts_and_time_base() {
+        let base = TimestampBase {
+            rate: RationalRate::new(1, 2).unwrap(),
+            origin_pts: 17,
+        };
+        let error = base.to_time(i64::MAX).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("pts=9223372036854775807"));
+        assert!(message.contains("origin_pts=17"));
+        assert!(message.contains("time_base_rate=1/2"));
+        assert!(message.contains("outside the supported range"));
     }
 
     #[test]
