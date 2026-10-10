@@ -503,11 +503,21 @@ impl fmt::Display for AudioProcessError {
 
 impl Error for AudioProcessError {}
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+))]
 mod device;
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
-pub use device::{DesktopAudioOutput, DesktopAudioOutputError};
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub use device::{AudioDeviceOutput, AudioDeviceOutputError};
 
 #[cfg(test)]
 mod tests {

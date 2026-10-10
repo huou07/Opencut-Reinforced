@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 CHECKS = {
-    'nativeDocumentsUiAndEditorControls', 'safMediaImportThroughDocumentsUi', 'visibleTexturePixels', 'externalUidPermissionEnforcement',
+    'nativeDocumentsUiAndEditorControls', 'safMediaImportThroughDocumentsUi', 'androidAudioTrackPlaybackClock', 'visibleTexturePixels', 'externalUidPermissionEnforcement',
     'activeLateSourceBeyond64', 'unchangedProjectRevision', 'playWithoutSeek', 'revokedPermissionUiRecovery',
     'missingPartialOpenRollbackAndRecovery', 'nonseekableNativeRegistrationRejected', 'clearDuringOpenDropsStaleBinding',
     'editAndGenerationDropPreparedFrame', 'surfaceLifecycleCallbacksConsistent', 'osMediaFdsAndNativeLeasesReleased',
@@ -62,6 +62,10 @@ def verify(report):
             or data.get('mediaImportMicros', 0) <= 0
             or int(data.get('mediaImportRevision', 0)) <= int(data['projectRevision'])):
         raise ValueError('Android SAF import must persist the selected source and report its runtime measurement')
+    if (data.get('audioPlaybackErrorCode') != ''
+            or int(data.get('audioPlaybackClockNumerator', 0)) <= 0
+            or int(data.get('audioPausedPositionNumerator', 0)) <= 0):
+        raise ValueError('Android audio-track playback must advance the device-master clock without an output error')
     if (data.get('captionImportCalls') != 1 or data.get('captionExportCalls') != 1
             or int(data.get('captionImportRevision', 0)) <= int(data.get('mediaImportRevision', 0))
             or data.get('captionExportBytes', 0) <= 0
@@ -103,5 +107,9 @@ if __name__ == '__main__':
     parser.add_argument('report', type=Path)
     args = parser.parse_args()
     data = verify(json.loads(args.report.read_text()))
-    print('Android SAF picker/import/editor/export/pixel/resource assertions verified.')
-    print(json.dumps({key: data[key] for key in ('uiPlayMicros', 'mediaImportMicros', 'exportBytes', 'journeyResources', 'stressResources', 'finalResources')}, indent=2))
+    print('Android SAF picker/import/audio-playback/export/pixel/resource assertions verified.')
+    print(json.dumps({key: data[key] for key in (
+        'uiPlayMicros', 'mediaImportMicros', 'audioPlaybackClockNumerator',
+        'audioPlaybackErrorCode', 'audioPausedPositionNumerator', 'exportBytes',
+        'journeyResources', 'stressResources', 'finalResources',
+    )}, indent=2))

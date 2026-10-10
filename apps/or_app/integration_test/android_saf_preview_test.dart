@@ -769,6 +769,7 @@ void main() {
       expect(imported.items[2].audioDetails, isNotNull);
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
+      expect((await gateway.save(session)).succeeded, isTrue);
       // Keep the granted source descriptors alive while the project revision
       // reconnects the viewer; project close below owns their release.
       await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
@@ -1155,7 +1156,7 @@ void main() {
       final selectedProjectPath = projectPicker.selectedProjectPath!;
       expect(selectedProjectPath, gateway.openedPath);
       final second = await secondGateway.openProject(selectedProjectPath);
-      final before = await secondGateway.summary(second);
+      var before = await secondGateway.summary(second);
       final reopenedRelink = (await secondGateway.listMediaPage(
         second,
         offset: 64,
@@ -1176,13 +1177,56 @@ void main() {
         reopenedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
         isTrue,
       );
+
+      final importedAudio = (await secondGateway.listMediaPage(
+        second,
+        offset: 65,
+        limit: 3,
+      )).items.singleWhere((item) => item.audioDetails != null);
+      final addedAudioTrack = await secondGateway.addTimelineTrack(
+        second,
+        before,
+        ProjectTimelineTrackKind.audio,
+      );
+      expect(
+        addedAudioTrack.succeeded,
+        isTrue,
+        reason: addedAudioTrack.message,
+      );
+      before = addedAudioTrack.view!;
+      final audioTrack = (await secondGateway.listTimelineTracks(second)).items
+          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.audio);
+      final insertedAudio = await secondGateway.insertTimelineClip(
+        second,
+        before,
+        trackId: audioTrack.trackId,
+        mediaId: importedAudio.mediaId,
+        timelineStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        duration: ProjectRationalTime(BigInt.one, 2),
+      );
+      expect(insertedAudio.succeeded, isTrue, reason: insertedAudio.message);
+      expect((await secondGateway.save(second)).succeeded, isTrue);
+      before = await secondGateway.summary(second);
+
       final played = await secondGateway.previewPlay(
         second,
       ); // No preceding seek.
       expect(played.frameSequence, greaterThan(BigInt.zero));
       expect(played.width, 16);
       expect(played.errorCode, isNull);
-      await secondGateway.previewPause(second);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 250)),
+      );
+      final audioClockTick = await secondGateway.previewTick(second);
+      expect(audioClockTick.errorCode, isNull);
+      expect(
+        audioClockTick.position.numerator,
+        greaterThan(BigInt.zero),
+        reason: 'Audio output device clock should advance while the WAV clip plays.',
+      );
+      final paused = await secondGateway.previewPause(second);
+      expect(paused.position.numerator, greaterThan(BigInt.zero));
       expect((await secondGateway.summary(second)).revision, before.revision);
       final firstFrame = await secondGateway.previewSeek(
         second,
@@ -1373,6 +1417,7 @@ void main() {
             for (final name in [
               'nativeDocumentsUiAndEditorControls',
               'safMediaImportThroughDocumentsUi',
+              'androidAudioTrackPlaybackClock',
               'visibleTexturePixels',
               'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
               'externalUidPermissionEnforcement',
@@ -1413,6 +1458,10 @@ void main() {
               imported.items[2].formatNames.contains('wav') &&
               imported.items[2].videoDetails == null &&
               imported.items[2].audioDetails != null,
+          'audioPlaybackClockNumerator': audioClockTick.position.numerator
+              .toString(),
+          'audioPlaybackErrorCode': audioClockTick.errorCode ?? '',
+          'audioPausedPositionNumerator': paused.position.numerator.toString(),
           'mediaImportSourceUris': imported.items
               .map((item) => item.sourceUri)
               .toList(growable: false),

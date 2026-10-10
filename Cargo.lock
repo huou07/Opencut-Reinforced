@@ -1785,6 +1785,8 @@ name = "or_app_bridge"
 version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
+ "jni",
+ "ndk-context",
  "or_audio",
  "or_core",
  "or_ipc",

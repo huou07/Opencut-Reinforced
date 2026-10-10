@@ -12,9 +12,9 @@ use std::time::Duration;
 const DEVICE_SAMPLE_RATE: u32 = 48_000;
 const DEVICE_CHANNELS: usize = 2;
 
-/// Desktop CPAL output. The stream starts paused; callers can prefill the
+/// CPAL output. The stream starts paused; callers can prefill the
 /// returned bounded producer before starting device callbacks.
-pub struct DesktopAudioOutput {
+pub struct AudioDeviceOutput {
     stream: Stream,
     clock: AudioClockMessage,
     device_frames: Arc<AtomicU64>,
@@ -22,25 +22,25 @@ pub struct DesktopAudioOutput {
     callback_cancellation: CancellationToken,
 }
 
-impl DesktopAudioOutput {
+impl AudioDeviceOutput {
     pub fn open(
         snapshot: RenderSnapshot,
         capacity_frames: NonZeroUsize,
-    ) -> Result<(AudioProducer, Self), DesktopAudioOutputError> {
+    ) -> Result<(AudioProducer, Self), AudioDeviceOutputError> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
-            .ok_or(DesktopAudioOutputError::NoOutputDevice)?;
+            .ok_or(AudioDeviceOutputError::NoOutputDevice)?;
         let config = device
             .supported_output_configs()
-            .map_err(|error| DesktopAudioOutputError::Device(error.to_string()))?
+            .map_err(|error| AudioDeviceOutputError::Device(error.to_string()))?
             .find_map(|range| {
                 (range.channels() as usize == DEVICE_CHANNELS
                     && range.sample_format() == SampleFormat::F32)
                     .then(|| range.try_with_sample_rate(DEVICE_SAMPLE_RATE))
                     .flatten()
             })
-            .ok_or(DesktopAudioOutputError::NoSupportedConfiguration)?;
+            .ok_or(AudioDeviceOutputError::NoSupportedConfiguration)?;
 
         let clock = AudioClockMessage::new(
             NonZeroU32::new(DEVICE_SAMPLE_RATE).expect("fixed rate is nonzero"),
@@ -70,7 +70,7 @@ impl DesktopAudioOutput {
                 move |_| error_failed.store(true, Ordering::Relaxed),
                 Some(Duration::from_secs(5)),
             )
-            .map_err(|error| DesktopAudioOutputError::Stream(error.to_string()))?;
+            .map_err(|error| AudioDeviceOutputError::Stream(error.to_string()))?;
 
         Ok((
             producer,
@@ -84,10 +84,10 @@ impl DesktopAudioOutput {
         ))
     }
 
-    pub fn start(&self) -> Result<(), DesktopAudioOutputError> {
+    pub fn start(&self) -> Result<(), AudioDeviceOutputError> {
         self.stream
             .play()
-            .map_err(|error| DesktopAudioOutputError::Stream(error.to_string()))
+            .map_err(|error| AudioDeviceOutputError::Stream(error.to_string()))
     }
 
     pub fn clock(&self) -> AudioClockMessage {
@@ -100,7 +100,7 @@ impl DesktopAudioOutput {
     }
 }
 
-impl Drop for DesktopAudioOutput {
+impl Drop for AudioDeviceOutput {
     fn drop(&mut self) {
         self.callback_cancellation.cancel();
         let _ = self.stream.pause();
@@ -108,7 +108,7 @@ impl Drop for DesktopAudioOutput {
 }
 
 #[derive(Debug)]
-pub enum DesktopAudioOutputError {
+pub enum AudioDeviceOutputError {
     NoOutputDevice,
     NoSupportedConfiguration,
     Device(String),
@@ -116,10 +116,10 @@ pub enum DesktopAudioOutputError {
     Buffer(AudioBufferError),
 }
 
-impl fmt::Display for DesktopAudioOutputError {
+impl fmt::Display for AudioDeviceOutputError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NoOutputDevice => formatter.write_str("no default desktop audio output device"),
+            Self::NoOutputDevice => formatter.write_str("no default audio output device"),
             Self::NoSupportedConfiguration => formatter
                 .write_str("the default output device does not support stereo F32 audio at 48 kHz"),
             Self::Device(message) => write!(
@@ -135,7 +135,7 @@ impl fmt::Display for DesktopAudioOutputError {
     }
 }
 
-impl Error for DesktopAudioOutputError {
+impl Error for AudioDeviceOutputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Buffer(error) => Some(error),
@@ -144,7 +144,7 @@ impl Error for DesktopAudioOutputError {
     }
 }
 
-impl From<AudioBufferError> for DesktopAudioOutputError {
+impl From<AudioBufferError> for AudioDeviceOutputError {
     fn from(error: AudioBufferError) -> Self {
         Self::Buffer(error)
     }

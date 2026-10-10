@@ -17,6 +17,8 @@ def report():
             'content://dev.opencut.saffixture.documents/document/media-audio',
         ],
         'mediaImportAudioOnlyPcmWav': True,
+        'audioPlaybackErrorCode': '', 'audioPlaybackClockNumerator': '1',
+        'audioPausedPositionNumerator': '1',
         'mediaImportMicros': 1000, 'mediaImportRevision': '2', 'projectRevision': '1',
         'providerProjectSha256AtSeed': 'a' * 64,
         'providerProjectSha256BeforeRestart': 'a' * 64,
@@ -65,6 +67,7 @@ class ReportTest(unittest.TestCase):
         for mutate in (lambda data: data['checks'].pop('nativeDocumentsUiAndEditorControls'),
                        lambda data: data['checks'].pop('mobileSelectedClipInspectorSheet'),
                        lambda data: data['checks'].pop('androidSafExportToDocumentsUi'),
+                       lambda data: data['checks'].pop('androidAudioTrackPlaybackClock'),
                        lambda data: data['checks'].pop('foregroundBackgroundPlaybackPausesAndSurfaceRecovers'),
                        lambda data: data.update(providerUid=data['appUid'])):
             value = report()
@@ -111,6 +114,16 @@ class ReportTest(unittest.TestCase):
         value = report()
         value['androidSafAcceptance']['mediaImportSourceUris'].pop()
         with self.assertRaises(ValueError): verify(value)
+
+    def test_android_audio_output_requires_advancing_device_master_clock(self):
+        for mutation in (
+            {'audioPlaybackErrorCode': 'AUDIO_OUTPUT_UNAVAILABLE'},
+            {'audioPlaybackClockNumerator': '0'},
+            {'audioPausedPositionNumerator': '0'},
+        ):
+            value = report()
+            value['androidSafAcceptance'].update(mutation)
+            with self.assertRaises(ValueError): verify(value)
 
     def test_android_caption_interchange_requires_real_import_and_export(self):
         value = report()

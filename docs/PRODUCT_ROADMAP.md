@@ -708,9 +708,12 @@ recovery at revision 8 after relaunch from PID 3577 to PID 5760; relinked media
 identity and its timeline reference survived. The preview Play call measured
 74,018 µs, with a 13,550 µs maximum main draw during the base journey and a
 62,418 µs maximum under resource stress. Final OS media descriptors and
-native leases returned to zero. The journey verifies video frames and WAV
-library import, not audible Android audio playback; that mobile audio-output
-path remains unaccepted. Android reports `hardware=UNVERIFIED`, and
+native leases returned to zero. Run 38016755374 on product SHA
+172dee37dbb7683d6034d884ee22614805ab8095 predates the Android output wiring;
+it verifies video frames and WAV library import, not audio-track playback.
+Android CPAL output and its device-master clock are now implemented and await
+exact-SHA hosted APK and playback acceptance. Android reports
+`hardware=UNVERIFIED`, and
 the guest log still contains Choreographer warnings for 111, 89, 65, 62, 38,
 37, and 36 skipped frames. Thus bounded-resource and functional checks pass,
 but Android performance is not accepted; profile the jank on representative

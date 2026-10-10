@@ -58,8 +58,7 @@ mod desktop {
     use or_audio::{
         AudioClockMessage, AudioProducer, AvSynchronizer, VideoSyncAction, process_audio_clip,
     };
-    #[cfg(not(target_os = "android"))]
-    use or_audio::{DesktopAudioOutput, DesktopAudioOutputError};
+    use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
         EffectReference, ExportRequest, ExportResponse, JobCancelOutcome, JobContext, JobFailure,
@@ -2016,18 +2015,13 @@ mod desktop {
         (sample * if sample < 0.0 { 32_768.0 } else { 32_767.0 }).round() as i16
     }
 
-    #[cfg(not(target_os = "android"))]
     struct AudioPlayback {
-        output: DesktopAudioOutput,
+        output: AudioDeviceOutput,
         cancellation: CancellationToken,
         worker: Option<JoinHandle<()>>,
         error: Arc<Mutex<Option<String>>>,
     }
 
-    #[cfg(target_os = "android")]
-    struct AudioPlayback;
-
-    #[cfg(not(target_os = "android"))]
     impl AudioPlayback {
         fn start(
             program: Arc<PreviewProgram>,
@@ -2046,7 +2040,7 @@ mod desktop {
                 TimeRange::new(origin, RationalTime::ZERO)
                     .map_err(|error| PreviewError::new("AUDIO_CLOCK_FAILED", error.to_string()))?,
             );
-            let (mut producer, output) = DesktopAudioOutput::open(
+            let (mut producer, output) = AudioDeviceOutput::open(
                 snapshot,
                 NonZeroUsize::new(AUDIO_BUFFER_FRAMES).expect("audio buffer is nonzero"),
             )
@@ -2109,33 +2103,6 @@ mod desktop {
         }
     }
 
-    #[cfg(target_os = "android")]
-    impl AudioPlayback {
-        fn start(
-            _program: Arc<PreviewProgram>,
-            _origin: RationalTime,
-            _budgets: RuntimeBudgets,
-        ) -> Result<Self, PreviewError> {
-            Err(PreviewError::new(
-                "AUDIO_OUTPUT_UNAVAILABLE",
-                "Android preview advances on the bounded monotonic video clock.",
-            ))
-        }
-
-        fn clock(&self) -> AudioClockMessage {
-            unreachable!("Android preview does not create an audio clock")
-        }
-
-        fn failed(&self) -> bool {
-            false
-        }
-
-        fn error(&self) -> Option<String> {
-            None
-        }
-    }
-
-    #[cfg(not(target_os = "android"))]
     impl Drop for AudioPlayback {
         fn drop(&mut self) {
             self.cancellation.cancel();
@@ -2145,8 +2112,7 @@ mod desktop {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
-    fn audio_output_error(error: DesktopAudioOutputError) -> PreviewError {
+    fn audio_output_error(error: AudioDeviceOutputError) -> PreviewError {
         PreviewError::new("AUDIO_OUTPUT_UNAVAILABLE", error.to_string())
     }
 

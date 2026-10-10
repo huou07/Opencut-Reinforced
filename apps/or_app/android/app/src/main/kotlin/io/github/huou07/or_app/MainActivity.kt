@@ -1,6 +1,7 @@
 package io.github.huou07.or_app
 
 import android.content.Intent
+import android.content.Context
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.net.Uri
@@ -31,6 +32,8 @@ private const val MAX_CAPTION_BYTES = 8L * 1024 * 1024
 private const val MAX_CAPTION_EXPORT_BYTES = 16L * 1024 * 1024
 
 class MainActivity : FlutterActivity() {
+    private external fun initializeAudioContext(context: Context): Boolean
+
     private data class PendingPick(
         val method: String,
         val result: MethodChannel.Result,
@@ -46,6 +49,10 @@ class MainActivity : FlutterActivity() {
     private var pendingPick: PendingPick? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        System.loadLibrary("or_app_bridge")
+        if (!initializeAudioContext(applicationContext)) {
+            throw IllegalStateException("Android audio runtime could not be initialized.")
+        }
         super.configureFlutterEngine(flutterEngine)
         if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             try {
