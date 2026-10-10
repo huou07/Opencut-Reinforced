@@ -190,6 +190,33 @@ fn seekable_saf_probe_ignores_mp3_attached_cover_art() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn software_decoder_reads_mp3_audio_through_seekable_saf_io() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MP3_FIXTURE);
+    let capability =
+        SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
+    let decoder = SoftwareMediaDecoder::new_with_seekable_io(capability, budgets()).unwrap();
+    let snapshot = snapshot(time(0, 1), time(1, 8));
+    let queue = SnapshotQueue::new(snapshot, 16).unwrap();
+    let cancellation = CancellationToken::new();
+
+    assert!(
+        decoder
+            .decode_audio(snapshot, &queue, &cancellation)
+            .unwrap()
+            > 0
+    );
+    let mut decoded_sample_frames = 0;
+    while let Some(item) = queue.try_pop_current().unwrap() {
+        let chunk = item.into_value();
+        assert_eq!(chunk.sample_rate(), 48_000);
+        assert_eq!(chunk.channels(), 2);
+        decoded_sample_frames += chunk.sample_frames();
+    }
+    assert!(decoded_sample_frames > 0);
+}
+
 #[test]
 fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();

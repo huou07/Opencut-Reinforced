@@ -1250,6 +1250,10 @@ void main() {
       final played = await secondGateway.previewPlay(
         second,
       ); // No preceding seek.
+      debugPrint(
+        'ANDROID_SAF_AUDIO_PREVIEW_RESULT '
+        'code=${played.errorCode} message=${played.errorMessage}',
+      );
       expect(played.frameSequence, greaterThan(BigInt.zero));
       expect(played.width, 16);
       expect(
