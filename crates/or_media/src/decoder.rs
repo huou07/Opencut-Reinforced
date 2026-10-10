@@ -1225,12 +1225,7 @@ fn clip_audio(
     }
 
     let start_frame = if timestamp < start {
-        ceil_sample_offset(audio_time_arithmetic(
-            "clip start offset",
-            start,
-            timestamp,
-            start.checked_sub(timestamp),
-        )?)?
+        audio_sample_offset(start, timestamp, true)?
     } else {
         0
     }
@@ -1238,13 +1233,7 @@ fn clip_audio(
     let end_frame = if range.duration().is_zero() {
         start_frame.saturating_add(1).min(source_frames)
     } else if timestamp < end {
-        floor_sample_offset(audio_time_arithmetic(
-            "clip end offset",
-            end,
-            timestamp,
-            end.checked_sub(timestamp),
-        )?)?
-        .min(source_frames)
+        audio_sample_offset(end, timestamp, false)?.min(source_frames)
     } else {
         0
     };
@@ -1252,35 +1241,21 @@ fn clip_audio(
         return Ok(None);
     }
     let sample_offset = sample_offset_time(start_frame)?;
-    let timestamp = audio_time_arithmetic(
-        "clipped chunk timestamp",
-        timestamp,
-        sample_offset,
-        timestamp.checked_add(sample_offset),
-    )?;
+    let timestamp = match timestamp.checked_add(sample_offset) {
+        Ok(timestamp) => timestamp,
+        Err(TimeError::ArithmeticOverflow) => {
+            let timestamp_frame = audio_sample_frame_ceil(timestamp)?
+                .checked_add(
+                    i64::try_from(start_frame).map_err(|_| DecodeError::TimestampOverflow)?,
+                )
+                .ok_or(DecodeError::TimestampOverflow)?;
+            RationalTime::new(timestamp_frame, OUTPUT_AUDIO_RATE).map_err(DecodeError::Time)?
+        }
+        Err(error) => return Err(DecodeError::Time(error)),
+    };
     samples.drain(..start_frame * OUTPUT_AUDIO_CHANNELS);
     samples.truncate((end_frame - start_frame) * OUTPUT_AUDIO_CHANNELS);
     Ok(Some((timestamp, samples)))
-}
-
-fn ceil_sample_offset(time: RationalTime) -> Result<usize, DecodeError> {
-    let product = i128::from(time.numerator()) * i128::from(OUTPUT_AUDIO_RATE);
-    let denominator = i128::from(time.denominator());
-    let samples = if product <= 0 {
-        0
-    } else {
-        (product + denominator - 1) / denominator
-    };
-    usize::try_from(samples).map_err(|_| DecodeError::TimestampOverflow)
-}
-
-fn floor_sample_offset(time: RationalTime) -> Result<usize, DecodeError> {
-    let product = i128::from(time.numerator()) * i128::from(OUTPUT_AUDIO_RATE);
-    let denominator = i128::from(time.denominator());
-    if product <= 0 {
-        return Ok(0);
-    }
-    usize::try_from(product / denominator).map_err(|_| DecodeError::TimestampOverflow)
 }
 
 fn sample_offset_time(samples: usize) -> Result<RationalTime, DecodeError> {
@@ -1301,6 +1276,35 @@ fn audio_time_arithmetic(
         right,
         source,
     })
+}
+
+fn audio_sample_offset(
+    later: RationalTime,
+    earlier: RationalTime,
+    round_up: bool,
+) -> Result<usize, DecodeError> {
+    let numerator = (i128::from(later.numerator()) * i128::from(earlier.denominator())
+        - i128::from(earlier.numerator()) * i128::from(later.denominator()))
+        * i128::from(OUTPUT_AUDIO_RATE);
+    if numerator <= 0 {
+        return Ok(0);
+    }
+    let denominator = i128::from(later.denominator()) * i128::from(earlier.denominator());
+    let mut samples = numerator.div_euclid(denominator);
+    if round_up && numerator.rem_euclid(denominator) != 0 {
+        samples += 1;
+    }
+    usize::try_from(samples).map_err(|_| DecodeError::TimestampOverflow)
+}
+
+fn audio_sample_frame_ceil(time: RationalTime) -> Result<i64, DecodeError> {
+    let numerator = i128::from(time.numerator()) * i128::from(OUTPUT_AUDIO_RATE);
+    let denominator = i128::from(time.denominator());
+    let mut frames = numerator.div_euclid(denominator);
+    if numerator.rem_euclid(denominator) != 0 {
+        frames += 1;
+    }
+    i64::try_from(frames).map_err(|_| DecodeError::TimestampOverflow)
 }
 
 fn past_range(timestamp: RationalTime, range: TimeRange) -> bool {
@@ -1509,8 +1513,14 @@ mod tests {
     fn ffmpeg_timebase_and_output_sample_offsets_stay_rational() {
         let base = TimestampBase::new(ffmpeg::Rational::new(1, 24_000), 0).unwrap();
         assert_eq!(base.to_time(1001).unwrap(), time(1001, 24_000));
-        assert_eq!(ceil_sample_offset(time(1, 44_100)).unwrap(), 2);
-        assert_eq!(floor_sample_offset(time(1, 44_100)).unwrap(), 1);
+        assert_eq!(
+            audio_sample_offset(time(1, 44_100), RationalTime::ZERO, true).unwrap(),
+            2
+        );
+        assert_eq!(
+            audio_sample_offset(time(1, 44_100), RationalTime::ZERO, false).unwrap(),
+            1
+        );
         assert_eq!(sample_offset_time(48_000).unwrap(), time(1, 1));
     }
 
@@ -1541,6 +1551,38 @@ mod tests {
         assert!(message.contains("left=RationalTime"));
         assert!(message.contains("right=RationalTime"));
         assert!(message.contains("outside the supported range"));
+    }
+
+    #[test]
+    fn audio_clipping_uses_sample_offsets_without_materializing_time_differences() {
+        let clip_start = time(741, 500_000_000);
+        let decoded_timestamp = time(-221, 8_820);
+        let offset = audio_sample_offset(clip_start, decoded_timestamp, true).unwrap();
+        let first_output_frame = audio_sample_frame_ceil(decoded_timestamp)
+            .unwrap()
+            .checked_add(i64::try_from(offset).unwrap())
+            .unwrap();
+
+        assert_eq!(offset, 1_203);
+        assert_eq!(
+            RationalTime::new(first_output_frame, OUTPUT_AUDIO_RATE).unwrap(),
+            time(1, 48_000)
+        );
+    }
+
+    #[test]
+    fn audio_clipping_handles_mp3_preroll_against_a_fine_grained_range() {
+        let clip_start = time(741, 500_000_000);
+        let decoded_timestamp = time(-221, 8_820);
+        let range = TimeRange::new(clip_start, time(1, 8)).unwrap();
+        let samples = vec![0.0; 16_000 * OUTPUT_AUDIO_CHANNELS];
+        let (timestamp, samples) = clip_audio(decoded_timestamp, range, samples)
+            .unwrap()
+            .unwrap();
+
+        assert!(timestamp >= clip_start);
+        assert!(timestamp < clip_start.checked_add(time(1, 48_000)).unwrap());
+        assert!(samples.len() / OUTPUT_AUDIO_CHANNELS <= 6_000);
     }
 
     #[test]

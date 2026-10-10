@@ -848,7 +848,9 @@ lock, releasing duplicated SAF descriptors when the project closes.
 Software decode uses the packaged FFmpeg profile and shared render path; the
 decoder includes the source PTS, origin PTS, and time-base rate when an FFmpeg
 timestamp cannot be represented by the project's exact rational clock; audio
-range/cursor overflows identify the operation and exact operands. The
+range/cursor overflows identify the operation and exact operands. Audio clip
+boundaries compute offsets directly in the 48 kHz sample clock so unrelated
+stream and clip denominators do not need to fit one rational denominator. The
 bounded BGRA lease is copied to one reusable bitmap and presented through
 Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
 both copy and drawing, including cleanup/recreation/release. Android output now
