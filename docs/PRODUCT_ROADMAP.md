@@ -726,20 +726,30 @@ journeys/lifecycle checks, Rust, Flutter static/widget, and descriptor-boundary
 jobs all passed on this SHA; workflow run 38016755374 completed successfully.
 
 Exact-SHA run [38024117671](https://github.com/huou07/Opencut-Reinforced/actions/runs/38024117671)
-on `da65ceb047ce0886d9783a05bb9873f5f5017765` passed Linux and Windows
-packaged product journeys, Rust, Flutter static/widget, and descriptor-boundary
-checks. The Android APK built for all ABIs and emulator bridge checks passed;
-the hosted SAF user journey now imports the exact WAV, recovers and reopens the
-project, and reaches AAudio stream startup before preview reports
-`AUDIO_PLAYBACK_FAILED`. Code-path analysis found Android Play started CPAL
-before the bridge registered the audio-only SAF URI as a seekable descriptor.
-The product correction gathers the active visual and still-relevant audio SAF
-sources under the existing 64-source bound, then starts audio only after the
-native registration completion. Focused Rust tests, bridge clippy, Flutter
-analysis, formatting, and diff checks pass locally. This correction is awaiting
-exact-SHA hosted Android playback acceptance; the macOS lifecycle job on the
-diagnostic SHA was still running when its Android job completed. No acoustic
-device-output or Android performance claim is made from the emulator.
+on `da65ceb047ce0886d9783a05bb9873f5f5017765` passed Linux/Windows packaged
+journeys, Rust, Flutter static/widget, and descriptor-boundary checks. Its
+Android SAF WAV journey imported/recovered the project and reached AAudio, then
+exposed `AUDIO_PLAYBACK_FAILED`. The cause was an ordering defect: Android Play
+started CPAL before the bridge registered the audio-only SAF URI as a
+seekable descriptor. Fix `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2` gathers
+active visual and still-relevant audio SAF sources under the existing 64-source
+bound, then starts audio only after native registration completion. Focused
+Rust tests (18 bridge unit tests), clippy, Flutter analysis, formatting, and
+diff checks pass locally.
+
+Exact-SHA run [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020)
+on `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2` passed all hosted checks:
+Rust, Flutter static/widget, descriptor boundary, macOS lifecycle/package,
+Linux and Windows packaged product journeys, and Android all-ABI packaging,
+emulator bridge, SAF import/audio playback, recovery, captions, relink, and
+export acceptance. The Android report records 1,028 µs WAV import, 152,660 µs
+Play call, an advancing AAudio device clock with no preview error, a valid
+96,963-byte Matroska export, and zero remaining media FDs or frame leases.
+Base maximum main draw was 17,982 µs and resource-stress maximum was 54,331 µs;
+the guest log also reports up to 125 skipped UI frames. Therefore Android audio
+playback is accepted on the API 36 x86_64 SwiftShader emulator, but physical
+device/acoustic output and Android performance are not accepted. Continue
+profiling the frame skips on representative hardware before release claims.
 
 ## Traceability from the preserved roadmap
 
