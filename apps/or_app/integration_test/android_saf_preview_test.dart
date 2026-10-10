@@ -1179,11 +1179,16 @@ void main() {
         isTrue,
       );
 
-      final importedAudio = (await secondGateway.listMediaPage(
+      final reopenedMedia = await secondGateway.listMediaPage(
         second,
         offset: 65,
         limit: 3,
-      )).items.singleWhere((item) => item.audioDetails != null);
+      );
+      final importedAudio = reopenedMedia.items.singleWhere(
+        (item) => item.sourceUri == _source('media-audio'),
+      );
+      expect(importedAudio.formatNames, contains('wav'));
+      expect(importedAudio.audioDetails, isNotNull);
       final addedAudioTrack = await secondGateway.addTimelineTrack(
         second,
         before,
