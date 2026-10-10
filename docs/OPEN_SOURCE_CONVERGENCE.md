@@ -30,10 +30,12 @@ strategic overlap but its checked Rust workspace has no editor core or Editor
 API yet, its desktop README describes a window shell, and its tracker labels
 those capabilities as future/input work. OpenTake has more concrete Rust
 editing/runtime structure, but is GPL-3.0, beta, desktop-first, and lacks
-verified Android parity. MLT is the strongest bounded media-engine candidate:
-an active LGPL framework used by mature editors, but adopting it would add a
-C++/module/package boundary and has not yet demonstrated OR's mobile and
-runtime needs. Run a small MLT adapter comparison before any engine migration.
+verified Android parity. MLT and GStreamer Editing Services (GES) are the
+bounded media-engine candidates: both are LGPL frameworks used by real
+editors, but adopting either adds a native module/package boundary and neither
+has demonstrated OR's Android, runtime, or Flutter integration needs. Compare
+them only against a concrete media compatibility or measured performance gap
+before any engine migration.
 
 The first product priority is to finish and verify the ordinary editor journey
 on the existing architecture. Defer a plugin marketplace, community backend,
@@ -68,16 +70,16 @@ patch is justified by this audit alone.
 | Project/document model | **KEEP canonical model; REUSE OTIO interchange** | OR has strict versioned `.orproj` schemas, explicit migrations, exact rational time, bounded atomic save, recovery ancestry checks, and Android SAF identities. OpenTimelineIO provides a maintained Apache-2.0 editorial interchange format and tested adapters, but it deliberately does not contain media and its C++/Python APIs are not a drop-in Rust/mobile project store. | Preserve `.orproj` as canonical state. Add a bounded OTIO import/export mapping when interoperability is implemented; preview and explain unsupported/lossy fields before import. Keep history, recovery, media identity, and OR-only settings in `.orproj`. |
 | Timeline/editing core | **KEEP** | Rust owns typed tracks/clips, revision-checked commands, undo/redo, and deterministic CLI parity. MLT, Shotcut, Kdenlive, and OpenShot have mature editing engines but their project semantics and UI are not directly compatible with OR/mobile. | Finish ordinary editing interactions; later measure an OTIO subset for exchange, not as canonical state. |
 | Media ingest/probing | **REUSE** | FFmpeg/ffprobe are established format tools and already underlie OR's packaged runtime/probe path. OpenShot/libopenshot and MLT add alternate media stacks rather than removing the need for codecs. | Keep FFmpeg as the media compatibility layer. Keep source permission/SAF behavior platform-owned and tested. |
-| Decode/playback | **BUILD + COMPARE** | OR already has a bounded FFmpeg software decode path, immutable frame snapshots, cancellation/queue limits, and wgpu preview. MLT provides a mature LGPL alternative, but adapter cost, Android, latency, seek behavior, and runtime packaging are unmeasured. | Build a narrow MLT evaluation adapter against representative OR fixtures and compare seek, playback, memory, packaging, and Android feasibility. Do not replace until it wins materially. |
-| Renderer/compositor | **KEEP** | The OR wgpu render spine is shared and platform-neutral; MLT/Shotcut/Kdenlive/libopenshot render stacks are mature but C++-centric and do not establish the required Flutter/mobile parity. | Keep one OR evaluation/render contract. Permit native surfaces only behind explicit adapters and measured fallbacks. |
-| Audio playback/mixing | **KEEP + COMPARE** | OR has bounded prepared audio buffers and a native cpal callback boundary. MLT/Shotcut/Kdenlive have mature audio routing/effects that may be reusable at a process/runtime boundary, but no current parity or package test exists. | Measure sync, device behavior, resource limits, and Android. Reuse MLT only if adapter and distribution evidence are favorable. |
+| Decode/playback | **KEEP + COMPARE** | OR already has a bounded FFmpeg software decode path, immutable frame snapshots, cancellation/queue limits, and wgpu preview. MLT and GES provide mature LGPL alternatives, but adapter cost, Android, latency, seek behavior, and runtime packaging are unmeasured. | After a packaged OR media baseline identifies a compatibility or performance gap, prototype the smallest MLT/GES boundary against the same redistributable fixtures. Do not replace until a candidate wins on user-visible behavior and total package/runtime cost. |
+| Renderer/compositor | **KEEP + COMPARE** | The OR wgpu render spine is shared and platform-neutral. MLT and GES can compose media graphs and effects, but their native module/plugin paths do not establish Flutter/mobile parity or preserve OR's preview/export semantics automatically. | Keep the current render snapshot contract. Compare only a bounded set of real operations; retain CPU/software fallbacks and OR semantics. |
+| Audio playback/mixing | **KEEP + COMPARE** | OR has bounded prepared audio buffers and a native cpal callback boundary. MLT and GES expose mature media-graph audio processing, but neither establishes OR sync, device behavior, resource limits, or Android package quality. | Measure current sync/device/resource behavior first; include one candidate in the bounded comparison only if the baseline demonstrates a material gap. |
 | Export | **BUILD on existing FFmpeg path** | OR packages a pinned LGPL-only FFmpeg runtime with recorded build provenance. Mature editors export well, but adopting their GPL applications is not a compatible code shortcut. | Finish packaged export workflows, codec/output choices, cancellation/progress, and preview/export parity. Track each shipped FFmpeg component/license. |
 | Proxies/cache | **KEEP** | OR already has bounded background jobs, disposable indexed cache, LRU eviction, and proxy-generation primitives; cache does not enter canonical project state. No inspected project justifies replacing this with an unmeasured service. | Expose only user-valued proxy controls after real media measurements and cleanup/recovery checks. |
 | Thumbnails/waveforms | **KEEP** | OR generates bounded FFmpeg artifacts through its existing job/cache path. This is small, compatible work with no proven superior drop-in. | Preserve limits and packaged dependency tests; improve only with observed UX/performance gaps. |
 | Effects/transitions | **KEEP semantics; REUSE selectively** | OR has typed brightness/contrast/saturation/blur and transition semantics shared by preview/export. MLT/Frei0r contain mature effect implementations but have module-by-module license and behavior differences. | Compare selected filters through MLT/FFmpeg/wgpu proof fixtures. Preserve OR parameter semantics and preview/export parity; no wholesale effect ABI yet. |
 | Captions/text | **KEEP canonical model; REUSE SRT/VTT codec provisionally** | OR's typed caption/text clips and deterministic bundled-font rendering align with project and export invariants. `subtitle-rs/subtitler` v2.9.0 is Apache-2.0 and its feature-trimmed SRT/VTT suite passed 162 upstream tests. OR's bounded codec now maps integer milliseconds exactly to rational time, strips unsupported styling with an explicit loss count, bounds input/cues/output, and refuses lossy export rounding. Its current library dependency still compiles CLI/logging support (`clap`, `tracing-subscriber`) and adds 29 packages not active elsewhere in the OR workspace. | Keep OR's typed model, project commands, timing and deterministic renderer. Finish one-command import/history, platform pickers, save/reopen, export, and packaged dependency/size checks before approving full adoption. Do not import its CLI, provider/network, transcript or model workflow. |
 | UI/editor interaction | **KEEP; improve** | OR's Flutter workspace and Focused Monochrome design are the only checked candidate UI intended to share desktop and touch concepts. Shotcut/Kdenlive/LosslessCut are mature desktop references, not reusable UI code; Palmier is closed for contribution and Mac-only. | Make visible journeys complete and understandable. Use mature editors as interaction references, not as a reason to replace the shared product shell. |
-| Desktop/mobile shells | **KEEP Flutter; retain iOS contract only** | OR currently packages macOS, Windows, Linux, and Android through a shared Flutter product surface. OpenCut's rewrite multi-platform direction is not implemented; OpenTake and inspected mature NLEs do not prove this parity. iOS is not currently a supported target. | Verify shared semantics on all current targets. Keep iOS as an architectural intent, not an acceptance claim, until toolchain, packaging, and native journey exist. |
+| Desktop/mobile shells | **KEEP Flutter; retain iOS contract only** | OR currently packages macOS, Windows, Linux, and Android through a shared Flutter product surface. OpenCut's rewrite multi-platform direction is not implemented; OpenTake, MLT/GES editors, and inspected mature NLEs do not prove this parity. iOS is not currently a supported target. | Verify shared semantics on all current targets. Keep iOS as an architectural intent, not an acceptance claim, until toolchain, packaging, and native journey exist. |
 | CLI/application API | **KEEP** | OR's typed Rust application requests and local IPC let GUI and CLI use one project host with revision checks and no TCP fallback. OpenCut's Editor API is a planned capability in the checked rewrite, not shipped evidence. | Keep commands semantic, discoverable, stable, and secret-safe. Use end-to-end parity tests. |
 | Agent/MCP integration | **BUILD on the command API; defer broad MCP surface** | OR has safe CLI/control primitives; OpenCut MCP/headless support is future tracker work. OpenTake has an MCP package but is GPL-3.0 and its compatibility with OR is unproven. | Add only task-oriented proposal/apply operations after human workflows exist. Never let an agent bypass revision checks or mutate a second document. |
 | Plugins | **DEFER / REMOVE from near-term scope** | OR's planned sandbox/API is substantial security/runtime work. OpenCut plugins are future work; no inspected compatible mature plugin host satisfies OR's platform, permission, resource, and licensing contract. | Keep declarative templates/assets and typed extension boundaries. Revisit executable plugins only for demonstrated user demand and a reviewed threat model. |
@@ -126,7 +128,7 @@ binary functionality is not evidence of reusable source. **Decision: do not
 copy Palmier code. Benchmark OpenTake behavior and monitor upstream only if a
 license-compatible contribution path and platform evidence appear.**
 
-### MLT, Shotcut, Kdenlive, OpenShot, and LosslessCut
+### MLT, GStreamer Editing Services, and mature editors
 
 [MLT](https://github.com/mltframework/mlt) is an actively maintained LGPL-2.1
 media framework with module-based producers, filters, transitions, and
@@ -142,8 +144,37 @@ and Android path must be demonstrated before adoption.
 actively built/tested, while the OpenShot application is GPL-3.0. Its C++,
 OpenCV, FFmpeg, audio, and language binding stack overlaps the OR media layer
 but does not demonstrate a lower-cost shared mobile integration. **Decision:
-MLT gets a bounded comparison POC; libopenshot remains a secondary candidate
-only if it solves a measured gap better.**
+keep it secondary unless a measured gap makes its capabilities materially
+better than MLT or GES.**
+
+[GStreamer Editing Services (GES)](https://gstreamer.freedesktop.org/documentation/gst-editing-services/)
+is an LGPL library built on GStreamer/GNonLin. It exposes timelines, layers,
+tracks, clips, transitions, project serialization, preview, and a render
+pipeline; its documentation describes cross-platform support on Unix-like
+systems and Windows. The official API also documents overlap constraints and
+commit-based timeline updates, so an adapter must map those rules deliberately
+rather than assume arbitrary OR overlap semantics. GStreamer plugin licensing,
+packaging, Rust/Flutter integration, Android behavior, and runtime performance
+remain unmeasured. **Decision: compare only against a measured gap; keep GES
+out of canonical project state.**
+
+[Flowblade](https://github.com/jliljebl/flowblade) is a GPL-3.0 Linux editor
+built on MLT. Its recent 2.24.2 release fixed an MLT 7.38 crash; release notes
+show continued work on UX, editing, audio, and packaging. It is strong evidence
+that MLT supports real multitrack editing, but the Linux-only GTK product and
+GPL application code are not reusable OR layers. **Decision: reference its
+MLT behavior and UX; do not copy Flowblade code.**
+
+[Pitivi](https://gitlab.gnome.org/GNOME/pitivi) is the GNOME editor built on
+GES. The GStreamer API documents GES as LGPL and cross-platform, while
+Pitivi's GTK/GNOME application is Linux-oriented and does not establish OR's
+shared mobile shell or runtime packaging. **Decision: use it as a GES behavior
+reference, not as OR's application foundation.**
+
+Blender's Video Sequence Editor is a capable part of the broader Blender
+suite, but Blender is GPL-3.0-or-later and is not a focused, embeddable editor
+engine. Its workflow is a useful editing interaction reference only.
+**Decision: REFERENCE; no code or runtime adoption.**
 
 [LosslessCut](https://github.com/mifi/lossless-cut) is GPL-2.0, Electron-based,
 and focused on stream-copy trimming/remuxing. It has valuable UX and media
@@ -272,11 +303,15 @@ leave that profile unshipped while a non-patent-encumbered route is evaluated.
 ## Evidence gaps and explicit experiments
 
 This audit is not a runtime benchmark. No project was installed or run locally
-as part of this evidence snapshot. Before replacing any working media
-subsystem, run one bounded hosted comparison using the same generated and
-redistributable fixtures:
+as part of this evidence snapshot. The engine experiment is gated on the
+packaged OR media baseline because a codec gap alone does not prove MLT or GES
+is a better fit: both depend on separately licensed codec/plugin builds and
+both add a native runtime boundary. If that baseline shows a material
+compatibility, reliability, or performance deficit, run one bounded hosted
+comparison using the same generated and redistributable fixtures:
 
-1. OR FFmpeg/wgpu baseline versus an MLT-backed decode/render/export adapter.
+1. OR FFmpeg/wgpu baseline versus the smaller MLT or GES decode/render/export
+   adapter; test the other candidate only if the first result is inconclusive.
 2. Exact seek and preview/export pixel/audio agreement on representative
    H.264/AAC, intra-frame, variable-frame-rate, text, alpha, and transition
    cases that OR claims to support.
@@ -285,15 +320,16 @@ redistributable fixtures:
    candidate can actually build.
 4. Clean package install and end-to-end import/edit/save/reopen/export journey
    with only shipped dependencies.
-5. License/module/package inspection for the exact MLT build and FFmpeg
-   configuration.
+5. License/module/package inspection for the exact selected framework build,
+   GStreamer/MLT plugin set, and FFmpeg configuration.
 
 OpenTake can be added as a desktop behavior benchmark, but GPL code remains
 outside OR unless the license decision changes. OpenCut should be re-audited
 when it ships an editor core/API, externally usable contribution path, and
 verifiable packages. These gates prevent both premature rewrites and
 indefinite discussion: the next product work is the useful user journey, while
-the engine experiment runs only when it can resolve a real architecture choice.
+the engine experiment has a concrete packaged-baseline trigger and bounded
+acceptance plan.
 
 ## Snapshot ledger
 
@@ -311,6 +347,7 @@ snapshot is not an endorsement and must be refreshed before integrating code.
 | Motion Canvas | `motion-canvas/motion-canvas@7b91435c301d530351dcf5ebb91dd139c002e405` (2025-07-02) | MIT; stable v3.17.2 with a newer alpha line; tests/E2E and CI; animation-authoring focus rather than NLE. |
 | Remotion | `remotion-dev/remotion@90e3db961921dadf99e8fd61eb18a6cd09265b4b` (2026-10-08) | v4.0.534; custom two-tier commercial license; React/browser rendering rather than native editor core. |
 | MLT | `mltframework/mlt@77ae5f8f8cb4e2f502c5dc868d6c7cf7b45bfc54` (2026-10-06) | LGPL-2.1 framework; v7.42.0; component/ctest coverage and Linux/macOS/Windows CI. |
+| GStreamer Editing Services (GES) | `GStreamer/gstreamer@8d08c320ce268d50d0609d22e4e1ca73accf1734` (2026-10-09), `subprojects/gst-editing-services` | The active GStreamer monorepo includes GES source, Meson build, API docs, examples, and LGPL license files; subproject version 1.29.2.1. Standalone GES repository history is stale, so maintenance evidence comes from the monorepo, not that mirror. No OR integration or performance test has run. |
 | Shotcut | `mltframework/shotcut@895ee392b6e0381353fbdc48b6889da9d3ad5c27` (2026-10-06) | GPL-3.0 desktop app; v26.9.27; active cross-platform releases and concrete fixes; built on MLT/FFmpeg. |
 | Kdenlive | v26.08.2 (2026-09 release) | GPL-3.0-or-KDE accepted GPL; MLT/KDE desktop app; tests, fuzzing, UI automation, and multi-platform packaging. |
 | libopenshot | `OpenShot/libopenshot@983c847ce7d0b7bfa4014d90bf86aa961a825f86` (2026-10-06) | LGPL-3.0 library; v1.0.1; C++/OpenCV/FFmpeg/audio dependencies and Linux/macOS/Windows CI; OpenShot application is GPL-3.0. |
@@ -495,11 +532,107 @@ therefore remains **BUILD on current FFmpeg/wgpu; compare MLT only against a
 specific measured gap before replacing a working path**.
 
 The default branches queried on 2026-10-10 for authentic OpenMontage,
-Open Generative AI, Palmier Pro, Remotion, MoneyPrinterTurbo, LosslessCut,
-Motion Canvas, Shotcut, and libopenshot matched the exact heads already listed
-in the 2026-10-09 snapshot ledger. Their previously recorded licensing,
+Palmier Pro, LosslessCut, Motion Canvas, MLT, and Shotcut matched the exact
+heads already listed in the 2026-10-09 snapshot ledger. Their licensing,
 architecture, release, and maturity boundaries remain unchanged. This is a
 source/release revalidation, not a claim that the audit installed or benchmarked
 those products. Upstream runtime evidence is not sufficient to compare against
 OR's cross-platform packaged journey; no replacement decision is made without
 that comparison.
+
+## Convergence recheck at product SHA `7dcbbd5` (2026-10-10)
+
+This review starts from exact `origin/main` and `HEAD`
+`7dcbbd5477652d35c0ea610e372cb7ea19b7b44c`, descended from the operator's
+reference `affc71a5bee840fed68536bfa47e7abe825b908e`. The repository's actual
+legacy cursor is `9D = DONE`, `9E = NEXT`; `MISSION.json` already marks legacy
+execution `PAUSED`, names `PRODUCT_ROADMAP.md` as active, and requires explicit
+requirement selection for coherent batches. The operator's older cursor
+snapshot is preserved as history; no PLAN/STATE transition was made.
+
+The in-flight explicit-discard correction is committed at `7dcbbd5` and
+preserves the process-death recovery contract. Its local Rust, Flutter widget,
+analysis, format, and Clippy checks passed. Exact-SHA hosted run
+[`38049557006`](https://github.com/huou07/Opencut-Reinforced/actions/runs/38049557006)
+was still in progress at this review, so no hosted product acceptance is
+claimed here.
+
+### Current code and maintenance evidence
+
+- **OpenCut rewrite** remains at
+  [`e6680107`](https://github.com/OpenCut-app/OpenCut/commit/e668010778568641babef2cc40be4703ae6916d6).
+  A shallow checkout confirms the Cargo workspace has only
+  `apps/desktop` active (`crates/*` remains commented out); its timeline panel
+  renders a placeholder label, and `main.rs` only opens the GPUI shell. The
+  [desktop README](https://github.com/OpenCut-app/OpenCut/blob/main/apps/desktop/README.md)
+  says it opens a window with no features. The rewrite tracker still proposes
+  the Editor API, engine, plugins, MCP/headless, and mobile. **Decision remains
+  KEEP OR / monitor OpenCut; do not migrate to the classic web release or the
+  current rewrite shell.**
+- **Open Generative AI** is now at
+  [`d8d624dc`](https://github.com/Anil-matcha/Open-Generative-AI/commit/d8d624dcf48a581fde18102f53d76a01a95ec58c).
+  The two commits since the last audit change README model counts and video
+  links only. The checked `package.json` confirms Next/React, Electron,
+  local-workspace packages, optional staged local inference binaries, and
+  separate macOS/Windows/Linux packaging. The repository-level MIT license
+  does not cover its submodules, models, or generated content. **Decision:
+  provider/workflow reference only; no application or model stack adoption.**
+- **MoneyPrinterTurbo** is now at
+  [`4204d0f3`](https://github.com/harry0703/MoneyPrinterTurbo/commit/4204d0f39afa8ada6f3edc31604141f959fe254e).
+  Its intervening source commits add Kimi Code OAuth, atomic task-state fixes,
+  caption timecode handling, batch-failure preservation, and corresponding
+  service/CLI tests. Its checked `pyproject.toml` remains a Python
+  FastAPI/Streamlit/CLI application with MoviePy, provider SDKs, Redis, and
+  subtitle/voice services; it does not expose a normal editor timeline.
+  **Decision: optional external generation/import workflow; no runtime reuse.**
+- **OpenTimelineIO** moved to
+  [`00c22fa3`](https://github.com/AcademySoftwareFoundation/OpenTimelineIO/commit/00c22fa3a64256d8d3dcafbc7276492185dd970d).
+  The intervening change fixes a null dereference and adds C++ and Python
+  regression tests. Its native format remains a good Apache-2.0 interchange
+  target; it remains unsuitable as OR's canonical project, recovery, or
+  permission model.
+- **Remotion** moved to
+  [`32af7e8f`](https://github.com/remotion-dev/remotion/commit/32af7e8f8ac67493ef81498d311af3dc9ca953a6)
+  with substantial active development since the last snapshot, including
+  rendering, timeline, caching, and performance changes. Its current
+  [core license](https://github.com/remotion-dev/remotion/blob/main/packages/core/LICENSE.md)
+  remains a custom two-tier license and the runtime remains React/browser
+  oriented. **Decision: no embedded runtime or code adoption.**
+- **Kdenlive** is at
+  [`b3588e05`](https://invent.kde.org/multimedia/kdenlive/-/commit/b3588e0507893ea5c119ba69df8347c68521b431);
+  **MLT** remains at
+  [`77ae5f8f`](https://github.com/mltframework/mlt/commit/77ae5f8f8cb4e2f502c5dc868d6c7cf7b45bfc54).
+  Both active codebases reinforce MLT's real editor use and maintenance, but
+  do not establish Flutter/Android fit or an OR runtime win.
+- **OpenShot Qt** is at
+  [`2cda6760`](https://github.com/OpenShot/openshot-qt/commit/2cda67602479a80b337b19470b70d52d9787776d),
+  and **libopenshot** remains at
+  [`983c847c`](https://github.com/OpenShot/libopenshot/commit/983c847ce7d0b7bfa4014d90bf86aa961a825f86).
+  This is an active GPL application plus LGPL library stack, not a proven
+  shared-mobile alternative to OR.
+
+### Additional directly relevant engine evidence
+
+GStreamer Editing Services is added as a peer to MLT in the bounded comparison
+set. The official [GES documentation](https://gstreamer.freedesktop.org/documentation/gst-editing-services/)
+describes its LGPL timeline, tracks/layers, clips, effects, transitions,
+project serialization, preview/render pipeline, and Unix-like/Windows support.
+Its [timeline API](https://gstreamer.freedesktop.org/documentation/gst-editing-services/gestimeline.html)
+also imposes overlap rules and explicit commit semantics. That makes it a real
+engine candidate and a real adapter constraint, not a drop-in for OR's exact
+time/overlap/command semantics. The current source is in the GStreamer
+monorepo at pinned commit
+[`8d08c320`](https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/8d08c320ce268d50d0609d22e4e1ca73accf1734),
+under `subprojects/gst-editing-services`; that tree contains the LGPL source,
+Meson build, examples, API docs, and tests. Its subproject build reports
+version 1.29.2.1. The older standalone GES repository is not the maintenance
+signal to use. GStreamer plugin-license closure and OR packaging/performance
+costs remain unmeasured. Decision remains **REUSE only if a packaged baseline
+demonstrates a gap and a bounded integration test beats the current path**.
+
+Flowblade provides a real MLT application reference: its GPL-3.0 editor is
+Linux/GTK focused and its [2.24.2 release notes](https://github.com/jliljebl/flowblade/releases)
+record an MLT 7.38 crash fix and continued editing/audio/UX work. Pitivi is a
+GNOME/GES reference; Blender's VSE is a broader GPL-3.0-or-later suite rather
+than a focused engine. These add interaction and engine evidence without
+changing the MIT OR adoption decision.
