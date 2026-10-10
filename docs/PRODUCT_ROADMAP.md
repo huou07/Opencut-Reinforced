@@ -283,6 +283,25 @@ representative device hardware identifies the responsible path and shows
 acceptable playback and interaction latency. The current run proves journey
 correctness and resource release, not performance acceptance.
 
+Run `38036564801` on exact product SHA
+`7d25d17cc9c4996c556a86b0d349202fedbce371` completed successfully across Rust,
+Flutter static/widget, granted-descriptor boundary, and packaged Linux,
+Windows, macOS, and Android jobs. Android's SAF journey passed all 25 recorded
+checks, including multi-file video/audio import, AAudio playback-clock
+progression, preview pixels through background/resume and recovery, mobile
+touch editing surfaces, relink identity/reference preservation, export,
+permission enforcement/recovery, bounded presentation stress, and zero final
+media FDs or in-flight leases. The report measured a 7,897 µs maximum Android
+canvas-lock time on the API 36 x86_64 SwiftShader emulator, compared with
+145,009 µs in the preceding software-canvas run; full stage measurements and
+structured per-file import results are in the
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38036564801).
+This is useful evidence for the hardware-canvas path and confirms that the
+earlier missing-audio report came from incomplete test diagnostics, not a
+reproduced import failure. It is still debug-emulator evidence: physical-device
+GPU behavior, release-build latency, and Android performance acceptance remain
+open.
+
 Run `37898610367` on exact product SHA
 `eee5d2413cbf5334c27a05a6523fc09a9b6acf41` passed Rust, Flutter static/widget,
 descriptor-boundary, Linux and Windows packaged verification. Android built

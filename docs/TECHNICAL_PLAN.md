@@ -875,6 +875,22 @@ performance claim. The Android SAF test records a resource snapshot immediately
 after surface resume and preserves structured results for each imported item,
 so a later journey failure does not discard the earlier render measurements or
 the import error that caused it.
+
+Exact-SHA platform run
+[38036564801](https://github.com/huou07/Opencut-Reinforced/actions/runs/38036564801)
+on `7d25d17cc9c4996c556a86b0d349202fedbce371` passed every hosted job,
+including the complete Android SAF journey. On the API 36 x86_64 SwiftShader
+emulator, the journey report measured a maximum canvas-lock time of 7,897 µs,
+canvas draw of 495 µs, `unlockCanvasAndPost` of 8,290 µs, and total main draw
+of 13,254 µs; all three selected SAF media sources imported successfully. The
+prior software-canvas run measured a 145,009 µs maximum canvas lock on the same
+hosted emulator configuration. This isolates canvas acquisition as a major
+emulator bottleneck and supports retaining the hardware-canvas implementation.
+The stress phase remained bounded (peak eight pending presentations, excess
+requests rejected, zero in-flight frame leases at completion). These debug
+emulator measurements do not establish release performance or physical-device
+GPU behavior; those remain unverified.
+
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 
