@@ -545,19 +545,23 @@ real package and user journey pass. The audit keeps FFmpeg as the current
 media foundation; MLT/GES remain measured comparison candidates, not
 prerequisites or assumed replacements.
 
-Exact-SHA run [38051317718](https://github.com/huou07/Opencut-Reinforced/actions/runs/38051317718)
-on `6d9d1854111cc81140e4f3b45b7e1b1e8a74e16a` verified Android's packaged
-H.264/AAC SAF import, caption and audio journeys, recovery, relink, and export;
-the report records bounded queues, zero final media descriptors/frame leases,
-and `hardware=UNVERIFIED`. The x86_64 emulator reported a 35,947µs maximum main
-draw and 194 skipped frames on the OR process; this is not physical-device
-performance evidence. Linux, Windows, and macOS packaged journeys reached
-relink but used a 1.0s MP4 clip with a 0.5s replacement, which the core
-correctly rejected to preserve the saved source range. This is a fixture
-mismatch, not evidence to weaken relink validation. The desktop candidate
-remains unaccepted pending a duration-compatible journey rerun; MP4 decoding
-also remains a candidate pending codec patent/distribution review and
-representative-media verification.
+Run [38051317718](https://github.com/huou07/Opencut-Reinforced/actions/runs/38051317718)
+on `6d9d1854111cc81140e4f3b45b7e1b1e8a74e16a` exposed a packaged-test fixture
+mismatch: the 1.0s MP4 clip could not be relinked to the 0.5s Matroska file, and
+the core correctly preserved its source-range guard. The fixture duration was
+aligned in `7fa7f749eae235536a6ac5a5cd4ffecf7443cbf2`. Exact-SHA run
+[38053268217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38053268217)
+on `7fa7f749eae235536a6ac5a5cd4ffecf7443cbf2` then passed all seven hosted
+jobs, including clean packaged create/reopen/relink/export on Linux, Windows,
+and macOS, plus Android all-ABI APK, H.264/AAC SAF import, captions, audio,
+recovery, relink, and export. Android's report records 1,046µs MP4 import, a
+valid 96,963-byte Matroska export, 43,034µs maximum main draw, zero final
+media descriptors/frame leases, and `hardware=UNVERIFIED`; the guest log also
+records 136 skipped frames on the OR process. This emulator result is not
+physical-device performance evidence. The candidate uses a tiny generated
+fixture, so representative camera-media compatibility and codec
+patent/distribution review remain before H.264/AAC is a supported release
+profile. MP4 export remains separate future work.
 
 Run [37962108563](https://github.com/huou07/Opencut-Reinforced/actions/runs/37962108563)
 on exact product SHA `e6f2afb6c808a8bea073829b17128e0b3116720e` passed Rust,

@@ -295,9 +295,14 @@ standalone PCM WAV audio:
 
 An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
 audio import through the same FFmpeg decoder and Rust import path. The candidate
-is not yet a supported release profile: hosted package builds and real packaged
-desktop and Android user journeys must pass first. It does not add MP4 export;
-the lossless Matroska export remains available.
+passed exact-SHA packaged desktop and Android journeys in run
+[38053268217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38053268217)
+on `7fa7f749eae235536a6ac5a5cd4ffecf7443cbf2`. Its generated 32×24 fixture
+proves the packaged probe/decode path and MP4-family relink compatibility only;
+it does not establish compatibility or performance with representative camera
+media. The import profile remains a candidate pending that media verification
+and codec patent/distribution review. It does not add MP4 export; the lossless
+Matroska export remains available.
 
 A file whose signature is outside Matroska, RIFF/RF64 WAV, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska
@@ -306,10 +311,10 @@ probing. Neither case is reported as corruption. Audio-only WAV can be placed
 on an audio track and decoded by the same software preview path as Matroska
 audio.
 WebM, H.265, VP9, and AV1 remain future import profiles. MP4/MOV H.264/AAC
-import is pending exact-SHA package and user-journey verification, and every
-distribution must separately review codec patent obligations. MP4/MOV export
-remains future work requiring the same legal, platform, and build-configuration
-review as other optional delivery profiles.
+package and user-journey verification passed on the candidate SHA above, but
+every distribution must separately review codec patent obligations.
+MP4/MOV export remains future work requiring the same legal, platform, and
+build-configuration review as other optional delivery profiles.
 
 ## Export
 
