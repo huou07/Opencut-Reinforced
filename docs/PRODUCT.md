@@ -304,10 +304,17 @@ media. OR's CLI probe and software decoder now also have a regression fixture
 with a licensed 1080p H.264 Big Buck Bunny video excerpt and generated silent
 5.1 AAC; that exercises real high-resolution frames and surround-audio
 downmix through the Rust path without redistributing the separately licensed
-score. It is not yet evidence for clean packaged journeys, camera-source
-variation, or physical-device performance. The import profile remains a
-candidate pending those checks and codec patent/distribution review. It does
-not add MP4 export; the lossless Matroska export remains available.
+score. The clean packaged desktop journey now uses this media for import,
+thumbnail, timeline preview, save/reopen, relink, and export; its hosted
+verification is pending. Exact SHA `24373b8221a43be5691ade1501c6cf4b018525ac`
+passed all seven jobs in
+[run 38057341264](https://github.com/huou07/Opencut-Reinforced/actions/runs/38057341264).
+The Rust job passed all 12 software-decode tests including this fixture, while
+that SHA's packaged desktop journey still used the tiny fixture. Neither the
+current Rust proof nor the pending desktop path establishes camera-source
+variation or physical-device performance. The import profile remains a
+candidate pending packaged acceptance and codec patent/distribution review.
+It does not add MP4 export; the lossless Matroska export remains available.
 
 A file whose signature is outside Matroska, RIFF/RF64 WAV, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska

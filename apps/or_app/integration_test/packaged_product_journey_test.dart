@@ -116,8 +116,8 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(find.byKey(const ValueKey('media-import')));
   await _pumpUntil(
     tester,
-    () => find.text('phone.mp4').evaluate().isNotEmpty,
-    'packaged H.264/AAC MP4 import',
+    () => find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
+    'packaged 1080p H.264/AAC MP4 import',
   );
   final mediaId = _singleKeySuffix(tester, 'media-preview-');
   await _pumpUntil(
@@ -231,7 +231,7 @@ Future<void> _reopenAndExport(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('phone.mp4').evaluate().isNotEmpty &&
+        find.text('big-buck-bunny.mp4').evaluate().isNotEmpty &&
         _hasKeyPrefix(tester, 'timeline-clip-'),
     'saved project reopen with media and timeline',
     attempts: 900,
