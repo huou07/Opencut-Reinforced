@@ -25,5 +25,14 @@ stripping global metadata, including device location. It contains 1920×1080
 H.264 video and stereo 48 kHz AAC; SHA-256 is
 `9e7618482872476a801271b847bedfca1cbf1722b0f7717415c52c960f2d7811`.
 
+`cc0_music_excerpt.mp3` is a three-second stream-copy excerpt of “Try me!” by
+iamoneabe, downloaded from [OpenGameArt](https://opengameart.org/content/try-me)
+under CC0 / public domain. The source file SHA-256 is
+`9dd9c59a16cfc9a6c991c56448c5f33ed1af79f8720dc0c5e91166fded95e4b5`; the
+excerpt SHA-256 is
+`d182f4087c7f8e1277e80ead98cd10b2f39e3538949bdd1a1417dbdccf7f18cc`.
+It retains its 44.1 kHz stereo MP3 stream and is used for import, decode, and
+packaged Android SAF/audio-playback acceptance.
+
 The remaining tiny fixtures are generated specifically for deterministic
 correctness tests and contain no third-party media.

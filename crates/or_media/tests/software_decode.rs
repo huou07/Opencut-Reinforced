@@ -10,6 +10,7 @@ use std::time::Instant;
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
+const MP3_FIXTURE: &str = "tests/fixtures/cc0_music_excerpt.mp3";
 const PHONE_FIXTURE: &str = "tests/fixtures/tiny_h264_aac.mp4";
 const BIG_BUCK_BUNNY_FIXTURE: &str = "tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4";
 const PHONE_PORTRAIT_FIXTURE: &str = "tests/fixtures/phone_portrait_90_h264_aac.mp4";
@@ -326,6 +327,47 @@ fn software_decoder_reads_audio_only_pcm_wav() {
         decoded_sample_frames += chunk.sample_frames();
     }
     assert_eq!(decoded_sample_frames, 12_000);
+}
+
+#[test]
+fn software_decoder_reads_audio_only_mp3() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MP3_FIXTURE);
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let snapshot = snapshot(time(0, 1), time(1, 8));
+    let queue = SnapshotQueue::new(snapshot, 16).unwrap();
+    let cancellation = CancellationToken::new();
+    assert!(
+        decoder
+            .decode_audio(snapshot, &queue, &cancellation)
+            .unwrap()
+            > 0
+    );
+    let mut decoded_sample_frames = 0;
+    let mut first_timestamp = None;
+    let mut final_end = None;
+    while let Some(item) = queue.try_pop_current().unwrap() {
+        let chunk = item.into_value();
+        assert_eq!(chunk.sample_rate(), 48_000);
+        assert_eq!(chunk.channels(), 2);
+        first_timestamp.get_or_insert(chunk.timestamp());
+        final_end = Some(
+            chunk
+                .timestamp()
+                .checked_add(time(chunk.sample_frames() as i64, 48_000))
+                .unwrap(),
+        );
+        decoded_sample_frames += chunk.sample_frames();
+    }
+    assert!(decoded_sample_frames > 0);
+    assert!(
+        first_timestamp.is_some_and(|timestamp| {
+            timestamp > RationalTime::ZERO && timestamp < time(1, 100)
+        })
+    );
+    let end_gap = time(1, 8).checked_sub(final_end.unwrap()).unwrap();
+    assert!(end_gap.is_positive());
+    assert!(i128::from(end_gap.numerator()) * 48_000 <= i128::from(end_gap.denominator()));
 }
 
 #[test]

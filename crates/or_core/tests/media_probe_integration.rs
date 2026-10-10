@@ -1,6 +1,6 @@
 use or_core::{
-    MediaStreamMetadata, ProjectFileSession, ProjectRevision, decode_project, prepare_media_import,
-    probe_media_file,
+    MediaStreamMetadata, ProjectFileSession, ProjectRevision, decode_project,
+    parse_media_probe_output, prepare_media_import, probe_media_file,
 };
 use std::{
     fs,
@@ -85,6 +85,49 @@ fn ffprobe_imports_pcm_wav_as_audio_only_media() {
 
     let prepared = prepare_media_import(&path).expect("prepare generated PCM WAV import");
     assert_eq!(prepared.metadata(), &metadata);
+}
+
+#[test]
+#[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
+fn ffprobe_imports_real_cc0_mp3_as_audio_only_media() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../or_media/tests/fixtures/cc0_music_excerpt.mp3");
+
+    let metadata = probe_media_file(&path).expect("probe real CC0 MP3 music excerpt");
+    assert!(metadata.format_names().iter().any(|name| name == "mp3"));
+    assert!(
+        metadata
+            .duration()
+            .is_some_and(|duration| duration.is_positive())
+    );
+    assert_eq!(metadata.streams().len(), 1);
+    assert!(matches!(
+        &metadata.streams()[0],
+        MediaStreamMetadata::Audio(audio)
+            if audio.codec_name() == Some("mp3") && audio.sample_rate() == Some(44_100)
+    ));
+
+    let prepared = prepare_media_import(&path).expect("prepare real MP3 import");
+    assert_eq!(prepared.metadata(), &metadata);
+}
+
+#[test]
+fn mp3_import_ignores_an_attached_cover_art_stream() {
+    let output = br#"{
+        "streams": [
+            {"index": 0, "codec_type": "video", "codec_name": "mjpeg", "width": 600, "height": 600,
+             "disposition": {"attached_pic": 1}},
+            {"index": 1, "codec_type": "audio", "codec_name": "mp3", "sample_rate": "44100", "channels": 2}
+        ],
+        "format": {"format_name": "mp3", "duration": "12.0"}
+    }"#;
+
+    let metadata = parse_media_probe_output(output, 1024).unwrap();
+    assert_eq!(metadata.streams().len(), 1);
+    assert!(matches!(
+        &metadata.streams()[0],
+        MediaStreamMetadata::Audio(audio) if audio.codec_name() == Some("mp3")
+    ));
 }
 
 #[test]

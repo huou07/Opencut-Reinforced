@@ -16,7 +16,7 @@ def report():
             'content://dev.opencut.saffixture.documents/document/media-second',
             'content://dev.opencut.saffixture.documents/document/media-audio',
         ],
-        'mediaImportAudioOnlyPcmWav': True,
+        'mediaImportAudioOnlyMp3': True,
         'mediaImportH264AacMp4': True,
         'audioPlaybackErrorCode': '', 'audioPlaybackClockNumerator': '1',
         'audioPausedPositionNumerator': '1',
@@ -135,10 +135,10 @@ class ReportTest(unittest.TestCase):
         value['androidSafAcceptance']['exportValidMatroska'] = False
         with self.assertRaises(ValueError): verify(value)
 
-    def test_android_media_import_requires_mp4_and_audio_only_wav(self):
+    def test_android_media_import_requires_mp4_and_audio_only_mp3(self):
         for invalid in (False, None):
             value = report()
-            value['androidSafAcceptance']['mediaImportAudioOnlyPcmWav'] = invalid
+            value['androidSafAcceptance']['mediaImportAudioOnlyMp3'] = invalid
             with self.assertRaises(ValueError): verify(value)
         value = report()
         value['androidSafAcceptance']['mediaImportH264AacMp4'] = False

@@ -69,7 +69,7 @@ int _providerFds() {
       if (target.contains('/dev.opencut.saffixture/') &&
           (target.endsWith('/tiny.mkv') ||
               target.endsWith('/tiny_h264_aac.mp4') ||
-              target.endsWith('/tiny.wav') ||
+              target.endsWith('/music.mp3') ||
               target.endsWith('/relink-replacement.mkv'))) {
         count++;
       }
@@ -796,7 +796,7 @@ void main() {
       expect(imported.items[1].formatNames, contains('mov'));
       expect(imported.items[1].videoDetails, contains('h264'));
       expect(imported.items[1].audioDetails, contains('aac'));
-      expect(imported.items[2].formatNames, contains('wav'));
+      expect(imported.items[2].formatNames, contains('mp3'));
       expect(imported.items[2].videoDetails, isNull);
       expect(imported.items[2].audioDetails, isNotNull);
       final importedRevision = (await gateway.summary(session)).revision;
@@ -1219,7 +1219,7 @@ void main() {
       final importedAudio = reopenedMedia.items.singleWhere(
         (item) => item.sourceUri == _source('media-audio'),
       );
-      expect(importedAudio.formatNames, contains('wav'));
+      expect(importedAudio.formatNames, contains('mp3'));
       expect(importedAudio.audioDetails, isNotNull);
       final addedAudioTrack = await secondGateway.addTimelineTrack(
         second,
@@ -1265,7 +1265,7 @@ void main() {
       expect(
         audioClockTick.position.numerator,
         greaterThan(BigInt.zero),
-        reason: 'Audio output device clock should advance while the WAV clip plays.',
+        reason: 'Audio output device clock should advance while the MP3 clip plays.',
       );
       final paused = await secondGateway.previewPause(second);
       expect(paused.position.numerator, greaterThan(BigInt.zero));
@@ -1502,8 +1502,8 @@ void main() {
           'captionExportBytes': captionExport['captionExportBytes'],
           'captionExportValidSrt': captionExport['validSrtCaption'],
           'mediaImportMicros': gateway.importMicros,
-          'mediaImportAudioOnlyPcmWav':
-              imported.items[2].formatNames.contains('wav') &&
+          'mediaImportAudioOnlyMp3':
+              imported.items[2].formatNames.contains('mp3') &&
               imported.items[2].videoDetails == null &&
               imported.items[2].audioDetails != null,
           'mediaImportH264AacMp4':

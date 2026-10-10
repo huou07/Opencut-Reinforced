@@ -518,23 +518,21 @@ does not claim that arbitrary forced surface replacement is product behavior.
 [Flutter SurfaceProducer API](https://api.flutter.dev/javadoc/io/flutter/view/TextureRegistry.SurfaceProducer.html),
 [Flutter Android surface lifecycle guidance](https://docs.flutter.dev/release/breaking-changes/android-surface-plugins).
 
-## Next high-value product gap: everyday media compatibility
+## Current product priority: everyday media and useful delivery
 
 The verified lossless export profile emits Matroska with FFV1 video and PCM
-S16LE audio; that is a correctness profile, not useful general-purpose media
-support for normal phone and camera footage. PCM WAV import already uses the
-shared probe, decoder, timeline, and Android SAF paths. A new implementation
-candidate adds ISO BMFF/MP4-family H.264 video and AAC audio import to the same
-path, with focused generated fixtures and the licensed 1080p excerpt recorded
-below. Exact-SHA desktop journeys now pass with the representative 1080p
-H.264/AAC source on Linux, Windows, and macOS. Android's current packaged
-journey still uses the generated MP4 fixture, so representative phone-source
-acceptance remains open. Codec patent/distribution review also remains open.
-MP4
-export remains separate future work because the current LGPL-only runtime does
-not include a supported H.264 encoder. Treat format support as a connected
-product capability spanning probing/import, package configuration,
-decode/preview, and usable delivery rather than isolated roadmap checkpoints.
+S16LE audio; it proves correctness but is not useful general-purpose delivery.
+H.264/AAC import now uses the shared Rust probe, decoder, timeline, and Android
+SAF paths. Exact-SHA desktop journeys use representative 1080p H.264/AAC media
+on Linux, Windows, and macOS; Android currently verifies H.264/AAC with a
+generated phone-shaped fixture, while representative phone-source acceptance
+and per-market codec distribution review remain open. A three-second CC0 MP3
+music excerpt is being added to the shared import/decode path and the Android
+SAF-to-audio-track playback journey; current source checks pass, with packaged
+exact-SHA verification pending. MP4 export and a generally useful compressed
+delivery profile remain the highest-value follow-on gap. Treat format support
+as a connected user capability spanning probe/import, package configuration,
+decode/preview, editing, persistence, and delivery.
 
 A real-media Rust proof now complements the small packaged fixture: OR's CLI
 probe accepted a pinned 1080p H.264 sample; the software decoder test decodes a
@@ -551,16 +549,17 @@ to a tiny fixture before export; the resulting 98 KB FFV1/PCM file is valid
 correctness evidence, not proof of useful full-quality delivery. Android's
 journey still uses synthetic media. This does not establish broader camera
 variation, phone-source Android acceptance, or codec distribution review.
-The desktop acceptance now exports before relink and requires the packaged
-FFmpeg tools to probe and fully decode the real-media 1920×1080 output. Exact-
-SHA run [38065960069](https://github.com/huou07/Opencut-Reinforced/actions/runs/38065960069)
-on `20e4ecb9a83509f00923597a12ed62e554d9a8e9` passed Android, Rust, Flutter,
-and descriptor-boundary jobs. Linux, Windows, and macOS all completed the
-real-media export journey, then failed only because the deliberately minimal
-packaged FFmpeg helper does not include the `null` output muxer used by the
-final full-decode assertion. Android passed its SAF preview/resource-bound
-journey. This run does not yet establish packaged full-decode acceptance on
-desktop.
+The desktop acceptance exports before relink and uses packaged `ffprobe` to
+fully decode the real-media 1920×1080 result. The assertion initially used a
+`null` muxer omitted from the minimal FFmpeg helper; it now uses packaged
+`ffprobe -count_frames`. Exact-SHA run
+[38069838351](https://github.com/huou07/Opencut-Reinforced/actions/runs/38069838351)
+on `11e82c03bd82e03c3af3e9a089c73b44ef13bcde` passed all seven platform,
+packaging, Rust, Flutter, and descriptor-boundary jobs. Linux, Windows, and
+macOS reports each record a 267,197-byte Matroska/FFV1/PCM correctness output
+with 12 video and 12 audio frames fully decoded by the packaged tool; Android
+passed its SAF journey. This 0.5-second lossless output is not evidence of
+practical compressed delivery or long-form export performance.
 
 The same real-phone source exposed a separate preview correctness gap: its
 H.264 stream is coded at 1920×1080 with a 90-degree display matrix. The Rust

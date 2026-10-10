@@ -22,7 +22,7 @@ const MAX_STDOUT_BYTES: usize = 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 const MAX_DIAGNOSTIC_CHARS: usize = 512;
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
-const SHOW_ENTRIES: &str = "format=format_name,duration:stream=index,codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_rate,channels,channel_layout,duration";
+const SHOW_ENTRIES: &str = "format=format_name,duration:stream=index,codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_rate,channels,channel_layout,duration,disposition=attached_pic";
 
 /// Stable machine-readable classification for a local media-probe failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -129,8 +129,9 @@ impl Error for MediaProbeError {}
 ///
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
 /// a project, or mutate project revision/history. Files outside the supported
-/// import profiles (Matroska with FFV1 video and/or PCM S16LE audio, or
-/// audio-only PCM S16LE WAV) are rejected as unsupported formats.
+/// import profiles (Matroska with FFV1 video and/or PCM S16LE audio,
+/// audio-only PCM S16LE WAV or MP3, or MOV-family H.264/AAC) are rejected as
+/// unsupported formats.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
     let metadata = FfprobeBackend::from_environment().probe(path)?;
     enforce_import_matrix(&metadata)?;
@@ -458,6 +459,9 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
         let fields = stream
             .as_object()
             .ok_or_else(|| MediaProbeError::new(MediaProbeErrorCode::InvalidProbeOutput))?;
+        if format_names.iter().any(|name| name == "mp3") && attached_picture(fields)? {
+            continue;
+        }
         let index = required_u32(fields, "index")?;
         let codec_type = optional_string(fields, "codec_type")?;
         let codec_name = optional_string(fields, "codec_name")?;
@@ -508,11 +512,33 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
     Ok(metadata)
 }
 
+fn attached_picture(fields: &Map<String, Value>) -> Result<bool, MediaProbeError> {
+    let Some(disposition) = fields.get("disposition") else {
+        return Ok(false);
+    };
+    let Some(disposition) = disposition.as_object() else {
+        return Err(MediaProbeError::new(
+            MediaProbeErrorCode::InvalidMediaMetadata,
+        ));
+    };
+    match disposition.get("attached_pic") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Number(value)) if value.as_u64().is_some() => {
+            Ok(value.as_u64().is_some_and(|value| value != 0))
+        }
+        Some(Value::String(value)) if value == "0" || value == "1" => Ok(value == "1"),
+        _ => Err(MediaProbeError::new(
+            MediaProbeErrorCode::InvalidMediaMetadata,
+        )),
+    }
+}
+
 /// EBML header shared by Matroska and WebM.
 const EBML_HEADER: &[u8; 4] = b"\x1a\x45\xdf\xa3";
 const RIFF_HEADER: &[u8; 4] = b"RIFF";
 const RF64_HEADER: &[u8; 4] = b"RF64";
 const WAVE_HEADER: &[u8; 4] = b"WAVE";
+const ID3_HEADER: &[u8; 3] = b"ID3";
 
 /// Video and audio codecs retained by the lossless Matroska profile.
 const MATRIX_VIDEO_CODEC: &str = "ffv1";
@@ -521,7 +547,7 @@ const MOV_VIDEO_CODEC: &str = "h264";
 const MOV_AUDIO_CODEC: &str = "aac";
 const MOV_FORMAT_NAMES: &[&str] = &["mov", "mp4", "m4a", "3gp", "3g2", "mj2"];
 
-/// Rejects containers outside the shipped Matroska, WAV, and ISO BMFF profiles
+/// Rejects containers outside the shipped Matroska, WAV, MP3, and ISO BMFF profiles
 /// before spawning the probe backend.
 fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     use std::io::Read as _;
@@ -530,7 +556,10 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
         fs::File::open(path).map_err(|_| MediaProbeError::new(MediaProbeErrorCode::ProbeFailed))?;
     file.read_exact(&mut header[..4])
         .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
-    if &header[..4] == EBML_HEADER {
+    if &header[..4] == EBML_HEADER
+        || &header[..3] == ID3_HEADER
+        || (header[0] == 0xff && header[1] & 0xe0 == 0xe0)
+    {
         Ok(())
     } else if &header[..4] == RIFF_HEADER || &header[..4] == RF64_HEADER {
         file.read_exact(&mut header[4..])
@@ -558,7 +587,8 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
 /// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// WAV is audio-only PCM S16LE; MOV/MP4 is H.264 video and/or AAC audio.
+/// WAV is audio-only PCM S16LE; MP3 is audio-only MP3; MOV/MP4 is H.264 video
+/// and/or AAC audio.
 /// Unsupported streams are reported as unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
     let is_matroska = metadata
@@ -566,11 +596,12 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
         .iter()
         .any(|name| name == "matroska");
     let is_wav = metadata.format_names().iter().any(|name| name == "wav");
+    let is_mp3 = metadata.format_names().iter().any(|name| name == "mp3");
     let is_mov = metadata
         .format_names()
         .iter()
         .any(|name| MOV_FORMAT_NAMES.contains(&name.as_str()));
-    if !is_matroska && !is_wav && !is_mov {
+    if !is_matroska && !is_wav && !is_mp3 && !is_mov {
         return Err(MediaProbeError::new(
             MediaProbeErrorCode::UnsupportedContainer,
         ));
@@ -585,6 +616,7 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
                 has_audio = true;
                 audio.codec_name().is_some_and(|codec| {
                     (is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC
+                        || is_mp3 && codec == "mp3"
                         || is_mov && codec == MOV_AUDIO_CODEC
                 })
             }
@@ -594,10 +626,10 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
             return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
         }
     }
-    if is_wav && !has_audio {
+    if (is_wav || is_mp3) && !has_audio {
         return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
-    if is_mov
+    if (is_mov || is_mp3)
         && !metadata.streams().iter().any(|stream| {
             matches!(
                 stream,

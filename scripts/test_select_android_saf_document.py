@@ -72,7 +72,7 @@ MEDIA_SECOND_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="false" />
   <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
-  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="2" text="music.mp3" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,440][1080,540]" selected="false" />
   <node index="3" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
@@ -95,7 +95,7 @@ MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="false" />
   <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
-  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="2" text="music.mp3" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
 </hierarchy>
 """
@@ -113,7 +113,7 @@ MEDIA_FIRST_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
   <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="false" />
-  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="2" text="music.mp3" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
   <node index="3" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[208,24][272,72]" />
@@ -126,14 +126,14 @@ MEDIA_FIRST_TWO_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[24,200][296,260]" selected="true" />
   <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,272][296,332]" selected="true" />
-  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="2" text="music.mp3" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[24,344][296,404]" selected="false" />
   <node index="3" text="Select" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[208,24][272,72]" />
 </hierarchy>
 """
 
-MEDIA_WAV_CLIPPED = b"""<?xml version='1.0' encoding='UTF-8'?>
+MEDIA_MP3_CLIPPED = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="" class="android.widget.ScrollView"
         package="com.google.android.documentsui" scrollable="true"
@@ -144,7 +144,7 @@ MEDIA_WAV_CLIPPED = b"""<?xml version='1.0' encoding='UTF-8'?>
   <node index="2" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.google.android.documentsui" bounds="[72,559][187,581]"
         selected="true" />
-  <node index="3" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="3" text="music.mp3" class="android.widget.LinearLayout"
         package="com.google.android.documentsui" enabled="false"
         bounds="[72,632][131,640]" selected="false" />
   <node index="4" text="Select" class="android.widget.Button"
@@ -159,7 +159,7 @@ MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
         package="com.android.documentsui" bounds="[0,200][1080,300]" selected="true" />
   <node index="1" text="phone.mp4" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,320][1080,420]" selected="true" />
-  <node index="2" text="tiny.wav" class="android.widget.LinearLayout"
+  <node index="2" text="music.mp3" class="android.widget.LinearLayout"
         package="com.android.documentsui" bounds="[0,440][1080,540]" selected="true" />
   <node index="3" text="Open" class="android.widget.Button"
         package="com.android.documentsui" enabled="true" bounds="[900,700][1080,800]" />
@@ -329,14 +329,14 @@ class SelectorTests(unittest.TestCase):
             self.assertIn("action=tap target=list-view", selection_log)
             self.assertIn("action=long-press target=tiny.mkv", selection_log)
             self.assertIn("action=tap target=phone.mp4", selection_log)
-            self.assertIn("action=tap target=tiny.wav", selection_log)
+            self.assertIn("action=tap target=music.mp3", selection_log)
             selected_report = (output / "documents-ui-selection.txt").read_text()
             self.assertIn(
-                "Selected phone.mp4,tiny.mkv,tiny.wav for media through native DocumentsUI.",
+                "Selected music.mp3,phone.mp4,tiny.mkv for media through native DocumentsUI.",
                 selected_report,
             )
 
-    def test_media_flow_scrolls_clipped_wav_tile_before_tapping(self):
+    def test_media_flow_scrolls_clipped_mp3_tile_before_tapping(self):
         with tempfile.TemporaryDirectory() as work:
             root = Path(work)
             guest = root / "guest.log"
@@ -348,7 +348,7 @@ class SelectorTests(unittest.TestCase):
                 PROVIDER,
                 MEDIA_LIST,
                 MEDIA_FIRST_SELECTED,
-                MEDIA_WAV_CLIPPED,
+                MEDIA_MP3_CLIPPED,
                 MEDIA_FIRST_TWO_SELECTED,
                 MEDIA_OPEN,
             ]
@@ -368,7 +368,7 @@ class SelectorTests(unittest.TestCase):
                 ],
             )
             self.assertIn(
-                "action=scroll target=tiny.wav",
+                "action=scroll target=music.mp3",
                 (output / "documents-ui-selector.log").read_text(),
             )
 

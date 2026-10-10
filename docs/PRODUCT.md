@@ -285,13 +285,15 @@ Normal import, thumbnails, waveforms, proxies, preview, and export run on the
 packaged FFmpeg 8.1.3 runtime in supported packages: no system `ffmpeg`/`ffprobe`
 or developer `PATH` override is required for a packaged user journey.
 
-The previously verified profile supports Matroska video and audio, plus
-standalone PCM WAV audio:
+The verified packaged profile supports Matroska video/audio and standalone PCM
+WAV. This change adds standalone MP3 to the same import/decode path; its
+exact-SHA packaged cross-platform verification is pending:
 
 | Container | Supported streams |
 | --- | --- |
 | Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
 | RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
+| MP3 (`.mp3`) | Audio-only MP3; candidate pending packaged verification |
 
 An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
 audio import through the same FFmpeg decoder and Rust import path. The candidate
@@ -316,12 +318,17 @@ variation or physical-device performance. The import profile remains a
 candidate pending packaged acceptance and codec patent/distribution review.
 It does not add MP4 export; the lossless Matroska export remains available.
 
-A file whose signature is outside Matroska, RIFF/RF64 WAV, or ISO BMFF is rejected as an
+A file whose signature is outside Matroska, RIFF/RF64 WAV, MP3, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska
 streams outside FFV1/PCM S16LE, are rejected as unsupported codecs after
-probing. Neither case is reported as corruption. Audio-only WAV can be placed
-on an audio track and decoded by the same software preview path as Matroska
-audio.
+probing. MP3 cover-art streams are ignored as attached pictures; MP3 video or
+non-MP3 audio is rejected. Unsupported media is not reported as corruption.
+Audio-only WAV and MP3 can be placed on an audio track and decoded by the same
+software preview path as Matroska audio. The bundled MP3 excerpt is CC0; the
+FFmpeg decoder remains part of the existing LGPL-only runtime configuration.
+Fraunhofer reports the final core patents in its MP3 licensing program expired
+in 2017; codec and distribution review remains a release obligation for each
+target market ([Fraunhofer IIS](https://www.audioblog.iis.fraunhofer.com/mp3-software-patents-licenses)).
 WebM, H.265, VP9, and AV1 remain future import profiles. MP4/MOV H.264/AAC
 package and user-journey verification passed on the candidate SHA above, but
 every distribution must separately review codec patent obligations.

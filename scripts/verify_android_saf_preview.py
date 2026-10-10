@@ -58,7 +58,7 @@ def verify(report):
                 'content://dev.opencut.saffixture.documents/document/media-second',
                 'content://dev.opencut.saffixture.documents/document/media-audio',
             ]
-            or data.get('mediaImportAudioOnlyPcmWav') is not True
+            or data.get('mediaImportAudioOnlyMp3') is not True
             or data.get('mediaImportH264AacMp4') is not True
             or data.get('mediaImportMicros', 0) <= 0
             or int(data.get('mediaImportRevision', 0)) <= int(data['projectRevision'])):

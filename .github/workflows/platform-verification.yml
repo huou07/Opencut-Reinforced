@@ -29,10 +29,10 @@ env:
     --disable-avdevice
     --disable-avfilter
     --enable-protocol=file
-    --enable-demuxer=matroska,mov,wav
+    --enable-demuxer=matroska,mov,wav,mp3
     --enable-muxer=matroska
-    --enable-decoder=ffv1,pcm_s16le,h264,aac
-    --enable-parser=h264,aac
+    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float
+    --enable-parser=h264,aac,mp3
     --enable-encoder=ffv1,pcm_s16le
   # Desktop-only additions for the packaged 9B1 media helpers. These arrive
   # after the common arguments so the program, filter-library, and component

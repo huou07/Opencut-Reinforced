@@ -42,8 +42,8 @@ public final class ControlActivity extends Activity {
                             int count;
                             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                         }
-                        File audio = new File(getFilesDir(), "tiny.wav");
-                        try (InputStream input = getAssets().open("tiny.wav"); FileOutputStream output = new FileOutputStream(audio)) {
+                        File audio = new File(getFilesDir(), "music.mp3");
+                        try (InputStream input = getAssets().open("cc0_music_excerpt.mp3"); FileOutputStream output = new FileOutputStream(audio)) {
                             byte[] buffer = new byte[4096];
                             int count;
                             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
@@ -119,7 +119,7 @@ public final class ControlActivity extends Activity {
                 }
                 JSONObject result = new JSONObject().put("providerUid", Process.myUid())
                     .put("providerOpens", FixtureDocumentsProvider.opens.get()).put("mediaBytes", new File(getFilesDir(), "tiny.mkv").length())
-                    .put("audioBytes", new File(getFilesDir(), "tiny.wav").length())
+                    .put("audioBytes", new File(getFilesDir(), "music.mp3").length())
                     .put("projectBytes", projectFile.length())
                     .put("projectSha256", sha256(projectFile))
                     .put("exportBytes", exported.length())
