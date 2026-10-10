@@ -93,7 +93,8 @@ Map<String, String> androidCargoEnvironment({
 
   final toolchain =
       '$androidHome/ndk/28.2.13676358/toolchains/llvm/prebuilt/$host';
-  final cc = '$toolchain/bin/${target.$2}21-clang';
+  // CPAL's Android AAudio backend requires the API 26 NDK stubs.
+  final cc = '$toolchain/bin/${target.$2}26-clang';
   final targetSuffix = targetTriple.replaceAll('-', '_');
   final prefix = '$installRoot/${target.$1}';
   return {
