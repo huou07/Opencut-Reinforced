@@ -30,9 +30,11 @@ iamoneabe, downloaded from [OpenGameArt](https://opengameart.org/content/try-me)
 under CC0 / public domain. The source file SHA-256 is
 `9dd9c59a16cfc9a6c991c56448c5f33ed1af79f8720dc0c5e91166fded95e4b5`; the
 excerpt SHA-256 is
-`d182f4087c7f8e1277e80ead98cd10b2f39e3538949bdd1a1417dbdccf7f18cc`.
-It retains its 44.1 kHz stereo MP3 stream and is used for import, decode, and
-packaged Android SAF/audio-playback acceptance.
+`812b747914fccbf1c59909954b92baec87ecec272223d5898f49e9661acc9f9d`. A
+generated 64×64 PNG cover image is embedded as an ID3 attached-picture stream
+to verify that desktop and SAF probing keep it out of the editable timeline.
+The fixture retains 44.1 kHz stereo MP3 audio and is used for import, decode,
+and packaged Android SAF/audio-playback acceptance.
 
 The remaining tiny fixtures are generated specifically for deterministic
 correctness tests and contain no third-party media.

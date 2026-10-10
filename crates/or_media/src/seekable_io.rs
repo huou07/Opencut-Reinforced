@@ -218,6 +218,11 @@ pub(crate) fn probe(
                 "index": stream.index(),
                 "codec_name": (codec_name != "none").then_some(codec_name),
                 "duration": duration,
+                "disposition": {
+                    "attached_pic": stream.disposition().contains(
+                        ffmpeg::format::stream::Disposition::ATTACHED_PIC
+                    ),
+                },
             });
             let fields = value.as_object_mut().expect("JSON object");
             match parameters.medium() {

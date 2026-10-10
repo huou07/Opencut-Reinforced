@@ -170,6 +170,26 @@ fn seekable_saf_probe_returns_metadata_accepted_by_the_core_import_matrix() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn seekable_saf_probe_ignores_mp3_attached_cover_art() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cc0_music_excerpt.mp3");
+    let capability =
+        SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
+    let size = capability.len();
+    let output = or_media::probe_seekable_media(&capability).unwrap();
+    let metadata = or_core::parse_media_probe_output(&output, size).unwrap();
+
+    assert!(metadata.format_names().iter().any(|name| name == "mp3"));
+    assert_eq!(metadata.streams().len(), 1);
+    assert!(matches!(
+        &metadata.streams()[0],
+        or_core::MediaStreamMetadata::Audio(audio)
+            if audio.codec_name() == Some("mp3")
+    ));
+}
+
 #[test]
 fn software_video_preview_holds_the_preceding_source_presentation_timestamp() {
     let decoder = SoftwareMediaDecoder::new(&fixture_source(), budgets()).unwrap();

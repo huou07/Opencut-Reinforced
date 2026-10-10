@@ -22,7 +22,7 @@ const MAX_STDOUT_BYTES: usize = 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 const MAX_DIAGNOSTIC_CHARS: usize = 512;
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
-const SHOW_ENTRIES: &str = "format=format_name,duration:stream=index,codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_rate,channels,channel_layout,duration,disposition=attached_pic";
+const SHOW_ENTRIES: &str = "format=format_name,duration:stream=index,codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_rate,channels,channel_layout,duration:stream_disposition=attached_pic";
 
 /// Stable machine-readable classification for a local media-probe failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -523,6 +523,7 @@ fn attached_picture(fields: &Map<String, Value>) -> Result<bool, MediaProbeError
     };
     match disposition.get("attached_pic") {
         None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(value)) => Ok(*value),
         Some(Value::Number(value)) if value.as_u64().is_some() => {
             Ok(value.as_u64().is_some_and(|value| value != 0))
         }
