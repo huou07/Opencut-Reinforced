@@ -636,6 +636,21 @@ the SAF journey. Android performance remains unaccepted; this run measured
 104,141 µs for Play and a 117,018 µs slowest main-thread draw in the 16×16
 emulator fixture.
 
+Exact-SHA run [38007605677](https://github.com/huou07/Opencut-Reinforced/actions/runs/38007605677)
+on `e76297bfa4fc16153f0287e3d35432036a640fe6` passed Rust, Linux, Windows,
+macOS, and descriptor-boundary jobs. Windows and Linux packaged journeys and
+the macOS native lifecycle/package journey passed. Flutter static checks caught
+a Dart formatting issue in the new Android report assertion; that formatting
+is corrected. Android built the all-ABI APK and passed through emulator bridge
+verification, but the SAF journey stopped before the new WAV import at the
+pre-background playback assertion. Its trace shows the test had sought to
+0.45 s on a 0.5 s fixture; the Play request took 243,946 µs and the next poll
+observed the preview at its end and paused. The test now seeks near the start
+before checking active playback and background/resume, preserving the same
+assertion with adequate fixture headroom. WAV import is not accepted as
+packaged Android capability until that corrected exact-SHA journey reaches
+and verifies the WAV import. Android performance remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

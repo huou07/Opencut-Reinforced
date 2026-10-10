@@ -614,6 +614,11 @@ void main() {
         reason: 'Unchanged active-source seeks must reuse the duplicated capability.',
       );
 
+      // Give the short fixture enough playback headroom for the native Play
+      // request and state poll before exercising Android background/resume.
+      await _seekUi(tester, gateway, .05);
+      expect(gateway.seekError, isNull);
+      expect(await _frameAvailable('before-background-play'), isTrue);
       final beforeBackground = await _resources();
       final playCallsBeforeBackground = gateway.playCalls;
       await tester.tap(find.byKey(const ValueKey('preview-play')));
@@ -1404,9 +1409,8 @@ void main() {
           'captionExportBytes': captionExport['captionExportBytes'],
           'captionExportValidSrt': captionExport['validSrtCaption'],
           'mediaImportMicros': gateway.importMicros,
-          'mediaImportAudioOnlyPcmWav': imported.items[2].formatNames.contains(
-                'wav',
-              ) &&
+          'mediaImportAudioOnlyPcmWav':
+              imported.items[2].formatNames.contains('wav') &&
               imported.items[2].videoDetails == null &&
               imported.items[2].audioDetails != null,
           'mediaImportSourceUris': imported.items
