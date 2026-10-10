@@ -237,6 +237,19 @@ Future<void> _reopenAndExport(
     attempts: 900,
   );
 
+  await tester.tap(find.byKey(const ValueKey('preview-play')));
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.byKey(const ValueKey('preview-play')));
+
+  await tester.tap(find.byKey(const ValueKey('export-project')));
+  await _pumpUntil(
+    tester,
+    () => find.text('Export complete').evaluate().isNotEmpty,
+    'export to the existing destination',
+    attempts: 1800,
+  );
+  expect(File(picker.exportPath).lengthSync(), greaterThan(0));
+
   final mediaId = _singleKeySuffix(tester, 'media-actions-');
   await tester.tap(find.byKey(ValueKey('media-actions-$mediaId')));
   await tester.pumpAndSettle();
@@ -266,19 +279,6 @@ Future<void> _reopenAndExport(
     () => find.text('Saved').evaluate().isNotEmpty,
     'save relinked media source',
   );
-
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-
-  await tester.tap(find.byKey(const ValueKey('export-project')));
-  await _pumpUntil(
-    tester,
-    () => find.text('Export complete').evaluate().isNotEmpty,
-    'export to the existing destination',
-    attempts: 1800,
-  );
-  expect(File(picker.exportPath).lengthSync(), greaterThan(0));
 }
 
 Future<void> _preserveProjectAcrossMissingSource(

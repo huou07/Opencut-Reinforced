@@ -120,12 +120,13 @@ def main() -> int:
     helper_directory = Path(
         os.environ.get("OR_PACKAGED_HELPERS_DIRECTORY", "")
     ).resolve()
+    ffmpeg = helper_directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
     bridge_directory = Path(
         os.environ.get("OR_PACKAGED_BRIDGE_DIRECTORY", "")
     ).resolve()
     ffprobe = helper_directory / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
-    if not ffprobe.is_file():
-        raise SystemExit(f"The packaged ffprobe helper is missing: {ffprobe}")
+    if not ffmpeg.is_file() or not ffprobe.is_file():
+        raise SystemExit(f"The packaged FFmpeg helpers are missing: {helper_directory}")
     bridge_name = {
         "nt": "or_app_bridge.dll",
         "posix": "libor_app_bridge.dylib"
@@ -289,7 +290,7 @@ def main() -> int:
             "-v",
             "error",
             "-show_entries",
-            "stream=codec_type,codec_name,width,height,sample_rate",
+            "format=format_name,duration,size:stream=codec_type,codec_name,width,height,sample_rate",
             "-of",
             "json",
             str(export),
@@ -299,13 +300,43 @@ def main() -> int:
         text=True,
         env={key: value for key, value in env.items() if not key.startswith("DYLD_") and key != "LD_LIBRARY_PATH"},
     )
-    streams = json.loads(probe.stdout)["streams"]
+    probe_result = json.loads(probe.stdout)
+    streams = probe_result["streams"]
     video = next((stream for stream in streams if stream["codec_type"] == "video"), None)
     audio = next((stream for stream in streams if stream["codec_type"] == "audio"), None)
     if video is None or video.get("codec_name") != "ffv1":
         raise SystemExit(f"Export does not contain the required FFV1 video stream: {streams}")
     if audio is None or audio.get("codec_name") != "pcm_s16le":
         raise SystemExit(f"Export does not contain the required PCM S16LE audio stream: {streams}")
+    if (video.get("width"), video.get("height")) != (1920, 1080):
+        raise SystemExit(f"Export did not preserve the real media's 1080p dimensions: {video}")
+    export_format = probe_result["format"]
+    if "matroska" not in export_format.get("format_name", ""):
+        raise SystemExit("Export is not an independently recognizable Matroska file.")
+    if float(export_format.get("duration", "0")) <= 0:
+        raise SystemExit("Export has no playable duration.")
+
+    decode = subprocess.run(
+        [
+            str(ffmpeg),
+            "-v",
+            "error",
+            "-i",
+            str(export),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        env={key: value for key, value in env.items() if not key.startswith("DYLD_") and key != "LD_LIBRARY_PATH"},
+    )
+    if decode.returncode != 0:
+        raise SystemExit(f"The packaged FFmpeg could not decode the exported video and audio: {decode.stderr}")
 
     report = {
         "platform": device,
@@ -315,10 +346,14 @@ def main() -> int:
         "rust_bridge_sha256": _sha256(bridge),
         "ffprobe": str(ffprobe),
         "ffprobe_sha256": _sha256(ffprobe),
+        "ffmpeg": str(ffmpeg),
+        "ffmpeg_sha256": _sha256(ffmpeg),
         "project_sha256_after_failures": _sha256(project),
         "export_sha256": _sha256(export),
         "export_bytes": export.stat().st_size,
         "export_streams": streams,
+        "export_format": export_format,
+        "export_full_decode": "passed",
         "app_processes": invocations,
     }
     report_path = runner_temp / f"or-packaged-product-journey-{device}.json"
@@ -333,7 +368,10 @@ def main() -> int:
                 "- The app was started in separate create, reopen/export, "
                 "missing-source, and missing-probe processes.\n"
             )
-            output.write(f"- Export: `{export.stat().st_size}` bytes; validated with the packaged `ffprobe`.\n")
+            output.write(
+                f"- Export: `{export.stat().st_size}` bytes at {video['width']}x{video['height']}; "
+                "Matroska/FFV1/PCM independently probed and fully decoded by packaged FFmpeg.\n"
+            )
             output.write(f"- Evidence report: `{report_path}`\n")
     return 0
 

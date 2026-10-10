@@ -551,6 +551,9 @@ to a tiny fixture before export; the resulting 98 KB FFV1/PCM file is valid
 correctness evidence, not proof of useful full-quality delivery. Android's
 journey still uses synthetic media. This does not establish broader camera
 variation, phone-source Android acceptance, or codec distribution review.
+The desktop acceptance now exports before the relink and requires the packaged
+FFmpeg tools to probe and fully decode the real-media 1920×1080 output; its
+exact-SHA cross-platform verification is pending.
 
 The same real-phone source exposed a separate preview correctness gap: its
 H.264 stream is coded at 1920×1080 with a 90-degree display matrix. The Rust
