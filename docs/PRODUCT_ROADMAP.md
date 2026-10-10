@@ -682,6 +682,20 @@ scrolling failure. The candidate correction requests both `video/*` and
 `audio/*`; WAV remains unaccepted on Android until a new exact-SHA journey
 imports all three sources. Android performance remains unaccepted.
 
+Exact-SHA run [38014795078](https://github.com/huou07/Opencut-Reinforced/actions/runs/38014795078)
+on `186ed1ff3e4bda577da80e35e269cb14a8d19e9b` passed Rust, Flutter
+static/widget, descriptor-boundary, Linux, and Windows packaged checks. The
+Android all-ABI package and emulator bridge passed. The updated media filter
+made `tiny.wav` selectable: native DocumentsUI recorded all three fixture
+files selected, and the product returned `openMedia result count=3`. The
+Android journey then failed at its post-import wait because the integration
+test still expected exactly two `importMedia` calls. That assertion reflected
+the former two-video fixture; it now requires all three video/audio imports.
+This run proves selection and bridge delivery, not completed project import;
+the exact-SHA hosted Android journey remains required. macOS lifecycle tests
+were still running when this evidence was captured. Android performance
+remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

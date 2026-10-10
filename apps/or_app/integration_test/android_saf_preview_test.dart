@@ -751,7 +751,7 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('media-import')));
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.importCalls == 2);
+      await _until(tester, () => gateway.importCalls == 3);
       final imported = await gateway.listMediaPage(
         session,
         offset: 65,
