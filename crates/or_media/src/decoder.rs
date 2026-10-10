@@ -1157,11 +1157,13 @@ fn emit_audio_frame(
         _budget: budget,
     };
     queue_audio(job.snapshot, frame, job.queue, job.cancellation)?;
-    *audio_cursor = Some(
-        timestamp
-            .checked_add(sample_offset_time(sample_frames)?)
-            .map_err(DecodeError::Time)?,
-    );
+    let sample_offset = sample_offset_time(sample_frames)?;
+    *audio_cursor = Some(audio_time_arithmetic(
+        "next audio chunk cursor",
+        timestamp,
+        sample_offset,
+        timestamp.checked_add(sample_offset),
+    )?);
     *emitted += 1;
     Ok(job.range.duration().is_zero())
 }
@@ -1223,7 +1225,12 @@ fn clip_audio(
     }
 
     let start_frame = if timestamp < start {
-        ceil_sample_offset(start.checked_sub(timestamp).map_err(DecodeError::Time)?)?
+        ceil_sample_offset(audio_time_arithmetic(
+            "clip start offset",
+            start,
+            timestamp,
+            start.checked_sub(timestamp),
+        )?)?
     } else {
         0
     }
@@ -1231,17 +1238,26 @@ fn clip_audio(
     let end_frame = if range.duration().is_zero() {
         start_frame.saturating_add(1).min(source_frames)
     } else if timestamp < end {
-        floor_sample_offset(end.checked_sub(timestamp).map_err(DecodeError::Time)?)?
-            .min(source_frames)
+        floor_sample_offset(audio_time_arithmetic(
+            "clip end offset",
+            end,
+            timestamp,
+            end.checked_sub(timestamp),
+        )?)?
+        .min(source_frames)
     } else {
         0
     };
     if end_frame <= start_frame {
         return Ok(None);
     }
-    let timestamp = timestamp
-        .checked_add(sample_offset_time(start_frame)?)
-        .map_err(DecodeError::Time)?;
+    let sample_offset = sample_offset_time(start_frame)?;
+    let timestamp = audio_time_arithmetic(
+        "clipped chunk timestamp",
+        timestamp,
+        sample_offset,
+        timestamp.checked_add(sample_offset),
+    )?;
     samples.drain(..start_frame * OUTPUT_AUDIO_CHANNELS);
     samples.truncate((end_frame - start_frame) * OUTPUT_AUDIO_CHANNELS);
     Ok(Some((timestamp, samples)))
@@ -1271,6 +1287,20 @@ fn sample_offset_time(samples: usize) -> Result<RationalTime, DecodeError> {
     let samples = i64::try_from(samples).map_err(|_| DecodeError::TimestampOverflow)?;
     let rate = RationalRate::new(OUTPUT_AUDIO_RATE, 1).map_err(DecodeError::Time)?;
     RationalTime::from_units(samples, rate).map_err(DecodeError::Time)
+}
+
+fn audio_time_arithmetic(
+    operation: &'static str,
+    left: RationalTime,
+    right: RationalTime,
+    result: Result<RationalTime, TimeError>,
+) -> Result<RationalTime, DecodeError> {
+    result.map_err(|source| DecodeError::AudioTimeArithmetic {
+        operation,
+        left,
+        right,
+        source,
+    })
 }
 
 fn past_range(timestamp: RationalTime, range: TimeRange) -> bool {
@@ -1349,6 +1379,12 @@ pub enum DecodeError {
     MissingAudioStream,
     MissingTimestamp,
     InvalidTimeBase,
+    AudioTimeArithmetic {
+        operation: &'static str,
+        left: RationalTime,
+        right: RationalTime,
+        source: TimeError,
+    },
     TimestampConversion {
         pts: i64,
         origin_pts: i64,
@@ -1383,6 +1419,15 @@ impl fmt::Display for DecodeError {
                 formatter.write_str("decoded frame has no presentation timestamp")
             }
             Self::InvalidTimeBase => formatter.write_str("media stream has an invalid time base"),
+            Self::AudioTimeArithmetic {
+                operation,
+                left,
+                right,
+                source,
+            } => write!(
+                formatter,
+                "audio timestamp arithmetic failed during {operation} (left={left:?}, right={right:?}): {source}"
+            ),
             Self::TimestampConversion {
                 pts,
                 origin_pts,
@@ -1433,6 +1478,7 @@ impl Error for DecodeError {
             Self::Budget(error) => Some(error),
             Self::FrameDescriptor(error) => Some(error),
             Self::FrameLease(error) => Some(error),
+            Self::AudioTimeArithmetic { source, .. } => Some(source),
             Self::TimestampConversion { source, .. } => Some(source),
             _ => None,
         }
@@ -1480,6 +1526,20 @@ mod tests {
         assert!(message.contains("pts=9223372036854775807"));
         assert!(message.contains("origin_pts=17"));
         assert!(message.contains("time_base_rate=1/2"));
+        assert!(message.contains("outside the supported range"));
+    }
+
+    #[test]
+    fn invalid_audio_time_arithmetic_reports_the_operation_and_operands() {
+        let left = time(i64::MAX, 1);
+        let right = time(1, 1);
+        let error =
+            audio_time_arithmetic("test cursor", left, right, left.checked_add(right)).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("test cursor"));
+        assert!(message.contains("left=RationalTime"));
+        assert!(message.contains("right=RationalTime"));
         assert!(message.contains("outside the supported range"));
     }
 
