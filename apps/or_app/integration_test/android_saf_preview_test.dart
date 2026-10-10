@@ -1265,6 +1265,10 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 250)),
       );
       final audioClockTick = await secondGateway.previewTick(second);
+      debugPrint(
+        'ANDROID_SAF_AUDIO_PREVIEW_TICK '
+        'code=${audioClockTick.errorCode} message=${audioClockTick.errorMessage}',
+      );
       expect(audioClockTick.errorCode, isNull);
       expect(
         audioClockTick.position.numerator,

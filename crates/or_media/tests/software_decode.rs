@@ -197,7 +197,7 @@ fn software_decoder_reads_mp3_audio_through_seekable_saf_io() {
     let capability =
         SeekableMediaIoCapability::from_file(std::fs::File::open(path).unwrap()).unwrap();
     let decoder = SoftwareMediaDecoder::new_with_seekable_io(capability, budgets()).unwrap();
-    let snapshot = snapshot(time(0, 1), time(1, 8));
+    let snapshot = snapshot(time(1, 10), time(1, 8));
     let queue = SnapshotQueue::new(snapshot, 16).unwrap();
     let cancellation = CancellationToken::new();
 
