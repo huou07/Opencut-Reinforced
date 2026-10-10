@@ -2,7 +2,8 @@ use or_core::{
     ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
     ExportRequest, ExportResponse, JobId, JobKind, JobProgress, JobSnapshot, JobState,
     OperationErrorCode, ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult,
-    RationalRate, TextFormatting, TrackId, TrackKind, VisualSettings,
+    RationalRate, RecoveryInspection, TextFormatting, TrackId, TrackKind, VisualSettings,
+    inspect_project_recovery,
 };
 use or_ipc::{
     ApplicationSuccess, ExportRequestHandler, IpcProtocolError, LiveProjectHost, LocalIpcClient,
@@ -508,6 +509,11 @@ fn dirty_host_refuses_implicit_shutdown_and_explicit_discard_keeps_disk_unchange
     let summary = host.describe().unwrap();
     host.handle_application_request(command(&summary, "project.rename", Some("Unsaved")))
         .unwrap();
+    host.autosave_checkpoint().unwrap();
+    assert!(matches!(
+        inspect_project_recovery(&project_path).unwrap(),
+        RecoveryInspection::Candidate(_)
+    ));
 
     assert!(host.shutdown(false).is_err());
     assert!(client.describe().is_ok());
@@ -516,6 +522,10 @@ fn dirty_host_refuses_implicit_shutdown_and_explicit_discard_keeps_disk_unchange
     host.shutdown(true).unwrap();
     assert!(!descriptor_path.exists());
     assert_eq!(fs::read(&project_path).unwrap(), original);
+    assert!(matches!(
+        inspect_project_recovery(&project_path).unwrap(),
+        RecoveryInspection::None
+    ));
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]

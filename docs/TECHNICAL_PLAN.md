@@ -178,6 +178,8 @@ Inspection reads and classifies without changing files or project state. If the 
 
 Applying is explicit and re-inspects the current canonical file before saving. It atomically saves recovery M through the existing project storage API, keeps revision M unchanged, then removes the sidecar. A save failure preserves the checkpoint; a cleanup failure after a successful save is reported as cleanup pending. Explicit discard removes the sidecar, including a malformed one, without changing the canonical project. Phase 8F uses this snapshot foundation for periodic autosave and explicit recovery UI; it is not event sourcing, command replay, or persistent history.
 
+When a user explicitly discards a dirty live session, shutdown removes a recovery candidate only if its contents still match the snapshot last autosaved by that session. A replaced, unrelated, or conflicting sidecar is preserved; a sidecar removal failure keeps the session open and reports the failure.
+
 ### Phase 4F file-backed session and shared dispatch
 
 `ApplicationRequest` carries an existing `CommandEnvelope`, `QueryEnvelope`, or `TransactionEnvelope`; `ApplicationResponse` carries the corresponding result or the existing `OperationError`. `ProjectSession::handle_application_request` delegates to the existing command, query, and transaction methods. This is the common semantic path for the headless CLI and IPC server; it does not introduce a second editing implementation.

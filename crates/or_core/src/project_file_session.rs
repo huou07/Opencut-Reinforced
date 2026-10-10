@@ -206,6 +206,23 @@ impl ProjectFileSession {
         Ok(true)
     }
 
+    /// Removes this session's recovery snapshot when the user explicitly discards its edits.
+    /// An unrelated or conflicting checkpoint is never removed.
+    pub fn discard_unsaved_recovery_checkpoint(&mut self) -> Result<(), ProjectFileSessionError> {
+        if let Some(autosaved) = &self.last_autosaved_project {
+            if let RecoveryInspection::Candidate(candidate) =
+                inspect_project_recovery(&self.project_path)
+                    .map_err(|error| recovery_error(&error.to_string()))?
+                && candidate.recovery_project() == autosaved
+            {
+                discard_project_recovery(&self.project_path)
+                    .map_err(|error| recovery_error(&error.to_string()))?;
+            }
+        }
+        self.last_autosaved_project = None;
+        Ok(())
+    }
+
     /// Dispatches through the same command, query, and transaction paths as ProjectSession.
     pub fn handle_application_request(
         &mut self,
@@ -664,6 +681,51 @@ mod tests {
             inspection => panic!("expected updated candidate, got {inspection:?}"),
         };
         assert_eq!(latest, *session.session().project());
+    }
+
+    #[test]
+    fn explicit_discard_removes_only_this_sessions_autosaved_checkpoint() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        save_project_file_atomic(&path, &base).unwrap();
+        let canonical_bytes = fs::read(&path).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "B"));
+        assert!(session.autosave_checkpoint().unwrap());
+
+        session.discard_unsaved_recovery_checkpoint().unwrap();
+
+        assert!(matches!(
+            inspect_project_recovery(&path).unwrap(),
+            RecoveryInspection::None
+        ));
+        assert_eq!(fs::read(&path).unwrap(), canonical_bytes);
+        assert!(session.is_dirty());
+    }
+
+    #[test]
+    fn explicit_discard_preserves_a_recovery_checkpoint_replaced_by_another_session() {
+        let directory = TestDirectory::new();
+        let path = directory.project_path();
+        let base = document("A", 4);
+        let unrelated = document("Another session", 5);
+        save_project_file_atomic(&path, &base).unwrap();
+        let mut session = ProjectFileSession::open(&path).unwrap();
+        session.handle_application_request(rename(session.session(), "B"));
+        assert!(session.autosave_checkpoint().unwrap());
+        write_recovery_checkpoint(&path, &base, &unrelated).unwrap();
+        let checkpoint_path = directory.0.join(".sample.orproj.or-recovery");
+        let checkpoint_bytes = fs::read(&checkpoint_path).unwrap();
+
+        session.discard_unsaved_recovery_checkpoint().unwrap();
+
+        assert_eq!(fs::read(checkpoint_path).unwrap(), checkpoint_bytes);
+        assert!(matches!(
+            inspect_project_recovery(&path).unwrap(),
+            RecoveryInspection::Candidate(candidate)
+                if candidate.recovery_project() == &unrelated
+        ));
     }
 
     #[test]

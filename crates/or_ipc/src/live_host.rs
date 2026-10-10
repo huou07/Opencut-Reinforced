@@ -210,6 +210,9 @@ impl LiveProjectHost {
             if state.session.is_dirty() && !discard_unsaved {
                 return Err(LiveProjectHostError::UnsavedChanges);
             }
+            if state.session.is_dirty() && discard_unsaved {
+                state.session.discard_unsaved_recovery_checkpoint()?;
+            }
             if !state.closing {
                 state.closing = true;
                 state.publish(ProjectHostEventKind::SessionClosing);
