@@ -89,6 +89,15 @@ def verify(report):
         if before <= 0 or before != after:
             raise ValueError('An unchanged active source was reopened during repeated seeks')
     stress = data['stressResources']
+    for stage in ('journeyResources', 'stressResources'):
+        measurements = data[stage]
+        for field in (
+            'maxFrameAcquireMicros', 'totalFrameAcquireMicros',
+            'maxBitmapCopyMicros', 'totalBitmapCopyMicros',
+            'bitmapAllocations', 'maxBitmapAllocationMicros',
+        ):
+            if not isinstance(measurements.get(field), int) or measurements[field] < 0:
+                raise ValueError('Android viewer stage timings and allocation counts are required')
     if not (stress['presentedFrames'] > 0 and 0 < stress['bitmapBytes'] <= 1920 * 1080 * 4
             and stress['peakPendingFrameResults'] <= 8 and stress['peakQueuedOperations'] <= 8
             and stress['pendingPresentations'] == 0 and stress['inFlightLeases'] == 0

@@ -751,6 +751,14 @@ playback is accepted on the API 36 x86_64 SwiftShader emulator, but physical
 device/acoustic output and Android performance are not accepted. Continue
 profiling the frame skips on representative hardware before release claims.
 
+To distinguish the remaining Android frame-time costs before changing the
+presentation architecture, the next diagnostic update records worker-side
+native frame acquisition, bitmap allocation, bitmap channel conversion/copy,
+and main-thread surface draw time as separate counters in the real journey
+report. These counters are diagnostic only and do not declare performance
+acceptable; a hosted run must first report them for ordinary preview and under
+resource stress.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

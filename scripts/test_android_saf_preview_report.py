@@ -27,8 +27,15 @@ def report():
         'surfaceLifecycleResources': {'cleanupDelta': 1, 'restorationDelta': 1, 'cleanups': 1, 'restorations': 1},
         'providerOpens': 4, 'uiPlayMicros': 100,
         'sameSourceRegistrations': [1, 1], 'sameSourceProviderOpens': [2, 2],
+        'journeyResources': {'maxFrameAcquireMicros': 1, 'totalFrameAcquireMicros': 1,
+                             'maxBitmapCopyMicros': 1, 'totalBitmapCopyMicros': 1,
+                             'bitmapAllocations': 1, 'maxBitmapAllocationMicros': 1},
         'stressResources': {'presentedFrames': 1, 'bitmapBytes': 1024, 'peakPendingFrameResults': 8,
-                            'peakQueuedOperations': 8, 'pendingPresentations': 0, 'inFlightLeases': 0, 'duplicatedMediaFds': 1},
+                            'peakQueuedOperations': 8, 'pendingPresentations': 0, 'inFlightLeases': 0,
+                            'duplicatedMediaFds': 1, 'maxFrameAcquireMicros': 1,
+                            'totalFrameAcquireMicros': 1, 'maxBitmapCopyMicros': 1,
+                            'totalBitmapCopyMicros': 1, 'bitmapAllocations': 1,
+                            'maxBitmapAllocationMicros': 1},
         'finalResources': {'duplicatedMediaFds': 0, 'inFlightLeases': 0, 'latestFrameBytes': 0},
         'exportBytes': 4096, 'exportValidMatroska': True,
         'captionImportRevision': '3', 'captionImportCalls': 1,
@@ -87,6 +94,19 @@ class ReportTest(unittest.TestCase):
                          {'finalOsMediaFds': 1}):
             value = report()
             value['androidSafAcceptance'].update(mutation)
+            with self.assertRaises(ValueError): verify(value)
+
+    def test_viewer_stage_measurements_are_required_and_nonnegative(self):
+        for field, invalid in (
+            ('maxFrameAcquireMicros', None),
+            ('totalFrameAcquireMicros', -1),
+            ('maxBitmapCopyMicros', 'unknown'),
+            ('totalBitmapCopyMicros', -1),
+            ('bitmapAllocations', None),
+            ('maxBitmapAllocationMicros', -1),
+        ):
+            value = report()
+            value['androidSafAcceptance']['journeyResources'][field] = invalid
             with self.assertRaises(ValueError): verify(value)
 
     def test_background_resume_without_surface_destruction_is_valid(self):

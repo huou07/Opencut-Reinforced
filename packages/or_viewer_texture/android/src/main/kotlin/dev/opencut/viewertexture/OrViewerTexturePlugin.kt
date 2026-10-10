@@ -61,6 +61,14 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var presentedFrames = 0L
     private var maxMainDrawMicros = 0L
     private var totalMainDrawMicros = 0L
+    // Worker-owned stage timings separate FFI acquisition and CPU pixel copy
+    // from the SurfaceProducer main-thread draw measured above.
+    private var maxFrameAcquireMicros = 0L
+    private var totalFrameAcquireMicros = 0L
+    private var maxBitmapCopyMicros = 0L
+    private var totalBitmapCopyMicros = 0L
+    private var bitmapAllocations = 0L
+    private var maxBitmapAllocationMicros = 0L
     private var surfaceCreations = 0L
     private var surfaceRestorations = 0L
     private var surfaceCleanups = 0L
@@ -296,15 +304,31 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 var copiedGeneration: Long? = null
                 try {
                     if (nativeLoaded && attached.get()) {
+                        val acquireStarted = SystemClock.elapsedRealtimeNanos()
                         val frame = nativeAcquireLatest()
+                        val acquireMicros = (SystemClock.elapsedRealtimeNanos() - acquireStarted) / 1000
+                        maxFrameAcquireMicros = maxOf(maxFrameAcquireMicros, acquireMicros)
+                        totalFrameAcquireMicros += acquireMicros
                         if (frame != null) {
                             try {
                                 if (epoch == surfaceEpoch.get() && nativeResourceSnapshot()?.get(0) == frame.generation) {
                                     val target = bitmap?.takeIf { it.width == frame.width && it.height == frame.height && !it.isRecycled }
-                                        ?: Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888).also {
-                                            bitmap?.recycle(); bitmap = it
+                                        ?: run {
+                                            val allocationStarted = SystemClock.elapsedRealtimeNanos()
+                                            Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888).also {
+                                                maxBitmapAllocationMicros = maxOf(
+                                                    maxBitmapAllocationMicros,
+                                                    (SystemClock.elapsedRealtimeNanos() - allocationStarted) / 1000,
+                                                )
+                                                bitmapAllocations++
+                                                bitmap?.recycle(); bitmap = it
+                                            }
                                         }
+                                    val copyStarted = SystemClock.elapsedRealtimeNanos()
                                     copyBgraIntoArgb8888(target, frame)
+                                    val copyMicros = (SystemClock.elapsedRealtimeNanos() - copyStarted) / 1000
+                                    maxBitmapCopyMicros = maxOf(maxBitmapCopyMicros, copyMicros)
+                                    totalBitmapCopyMicros += copyMicros
                                     copiedGeneration = frame.generation
                                 } else staleDrops.incrementAndGet()
                             } finally { nativeReleaseFrame(frame.releaseContext) }
@@ -370,6 +394,12 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             mainMetrics + mapOf(
                 "generation" to native[0], "inFlightLeases" to native[1], "latestFrameBytes" to native[2],
                 "duplicatedMediaFds" to native[3], "bitmapBytes" to (bitmap?.allocationByteCount ?: 0),
+                "maxFrameAcquireMicros" to maxFrameAcquireMicros,
+                "totalFrameAcquireMicros" to totalFrameAcquireMicros,
+                "maxBitmapCopyMicros" to maxBitmapCopyMicros,
+                "totalBitmapCopyMicros" to totalBitmapCopyMicros,
+                "bitmapAllocations" to bitmapAllocations,
+                "maxBitmapAllocationMicros" to maxBitmapAllocationMicros,
                 "registrationCount" to registrationCount, "staleDrops" to staleDrops.get(),
                 "queuedOperations" to worker.queue.size, "peakQueuedOperations" to peakQueuedOperations.get(),
             )

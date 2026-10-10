@@ -859,6 +859,11 @@ worker cannot race ahead of permission-checked seekable descriptor registration.
 Unchanged source sets reuse their native capabilities. Android hardware
 acceleration and physical-device acoustic output remain unavailable/unverified;
 emulator frame skips mean Android performance remains unaccepted.
+Android SAF journey diagnostics separately report native latest-frame
+acquisition, CPU bitmap channel conversion/copy, bitmap allocation count and
+maximum allocation time, and main-thread `SurfaceProducer` draw duration.
+These bounded counters identify the expensive stage; they are diagnostic
+measurements, not performance acceptance thresholds.
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 
