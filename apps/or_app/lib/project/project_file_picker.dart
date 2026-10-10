@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 
+import 'export_profile.dart';
+
 abstract interface class ProjectFilePicker {
   bool get isSupported;
   bool get supportsMediaImport;
@@ -10,7 +12,10 @@ abstract interface class ProjectFilePicker {
   Future<String?> openProjectPath();
   Future<List<String>> openMediaSources();
   Future<String?> saveProjectPath({required String suggestedName});
-  Future<String?> saveExportPath({required String suggestedName});
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  });
   Future<String?> openCaptionFile();
   Future<void> cleanupCaptionFile(String path);
   Future<String?> saveCaptionPath({required String suggestedName});
@@ -40,10 +45,6 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   static const _projectType = XTypeGroup(
     label: 'Opencut Reinforced project',
     extensions: ['orproj'],
-  );
-  static const _exportType = XTypeGroup(
-    label: 'Matroska video',
-    extensions: ['mkv'],
   );
   static const _captionType = XTypeGroup(
     label: 'SubRip or WebVTT captions',
@@ -85,10 +86,15 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async {
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async {
     if (!isSupported) return null;
     final location = await getSaveLocation(
-      acceptedTypeGroups: [_exportType],
+      acceptedTypeGroups: [
+        XTypeGroup(label: profile.label, extensions: [profile.extension]),
+      ],
       suggestedName: suggestedName,
     );
     return location?.path;
@@ -237,11 +243,18 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async {
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async {
     try {
       final response = await _channel.invokeMapMethod<String, Object?>(
         'createExport',
-        {'suggestedName': suggestedName},
+        {
+          'suggestedName': suggestedName,
+          'extension': profile.extension,
+          'mimeType': profile.mimeType,
+        },
       );
       if (response == null) return null;
       final path = response['workingPath'];

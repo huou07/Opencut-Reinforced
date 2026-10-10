@@ -38,6 +38,7 @@ class MainActivity : FlutterActivity() {
         val method: String,
         val result: MethodChannel.Result,
         val requiredModes: Int,
+        val exportExtension: String? = null,
     )
 
     private class SafFailure(val code: String, message: String) : Exception(message)
@@ -170,12 +171,22 @@ class MainActivity : FlutterActivity() {
                 )
             }
             "createExport" -> {
+                val extension = call.argument<String>("extension")?.lowercase()
+                val mimeType = call.argument<String>("mimeType")
+                val expectedMime = when (extension) {
+                    "mkv" -> "video/x-matroska"
+                    else -> null
+                }
+                if (extension == null || mimeType != expectedMime) {
+                    result.error("EXPORT_FORMAT_INVALID", "Choose a supported export format.", null)
+                    return
+                }
                 val suggestedName = call.argument<String>("suggestedName")
                     ?.substringAfterLast('/')
                     ?.substringAfterLast('\\')
                     ?.takeIf(String::isNotBlank)
-                    ?.let { if (it.endsWith(".mkv", ignoreCase = true)) it else "$it.mkv" }
-                    ?: "export.mkv"
+                    ?.let { if (it.endsWith(".$extension", ignoreCase = true)) it else "$it.$extension" }
+                    ?: "export.$extension"
                 launchPicker(
                     Intent.ACTION_CREATE_DOCUMENT,
                     "createExport",
@@ -184,7 +195,8 @@ class MainActivity : FlutterActivity() {
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                     suggestedName,
                     requiredModes = Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    mimeType = "video/x-matroska",
+                    mimeType = mimeType,
+                    exportExtension = extension,
                 )
             }
             "synchronizeProject" -> {
@@ -253,6 +265,7 @@ class MainActivity : FlutterActivity() {
         requiredModes: Int = modes,
         mimeType: String = "*/*",
         allowMultiple: Boolean = false,
+        exportExtension: String? = null,
     ) {
         if (pendingPick != null) {
             result.error("PROJECT_PICKER_BUSY", "A document request is already open.", null)
@@ -277,7 +290,7 @@ class MainActivity : FlutterActivity() {
             addFlags(modes or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         try {
-            pendingPick = PendingPick(method, result, requiredModes)
+            pendingPick = PendingPick(method, result, requiredModes, exportExtension)
             startActivityForResult(intent, SAF_PICK_REQUEST)
         } catch (_: Exception) {
             pendingPick = null
@@ -342,7 +355,11 @@ class MainActivity : FlutterActivity() {
                 }
                 "openProject" -> projectLocation(uri, prepareWorkingCopy(uri))
                 "createProject" -> projectLocation(uri, prepareNewWorkingCopy(uri))
-                "createExport" -> exportLocation(uri)
+                "createExport" -> exportLocation(
+                    uri,
+                    pending.exportExtension
+                        ?: throw SafFailure("EXPORT_FORMAT_INVALID", "Choose a supported export format."),
+                )
                 "createCaptionExport" -> captionExportLocation(uri)
                 "openMedia" -> mapOf("sourceUri" to uri.toString())
                 else -> throw SafFailure("PROJECT_PICK_FAILED", "The project selection is invalid.")
@@ -473,9 +490,12 @@ class MainActivity : FlutterActivity() {
         return input.use(::readBounded)
     }
 
-    private fun exportLocation(uri: Uri): Map<String, String> {
+    private fun exportLocation(uri: Uri, extension: String): Map<String, String> {
         requireDocumentUri(uri)
-        val file = File.createTempFile("or-export-", ".mkv", exportStagingDirectory())
+        if (extension != "mkv") {
+            throw SafFailure("EXPORT_FORMAT_INVALID", "Choose a supported export format.")
+        }
+        val file = File.createTempFile("or-export-", ".$extension", exportStagingDirectory())
         return mapOf("workingPath" to file.absolutePath, "documentUri" to uri.toString())
     }
 

@@ -517,7 +517,7 @@ and other native interop remain runtime-adapter work for later checkpoints.
 
 FFmpeg is the intended baseline for media probing, demux, decode, encode, mux, conversion, and resampling. Checkpoint 7C0 selects the current high-level `ffmpeg-the-third` Rust binding, package version `6.0.0+ffmpeg-9.0`, with its paired `ffmpeg-sys-the-third` 6.0.0 binding layer. The maintained upstream release adds FFmpeg 9 support while retaining FFmpeg 5.1 through 8.1 compatibility, and exposes Rust wrappers for format/demux, codec/decode, frame, software-resampling, and software-scaling APIs. Its declared Rust 1.80 MSRV is below the workspace's Rust 1.85 floor. Both Rust packages declare WTFPL. The system-link path needs FFmpeg headers and shared libraries, `pkg-config`, a C compiler, and `clang`/`libclang` for runtime bindgen; the binding uses vcpkg discovery for MSVC. The `ffmpeg-sys` link step does not directly require CMake; the Linux/macOS FFmpeg source build uses `configure`/`make`. CMake/tool versions for a Windows vcpkg port are port-specific and must be fixed with that platform's later build gate. See the [published 6.0.0 package](https://crates.io/crates/ffmpeg-the-third/6.0.0), [upstream release history](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/CHANGELOG.md), and [current build manifest](https://github.com/shssoichiro/ffmpeg-the-third/blob/master/ffmpeg-sys-the-third/Cargo.toml).
 
-The approved baseline is FFmpeg 8.1.3, using matching headers and library ABI majors at build and runtime. Any update requires a new compatibility, API, MSRV, license, and hosted-link review; the later gates use 8.1.3. Checkpoint 7C0 provisions a separate Linux CI prefix built from the official 8.1.3 source with shared libraries, `--disable-autodetect`, `--disable-everything`, and no `--enable-gpl`, `--enable-nonfree`, or `--enable-version3` options, then compiles, links, loads, and checks the native library ABI/license strings through an out-of-workspace probe. The CI-only build also uses `--disable-asm` to reduce build requirements. The 7C0 probe was tooling only. The production workspace now pins `ffmpeg-the-third` 6.0.0 with only codec, format, software-resampling, and software-scaling features. Its hosted prefix keeps the LGPL-only dynamic configuration and enables the `file` protocol, Matroska, MOV, and WAV demuxers; FFV1/PCM S16LE, H.264, and AAC decoders; and H.264/AAC parsers. The additional MP4-family profile is a candidate only until packaged desktop and Android journeys pass; its library license configuration does not settle codec patent obligations. WAV remains limited to audio-only PCM S16LE. These options add no external codec library, GPL module, nonfree module, or encoder.
+The approved baseline is FFmpeg 8.1.3, using matching headers and library ABI majors at build and runtime. Any update requires a new compatibility, API, MSRV, license, and hosted-link review; the later gates use 8.1.3. Checkpoint 7C0 provisions a separate Linux CI prefix built from the official 8.1.3 source with shared libraries, `--disable-autodetect`, `--disable-everything`, and no `--enable-gpl`, `--enable-nonfree`, or `--enable-version3` options, then compiles, links, loads, and checks the native library ABI/license strings through an out-of-workspace probe. The CI-only build also uses `--disable-asm` to reduce build requirements. The 7C0 probe was tooling only. The production workspace now pins `ffmpeg-the-third` 6.0.0 with only codec, format, software-resampling, and software-scaling features. Its base hosted prefix keeps the LGPL-only dynamic configuration and enables the `file` protocol, Matroska, MOV, and WAV demuxers; FFV1/PCM S16LE, H.264, AAC, VP9, and Opus decoders; and H.264/AAC parsers. The additional MP4-family profile is a candidate only until packaged desktop and Android journeys pass; its library license configuration does not settle codec patent obligations. WAV remains limited to audio-only PCM S16LE. A separate desktop export profile statically links pinned libvpx and libopus into the LGPL FFmpeg shared build for WebM/VP9/Opus; it remains pending packaged acceptance and its specific notices/source obligations are recorded in `SECURITY_LICENSING.md`. Android continues using the base runtime without those external encoder libraries. The base profile adds no GPL module, nonfree module, or encoder.
 
 Dynamic linking is the selected packaging strategy. Build from the pinned FFmpeg source/configuration for each target and bundle the matching `libavcodec`, `libavformat`, `libavutil`, `libswresample`, and `libswscale` shared libraries plus their runtime dependencies. Include the corresponding headers and import metadata only in development/build environments. Linux packages ship the `.so` libraries with app-relative runtime lookup; macOS packages ship the `.dylib` libraries with app-relative loader paths and sign/notarize the complete bundle; Windows packages ship matching MSVC `.dll` files beside the app and use their `.lib` import libraries at build time. Release packages must include the exact corresponding FFmpeg source, build configuration, changes, and LGPL notices/source location; keep the FFmpeg shared libraries replaceable and preserve their library names. Android is a separate Phase 9 decision requiring NDK builds for supported ABIs and per-ABI shared-library packaging evidence.
 
@@ -775,16 +775,24 @@ request and queues bounded background work with monotonic frame progress and
 cancellation. It evaluates exact sequence frame times through the same timeline
 loader, renderer, text rasterizer, transform/crop/opacity, and visual effect and
 transition path as preview; audio reuses the bounded timeline mixer and the
-typed gain, pan, and fade processor. Video uses Matroska + FFV1; audio is stereo
-48 kHz PCM S16LE. The selected destination must be an absolute `.mkv` path.
-Output is encoded inside a unique sibling staging directory (owner-only on
-Unix) and published only after both streams and the trailer finish. Cancellation,
-offline media, and encode failures clean staging output, preserve an existing
-destination, and leave a new destination absent.
-Export does not mutate canonical project state or increment its revision.
-This checkpoint enables only the muxer and encoders required by this profile.
-H.264, H.265/HEVC, AV1, VP9, NVENC, VideoToolbox, MediaCodec, and other delivery
-or hardware paths are optional and do not gate Desktop MVP.
+typed gain, pan, and fade processor. The lossless profile uses Matroska + FFV1
+video and stereo 48 kHz PCM S16LE audio. A desktop delivery profile uses WebM
+with VP9 and stereo 48 kHz Opus audio, after the user chooses the profile and
+its matching destination extension. VP9 receives bounded BGRA-to-YUV420P
+conversion tagged as BT.709 limited-range SDR and uses the realtime libvpx
+configuration; Opus input is queued in a bounded buffer and the final partial
+frame is submitted without padding the project audio duration. Android retains
+the Matroska profile until its packaged codec build and device acceptance prove
+the delivery profile there. Both writers stage beside the destination and
+publish only after streams and trailer complete. Cancellation, offline media,
+and encode failures clean staging output, preserve an existing destination,
+and leave a new destination absent. The selected destination is an absolute
+path with the extension required by the selected profile. Export does not
+mutate canonical project state or increment its revision.
+
+The package build enables only the selected profile's required muxer and
+encoders. H.264, H.265/HEVC, AV1, NVENC, VideoToolbox, MediaCodec, and other
+hardware paths remain optional and do not gate Desktop MVP.
 
 The Flutter shell submits a recovery-checkpoint autosave every 30 seconds while
 the project is dirty. The Rust file session validates the exact saved base and

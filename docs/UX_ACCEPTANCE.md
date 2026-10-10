@@ -225,9 +225,15 @@ today.
 - The compact viewer's loading and unavailable states fit their allocated space
   during recovery and surface initialization, including very small transient
   viewports; status stays available to screen readers without a clipped message.
+- Desktop export offers a smaller WebM VP9/Opus delivery profile and a
+  lossless Matroska FFV1/PCM profile. The format choice is clear before the
+  destination picker; progress, cancellation, failure, and completed output
+  use the same export status path.
 - Android export uses the shared project/timeline semantics, reports progress
   and failure in that status area, supports cancellation while active, and
   publishes a completed Matroska file to the selected DocumentsUI destination.
+  It must not offer WebM until the packaged Android runtime includes and
+  verifies the VP9/Opus encoders.
 - Media import lets desktop users select several files in the platform picker.
   Android requests multi-select through DocumentsUI, takes a read grant for
   every returned document, and imports each through the same project command

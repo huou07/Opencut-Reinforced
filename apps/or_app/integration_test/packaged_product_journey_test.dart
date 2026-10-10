@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:ui' show Size;
 
-import 'package:flutter/foundation.dart' show ValueKey;
+import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
 import 'package:flutter/material.dart'
     show
         IconButton,
@@ -13,6 +13,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
@@ -244,11 +245,24 @@ Future<void> _reopenAndExport(
   await tester.tap(find.byKey(const ValueKey('export-project')));
   await _pumpUntil(
     tester,
+    () => find.text('Export video').evaluate().isNotEmpty,
+    'export profile selection',
+  );
+  final exportTimer = Stopwatch()..start();
+  await tester.tap(find.text('Continue'));
+  await _pumpUntil(
+    tester,
     () => find.text('Export complete').evaluate().isNotEmpty,
     'export to the existing destination',
     attempts: 1800,
   );
+  exportTimer.stop();
   expect(File(picker.exportPath).lengthSync(), greaterThan(0));
+  debugPrint(
+    'OR_PACKAGED_EXPORT_METRICS profile=webm_vp9_opus '
+    'elapsed_ms=${exportTimer.elapsedMilliseconds} '
+    'bytes=${File(picker.exportPath).lengthSync()}',
+  );
 
   final mediaId = _singleKeySuffix(tester, 'media-actions-');
   await tester.tap(find.byKey(ValueKey('media-actions-$mediaId')));
@@ -470,8 +484,10 @@ class _JourneyPicker implements ProjectFilePicker {
       projectPath;
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async =>
-      nextExportPath;
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async => nextExportPath;
 
   @override
   Future<String?> openCaptionFile() async => null;

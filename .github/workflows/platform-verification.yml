@@ -31,7 +31,7 @@ env:
     --enable-protocol=file
     --enable-demuxer=matroska,mov,wav,mp3
     --enable-muxer=matroska
-    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float
+    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus
     --enable-parser=h264,aac,mp3
     --enable-encoder=ffv1,pcm_s16le
   # Desktop-only additions for the packaged 9B1 media helpers. These arrive
@@ -57,6 +57,12 @@ env:
     --enable-filter=aformat
     --enable-filter=aresample
     --enable-filter=showwavespic
+  FFMPEG_EXPORT_CONFIGURE_ARGS: >-
+    --pkg-config-flags=--static
+    --enable-libvpx
+    --enable-libopus
+    --enable-muxer=webm
+    --enable-encoder=libvpx_vp9,libopus
 
 jobs:
   rust:
@@ -259,7 +265,16 @@ jobs:
         run: flutter pub get
 
       - name: Install FFmpeg source-build tooling
-        run: brew install pkg-config
+        run: brew install cmake nasm pkg-config
+
+      - name: Build pinned VP9 and Opus codec sources
+        id: codec-build
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          bash scripts/build_desktop_export_codecs.sh macos \
+            "$RUNNER_TEMP/ffmpeg-codecs-install" \
+            "$RUNNER_TEMP/desktop-export-codecs"
 
       - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
         id: ffmpeg-build
@@ -278,7 +293,8 @@ jobs:
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}" "${helper_configure_args[@]}")
+          read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
           make install
@@ -321,12 +337,15 @@ jobs:
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
-            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
+            echo "libvpx configure target: $LIBVPX_CONFIGURE_TARGET"
+            echo "Enabled muxers: matroska, webm, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
+            cat "$RUNNER_TEMP/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt"
             echo "Compiler: $(clang --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
             echo "Rust toolchain: $(rustc --version)"
@@ -345,6 +364,7 @@ jobs:
         run: |
           cargo test --locked -p or_runtime
           cargo test --locked -p or_media
+          cargo test --locked -p or_media --test software_export writer_publishes_webm_with_vp9_and_opus_streams -- --exact --ignored
           cargo test --locked -p or_app_bridge
           cargo test --locked -p or_core --test project_recovery
 
@@ -444,6 +464,12 @@ jobs:
             ${{ runner.temp }}/ffmpeg-8.1.3-install.tar.gz
             ${{ runner.temp }}/FFMPEG-BUILD-INFO.txt
             ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
+            ${{ runner.temp }}/desktop-export-codecs/opus-1.6.1.tar.gz
+            ${{ runner.temp }}/desktop-export-codecs/libvpx-v1.17.0.tar
+            ${{ runner.temp }}/desktop-export-codecs/OPUS-COPYING
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-LICENSE
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-PATENTS
+            ${{ runner.temp }}/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -544,7 +570,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang cmake libclang-dev libasound2-dev ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth
+          sudo apt-get install -y build-essential clang cmake libclang-dev libasound2-dev nasm ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -561,6 +587,15 @@ jobs:
       - name: Resolve Flutter dependencies
         working-directory: apps/or_app
         run: flutter pub get
+
+      - name: Build pinned VP9 and Opus codec sources
+        id: codec-build
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          bash scripts/build_desktop_export_codecs.sh linux \
+            "$RUNNER_TEMP/ffmpeg-codecs-install" \
+            "$RUNNER_TEMP/desktop-export-codecs"
 
       - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
         id: ffmpeg-build
@@ -579,7 +614,8 @@ jobs:
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}")
+          read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
           make install
@@ -626,12 +662,15 @@ jobs:
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
-            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
+            echo "libvpx configure target: $LIBVPX_CONFIGURE_TARGET"
+            echo "Enabled muxers: matroska, webm, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
+            cat "$RUNNER_TEMP/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt"
             echo "Compiler: $(cc --version | head -n 1)"
             echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
             echo "Rust toolchain: $(rustc --version)"
@@ -681,6 +720,7 @@ jobs:
         run: |
           cargo test --locked -p or_runtime
           cargo test --locked -p or_media
+          cargo test --locked -p or_media --test software_export writer_publishes_webm_with_vp9_and_opus_streams -- --exact --ignored
           cargo test --locked -p or_app_bridge
           cargo test --locked -p or_core --test project_recovery
 
@@ -770,6 +810,12 @@ jobs:
             ${{ runner.temp }}/ffmpeg-8.1.3-install.tar.gz
             ${{ runner.temp }}/FFMPEG-BUILD-INFO.txt
             ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
+            ${{ runner.temp }}/desktop-export-codecs/opus-1.6.1.tar.gz
+            ${{ runner.temp }}/desktop-export-codecs/libvpx-v1.17.0.tar
+            ${{ runner.temp }}/desktop-export-codecs/OPUS-COPYING
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-LICENSE
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-PATENTS
+            ${{ runner.temp }}/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -800,7 +846,18 @@ jobs:
           path-type: inherit
           update: true
           install: make pkgconf
-          pacboy: clang:p
+          pacboy: clang:p nasm:p
+
+      - name: Build pinned VP9 and Opus codec sources
+        id: codec-build
+        shell: msys2 {0}
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          temp="$(cygpath -u "$RUNNER_TEMP")"
+          bash scripts/build_desktop_export_codecs.sh windows \
+            "$temp/ffmpeg-codecs-install" \
+            "$temp/desktop-export-codecs"
 
       - name: Build pinned static zlib for Windows FFmpeg helpers
         shell: pwsh
@@ -882,7 +939,8 @@ jobs:
           cd "$source"
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
-          configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}" "${helper_configure_args[@]}")
+          read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           # FFmpeg configure discovers zlib through pkg-config. CMake's MSVC
           # install provides the static archive and headers but no .pc file.
           zlib_prefix="$(cygpath -u "$OR_ZLIB_PREFIX")"
@@ -942,6 +1000,8 @@ jobs:
           LIBCLANG_PATH = { value = "$libclang_path", force = true }
           EOF
           echo "FFMPEG_INSTALL_PREFIX=$prefix_win" >> "$GITHUB_ENV"
+          codec_prefix_win="$(cygpath -am "$FFMPEG_CODEC_PREFIX")"
+          echo "FFMPEG_CODEC_PREFIX=$codec_prefix_win" >> "$GITHUB_ENV"
           echo "LIBCLANG_PATH=$libclang_path" >> "$GITHUB_ENV"
           echo "INCLUDE=$prefix_win/include;$INCLUDE" >> "$GITHUB_ENV"
           echo "LIB=$prefix_win/lib;$prefix_win/bin;$LIB" >> "$GITHUB_ENV"
@@ -968,12 +1028,15 @@ jobs:
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
             echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
-            echo "Enabled muxers: matroska, image2, image2pipe"
+            echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
+            echo "libvpx configure target: $LIBVPX_CONFIGURE_TARGET"
+            echo "Enabled muxers: matroska, webm, image2, image2pipe"
             echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
             echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
+            cat "$temp/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt"
             echo "Packaging modifications: versionless MSVC import-library aliases are copied for Rust linking; upstream import libraries and DLLs are retained; zlib is statically linked into the helper executables"
             echo "MSVC import library names exposed to Rust: avcodec.lib, avformat.lib, avutil.lib, swresample.lib, swscale.lib"
             echo "Compiler: $(cl 2>&1 | head -n 1 || true)"
@@ -1015,6 +1078,7 @@ jobs:
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
           cargo test --locked -p or_runtime
           cargo test --locked -p or_media
+          cargo test --locked -p or_media --test software_export writer_publishes_webm_with_vp9_and_opus_streams -- --exact --ignored
           cargo test --locked -p or_app_bridge
           cargo test --locked -p or_core --test project_recovery
 
@@ -1091,6 +1155,12 @@ jobs:
             ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
             ${{ runner.temp }}/zlib-1.3.2.tar.gz
             ${{ runner.temp }}/ZLIB-LICENSE.txt
+            ${{ runner.temp }}/desktop-export-codecs/opus-1.6.1.tar.gz
+            ${{ runner.temp }}/desktop-export-codecs/libvpx-v1.17.0.tar
+            ${{ runner.temp }}/desktop-export-codecs/OPUS-COPYING
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-LICENSE
+            ${{ runner.temp }}/desktop-export-codecs/LIBVPX-PATENTS
+            ${{ runner.temp }}/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt
           if-no-files-found: error
           retention-days: 14
 

@@ -61,12 +61,12 @@ mod desktop {
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
-        EffectReference, ExportRequest, ExportResponse, JobCancelOutcome, JobContext, JobFailure,
-        JobKind, JobManager, JobManagerConfig, JobState, MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId,
-        MediaSourceRef, MediaStreamMetadata, Opacity, ProjectId, ProjectInstanceId,
-        ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-        TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
-        TransitionReference,
+        EffectReference, ExportProfile, ExportRequest, ExportResponse, JobCancelOutcome,
+        JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
+        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata, Opacity,
+        ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
+        RationalRate, RationalTime, TextFormatting, TimeRange, TimelineClipState,
+        TimelineTrackSummaryV2, TrackKind, Transform, TransitionReference,
     };
     use or_ipc::{ExportRequestHandler, LiveProjectHost};
     use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
@@ -197,6 +197,7 @@ mod desktop {
                     project_instance_id,
                     expected_project_revision,
                     destination,
+                    profile,
                 } => {
                     if project_id != session.project_id()
                         || project_instance_id != session.project_instance_id()
@@ -213,15 +214,21 @@ mod desktop {
                         );
                     }
                     let destination = std::path::PathBuf::from(destination);
+                    let (extension, format_name) = match profile {
+                        ExportProfile::MatroskaFfv1PcmS16le => ("mkv", "Matroska"),
+                        ExportProfile::WebmVp9Opus => ("webm", "WebM"),
+                    };
                     if !destination.is_absolute()
                         || !destination
                             .extension()
                             .and_then(std::ffi::OsStr::to_str)
-                            .is_some_and(|extension| extension.eq_ignore_ascii_case("mkv"))
+                            .is_some_and(|actual| actual.eq_ignore_ascii_case(extension))
                     {
                         return ExportResponse::failure(
                             "INVALID_EXPORT_DESTINATION",
-                            "choose an absolute Matroska destination with an .mkv extension",
+                            format!(
+                                "choose an absolute {format_name} destination with a .{extension} extension"
+                            ),
                         );
                     }
                     if !*FFMPEG_LICENSE_OK.get_or_init(or_media::verify_ffmpeg_runtime) {
@@ -292,6 +299,7 @@ mod desktop {
                         let result = export_program(
                             program,
                             destination,
+                            profile,
                             output_size,
                             frame_count,
                             frame_rate,
@@ -1942,6 +1950,7 @@ mod desktop {
     fn export_program(
         program: Arc<PreviewProgram>,
         destination: std::path::PathBuf,
+        profile: ExportProfile,
         output_size: (u32, u32),
         frame_count: u64,
         frame_rate: RationalRate,
@@ -1955,8 +1964,15 @@ mod desktop {
         let total_audio_frames = audio_frames_ceil(content_end)?;
         i64::try_from(total_audio_frames)
             .map_err(|_| "audio duration exceeds the output sample clock".to_owned())?;
-        let mut writer = or_media::MatroskaFfv1PcmS16leWriter::create(
+        let media_profile = match profile {
+            ExportProfile::MatroskaFfv1PcmS16le => {
+                or_media::SoftwareExportProfile::MatroskaFfv1PcmS16le
+            }
+            ExportProfile::WebmVp9Opus => or_media::SoftwareExportProfile::WebmVp9Opus,
+        };
+        let mut writer = or_media::FfmpegSoftwareExportWriter::create_with_profile(
             destination,
+            media_profile,
             output_size.0,
             output_size.1,
             frame_rate.numerator(),

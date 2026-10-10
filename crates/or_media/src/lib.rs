@@ -10,7 +10,10 @@ pub use decoder::{
     AudioChunk, DecodeError, SoftwareMediaDecoder, VideoDecodeSession, VideoDecodeSessionMetrics,
     VideoFrame,
 };
-pub use encoder::{ExportEncodeError, MatroskaFfv1PcmS16leWriter};
+pub use encoder::{
+    ExportEncodeError, FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter,
+    SoftwareExportProfile,
+};
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
 #[cfg(unix)]

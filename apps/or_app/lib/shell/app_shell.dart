@@ -10,6 +10,7 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../core_gateway.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../project/export_profile.dart';
 import '../project/project_file_picker.dart';
 import '../project/project_gateway.dart';
 import '../screens/asset_library_screen.dart';
@@ -1038,9 +1039,13 @@ class _AppShellState extends State<AppShell> {
     try {
       final current = await widget.projectGateway.summary(session);
       if (!mounted || !identical(session, _activeSession)) return;
-      final suggestedName = _exportSuggestedName(current.name);
+      final profile = await _chooseExportProfile();
+      if (profile == null || !mounted || !identical(session, _activeSession)) {
+        return;
+      }
       destination = await widget.projectFilePicker.saveExportPath(
-        suggestedName: suggestedName,
+        suggestedName: profile.suggestedName(current.name),
+        profile: profile,
       );
       if (destination == null) {
         return;
@@ -1227,11 +1232,6 @@ class _AppShellState extends State<AppShell> {
     } catch (_) {
       // Preserve the primary export result if cleanup fails.
     }
-  }
-
-  static String _exportSuggestedName(String projectName) {
-    final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
-    return '${base.isEmpty ? 'Untitled' : base}.mkv';
   }
 
   static String _exportJobLabel(ProjectExportJob job) {
@@ -1464,6 +1464,47 @@ class _AppShellState extends State<AppShell> {
           );
         },
       );
+
+  Future<ExportProfile?> _chooseExportProfile() {
+    final profiles = ExportProfile.available;
+    if (profiles.length == 1) return Future.value(profiles.single);
+    return showDialog<ExportProfile>(
+      context: context,
+      builder: (context) {
+        var selected = ExportProfile.defaultForPlatform;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Export video'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final profile in profiles)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    onTap: () => setDialogState(() => selected = profile),
+                    title: Text(profile.label),
+                    subtitle: Text(profile.description),
+                    trailing: selected == profile
+                        ? const Icon(Icons.check)
+                        : null,
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(selected),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _removeTimelineTrack(
     ProjectReadModel expected,

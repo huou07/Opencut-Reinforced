@@ -19,8 +19,8 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportRequest, ExportResponse,
-    LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportRequest,
+    ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
     MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode,
     ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult,
     TimelineClipPage, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,

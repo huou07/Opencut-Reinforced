@@ -166,9 +166,9 @@ def main() -> int:
     bad_project = work / "invalid-project.orproj"
     bad_project.write_bytes(b"this is not an OR project\n")
     project = work / "journey.orproj"
-    export = work / "existing-export.mkv"
+    export = work / "existing-export.webm"
     export.write_bytes(b"existing destination must be replaced\n")
-    failed_export = work / "failed-export.mkv"
+    failed_export = work / "failed-export.webm"
     failed_export.mkdir()
     failure_sentinel = failed_export / "preserve-me.txt"
     failure_sentinel.write_text(
@@ -304,17 +304,19 @@ def main() -> int:
     streams = probe_result["streams"]
     video = next((stream for stream in streams if stream["codec_type"] == "video"), None)
     audio = next((stream for stream in streams if stream["codec_type"] == "audio"), None)
-    if video is None or video.get("codec_name") != "ffv1":
-        raise SystemExit(f"Export does not contain the required FFV1 video stream: {streams}")
-    if audio is None or audio.get("codec_name") != "pcm_s16le":
-        raise SystemExit(f"Export does not contain the required PCM S16LE audio stream: {streams}")
+    if video is None or video.get("codec_name") != "vp9":
+        raise SystemExit(f"Export does not contain the required VP9 video stream: {streams}")
+    if audio is None or audio.get("codec_name") != "opus":
+        raise SystemExit(f"Export does not contain the required Opus audio stream: {streams}")
     if (video.get("width"), video.get("height")) != (1920, 1080):
         raise SystemExit(f"Export did not preserve the real media's 1080p dimensions: {video}")
     export_format = probe_result["format"]
-    if "matroska" not in export_format.get("format_name", ""):
-        raise SystemExit("Export is not an independently recognizable Matroska file.")
+    if "webm" not in export_format.get("format_name", ""):
+        raise SystemExit("Export is not an independently recognizable WebM file.")
     if float(export_format.get("duration", "0")) <= 0:
         raise SystemExit("Export has no playable duration.")
+    if export.stat().st_size > 2_000_000:
+        raise SystemExit("The short WebM product-journal export exceeded its 2 MB budget.")
 
     helper_env = {
         key: value
@@ -386,7 +388,7 @@ def main() -> int:
             )
             output.write(
                 f"- Export: `{export.stat().st_size}` bytes at {video['width']}x{video['height']}; "
-                "Matroska/FFV1/PCM independently probed and fully decoded by packaged ffprobe "
+                "WebM/VP9/Opus independently probed and fully decoded by packaged ffprobe "
                 f"(frames: {decoded_frame_counts}).\n"
             )
             output.write(f"- Evidence report: `{report_path}`\n")

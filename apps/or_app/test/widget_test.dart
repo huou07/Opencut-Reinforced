@@ -9,6 +9,7 @@ import 'package:or_app/core_gateway.dart';
 import 'package:or_app/design/or_colors.dart';
 import 'package:or_app/design/or_spacing.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/screens/settings_screen.dart';
@@ -1560,8 +1561,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
     await tester.pump();
+    expect(find.text('Export video'), findsOneWidget);
+    await tester.tap(find.text('Matroska lossless'));
+    await tester.tap(find.text('Continue'));
     await tester.pump();
     expect(picker.exportPathCalls, 1);
+    expect(picker.lastExportProfile, ExportProfile.matroskaFfv1PcmS16le);
     expect(gateway.exportCalls, 1);
     expect(gateway.lastExportDestination, '/tmp/export-project.mkv');
     expect(find.byKey(const ValueKey('cancel-export')), findsOneWidget);
@@ -1591,6 +1596,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('export offers WebM as the ordinary desktop default', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.webm';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    expect(find.text('Export video'), findsOneWidget);
+    expect(find.text('WebM video'), findsOneWidget);
+    expect(
+      find.text(
+        'Smaller file for sharing, with lossy VP9 video and Opus audio.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(picker.lastExportProfile, ExportProfile.webmVp9Opus);
+    expect(gateway.lastExportDestination, '/tmp/export-project.webm');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'completed export is published through the selected storage boundary',
     (tester) async {
@@ -1604,6 +1639,9 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('export-project')));
       await tester.pump();
+      expect(find.text('Export video'), findsOneWidget);
+      await tester.tap(find.text('Matroska lossless'));
+      await tester.tap(find.text('Continue'));
       await tester.pump();
       gateway.completeExport();
       await tester.pump(const Duration(milliseconds: 450));
@@ -3387,6 +3425,7 @@ class _FakeProjectPicker implements ProjectFilePicker {
   int mediaOpenCalls = 0;
   int saveCalls = 0;
   int exportPathCalls = 0;
+  ExportProfile? lastExportProfile;
   int captionOpenCalls = 0;
   int captionCleanupCalls = 0;
   int publishExportCalls = 0;
@@ -3421,8 +3460,12 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async {
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async {
     exportPathCalls++;
+    lastExportProfile = profile;
     return exportPath;
   }
 

@@ -71,6 +71,14 @@ def main() -> int:
     restricted_options = ("--enable-gpl", "--enable-version3", "--enable-nonfree")
     if any(option in build_configuration for option in restricted_options):
         raise SystemExit("The packaged helper build enables a restricted FFmpeg license mode.")
+    encoders = _run(
+        "VP9 and Opus encoder discovery",
+        [str(ffmpeg), "-hide_banner", "-encoders"],
+        env,
+    ).decode("utf-8", errors="replace")
+    for codec in ("libvpx-vp9", "libopus"):
+        if codec not in encoders:
+            raise SystemExit(f"The packaged helper is missing the required {codec} encoder.")
 
     args.work.mkdir(parents=True, exist_ok=True)
     thumbnail = args.work / "thumbnail.png"
@@ -168,6 +176,70 @@ def main() -> int:
     if not proxy.is_file() or not proxy_streams or proxy_streams[0].get("codec_name") != "mpeg4":
         raise SystemExit(f"The generated proxy could not be validated: {proxy_result}")
 
+    webm = args.work / "delivery.webm"
+    _run(
+        "WebM VP9/Opus export",
+        [
+            str(ffmpeg),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(args.media),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0?",
+            "-c:v",
+            "libvpx-vp9",
+            "-deadline",
+            "realtime",
+            "-cpu-used",
+            "8",
+            "-crf",
+            "36",
+            "-b:v",
+            "0",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "128k",
+            "-f",
+            "webm",
+            str(webm),
+        ],
+        env,
+    )
+    webm_result = _probe(ffprobe, webm, env)
+    webm_streams = webm_result.get("streams", [])
+    codecs = {stream.get("codec_name") for stream in webm_streams}
+    if not webm.is_file() or codecs != {"vp9", "opus"}:
+        raise SystemExit(f"The generated WebM stream set is invalid: {webm_result}")
+    decoded = json.loads(
+        _run(
+            "WebM full decode",
+            [
+                str(ffprobe),
+                "-v",
+                "error",
+                "-count_frames",
+                "-show_entries",
+                "stream=codec_type,nb_read_frames",
+                "-of",
+                "json",
+                str(webm),
+            ],
+            env,
+        )
+    )
+    decoded_counts = {
+        stream.get("codec_type"): int(stream.get("nb_read_frames", "0"))
+        for stream in decoded.get("streams", [])
+    }
+    if not all(decoded_counts.get(kind, 0) > 0 for kind in ("video", "audio")):
+        raise SystemExit(f"The WebM did not fully decode both streams: {decoded_counts}")
+
     print(
         "OR_PACKAGED_FFMPEG_CAPABILITIES "
         + json.dumps(
@@ -178,6 +250,9 @@ def main() -> int:
                 "waveform_bytes": waveform.stat().st_size,
                 "proxy_bytes": proxy.stat().st_size,
                 "proxy_codec": proxy_streams[0]["codec_name"],
+                "webm_bytes": webm.stat().st_size,
+                "webm_codecs": sorted(codecs),
+                "webm_decoded_frames": decoded_counts,
             },
             sort_keys=True,
         )

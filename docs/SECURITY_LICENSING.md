@@ -170,6 +170,31 @@ packages do not bundle helpers in 9B1: the CLI resolves a packaged sibling
 when one is present and otherwise keeps its developer override/`PATH` behavior
 for unpackaged runs.
 
+### Desktop WebM delivery codecs (candidate)
+
+The desktop FFmpeg profile now has a candidate WebM muxer with VP9 from
+libvpx v1.17.0 at pinned commit
+[`6df3ec34557879fff673706f4a1d9fbd0f3a6f0e`](https://chromium.googlesource.com/webm/libvpx/+/6df3ec34557879fff673706f4a1d9fbd0f3a6f0e/)
+and Opus from libopus 1.6.1 at source archive SHA-256
+`6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1`.
+Both are built as static libraries and linked into the existing dynamically
+replaceable FFmpeg shared libraries. The app and helper packages carry the
+upstream Opus COPYING text, libvpx LICENSE and PATENTS notices; Developer
+Preview source assets include the exact codec archives and build metadata.
+The upstream source licenses permit redistribution subject to their included
+BSD-style conditions and disclaimers. The Opus notice identifies specific
+royalty-free patent grants; the libvpx patent notice grants rights only for
+specified claims licensable by Google. These notices are not a general patent
+clearance opinion for every codec implementation, modification, jurisdiction,
+or commercial use. Release owners must retain the notices and review the exact
+shipped binaries and distribution context.
+
+This candidate adds no GPL, version3, or nonfree FFmpeg mode. Android does not
+build these codec libraries and does not expose this export profile. Desktop
+WebM remains pending exact-SHA packaged verification and independent output
+acceptance; this record documents the selected source and compliance artifacts,
+not a completed release/legal approval.
+
 ### Checkpoint 7C linked software runtime
 
 `or_media` consumes the approved `ffmpeg-the-third` 6.0.0 binding with dynamic

@@ -1895,6 +1895,8 @@ pub enum ExportRequest {
         project_instance_id: ProjectInstanceId,
         expected_project_revision: ProjectRevision,
         destination: String,
+        #[serde(default)]
+        profile: ExportProfile,
     },
     Status {
         project_id: ProjectId,
@@ -1906,6 +1908,53 @@ pub enum ExportRequest {
         project_instance_id: ProjectInstanceId,
         job_id: crate::JobId,
     },
+}
+
+/// Container and codec combination used for a rendered video export.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportProfile {
+    /// Large, lossless Matroska video with PCM audio.
+    #[default]
+    MatroskaFfv1PcmS16le,
+    /// Smaller WebM delivery output using VP9 video and Opus audio.
+    WebmVp9Opus,
+}
+
+#[cfg(test)]
+mod export_profile_tests {
+    use super::{ExportProfile, ExportRequest};
+    use crate::{ProjectId, ProjectInstanceId};
+
+    #[test]
+    fn legacy_export_start_defaults_to_the_lossless_profile() {
+        let request: ExportRequest = serde_json::from_value(serde_json::json!({
+            "operation": "start",
+            "request": {
+                "project_id": ProjectId::generate(),
+                "project_instance_id": ProjectInstanceId::generate(),
+                "expected_project_revision": 0,
+                "destination": "/tmp/legacy.mkv"
+            }
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            request,
+            ExportRequest::Start {
+                profile: ExportProfile::MatroskaFfv1PcmS16le,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn webm_profile_has_a_stable_wire_name() {
+        assert_eq!(
+            serde_json::to_value(ExportProfile::WebmVp9Opus).unwrap(),
+            serde_json::Value::String("webm_vp9_opus".to_owned())
+        );
+    }
 }
 
 /// Result for an export request. Export work never changes the project revision.

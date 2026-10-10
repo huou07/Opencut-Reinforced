@@ -97,6 +97,13 @@ The optimized Desktop MVP milestone is represented by the execution graph from
   recovery-checkpoint autosave, explicit Save/reopen, and preview/export
   hardening.
 
+Desktop now also has an implementation candidate for a smaller WebM delivery
+profile using VP9 video and Opus audio. It uses the same captured project,
+timeline renderer, mixer, staging, and publication path as the lossless profile.
+Exact-SHA hosted package and independent-playback evidence is required before
+calling this delivery profile accepted. Android continues to offer its verified
+Matroska profile because its packaged FFmpeg does not include these encoders.
+
 Linked clips, grouping, nested timelines, multicamera, and other complex
 relationship semantics remain advanced Phase 13 scope unless re-promoted by a
 separate plan amendment.
@@ -294,6 +301,7 @@ exact-SHA packaged cross-platform verification is pending:
 | Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
 | RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
 | MP3 (`.mp3`) | Audio-only MP3; candidate pending packaged verification |
+| WebM (`.webm`) | VP9 video and/or Opus audio; codec-enabled desktop candidate, pending packaged import verification |
 
 An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
 audio import through the same FFmpeg decoder and Rust import path. The candidate
@@ -316,7 +324,8 @@ that SHA's packaged desktop journey still used the tiny fixture. Neither the
 current Rust proof nor the pending desktop path establishes camera-source
 variation or physical-device performance. The import profile remains a
 candidate pending packaged acceptance and codec patent/distribution review.
-It does not add MP4 export; the lossless Matroska export remains available.
+MP4 export remains out of scope; the lossless Matroska export remains available
+on desktop and Android.
 
 A file whose signature is outside Matroska, RIFF/RF64 WAV, MP3, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska
@@ -339,7 +348,7 @@ build-configuration review as other optional delivery profiles.
 
 **MVP FOUNDATION:** usable software video export through a background job with progress and cancellation. The mandatory correctness profile is Matroska + FFV1 video + PCM S16LE audio through linked software FFmpeg. Other delivery and hardware profiles are optional and require separate evidence.
 
-**PLANNED (optional delivery profiles):** MP4, MOV, and WebM containers; codecs H.264, H.265, AV1, and VP9 only after legal, platform, and build-configuration review; hardware encoding where supported. Desktop MVP correctness uses the required software Matroska + FFV1 + PCM S16LE profile.
+**PLANNED (optional delivery profiles):** MP4 and MOV; codecs H.264, H.265, and AV1; hardware encoding where supported, each only after legal, platform, and build-configuration review. A desktop WebM + VP9/Opus candidate is implemented but awaits exact-SHA packaged and independent-output acceptance. Desktop and Android retain software Matroska + FFV1 + PCM S16LE as the lossless profile.
 
 ## Interchange
 

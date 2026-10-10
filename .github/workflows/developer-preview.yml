@@ -212,6 +212,12 @@ jobs:
             install_name_tool -add_rpath @loader_path/../Frameworks "$helper"
           done
           cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$notices/COPYING.LGPLv2.1"
+          opus_notices="$app/Contents/Resources/ThirdPartyNotices/Opus"
+          vpx_notices="$app/Contents/Resources/ThirdPartyNotices/libvpx"
+          mkdir -p "$opus_notices" "$vpx_notices"
+          cp "$RUNNER_TEMP/ffmpeg-verification/OPUS-COPYING" "$opus_notices/COPYING"
+          cp "$RUNNER_TEMP/ffmpeg-verification/LIBVPX-LICENSE" "$vpx_notices/LICENSE"
+          cp "$RUNNER_TEMP/ffmpeg-verification/LIBVPX-PATENTS" "$vpx_notices/PATENTS"
           cat > "$notices/FFmpeg-NOTICE.txt" <<'EOF'
           This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
           The corresponding FFmpeg source archive and exact build configuration
@@ -219,7 +225,10 @@ jobs:
           are separate files in Contents/Frameworks and may be replaced with a
           compatible LGPL-compliant build under the applicable license terms.
           The ffmpeg and ffprobe programs beside the application binary are built
-          from the same source and configuration for import and media previews.
+          from the same source and configuration for import, media previews,
+          and WebM export. FFmpeg's WebM export links libvpx and libopus
+          statically; their licenses and the libvpx patent notice are included
+          in the adjacent Opus and libvpx directories.
           EOF
           codesign --force --deep --sign - --timestamp=none "$app"
 
@@ -384,6 +393,12 @@ jobs:
           if (-not (Test-Path $zlibLicense -PathType Leaf)) { throw 'zlib license text missing beside the helpers' }
           Copy-Item -Path $zlibLicense -Destination (Join-Path $notices 'ZLIB-LICENSE.txt') -Force
           Copy-Item (Join-Path $env:RUNNER_TEMP 'ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1') (Join-Path $notices 'COPYING.LGPLv2.1')
+          $opusNotices = Join-Path $bundle 'licenses/Opus'
+          $vpxNotices = Join-Path $bundle 'licenses/libvpx'
+          New-Item -ItemType Directory -Force -Path $opusNotices, $vpxNotices | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'ffmpeg-verification/OPUS-COPYING') (Join-Path $opusNotices 'COPYING')
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'ffmpeg-verification/LIBVPX-LICENSE') (Join-Path $vpxNotices 'LICENSE')
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'ffmpeg-verification/LIBVPX-PATENTS') (Join-Path $vpxNotices 'PATENTS')
           @'
           This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
           The corresponding FFmpeg source archive and exact build configuration
@@ -391,7 +406,10 @@ jobs:
           separate files beside the application and may be replaced with a
           compatible LGPL-compliant build under the applicable license terms.
           The ffmpeg.exe and ffprobe.exe programs beside the application are built
-          from the same source and configuration for import and media previews;
+          from the same source and configuration for import, media previews,
+          and WebM export. FFmpeg's WebM export statically links libvpx and
+          libopus; their licenses and the libvpx patent notice are included in
+          the adjacent Opus and libvpx directories.
           the Windows ffmpeg.exe helper statically links zlib 1.3.2; its license
           is included in ZLIB-LICENSE.txt.
           '@ | Set-Content -LiteralPath (Join-Path $notices 'FFmpeg-NOTICE.txt') -Encoding utf8
@@ -536,6 +554,12 @@ jobs:
           notices="$bundle/licenses/FFmpeg"
           mkdir -p "$notices"
           cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$notices/COPYING.LGPLv2.1"
+          opus_notices="$bundle/licenses/Opus"
+          vpx_notices="$bundle/licenses/libvpx"
+          mkdir -p "$opus_notices" "$vpx_notices"
+          cp "$RUNNER_TEMP/ffmpeg-verification/OPUS-COPYING" "$opus_notices/COPYING"
+          cp "$RUNNER_TEMP/ffmpeg-verification/LIBVPX-LICENSE" "$vpx_notices/LICENSE"
+          cp "$RUNNER_TEMP/ffmpeg-verification/LIBVPX-PATENTS" "$vpx_notices/PATENTS"
           cat > "$notices/FFmpeg-NOTICE.txt" <<'EOF'
           This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
           The corresponding FFmpeg source archive and exact build configuration
@@ -543,7 +567,10 @@ jobs:
           libraries are separate files beside the Rust bridge and may be replaced
           with a compatible LGPL-compliant build under the applicable license terms.
           The ffmpeg and ffprobe programs beside the application binary are built
-          from the same source and configuration for import and media previews.
+          from the same source and configuration for import, media previews,
+          and WebM export. FFmpeg's WebM export statically links libvpx and
+          libopus; their licenses and the libvpx patent notice are included in
+          the adjacent Opus and libvpx directories.
           EOF
           env -u LD_LIBRARY_PATH python3 - "$bridge" <<'PY'
           import ctypes
@@ -953,7 +980,7 @@ jobs:
           provenance="$RUNNER_TEMP/ffmpeg-provenance"
           for target in macos linux windows-x64; do
             dir="$provenance/$target"
-            for file in ffmpeg-8.1.3.tar.xz FFMPEG-BUILD-INFO.txt FFmpeg-COPYING.LGPLv2.1; do
+            for file in ffmpeg-8.1.3.tar.xz FFMPEG-BUILD-INFO.txt FFmpeg-COPYING.LGPLv2.1 opus-1.6.1.tar.gz libvpx-v1.17.0.tar OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
               if [[ ! -s "$dir/$file" ]]; then
                 echo "::error::Verified $target FFmpeg provenance is missing: $file"
                 exit 1
@@ -966,6 +993,21 @@ jobs:
               exit 1
             fi
           done
+          for target in macos linux windows-x64; do
+            dir="$provenance/$target"
+            echo "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1  $dir/opus-1.6.1.tar.gz" | sha256sum --check
+            expected_vpx_sha="$(sed -n 's/^libvpx source archive SHA-256: //p' "$dir/EXPORT-CODEC-SOURCES.txt")"
+            test -n "$expected_vpx_sha"
+            echo "$expected_vpx_sha  $dir/libvpx-v1.17.0.tar" | sha256sum --check
+            tar -tf "$dir/libvpx-v1.17.0.tar" | grep -Fxq 'libvpx-v1.17.0/LICENSE'
+            tar -tf "$dir/libvpx-v1.17.0.tar" | grep -Fxq 'libvpx-v1.17.0/PATENTS'
+          done
+          for file in opus-1.6.1.tar.gz OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
+            cmp "$provenance/macos/$file" "$provenance/linux/$file"
+            cmp "$provenance/macos/$file" "$provenance/windows-x64/$file"
+          done
+          cmp "$provenance/macos/libvpx-v1.17.0.tar" "$provenance/linux/libvpx-v1.17.0.tar"
+          cmp "$provenance/macos/libvpx-v1.17.0.tar" "$provenance/windows-x64/libvpx-v1.17.0.tar"
           echo "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16  $provenance/windows-x64/zlib-1.3.2.tar.gz" | sha256sum --check
           tar -tzf "$provenance/windows-x64/zlib-1.3.2.tar.gz" >/dev/null
           cmp "$provenance/macos/ffmpeg-8.1.3.tar.xz" "$provenance/linux/ffmpeg-8.1.3.tar.xz"
@@ -975,6 +1017,8 @@ jobs:
           cp "$provenance/macos/ffmpeg-8.1.3.tar.xz" "$assets/ffmpeg-8.1.3-source.tar.xz"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $assets/ffmpeg-8.1.3-source.tar.xz" | sha512sum --check
           xz --test "$assets/ffmpeg-8.1.3-source.tar.xz"
+          cp "$provenance/macos/opus-1.6.1.tar.gz" "$assets/opus-1.6.1-source.tar.gz"
+          cp "$provenance/macos/libvpx-v1.17.0.tar" "$assets/libvpx-v1.17.0-source.tar"
           {
             echo "FFmpeg release: 8.1.3"
             echo "Rust binding: ffmpeg-the-third 6.0.0"
@@ -982,6 +1026,9 @@ jobs:
             echo "zlib source URL: https://zlib.net/fossils/zlib-1.3.2.tar.gz"
             echo "zlib source SHA-256: bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
             echo "Windows app package includes ZLIB-LICENSE.txt"
+            echo
+            echo "=== Verified desktop export codec source ==="
+            cat "$provenance/macos/EXPORT-CODEC-SOURCES.txt"
             for target in macos linux windows-x64; do
               echo
               echo "=== Verified $target build ==="
@@ -1003,6 +1050,15 @@ jobs:
           grep -Fq 'licenses/FFmpeg/FFmpeg-NOTICE.txt' <<< "$windows_entries"
           grep -Fq 'licenses/FFmpeg/COPYING.LGPLv2.1' <<< "$linux_entries"
           grep -Fq 'licenses/FFmpeg/FFmpeg-NOTICE.txt' <<< "$linux_entries"
+          grep -Fq 'ThirdPartyNotices/Opus/COPYING' <<< "$mac_entries"
+          grep -Fq 'ThirdPartyNotices/libvpx/LICENSE' <<< "$mac_entries"
+          grep -Fq 'ThirdPartyNotices/libvpx/PATENTS' <<< "$mac_entries"
+          grep -Fq 'licenses/Opus/COPYING' <<< "$windows_entries"
+          grep -Fq 'licenses/libvpx/LICENSE' <<< "$windows_entries"
+          grep -Fq 'licenses/libvpx/PATENTS' <<< "$windows_entries"
+          grep -Fq 'licenses/Opus/COPYING' <<< "$linux_entries"
+          grep -Fq 'licenses/libvpx/LICENSE' <<< "$linux_entries"
+          grep -Fq 'licenses/libvpx/PATENTS' <<< "$linux_entries"
 
           cat > "$assets/BUILD-INFO.txt" <<EOF
           Opencut Reinforced Developer Preview
@@ -1025,9 +1081,9 @@ jobs:
           - opencut-reinforced-cli-windows-x64.zip (unsigned)
           - opencut-reinforced-cli-linux-x64.tar.gz (unsigned)
 
-          Release assets: seven application/CLI packages, FFmpeg build provenance and the matching FFmpeg source archive, and SHA256SUMS.txt (eleven assets total).
+          Release assets: seven application/CLI packages, FFmpeg build provenance, FFmpeg/Opus/libvpx corresponding source archives, and SHA256SUMS.txt (thirteen assets total).
           SHA256SUMS.txt covers every other release asset; a checksum manifest cannot contain its own checksum.
-          The three desktop application archives contain the matching FFmpeg 8.1.3 shared runtime libraries and LGPL notices. The Windows FFmpeg helper statically links zlib 1.3.2; its source URL and pinned hash are in FFMPEG-BUILD-INFO.txt, and its license is in the Windows application package.
+          The desktop application archives contain the matching FFmpeg 8.1.3 shared runtime libraries and LGPL notices, plus Opus/libvpx notices for the WebM VP9/Opus export profile. Codec source versions, exact source archive hashes, and the libvpx patent notice are included with the packages; the corresponding source archives are release assets. These notices do not establish patent clearance in every jurisdiction.
 
           Warning: Pre-MVP developer build; not a stable release or a performance benchmark.
           EOF
@@ -1038,12 +1094,14 @@ jobs:
             BUILD-INFO.txt
             FFMPEG-BUILD-INFO.txt
             ffmpeg-8.1.3-source.tar.xz
+            opus-1.6.1-source.tar.gz
+            libvpx-v1.17.0-source.tar
           )
           sha256sum "${checksummed_files[@]}" > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
           file_count="$(find "$assets" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')"
-          if [[ "$file_count" != "11" ]]; then
-            echo "::error::Expected exactly eleven Developer Preview assets, found $file_count files."
+          if [[ "$file_count" != "13" ]]; then
+            echo "::error::Expected exactly thirteen Developer Preview assets, found $file_count files."
             exit 1
           fi
 
@@ -1199,6 +1257,8 @@ jobs:
             "$assets/BUILD-INFO.txt" \
             "$assets/FFMPEG-BUILD-INFO.txt" \
             "$assets/ffmpeg-8.1.3-source.tar.xz" \
+            "$assets/opus-1.6.1-source.tar.gz" \
+            "$assets/libvpx-v1.17.0-source.tar" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Opencut Reinforced Developer Preview $SHORT_SHA" \
             --notes-file "$RUNNER_TEMP/RELEASE-NOTES.md" \
@@ -1214,9 +1274,9 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${DEVELOPER_TAG}" > "$release_json"
 
           if ! jq -e --arg tag "$DEVELOPER_TAG" \
-            '.tag_name == $tag and .prerelease == true and (.assets | length == 11)' \
+            '.tag_name == $tag and .prerelease == true and (.assets | length == 13)' \
             "$release_json" > /dev/null; then
-            echo "::error::Published release is not the expected eleven-asset prerelease."
+            echo "::error::Published release is not the expected thirteen-asset prerelease."
             exit 1
           fi
 
@@ -1232,6 +1292,8 @@ jobs:
             BUILD-INFO.txt
             FFMPEG-BUILD-INFO.txt
             ffmpeg-8.1.3-source.tar.xz
+            opus-1.6.1-source.tar.gz
+            libvpx-v1.17.0-source.tar
           )
           for asset in "${expected_assets[@]}"; do
             if ! jq -e --arg name "$asset" '.assets | any(.[]; .name == $name and .size > 0)' "$release_json" > /dev/null; then

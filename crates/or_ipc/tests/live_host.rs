@@ -127,6 +127,7 @@ fn export_job_requests_share_the_live_application_and_ipc_route_without_mutation
             .join("output.mkv")
             .to_string_lossy()
             .into_owned(),
+        profile: or_core::ExportProfile::MatroskaFfv1PcmS16le,
     };
 
     let ApplicationResponse::Export(started) = host

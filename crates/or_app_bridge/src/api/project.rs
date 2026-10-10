@@ -2238,6 +2238,22 @@ impl ProjectHostHandle {
         expected_revision: u64,
         destination: String,
     ) -> ProjectExportJobView {
+        let profile = std::path::Path::new(&destination)
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+            .and_then(|extension| match extension {
+                "mkv" => Some(or_core::ExportProfile::MatroskaFfv1PcmS16le),
+                "webm" => Some(or_core::ExportProfile::WebmVp9Opus),
+                _ => None,
+            });
+        let Some(profile) = profile else {
+            return export_job_view(ExportResponse::failure(
+                "INVALID_EXPORT_PROFILE",
+                "choose a destination ending in .mkv or .webm",
+            ));
+        };
         let (project_id, project_instance_id, expected_project_revision) =
             match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
                 Ok(identity) => identity,
@@ -2250,6 +2266,7 @@ impl ProjectHostHandle {
             project_instance_id,
             expected_project_revision,
             destination,
+            profile,
         })
     }
 

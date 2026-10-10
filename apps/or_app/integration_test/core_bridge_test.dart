@@ -9,6 +9,7 @@ import 'package:flutter/material.dart' show SnackBar, Text;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
@@ -1348,7 +1349,10 @@ class _NativeProjectPicker implements ProjectFilePicker {
       projectPath;
 
   @override
-  Future<String?> saveExportPath({required String suggestedName}) async => null;
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async => null;
 
   @override
   Future<String?> openCaptionFile() async => null;

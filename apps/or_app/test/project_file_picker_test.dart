@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 
 void main() {
@@ -202,7 +203,10 @@ void main() {
       final picker = AndroidSafProjectPicker(channel: channel);
 
       expect(picker.supportsExport, isTrue);
-      final path = await picker.saveExportPath(suggestedName: 'demo.mkv');
+      final path = await picker.saveExportPath(
+        suggestedName: 'demo.mkv',
+        profile: ExportProfile.matroskaFfv1PcmS16le,
+      );
       await picker.publishExportPath(path!);
 
       expect(path, '/data/user/0/or_app/cache/or-exports/export.mkv');
@@ -213,6 +217,11 @@ void main() {
       expect(calls.last.arguments, {
         'workingPath': path,
         'documentUri': 'content://com.example.documents/document/export',
+      });
+      expect(calls.first.arguments, {
+        'suggestedName': 'demo.mkv',
+        'extension': 'mkv',
+        'mimeType': 'video/x-matroska',
       });
     },
   );
