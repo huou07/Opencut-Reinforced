@@ -781,6 +781,23 @@ packaged journey. Kotlin reported an unresolved `order` reference because
 `clear()` from `order()`; this failed run supplies no pixel or performance
 acceptance evidence, and the corrected candidate still needs a hosted rerun.
 
+Corrected exact-SHA run
+[38030603727](https://github.com/huou07/Opencut-Reinforced/actions/runs/38030603727)
+on `0e922ea552476042de5a424859a41a0636a40d3f` passed Rust, Flutter,
+descriptor-boundary, Linux, Windows, macOS, and Android packaging/product
+journeys. Android's real red-frame pixel checks pass with the native-order
+pixel-word conversion; SAF WAV playback, recovery, export, and resource checks
+also pass. On the 921,600-byte ordinary frame, total bitmap conversion/copy
+was 70,736 µs over 28 presented frames (max 51,417 µs), versus 84,038 µs over
+27 frames (max 68,474 µs) on the prior run. This is a modest measured decrease,
+not a stable performance claim: native acquisition and main-thread surface draw
+outliers were much higher on this run (27,341 µs and 168,227 µs maxima versus
+501 µs and 26,556 µs before), showing substantial emulator/run variance. Stress
+draw peaked at 168,227 µs; Choreographer still reported up to 79 skipped frames.
+Android performance remains unaccepted pending representative-hardware
+profiling and better-isolated surface-draw measurements. No acoustic-device
+output claim is made from the emulator.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

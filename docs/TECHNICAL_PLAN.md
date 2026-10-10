@@ -856,7 +856,9 @@ prepared Play request includes active visual SAF
 sources and audio SAF sources whose timeline clips extend beyond the playhead.
 The bridge registers that bounded source set before starting CPAL, so the audio
 worker cannot race ahead of permission-checked seekable descriptor registration.
-Unchanged source sets reuse their native capabilities. Android hardware
+Unchanged source sets reuse their native capabilities. Android converts the
+published BGRA frame into its reusable bitmap with a native-order 32-bit
+channel swap rather than per-channel byte-buffer reads and writes. Android hardware
 acceleration and physical-device acoustic output remain unavailable/unverified;
 emulator frame skips mean Android performance remains unaccepted.
 Android SAF journey diagnostics separately report native latest-frame
