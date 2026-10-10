@@ -533,6 +533,16 @@ not include a supported H.264 encoder. Treat format support as a connected
 product capability spanning probing/import, package configuration,
 decode/preview, and usable delivery rather than isolated roadmap checkpoints.
 
+A real-media Rust proof now complements the small packaged fixture: OR's CLI
+probe accepted a pinned 30-second 1080p H.264 sample; the software decoder
+test decodes a 1080p frame and generated silent 5.1 AAC to the editor's stereo
+output. The separately licensed score was stripped. The redistributed
+two-second CC BY 3.0 excerpt and pinned source are documented in
+`crates/or_media/tests/fixtures/README.md`. This closes neither packaged
+camera-media acceptance nor codec distribution review; the hosted platform
+journey still uses the tiny fixture. Keep this gap ahead of emulator-only
+optimization while emulator correctness and resource bounds remain intact.
+
 Before shipping a profile, inspect actual decoder/encoder support and build
 flags for every target; review component licenses, patent/distribution
 constraints and FFmpeg notices/source provenance; exercise generated legal

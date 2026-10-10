@@ -300,9 +300,14 @@ passed exact-SHA packaged desktop and Android journeys in run
 on `7fa7f749eae235536a6ac5a5cd4ffecf7443cbf2`. Its generated 32×24 fixture
 proves the packaged probe/decode path and MP4-family relink compatibility only;
 it does not establish compatibility or performance with representative camera
-media. The import profile remains a candidate pending that media verification
-and codec patent/distribution review. It does not add MP4 export; the lossless
-Matroska export remains available.
+media. OR's CLI probe and software decoder now also have a regression fixture
+with a licensed 1080p H.264 Big Buck Bunny video excerpt and generated silent
+5.1 AAC; that exercises real high-resolution frames and surround-audio
+downmix through the Rust path without redistributing the separately licensed
+score. It is not yet evidence for clean packaged journeys, camera-source
+variation, or physical-device performance. The import profile remains a
+candidate pending those checks and codec patent/distribution review. It does
+not add MP4 export; the lossless Matroska export remains available.
 
 A file whose signature is outside Matroska, RIFF/RF64 WAV, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska

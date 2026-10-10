@@ -11,6 +11,7 @@ use std::time::Instant;
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
 const PHONE_FIXTURE: &str = "tests/fixtures/tiny_h264_aac.mp4";
+const BIG_BUCK_BUNNY_FIXTURE: &str = "tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4";
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {
     RationalTime::new(numerator, denominator).unwrap()
@@ -36,6 +37,11 @@ fn fixture_source() -> MediaSourceRef {
 
 fn phone_fixture_source() -> MediaSourceRef {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(PHONE_FIXTURE);
+    MediaSourceRef::local_file(file_uri(&path)).unwrap()
+}
+
+fn big_buck_bunny_fixture_source() -> MediaSourceRef {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BIG_BUCK_BUNNY_FIXTURE);
     MediaSourceRef::local_file(file_uri(&path)).unwrap()
 }
 
@@ -350,6 +356,40 @@ fn software_decoder_reads_h264_video_and_aac_audio_from_phone_mp4() {
 
     // AAC packets can begin before the requested edit point. Seeking with the
     // codec's priming interval must still produce an exact half-open range.
+    let audio_snapshot = snapshot(time(1, 4), time(1, 8));
+    let audio_queue = SnapshotQueue::new(audio_snapshot, 8).unwrap();
+    assert!(
+        decoder
+            .decode_audio(audio_snapshot, &audio_queue, &cancellation)
+            .unwrap()
+            > 0
+    );
+    let mut decoded_sample_frames = 0;
+    while let Some(item) = audio_queue.try_pop_current().unwrap() {
+        let chunk = item.into_value();
+        assert_eq!(chunk.sample_rate(), 48_000);
+        assert_eq!(chunk.channels(), 2);
+        decoded_sample_frames += chunk.sample_frames();
+    }
+    assert_eq!(decoded_sample_frames, 6_000);
+}
+
+#[test]
+fn software_decoder_reads_real_1080p_h264_and_surround_aac_media() {
+    let decoder = SoftwareMediaDecoder::new(&big_buck_bunny_fixture_source(), budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+
+    let frame = decoder
+        .decode_video_frame_at(time(1, 2), &cancellation)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (frame.descriptor().width(), frame.descriptor().height()),
+        (1920, 1080)
+    );
+    assert_eq!(frame.pixels().len(), 1920 * 1080 * 4);
+    drop(frame);
+
     let audio_snapshot = snapshot(time(1, 4), time(1, 8));
     let audio_queue = SnapshotQueue::new(audio_snapshot, 8).unwrap();
     assert!(
