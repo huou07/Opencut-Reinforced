@@ -8,11 +8,16 @@ import time
 import xml.etree.ElementTree as ET
 
 
-def center(bounds):
+def bounds_values(bounds):
     values = [int(value) for value in re.findall(r"\d+", bounds)]
     if len(values) != 4:
         raise ValueError(f"Invalid Android UI bounds: {bounds}")
-    return [(values[0] + values[2]) // 2, (values[1] + values[3]) // 2]
+    return values
+
+
+def center(bounds):
+    left, top, right, bottom = bounds_values(bounds)
+    return [(left + right) // 2, (top + bottom) // 2]
 
 
 def select(device, guest_log, output, flow="open"):
@@ -46,6 +51,8 @@ def select(device, guest_log, output, flow="open"):
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
     list_view_requested = False
+    media_scroll_attempts = 0
+    last_media_scroll_at = 0.0
     last_media_action = None
     last_media_action_at = 0.0
     last_reported_selection = None
@@ -158,10 +165,15 @@ def select(device, guest_log, output, flow="open"):
             (node for node in nodes if node.get("content-desc") == "List view"),
             None,
         )
+        scroll_view = next(
+            (node for node in nodes if node.get("scrollable") == "true"),
+            None,
+        )
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
         pending_media = None
+        scroll_for_media = False
         if selected_root and flow == "open" and document is not None:
             target = document
         elif selected_root and flow == "caption-import" and caption_file is not None:
@@ -193,11 +205,22 @@ def select(device, guest_log, output, flow="open"):
                 # card coordinates or scrolling.
                 target = list_view
             elif listing_complete and next_media is not None:
-                action = "long-press" if flow == "media" and not selected_media else "tap"
-                retry_wait = time.monotonic() - last_media_action_at < 1.5
-                if last_media_action != (next_media, action) or not retry_wait:
-                    target = selectable_media[next_media]
-                    pending_media = next_media
+                media_node = selectable_media[next_media]
+                if media_node.get("enabled") == "false":
+                    if list_view is not None and not list_view_requested:
+                        target = list_view
+                    elif scroll_view is not None and media_scroll_attempts < 6:
+                        retry_wait = time.monotonic() - last_media_scroll_at < 0.75
+                        if not retry_wait:
+                            target = scroll_view
+                            pending_media = next_media
+                            scroll_for_media = True
+                else:
+                    action = "long-press" if flow == "media" and not selected_media else "tap"
+                    retry_wait = time.monotonic() - last_media_action_at < 1.5
+                    if last_media_action != (next_media, action) or not retry_wait:
+                        target = media_node
+                        pending_media = next_media
             elif (
                 listing_complete
                 and expected_media.issubset(selected_media)
@@ -213,19 +236,39 @@ def select(device, guest_log, output, flow="open"):
             target = drawer
             opened_roots = True
         if target is not None:
-            x, y = center(target.get("bounds", ""))
             try:
-                if pending_media is not None and flow == "media" and not selected_media:
-                    # DocumentsUI opens a file on a normal first tap. Long-press
-                    # the first item to enter multi-select mode.
-                    adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
+                if scroll_for_media:
+                    left, top, right, bottom = bounds_values(target.get("bounds", ""))
+                    x = (left + right) // 2
+                    y_start = top + int((bottom - top) * 0.78)
+                    y_end = top + int((bottom - top) * 0.42)
+                    adb(
+                        "shell",
+                        "input",
+                        "swipe",
+                        str(x),
+                        str(y_start),
+                        str(x),
+                        str(y_end),
+                        "350",
+                    )
+                    media_scroll_attempts += 1
+                    last_media_scroll_at = time.monotonic()
+                    with selector_log.open("a", encoding="utf-8") as record:
+                        record.write(f"action=scroll target={pending_media}\n")
                 else:
-                    adb("shell", "input", "tap", str(x), str(y))
+                    x, y = center(target.get("bounds", ""))
+                    if pending_media is not None and flow == "media" and not selected_media:
+                        # DocumentsUI opens a file on a normal first tap.
+                        # Long-press the first item to enter multi-select mode.
+                        adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
+                    else:
+                        adb("shell", "input", "tap", str(x), str(y))
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.
                 continue
-            if pending_media is not None:
+            if pending_media is not None and not scroll_for_media:
                 action = (
                     "long-press"
                     if flow == "media" and not selected_media

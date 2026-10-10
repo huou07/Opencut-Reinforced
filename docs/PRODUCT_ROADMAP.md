@@ -651,6 +651,23 @@ assertion with adequate fixture headroom. WAV import is not accepted as
 packaged Android capability until that corrected exact-SHA journey reaches
 and verifies the WAV import. Android performance remains unaccepted.
 
+Exact-SHA run [38009873452](https://github.com/huou07/Opencut-Reinforced/actions/runs/38009873452)
+on `fc00df936708393daa46fddc8023a32008bf88f9` passed Rust, Flutter,
+descriptor-boundary, Linux, Windows, and macOS jobs, including all desktop
+packaged journeys. Android built the all-ABI APK, passed emulator bridge
+verification, and passed background/resume with a real resumed frame. Its
+play request measured 93,891 µs at 47.8 ms into the 0.5-second fixture. The
+SAF journey then reached the media picker but timed out before import: after
+selecting both video fixtures, the third `tiny.wav` accessibility node was
+disabled and clipped to y=632–640 at the bottom of a 640-pixel display. The
+selector repeatedly tapped that clipped coordinate. This is a test-driver
+scrolling defect, not evidence against WAV decode or import. The selector now
+scrolls the native DocumentsUI list when a requested item is disabled, waits
+for a fresh visible/actionable node, and caps retries; a regression test
+reproduces the clipped tile. Fourteen local selector tests pass. Android WAV
+import remains unverified until the exact-SHA packaged journey imports and
+checks all three media sources. Android performance remains unaccepted.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

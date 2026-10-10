@@ -133,6 +133,26 @@ MEDIA_FIRST_TWO_SELECTED = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+MEDIA_WAV_CLIPPED = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="" class="android.widget.ScrollView"
+        package="com.google.android.documentsui" scrollable="true"
+        bounds="[0,24][320,640]" />
+  <node index="1" text="tiny.mkv" class="android.widget.LinearLayout"
+        package="com.google.android.documentsui" bounds="[72,486][187,508]"
+        selected="true" />
+  <node index="2" text="tiny-second.mkv" class="android.widget.LinearLayout"
+        package="com.google.android.documentsui" bounds="[72,559][187,581]"
+        selected="true" />
+  <node index="3" text="tiny.wav" class="android.widget.LinearLayout"
+        package="com.google.android.documentsui" enabled="false"
+        bounds="[72,632][131,640]" selected="false" />
+  <node index="4" text="Select" class="android.widget.Button"
+        package="com.google.android.documentsui" enabled="true"
+        bounds="[208,24][272,72]" />
+</hierarchy>
+"""
+
 MEDIA_OPEN = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="tiny.mkv" class="android.widget.LinearLayout"
@@ -314,6 +334,42 @@ class SelectorTests(unittest.TestCase):
             self.assertIn(
                 "Selected tiny-second.mkv,tiny.mkv,tiny.wav for media through native DocumentsUI.",
                 selected_report,
+            )
+
+    def test_media_flow_scrolls_clipped_wav_tile_before_tapping(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media")
+            adb.trees = [
+                DRAWER,
+                PROVIDER,
+                MEDIA_LIST,
+                MEDIA_FIRST_SELECTED,
+                MEDIA_WAV_CLIPPED,
+                MEDIA_FIRST_TWO_SELECTED,
+                MEDIA_OPEN,
+            ]
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(
+                adb.actions,
+                [
+                    ("tap", 0),
+                    ("tap", 1),
+                    ("swipe", 2),
+                    ("tap", 3),
+                    ("swipe", 4),
+                    ("tap", 5),
+                    ("tap", 6),
+                ],
+            )
+            self.assertIn(
+                "action=scroll target=tiny.wav",
+                (output / "documents-ui-selector.log").read_text(),
             )
 
     def test_media_relink_selects_exactly_one_replacement_video(self):
