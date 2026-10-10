@@ -13,6 +13,17 @@ opus_version=1.6.1
 opus_sha256=6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
 vpx_commit=6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
 
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "no SHA-256 utility is available" >&2
+    return 1
+  fi
+}
+
 mkdir -p "$work" "$prefix"
 
 if [[ "$platform" == linux ]]; then
@@ -38,7 +49,11 @@ opus_archive="$work/opus-$opus_version.tar.gz"
 curl --fail --location --silent --show-error --retry 3 --max-time 300 \
   "https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz" \
   --output "$opus_archive"
-echo "$opus_sha256  $opus_archive" | shasum -a 256 --check
+actual_opus_sha256="$(sha256_file "$opus_archive")"
+if [[ "$actual_opus_sha256" != "$opus_sha256" ]]; then
+  echo "Opus source SHA-256 mismatch: $actual_opus_sha256" >&2
+  exit 1
+fi
 tar -xzf "$opus_archive" -C "$work"
 
 opus_cmake_args=(
@@ -112,7 +127,7 @@ cp "$vpx_source/LICENSE" "$work/LIBVPX-LICENSE"
 cp "$vpx_source/PATENTS" "$work/LIBVPX-PATENTS"
 git -C "$vpx_source" archive --format=tar --prefix=libvpx-v1.17.0/ \
   --output="$work/libvpx-v1.17.0.tar" HEAD
-vpx_archive_sha256="$(shasum -a 256 "$work/libvpx-v1.17.0.tar" | awk '{print $1}')"
+vpx_archive_sha256="$(sha256_file "$work/libvpx-v1.17.0.tar")"
 cat > "$work/EXPORT-CODEC-SOURCES.txt" <<EOF
 libopus version: $opus_version
 libopus source: https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz
