@@ -15,5 +15,15 @@ silence, used only to exercise stream decode and surround-to-stereo downmix.
 The fixture has 1920×1080 H.264 video at 24 fps and 5.1 AAC audio at 48 kHz.
 Its SHA-256 is `7b88ad19dc59986f59a59033e3d7a51d16d5cb3e454796ae6556c61e642b057a`.
 
+`phone_portrait_90_h264_aac.mp4` is a one-second stream-copy excerpt of the
+Samsung Galaxy S9 H.264/AAC portrait-orientation sample in the CC0
+[`shotstack/test-media` repository](https://github.com/shotstack/test-media/tree/b790a2b72325feecd189291c52663ed8123b1839/orientation).
+The selected source is `h1920_w1080_f30_a9-16_r90.mp4`, Git blob
+`b66d197c4a92dc1300fc035bc82b81c50eee1be1`. The excerpt was made with
+`-noautorotate` and stream copy, retaining its 90-degree display matrix while
+stripping global metadata, including device location. It contains 1920×1080
+H.264 video and stereo 48 kHz AAC; SHA-256 is
+`9e7618482872476a801271b847bedfca1cbf1722b0f7717415c52c960f2d7811`.
+
 The remaining tiny fixtures are generated specifically for deterministic
 correctness tests and contain no third-party media.

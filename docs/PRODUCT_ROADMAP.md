@@ -526,9 +526,11 @@ support for normal phone and camera footage. PCM WAV import already uses the
 shared probe, decoder, timeline, and Android SAF paths. A new implementation
 candidate adds ISO BMFF/MP4-family H.264 video and AAC audio import to the same
 path, with focused generated fixtures and the licensed 1080p excerpt recorded
-below. Package flags, native decoder path, and codec patent/distribution review
-remain in progress; do not count this profile as shipped until exact-SHA
-desktop and Android journeys pass. MP4
+below. Exact-SHA desktop journeys now pass with the representative 1080p
+H.264/AAC source on Linux, Windows, and macOS. Android's current packaged
+journey still uses the generated MP4 fixture, so representative phone-source
+acceptance remains open. Codec patent/distribution review also remains open.
+MP4
 export remains separate future work because the current LGPL-only runtime does
 not include a supported H.264 encoder. Treat format support as a connected
 product capability spanning probing/import, package configuration,
@@ -540,15 +542,26 @@ probe accepted a pinned 1080p H.264 sample; the software decoder test decodes a
 separately licensed score was stripped. The redistributed half-second CC BY
 3.0 excerpt and pinned source are documented in
 `crates/or_media/tests/fixtures/README.md`. The clean packaged desktop journey
-now uses it for import, timeline preview, save/reopen, relink, and export; the
-exact-SHA hosted result is pending. Product SHA
-`24373b8221a43be5691ade1501c6cf4b018525ac` passed all seven jobs in
-[run 38057341264](https://github.com/huou07/Opencut-Reinforced/actions/runs/38057341264);
-the linked Rust decoder suite passed 12 tests with this media, but that
-packaged desktop journey still used the tiny fixture. This does not establish
-camera-source variation, Android packaged acceptance for this sample, or
-codec distribution review. Keep this gap ahead of emulator-only optimization
-while emulator correctness and resource bounds remain intact.
+uses it for import, timeline preview, save/reopen, relink, and export.
+Exact-SHA product SHA `f13427cb8997f313429ae450584c74cc896154e8` passed all
+seven jobs in [run 38060985339](https://github.com/huou07/Opencut-Reinforced/actions/runs/38060985339).
+Linux, Windows, and macOS clean packaged journeys imported the real 1080p
+source, previewed it, saved/reopened, relinked, and exported. The test relinks
+to a tiny fixture before export; the resulting 98 KB FFV1/PCM file is valid
+correctness evidence, not proof of useful full-quality delivery. Android's
+journey still uses synthetic media. This does not establish broader camera
+variation, phone-source Android acceptance, or codec distribution review.
+
+The same real-phone source exposed a separate preview correctness gap: its
+H.264 stream is coded at 1920×1080 with a 90-degree display matrix. The Rust
+decoder previously returned coded dimensions and pixels unchanged, so portrait
+phone footage could appear sideways or stretched while FFmpeg-generated
+thumbnails honor orientation. A pinned, metadata-scrubbed CC0 excerpt and
+regression test now cover this case; the shared decoder fix must pass packaged
+desktop and Android verification before this compatibility gap is closed.
+This finding prioritizes everyday source behavior over further emulator-only
+micro-optimization; emulator correctness and resource bounds remain intact,
+while physical-device performance is still unverified.
 
 Before shipping a profile, inspect actual decoder/encoder support and build
 flags for every target; review component licenses, patent/distribution

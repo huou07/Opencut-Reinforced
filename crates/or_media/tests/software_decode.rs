@@ -12,6 +12,7 @@ const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
 const PHONE_FIXTURE: &str = "tests/fixtures/tiny_h264_aac.mp4";
 const BIG_BUCK_BUNNY_FIXTURE: &str = "tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4";
+const PHONE_PORTRAIT_FIXTURE: &str = "tests/fixtures/phone_portrait_90_h264_aac.mp4";
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {
     RationalTime::new(numerator, denominator).unwrap()
@@ -42,6 +43,11 @@ fn phone_fixture_source() -> MediaSourceRef {
 
 fn big_buck_bunny_fixture_source() -> MediaSourceRef {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BIG_BUCK_BUNNY_FIXTURE);
+    MediaSourceRef::local_file(file_uri(&path)).unwrap()
+}
+
+fn phone_portrait_fixture_source() -> MediaSourceRef {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(PHONE_PORTRAIT_FIXTURE);
     MediaSourceRef::local_file(file_uri(&path)).unwrap()
 }
 
@@ -406,6 +412,22 @@ fn software_decoder_reads_real_1080p_h264_and_surround_aac_media() {
         decoded_sample_frames += chunk.sample_frames();
     }
     assert_eq!(decoded_sample_frames, 6_000);
+}
+
+#[test]
+fn software_decoder_applies_phone_display_rotation_to_h264_video() {
+    let decoder = SoftwareMediaDecoder::new(&phone_portrait_fixture_source(), budgets()).unwrap();
+    let cancellation = CancellationToken::new();
+    let frame = decoder
+        .decode_video_frame_at(time(1, 4), &cancellation)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        (frame.descriptor().width(), frame.descriptor().height()),
+        (1080, 1920)
+    );
+    assert_eq!(frame.pixels().len(), 1080 * 1920 * 4);
 }
 
 #[cfg(unix)]

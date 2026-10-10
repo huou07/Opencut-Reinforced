@@ -30,6 +30,59 @@ const MAX_SOFTWARE_FRAME_BYTES: usize = 256 * 1024 * 1024;
 const MAX_AUDIO_INPUT_SAMPLES: usize = 1_048_576;
 const MAX_AUDIO_CHUNK_BYTES: usize = 64 * 1024 * 1024;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum DisplayRotation {
+    #[default]
+    None,
+    Clockwise90,
+    HalfTurn,
+    CounterClockwise90,
+}
+
+#[derive(Clone, Copy)]
+struct VideoStreamPresentation {
+    time_base: TimestampBase,
+    display_rotation: DisplayRotation,
+}
+
+impl DisplayRotation {
+    fn from_degrees(degrees: f64) -> Result<Self, DecodeError> {
+        if !degrees.is_finite() {
+            return Err(DecodeError::InvalidDisplayMatrix);
+        }
+        let degrees = (degrees.round() as i32).rem_euclid(360);
+        match degrees {
+            0 => Ok(Self::None),
+            90 => Ok(Self::CounterClockwise90),
+            180 => Ok(Self::HalfTurn),
+            270 => Ok(Self::Clockwise90),
+            _ => Err(DecodeError::UnsupportedDisplayRotation(degrees)),
+        }
+    }
+
+    const fn output_size(self, width: u32, height: u32) -> (u32, u32) {
+        match self {
+            Self::Clockwise90 | Self::CounterClockwise90 => (height, width),
+            Self::None | Self::HalfTurn => (width, height),
+        }
+    }
+
+    const fn output_coordinate(
+        self,
+        width: usize,
+        height: usize,
+        column: usize,
+        row: usize,
+    ) -> (usize, usize) {
+        match self {
+            Self::None => (column, row),
+            Self::Clockwise90 => (height - row - 1, column),
+            Self::HalfTurn => (width - column - 1, height - row - 1),
+            Self::CounterClockwise90 => (row, width - column - 1),
+        }
+    }
+}
+
 /// A packed RGBA software frame. The runtime budget stays held until the frame
 /// is dropped, including while it waits in a bounded queue.
 #[derive(Debug)]
@@ -235,16 +288,20 @@ impl SoftwareMediaDecoder {
             return Err(DecodeError::Cancelled);
         }
         let input = self.open_input(cancellation)?;
-        let (stream_index, time_base, context) = {
+        let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
                 .best(ffmpeg::media::Type::Video)
                 .ok_or(DecodeError::MissingVideoStream)?;
+            let parameters = stream.parameters();
+            let display_rotation = stream_display_rotation(&parameters)?;
+            let context = codec::context::Context::from_parameters(parameters)
+                .map_err(DecodeError::Ffmpeg)?;
             (
                 stream.index(),
                 TimestampBase::new(stream.time_base(), stream.start_time())?,
-                codec::context::Context::from_parameters(stream.parameters())
-                    .map_err(DecodeError::Ffmpeg)?,
+                context,
+                display_rotation,
             )
         };
         let decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
@@ -253,6 +310,7 @@ impl SoftwareMediaDecoder {
             decoder,
             stream_index,
             time_base,
+            display_rotation,
             budgets: self.budgets.clone(),
             scaler: None,
             previous_frame: None,
@@ -276,16 +334,20 @@ impl SoftwareMediaDecoder {
         let range = snapshot.requested_range();
         validate_range(range)?;
         let mut input = self.open_input(cancellation)?;
-        let (stream_index, time_base, context) = {
+        let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
                 .best(ffmpeg::media::Type::Video)
                 .ok_or(DecodeError::MissingVideoStream)?;
+            let parameters = stream.parameters();
+            let display_rotation = stream_display_rotation(&parameters)?;
+            let context = codec::context::Context::from_parameters(parameters)
+                .map_err(DecodeError::Ffmpeg)?;
             (
                 stream.index(),
                 TimestampBase::new(stream.time_base(), stream.start_time())?,
-                codec::context::Context::from_parameters(stream.parameters())
-                    .map_err(DecodeError::Ffmpeg)?,
+                context,
+                display_rotation,
             )
         };
         let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
@@ -307,13 +369,27 @@ impl SoftwareMediaDecoder {
                 continue;
             }
             decoder.send_packet(&packet).map_err(DecodeError::Ffmpeg)?;
-            if drain_video(&mut decoder, &mut scaler, time_base, &job, &mut emitted)? {
+            if drain_video(
+                &mut decoder,
+                &mut scaler,
+                display_rotation,
+                time_base,
+                &job,
+                &mut emitted,
+            )? {
                 return Ok(emitted);
             }
         }
 
         decoder.send_eof().map_err(DecodeError::Ffmpeg)?;
-        drain_video(&mut decoder, &mut scaler, time_base, &job, &mut emitted)?;
+        drain_video(
+            &mut decoder,
+            &mut scaler,
+            display_rotation,
+            time_base,
+            &job,
+            &mut emitted,
+        )?;
         Ok(emitted)
     }
 
@@ -331,19 +407,27 @@ impl SoftwareMediaDecoder {
         let range = TimeRange::new(source_time, RationalTime::ZERO).map_err(DecodeError::Time)?;
         validate_range(range)?;
         let mut input = self.open_input(cancellation)?;
-        let (stream_index, time_base, context) = {
+        let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
                 .best(ffmpeg::media::Type::Video)
                 .ok_or(DecodeError::MissingVideoStream)?;
+            let parameters = stream.parameters();
+            let display_rotation = stream_display_rotation(&parameters)?;
+            let context = codec::context::Context::from_parameters(parameters)
+                .map_err(DecodeError::Ffmpeg)?;
             (
                 stream.index(),
                 TimestampBase::new(stream.time_base(), stream.start_time())?,
-                codec::context::Context::from_parameters(stream.parameters())
-                    .map_err(DecodeError::Ffmpeg)?,
+                context,
+                display_rotation,
             )
         };
         let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        let presentation = VideoStreamPresentation {
+            time_base,
+            display_rotation,
+        };
         seek_to_range(&mut input, stream_index, range, time_base)?;
         let mut scaler = None;
         let mut candidate = None;
@@ -359,7 +443,7 @@ impl SoftwareMediaDecoder {
             if drain_video_frame_at(
                 &mut decoder,
                 &mut scaler,
-                time_base,
+                presentation,
                 source_time,
                 &self.budgets,
                 cancellation,
@@ -373,7 +457,7 @@ impl SoftwareMediaDecoder {
         drain_video_frame_at(
             &mut decoder,
             &mut scaler,
-            time_base,
+            presentation,
             source_time,
             &self.budgets,
             cancellation,
@@ -497,6 +581,42 @@ impl SoftwareMediaDecoder {
     }
 }
 
+fn stream_display_rotation(
+    parameters: &codec::ParametersRef<'_>,
+) -> Result<DisplayRotation, DecodeError> {
+    let parameters = parameters.as_ptr();
+    // FFmpeg 8 stores stream-wide display transforms on AVCodecParameters.
+    // Copy the small matrix while the stream-owned parameter object is borrowed.
+    unsafe {
+        let parameters = &*parameters;
+        if parameters.nb_coded_side_data < 0 {
+            return Err(DecodeError::InvalidDisplayMatrix);
+        }
+        let side_data = ffmpeg::ffi::av_packet_side_data_get(
+            parameters.coded_side_data,
+            parameters.nb_coded_side_data,
+            ffmpeg::ffi::AVPacketSideDataType::DISPLAYMATRIX,
+        );
+        if side_data.is_null() {
+            return Ok(DisplayRotation::None);
+        }
+        let side_data = &*side_data;
+        let matrix_bytes = 9 * std::mem::size_of::<i32>();
+        if side_data.data.is_null() || side_data.size < matrix_bytes {
+            return Err(DecodeError::InvalidDisplayMatrix);
+        }
+        let matrix: [i32; 9] = std::array::from_fn(|index| {
+            std::ptr::read_unaligned(
+                side_data
+                    .data
+                    .add(index * std::mem::size_of::<i32>())
+                    .cast(),
+            )
+        });
+        DisplayRotation::from_degrees(ffmpeg::ffi::av_display_rotation_get(matrix.as_ptr()))
+    }
+}
+
 /// Counters used to verify that playback reuses its demuxer and seeks only on
 /// discontinuities.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -512,6 +632,7 @@ pub struct VideoDecodeSession {
     decoder: codec::decoder::Video,
     stream_index: usize,
     time_base: TimestampBase,
+    display_rotation: DisplayRotation,
     budgets: RuntimeBudgets,
     scaler: Option<(Pixel, u32, u32, scaling::Context)>,
     previous_frame: Option<VideoFrame>,
@@ -574,8 +695,13 @@ impl VideoDecodeSession {
                         .timestamp()
                         .ok_or(DecodeError::MissingTimestamp)
                         .and_then(|pts| self.time_base.to_time(pts))?;
-                    let frame =
-                        make_video_frame(&decoded, timestamp, &mut self.scaler, &self.budgets)?;
+                    let frame = make_video_frame(
+                        &decoded,
+                        timestamp,
+                        self.display_rotation,
+                        &mut self.scaler,
+                        &self.budgets,
+                    )?;
                     self.metrics.decoded_frames = self.metrics.decoded_frames.saturating_add(1);
                     if timestamp <= target {
                         self.previous_frame = Some(frame);
@@ -752,6 +878,7 @@ struct DecodeJob<'a, T> {
 fn drain_video(
     decoder: &mut codec::decoder::Video,
     scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    display_rotation: DisplayRotation,
     time_base: TimestampBase,
     job: &DecodeJob<'_, VideoFrame>,
     emitted: &mut usize,
@@ -771,7 +898,7 @@ fn drain_video(
                 if timestamp < job.range.start() {
                     continue;
                 }
-                let done = emit_video_frame(&decoded, timestamp, scaler, job)?;
+                let done = emit_video_frame(&decoded, timestamp, display_rotation, scaler, job)?;
                 *emitted += 1;
                 if done {
                     return Ok(true);
@@ -787,10 +914,11 @@ fn drain_video(
 fn emit_video_frame(
     decoded: &VideoFrameBuffer,
     timestamp: RationalTime,
+    display_rotation: DisplayRotation,
     scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
     job: &DecodeJob<'_, VideoFrame>,
 ) -> Result<bool, DecodeError> {
-    let frame = make_video_frame(decoded, timestamp, scaler, job.budgets)?;
+    let frame = make_video_frame(decoded, timestamp, display_rotation, scaler, job.budgets)?;
     queue_video(job.snapshot, frame, job.queue, job.cancellation)?;
     Ok(job.range.duration().is_zero())
 }
@@ -798,6 +926,7 @@ fn emit_video_frame(
 fn make_video_frame(
     decoded: &VideoFrameBuffer,
     timestamp: RationalTime,
+    display_rotation: DisplayRotation,
     scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
     budgets: &RuntimeBudgets,
 ) -> Result<VideoFrame, DecodeError> {
@@ -845,7 +974,8 @@ fn make_video_frame(
     if stride < row_bytes {
         return Err(DecodeError::InvalidFrameData);
     }
-    let mut pixels = Vec::with_capacity(packed_len);
+    let (display_width, display_height) = display_rotation.output_size(width, height);
+    let mut pixels = vec![0; packed_len];
     for row in 0..height as usize {
         let start = row
             .checked_mul(stride)
@@ -853,10 +983,23 @@ fn make_video_frame(
         let end = start
             .checked_add(row_bytes)
             .ok_or(DecodeError::InvalidFrameData)?;
-        pixels.extend_from_slice(plane.get(start..end).ok_or(DecodeError::InvalidFrameData)?);
+        let source_row = plane.get(start..end).ok_or(DecodeError::InvalidFrameData)?;
+        for column in 0..width as usize {
+            let (display_x, display_y) =
+                display_rotation.output_coordinate(width as usize, height as usize, column, row);
+            let source_offset = column * 4;
+            let destination_offset = (display_y * display_width as usize + display_x) * 4;
+            pixels[destination_offset..destination_offset + 4]
+                .copy_from_slice(&source_row[source_offset..source_offset + 4]);
+        }
     }
 
-    let descriptor = FrameDescriptor::software(width, height, FramePixelFormat::Rgba8, timestamp)?;
+    let descriptor = FrameDescriptor::software(
+        display_width,
+        display_height,
+        FramePixelFormat::Rgba8,
+        timestamp,
+    )?;
     let lease = FrameLease::from_software(descriptor, pixels)?;
     Ok(VideoFrame {
         lease,
@@ -867,7 +1010,7 @@ fn make_video_frame(
 fn drain_video_frame_at(
     decoder: &mut codec::decoder::Video,
     scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
-    time_base: TimestampBase,
+    presentation: VideoStreamPresentation,
     target: RationalTime,
     budgets: &RuntimeBudgets,
     cancellation: &or_runtime::CancellationToken,
@@ -883,15 +1026,27 @@ fn drain_video_frame_at(
                 let timestamp = decoded
                     .timestamp()
                     .ok_or(DecodeError::MissingTimestamp)
-                    .and_then(|pts| time_base.to_time(pts))?;
+                    .and_then(|pts| presentation.time_base.to_time(pts))?;
                 if timestamp > target {
                     if candidate.is_none() {
-                        *candidate = Some(make_video_frame(&decoded, timestamp, scaler, budgets)?);
+                        *candidate = Some(make_video_frame(
+                            &decoded,
+                            timestamp,
+                            presentation.display_rotation,
+                            scaler,
+                            budgets,
+                        )?);
                     }
                     return Ok(true);
                 }
                 candidate.take();
-                *candidate = Some(make_video_frame(&decoded, timestamp, scaler, budgets)?);
+                *candidate = Some(make_video_frame(
+                    &decoded,
+                    timestamp,
+                    presentation.display_rotation,
+                    scaler,
+                    budgets,
+                )?);
             }
             Err(FfmpegError::Eof) => return Ok(true),
             Err(error) if is_again(error) => return Ok(false),
@@ -1190,6 +1345,8 @@ pub enum DecodeError {
     InvalidAudioRate,
     InvalidAudioFrame,
     InvalidFrameData,
+    InvalidDisplayMatrix,
+    UnsupportedDisplayRotation(i32),
     VideoFrameTooLarge,
     AudioFrameTooLarge,
     TimestampOverflow,
@@ -1220,6 +1377,15 @@ impl fmt::Display for DecodeError {
                 formatter.write_str("decoded audio frame has an unsupported layout")
             }
             Self::InvalidFrameData => formatter.write_str("decoded video frame data is incomplete"),
+            Self::InvalidDisplayMatrix => {
+                formatter.write_str("video stream has an invalid display matrix")
+            }
+            Self::UnsupportedDisplayRotation(degrees) => {
+                write!(
+                    formatter,
+                    "video stream has unsupported display rotation: {degrees} degrees"
+                )
+            }
             Self::VideoFrameTooLarge => {
                 formatter.write_str("decoded video frame exceeds the configured bound")
             }
@@ -1284,5 +1450,41 @@ mod tests {
         assert!(is_again(FfmpegError::Other {
             errno: eagain_errno,
         }));
+    }
+
+    #[test]
+    fn display_rotation_maps_pixels_in_the_expected_direction() {
+        let source = *b"ABCDEF";
+        let rotated = |rotation: DisplayRotation| {
+            let (width, height) = rotation.output_size(2, 3);
+            let mut output = vec![0; (width * height) as usize];
+            for row in 0..3 {
+                for column in 0..2 {
+                    let (x, y) = rotation.output_coordinate(2, 3, column, row);
+                    output[(y * width as usize) + x] = source[row * 2 + column];
+                }
+            }
+            output
+        };
+
+        assert_eq!(rotated(DisplayRotation::Clockwise90), b"ECAFDB");
+        assert_eq!(rotated(DisplayRotation::CounterClockwise90), b"BDFACE");
+        assert_eq!(rotated(DisplayRotation::HalfTurn), b"FEDCBA");
+    }
+
+    #[test]
+    fn display_matrix_angles_are_normalized_and_reject_arbitrary_rotation() {
+        assert_eq!(
+            DisplayRotation::from_degrees(-90.0).unwrap(),
+            DisplayRotation::Clockwise90
+        );
+        assert_eq!(
+            DisplayRotation::from_degrees(180.0).unwrap(),
+            DisplayRotation::HalfTurn
+        );
+        assert!(matches!(
+            DisplayRotation::from_degrees(45.0),
+            Err(DecodeError::UnsupportedDisplayRotation(45))
+        ));
     }
 }
