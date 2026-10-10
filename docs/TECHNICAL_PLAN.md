@@ -848,7 +848,12 @@ bounded BGRA lease is copied to one reusable bitmap and presented through
 Flutter's SurfaceProducer on the main thread. Surface and preview epochs cover
 both copy and drawing, including cleanup/recreation/release. Android output now
 uses the shared `or_audio` CPAL path, pending exact-SHA hosted APK and real
-audio-track acceptance. Hardware acceleration remains unavailable/unverified.
+audio-track acceptance. A prepared Play request includes active visual SAF
+sources and audio SAF sources whose timeline clips extend beyond the playhead.
+The bridge registers that bounded source set before starting CPAL, so the audio
+worker cannot race ahead of permission-checked seekable descriptor registration.
+Unchanged source sets reuse their native capabilities. Hardware acceleration
+remains unavailable/unverified.
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 

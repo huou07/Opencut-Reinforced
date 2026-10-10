@@ -1220,7 +1220,11 @@ void main() {
       ); // No preceding seek.
       expect(played.frameSequence, greaterThan(BigInt.zero));
       expect(played.width, 16);
-      expect(played.errorCode, isNull);
+      expect(
+        played.errorCode,
+        isNull,
+        reason: played.errorMessage ?? 'Audio playback did not start.',
+      );
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 250)),
       );

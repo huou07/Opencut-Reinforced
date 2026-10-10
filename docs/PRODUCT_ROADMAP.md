@@ -725,6 +725,22 @@ hardware before making a release claim. Linux, Windows, and macOS packaged
 journeys/lifecycle checks, Rust, Flutter static/widget, and descriptor-boundary
 jobs all passed on this SHA; workflow run 38016755374 completed successfully.
 
+Exact-SHA run [38024117671](https://github.com/huou07/Opencut-Reinforced/actions/runs/38024117671)
+on `da65ceb047ce0886d9783a05bb9873f5f5017765` passed Linux and Windows
+packaged product journeys, Rust, Flutter static/widget, and descriptor-boundary
+checks. The Android APK built for all ABIs and emulator bridge checks passed;
+the hosted SAF user journey now imports the exact WAV, recovers and reopens the
+project, and reaches AAudio stream startup before preview reports
+`AUDIO_PLAYBACK_FAILED`. Code-path analysis found Android Play started CPAL
+before the bridge registered the audio-only SAF URI as a seekable descriptor.
+The product correction gathers the active visual and still-relevant audio SAF
+sources under the existing 64-source bound, then starts audio only after the
+native registration completion. Focused Rust tests, bridge clippy, Flutter
+analysis, formatting, and diff checks pass locally. This correction is awaiting
+exact-SHA hosted Android playback acceptance; the macOS lifecycle job on the
+diagnostic SHA was still running when its Android job completed. No acoustic
+device-output or Android performance claim is made from the emulator.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

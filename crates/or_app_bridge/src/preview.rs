@@ -146,6 +146,7 @@ mod desktop {
         generation: u64,
         cancellation: CancellationToken,
         sources: Vec<String>,
+        start_audio_after_registration: bool,
     }
 
     struct PreparedCompletion<'a>(&'a AtomicBool);
@@ -503,6 +504,14 @@ mod desktop {
         }
 
         pub fn play(&self, host: &LiveProjectHost) -> Result<PreviewSnapshot, PreviewError> {
+            self.play_with_audio(host, true)
+        }
+
+        fn play_with_audio(
+            &self,
+            host: &LiveProjectHost,
+            start_audio: bool,
+        ) -> Result<PreviewSnapshot, PreviewError> {
             let program = self.ensure_program(host)?;
             let (origin, expected_generation) = {
                 let state = lock(&self.state);
@@ -523,17 +532,14 @@ mod desktop {
                 }
                 (playback.position, playback.generation)
             };
-            let (audio_playback, audio_error) = if program.audio_clips.is_empty() {
+            let (audio_playback, audio_error) = if !start_audio || program.audio_clips.is_empty() {
                 (None, None)
             } else {
-                match AudioPlayback::start(
+                start_audio_playback(
                     Arc::clone(&program),
                     origin,
                     self.render_resources.budgets.clone(),
-                ) {
-                    Ok(audio) => (Some(audio), None),
-                    Err(error) => (None, Some(error.message)),
-                }
+                )
             };
             let mut state = lock(&self.state);
             let current = state.transport.snapshot();
@@ -784,7 +790,7 @@ mod desktop {
                     self.step_with_mode(host, direction, mode)?
                 }
                 PreviewPreparationAction::Play => {
-                    self.play(host)?;
+                    self.play_with_audio(host, false)?;
                     self.tick_with_mode(host, mode)?
                 }
                 PreviewPreparationAction::Tick => self.tick_with_mode(host, mode)?,
@@ -838,6 +844,19 @@ mod desktop {
                 || current.project_revision != frame.program.key.revision
             {
                 return Err(stale_preparation());
+            }
+            if frame.start_audio_after_registration {
+                let origin = lock(&self.state).transport.snapshot().position;
+                let (audio_playback, audio_error) = start_audio_playback(
+                    Arc::clone(&frame.program),
+                    origin,
+                    self.render_resources.budgets.clone(),
+                );
+                let mut state = lock(&self.state);
+                if state.transport.snapshot().playing && state.audio_playback.is_none() {
+                    state.audio_playback = audio_playback;
+                    state.audio_error = audio_error;
+                }
             }
             self.render_request(
                 host,
@@ -904,7 +923,22 @@ mod desktop {
                     if self.closed.load(Ordering::SeqCst) {
                         return Err(stale_preparation());
                     }
-                    let sources = program.active_saf_sources(request.time)?;
+                    let (playing, start_audio_after_registration) = {
+                        let state = lock(&self.state);
+                        let playing = state.transport.snapshot().playing;
+                        (
+                            playing,
+                            playing
+                                && state.audio_playback.is_none()
+                                && state.audio_error.is_none()
+                                && !program.audio_clips.is_empty(),
+                        )
+                    };
+                    let sources = if playing {
+                        program.playback_saf_sources(request.time)?
+                    } else {
+                        program.active_saf_sources(request.time)?
+                    };
                     // Superseding a prepared tick also cancels already decoding
                     // work; transport timing remains the original exact request.
                     let (generation, cancellation) = self.invalidate()?;
@@ -918,6 +952,7 @@ mod desktop {
                         generation,
                         cancellation,
                         sources,
+                        start_audio_after_registration,
                     });
                 }
             }
@@ -1441,6 +1476,34 @@ mod desktop {
                 return Err(PreviewError::new(
                     "MEDIA_SOURCE_BUDGET_EXCEEDED",
                     "This preview frame requires more than 64 Android media sources.",
+                ));
+            }
+            Ok(sources)
+        }
+
+        fn playback_saf_sources(&self, time: RationalTime) -> Result<Vec<String>, PreviewError> {
+            let mut sources = self.active_saf_sources(time)?;
+            sources.extend(
+                self.audio_clips
+                    .iter()
+                    .filter(|clip| {
+                        clip.timeline_start
+                            .checked_add(clip.duration)
+                            .is_ok_and(|end| end > time)
+                    })
+                    .filter_map(|clip| match &clip.source {
+                        MediaSourceRef::AndroidSafDocumentUri { uri } => {
+                            Some(uri.as_str().to_owned())
+                        }
+                        _ => None,
+                    }),
+            );
+            sources.sort_unstable();
+            sources.dedup();
+            if sources.len() > 64 {
+                return Err(PreviewError::new(
+                    "MEDIA_SOURCE_BUDGET_EXCEEDED",
+                    "This playback requires more than 64 Android media sources.",
                 ));
             }
             Ok(sources)
@@ -2116,6 +2179,17 @@ mod desktop {
         PreviewError::new("AUDIO_OUTPUT_UNAVAILABLE", error.to_string())
     }
 
+    fn start_audio_playback(
+        program: Arc<PreviewProgram>,
+        origin: RationalTime,
+        budgets: RuntimeBudgets,
+    ) -> (Option<AudioPlayback>, Option<String>) {
+        match AudioPlayback::start(program, origin, budgets) {
+            Ok(audio) => (Some(audio), None),
+            Err(error) => (None, Some(error.message)),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn produce_audio(
         producer: &mut AudioProducer,
@@ -2422,7 +2496,13 @@ mod desktop {
         static TEST_LOCK: Mutex<()> = Mutex::new(());
 
         fn late_source_project() -> or_core::ProjectDocument {
-            let media = (1..=65).map(|index| format!(r#"{{"id":"{index:08x}-2222-4222-8222-222222222222","source":{{"kind":"android_saf_document_uri","uri":"content://dev.opencut.fixture/document/clip-{index:02}"}},"metadata":{{"format_names":["matroska"],"duration":{{"numerator":1,"denominator":1}},"file_size_bytes":1024,"streams":[{{"kind":"video","metadata":{{"index":0,"codec_name":"ffv1","width":16,"height":16,"pixel_format":"bgra","average_frame_rate":{{"numerator":4,"denominator":1}},"duration":{{"numerator":1,"denominator":1}}}}}}]}}}}"#)).collect::<Vec<_>>().join(",");
+            let video_media = (1..=65)
+                .map(|index| format!(r#"{{"id":"{index:08x}-2222-4222-8222-222222222222","source":{{"kind":"android_saf_document_uri","uri":"content://dev.opencut.fixture/document/clip-{index:02}"}},"metadata":{{"format_names":["matroska"],"duration":{{"numerator":1,"denominator":1}},"file_size_bytes":1024,"streams":[{{"kind":"video","metadata":{{"index":0,"codec_name":"ffv1","width":16,"height":16,"pixel_format":"bgra","average_frame_rate":{{"numerator":4,"denominator":1}},"duration":{{"numerator":1,"denominator":1}}}}}}]}}}}"#))
+                .collect::<Vec<_>>()
+                .join(",");
+            let media = format!(
+                r#"{video_media},{{"id":"00000042-2222-4222-8222-222222222222","source":{{"kind":"android_saf_document_uri","uri":"content://dev.opencut.fixture/document/media-audio"}},"metadata":{{"format_names":["wav"],"duration":{{"numerator":1,"denominator":1}},"file_size_bytes":2048,"streams":[{{"kind":"audio","metadata":{{"index":0,"codec_name":"pcm_s16le","sample_rate":48000,"channels":2,"channel_layout":"stereo","duration":{{"numerator":1,"denominator":1}}}}}}]}}}}"#
+            );
             let project = decode_project(&format!(r#"{{"format":"opencut-reinforced-project","schema_version":7,"project":{{"id":"01234567-89ab-4def-8123-456789abcdef","revision":0,"name":"Late SAF source","media":[{media}],"timeline":{{"tracks":[],"markers":[],"sequence_frame_rate":{{"numerator":4,"denominator":1}}}}}}}}"#)).unwrap();
             let mut session = ProjectSession::open(project);
             let track = or_core::TrackId::generate();
@@ -2447,17 +2527,52 @@ mod desktop {
                     TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 1).unwrap()).unwrap(),
                 ))
                 .unwrap();
+            let audio_track = or_core::TrackId::generate();
+            session
+                .execute_command(or_core::CommandEnvelope::add_timeline_track(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    session.project_revision(),
+                    audio_track,
+                    TrackKind::Audio,
+                ))
+                .unwrap();
+            session
+                .execute_command(or_core::CommandEnvelope::insert_timeline_clip(
+                    session.project_id(),
+                    session.project_instance_id(),
+                    session.project_revision(),
+                    or_core::ClipId::generate(),
+                    audio_track,
+                    session.project().media_items()[65].id(),
+                    RationalTime::ZERO,
+                    TimeRange::new(RationalTime::ZERO, RationalTime::new(1, 2).unwrap()).unwrap(),
+                ))
+                .unwrap();
             session.project().clone()
         }
 
         #[test]
         fn evaluated_late_library_source_is_active_and_half_open() {
             let project = late_source_project();
-            assert_eq!(project.media_items().len(), 65);
+            assert_eq!(project.media_items().len(), 66);
             let session = ProjectSession::open(project);
             let mut program = load_program_from_session(&session).unwrap();
             assert_eq!(
                 program.active_saf_sources(RationalTime::ZERO).unwrap(),
+                ["content://dev.opencut.fixture/document/clip-65"]
+            );
+            assert_eq!(
+                program.playback_saf_sources(RationalTime::ZERO).unwrap(),
+                [
+                    "content://dev.opencut.fixture/document/clip-65",
+                    "content://dev.opencut.fixture/document/media-audio"
+                ]
+            );
+            assert_eq!(
+                program
+                    .playback_saf_sources(RationalTime::new(1, 2).unwrap())
+                    .unwrap(),
                 ["content://dev.opencut.fixture/document/clip-65"]
             );
             assert!(
@@ -2485,7 +2600,7 @@ mod desktop {
                     "content://dev.opencut.fixture/document/clip-65"
                 ]
             );
-            assert_eq!(session.project_revision().value(), 2);
+            assert_eq!(session.project_revision().value(), 4);
         }
 
         #[test]
@@ -2506,6 +2621,13 @@ mod desktop {
             assert_eq!(
                 program
                     .active_saf_sources(RationalTime::ZERO)
+                    .unwrap_err()
+                    .code,
+                "MEDIA_SOURCE_BUDGET_EXCEEDED"
+            );
+            assert_eq!(
+                program
+                    .playback_saf_sources(RationalTime::ZERO)
                     .unwrap_err()
                     .code,
                 "MEDIA_SOURCE_BUDGET_EXCEEDED"
@@ -2674,11 +2796,21 @@ mod desktop {
             assert!(play.snapshot.playback.playing);
             assert_eq!(
                 play.sources,
-                ["content://dev.opencut.fixture/document/clip-65"]
+                [
+                    "content://dev.opencut.fixture/document/clip-65",
+                    "content://dev.opencut.fixture/document/media-audio"
+                ]
             );
             let old = play
                 .request_id
                 .expect("play has a first frame without prior seek");
+            assert!(
+                lock(&runtime.pending)
+                    .as_ref()
+                    .unwrap()
+                    .start_audio_after_registration
+            );
+            assert!(lock(&runtime.state).audio_playback.is_none());
             let seek = runtime
                 .prepare(
                     &host,
@@ -2724,7 +2856,7 @@ mod desktop {
                     .code,
                 "STALE_PREVIEW_REQUEST"
             );
-            assert_eq!(host.describe().unwrap().summary.project_revision.value(), 2);
+            assert_eq!(host.describe().unwrap().summary.project_revision.value(), 4);
             host.shutdown(false).unwrap();
         }
     }
