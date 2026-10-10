@@ -39,7 +39,20 @@ elif [[ "$platform" == macos ]]; then
     *) echo "unsupported macOS architecture: $(uname -m)" >&2; exit 2 ;;
   esac
 elif [[ "$platform" == windows ]]; then
-  vpx_target=x86_64-win64-vs17
+  if [[ -z "${VSINSTALLDIR:-}" ]]; then
+    echo "Visual Studio install directory is unavailable" >&2
+    exit 2
+  fi
+  vs_major="$(basename "$(dirname "$(cygpath -u "$VSINSTALLDIR")")")"
+  case "$vs_major" in
+    15) vs_year=2017 ;;
+    16) vs_year=2019 ;;
+    17) vs_year=2022 ;;
+    18) vs_year=2026 ;;
+    *) echo "unsupported Visual Studio version: $vs_major" >&2; exit 2 ;;
+  esac
+  vpx_target="x86_64-win64-vs$vs_major"
+  win_cmake_generator="Visual Studio $vs_major $vs_year"
 else
   echo "unsupported platform: $platform" >&2
   exit 2
@@ -67,7 +80,7 @@ opus_cmake_args=(
 if [[ "$platform" == windows ]]; then
   opus_cmake_args[1]="-DCMAKE_INSTALL_PREFIX=$(cygpath -aw "$prefix")"
   cmake -S "$work/opus-$opus_version" -B "$work/opus-build" \
-    -G "Visual Studio 17 2022" -A x64 "${opus_cmake_args[@]}"
+    -G "$win_cmake_generator" -A x64 "${opus_cmake_args[@]}"
 else
   cmake -S "$work/opus-$opus_version" -B "$work/opus-build" "${opus_cmake_args[@]}"
 fi

@@ -361,6 +361,12 @@ Future<void> _preserveProjectAcrossMissingProbe(
   await tester.tap(find.byKey(const ValueKey('export-project')));
   await _pumpUntil(
     tester,
+    () => find.text('Export video').evaluate().isNotEmpty,
+    'failed export profile selection',
+  );
+  await tester.tap(find.text('Continue'));
+  await _pumpUntil(
+    tester,
     () => find
         .textContaining('could not publish the completed export')
         .evaluate()

@@ -172,12 +172,13 @@ class MainActivity : FlutterActivity() {
             }
             "createExport" -> {
                 val extension = call.argument<String>("extension")?.lowercase()
-                val mimeType = call.argument<String>("mimeType")
                 val expectedMime = when (extension) {
                     "mkv" -> "video/x-matroska"
                     else -> null
                 }
-                if (extension == null || mimeType != expectedMime) {
+                if (extension == null || expectedMime == null ||
+                    call.argument<String>("mimeType") != expectedMime
+                ) {
                     result.error("EXPORT_FORMAT_INVALID", "Choose a supported export format.", null)
                     return
                 }
@@ -195,7 +196,7 @@ class MainActivity : FlutterActivity() {
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                     suggestedName,
                     requiredModes = Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    mimeType = mimeType,
+                    mimeType = expectedMime,
                     exportExtension = extension,
                 )
             }
