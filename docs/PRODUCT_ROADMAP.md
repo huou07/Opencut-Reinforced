@@ -751,13 +751,13 @@ playback is accepted on the API 36 x86_64 SwiftShader emulator, but physical
 device/acoustic output and Android performance are not accepted. Continue
 profiling the frame skips on representative hardware before release claims.
 
-To distinguish the remaining Android frame-time costs before changing the
-presentation architecture, the next diagnostic update records worker-side
-native frame acquisition, bitmap allocation, bitmap channel conversion/copy,
-and main-thread surface draw time as separate counters in the real journey
-report. These counters are diagnostic only and do not declare performance
-acceptable; a hosted run must first report them for ordinary preview and under
-resource stress.
+The stage diagnostics split native acquisition, bitmap allocation and copy,
+and overall main-thread surface presentation. The latest result shows high
+variance in acquisition and total draw, so the next diagnostic update splits
+the main-thread cost into surface resize, `lockCanvas`, bitmap draw, and
+`unlockCanvasAndPost`. These counters are diagnostic only and do not declare
+performance acceptable; inspect both ordinary preview and resource stress
+before changing the presentation architecture.
 
 Exact-SHA run [38028004390](https://github.com/huou07/Opencut-Reinforced/actions/runs/38028004390)
 on `71254777be99b9b16d06fc5caa7d9fd1f5e86049` passed all hosted platforms

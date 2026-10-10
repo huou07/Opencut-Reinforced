@@ -863,9 +863,10 @@ acceleration and physical-device acoustic output remain unavailable/unverified;
 emulator frame skips mean Android performance remains unaccepted.
 Android SAF journey diagnostics separately report native latest-frame
 acquisition, CPU bitmap channel conversion/copy, bitmap allocation count and
-maximum allocation time, and main-thread `SurfaceProducer` draw duration.
-These bounded counters identify the expensive stage; they are diagnostic
-measurements, not performance acceptance thresholds.
+maximum allocation time. Main-thread timing splits `SurfaceProducer` resize,
+`lockCanvas`, bitmap draw, and `unlockCanvasAndPost` within its total draw
+duration. These bounded counters identify the expensive stage; they are
+diagnostic measurements, not performance acceptance thresholds.
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 

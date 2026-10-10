@@ -95,6 +95,8 @@ def verify(report):
             'maxFrameAcquireMicros', 'totalFrameAcquireMicros',
             'maxBitmapCopyMicros', 'totalBitmapCopyMicros',
             'bitmapAllocations', 'maxBitmapAllocationMicros',
+            'maxSurfaceResizeMicros', 'maxCanvasLockMicros',
+            'maxCanvasDrawMicros', 'maxCanvasPostMicros',
         ):
             if not isinstance(measurements.get(field), int) or measurements[field] < 0:
                 raise ValueError('Android viewer stage timings and allocation counts are required')

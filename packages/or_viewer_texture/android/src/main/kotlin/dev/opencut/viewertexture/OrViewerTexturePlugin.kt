@@ -62,6 +62,12 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var presentedFrames = 0L
     private var maxMainDrawMicros = 0L
     private var totalMainDrawMicros = 0L
+    // Main-thread SurfaceProducer stage timings are updated only by its draw
+    // callback and returned with the existing resource snapshot.
+    private var maxSurfaceResizeMicros = 0L
+    private var maxCanvasLockMicros = 0L
+    private var maxCanvasDrawMicros = 0L
+    private var maxCanvasPostMicros = 0L
     // Worker-owned stage timings separate FFI acquisition and CPU pixel copy
     // from the SurfaceProducer main-thread draw measured above.
     private var maxFrameAcquireMicros = 0L
@@ -349,13 +355,36 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         val started = SystemClock.elapsedRealtimeNanos()
                         try {
                             val target = bitmap!!
-                            producer?.let {
-                                it.setSize(target.width, target.height)
-                                val surface = it.surface
+                            producer?.let { surfaceProducer ->
+                                val resizeStarted = SystemClock.elapsedRealtimeNanos()
+                                surfaceProducer.setSize(target.width, target.height)
+                                maxSurfaceResizeMicros = maxOf(
+                                    maxSurfaceResizeMicros,
+                                    (SystemClock.elapsedRealtimeNanos() - resizeStarted) / 1000,
+                                )
+                                val surface = surfaceProducer.surface
                                 if (surface.isValid) {
+                                    val lockStarted = SystemClock.elapsedRealtimeNanos()
                                     val canvas = surface.lockCanvas(null)
-                                    try { canvas.drawBitmap(target, null, Rect(0, 0, canvas.width, canvas.height), null) }
-                                    finally { surface.unlockCanvasAndPost(canvas) }
+                                    maxCanvasLockMicros = maxOf(
+                                        maxCanvasLockMicros,
+                                        (SystemClock.elapsedRealtimeNanos() - lockStarted) / 1000,
+                                    )
+                                    try {
+                                        val drawStarted = SystemClock.elapsedRealtimeNanos()
+                                        canvas.drawBitmap(target, null, Rect(0, 0, canvas.width, canvas.height), null)
+                                        maxCanvasDrawMicros = maxOf(
+                                            maxCanvasDrawMicros,
+                                            (SystemClock.elapsedRealtimeNanos() - drawStarted) / 1000,
+                                        )
+                                    } finally {
+                                        val postStarted = SystemClock.elapsedRealtimeNanos()
+                                        surface.unlockCanvasAndPost(canvas)
+                                        maxCanvasPostMicros = maxOf(
+                                            maxCanvasPostMicros,
+                                            (SystemClock.elapsedRealtimeNanos() - postStarted) / 1000,
+                                        )
+                                    }
                                     presented = true
                                     presentedFrames++
                                 }
@@ -389,6 +418,10 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             "pendingPresentations" to if (workPending.get()) 1 else 0,
             "presentedFrames" to presentedFrames, "maxMainDrawMicros" to maxMainDrawMicros,
             "totalMainDrawMicros" to totalMainDrawMicros,
+            "maxSurfaceResizeMicros" to maxSurfaceResizeMicros,
+            "maxCanvasLockMicros" to maxCanvasLockMicros,
+            "maxCanvasDrawMicros" to maxCanvasDrawMicros,
+            "maxCanvasPostMicros" to maxCanvasPostMicros,
             "surfaceCreations" to surfaceCreations, "surfaceRestorations" to surfaceRestorations,
             "surfaceCleanups" to surfaceCleanups, "surfaceReleases" to surfaceReleases,
             "peakPendingFrameResults" to peakPendingFrameResults, "rejectedFrameRequests" to rejectedFrameRequests,
