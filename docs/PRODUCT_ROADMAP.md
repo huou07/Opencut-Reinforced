@@ -302,6 +302,21 @@ reproduced import failure. It is still debug-emulator evidence: physical-device
 GPU behavior, release-build latency, and Android performance acceptance remain
 open.
 
+Exact-SHA run `38039913360` on product SHA
+`02ebdddfe413099aed97aef40f2a6fed531fb76a` passed the Android SAF journey,
+which recorded all 25 checks, the exact preview color through initial,
+background/resume, and process-recovery samples, successful video/audio
+imports, successful export, and zero final media descriptors or frame leases.
+The Android measurements show main-thread draw max 5,039 µs, canvas draw max
+76 µs, and direct bitmap-copy max 21,278 µs. Compared with the previous run,
+this does not show lower peak copy latency; it removes the per-pixel CPU loop
+and scratch buffer while preserving pixels. No Android performance acceptance
+claim follows from this debug SwiftShader emulator result. The first macOS
+lifecycle attempt timed out after app launch without test output; rerunning
+only macOS at the same SHA passed the lifecycle tests and packaged product
+journey. Rust, Flutter, descriptor boundary, Linux and Windows jobs had already
+passed in the same exact-SHA workflow.
+
 Run `37898610367` on exact product SHA
 `eee5d2413cbf5334c27a05a6523fc09a9b6acf41` passed Rust, Flutter static/widget,
 descriptor-boundary, Linux and Windows packaged verification. Android built

@@ -893,6 +893,23 @@ requests rejected, zero in-flight frame leases at completion). These debug
 emulator measurements do not establish release performance or physical-device
 GPU behavior; those remain unverified.
 
+The direct-copy/color-filter candidate was verified at exact product SHA
+`02ebdddfe413099aed97aef40f2a6fed531fb76a` in hosted run
+[38039913360](https://github.com/huou07/Opencut-Reinforced/actions/runs/38039913360).
+All platform jobs passed after a same-SHA macOS-only rerun: the first macOS
+attempt timed out while its lifecycle test emitted no output after app launch,
+and the rerun passed the native lifecycle and packaged product journeys. The
+Android report passed all 25 SAF checks and all three pixel samples remained
+`[252, 0, 0, 255]`, including after resume and recovery. Maximum main draw was
+5,039 µs and maximum canvas draw was 76 µs. CPU bitmap-copy maximum was still
+21,278 µs for a 921,600-byte frame (22,964 µs total), so this run does not
+establish a lower peak copy latency than the prior implementation. The
+per-pixel CPU swizzle and scratch buffer are removed; the direct copy and
+hardware canvas filter preserve the measured image. Treat this as a simpler,
+correct presentation path, not an accepted Android performance improvement.
+The emulator measurements still do not establish release or physical-device
+performance.
+
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 
