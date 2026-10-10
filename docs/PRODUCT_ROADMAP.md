@@ -551,9 +551,16 @@ to a tiny fixture before export; the resulting 98 KB FFV1/PCM file is valid
 correctness evidence, not proof of useful full-quality delivery. Android's
 journey still uses synthetic media. This does not establish broader camera
 variation, phone-source Android acceptance, or codec distribution review.
-The desktop acceptance now exports before the relink and requires the packaged
-FFmpeg tools to probe and fully decode the real-media 1920×1080 output; its
-exact-SHA cross-platform verification is pending.
+The desktop acceptance now exports before relink and requires the packaged
+FFmpeg tools to probe and fully decode the real-media 1920×1080 output. Exact-
+SHA run [38065960069](https://github.com/huou07/Opencut-Reinforced/actions/runs/38065960069)
+on `20e4ecb9a83509f00923597a12ed62e554d9a8e9` passed Android, Rust, Flutter,
+and descriptor-boundary jobs. Linux, Windows, and macOS all completed the
+real-media export journey, then failed only because the deliberately minimal
+packaged FFmpeg helper does not include the `null` output muxer used by the
+final full-decode assertion. Android passed its SAF preview/resource-bound
+journey. This run does not yet establish packaged full-decode acceptance on
+desktop.
 
 The same real-phone source exposed a separate preview correctness gap: its
 H.264 stream is coded at 1920×1080 with a 90-degree display matrix. The Rust

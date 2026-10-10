@@ -316,27 +316,43 @@ def main() -> int:
     if float(export_format.get("duration", "0")) <= 0:
         raise SystemExit("Export has no playable duration.")
 
-    decode = subprocess.run(
+    helper_env = {
+        key: value
+        for key, value in env.items()
+        if not key.startswith("DYLD_") and key != "LD_LIBRARY_PATH"
+    }
+    full_decode = subprocess.run(
         [
-            str(ffmpeg),
+            str(ffprobe),
             "-v",
             "error",
-            "-i",
+            "-count_frames",
+            "-show_entries",
+            "stream=codec_type,nb_read_frames",
+            "-of",
+            "json",
             str(export),
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a:0",
-            "-f",
-            "null",
-            "-",
         ],
         capture_output=True,
         text=True,
-        env={key: value for key, value in env.items() if not key.startswith("DYLD_") and key != "LD_LIBRARY_PATH"},
+        env=helper_env,
+        timeout=180,
     )
-    if decode.returncode != 0:
-        raise SystemExit(f"The packaged FFmpeg could not decode the exported video and audio: {decode.stderr}")
+    if full_decode.returncode != 0:
+        raise SystemExit(
+            "The packaged ffprobe could not fully decode the exported video and audio: "
+            f"{full_decode.stderr}"
+        )
+    decoded_streams = json.loads(full_decode.stdout)["streams"]
+    decoded_frame_counts = {
+        stream["codec_type"]: int(stream.get("nb_read_frames", "0"))
+        for stream in decoded_streams
+    }
+    if not all(decoded_frame_counts.get(kind, 0) > 0 for kind in ("video", "audio")):
+        raise SystemExit(
+            "The packaged ffprobe did not decode frames from both exported streams: "
+            f"{decoded_frame_counts}"
+        )
 
     report = {
         "platform": device,
@@ -353,7 +369,7 @@ def main() -> int:
         "export_bytes": export.stat().st_size,
         "export_streams": streams,
         "export_format": export_format,
-        "export_full_decode": "passed",
+        "export_full_decode": decoded_frame_counts,
         "app_processes": invocations,
     }
     report_path = runner_temp / f"or-packaged-product-journey-{device}.json"
@@ -370,7 +386,8 @@ def main() -> int:
             )
             output.write(
                 f"- Export: `{export.stat().st_size}` bytes at {video['width']}x{video['height']}; "
-                "Matroska/FFV1/PCM independently probed and fully decoded by packaged FFmpeg.\n"
+                "Matroska/FFV1/PCM independently probed and fully decoded by packaged ffprobe "
+                f"(frames: {decoded_frame_counts}).\n"
             )
             output.write(f"- Evidence report: `{report_path}`\n")
     return 0
