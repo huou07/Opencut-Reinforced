@@ -329,6 +329,7 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectGatewayException? seekError;
   int seekCalls = 0, playCalls = 0, playMicros = 0;
   int importCalls = 0, importMicros = 0;
+  final List<ProjectActionResult> importResults = [];
   int relinkCalls = 0;
   String? lastRelinkMediaId, lastRelinkSource;
   ProjectActionResult? lastRelinkResult;
@@ -388,7 +389,9 @@ class _ObservedGateway extends RustProjectGateway {
   ) async {
     final watch = Stopwatch()..start();
     try {
-      return await super.importMedia(session, current, source);
+      final result = await super.importMedia(session, current, source);
+      importResults.add(result);
+      return result;
     } finally {
       importCalls++;
       importMicros = watch.elapsedMicroseconds;
@@ -669,6 +672,9 @@ void main() {
       expect(await _frameAvailable('after-background-resume'), isTrue);
       await _settleTextureSurface(tester, stage: 'background-resumed-surface');
       final afterBackground = await _resources();
+      debugPrint(
+        'ANDROID_SAF_PREVIEW_RESOURCE_SNAPSHOT ${jsonEncode(afterBackground)}',
+      );
       final surfaceCleanupDelta =
           afterBackground['surfaceCleanups']! -
           beforeBackground['surfaceCleanups']!;
@@ -752,6 +758,25 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('media-import')));
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
       await _until(tester, () => gateway.importCalls == 3);
+      final importResults = gateway.importResults;
+      final importResultSummary = jsonEncode(
+        importResults
+            .map(
+              (result) => {
+                'succeeded': result.succeeded,
+                'errorCode': result.errorCode,
+                'message': result.message,
+              },
+            )
+            .toList(growable: false),
+      );
+      debugPrint('ANDROID_SAF_MEDIA_IMPORT_RESULTS $importResultSummary');
+      expect(importResults, hasLength(3), reason: importResultSummary);
+      expect(
+        importResults.every((result) => result.succeeded),
+        isTrue,
+        reason: importResultSummary,
+      );
       final imported = await gateway.listMediaPage(
         session,
         offset: 65,

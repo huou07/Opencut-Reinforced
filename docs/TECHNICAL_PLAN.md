@@ -871,7 +871,10 @@ Android's hardware-canvas full-surface contract. It therefore uses
 counters identify the expensive stage; they are diagnostic measurements, not
 performance acceptance thresholds. Hardware-canvas acquisition still requires
 exact packaged measurements and representative-device profiling before any
-performance claim.
+performance claim. The Android SAF test records a resource snapshot immediately
+after surface resume and preserves structured results for each imported item,
+so a later journey failure does not discard the earlier render measurements or
+the import error that caused it.
 See TOOLING.md and TESTING.md for hosted real DocumentsUI/editor journeys and
 measured diagnostic limits.
 
