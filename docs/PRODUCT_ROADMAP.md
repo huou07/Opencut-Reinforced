@@ -773,6 +773,14 @@ reusable buffers. Exact-SHA Android visual and stress measurements must
 confirm the change before performance can be accepted; emulator-only evidence
 still cannot establish physical-device performance.
 
+Android compilation on exact-SHA run
+[38029705498](https://github.com/huou07/Opencut-Reinforced/actions/runs/38029705498)
+for candidate `0fff8bcac0771ecff1b21968fc4284e48a88140f` stopped before the
+packaged journey. Kotlin reported an unresolved `order` reference because
+`ByteBuffer.clear()` is typed as `Buffer` in this toolchain. The fix separates
+`clear()` from `order()`; this failed run supplies no pixel or performance
+acceptance evidence, and the corrected candidate still needs a hosted rerun.
+
 ## Traceability from the preserved roadmap
 
 | Legacy scope | Active mapping | Treatment |

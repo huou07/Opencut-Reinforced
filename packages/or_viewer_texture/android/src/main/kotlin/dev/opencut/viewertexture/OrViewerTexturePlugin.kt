@@ -288,7 +288,8 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             ?.takeIf { it.capacity() >= count * 4 }
             ?: ByteBuffer.allocateDirect(count * 4).also { bgraSwapScratch = it }
         val sourcePixels = source.asIntBuffer()
-        val outputPixels = scratch.clear().order(ByteOrder.nativeOrder()).asIntBuffer()
+        scratch.clear()
+        val outputPixels = scratch.order(ByteOrder.nativeOrder()).asIntBuffer()
         repeat(count) {
             val pixel = sourcePixels.get()
             outputPixels.put(
