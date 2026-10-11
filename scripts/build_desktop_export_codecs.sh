@@ -69,12 +69,17 @@ elif [[ "$platform" == android ]]; then
   esac
   android_clang="$android_toolchain/${clang_prefix}26-clang"
   android_clangxx="$android_toolchain/${clang_prefix}26-clang++"
+  android_as="$android_clang"
+  if [[ "$android_abi" == x86_64 ]]; then
+    command -v nasm >/dev/null
+    android_as=nasm
+  fi
   android_vpx_tools=(
     "CC=$android_clang"
     "CXX=$android_clangxx"
     "AR=$android_toolchain/llvm-ar"
     "LD=$android_clang"
-    "AS=$android_clang"
+    "AS=$android_as"
     "STRIP=$android_toolchain/llvm-strip"
   )
   for tool in "$android_clang" "$android_clangxx" \
