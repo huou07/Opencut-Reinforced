@@ -18,18 +18,16 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish the ordinary edit/export journey across supported
-packages, then make a usable Developer Preview available for dogfooding. At
-exact product SHA `a81672b64f5ff2280de18de21c089cf03b1c49f0`, the hosted Linux and
-macOS packaged journeys passed. Windows configured and built its packaged app
-but the real export journey timed out in both attempts of
-[run 38140193039](https://github.com/huou07/Opencut-Reinforced/actions/runs/38140193039).
-Android's three-document SAF import failed once on MP3 and passed on the
-identical-SHA rerun; treat this as an intermittent import defect until its
-cause is established. Next work diagnoses Windows export from live progress
-evidence while preserving the existing acceptance limit, then repairs the
-highest-value media journey. Android remains Matroska-only and emulator
-acceptance does not establish physical-device performance.
+Current product focus: complete the packaged edit/export journey, including
+Android SAF output, publish a usable Developer Preview when the exact-SHA
+release gate passes, and start gathering real user/task evidence. At exact
+product SHA `178763b645ef3ceca20659c97ce0cc561ff287e3`, the Linux, macOS, and
+Windows packaged journeys and Android all-ABI build, SAF preview, permission
+revoke/regrant, and resource checks passed. Android export did not run because
+the integration test asserted the asynchronous export-profile dialog too early;
+the bounded wait is committed at `5448f4d4933e378ea36547fa5ecbf283ba1b0769`
+and awaits fresh exact-SHA verification. Android WebM remains unverified, and
+emulator acceptance does not establish physical-device performance.
 
 ## Product acceptance target
 
@@ -93,7 +91,8 @@ journey unless results establish a real engine migration dependency.
 
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Packaged edit/export:** exact-SHA run [38162539040](https://github.com/huou07/Opencut-Reinforced/actions/runs/38162539040) on `c3bcd95030d7fbcd7905a5a28d947e375f46497c` passed Linux, macOS, and Windows real-media journeys. Exact repeat on [38165543230](https://github.com/huou07/Opencut-Reinforced/actions/runs/38165543230) on `81491556f6035a309cee129f25b7e762bd1dd11c` passed Windows again. Both runs imported 1080p H.264/AAC, saved/reopened/relinked, exported 30 seconds of VP9/Opus, and independently decoded 720 video plus 1,501 audio frames. Hosted export times were Linux 47.299 s, macOS 57.394 s, and Windows 182.114 s then 169.702 s; monitor the Windows result through dogfood before changing quality/speed settings. Run 38165543230 also had a macOS lifecycle-suite timeout with no assertion failure (the identical suite passed on 38162539040) and a transient Linux TLS failure downloading Opus from `downloads.xiph.org`. Its Android loop exposed a repository-relative script path that fails after FFmpeg changes directories; the absolute-path repair is committed locally and awaits exact-SHA verification. Details are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Next work:** verify the Android codec-builder path across all ABIs and its SAF WebM journey on the repaired exact SHA. Recheck macOS lifecycle and Linux dependency download on that run. If platform evidence passes, obtain the release-candidate review, publish the updated Developer Preview, and collect real user/task evidence. Then prioritize Android everyday media/export gaps and the largest dogfood findings. Emulator correctness does not establish physical-device performance; record that gap without further emulator tuning unless a measured correctness/resource threshold fails.
+- **Exact-SHA platform run:** run [38169492902](https://github.com/huou07/Opencut-Reinforced/actions/runs/38169492902) on `178763b645ef3ceca20659c97ce0cc561ff287e3` passed Linux, macOS, Windows, Rust, Flutter, descriptor, and repository-hygiene checks. All three desktop journeys imported, edited, saved/reopened/relinked and independently decoded 30-second VP9/Opus exports (720 video and 1,501 audio frames). Linux exported in 46.504 s (12,763,556 bytes), macOS in 40.188 s (12,768,681 bytes), and Windows in 161.731 s (12,768,681 bytes). Android built FFmpeg and the packaged app for all three ABIs, then passed SAF preview, permission revoke/regrant, and bounded-resource checks; the integration test failed before export because it asserted the asynchronously opened profile dialog after only one frame. The next test change waits a bounded period for that dialog before asserting it; Android WebM export remains unverified. Full details and Android resource measurements are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
+- **Next work:** run exact-SHA verification for the bounded Android dialog wait. If the actual SAF WebM save and independent decode pass, obtain the release-candidate review, publish the updated Developer Preview, and start collecting real user/task evidence. Then address the highest-value gaps exposed by dogfooding and Android everyday media/export. Emulator correctness does not establish physical-device performance; record that gap without more emulator tuning unless a measured correctness/resource threshold fails.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 

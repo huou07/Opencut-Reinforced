@@ -1002,3 +1002,35 @@ without an assertion result; its identical test selection passed on
 the test process remained alive until timeout, and cleanup terminated it. This
 is unresolved; the next exact-SHA run will distinguish a repeatable test hang
 from hosted-runner variance before any retry or product change.
+
+Exact-SHA run [38169492902](https://github.com/huou07/Opencut-Reinforced/actions/runs/38169492902)
+on `178763b645ef3ceca20659c97ce0cc561ff287e3` passed the Linux, macOS,
+Windows, Rust, Flutter, descriptor, and repository-hygiene jobs. All three
+desktop packaged journeys imported the real 1080p H.264/AAC sample, edited,
+saved/reopened/relinked, exported 30 seconds of VP9/Opus, and independently
+decoded 720 video frames and 1,501 audio frames. Linux output was 12,763,556
+bytes in 46,504 ms; macOS was 12,768,681 bytes in 40,188 ms; Windows was
+12,768,681 bytes in 161,731 ms. Windows remains slower on the hosted runner
+(earlier successful measurements were 169,702 and 182,114 ms); this is a
+dogfood/performance observation, not evidence for an unmeasured codec change.
+The identical macOS lifecycle selection that timed out on `81491556` passed
+here, so the earlier timeout is not repeatable product-failure evidence. Linux
+also passed after the prior one-off Xiph download TLS error.
+
+Android built the packaged app and FFmpeg runtime for all three ABIs, then
+passed SAF preview, source permission revoke/regrant, and bounded resource
+checks before its real export journey. The journey failed at
+`android_saf_preview_test.dart:736`: after tapping Export it pumped one frame
+and immediately expected the `Export video` profile dialog. Product code first
+awaits the Rust project summary before presenting that dialog, so this is
+consistent with a test-side asynchronous scheduling race; it does not establish
+Android export failure or success. The follow-up on exact SHA
+`5448f4d4933e378ea36547fa5ecbf283ba1b0769` adds a bounded wait for that dialog
+and retains the profile assertions and actual SAF destination write plus
+independent decode checks. The c5 emulator snapshot before export reported 22
+presented frames, max main draw 19,196 microseconds, total main draw 106,611
+microseconds, zero pending presentations, peak one pending frame result, zero
+in-flight frame leases, one registered duplicated media FD, zero queued
+operations, and one surface creation. These emulator results establish
+boundedness/correctness for the observed path only; they are not physical-device
+performance evidence and do not complete Android WebM acceptance.
