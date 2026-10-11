@@ -225,8 +225,8 @@ if [[ "$platform" == windows ]]; then
 fi
 
 cp "$work/opus-$opus_version/COPYING" "$work/OPUS-COPYING"
-cp "$vpx_source/LICENSE" "$work/LIBVPX-LICENSE"
-cp "$vpx_source/PATENTS" "$work/LIBVPX-PATENTS"
+git -C "$vpx_source" show "$vpx_commit:LICENSE" > "$work/LIBVPX-LICENSE"
+git -C "$vpx_source" show "$vpx_commit:PATENTS" > "$work/LIBVPX-PATENTS"
 git -C "$vpx_source" archive --format=tar --prefix=libvpx-v1.17.0/ \
   --output="$work/libvpx-v1.17.0.tar" HEAD
 vpx_archive_sha256="$(sha256_file "$work/libvpx-v1.17.0.tar")"

@@ -18,7 +18,7 @@ of the thirteen required assets is non-empty and checksummed (except the
 checksum file itself): four app packages, three desktop CLI packages, two
 build/provenance files, and the FFmpeg, Opus, and libvpx source archives.
 
-The packages are debug developer builds for testing, not production releases or performance benchmarks. macOS uses an ad-hoc debug signature and is not notarized; Android uses the standard debug signing key. No package has production signing. Desktop app archives carry their matching FFmpeg runtime libraries and license notices. Build information records codec source identities, configuration, toolchains, and license posture. Build outputs are not committed to Git.
+The packages are debug developer builds for testing, not production releases or performance benchmarks. macOS uses an ad-hoc debug signature and is not notarized; Android uses the standard debug signing key. No package has production signing. Desktop app archives carry their matching FFmpeg runtime libraries and license notices. Build information records codec source identities, configuration, toolchains, and license posture. Pinned libvpx license and patent notices are extracted from the exact Git commit blobs, so Windows checkout line-ending conversion cannot alter the distributed provenance. Build outputs are not committed to Git.
 
 The Android preview APK reuses the FFmpeg install from the successful
 Platform Verification run for the same source commit. Android WebM is included
