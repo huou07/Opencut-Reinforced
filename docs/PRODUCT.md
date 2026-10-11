@@ -301,7 +301,7 @@ exact-SHA packaged cross-platform verification is pending:
 | Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
 | RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
 | MP3 (`.mp3`) | Audio-only MP3; candidate pending packaged verification |
-| WebM (`.webm`) | VP9 video and/or Opus audio; codec-enabled desktop candidate, pending packaged import verification |
+| Matroska/WebM (`.mkv`, `.webm`) | FFV1/PCM S16LE or VP9/Opus; packaged WebM round-trip import verification is pending |
 
 An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
 audio import through the same FFmpeg decoder and Rust import path. The candidate
@@ -338,7 +338,9 @@ FFmpeg decoder remains part of the existing LGPL-only runtime configuration.
 Fraunhofer reports the final core patents in its MP3 licensing program expired
 in 2017; codec and distribution review remains a release obligation for each
 target market ([Fraunhofer IIS](https://www.audioblog.iis.fraunhofer.com/mp3-software-patents-licenses)).
-WebM, H.265, VP9, and AV1 remain future import profiles. MP4/MOV H.264/AAC
+H.265 and AV1 remain future import profiles. VP9/Opus import now uses the
+existing packaged decoder path and is being verified by re-importing a real
+packaged WebM export in the desktop journey. MP4/MOV H.264/AAC
 package and user-journey verification passed on the candidate SHA above, but
 every distribution must separately review codec patent obligations.
 MP4/MOV export remains future work requiring the same legal, platform, and

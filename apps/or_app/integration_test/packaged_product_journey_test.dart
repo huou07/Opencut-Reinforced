@@ -237,6 +237,10 @@ Future<void> _reopenAndExport(
     'saved project reopen with media and timeline',
     attempts: 900,
   );
+  // Capture the source item identity before adding the exported file to the
+  // media library, which gives the project a second media-actions key.
+  final mediaId = _singleKeySuffix(tester, 'media-actions-');
+  final timelineClipCountBeforeImport = _timelineClipCount(tester);
 
   await tester.tap(find.byKey(const ValueKey('preview-play')));
   await tester.pump(const Duration(milliseconds: 300));
@@ -264,7 +268,28 @@ Future<void> _reopenAndExport(
     'bytes=${File(picker.exportPath).lengthSync()}',
   );
 
-  final mediaId = _singleKeySuffix(tester, 'media-actions-');
+  final importButton = find.byKey(const ValueKey('media-import'));
+  picker.nextMediaPath = picker.exportPath;
+  await _waitForImportButton(tester, importButton);
+  await tester.tap(importButton);
+  await _pumpUntil(
+    tester,
+    () => find.text('existing-export.webm').evaluate().isNotEmpty,
+    'reimport packaged WebM export into the same project',
+  );
+  final importedMediaIds = _keySuffixes(tester, 'media-actions-')
+    ..remove(mediaId);
+  expect(importedMediaIds, hasLength(1));
+  final importedMediaId = importedMediaIds.single;
+  await tester.tap(find.byKey(ValueKey('media-add-timeline-$importedMediaId')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+  await _pumpUntil(
+    tester,
+    () => _timelineClipCount(tester) == timelineClipCountBeforeImport + 1,
+    'insert reimported WebM export into the timeline',
+  );
+
   await tester.tap(find.byKey(ValueKey('media-actions-$mediaId')));
   await tester.pumpAndSettle();
   picker.nextMediaPath = picker.replacementMediaPath;
@@ -402,21 +427,29 @@ String _requiredEnvironment(String name) {
 }
 
 String _singleKeySuffix(WidgetTester tester, String prefix) {
-  final values = tester
-      .widgetList<Widget>(
-        find.byWidgetPredicate((widget) {
-          final key = widget.key;
-          return key is ValueKey<String> &&
-              key.value.startsWith(prefix) &&
-              !key.value.startsWith('media-preview-image-');
-        }),
-      )
-      .map((widget) => (widget.key as ValueKey<String>).value)
-      .where((value) => value.length > prefix.length)
-      .toSet();
+  final values = _keySuffixes(tester, prefix);
   expect(values, hasLength(1));
-  return values.single.substring(prefix.length);
+  return values.single;
 }
+
+Set<String> _keySuffixes(WidgetTester tester, String prefix) => tester
+    .widgetList<Widget>(
+      find.byWidgetPredicate((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith(prefix) &&
+            !key.value.startsWith('media-preview-image-');
+      }),
+    )
+    .map((widget) => (widget.key as ValueKey<String>).value)
+    .where((value) => value.length > prefix.length)
+    .map((value) => value.substring(prefix.length))
+    .toSet();
+
+int _timelineClipCount(WidgetTester tester) => _keySuffixes(
+  tester,
+  'timeline-clip-',
+).where((suffix) => !suffix.startsWith('tooltip-')).length;
 
 bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     .widgetList<Widget>(

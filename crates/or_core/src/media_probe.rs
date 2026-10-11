@@ -129,7 +129,7 @@ impl Error for MediaProbeError {}
 ///
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
 /// a project, or mutate project revision/history. Files outside the supported
-/// import profiles (Matroska with FFV1 video and/or PCM S16LE audio,
+/// import profiles (Matroska/WebM with FFV1/PCM S16LE or VP9/Opus,
 /// audio-only PCM S16LE WAV or MP3, or MOV-family H.264/AAC) are rejected as
 /// unsupported formats.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
@@ -544,12 +544,14 @@ const ID3_HEADER: &[u8; 3] = b"ID3";
 /// Video and audio codecs retained by the lossless Matroska profile.
 const MATRIX_VIDEO_CODEC: &str = "ffv1";
 const MATRIX_AUDIO_CODEC: &str = "pcm_s16le";
+const WEBM_VIDEO_CODEC: &str = "vp9";
+const WEBM_AUDIO_CODEC: &str = "opus";
 const MOV_VIDEO_CODEC: &str = "h264";
 const MOV_AUDIO_CODEC: &str = "aac";
 const MOV_FORMAT_NAMES: &[&str] = &["mov", "mp4", "m4a", "3gp", "3g2", "mj2"];
 
-/// Rejects containers outside the shipped Matroska, WAV, MP3, and ISO BMFF profiles
-/// before spawning the probe backend.
+/// Rejects containers outside the shipped Matroska/WebM, WAV, MP3, and ISO
+/// BMFF profiles before spawning the probe backend.
 fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     use std::io::Read as _;
     let mut header = [0_u8; 12];
@@ -588,8 +590,8 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
 /// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// WAV is audio-only PCM S16LE; MP3 is audio-only MP3; MOV/MP4 is H.264 video
-/// and/or AAC audio.
+/// Matroska/WebM accepts FFV1/PCM S16LE or VP9/Opus; WAV and MP3 are audio-only;
+/// MOV/MP4 accepts H.264 video and/or AAC audio.
 /// Unsupported streams are reported as unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
     let is_matroska = metadata
@@ -611,14 +613,16 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
     for stream in metadata.streams() {
         let supported = match stream {
             MediaStreamMetadata::Video(video) => video.codec_name().is_some_and(|codec| {
-                (is_matroska && codec == MATRIX_VIDEO_CODEC) || (is_mov && codec == MOV_VIDEO_CODEC)
+                (is_matroska && matches!(codec, MATRIX_VIDEO_CODEC | WEBM_VIDEO_CODEC))
+                    || (is_mov && codec == MOV_VIDEO_CODEC)
             }),
             MediaStreamMetadata::Audio(audio) => {
                 has_audio = true;
                 audio.codec_name().is_some_and(|codec| {
-                    (is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC
-                        || is_mp3 && codec == "mp3"
-                        || is_mov && codec == MOV_AUDIO_CODEC
+                    ((is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC)
+                        || (is_matroska && codec == WEBM_AUDIO_CODEC)
+                        || (is_mp3 && codec == "mp3")
+                        || (is_mov && codec == MOV_AUDIO_CODEC)
                 })
             }
             MediaStreamMetadata::Other(_) => true,
@@ -959,6 +963,19 @@ mod tests {
         }"#;
         let metadata = parse_probe_json(json, 2048).unwrap();
         enforce_import_matrix(&metadata).unwrap();
+    }
+
+    #[test]
+    fn import_matrix_accepts_vp9_opus_ebml_media() {
+        let json = br#"{
+            "format": {"format_name":"matroska,webm"},
+            "streams": [
+                {"index":0,"codec_type":"video","codec_name":"vp9","width":64,"height":48},
+                {"index":1,"codec_type":"audio","codec_name":"opus","sample_rate":"48000","channels":2}
+            ]
+        }"#;
+
+        enforce_import_matrix(&parse_probe_json(json, 2048).unwrap()).unwrap();
     }
 
     #[test]
