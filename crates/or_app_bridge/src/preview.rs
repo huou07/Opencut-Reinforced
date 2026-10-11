@@ -1140,6 +1140,64 @@ mod desktop {
                     "the approved LGPL FFmpeg runtime could not be loaded",
                 ));
             }
+            if let Some((width, height)) = fixed_size
+                && let Some(clip) = direct_video_clip_at(program, time, (width, height))
+            {
+                let offset = time.checked_sub(clip.timeline_start).map_err(|error| {
+                    PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
+                })?;
+                let source_time = clip
+                    .source_start
+                    .checked_add(offset)
+                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+                let runtime_generation = expected_generation.map(|(generation, _)| generation);
+                match self.decode_video_frame(
+                    program.key,
+                    runtime_generation,
+                    &clip.source,
+                    source_time,
+                    cancellation,
+                ) {
+                    Ok(Some(frame))
+                        if frame.descriptor().width() == width
+                            && frame.descriptor().height() == height
+                            && frame
+                                .pixels()
+                                .as_chunks::<4>()
+                                .0
+                                .iter()
+                                .all(|pixel| pixel[3] == u8::MAX) =>
+                    {
+                        if cancellation.is_cancelled()
+                            || expected_generation.is_some_and(|(generation, current)| {
+                                current.load(Ordering::SeqCst) != generation
+                            })
+                        {
+                            return Err(PreviewError::new(
+                                "PREVIEW_CANCELLED",
+                                "preview request was superseded",
+                            ));
+                        }
+                        return Ok(Presentation {
+                            width,
+                            height,
+                            pixels: frame.pixels().to_vec(),
+                            error_code: None,
+                            error_message: None,
+                        });
+                    }
+                    Err(error) if matches!(error, or_media::DecodeError::Cancelled) => {
+                        return Err(PreviewError::new("PREVIEW_CANCELLED", error.to_string()));
+                    }
+                    Err(error) if fail_on_decode_error => {
+                        return Err(PreviewError::new(
+                            "EXPORT_MEDIA_DECODE_FAILED",
+                            error.to_string(),
+                        ));
+                    }
+                    Ok(Some(_)) | Ok(None) | Err(_) => {}
+                }
+            }
             for clip in &program.video_clips {
                 let clip_end = clip
                     .timeline_start
@@ -1461,6 +1519,126 @@ mod desktop {
         video_clips: Vec<VideoClip>,
         text_clips: Vec<TextClip>,
         audio_clips: Vec<AudioClip>,
+    }
+
+    fn direct_video_clip_at(
+        program: &PreviewProgram,
+        time: RationalTime,
+        output_size: (u32, u32),
+    ) -> Option<&VideoClip> {
+        let active = |start: RationalTime, duration: RationalTime| {
+            start
+                .checked_add(duration)
+                .is_ok_and(|end| time >= start && time < end)
+        };
+        if program
+            .text_clips
+            .iter()
+            .any(|clip| active(clip.timeline_start, clip.duration))
+        {
+            return None;
+        }
+        let mut video_clips = program
+            .video_clips
+            .iter()
+            .filter(|clip| active(clip.timeline_start, clip.duration));
+        let clip = video_clips.next()?;
+        if video_clips.next().is_some()
+            || clip.source_dimensions != Some(output_size)
+            || clip.transform != Transform::IDENTITY
+            || clip.crop != Crop::NONE
+            || clip.opacity != Opacity::OPAQUE
+            || !clip.effects.is_empty()
+            || clip.transition_in.is_some()
+            || clip.transition_out.is_some()
+        {
+            return None;
+        }
+        Some(clip)
+    }
+
+    #[cfg(test)]
+    mod direct_frame_tests {
+        use super::*;
+
+        fn program() -> PreviewProgram {
+            let project = or_core::ProjectDocument::new("identity export");
+            PreviewProgram {
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(RationalRate::new(24, 1).unwrap()),
+                content_end: Some(RationalTime::new(10, 1).unwrap()),
+                video_clips: vec![VideoClip {
+                    source: MediaSourceRef::local_file("file:///identity.mp4").unwrap(),
+                    source_dimensions: Some((1920, 1080)),
+                    timeline_start: RationalTime::ZERO,
+                    source_start: RationalTime::ZERO,
+                    duration: RationalTime::new(10, 1).unwrap(),
+                    transform: Transform::IDENTITY,
+                    crop: Crop::NONE,
+                    opacity: Opacity::OPAQUE,
+                    effects: Vec::new(),
+                    transition_in: None,
+                    transition_out: None,
+                }],
+                text_clips: Vec::new(),
+                audio_clips: Vec::new(),
+            }
+        }
+
+        #[test]
+        fn direct_frame_requires_an_identity_full_size_uncomposited_video() {
+            let mut program = program();
+            let middle = RationalTime::new(5, 1).unwrap();
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_some());
+            assert!(direct_video_clip_at(&program, middle, (1280, 720)).is_none());
+            assert!(
+                direct_video_clip_at(&program, RationalTime::new(10, 1).unwrap(), (1920, 1080),)
+                    .is_none()
+            );
+
+            program.video_clips[0].transform.rotation_milli_degrees = 1_000;
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_none());
+            program.video_clips[0].transform = Transform::IDENTITY;
+            program.video_clips[0].crop.left_basis_points = 1_000;
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_none());
+            program.video_clips[0].crop = Crop::NONE;
+            program.video_clips[0].opacity.basis_points = 5_000;
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_none());
+            program.video_clips[0].opacity = Opacity::OPAQUE;
+
+            program.video_clips.push(VideoClip {
+                source: MediaSourceRef::local_file("file:///second.mp4").unwrap(),
+                source_dimensions: Some((1920, 1080)),
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(10, 1).unwrap(),
+                transform: Transform::IDENTITY,
+                crop: Crop::NONE,
+                opacity: Opacity::OPAQUE,
+                effects: Vec::new(),
+                transition_in: None,
+                transition_out: None,
+            });
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_none());
+            program.video_clips.pop();
+            program.text_clips.push(TextClip {
+                text: "title".to_owned(),
+                formatting: TextFormatting::default(),
+                timeline_start: RationalTime::new(4, 1).unwrap(),
+                duration: RationalTime::new(2, 1).unwrap(),
+                transform: Transform::IDENTITY,
+                crop: Crop::NONE,
+                opacity: Opacity::OPAQUE,
+                effects: Vec::new(),
+                transition_in: None,
+                transition_out: None,
+            });
+            assert!(direct_video_clip_at(&program, middle, (1920, 1080)).is_none());
+        }
     }
 
     impl PreviewProgram {

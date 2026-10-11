@@ -130,6 +130,13 @@ FFmpeg is the media layer for demuxing, software decoding, encoding, muxing, and
 
 The render core evaluates a versioned timeline view into sources, transforms, effects, compositing, color, and output. Preview and export use the same edit semantics, while scheduling and quality may differ; cross-GPU pixels are not required to be bit-identical. Phase 7B establishes `or_render` on the pinned wgpu 25.0.2 spine; backend support and performance remain subject to hosted platform verification and later measurement.
 
+For export frames with one same-size, fully opaque video source, no active text
+or other video layers, and identity visual settings, the bridge may forward the
+decoded RGBA frame directly to the existing encoder. This is semantically the
+identity render and avoids an offscreen GPU readback and its synchronization
+for those frames. Composited, scaled, transformed, effected, transitioned,
+transparent, or text-bearing frames continue through the shared wgpu renderer.
+
 The future canonical simple-motion path is a versioned, non-executable
 `MotionScene` source. It uses exact `RationalTime`, typed bounded primitives,
 random-access evaluation, and stable asset/font provenance. Evaluation lowers to
