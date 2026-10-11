@@ -893,3 +893,12 @@ run's Linux, macOS, Android, Rust, Flutter, and descriptor jobs passed. Debug
 symbols remain enabled. The next diagnostic will expose the linker executable
 resolved by FFmpeg's wrapper and preserve its return details before any further
 Windows build change.
+
+In exact-SHA run [38127990851](https://github.com/huou07/Opencut-Reinforced/actions/runs/38127990851)
+on `bfb5b6d7a20430c127d795f585607983ae798dfd`, Windows again failed at the
+same stdbit link probe. The failure branch then stopped before its diagnostic
+because `command -v cl` returned no match under `set -e`; the toolchain exposes
+`cl.exe`, and FFmpeg's own wrapper falls back to `link.exe` when bare `cl` is
+missing. The next diagnostic checks both names and replays the probe through
+that fallback. Linux and macOS packaged journeys, Android APK/SAF acceptance,
+Rust, Flutter, and descriptor checks all passed on this SHA.

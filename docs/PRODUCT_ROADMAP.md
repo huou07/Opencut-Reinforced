@@ -30,12 +30,12 @@ alone previously added FFmpeg's `-debug` link flag. Exact-SHA run
 `38126190565` on `2c43fccad8cb80c850c52f5291927e57843a6e6c` disproved disabling
 debug symbols as a fix: the probe still fails without `-debug`, while preceding
 MSVC link probes pass. Debug symbols remain enabled. The wrapper reports no
-linker diagnostic, so the next Windows configure failure will print the
-resolved linker candidates and replay the final probe with shell tracing before
-any correction. Keep longer-media profiling gated on a real quality,
-responsiveness, cancellation, or resource problem. Android remains
-Matroska-only; emulator acceptance does not establish physical-device
-performance.
+linker diagnostic. The first diagnostic stopped before reporting paths because
+the workflow exposes `cl.exe`, not bare `cl`; its next run checks both names and
+replays the final probe through the wrapper's `link.exe` fallback. Profile
+longer media only when real evidence shows a quality, responsiveness,
+cancellation, or resource problem. Android remains Matroska-only; emulator
+acceptance does not establish physical-device performance.
 
 ## Product acceptance target
 

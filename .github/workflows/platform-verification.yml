@@ -980,12 +980,13 @@ jobs:
           # zlib is statically linked into the MSVC helper executables.
           cp "$RUNNER_TEMP/ZLIB-LICENSE.txt" "$prefix/ZLIB-LICENSE.txt"
           if ! ./configure "${configure_args[@]}"; then
-            cl_path="$(command -v cl)"
+            cl_path="$(command -v cl.exe || command -v cl || true)"
+            link_path="$(command -v link.exe || command -v link || true)"
             cl_directory="$(dirname "$cl_path")"
             echo "MSVC compiler: $cl_path"
             echo "MSVC linker candidates: $cl_directory/link and $cl_directory/link.exe"
             ls -l "$cl_path" "$cl_directory/link" "$cl_directory/link.exe" 2>&1 || true
-            echo "PATH linker: $(command -v link.exe || true)"
+            echo "PATH linker: $link_path"
             for probe_object in ffconf.*/test.o; do
               if [[ -f "$probe_object" ]]; then
                 probe_output="${probe_object%.o}.diagnostic.exe"
