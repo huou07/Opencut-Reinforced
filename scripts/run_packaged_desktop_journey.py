@@ -141,8 +141,8 @@ def _prepare_representative_media(
             "30",
             "-map_metadata",
             "-1",
-            "-f",
-            "matroska",
+            "-movflags",
+            "+faststart",
             str(destination),
         ],
         capture_output=True,
@@ -249,7 +249,7 @@ def main() -> int:
         if guarded.returncode == 0:
             raise SystemExit(f"The inert host {helper} guard unexpectedly succeeded.")
 
-    media = work / "big-buck-bunny.mkv"
+    media = work / "big-buck-bunny.mp4"
     representative_source = work / "big-buck-bunny-source.mp4"
     _download_representative_media(representative_source)
     _prepare_representative_media(
@@ -290,6 +290,7 @@ def main() -> int:
     )
     if (
         input_video is None
+        or "mp4" not in input_probe_result["format"].get("format_name", "").split(",")
         or input_video.get("codec_name") != "h264"
         or (input_video.get("width"), input_video.get("height")) != (1920, 1080)
         or input_audio is None
@@ -302,7 +303,7 @@ def main() -> int:
             f"{input_probe_result}"
         )
     reimport_timeline_start = f"{math.ceil(representative_duration)}/1"
-    replacement_media = work / "relinked-bunny.mkv"
+    replacement_media = work / "relinked-bunny.mp4"
     shutil.copyfile(media, replacement_media)
     unsupported = work / "unsupported.mp4"
     unsupported.write_bytes(b"not an OR supported media file\n")

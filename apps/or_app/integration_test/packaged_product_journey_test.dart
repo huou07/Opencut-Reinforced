@@ -119,8 +119,8 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(find.byKey(const ValueKey('media-import')));
   await _pumpUntil(
     tester,
-    () => find.text('big-buck-bunny.mkv').evaluate().isNotEmpty,
-    'packaged 1080p H.264/AAC Matroska import',
+    () => find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
+    'packaged 1080p H.264/AAC MP4 import',
   );
   final mediaId = _singleKeySuffix(tester, 'media-preview-');
   await _pumpUntil(
@@ -308,7 +308,7 @@ Future<void> _reopenAndExport(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('big-buck-bunny.mkv').evaluate().isNotEmpty &&
+        find.text('big-buck-bunny.mp4').evaluate().isNotEmpty &&
         find.text('Text: A real opening title').evaluate().isNotEmpty &&
         _hasKeyPrefix(tester, 'timeline-clip-'),
     'saved project reopen with media and timeline',
@@ -379,7 +379,7 @@ Future<void> _reopenAndExport(
   await _pumpUntil(
     tester,
     () =>
-        find.text('relinked-bunny.mkv').evaluate().isNotEmpty &&
+        find.text('relinked-bunny.mp4').evaluate().isNotEmpty &&
         find.byKey(ValueKey('media-actions-$mediaId')).evaluate().isNotEmpty &&
         _hasKeyPrefix(tester, 'timeline-clip-'),
     'relink source while preserving its MediaId',
@@ -411,7 +411,7 @@ Future<void> _preserveProjectAcrossMissingSource(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('relinked-bunny.mkv').evaluate().isNotEmpty,
+        find.text('relinked-bunny.mp4').evaluate().isNotEmpty,
     'project reopen before failure checks',
   );
 
@@ -430,7 +430,7 @@ Future<void> _preserveProjectAcrossMissingSource(
         .isNotEmpty,
     'unavailable external media feedback',
   );
-  expect(find.text('relinked-bunny.mkv'), findsWidgets);
+  expect(find.text('relinked-bunny.mp4'), findsWidgets);
 }
 
 Future<void> _preserveProjectAcrossMissingProbe(
@@ -442,7 +442,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
     tester,
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
-        find.text('relinked-bunny.mkv').evaluate().isNotEmpty,
+        find.text('relinked-bunny.mp4').evaluate().isNotEmpty,
     'project reopen before missing-probe check',
   );
 
@@ -460,7 +460,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
         .isNotEmpty,
     'missing packaged probe feedback',
   );
-  expect(find.text('relinked-bunny.mkv'), findsWidgets);
+  expect(find.text('relinked-bunny.mp4'), findsWidgets);
 
   picker.nextExportPath = _requiredEnvironment(
     'OR_PACKAGED_JOURNEY_FAILED_EXPORT',
