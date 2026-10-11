@@ -978,6 +978,12 @@ jobs:
             tail -n 240 ffbuild/config.log
             exit 1
           fi
+          if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config.h; then
+            echo "FFmpeg did not configure the required libvpx VP9 encoder."
+            echo "FFmpeg configure log (last 240 lines):"
+            tail -n 240 ffbuild/config.log
+            exit 1
+          fi
           make -j2
           make install
           # The install bin directory holds helper DLLs. Exercise the actual
