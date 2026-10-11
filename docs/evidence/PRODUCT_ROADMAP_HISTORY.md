@@ -1034,3 +1034,31 @@ in-flight frame leases, one registered duplicated media FD, zero queued
 operations, and one surface creation. These emulator results establish
 boundedness/correctness for the observed path only; they are not physical-device
 performance evidence and do not complete Android WebM acceptance.
+
+Exact-SHA Platform Verification run
+[38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290)
+passed on `33f7f355a5bb1c848551babe9c4c5c11c2a65316`. Linux, macOS, and
+Windows packaged desktop journeys each imported, revised, saved/reopened,
+relinked, exported 30 seconds of VP9/Opus, and independently decoded 720 video
+and 1,501 audio frames. Export times were Linux 46,883 ms, macOS 54,526 ms,
+and Windows 151,311 ms. Android built all three FFmpeg ABIs and passed
+DocumentsUI SAF WebM export to the actual provider destination; the result was
+965 bytes, reported VP9 video and Opus audio, and independently decoded to two
+video buffers and 26 audio buffers. This Android fixture is only half a second.
+The hosted emulator also logged skipped-frame stalls (including a 162-frame
+startup stall); resource bounds passed, but this is not representative
+physical-device performance evidence. Linux, Windows, and macOS lifecycle
+coverage and repository hygiene also passed.
+
+Developer Preview run
+[38175016011](https://github.com/huou07/Opencut-Reinforced/actions/runs/38175016011)
+on the same exact SHA failed before publication. All seven app/CLI build jobs
+completed; Android, both CLIs, and their packages succeeded. The macOS, Linux,
+and Windows app builds succeeded but each packaging job looked for
+`OPUS-COPYING` at the root of the downloaded FFmpeg artifact. Platform
+Verification uploads codec provenance from `desktop-export-codecs/`; because
+the artifact paths have `$RUNNER_TEMP` as their common ancestor, that folder
+is preserved on download. The workflow now consumes that path and normalizes
+the provenance files before checksum/release assembly. No preview was
+published by run 38175016011; fresh exact-SHA verification and preview builds
+are required.
