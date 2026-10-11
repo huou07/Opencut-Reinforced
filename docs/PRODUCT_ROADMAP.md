@@ -18,18 +18,20 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish the cross-platform ordinary-MP4 editing journey.
-Linux passed the packaged H.264/AAC MP4-to-WebM VP9/Opus journey on exact SHA
-`a7183b34734c4cfeec3066dfe944d7cbdae4d0f8` (run
-[38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385));
-macOS and Android also passed their packaged MP4 and SAF journeys on that SHA.
-Windows passed the corrected libvpx build but stopped in FFmpeg configure at
-its MSVC `stdbit.h` probe. A local Windows configure correction supplies
-FFmpeg's pinned compatibility-header directory directly to compiler probes and
-awaits exact-SHA verification. Keep longer-media profiling gated on a real
-quality, responsiveness, cancellation, or resource problem. Android remains
-Matroska-only; emulator acceptance does not establish physical-device
-performance.
+Current product focus: finish the cross-platform ordinary-MP4 editing journey
+and make a usable Developer Preview available for dogfooding. Exact-SHA run
+[38124449401](https://github.com/huou07/Opencut-Reinforced/actions/runs/38124449401)
+on `af73be02d5907b38851bb45b88132b2b3a136f4d` passed Linux and macOS packaged
+H.264/AAC MP4-to-WebM VP9/Opus journeys, Android all-ABI packaging and SAF
+preview/resource acceptance, and Rust, Flutter, and descriptor checks. Windows
+passed codec-source setup but failed FFmpeg configure while linking its MSVC
+`stdbit.h` probe. The pinned compatibility header compiles; the failed probe
+alone adds FFmpeg's `-debug` link flag. The next Windows build disables debug
+symbols in the shipped runtime and retains the compatibility header. This is a
+targeted hypothesis awaiting exact-SHA verification. Keep longer-media profiling
+gated on a real quality, responsiveness, cancellation, or resource problem.
+Android remains Matroska-only; emulator acceptance does not establish
+physical-device performance.
 
 ## Product acceptance target
 

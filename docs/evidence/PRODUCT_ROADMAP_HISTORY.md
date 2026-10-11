@@ -872,3 +872,14 @@ candidate supplies FFmpeg 8.1.3's own `compat/stdbit` include path directly to
 the Windows configure probes. The macOS log again printed `open returned 1`
 before its Flutter tests, but its lifecycle, preview-transport, and packaged
 journey tests all passed, so that message alone is not treated as a failure.
+
+Exact-SHA run [38124449401](https://github.com/huou07/Opencut-Reinforced/actions/runs/38124449401)
+on `af73be02d5907b38851bb45b88132b2b3a136f4d` passed Linux and macOS packaged
+ordinary-MP4 journeys, Android all-ABI packaging and SAF preview/resource
+acceptance, plus Rust, Flutter, and descriptor checks. Windows passed the
+corrected libvpx CRT build and compiled FFmpeg's pinned `compat/stdbit` header,
+but the feature probe failed at the MSVC link step. In the configure log,
+earlier generic MSVC link probes omit `-debug`; the failing stdbit link probe
+includes it. The follow-up disables FFmpeg debug symbols in the Windows release
+runtime, retains the pinned compatibility header, and requires exact-SHA hosted
+verification. No physical-device Android performance result is claimed.
