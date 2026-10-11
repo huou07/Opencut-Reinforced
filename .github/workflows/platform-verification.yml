@@ -1282,8 +1282,10 @@ jobs:
                 ;;
             esac
 
-            clang="$toolchain/bin/${clang_prefix}21-clang"
-            clangxx="$toolchain/bin/${clang_prefix}21-clang++"
+            # Match minSdk and codec builds. API 21 lacks the exported stderr
+            # symbol referenced by Opus's enabled production hardening.
+            clang="$toolchain/bin/${clang_prefix}26-clang"
+            clangxx="$toolchain/bin/${clang_prefix}26-clang++"
             target_suffix="${rust_target//-/_}"
             cc_env="CC_$target_suffix"
             ar_env="AR_$target_suffix"

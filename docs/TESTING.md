@@ -33,6 +33,8 @@ GitHub Actions runs Rust formatting, Clippy, and the full workspace test suite; 
 
 GitHub-hosted Actions is canonical for platform correctness, linker-dependent builds, and the native bridge runtime smoke test. Local inability to run a platform test does not remove its verification requirement; it moves the evidence source to the equivalent required Actions job.
 
+Android FFmpeg cross-link probes target API 26, matching the packaged app's `minSdk` and the Opus/libvpx target. Keeping these API levels aligned preserves Opus production hardening while ensuring the probe uses the same Android C library exports available to supported installs.
+
 Local native/runtime execution is disallowed by default: do not launch OR, an emulator/simulator, or an attached device for verification; do not run native Flutter integration tests that launch OR, manually smoke-test the GUI, or open a built/downloaded Developer Preview. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
