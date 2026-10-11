@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 enum ExportProfile {
   webmVp9Opus(
     wireName: 'webm_vp9_opus',
@@ -32,11 +30,9 @@ enum ExportProfile {
   final String label;
   final String description;
 
-  static List<ExportProfile> get available =>
-      Platform.isAndroid ? const [ExportProfile.matroskaFfv1PcmS16le] : values;
+  static List<ExportProfile> get available => values;
 
-  static ExportProfile get defaultForPlatform =>
-      Platform.isAndroid ? matroskaFfv1PcmS16le : webmVp9Opus;
+  static const ExportProfile defaultForPlatform = webmVp9Opus;
 
   String suggestedName(String projectName) {
     final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();

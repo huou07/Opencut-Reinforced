@@ -170,9 +170,9 @@ packages do not bundle helpers in 9B1: the CLI resolves a packaged sibling
 when one is present and otherwise keeps its developer override/`PATH` behavior
 for unpackaged runs.
 
-### Desktop WebM delivery codecs (candidate)
+### WebM delivery codecs (desktop profile; Android candidate)
 
-The desktop FFmpeg profile now has a candidate WebM muxer with VP9 from
+The desktop FFmpeg profile uses a WebM muxer with VP9 from
 libvpx v1.17.0 at pinned commit
 [`6df3ec34557879fff673706f4a1d9fbd0f3a6f0e`](https://chromium.googlesource.com/webm/libvpx/+/6df3ec34557879fff673706f4a1d9fbd0f3a6f0e/)
 and Opus from libopus 1.6.1 at source archive SHA-256
@@ -184,19 +184,22 @@ Preview source assets include the exact codec archives and build metadata.
 The Windows build uses libvpx's `vpxmt.lib` static CRT variant to match
 FFmpeg's MSVC C runtime and points the generated pkg-config entry at that
 archive for FFmpeg's link.
-The upstream source licenses permit redistribution subject to their included
-BSD-style conditions and disclaimers. The Opus notice identifies specific
-royalty-free patent grants; the libvpx patent notice grants rights only for
-specified claims licensable by Google. These notices are not a general patent
-clearance opinion for every codec implementation, modification, jurisdiction,
-or commercial use. Release owners must retain the notices and review the exact
-shipped binaries and distribution context.
+The Android packaged candidate uses the same pinned codec sources, statically
+linked into its existing LGPL FFmpeg shared libraries for all three supported
+ABIs. Its CI artifact preserves both upstream notices, the libvpx patent
+notice, and source identity; the Android package build stages those notices as
+assets. The upstream source licenses permit redistribution subject to their
+included BSD-style conditions and disclaimers. The Opus notice identifies
+specific royalty-free patent grants; the libvpx patent notice grants rights
+only for specified claims licensable by Google. These notices are not a
+general patent clearance opinion for every codec implementation, modification,
+jurisdiction, or commercial use. Release owners must retain the notices and
+review the exact shipped binaries and distribution context.
 
-This candidate adds no GPL, version3, or nonfree FFmpeg mode. Android does not
-build these codec libraries and does not expose this export profile. Desktop
-WebM remains pending exact-SHA packaged verification and independent output
-acceptance; this record documents the selected source and compliance artifacts,
-not a completed release/legal approval.
+This profile adds no GPL, version3, or nonfree FFmpeg mode. The Android build
+and actual SAF export acceptance are still pending exact-SHA hosted
+verification. This record documents the selected source and compliance
+artifacts, not a completed release/legal approval.
 
 ### Checkpoint 7C linked software runtime
 

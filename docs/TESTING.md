@@ -723,11 +723,17 @@ hardening commit itself must pass both workflows.
   identity through provider FD acquisition, duplication, software decode,
   shared rendering, and surface presentation. Fixture setup and revocation
   controls do not replace the app picker, gateway, renderer, or viewer.
-- The same journey exports through DocumentsUI, waits for the compact top-bar
-  `Export complete` tooltip, then checks the separate provider received more
-  than four bytes of a valid Matroska file. The tooltip assertion follows the
-  compact UI contract; provider bytes and container validation prove the actual
-  export completed.
+- The Android journey now selects the default WebM delivery profile through
+  the existing profile dialog, exports through DocumentsUI, and records the
+  elapsed end-to-end emulator time through the app's `Export complete` state.
+  Acceptance requires the separate provider document to contain readable VP9
+  and Opus samples as reported by Android's `MediaExtractor`, then requires
+  Android's independent `MediaCodec` decoders to drain both tracks to end of
+  stream with non-empty decoded output. Each track check is bounded to 20
+  seconds. A container signature, parser-only sample, or synthetic report
+  cannot satisfy the check. This updated packaged journey is pending exact-SHA
+  hosted verification. Emulator timing is reported as emulator evidence and
+  does not establish physical-device performance.
 - It then selects two fixture videos in one native DocumentsUI multi-select
   action and verifies both SAF references reach the real media library. The
   selector long-presses the first file to enter selection mode, then selects
@@ -963,8 +969,11 @@ checks surface recreation and frame presentation.
 The separate SAF acceptance provider advertises directory creation on both its
 root and root document. The DocumentsUI export selector waits for an enabled
 Save action; a disabled button is not counted as a completed picker handoff.
-The end-to-end export check then requires the selected document to contain a
-valid Matroska result after the Android method-channel publish operation.
+The updated end-to-end export check requires the selected document to contain
+sampled VP9 video and Opus audio after the Android method-channel publish
+operation and requires complete decode of both tracks through Android's native
+media decoders. The user-flow timer ends at the app's export-complete state;
+the independent file and decoder checks are excluded from that duration.
 After the preview driver exits, process-recovery acceptance verifies that
 `am force-stop` removed its PID, then lets `flutter drive` install and start the
 recovery-targeted APK as a new process in the same package. It does not manually

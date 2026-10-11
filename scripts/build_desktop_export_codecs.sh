@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: $0 <linux|macos|windows> <prefix> <work-directory>" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "usage: $0 <linux|macos|windows|android> <prefix> <work-directory> [android-abi]" >&2
   exit 2
 fi
 
 platform="$1"
+android_abi="${4:-}"
+if [[ "$platform" == android && -z "$android_abi" ]] || [[ "$platform" != android && -n "$android_abi" ]]; then
+  echo "android builds require an ABI; desktop builds do not accept one" >&2
+  exit 2
+fi
 prefix="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 work="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
 opus_version=1.6.1
@@ -53,22 +58,37 @@ elif [[ "$platform" == windows ]]; then
   esac
   vpx_target="x86_64-win64-vs$vs_major"
   win_cmake_generator="Visual Studio $vs_major $vs_year"
+elif [[ "$platform" == android ]]; then
+  android_ndk="${ANDROID_NDK_HOME:-${ANDROID_HOME:-}/ndk/28.2.13676358}"
+  test -x "$android_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+  case "$android_abi" in
+    armeabi-v7a) vpx_target=armv7-android-gcc ;;
+    arm64-v8a) vpx_target=arm64-android-gcc ;;
+    x86_64) vpx_target=x86_64-android-gcc ;;
+    *) echo "unsupported Android ABI: $android_abi" >&2; exit 2 ;;
+  esac
 else
   echo "unsupported platform: $platform" >&2
   exit 2
 fi
 
 opus_archive="$work/opus-$opus_version.tar.gz"
-curl --fail --location --silent --show-error --retry 3 --max-time 300 \
-  "https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz" \
-  --output "$opus_archive"
+if [[ ! -f "$opus_archive" ]]; then
+  curl --fail --location --silent --show-error --retry 3 --max-time 300 \
+    "https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz" \
+    --output "$opus_archive"
+fi
 actual_opus_sha256="$(sha256_file "$opus_archive")"
 if [[ "$actual_opus_sha256" != "$opus_sha256" ]]; then
   echo "Opus source SHA-256 mismatch: $actual_opus_sha256" >&2
   exit 1
 fi
-tar -xzf "$opus_archive" -C "$work"
+if [[ ! -d "$work/opus-$opus_version" ]]; then
+  tar -xzf "$opus_archive" -C "$work"
+fi
 
+opus_build="$work/opus-build"
+vpx_build="$work/libvpx-build"
 opus_cmake_args=(
   -DCMAKE_BUILD_TYPE=Release \
   "-DCMAKE_INSTALL_PREFIX=$prefix" \
@@ -77,23 +97,35 @@ opus_cmake_args=(
   -DOPUS_BUILD_TESTING=OFF \
   -DOPUS_BUILD_PROGRAMS=OFF
 )
+if [[ "$platform" == android ]]; then
+  opus_build+="-$android_abi"
+  vpx_build+="-$android_abi"
+  opus_cmake_args+=(
+    "-DCMAKE_TOOLCHAIN_FILE=$android_ndk/build/cmake/android.toolchain.cmake"
+    "-DANDROID_ABI=$android_abi"
+    -DANDROID_PLATFORM=26
+    -DANDROID_STL=c++_static
+  )
+fi
 if [[ "$platform" == windows ]]; then
   opus_cmake_args[1]="-DCMAKE_INSTALL_PREFIX=$(cygpath -aw "$prefix")"
-  cmake -S "$work/opus-$opus_version" -B "$work/opus-build" \
+  cmake -S "$work/opus-$opus_version" -B "$opus_build" \
     -G "$win_cmake_generator" -A x64 "${opus_cmake_args[@]}"
 else
-  cmake -S "$work/opus-$opus_version" -B "$work/opus-build" "${opus_cmake_args[@]}"
+  cmake -S "$work/opus-$opus_version" -B "$opus_build" "${opus_cmake_args[@]}"
 fi
-cmake --build "$work/opus-build" --config Release --parallel 2
-cmake --install "$work/opus-build" --config Release
+cmake --build "$opus_build" --config Release --parallel 2
+cmake --install "$opus_build" --config Release
 
 vpx_source="$work/libvpx"
-git -c advice.detachedHead=false clone --filter=blob:none \
-  https://chromium.googlesource.com/webm/libvpx "$vpx_source"
+if [[ ! -d "$vpx_source/.git" ]]; then
+  git -c advice.detachedHead=false clone --filter=blob:none \
+    https://chromium.googlesource.com/webm/libvpx "$vpx_source"
+fi
 git -C "$vpx_source" checkout --detach "$vpx_commit"
 test "$(git -C "$vpx_source" rev-parse HEAD)" = "$vpx_commit"
-mkdir -p "$work/libvpx-build"
-cd "$work/libvpx-build"
+mkdir -p "$vpx_build"
+cd "$vpx_build"
 vpx_configure_args=(
   "--target=$vpx_target" \
   "--prefix=$prefix" \
@@ -105,6 +137,9 @@ vpx_configure_args=(
   --enable-pic \
   --enable-vp9
 )
+if [[ "$platform" == android ]]; then
+  vpx_configure_args+=("--sdk-path=$android_ndk")
+fi
 if [[ "$platform" == windows ]]; then
   # FFmpeg's documented MSVC toolchain uses /MT; match it to avoid mixing the
   # UCRT imports from libvpx's default /MD archive into FFmpeg's msvcrt build.
@@ -191,7 +226,7 @@ test "$(pkg-config --modversion opus)" = "$opus_version"
 test "$(pkg-config --variable=prefix opus)" = "$prefix"
 test "$(pkg-config --modversion vpx)" = "1.17.0"
 test "$(pkg-config --variable=prefix vpx)" = "$prefix"
-if [[ -n "${GITHUB_ENV:-}" ]]; then
+if [[ -n "${GITHUB_ENV:-}" && "$platform" != android ]]; then
   echo "FFMPEG_CODEC_PREFIX=$prefix" >> "$GITHUB_ENV"
   echo "LIBVPX_CONFIGURE_TARGET=$vpx_target" >> "$GITHUB_ENV"
   echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> "$GITHUB_ENV"

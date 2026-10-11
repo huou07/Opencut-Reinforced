@@ -174,6 +174,7 @@ class MainActivity : FlutterActivity() {
                 val extension = call.argument<String>("extension")?.lowercase()
                 val expectedMime = when (extension) {
                     "mkv" -> "video/x-matroska"
+                    "webm" -> "video/webm"
                     else -> null
                 }
                 if (extension == null || expectedMime == null ||
@@ -493,7 +494,7 @@ class MainActivity : FlutterActivity() {
 
     private fun exportLocation(uri: Uri, extension: String): Map<String, String> {
         requireDocumentUri(uri)
-        if (extension != "mkv") {
+        if (extension != "mkv" && extension != "webm") {
             throw SafFailure("EXPORT_FORMAT_INVALID", "Choose a supported export format.")
         }
         val file = File.createTempFile("or-export-", ".$extension", exportStagingDirectory())
@@ -756,7 +757,9 @@ class MainActivity : FlutterActivity() {
     private fun requireManagedExportFile(path: String): File {
         val directory = exportStagingDirectory()
         val requested = File(path).canonicalFile
-        if (requested.parentFile != directory || !requested.name.endsWith(".mkv", ignoreCase = true)) {
+        val supportedExtension = requested.name.endsWith(".mkv", ignoreCase = true) ||
+            requested.name.endsWith(".webm", ignoreCase = true)
+        if (requested.parentFile != directory || !supportedExtension) {
             throw SafFailure("EXPORT_SAVE_FAILED", "The temporary export path is invalid.")
         }
         return requested

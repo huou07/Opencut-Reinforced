@@ -2,6 +2,9 @@ package dev.opencut.saffixture;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.media.MediaCodec;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
@@ -11,6 +14,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
@@ -95,14 +99,9 @@ public final class ControlActivity extends Activity {
                     "control operation=" + (operation == null ? "status" : operation)
                         + " projectSha256=" + sha256(projectFile)
                 );
-                File exported = new File(getFilesDir(), "export.mkv");
-                boolean validMatroska = false;
-                if (exported.isFile() && exported.length() >= 4) {
-                    try (InputStream input = new java.io.FileInputStream(exported)) {
-                        validMatroska = input.read() == 0x1a && input.read() == 0x45
-                            && input.read() == 0xdf && input.read() == 0xa3;
-                    }
-                }
+                File exported = new File(getFilesDir(), "export.webm");
+                JSONObject webm = "exportStatus".equals(operation)
+                    ? inspectWebm(exported) : new JSONObject();
                 File captionExport = new File(getFilesDir(), "caption-export.srt");
                 String captionText = "";
                 if (captionExport.isFile() && captionExport.length() <= 1024 * 1024) {
@@ -123,7 +122,17 @@ public final class ControlActivity extends Activity {
                     .put("projectBytes", projectFile.length())
                     .put("projectSha256", sha256(projectFile))
                     .put("exportBytes", exported.length())
-                    .put("validMatroska", validMatroska)
+                    .put("validWebm", webm.optBoolean("validWebm"))
+                    .put("webmVideoMime", webm.optString("webmVideoMime"))
+                    .put("webmAudioMime", webm.optString("webmAudioMime"))
+                    .put("webmVideoSampleBytes", webm.optInt("webmVideoSampleBytes"))
+                    .put("webmAudioSampleBytes", webm.optInt("webmAudioSampleBytes"))
+                    .put("webmVideoDecodeComplete", webm.optBoolean("webmVideoDecodeComplete"))
+                    .put("webmVideoDecodedBuffers", webm.optInt("webmVideoDecodedBuffers"))
+                    .put("webmVideoDecodedBytes", webm.optLong("webmVideoDecodedBytes"))
+                    .put("webmAudioDecodeComplete", webm.optBoolean("webmAudioDecodeComplete"))
+                    .put("webmAudioDecodedBuffers", webm.optInt("webmAudioDecodedBuffers"))
+                    .put("webmAudioDecodedBytes", webm.optLong("webmAudioDecodedBytes"))
                     .put("captionExportBytes", captionExport.length())
                     .put("validSrtCaption", captionText.contains("Imported SAF caption")
                         && captionText.contains("00:00:00,000 --> 00:00:01,000"));
@@ -132,6 +141,151 @@ public final class ControlActivity extends Activity {
                 runOnUiThread(() -> { setResult(RESULT_CANCELED, new Intent().putExtra("error", error.toString())); finish(); });
             }
         }, "fixture-control").start();
+    }
+
+    private static JSONObject inspectWebm(File file) {
+        String videoMime = "";
+        String audioMime = "";
+        int videoSampleBytes = 0;
+        int audioSampleBytes = 0;
+        int videoTrack = -1;
+        int audioTrack = -1;
+        MediaExtractor extractor = new MediaExtractor();
+        try {
+            if (!file.isFile() || file.length() <= 4) return new JSONObject();
+            extractor.setDataSource(file.getAbsolutePath());
+            for (int index = 0; index < extractor.getTrackCount(); index++) {
+                MediaFormat format = extractor.getTrackFormat(index);
+                String mime = format.getString(MediaFormat.KEY_MIME);
+                if (mime == null) continue;
+                boolean video = mime.equals("video/x-vnd.on2.vp9");
+                boolean audio = mime.equals("audio/opus");
+                if (!video && !audio) continue;
+                if (video) {
+                    videoMime = mime;
+                    videoTrack = index;
+                }
+                if (audio) {
+                    audioMime = mime;
+                    audioTrack = index;
+                }
+                extractor.selectTrack(index);
+                extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+                ByteBuffer sample = ByteBuffer.allocate(1024 * 1024);
+                int bytes = extractor.readSampleData(sample, 0);
+                if (video) videoSampleBytes = Math.max(bytes, 0);
+                if (audio) audioSampleBytes = Math.max(bytes, 0);
+                extractor.unselectTrack(index);
+            }
+        } catch (Exception error) {
+            Log.w("OrSafFixture", "Independent WebM inspection failed", error);
+        } finally {
+            extractor.release();
+        }
+        DecodeStats videoDecode = decodeTrack(file, videoTrack);
+        DecodeStats audioDecode = decodeTrack(file, audioTrack);
+        try {
+            return new JSONObject()
+                .put("validWebm", videoSampleBytes > 0 && audioSampleBytes > 0
+                    && videoDecode.complete && audioDecode.complete)
+                .put("webmVideoMime", videoMime)
+                .put("webmAudioMime", audioMime)
+                .put("webmVideoSampleBytes", videoSampleBytes)
+                .put("webmAudioSampleBytes", audioSampleBytes)
+                .put("webmVideoDecodeComplete", videoDecode.complete)
+                .put("webmVideoDecodedBuffers", videoDecode.outputBuffers)
+                .put("webmVideoDecodedBytes", videoDecode.decodedBytes)
+                .put("webmAudioDecodeComplete", audioDecode.complete)
+                .put("webmAudioDecodedBuffers", audioDecode.outputBuffers)
+                .put("webmAudioDecodedBytes", audioDecode.decodedBytes);
+        } catch (Exception impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private static final long MAX_TRACK_DECODE_NANOS = TimeUnit.SECONDS.toNanos(20);
+
+    private static final class DecodeStats {
+        final boolean complete;
+        final int outputBuffers;
+        final long decodedBytes;
+
+        DecodeStats(boolean complete, int outputBuffers, long decodedBytes) {
+            this.complete = complete;
+            this.outputBuffers = outputBuffers;
+            this.decodedBytes = decodedBytes;
+        }
+    }
+
+    private static DecodeStats decodeTrack(File file, int trackIndex) {
+        if (trackIndex < 0) return new DecodeStats(false, 0, 0);
+        MediaExtractor extractor = new MediaExtractor();
+        MediaCodec decoder = null;
+        boolean decoderStarted = false;
+        int submittedSamples = 0;
+        int outputBuffers = 0;
+        long decodedBytes = 0;
+        boolean inputEnded = false;
+        boolean outputEnded = false;
+        long deadline = System.nanoTime() + MAX_TRACK_DECODE_NANOS;
+        MediaCodec.BufferInfo outputInfo = new MediaCodec.BufferInfo();
+        try {
+            extractor.setDataSource(file.getAbsolutePath());
+            MediaFormat format = extractor.getTrackFormat(trackIndex);
+            String mime = format.getString(MediaFormat.KEY_MIME);
+            if (mime == null) return new DecodeStats(false, 0, 0);
+            extractor.selectTrack(trackIndex);
+            decoder = MediaCodec.createDecoderByType(mime);
+            decoder.configure(format, null, null, 0);
+            decoder.start();
+            decoderStarted = true;
+
+            while (!outputEnded && System.nanoTime() < deadline) {
+                if (!inputEnded) {
+                    int inputIndex = decoder.dequeueInputBuffer(5_000);
+                    if (inputIndex >= 0) {
+                        ByteBuffer input = decoder.getInputBuffer(inputIndex);
+                        if (input == null) throw new IllegalStateException("Decoder input buffer is unavailable");
+                        input.clear();
+                        int sampleBytes = extractor.readSampleData(input, 0);
+                        if (sampleBytes < 0) {
+                            decoder.queueInputBuffer(inputIndex, 0, 0, 0,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                            inputEnded = true;
+                        } else {
+                            long presentationTimeUs = Math.max(extractor.getSampleTime(), 0L);
+                            decoder.queueInputBuffer(inputIndex, 0, sampleBytes,
+                                presentationTimeUs, 0);
+                            submittedSamples++;
+                            extractor.advance();
+                        }
+                    }
+                }
+
+                int outputIndex = decoder.dequeueOutputBuffer(outputInfo, 5_000);
+                if (outputIndex >= 0) {
+                    if (outputInfo.size > 0) {
+                        outputBuffers++;
+                        decodedBytes += outputInfo.size;
+                    }
+                    outputEnded = (outputInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+                    decoder.releaseOutputBuffer(outputIndex, false);
+                }
+            }
+            if (!outputEnded) Log.w("OrSafFixture", "Independent WebM decoder exceeded its bounded verification time");
+        } catch (Exception error) {
+            Log.w("OrSafFixture", "Independent WebM track decode failed", error);
+        } finally {
+            if (decoder != null) {
+                if (decoderStarted) {
+                    try { decoder.stop(); } catch (Exception ignored) { }
+                }
+                decoder.release();
+            }
+            extractor.release();
+        }
+        return new DecodeStats(outputEnded && submittedSamples > 0 && outputBuffers > 0
+            && decodedBytes > 0, outputBuffers, decodedBytes);
     }
 
     private static String sha256(File file) throws Exception {

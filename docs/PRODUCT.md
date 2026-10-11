@@ -326,7 +326,8 @@ current Rust proof nor the pending desktop path establishes camera-source
 variation or physical-device performance. The import profile remains a
 candidate pending packaged acceptance and codec patent/distribution review.
 MP4 export remains out of scope; the lossless Matroska export remains available
-on desktop and Android. Matroska also accepts H.264 video and AAC audio through
+on desktop and Android. Android WebM delivery is a candidate pending the
+packaged codec and provider-output checks described below. Matroska also accepts H.264 video and AAC audio through
 the existing packaged FFmpeg decoder path. A pinned 30-second Big Buck Bunny
 source is used only by the desktop packaged journey; its original soundtrack is
 not included. Exact packaged proof for that longer import/export journey is
@@ -355,7 +356,9 @@ build-configuration review as other optional delivery profiles.
 
 **MVP FOUNDATION:** usable software video export through a background job with progress and cancellation. The mandatory correctness profile is Matroska + FFV1 video + PCM S16LE audio through linked software FFmpeg. Other delivery and hardware profiles are optional and require separate evidence.
 
-**PLANNED (optional delivery profiles):** MP4 and MOV; codecs H.264, H.265, and AV1; hardware encoding where supported, each only after legal, platform, and build-configuration review. A desktop WebM + VP9/Opus candidate is implemented but awaits exact-SHA packaged and independent-output acceptance. Desktop and Android retain software Matroska + FFV1 + PCM S16LE as the lossless profile.
+**AVAILABLE (desktop):** WebM + VP9/Opus delivery and Matroska + FFV1 + PCM S16LE lossless profiles share the same render/export path. Android WebM + VP9/Opus packaging is a candidate pending exact-SHA all-ABI build and real SAF output verification; Android Matroska + FFV1 + PCM S16LE remains available. Codec provenance and redistribution notices are recorded in `SECURITY_LICENSING.md`.
+
+**PLANNED (optional delivery profiles):** MP4 and MOV; codecs H.264, H.265, and AV1; hardware encoding where supported, each only after legal, platform, and build-configuration review.
 
 ## Interchange
 

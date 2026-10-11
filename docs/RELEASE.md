@@ -27,9 +27,10 @@ These artifacts are debug developer builds for testing only. macOS carries only 
 The Android preview APK reuses the FFmpeg install artifact from the successful
 Platform Verification run for the same source commit. Before publication, the
 preview job stages that install for the bridge build, copies its shared
-libraries into Android's `jniLibs` directories, and checks that the APK
-contains the Rust bridge and FFmpeg shared libraries for `arm64-v8a`,
-`armeabi-v7a`, and `x86_64`.
+libraries and required FFmpeg/libvpx/Opus notices into the package, and checks
+the Rust bridge, FFmpeg shared libraries, and notice assets for `arm64-v8a`,
+`armeabi-v7a`, and `x86_64`. The Android WebM profile remains a candidate until
+its exact-SHA all-ABI build and SAF output journey pass.
 
 The current preview includes the native Flutter application using OR Focused Monochrome, Home, Projects, Templates, Asset Library, Settings, responsive desktop/mobile navigation, and a non-project Editor Shell Preview for layout evaluation. On macOS, Windows, and Linux, users create/open `.orproj` projects, import multiple media files, edit a shared Rust-owned session, preview video, and export the currently supported Matroska profile. Attached CLI clients use the same live session and command path. Android uses SAF to create/open project documents, media import, preview, and export through an app-private working copy and explicit document synchronization. Project changes can be saved explicitly; dirty projects also update a recovery sidecar periodically without overwriting the canonical file. Users can inspect, apply, or discard recovery state. CLI descriptor credentials are not displayed; Unix endpoints use owner-only permissions and Windows endpoints use protected owner-only DACLs and reject remote clients. The editor has materially incomplete features and formats; these packages are not production-ready.
 
@@ -42,7 +43,7 @@ The current media library supports multiple-file import on desktop and multiple-
 - Trim uses an absolute timeline edge, split uses an exact interior point with Rust-generated right-clip IDs, and ripple delete shifts only later clips on the selected track. Each operation uses the existing Rust command and session-history system; attached CLI edits update the open Flutter view through shared host events.
 - Flutter loads at most 100 clips per track page and offers explicit Load more for additional clips. Exact timeline values remain Rust-owned; the UI uses doubles only for display layout and never applies optimistic edit geometry.
 
-The timeline supports canonical track and clip editing, pointer move/trim, marker-aware snapping, typed transforms, basic text/captions, selected audio controls, and a closed set of effects/transitions. Desktop playback uses exact seek, scrubbing, play/pause, frame stepping, software decode, and the shared render path; Android has a software preview path with SAF media. Export currently writes Matroska with FFV1 video and PCM S16LE audio. Playback and frame stepping require an explicit sequence rate. The codec profile, editing depth, accessibility/usability evidence, and production packaging remain below a general-purpose release bar.
+The timeline supports canonical track and clip editing, pointer move/trim, marker-aware snapping, typed transforms, basic text/captions, selected audio controls, and a closed set of effects/transitions. Desktop playback uses exact seek, scrubbing, play/pause, frame stepping, software decode, and the shared render path; Android has a software preview path with SAF media. The verified Android export remains Matroska with FFV1 video and PCM S16LE audio; the current source adds a WebM VP9/Opus candidate while retaining Matroska. Playback and frame stepping require an explicit sequence rate. The codec profile, editing depth, accessibility/usability evidence, and production packaging remain below a general-purpose release bar.
 
 The attached CLI archives contain `or`/`or.exe` plus safe usage examples, but no descriptor or project-session credential. The macOS CLI is a universal Apple silicon and Intel binary. The SHA-256 manifest covers all ten other release assets. The current debug package and hosted journey do not establish production signing, broad user-perceived performance, or a complete codec profile.
 

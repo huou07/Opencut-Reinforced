@@ -51,8 +51,27 @@ def verify(report):
         digest = data.get(field)
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
             raise ValueError('Provider project digest observations are required')
-    if data['exportBytes'] <= 4 or data['exportValidMatroska'] is not True:
-        raise ValueError('Android SAF export must produce a non-empty Matroska file in the selected provider')
+    if (type(data.get('exportBytes')) is not int or data['exportBytes'] <= 4
+            or data['exportValidWebm'] is not True
+            or data.get('exportVideoMime') != 'video/x-vnd.on2.vp9'
+            or data.get('exportAudioMime') != 'audio/opus'
+            or type(data.get('exportVideoSampleBytes')) is not int
+            or data['exportVideoSampleBytes'] <= 0
+            or type(data.get('exportAudioSampleBytes')) is not int
+            or data['exportAudioSampleBytes'] <= 0
+            or data.get('exportVideoDecodeComplete') is not True
+            or type(data.get('exportVideoDecodedBuffers')) is not int
+            or data['exportVideoDecodedBuffers'] <= 0
+            or type(data.get('exportVideoDecodedBytes')) is not int
+            or data['exportVideoDecodedBytes'] <= 0
+            or data.get('exportAudioDecodeComplete') is not True
+            or type(data.get('exportAudioDecodedBuffers')) is not int
+            or data['exportAudioDecodedBuffers'] <= 0
+            or type(data.get('exportAudioDecodedBytes')) is not int
+            or data['exportAudioDecodedBytes'] <= 0
+            or type(data.get('exportElapsedMicros')) is not int
+            or data['exportElapsedMicros'] <= 0):
+        raise ValueError('Android SAF export must contain completely decoded VP9 video and Opus audio tracks in the selected provider')
     if (data.get('mediaImportSourceUris') != [
                 'content://dev.opencut.saffixture.documents/document/media',
                 'content://dev.opencut.saffixture.documents/document/media-second',
@@ -119,9 +138,14 @@ if __name__ == '__main__':
     parser.add_argument('report', type=Path)
     args = parser.parse_args()
     data = verify(json.loads(args.report.read_text()))
-    print('Android SAF picker/import/audio-playback/export/pixel/resource assertions verified.')
+    print('Android SAF picker/import/audio-playback/VP9-WebM-export/pixel/resource assertions verified.')
     print(json.dumps({key: data[key] for key in (
         'uiPlayMicros', 'mediaImportMicros', 'audioPlaybackClockNumerator',
         'audioPlaybackErrorCode', 'audioPausedPositionNumerator', 'exportBytes',
+        'exportVideoMime', 'exportAudioMime', 'exportVideoSampleBytes',
+        'exportAudioSampleBytes', 'exportVideoDecodeComplete',
+        'exportVideoDecodedBuffers', 'exportVideoDecodedBytes',
+        'exportAudioDecodeComplete', 'exportAudioDecodedBuffers',
+        'exportAudioDecodedBytes', 'exportElapsedMicros',
         'journeyResources', 'stressResources', 'finalResources',
     )}, indent=2))

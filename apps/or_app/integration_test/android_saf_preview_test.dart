@@ -730,7 +730,12 @@ void main() {
 
       final exportButton = find.byKey(const ValueKey('export-project'));
       await tester.ensureVisible(exportButton);
+      final exportTimer = Stopwatch()..start();
       await tester.tap(exportButton);
+      await tester.pump();
+      expect(find.text('Export video'), findsOneWidget);
+      expect(find.text('WebM video'), findsOneWidget);
+      await tester.tap(find.text('Continue'));
       await tester.pump();
       debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
       await _until(tester, () {
@@ -747,9 +752,20 @@ void main() {
         'Export complete',
         reason: 'Android export ended with status: $exportStatus',
       );
+      exportTimer.stop();
       final exported = await _control('exportStatus');
       expect(exported['exportBytes'], greaterThan(4));
-      expect(exported['validMatroska'], isTrue);
+      expect(exported['validWebm'], isTrue);
+      expect(exported['webmVideoMime'], 'video/x-vnd.on2.vp9');
+      expect(exported['webmAudioMime'], 'audio/opus');
+      expect(exported['webmVideoSampleBytes'], greaterThan(0));
+      expect(exported['webmAudioSampleBytes'], greaterThan(0));
+      expect(exported['webmVideoDecodeComplete'], isTrue);
+      expect(exported['webmVideoDecodedBuffers'], greaterThan(0));
+      expect(exported['webmVideoDecodedBytes'], greaterThan(0));
+      expect(exported['webmAudioDecodeComplete'], isTrue);
+      expect(exported['webmAudioDecodedBuffers'], greaterThan(0));
+      expect(exported['webmAudioDecodedBytes'], greaterThan(0));
       expect((await gateway.summary(session)).revision, revision);
 
       await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
@@ -1538,7 +1554,18 @@ void main() {
           ),
           'mediaRelinkRevision': mediaRelinkRevision.toString(),
           'exportBytes': exported['exportBytes'],
-          'exportValidMatroska': exported['validMatroska'],
+          'exportValidWebm': exported['validWebm'],
+          'exportVideoMime': exported['webmVideoMime'],
+          'exportAudioMime': exported['webmAudioMime'],
+          'exportVideoSampleBytes': exported['webmVideoSampleBytes'],
+          'exportAudioSampleBytes': exported['webmAudioSampleBytes'],
+          'exportVideoDecodeComplete': exported['webmVideoDecodeComplete'],
+          'exportVideoDecodedBuffers': exported['webmVideoDecodedBuffers'],
+          'exportVideoDecodedBytes': exported['webmVideoDecodedBytes'],
+          'exportAudioDecodeComplete': exported['webmAudioDecodeComplete'],
+          'exportAudioDecodedBuffers': exported['webmAudioDecodedBuffers'],
+          'exportAudioDecodedBytes': exported['webmAudioDecodedBytes'],
+          'exportElapsedMicros': exportTimer.elapsedMicroseconds,
           'visiblePixelRgba': pixels,
           'backgroundResumePixelRgba': backgroundPixels,
           'recoveredPixelRgba': recoveredPixels,

@@ -12,6 +12,15 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  test('mobile offers WebM by default while retaining lossless Matroska', () {
+    expect(ExportProfile.defaultForPlatform, ExportProfile.webmVp9Opus);
+    expect(ExportProfile.available, contains(ExportProfile.webmVp9Opus));
+    expect(
+      ExportProfile.available,
+      contains(ExportProfile.matroskaFfv1PcmS16le),
+    );
+  });
+
   test('Android media picker returns multiple validated SAF URIs', () async {
     var pickerCalled = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -183,43 +192,68 @@ void main() {
     },
   );
 
+  test('Android WebM export stages locally and publishes through the selected SAF URI', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return switch (call.method) {
+            'createExport' => {
+              'workingPath': '/data/user/0/or_app/cache/or-exports/export.webm',
+              'documentUri':
+                  'content://com.example.documents/document/export-webm',
+            },
+            _ => null,
+          };
+        });
+    final picker = AndroidSafProjectPicker(channel: channel);
+
+    expect(picker.supportsExport, isTrue);
+    final path = await picker.saveExportPath(
+      suggestedName: 'demo.webm',
+      profile: ExportProfile.webmVp9Opus,
+    );
+    await picker.publishExportPath(path!);
+
+    expect(path, '/data/user/0/or_app/cache/or-exports/export.webm');
+    expect(calls.map((call) => call.method), ['createExport', 'publishExport']);
+    expect(calls.last.arguments, {
+      'workingPath': path,
+      'documentUri': 'content://com.example.documents/document/export-webm',
+    });
+    expect(calls.first.arguments, {
+      'suggestedName': 'demo.webm',
+      'extension': 'webm',
+      'mimeType': 'video/webm',
+    });
+  });
+
   test(
-    'Android export stages locally and publishes through the selected SAF URI',
+    'Android can still select the lossless Matroska export profile',
     () async {
-      final calls = <MethodCall>[];
+      Map<Object?, Object?>? arguments;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            calls.add(call);
-            return switch (call.method) {
-              'createExport' => {
-                'workingPath':
-                    '/data/user/0/or_app/cache/or-exports/export.mkv',
+            if (call.method == 'createExport') {
+              arguments = call.arguments as Map<Object?, Object?>;
+              return {
+                'workingPath': '/data/user/0/or_app/cache/or-exports/large.mkv',
                 'documentUri':
-                    'content://com.example.documents/document/export',
-              },
-              _ => null,
-            };
+                    'content://com.example.documents/document/lossless',
+              };
+            }
+            return null;
           });
-      final picker = AndroidSafProjectPicker(channel: channel);
 
-      expect(picker.supportsExport, isTrue);
+      final picker = AndroidSafProjectPicker(channel: channel);
       final path = await picker.saveExportPath(
-        suggestedName: 'demo.mkv',
+        suggestedName: 'large.mkv',
         profile: ExportProfile.matroskaFfv1PcmS16le,
       );
-      await picker.publishExportPath(path!);
 
-      expect(path, '/data/user/0/or_app/cache/or-exports/export.mkv');
-      expect(calls.map((call) => call.method), [
-        'createExport',
-        'publishExport',
-      ]);
-      expect(calls.last.arguments, {
-        'workingPath': path,
-        'documentUri': 'content://com.example.documents/document/export',
-      });
-      expect(calls.first.arguments, {
-        'suggestedName': 'demo.mkv',
+      expect(path, '/data/user/0/or_app/cache/or-exports/large.mkv');
+      expect(arguments, {
+        'suggestedName': 'large.mkv',
         'extension': 'mkv',
         'mimeType': 'video/x-matroska',
       });

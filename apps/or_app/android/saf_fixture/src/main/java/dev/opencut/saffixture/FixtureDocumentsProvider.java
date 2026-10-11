@@ -39,7 +39,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         row.add(DocumentsContract.Root.COLUMN_TITLE, "OR SAF acceptance");
         row.add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY
             | DocumentsContract.Root.FLAG_SUPPORTS_CREATE);
-        row.add(DocumentsContract.Root.COLUMN_MIME_TYPES, "application/json\nvideo/x-matroska\nvideo/mp4\naudio/wav\naudio/mpeg\napplication/x-subrip\ntext/vtt\ntext/plain");
+        row.add(DocumentsContract.Root.COLUMN_MIME_TYPES, "application/json\nvideo/x-matroska\nvideo/webm\nvideo/mp4\naudio/wav\naudio/mpeg\napplication/x-subrip\ntext/vtt\ntext/plain");
         return cursor;
     }
     @Override public Cursor queryDocument(String id, String[] projection) {
@@ -57,6 +57,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
             addDocument(cursor, "relink-replacement");
             addDocument(cursor, "captions");
             if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
+            if (new File(getContext().getFilesDir(), "export.webm").isFile()) addDocument(cursor, "export-webm");
             if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) addDocument(cursor, "caption-export");
             if (new File(getContext().getFilesDir(), "caption-export.vtt").isFile()) addDocument(cursor, "caption-export-vtt");
         }
@@ -65,42 +66,44 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
-        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "phone.mp4" : id.equals("media-audio") ? "music.mp3" : id.equals("relink-replacement") ? "relink-replacement.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : "export.mkv");
-        row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : id.equals("media-audio") ? "audio/mpeg" : id.equals("media-second") ? "video/mp4" : id.equals("captions") || id.equals("caption-export") ? "application/x-subrip" : id.equals("caption-export-vtt") ? "text/vtt" : "video/x-matroska");
+        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "phone.mp4" : id.equals("media-audio") ? "music.mp3" : id.equals("relink-replacement") ? "relink-replacement.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("export-webm") ? "export.webm" : "export.mkv");
+        row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : id.equals("media-audio") ? "audio/mpeg" : id.equals("media-second") ? "video/mp4" : id.equals("captions") || id.equals("caption-export") ? "application/x-subrip" : id.equals("caption-export-vtt") ? "text/vtt" : id.equals("export-webm") ? "video/webm" : "video/x-matroska");
         row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root")
             ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
-            : id.equals("export") || id.equals("caption-export") || id.equals("caption-export-vtt")
+            : id.equals("export") || id.equals("export-webm") || id.equals("caption-export") || id.equals("caption-export-vtt")
                 ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
                 : id.equals("project") ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE : 0);
-        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("captions") ? "captions.srt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("captions") ? "captions.srt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
         row.add(DocumentsContract.Document.COLUMN_SIZE, file.length());
     }
 
     @Override public String createDocument(String parentId, String mimeType, String displayName) throws FileNotFoundException {
-        if (!parentId.equals("root") || (!mimeType.equals("video/x-matroska") && !mimeType.equals("application/x-subrip") && !mimeType.equals("text/vtt"))) throw new FileNotFoundException("Unsupported fixture document");
+        if (!parentId.equals("root") || (!mimeType.equals("video/x-matroska") && !mimeType.equals("video/webm") && !mimeType.equals("application/x-subrip") && !mimeType.equals("text/vtt"))) throw new FileNotFoundException("Unsupported fixture document");
         Log.i("OrSafFixture", "createDocument parent=" + parentId + " mime=" + mimeType);
         boolean caption = mimeType.equals("application/x-subrip") || mimeType.equals("text/vtt");
         boolean webVtt = mimeType.equals("text/vtt");
-        File output = new File(getContext().getFilesDir(), webVtt ? "caption-export.vtt" : caption ? "caption-export.srt" : "export.mkv");
+        boolean webm = mimeType.equals("video/webm");
+        File output = new File(getContext().getFilesDir(), webVtt ? "caption-export.vtt" : caption ? "caption-export.srt" : webm ? "export.webm" : "export.mkv");
         if (output.exists() && !output.delete()) throw new FileNotFoundException("Existing export could not be replaced");
         try {
             if (!output.createNewFile()) throw new FileNotFoundException("Export document could not be created");
         } catch (java.io.IOException error) { throw new FileNotFoundException("Export document could not be created"); }
-        return webVtt ? "caption-export-vtt" : caption ? "caption-export" : "export";
+        return webVtt ? "caption-export-vtt" : caption ? "caption-export" : webm ? "export-webm" : "export";
     }
 
     @Override public void deleteDocument(String documentId) throws FileNotFoundException {
         Log.i("OrSafFixture", "deleteDocument id=" + documentId);
         boolean webVtt = documentId.equals("caption-export-vtt");
         boolean caption = documentId.equals("caption-export") || webVtt;
-        if ((!caption && !documentId.equals("export")) || !new File(getContext().getFilesDir(), webVtt ? "caption-export.vtt" : caption ? "caption-export.srt" : "export.mkv").delete()) {
+        boolean webm = documentId.equals("export-webm");
+        if ((!caption && !documentId.equals("export") && !webm) || !new File(getContext().getFilesDir(), webVtt ? "caption-export.vtt" : caption ? "caption-export.srt" : webm ? "export.webm" : "export.mkv").delete()) {
             throw new FileNotFoundException("Export document could not be deleted");
         }
     }
     @Override public ParcelFileDescriptor openDocument(String id, String mode, CancellationSignal signal) throws FileNotFoundException {
         Log.i("OrSafFixture", "openDocument id=" + id + " mode=" + mode);
-        if ((id.equals("export") || id.equals("caption-export") || id.equals("caption-export-vtt")) && (mode.contains("w") || mode.contains("t"))) {
-            File file = new File(getContext().getFilesDir(), id.equals("export") ? "export.mkv" : id.equals("caption-export-vtt") ? "caption-export.vtt" : "caption-export.srt");
+        if ((id.equals("export") || id.equals("export-webm") || id.equals("caption-export") || id.equals("caption-export-vtt")) && (mode.contains("w") || mode.contains("t"))) {
+            File file = new File(getContext().getFilesDir(), id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("caption-export-vtt") ? "caption-export.vtt" : "caption-export.srt");
             return ParcelFileDescriptor.open(file,
                 ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE);
         }
@@ -121,7 +124,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
                 throw new FileNotFoundException("Blocked-open cancelled");
             }
         }
-        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
         if (id.equals("pipe")) {
             try {
                 ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();

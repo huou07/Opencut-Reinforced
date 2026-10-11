@@ -42,7 +42,13 @@ def report():
                             'maxCanvasLockMicros': 1, 'maxCanvasDrawMicros': 1,
                             'maxCanvasPostMicros': 1},
         'finalResources': {'duplicatedMediaFds': 0, 'inFlightLeases': 0, 'latestFrameBytes': 0},
-        'exportBytes': 4096, 'exportValidMatroska': True,
+        'exportBytes': 4096, 'exportValidWebm': True,
+        'exportVideoMime': 'video/x-vnd.on2.vp9', 'exportAudioMime': 'audio/opus',
+        'exportVideoSampleBytes': 1024, 'exportAudioSampleBytes': 96,
+        'exportVideoDecodeComplete': True, 'exportVideoDecodedBuffers': 24,
+        'exportVideoDecodedBytes': 262144, 'exportAudioDecodeComplete': True,
+        'exportAudioDecodedBuffers': 48, 'exportAudioDecodedBytes': 8192,
+        'exportElapsedMicros': 100000,
         'captionImportRevision': '3', 'captionImportCalls': 1,
         'captionExportCalls': 1, 'captionExportBytes': 128,
         'captionExportValidSrt': True,
@@ -130,10 +136,27 @@ class ReportTest(unittest.TestCase):
         value['androidSafAcceptance']['surfaceLifecycleResources']['restorationDelta'] = 0
         with self.assertRaises(ValueError): verify(value)
 
-    def test_android_export_requires_valid_provider_matroska(self):
+    def test_android_export_requires_independently_parsed_provider_webm_tracks(self):
         value = report()
-        value['androidSafAcceptance']['exportValidMatroska'] = False
-        with self.assertRaises(ValueError): verify(value)
+        for field, invalid in (
+            ('exportValidWebm', False),
+            ('exportVideoMime', 'video/avc'),
+            ('exportAudioMime', 'audio/raw'),
+            ('exportVideoSampleBytes', 0),
+            ('exportAudioSampleBytes', 0),
+            ('exportVideoSampleBytes', True),
+            ('exportVideoDecodeComplete', False),
+            ('exportVideoDecodedBuffers', 0),
+            ('exportVideoDecodedBytes', True),
+            ('exportAudioDecodeComplete', False),
+            ('exportAudioDecodedBuffers', 0),
+            ('exportAudioDecodedBytes', True),
+            ('exportElapsedMicros', 0),
+            ('exportElapsedMicros', True),
+        ):
+            changed = copy.deepcopy(value)
+            changed['androidSafAcceptance'][field] = invalid
+            with self.assertRaises(ValueError): verify(changed)
 
     def test_android_media_import_requires_mp4_and_audio_only_mp3(self):
         for invalid in (False, None):

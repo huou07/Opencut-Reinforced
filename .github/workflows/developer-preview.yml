@@ -646,6 +646,19 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/android-ffmpeg-verification
 
+      - name: Stage Android export codec notices in the installable package
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/android-ffmpeg-verification/android-export-codecs"
+          asset_root="$GITHUB_WORKSPACE/apps/or_app/android/app/src/main/assets/open-source"
+          mkdir -p "$asset_root"
+          install -m 644 "$RUNNER_TEMP/android-ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$asset_root/FFmpeg-COPYING.LGPLv2.1"
+          for notice in OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
+            test -s "$source_root/$notice"
+            install -m 644 "$source_root/$notice" "$asset_root/$notice"
+          done
+
       - name: Expose verified Android FFmpeg libraries to the build hook
         working-directory: apps/or_app
         shell: bash
@@ -707,6 +720,9 @@ jobs:
                 exit 1
               fi
             done
+          done
+          for notice in FFmpeg-COPYING.LGPLv2.1 OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
+            grep -Fxq "assets/open-source/$notice" <<< "$apk_entries"
           done
 
       - name: Preserve failed Android preview APK for diagnosis

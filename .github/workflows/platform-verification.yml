@@ -34,13 +34,14 @@ env:
     --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus
     --enable-parser=h264,aac,mp3
     --enable-encoder=ffv1,pcm_s16le
-  # Desktop-only additions for the packaged 9B1 media helpers. These arrive
+  # Desktop-only additions for packaged FFmpeg helper executables. These arrive
   # after the common arguments so the program, filter-library, and component
   # enables win over the minimal defaults, and list options accumulate. Every
-  # addition except the system zlib compression library is a native
-  # dependency-free FFmpeg component under the same LGPL-2.1-or-later posture;
+  # additions except the system zlib compression library are native
+  # FFmpeg components under the same LGPL-2.1-or-later posture;
   # see the 9B1 review in docs/SECURITY_LICENSING.md. Android and the Rust link
-  # probe keep the minimal library-only build.
+  # probe keep the minimal library-only build. The Android export profile below
+  # is enabled separately after its pinned static codecs are built.
   FFMPEG_HELPER_CONFIGURE_ARGS: >-
     --enable-ffmpeg
     --enable-ffprobe
@@ -57,6 +58,8 @@ env:
     --enable-filter=aformat
     --enable-filter=aresample
     --enable-filter=showwavespic
+  # Reused desktop/Android delivery profile; each target enables it only after
+  # staging the exact libvpx/libopus source pins and notices.
   FFMPEG_EXPORT_CONFIGURE_ARGS: >-
     --pkg-config-flags=--static
     --enable-libvpx
@@ -1244,8 +1247,10 @@ jobs:
           toolchain="$ndk/toolchains/llvm/prebuilt/linux-x86_64"
           build_root="$RUNNER_TEMP/android-ffmpeg"
           info_root="$RUNNER_TEMP/android-ffmpeg-build-info"
+          codec_work="$RUNNER_TEMP/android-export-codecs"
+          codec_root="$RUNNER_TEMP/android-export-codecs-install"
           jni_root="$GITHUB_WORKSPACE/apps/or_app/android/app/src/main/jniLibs"
-          mkdir -p "$build_root/install" "$build_root/probes" "$info_root"
+          mkdir -p "$build_root/install" "$build_root/probes" "$info_root" "$codec_work" "$codec_root"
           curl --fail --location --silent --show-error --retry 3 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
@@ -1285,9 +1290,22 @@ jobs:
             bindgen_env="BINDGEN_EXTRA_CLANG_ARGS_$target_suffix"
             prefix="$build_root/install/$abi"
             probe_dir="$build_root/probes/$abi"
+            codec_prefix="$codec_root/$abi"
             jni_dir="$jni_root/$abi"
             test -x "$clang"
             test -x "$clangxx"
+
+            ANDROID_NDK_HOME="$ndk" ANDROID_ABI="$abi" \
+              bash scripts/build_desktop_export_codecs.sh android \
+                "$codec_prefix" "$codec_work" "$abi"
+            test "$(PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" pkg-config --modversion opus)" = "1.6.1"
+            test "$(PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" pkg-config --modversion vpx)" = "1.17.0"
+            test -s "$codec_prefix/lib/libopus.a"
+            test -s "$codec_prefix/lib/libvpx.a"
+            static_codec_libs="$(PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" pkg-config --static --libs opus vpx)"
+            grep -Fq -- '-lopus' <<< "$static_codec_libs"
+            grep -Fq -- '-lvpx' <<< "$static_codec_libs"
+            echo "Android static export codec link flags: $static_codec_libs"
 
             rm -rf "$RUNNER_TEMP/ffmpeg-8.1.3"
             tar -xJf "$archive" -C "$RUNNER_TEMP"
@@ -1308,7 +1326,13 @@ jobs:
               "${cpu_args[@]}"
               "${common_configure_args[@]}"
             )
-            ./configure "${configure_args[@]}"
+            read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+            PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" \
+              PKG_CONFIG_ALLOW_CROSS=1 \
+              ./configure "${configure_args[@]}" "${export_configure_args[@]}"
+            grep -q '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' ffbuild/config_components.h
+            grep -q '^#define CONFIG_LIBOPUS_ENCODER 1$' ffbuild/config_components.h
+            grep -q '^#define CONFIG_WEBM_MUXER 1$' ffbuild/config_components.h
             make -j2
             make install
 
@@ -1353,14 +1377,16 @@ jobs:
               echo "Official upstream tag commit: 1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
               echo "Source archive SHA-512: acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1"
               echo "Patch status: unpatched upstream release archive"
-              echo "Configure arguments: ${configure_args[*]}"
+              echo "Configure arguments: ${configure_args[*]} ${export_configure_args[*]}"
+              echo "Android export codec source provenance:"
+              cat "$codec_work/EXPORT-CODEC-SOURCES.txt"
               echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
               echo "Enabled protocols: file"
-              echo "Enabled demuxers: matroska, mov"
-              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac"
-              echo "Enabled parsers: h264, aac"
-              echo "Enabled encoders: ffv1, pcm_s16le"
-              echo "Enabled muxers: matroska"
+              echo "Enabled demuxers: matroska, mov, wav, mp3"
+              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, mp3float, vp9, opus"
+              echo "Enabled parsers: h264, aac, mp3"
+              echo "Enabled encoders: ffv1, pcm_s16le, libvpx_vp9, libopus"
+              echo "Enabled muxers: matroska, webm"
               echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
               echo "Compiler: $("$clang" --version | head -n 1)"
               echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
@@ -1399,6 +1425,18 @@ jobs:
             test -f "$install_link/$abi/include/libavcodec/avcodec.h"
           done
 
+      - name: Stage Android export codec notices in the installable package
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/android-export-codecs"
+          asset_root="$GITHUB_WORKSPACE/apps/or_app/android/app/src/main/assets/open-source"
+          mkdir -p "$asset_root"
+          install -m 644 "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1" "$asset_root/FFmpeg-COPYING.LGPLv2.1"
+          for notice in OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
+            test -s "$source_root/$notice"
+            install -m 644 "$source_root/$notice" "$asset_root/$notice"
+          done
+
       - name: Build debug APK with FFmpeg shared libraries for all ABIs
         working-directory: apps/or_app
         run: flutter build apk --debug --target-platform android-arm,android-arm64,android-x64
@@ -1409,6 +1447,7 @@ jobs:
           apk="$GITHUB_WORKSPACE/apps/or_app/build/app/outputs/flutter-apk/app-debug.apk"
           toolchain="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64"
           test -f "$apk"
+          echo "Android debug APK bytes: $(stat -c '%s' "$apk")" | tee -a "$GITHUB_STEP_SUMMARY"
           apk_entries="$(unzip -Z1 "$apk")"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             prefix="$RUNNER_TEMP/android-ffmpeg/install/$abi"
@@ -1421,6 +1460,9 @@ jobs:
               grep -Fxq "lib/$abi/lib$library.so" <<< "$apk_entries"
               grep -Fxq "lib/$abi/$soname" <<< "$apk_entries"
             done
+          done
+          for notice in FFmpeg-COPYING.LGPLv2.1 OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
+            grep -Fxq "assets/open-source/$notice" <<< "$apk_entries"
           done
 
       - name: Check Android SAF report rejection guards
@@ -1639,6 +1681,12 @@ jobs:
             ${{ runner.temp }}/FFmpeg-COPYING.LGPLv2.1
             ${{ runner.temp }}/android-ffmpeg/**
             ${{ runner.temp }}/android-ffmpeg-build-info/**
+            ${{ runner.temp }}/android-export-codecs/opus-1.6.1.tar.gz
+            ${{ runner.temp }}/android-export-codecs/libvpx-v1.17.0.tar
+            ${{ runner.temp }}/android-export-codecs/OPUS-COPYING
+            ${{ runner.temp }}/android-export-codecs/LIBVPX-LICENSE
+            ${{ runner.temp }}/android-export-codecs/LIBVPX-PATENTS
+            ${{ runner.temp }}/android-export-codecs/EXPORT-CODEC-SOURCES.txt
             ${{ runner.temp }}/android-render-matrix.txt
             ${{ runner.temp }}/android-emulator.log
             ${{ runner.temp }}/android-driver-*.log
