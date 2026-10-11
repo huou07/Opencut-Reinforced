@@ -111,51 +111,6 @@ def _download_representative_media(destination: Path) -> None:
         raise SystemExit("Pinned representative media failed its size or SHA-256 check.")
 
 
-def _prepare_representative_media(
-    ffmpeg: Path, source: Path, silence_fixture: Path, destination: Path
-) -> None:
-    completed = subprocess.run(
-        [
-            str(ffmpeg),
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-nostdin",
-            "-i",
-            str(source),
-            "-stream_loop",
-            "-1",
-            "-i",
-            str(silence_fixture),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            "-map_chapters",
-            "-1",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "copy",
-            "-t",
-            "30",
-            "-map_metadata",
-            "-1",
-            "-movflags",
-            "+faststart",
-            str(destination),
-        ],
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-    )
-    if completed.returncode != 0:
-        raise SystemExit(
-            "Packaged FFmpeg could not prepare the representative media: "
-            f"{completed.stderr[-2000:]}"
-        )
-
-
 def _restore_macos_bridge_alias(bridge: Path) -> None:
     framework_binary = bridge.with_name("or_app_bridge")
     if not framework_binary.is_file():
@@ -250,14 +205,7 @@ def main() -> int:
             raise SystemExit(f"The inert host {helper} guard unexpectedly succeeded.")
 
     media = work / "big-buck-bunny.mp4"
-    representative_source = work / "big-buck-bunny-source.mp4"
-    _download_representative_media(representative_source)
-    _prepare_representative_media(
-        ffmpeg,
-        representative_source,
-        ROOT / "crates/or_media/tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4",
-        media,
-    )
+    _download_representative_media(media)
     input_probe = subprocess.run(
         [
             str(ffprobe),

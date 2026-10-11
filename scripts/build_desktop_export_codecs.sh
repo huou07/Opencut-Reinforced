@@ -94,7 +94,7 @@ git -C "$vpx_source" checkout --detach "$vpx_commit"
 test "$(git -C "$vpx_source" rev-parse HEAD)" = "$vpx_commit"
 mkdir -p "$work/libvpx-build"
 cd "$work/libvpx-build"
-"$vpx_source/configure" \
+vpx_configure_args=(
   "--target=$vpx_target" \
   "--prefix=$prefix" \
   --disable-examples \
@@ -104,13 +104,20 @@ cd "$work/libvpx-build"
   --disable-shared \
   --enable-pic \
   --enable-vp9
+)
+if [[ "$platform" == windows ]]; then
+  # FFmpeg's documented MSVC toolchain uses /MT; match it to avoid mixing the
+  # UCRT imports from libvpx's default /MD archive into FFmpeg's msvcrt build.
+  vpx_configure_args+=(--static-crt)
+fi
+"$vpx_source/configure" "${vpx_configure_args[@]}"
 make -j2
 make install
 
 if [[ "$platform" == windows ]]; then
-  # The MSVC target installs vpxmd.lib below lib/x64 but does not install a
-  # pkg-config file. Describe that actual layout for FFmpeg's MSVC linker.
-  test -f "$prefix/lib/x64/vpxmd.lib"
+  # The MSVC target installs vpxmt.lib below lib/x64 but does not install a
+  # pkg-config file. Describe the /MT-compatible archive for FFmpeg.
+  test -f "$prefix/lib/x64/vpxmt.lib"
   mkdir -p "$prefix/lib/pkgconfig"
   cat > "$prefix/lib/pkgconfig/vpx.pc" <<EOF
 prefix=$prefix
@@ -121,7 +128,7 @@ includedir=\${prefix}/include
 Name: libvpx
 Description: VP8 and VP9 video codec
 Version: 1.17.0
-Libs: -L\${libdir}/x64 -lvpxmd
+Libs: -L\${libdir}/x64 -lvpxmt
 Libs.private:
 Cflags: -I\${includedir}
 EOF
@@ -144,7 +151,7 @@ Cflags: -I\${includedir}/opus
 EOF
 test -f "$prefix/lib/libopus.a" || test -f "$prefix/lib/opus.lib"
 if [[ "$platform" == windows ]]; then
-  test -f "$prefix/lib/x64/vpxmd.lib"
+  test -f "$prefix/lib/x64/vpxmt.lib"
 else
   test -f "$prefix/lib/libvpx.a"
 fi
@@ -152,8 +159,8 @@ test -f "$pkgconfig/vpx.pc"
 if [[ "$platform" == windows ]]; then
   # MSVC provides math/thread symbols in its C runtime rather than -lm/-lpthread.
   sed -i 's/^Libs\.private:.*/Libs.private:/' "$pkgconfig/opus.pc" "$pkgconfig/vpx.pc"
-  if ! PKG_CONFIG_PATH="$pkgconfig" pkg-config --static --libs vpx | grep -Fq -- '-lvpxmd'; then
-    echo "MSVC libvpx pkg-config flags do not name the installed vpxmd archive" >&2
+  if ! PKG_CONFIG_PATH="$pkgconfig" pkg-config --static --libs vpx | grep -Fq -- '-lvpxmt'; then
+    echo "MSVC libvpx pkg-config flags do not name the installed vpxmt archive" >&2
     exit 1
   fi
   if PKG_CONFIG_PATH="$pkgconfig" pkg-config --static --libs vpx | grep -Eq -- '(^| )-l(m|pthread)( |$)'; then
