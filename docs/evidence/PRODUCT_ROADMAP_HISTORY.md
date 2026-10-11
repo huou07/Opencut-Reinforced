@@ -856,3 +856,19 @@ lifecycle step later ran to the job's 100-minute timeout after Flutter logged
 claimed from this run. The same three lifecycle tests passed on exact SHA
 `fae38c7` in run `38114223195`; this isolates the result as inconsistent hosted
 app launch behavior, not an accepted 346d2402 product result.
+
+Exact-SHA run [38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385)
+on `a7183b34734c4cfeec3066dfe944d7cbdae4d0f8` passed the Linux and macOS
+packaged ordinary-MP4 journeys, Android SAF preview/resource acceptance, and
+the Rust, Flutter, and descriptor checks. Both desktop apps imported the pinned
+22,718,509-byte 1080p H.264/six-channel AAC MP4, saved/reopened/relinked the
+edit, added its title, and exported WebM VP9/Opus. Linux exported 12,763,556
+bytes in 61,361 ms; macOS exported 12,768,681 bytes. Both outputs were 30.008
+seconds, independently decoded to 720 video frames and 1501 audio frames, and
+all four app phases exited 0 with host FFmpeg/ffprobe lookup blocked. Windows
+passed its corrected libvpx CRT build but failed in FFmpeg configure while
+probing for MSVC `stdbit.h`; that run is not a cross-platform pass. The next
+candidate supplies FFmpeg 8.1.3's own `compat/stdbit` include path directly to
+the Windows configure probes. The macOS log again printed `open returned 1`
+before its Flutter tests, but its lifecycle, preview-transport, and packaged
+journey tests all passed, so that message alone is not treated as a failure.
