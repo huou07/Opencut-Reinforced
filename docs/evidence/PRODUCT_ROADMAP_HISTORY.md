@@ -913,3 +913,15 @@ unresolved. The next workflow revision moves capture into a failure-only
 Actions step so it can inspect the retained FFmpeg source/configure log after
 the failing step exits, and replay the exact wrapper link. No Windows packaged
 journey or cross-platform pass is claimed from this run.
+
+Exact-SHA run [38133514739](https://github.com/huou07/Opencut-Reinforced/actions/runs/38133514739)
+on `ff0f0fd5f276c7bae2c30780b37aaeee170c4b90` passed Linux and macOS packaged
+editing/export journeys, Android all-ABI packaging and SAF preview/resource
+acceptance, Rust, Flutter, and descriptor checks. Windows again failed FFmpeg
+configure, and the separate failure-only diagnostic ran successfully. It
+reported `cl.exe` under Visual Studio, but bare `cl` was not found; PATH
+resolved `link.exe` to `/usr/bin/link.exe` even though the adjacent MSVC
+`link.exe` existed. FFmpeg's wrapper therefore selected the wrong linker on
+fallback. The workflow now prepends Visual Studio's linker directory and
+asserts the resolution before configure. Exact-SHA hosted verification of that
+fix is pending; the run does not establish Windows packaged behavior.

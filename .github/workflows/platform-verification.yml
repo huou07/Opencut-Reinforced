@@ -947,6 +947,13 @@ jobs:
           stdbit_compat="$(cygpath -am "$source/compat/stdbit")"
           test -f "$source/compat/stdbit/stdbit.h"
           configure_args+=("--extra-cflags=-I$stdbit_compat")
+          # MSYS2's /usr/bin also contains link.exe, but FFmpeg's MSVC wrapper
+          # falls back to PATH lookup when bare `cl` is unavailable. Put the
+          # adjacent Visual Studio linker first so that probe links use MSVC.
+          msvc_linker_dir="$(cygpath -u "$VCToolsInstallDir")"
+          msvc_linker_dir="${msvc_linker_dir%/}/bin/HostX64/x64"
+          export PATH="$msvc_linker_dir:$PATH"
+          test "$(command -v link.exe)" = "$msvc_linker_dir/link.exe"
           # FFmpeg configure discovers zlib through pkg-config. CMake's MSVC
           # install provides the static archive and headers but no .pc file.
           zlib_prefix="$(cygpath -u "$OR_ZLIB_PREFIX")"
