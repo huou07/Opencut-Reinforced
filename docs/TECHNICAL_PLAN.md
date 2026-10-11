@@ -650,8 +650,11 @@ The first `or_ai` implementation contains strict V1 newline-delimited message
 framing and bounded, provenance-bearing transcript proposal validation. The
 host must supply the expected project ID/revision, media ID/full digest, and
 provider/model provenance when validating or decoding a result; proposals that
-do not exactly match it are rejected. Directly constructed proposals also
-receive the same conservative 8 MiB serialized-size bound as decoded results.
+do not exactly match it are rejected. Project and media identities must use the
+repository's UUIDv4 IDs; expected identities and returned proposal fields are
+validated by reference for UUID, digest, and provenance bounds before any
+comparison or size estimation. Directly constructed proposals also receive
+the same conservative 8 MiB serialized-size bound as decoded results.
 It does not yet spawn providers, install models, or expose transcription in the
 application. The integration feasibility result for the pinned Whisper source
 and one optional model is recorded in

@@ -58,7 +58,7 @@ pub struct TranscribeRequest {
 impl TranscribeRequest {
     fn validate(&self) -> Result<(), ProtocolError> {
         self.input.validate()?;
-        if !valid_identity(&self.identity)
+        if self.identity.validate().is_err()
             || self.language.as_ref().is_some_and(|language| {
                 language.is_empty()
                     || language.len() > MAX_LANGUAGE_BYTES
@@ -71,30 +71,6 @@ impl TranscribeRequest {
         }
         Ok(())
     }
-}
-
-fn valid_identity(identity: &TranscriptIdentity) -> bool {
-    identity.media_sha256.len() == 64
-        && identity
-            .media_sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
-        && !identity.provider_id.is_empty()
-        && identity.provider_id.len() <= 128
-        && !identity.model_id.is_empty()
-        && identity.model_id.len() <= 128
-        && !identity.model_version.is_empty()
-        && identity.model_version.len() <= 128
-        && !identity.model_license.is_empty()
-        && identity.model_license.len() <= 256
-        && [
-            identity.provider_id.as_str(),
-            identity.model_id.as_str(),
-            identity.model_version.as_str(),
-            identity.model_license.as_str(),
-        ]
-        .iter()
-        .all(|value| !value.contains(['\0', '\n', '\r']))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -267,15 +243,19 @@ mod tests {
 
     fn identity() -> TranscriptIdentity {
         TranscriptIdentity {
-            project_id: Uuid::from_u128(3),
+            project_id: test_uuid(3),
             project_revision: 7,
-            media_id: Uuid::from_u128(4),
+            media_id: test_uuid(4),
             media_sha256: "b".repeat(64),
             provider_id: "whisper.cpp".to_owned(),
             model_id: "whisper-tiny-en".to_owned(),
             model_version: "1".to_owned(),
             model_license: "MIT".to_owned(),
         }
+    }
+
+    fn test_uuid(id: u128) -> Uuid {
+        Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0000 | id)
     }
 
     #[test]
@@ -381,5 +361,32 @@ mod tests {
             .validate(),
             Err(ProtocolError::InvalidMessage)
         ));
+    }
+
+    #[test]
+    fn rejects_non_v4_project_and_media_ids_in_transcription_requests() {
+        for mutate in [
+            |identity: &mut TranscriptIdentity| identity.project_id = Uuid::nil(),
+            |identity: &mut TranscriptIdentity| identity.media_id = Uuid::from_u128(4),
+        ] {
+            let mut invalid = identity();
+            mutate(&mut invalid);
+            let message = request(ProviderMessage::StartTranscription {
+                request: TranscribeRequest {
+                    input: ManagedFileRef {
+                        id: Uuid::from_u128(2),
+                        size_bytes: 1,
+                        sha256: "a".repeat(64),
+                    },
+                    identity: invalid,
+                    language: None,
+                    max_duration_ms: 1_000,
+                },
+            });
+            assert!(matches!(
+                message.validate(),
+                Err(ProtocolError::InvalidMessage)
+            ));
+        }
     }
 }

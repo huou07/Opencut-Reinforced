@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use uuid::{Uuid, Version};
 
 pub const MAX_TRANSCRIPT_SEGMENTS: usize = 10_000;
 pub const MAX_TRANSCRIPT_TEXT_BYTES: usize = 16 * 1024;
@@ -46,12 +46,27 @@ pub struct TranscriptIdentity {
     pub model_license: String,
 }
 
+impl TranscriptIdentity {
+    pub fn validate(&self) -> Result<(), TranscriptValidationError> {
+        validate_identity_fields(
+            self.project_id,
+            self.media_id,
+            &self.media_sha256,
+            &self.provider_id,
+            &self.model_id,
+            &self.model_version,
+            &self.model_license,
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscriptValidationError {
     ProposalTooLarge,
     NoSegments,
     TooManySegments,
     InvalidMediaDigest,
+    InvalidIdentity,
     InvalidProvenance,
     IdentityMismatch,
     InvalidSegment,
@@ -84,20 +99,17 @@ impl TranscriptProposal {
         if self.segments.len() > MAX_TRANSCRIPT_SEGMENTS {
             return Err(TranscriptValidationError::TooManySegments);
         }
-        if self.media_sha256.len() != 64
-            || !self
-                .media_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err(TranscriptValidationError::InvalidMediaDigest);
-        }
-        if !valid_label(&self.provider_id, 128)
-            || !valid_label(&self.model_id, 128)
-            || !valid_label(&self.model_version, 128)
-            || !valid_label(&self.model_license, 256)
-            || !valid_label(&self.language, 64)
-        {
+        expected.validate()?;
+        validate_identity_fields(
+            self.project_id,
+            self.media_id,
+            &self.media_sha256,
+            &self.provider_id,
+            &self.model_id,
+            &self.model_version,
+            &self.model_license,
+        )?;
+        if !valid_label(&self.language, 64) {
             return Err(TranscriptValidationError::InvalidProvenance);
         }
         if self.project_id != expected.project_id
@@ -185,15 +197,42 @@ fn valid_label(value: &str, max_bytes: usize) -> bool {
         && !value.contains('\r')
 }
 
+fn validate_identity_fields(
+    project_id: Uuid,
+    media_id: Uuid,
+    media_sha256: &str,
+    provider_id: &str,
+    model_id: &str,
+    model_version: &str,
+    model_license: &str,
+) -> Result<(), TranscriptValidationError> {
+    if project_id.get_version() != Some(Version::Random)
+        || media_id.get_version() != Some(Version::Random)
+    {
+        return Err(TranscriptValidationError::InvalidIdentity);
+    }
+    if media_sha256.len() != 64 || !media_sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(TranscriptValidationError::InvalidMediaDigest);
+    }
+    if !valid_label(provider_id, 128)
+        || !valid_label(model_id, 128)
+        || !valid_label(model_version, 128)
+        || !valid_label(model_license, 256)
+    {
+        return Err(TranscriptValidationError::InvalidProvenance);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn proposal() -> TranscriptProposal {
         TranscriptProposal {
-            project_id: Uuid::from_u128(1),
+            project_id: test_uuid(1),
             project_revision: 4,
-            media_id: Uuid::from_u128(2),
+            media_id: test_uuid(2),
             media_sha256: "a".repeat(64),
             provider_id: "whisper.cpp".to_owned(),
             model_id: "whisper-tiny-en".to_owned(),
@@ -211,15 +250,19 @@ mod tests {
 
     fn identity() -> TranscriptIdentity {
         TranscriptIdentity {
-            project_id: Uuid::from_u128(1),
+            project_id: test_uuid(1),
             project_revision: 4,
-            media_id: Uuid::from_u128(2),
+            media_id: test_uuid(2),
             media_sha256: "a".repeat(64),
             provider_id: "whisper.cpp".to_owned(),
             model_id: "whisper-tiny-en".to_owned(),
             model_version: "1".to_owned(),
             model_license: "MIT".to_owned(),
         }
+    }
+
+    fn test_uuid(id: u128) -> Uuid {
+        Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0000 | id)
     }
 
     #[test]
@@ -291,9 +334,9 @@ mod tests {
     #[test]
     fn rejects_proposals_for_another_project_media_revision_or_model() {
         let mutations: [fn(&mut TranscriptIdentity); 8] = [
-            |expected: &mut TranscriptIdentity| expected.project_id = Uuid::from_u128(3),
+            |expected: &mut TranscriptIdentity| expected.project_id = test_uuid(3),
             |expected: &mut TranscriptIdentity| expected.project_revision += 1,
-            |expected: &mut TranscriptIdentity| expected.media_id = Uuid::from_u128(3),
+            |expected: &mut TranscriptIdentity| expected.media_id = test_uuid(3),
             |expected: &mut TranscriptIdentity| expected.media_sha256 = "b".repeat(64),
             |expected: &mut TranscriptIdentity| expected.provider_id = "other".to_owned(),
             |expected: &mut TranscriptIdentity| expected.model_id = "other".to_owned(),
@@ -341,5 +384,36 @@ mod tests {
         let mut expected = identity();
         expected.project_revision = u64::MAX;
         candidate.validate(&expected, u64::MAX).unwrap();
+    }
+
+    #[test]
+    fn rejects_non_v4_project_or_media_identity_even_when_proposal_matches() {
+        let mut expected = identity();
+        expected.project_id = Uuid::nil();
+        let mut candidate = proposal();
+        candidate.project_id = Uuid::nil();
+        assert_eq!(
+            candidate.validate(&expected, 1200),
+            Err(TranscriptValidationError::InvalidIdentity)
+        );
+
+        let mut expected = identity();
+        expected.media_id = Uuid::from_u128(2);
+        let mut candidate = proposal();
+        candidate.media_id = Uuid::from_u128(2);
+        assert_eq!(
+            candidate.validate(&expected, 1200),
+            Err(TranscriptValidationError::InvalidIdentity)
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_provenance_without_copying_into_validation_identity() {
+        let mut candidate = proposal();
+        candidate.provider_id = "x".repeat(1024 * 1024);
+        assert_eq!(
+            candidate.validate(&identity(), 1200),
+            Err(TranscriptValidationError::InvalidProvenance)
+        );
     }
 }
