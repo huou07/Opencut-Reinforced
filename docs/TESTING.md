@@ -923,6 +923,10 @@ a bounded wait rather than a fixed delay. The
 acceptance step checks that failures preserve the saved
 project and the failed destination, then uses the packaged `ffprobe` to validate
 FFV1 video and PCM S16LE audio in the export.
+If packaged export misses its existing acceptance window, the journey logs the
+current editor export status every ten seconds and at timeout. This preserves
+the limit while distinguishing a stalled job from a reported encoder or
+publication error.
 
 9C extends the hosted Android SAF editor journey at the compact device size. It
 drags the real preview scrubber, opens the project media library from the mobile

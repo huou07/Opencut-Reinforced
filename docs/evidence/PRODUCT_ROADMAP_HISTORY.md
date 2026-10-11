@@ -951,3 +951,17 @@ packaged journey, Android packaged SAF/runtime acceptance, Rust, Flutter, and
 descriptor checks all passed on this SHA. Windows packaging did not run because
 the VP9 guard stopped the job. The follow-up changes only the guard's inspected
 header, removes temporary wrapper tracing, and preserves the codec requirement.
+
+Exact-SHA run [38140193039](https://github.com/huou07/Opencut-Reinforced/actions/runs/38140193039)
+on `a81672b64f5ff2280de18de21c089cf03b1c49f0` passed repository hygiene,
+Linux/macOS packaged journeys, Rust, Flutter, and descriptor checks. Attempt 1
+failed Windows packaged export after its existing 180-second wait and failed
+the third selected Android SAF media import with `SOURCE_UNAVAILABLE`; the
+same unchanged SHA's attempt 2 passed the full Android SAF preview/import/
+recovery journey and again failed Windows export at that timeout. This
+establishes repeatable Windows journey failure and non-repeatable Android
+failure on this pair of attempts, but provides no Windows export progress or
+encoder error. The timeout was not increased. The next acceptance edit records
+the already visible export status every ten seconds and on timeout, so the
+next run can distinguish slow progress from a reported failure without
+changing product behavior or its acceptance window.

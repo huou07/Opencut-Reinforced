@@ -11,6 +11,7 @@ import 'package:flutter/material.dart'
         SnackBar,
         Text,
         TextButton,
+        Tooltip,
         Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -336,6 +337,7 @@ Future<void> _reopenAndExport(
     () => find.text('Export complete').evaluate().isNotEmpty,
     'export to the existing destination',
     attempts: 1800,
+    diagnostic: () => 'status="${_exportStatusText(tester)}"',
   );
   exportTimer.stop();
   expect(File(picker.exportPath).lengthSync(), greaterThan(0));
@@ -562,12 +564,26 @@ Future<void> _pumpUntil(
   bool Function() ready,
   String operation, {
   int attempts = 600,
+  String Function()? diagnostic,
 }) async {
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (ready()) return;
+    if (diagnostic != null && (attempt + 1) % 100 == 0) {
+      debugPrint(
+        'OR_PACKAGED_JOURNEY_PROGRESS operation="$operation" '
+        'elapsed_ms=${(attempt + 1) * 100} ${diagnostic()}',
+      );
+    }
     await tester.pump(const Duration(milliseconds: 100));
   }
-  fail('Timed out waiting for $operation.');
+  final detail = diagnostic == null ? '' : ' ${diagnostic()}';
+  fail('Timed out waiting for $operation.$detail');
+}
+
+String _exportStatusText(WidgetTester tester) {
+  final status = find.byKey(const ValueKey('export-status'));
+  if (status.evaluate().isEmpty) return '<not visible>';
+  return tester.widget<Tooltip>(status).message ?? '<no message>';
 }
 
 Future<void> _waitForImportButton(WidgetTester tester, Finder button) async {

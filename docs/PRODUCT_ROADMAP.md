@@ -18,20 +18,18 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish the cross-platform ordinary-MP4 editing journey
-and make a usable Developer Preview available for dogfooding. On exact SHA
-`e1bc1d9e5fe29aa42e32d0f6ea3d7ec9e84e0d41`, run
-[38138251731](https://github.com/huou07/Opencut-Reinforced/actions/runs/38138251731)
-passed Linux, macOS, Android, Rust, Flutter, and descriptor checks. Windows
-successfully configured FFmpeg and linked its MSVC `stdbit.h` probe, then the
-workflow's VP9 guard failed because it searched `config.h`; FFmpeg emits codec
-component selections in `config_components.h`. The next exact-SHA run verifies
-that same VP9 requirement against the correct generated header and continues
-through the Windows packaged journey. Earlier Windows probe diagnoses in the
-history archive are superseded by this direct configure trace. Profile longer
-media only when real evidence shows a quality, responsiveness, cancellation,
-or resource problem. Android remains Matroska-only; emulator acceptance does
-not establish physical-device performance.
+Current product focus: finish the ordinary edit/export journey across supported
+packages, then make a usable Developer Preview available for dogfooding. At
+exact product SHA `a81672b64f5ff2280de18de21c089cf03b1c49f0`, the hosted Linux and
+macOS packaged journeys passed. Windows configured and built its packaged app
+but the real export journey timed out in both attempts of
+[run 38140193039](https://github.com/huou07/Opencut-Reinforced/actions/runs/38140193039).
+Android's three-document SAF import failed once on MP3 and passed on the
+identical-SHA rerun; treat this as an intermittent import defect until its
+cause is established. Next work diagnoses Windows export from live progress
+evidence while preserving the existing acceptance limit, then repairs the
+highest-value media journey. Android remains Matroska-only and emulator
+acceptance does not establish physical-device performance.
 
 ## Product acceptance target
 
@@ -94,9 +92,9 @@ journey unless results establish a real engine migration dependency.
 ## Current product status and highest-value gaps
 
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Export and ordinary MP4 editing:** exact SHA `346d2402cf0a519cb840380512b5fc6b6c7bcb2d`, run [38116245081](https://github.com/huou07/Opencut-Reinforced/actions/runs/38116245081), passed Linux's clean packaged journey with the pinned real 1080p H.264/six-channel AAC MP4: create/edit/title/save/reopen/relink and independent WebM VP9/Opus probe all passed. Linux exported 30.008 seconds at 12,763,556 bytes in 61,361 ms (56.2% of source size); all four app phases exited 0. Exact SHA `a7183b34734c4cfeec3066dfe944d7cbdae4d0f8`, run [38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385), passed the same clean packaged journey on Linux and macOS; each output was 30.008 seconds, independently decoded as 720 VP9 video frames and 1501 Opus audio frames. The macOS output was 12,768,681 bytes (56.2% of the 22,718,509-byte MP4). Android's packaged SAF preview/resource journey and all non-Windows checks passed. Windows passed corrected libvpx CRT configuration, then failed FFmpeg configure at `stdbit.h`; a local compatibility-header path fix awaits verification. Android remains Matroska-only.
-- **Known platform evidence gaps:** the overall Platform Verification run [38111281741](https://github.com/huou07/Opencut-Reinforced/actions/runs/38111281741) failed only the Windows VP9 configure guard; Linux, macOS, Android, Rust, Flutter, and descriptor jobs passed. Android SAF preview/resource acceptance passed in that run, but API 36 emulator observations do not prove physical-device performance or acoustic output.
-- **Next work:** verify the Windows FFmpeg compatibility-header fix and packaged MP4 journey, then publish the exact verified Developer Preview for dogfooding. Android preview correctness remains emulator-only; physical hardware is still unverified. Add a real MOV journey only if user evidence or compatibility failures warrant it. Assess longer-media quality, cancellation, and resources only where real user journeys expose a material issue.
+- **Export and ordinary MP4 editing:** exact SHA `a7183b34734c4cfeec3066dfe944d7cbdae4d0f8`, run [38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385), passed the clean Linux and macOS journey using a real 1080p H.264/AAC MP4 and independently probed 30.008-second VP9/Opus output. Windows packaged export remains unverified because the same journey timed out twice on `a81672b`; current exports do not emit Windows timing/progress evidence. Android remains Matroska-only.
+- **Current verification:** run [38140193039](https://github.com/huou07/Opencut-Reinforced/actions/runs/38140193039), attempt 1, passed Linux/macOS and failed Windows packaged export plus one Android MP3 import. Attempt 2 passed Android SAF import/recovery and again timed out Windows packaged export. Rust, Flutter, descriptor, and the other platform checks passed on attempt 1. Exact result detail is in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
+- **Next work:** diagnose Windows export progress with the test's existing 180-second window unchanged, fix the product cause, and reverify the packaged journey. Then continue Android everyday-format and mobile-export gaps before dogfooding. Android emulator correctness is not physical-device performance evidence; add real-device measurement when representative hardware becomes available.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 
