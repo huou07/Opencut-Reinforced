@@ -1188,7 +1188,7 @@ jobs:
           - Play and frame step require an explicit sequence frame rate. Seek remains exact and available when no rate is configured.
           - Playback uses linked FFmpeg 8.1.3 software decoding and bounded native pixel-buffer presentation on macOS, Windows, and Linux. No hardware decode or shared GPU-surface path is enabled.
           - Desktop application packages include their matching FFmpeg shared libraries and LGPL notices; the release also includes the matching source archive and per-platform build information.
-          - Android builds remain available, but linked FFmpeg and viewer playback are not enabled on Android.
+          - Android packages include the linked FFmpeg runtime and software preview path; project and media files use Android's Storage Access Framework with explicit synchronization for project documents.
 
           **PHASE 8F — EXPORT, AUTOSAVE, AND DESKTOP MVP HARDENING**
 
@@ -1197,7 +1197,21 @@ jobs:
           - In-progress output stays in a unique sibling staging directory; only a completed file is published to the chosen `.mkv` destination. Cancellation, missing media, or encode failures preserve an existing destination and leave a new destination absent.
           - Periodic autosave writes the bounded recovery sidecar without replacing the canonical `.orproj` file. Explicit Save remains the canonical project-file action; recovery inspection and user-selected recovery remain available.
 
-          Still unavailable: track reorder, multi-select, linked clips, automatic captions, filesystem watching, and Android Storage Access Framework integration.
+          **DESKTOP WEBM DELIVERY PROFILE**
+
+          - Desktop packages can import ordinary H.264/AAC MP4 media and export WebM with VP9 video and Opus audio through the same timeline, text, effects, and audio mix path as preview.
+          - The hosted packaged journey creates and edits a project, adds a title, saves and reopens it, relinks an offline source, exports a 30-second result, then independently probes and decodes the output.
+          - Android continues to offer Matroska with FFV1/PCM; desktop WebM encoders are not claimed on Android.
+
+          **DOGFOOD: TRY ONE ORDINARY EDIT**
+
+          1. Create a project and import a local H.264/AAC MP4. Note any install, permission, or file-compatibility friction.
+          2. Preview it, place it on a video track, add a short title or caption, trim or split a clip, and use undo/redo.
+          3. Save, close, and reopen the project. If practical, move or temporarily rename a source and try the relink flow.
+          4. On desktop, export WebM; on Android, export Matroska. Open the result in an independent player and check its picture, sound, and duration.
+          5. Report your OS/device, source format and duration, steps that were confusing or failed, export time, and whether another app played the result. Do not send private media; describe the issue or attach a legally shareable sample.
+
+          Still unavailable: track reorder, multi-select, linked clips, automatic captions, folder import, and physical-device Android performance evidence.
 
           OR remains a pre-release desktop video editor. This Developer Preview is for testing and is not a production release.
 
