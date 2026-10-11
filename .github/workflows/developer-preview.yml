@@ -1136,7 +1136,7 @@ jobs:
           2. Preview the media, place it on the timeline, trim or split it, add a short title or manual caption, and use undo/redo.
           3. Save, close, and reopen the project. On desktop, you can also move a source and try Relink.
           4. Export a profile offered by the app, open the result in an independent player, and check picture, sound, and duration.
-          5. Report your OS/device, source format and duration, confusing or failed steps, export time, and whether another app played the result. Do not send private media; describe the issue or attach a legally shareable sample.
+          5. Report your OS/device, source format and duration, confusing or failed steps, export time, and whether another app played the result. File a reproducible issue with the [bug report form](https://github.com/huou07/Opencut-Reinforced/issues/new?template=bug_report.yml). Do not send private media; describe the issue or attach a legally shareable sample.
 
           ## Included workflows
 
