@@ -958,7 +958,17 @@ jobs:
           Libs: -L\${libdir} -lz
           Cflags: -I\${includedir}
           EOF
-          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          # Reconstruct the codec path in this MSYS process rather than
+          # inheriting the value exported across prior Windows shell steps.
+          # The codec build validates its own pkg-config environment, but this
+          # FFmpeg configure process must independently see the same packages.
+          codec_pkgconfig="$(cygpath -u "$FFMPEG_CODEC_PREFIX")/lib/pkgconfig"
+          test -f "$codec_pkgconfig/opus.pc"
+          test -f "$codec_pkgconfig/vpx.pc"
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$codec_pkgconfig:/clang64/lib/pkgconfig:/clang64/share/pkgconfig"
+          test "$(pkg-config --modversion opus)" = "1.6.1"
+          test "$(pkg-config --modversion vpx)" = "1.17.0"
+          pkg-config --static --libs opus vpx
           test "$(pkg-config --modversion zlib)" = "1.3.2"
           pkg-config --cflags --libs zlib
           # zlib is statically linked into the MSVC helper executables.
