@@ -152,7 +152,11 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => find.text('No timeline tracks').evaluate().isEmpty,
     'video track creation',
   );
-  await tester.tap(find.byKey(ValueKey('media-add-timeline-$mediaId')));
+  final addMediaToTimeline = find.byKey(
+    ValueKey('media-add-timeline-$mediaId'),
+  );
+  await _waitForMediaAddToTimelineButton(tester, addMediaToTimeline);
+  await tester.tap(addMediaToTimeline);
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
   await _pumpUntil(
@@ -360,7 +364,11 @@ Future<void> _reopenAndExport(
     ..remove(mediaId);
   expect(importedMediaIds, hasLength(1));
   final importedMediaId = importedMediaIds.single;
-  await tester.tap(find.byKey(ValueKey('media-add-timeline-$importedMediaId')));
+  final addExportToTimeline = find.byKey(
+    ValueKey('media-add-timeline-$importedMediaId'),
+  );
+  await _waitForMediaAddToTimelineButton(tester, addExportToTimeline);
+  await tester.tap(addExportToTimeline);
   await tester.pumpAndSettle();
   await _pumpUntil(
     tester,
@@ -603,6 +611,20 @@ Future<void> _waitForImportButton(WidgetTester tester, Finder button) async {
         tester.widget<OutlinedButton>(button).onPressed != null &&
         button.hitTestable().evaluate().isNotEmpty,
     'media import control readiness',
+  );
+}
+
+Future<void> _waitForMediaAddToTimelineButton(
+  WidgetTester tester,
+  Finder button,
+) async {
+  await tester.ensureVisible(button);
+  await _pumpUntil(
+    tester,
+    () =>
+        tester.widget<IconButton>(button).onPressed != null &&
+        button.hitTestable().evaluate().isNotEmpty,
+    'media add-to-timeline control readiness',
   );
 }
 

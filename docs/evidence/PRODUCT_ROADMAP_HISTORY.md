@@ -1053,7 +1053,7 @@ coverage and repository hygiene also passed.
 Developer Preview run
 [38175016011](https://github.com/huou07/Opencut-Reinforced/actions/runs/38175016011)
 on the same exact SHA failed before publication. All seven app/CLI build jobs
-completed; Android, both CLIs, and their packages succeeded. The macOS, Linux,
+completed; Android and all three CLI packages succeeded. The macOS, Linux,
 and Windows app builds succeeded but each packaging job looked for
 `OPUS-COPYING` at the root of the downloaded FFmpeg artifact. Platform
 Verification uploads codec provenance from `desktop-export-codecs/`; because
@@ -1062,3 +1062,23 @@ is preserved on download. The workflow now consumes that path and normalizes
 the provenance files before checksum/release assembly. No preview was
 published by run 38175016011; fresh exact-SHA verification and preview builds
 are required.
+
+Platform Verification run
+[38175927309](https://github.com/huou07/Opencut-Reinforced/actions/runs/38175927309)
+on `58d49321f2f1d0fe487cb159f21d2d5f316bbab3` verified Rust, Flutter static
+and widget checks, and the descriptor boundary. Its Linux packaged journey
+built the app and exported a 30-second VP9/Opus file in 46,957 ms
+(12,763,556 bytes), then timed out before opening the insert dialog for that
+reimported export. The acceptance path waited for the media name to appear but
+tapped Add to Timeline before checking that the action was enabled. That action
+is intentionally disabled until the media page, project, and timeline track
+snapshots share the same revision; the test can therefore tap during refresh
+and never reopen the dialog. A bounded readiness wait now checks that the
+button is enabled and visible before tapping, preserving the same editing
+assertion and timeout if the snapshots never converge. This is a falsifiable
+test-race hypothesis, not a product PASS; fresh exact-SHA Platform Verification
+is required. The completed run passed Android all-ABI build and SAF preview /
+resource checks, macOS lifecycle and packaged journey, and the Windows
+packaged journey; Rust, Flutter, and descriptor checks also passed. Linux was
+the only failed job. This run used the fixed codec artifact paths, but did not
+pass the full Platform Verification gate because of the Linux test failure.
