@@ -4,10 +4,12 @@ import 'dart:ui' show Size;
 import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
 import 'package:flutter/material.dart'
     show
+        FilledButton,
         IconButton,
         OutlinedButton,
         PopupMenuButton,
         SnackBar,
+        Text,
         TextButton,
         Widget;
 import 'package:flutter_test/flutter_test.dart';
@@ -189,11 +191,26 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     find.byKey(const ValueKey('timeline-text-duration')),
     '5/1',
   );
-  await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+  final saveTitle = find.byKey(const ValueKey('timeline-save-text'));
+  expect(tester.widget<FilledButton>(saveTitle).onPressed, isNotNull);
+  await tester.tap(saveTitle);
   await _pumpUntil(
     tester,
-    () => _timelineClipCount(tester) == mediaClipIds.length + 1,
+    () =>
+        find.byKey(const ValueKey('timeline-text-content')).evaluate().isEmpty,
+    'title editor submission',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        _timelineClipCount(tester) == mediaClipIds.length + 1 ||
+        _visibleSnackBarMessage(tester) != null,
     'insert title over the imported video',
+  );
+  expect(
+    _timelineClipCount(tester),
+    mediaClipIds.length + 1,
+    reason: 'Title insertion feedback: ${_visibleSnackBarMessage(tester)}',
   );
 
   final titleClipIds = _keySuffixes(tester, 'timeline-clip-')
@@ -515,6 +532,14 @@ int _timelineClipCount(WidgetTester tester) => _keySuffixes(
   tester,
   'timeline-clip-',
 ).where((suffix) => !suffix.startsWith('tooltip-')).length;
+
+String? _visibleSnackBarMessage(WidgetTester tester) {
+  for (final snackBar in tester.widgetList<SnackBar>(find.byType(SnackBar))) {
+    final content = snackBar.content;
+    if (content is Text) return content.data;
+  }
+  return null;
+}
 
 bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     .widgetList<Widget>(
