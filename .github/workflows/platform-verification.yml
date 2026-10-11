@@ -1298,7 +1298,7 @@ jobs:
             test -x "$clangxx"
 
             ANDROID_NDK_HOME="$ndk" ANDROID_ABI="$abi" \
-              bash scripts/build_desktop_export_codecs.sh android \
+              bash "$GITHUB_WORKSPACE/scripts/build_desktop_export_codecs.sh" android \
                 "$codec_prefix" "$codec_work" "$abi"
             test "$(PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" pkg-config --modversion opus)" = "1.6.1"
             test "$(PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" pkg-config --modversion vpx)" = "1.17.0"
