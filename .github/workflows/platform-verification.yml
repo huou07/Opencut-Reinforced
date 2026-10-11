@@ -1339,9 +1339,10 @@ jobs:
               fi
               exit 1
             fi
-            grep -q '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' ffbuild/config_components.h
-            grep -q '^#define CONFIG_LIBOPUS_ENCODER 1$' ffbuild/config_components.h
-            grep -q '^#define CONFIG_WEBM_MUXER 1$' ffbuild/config_components.h
+            # FFmpeg 8.1.3 emits config_components.h at the source root.
+            grep -q '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config_components.h
+            grep -q '^#define CONFIG_LIBOPUS_ENCODER 1$' config_components.h
+            grep -q '^#define CONFIG_WEBM_MUXER 1$' config_components.h
             make -j2
             make install
 
