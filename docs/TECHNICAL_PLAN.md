@@ -643,6 +643,18 @@ over that contract. The reference local ASR sidecar is whisper.cpp v1.9.4; its
 runtime and all model artifacts keep their separate dependency and licensing
 reviews. CI uses deterministic provider fakes and protocol fixtures.
 
+The first `or_ai` implementation contains strict V1 newline-delimited message
+framing and bounded, provenance-bearing transcript proposal validation. The
+host must supply the expected project ID/revision, media ID/full digest, and
+provider/model provenance when validating or decoding a result; proposals that
+do not exactly match it are rejected. Directly constructed proposals also
+receive the same conservative 8 MiB serialized-size bound as decoded results.
+It does not yet spawn providers, install models, or expose transcription in the
+application. The integration feasibility result for the pinned Whisper source
+and one optional model is recorded in
+[`docs/evidence/local-transcription-poc.md`](evidence/local-transcription-poc.md);
+that short fixture is not a packaged-provider or performance acceptance result.
+
 Runtime code licenses do not establish the license or redistribution rights for
 model weights, tokenizers, or associated assets. Verify each exact artifact.
 Network-capable providers declare their access needs and pass through the
