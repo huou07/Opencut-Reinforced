@@ -18,17 +18,18 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish and verify the shared WebM VP9/Opus profile on
-Windows. Linux and macOS packaged journeys now pass; Windows FFmpeg configure
-does not enable the required encoder. After that cross-platform export result,
-prioritize a packaged ordinary MP4/MOV user journey over further encode tuning.
-The last passing journey used H.264/AAC Matroska and measured a 30-second WebM
-export. Its input is being changed to MP4; that result is not yet verified.
-Longer-media profiling should drive work only if it exposes an output-quality,
+Current product focus: finish the cross-platform ordinary-MP4 editing journey.
+Linux passed the packaged H.264/AAC MP4-to-WebM VP9/Opus journey on exact SHA
+`a7183b34734c4cfeec3066dfe944d7cbdae4d0f8` (run
+[38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385));
+Windows passed the corrected libvpx build but then stopped in FFmpeg configure
+at its MSVC `stdbit.h` probe. macOS lifecycle verification is still in
+progress. A local Windows configure correction supplies FFmpeg's pinned
+compatibility-header directory directly to compiler probes and awaits exact-SHA
+verification. Keep longer-media profiling gated on a real quality,
 responsiveness, cancellation, or resource problem. Android remains
-Matroska-only until its packaged encoder profile is independently built and
-device-tested. Android emulator evidence still does not stand in for physical
-device performance.
+Matroska-only; emulator acceptance does not establish physical-device
+performance.
 
 ## Product acceptance target
 
@@ -91,9 +92,9 @@ journey unless results establish a real engine migration dependency.
 ## Current product status and highest-value gaps
 
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Export and ordinary MP4 editing:** exact SHA `346d2402cf0a519cb840380512b5fc6b6c7bcb2d`, run [38116245081](https://github.com/huou07/Opencut-Reinforced/actions/runs/38116245081), passes Linux's clean packaged journey with the pinned real 1080p H.264/six-channel AAC MP4: create/edit/title/save/reopen/relink and independent WebM VP9/Opus probe all passed. Linux exported 30.008 seconds at 12,763,556 bytes in 61,361 ms (56.2% of source size); all four app phases exited 0. This proves the Linux path only while other platform jobs are pending. The earlier exact SHA `5c45a111435cac32ab6767bc5b9b8dffaaaf242a` also passed packaged WebM journeys on Linux and macOS. The current Windows job failed before FFmpeg configure because the pinned libvpx option spelling was wrong; `/MT` archive selection is corrected in `e6d1b5d` and awaits exact-SHA verification. Android remains Matroska-only.
+- **Export and ordinary MP4 editing:** exact SHA `346d2402cf0a519cb840380512b5fc6b6c7bcb2d`, run [38116245081](https://github.com/huou07/Opencut-Reinforced/actions/runs/38116245081), passed Linux's clean packaged journey with the pinned real 1080p H.264/six-channel AAC MP4: create/edit/title/save/reopen/relink and independent WebM VP9/Opus probe all passed. Linux exported 30.008 seconds at 12,763,556 bytes in 61,361 ms (56.2% of source size); all four app phases exited 0. On `a7183b34734c4cfeec3066dfe944d7cbdae4d0f8`, run [38121804385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38121804385) reproduced the Linux pass. Windows passed corrected libvpx CRT configuration, then failed FFmpeg configure while probing for `stdbit.h`; a local compatibility-header path fix awaits verification. The exact run's macOS and Android jobs are still active. The earlier exact SHA `5c45a111435cac32ab6767bc5b9b8dffaaaf242a` passed packaged WebM journeys on Linux and macOS. Android remains Matroska-only.
 - **Known platform evidence gaps:** the overall Platform Verification run [38111281741](https://github.com/huou07/Opencut-Reinforced/actions/runs/38111281741) failed only the Windows VP9 configure guard; Linux, macOS, Android, Rust, Flutter, and descriptor jobs passed. Android SAF preview/resource acceptance passed in that run, but API 36 emulator observations do not prove physical-device performance or acoustic output.
-- **Next work:** verify the corrected Windows libvpx `/MT` option and complete the macOS/Windows packaged MP4 journeys. Android preview correctness remains emulator-only; physical hardware is still unverified. Add a real MOV journey only if user evidence or compatibility failures warrant it. Assess longer-media quality, cancellation, and resources only where real user journeys expose a material issue.
+- **Next work:** complete the Windows FFmpeg build and macOS/Windows packaged MP4 journeys, then publish the exact verified Developer Preview for dogfooding. Android preview correctness remains emulator-only; physical hardware is still unverified. Add a real MOV journey only if user evidence or compatibility failures warrant it. Assess longer-media quality, cancellation, and resources only where real user journeys expose a material issue.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 

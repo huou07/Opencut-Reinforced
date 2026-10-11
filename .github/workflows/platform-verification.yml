@@ -941,6 +941,11 @@ jobs:
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
           read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
           configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
+          # MSVC lacks the C23 stdbit.h header. Expose FFmpeg's own compatible
+          # implementation during configure so compiler feature checks can use it.
+          stdbit_compat="$(cygpath -am "$source/compat/stdbit")"
+          test -f "$source/compat/stdbit/stdbit.h"
+          configure_args+=("--extra-cflags=-I$stdbit_compat")
           # FFmpeg configure discovers zlib through pkg-config. CMake's MSVC
           # install provides the static archive and headers but no .pc file.
           zlib_prefix="$(cygpath -u "$OR_ZLIB_PREFIX")"
