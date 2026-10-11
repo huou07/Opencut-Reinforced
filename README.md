@@ -9,16 +9,18 @@ application creates, opens, edits, saves, and recovers `.orproj` projects on
 macOS, Windows, Linux, and Android. A Rust-owned project session serves the
 Flutter UI and attached CLI through shared validated commands. Users can import
 multiple local media files on desktop and multiple Android SAF documents,
-preview media, assemble and revise timeline clips, and export the supported
-Matroska profile. Android projects use SAF documents and an app-private working
-copy with explicit synchronization. Dirty work periodically updates a recovery
-checkpoint without overwriting the canonical project file; Save remains
-explicit.
+preview media, assemble and revise timeline clips, add titles and manual
+captions, and export Matroska or desktop WebM. Android projects use SAF
+documents and an app-private working copy with explicit synchronization; the
+Android WebM profile is claimed only after its exact-SHA all-ABI packaged
+journey passes. Dirty work
+periodically updates a recovery checkpoint without overwriting the canonical
+project file; Save remains explicit.
 
-The product is not yet a complete general-purpose editor: the current export
-profile and editing tools are limited, and captions, richer audio/effects,
-relinking, and focused AI workflows remain incomplete. Stable application
-releases: none. Debug Developer Preview prereleases are available from
+The product is not yet a complete general-purpose editor: advanced editing,
+some media formats, automatic captions and other AI workflows, folder import,
+and production signing remain incomplete. Android physical-device performance
+has not yet been measured. Stable application releases: none. Debug Developer Preview prereleases are available from
 [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); they
 are for testing, not production distribution. See the active outcome-based
 [product roadmap](docs/PRODUCT_ROADMAP.md) and
@@ -48,7 +50,7 @@ The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFil
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, clip insert/move/trim/split/ripple delete, markers, snapping, history, desktop preview, and a limited Matroska export profile. Proxies remain a cache foundation rather than an exposed workflow. Supported codec/container choices, advanced editing, audio tools, effects, captions, offline relinking, and AI assistance remain limited or incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
+The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, exact clip edits, markers, snapping, history, preview, and desktop Matroska/WebM export. Android WebM remains conditional on exact-SHA all-ABI and SAF output verification. Proxies remain a cache foundation rather than an exposed workflow. Advanced editing, some codec/container choices, AI assistance, and production packaging remain incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
 
 ## Product direction
 

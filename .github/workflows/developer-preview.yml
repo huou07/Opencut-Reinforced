@@ -1124,147 +1124,35 @@ jobs:
           cat > "$RUNNER_TEMP/RELEASE-NOTES.md" <<'EOF'
           # Opencut Reinforced Developer Preview
 
-          **PRERELEASE — DEBUG / DEVELOPER BUILD**
+          **PRERELEASE — DEBUG TEST BUILD**
 
           Source commit: @SOURCE_COMMIT@
 
-          This build is for developer testing of the native UI shell, project lifecycle, project media library and previews, CLI, and architecture foundation. It is a pre-MVP project, not a usable video editor.
+          This preview is built only after the same source commit passes hosted Platform Verification. It is an unsigned or ad-hoc-signed test build, not a stable release or performance benchmark.
 
-          **PHASE 4 FOUNDATION COMPLETE**
+          ## Try one ordinary project
 
-          - Real desktop New/Open/Save project lifecycle on macOS, Windows, and Linux.
-          - One Rust-owned live project session is shared by Flutter and authenticated local IPC.
-          - Attached CLI operations update the project open in Flutter.
-          - Real Rename, Undo, Redo, and explicit Save with dirty and exit guards.
-          - Explicit recovery handling and safe no-clobber new project creation.
-          - Desktop CLI packages are included for testing this flow.
+          1. Install the package for your OS, create a project, and import a real video with audio. Note any install, permission, or file-compatibility friction.
+          2. Preview the media, place it on the timeline, trim or split it, add a short title or manual caption, and use undo/redo.
+          3. Save, close, and reopen the project. On desktop, you can also move a source and try Relink.
+          4. Export a profile offered by the app, open the result in an independent player, and check picture, sound, and duration.
+          5. Report your OS/device, source format and duration, confusing or failed steps, export time, and whether another app played the result. Do not send private media; describe the issue or attach a legally shareable sample.
 
-          **PHASE 5A — MEDIA PROBE FOUNDATION**
+          ## Included workflows
 
-          - The desktop CLI provides read-only local metadata inspection: `or media probe --file PATH [--json]`.
-          - Media probing requires a system-provided `ffprobe`; it is not bundled with OR.
+          - Create/open projects, import media, edit and revise clips, preview, add titles and manual captions, save/reopen, and recover unsaved work.
+          - Import/export SRT and WebVTT captions with a preview of formatting loss.
+          - Export Matroska with FFV1/PCM and WebM with VP9/Opus on desktop. Android WebM is included only when the exact-SHA all-ABI and SAF output checks pass.
+          - Use the desktop CLI against the same live project session as the application.
 
-          **PHASE 5B — PROJECT MEDIA LIBRARY**
+          ## Known limitations
 
-          - `.orproj` schema v2 persists an ordered project media library; v1 projects still load and migrate on the next explicit save.
-          - Desktop users can Import Media, list items in the Media panel, and remove items through the Rust-owned project session.
-          - Import requires a system-provided `ffprobe`. The selected file is probed locally; project loading never opens or probes stored source references.
-          - The project stores validated local file URIs and bounded metadata, not media bytes. A source can be offline or moved after import.
-          - Headless and attached CLI commands support media list/add/remove; attached import prepares the selected source locally and sends the normal `media.add` command.
+          - Automatic captions, translation, and other AI workflows are not available yet.
+          - Folder import, track reorder, multi-select, and linked clips are not available.
+          - Android verification uses an emulator; physical-device performance has not been measured.
+          - iOS is not a supported target. No package is production-signed; macOS is not notarized.
 
-          **PHASE 5C — JOB AND CACHE INFRASTRUCTURE FOUNDATION**
-
-          - Bounded background Job Manager: a fixed worker pool, a bounded pending queue with non-blocking backpressure, bounded tracked records, cooperative cancellation, panic containment, and deterministic shutdown.
-          - Disposable thumbnail/waveform cache foundation: deterministic SHA-256 cache keys and bounded, atomic, explicitly cleared storage.
-          - Phase 5D uses this infrastructure for generated, read-only Media-panel previews. Job and cache activity never changes project revision and is never stored in a project.
-
-          **PHASE 5D — MEDIA LIBRARY PREVIEWS**
-
-          - The desktop Media panel can show cached PNG thumbnails for video media and a combined waveform preview for audio-only media.
-          - Bounded background generation uses a disposable cache and bounded source fingerprint for cache invalidation; preview artifacts do not enter the project file.
-          - Media import requires a system-provided `ffprobe`; preview generation requires a system-provided `ffmpeg`.
-          - Library images remain read-only cache artifacts. Playback uses the separate linked software decoder path introduced in Phase 7.
-
-          **PHASE 5E — PERSISTENT CACHE INDEX AND AUTOMATIC EVICTION**
-
-          - A disposable SQLite index persists accounting and access order for generated thumbnail and waveform artifacts, and reconciles existing Phase 5D cache files.
-          - Persistent sequence-based LRU eviction removes the minimum required managed artifacts under cache budget pressure.
-          - The index stores only artifact kind, opaque cache key, byte size, and access sequence; it is disposable cache metadata, not project data.
-          - The artifact-byte budget excludes the SQLite index and its metadata.
-
-          **PHASE 5F — FILE-BACKED PROXY FOUNDATION**
-
-          - Rust can generate a bounded file-backed video proxy into the disposable artifact cache.
-          - Proxy generation is not exposed through the UI, CLI, or IPC, is not a playback source, and does not change project state.
-
-          **PHASE 6C — REAL PROJECT TIMELINE FOUNDATION**
-
-          - Real project workspaces display canonical Video/Audio tracks and timeline clip blocks.
-          - Users can add Video/Audio tracks, insert and move media clips through explicit exact-time dialogs, and explicitly delete clips.
-          - Timeline edits use the shared Rust command and session-history system; attached CLI edits refresh the open GUI through project-change events.
-          - Clip pages are bounded to 100 items and additional items load on demand.
-
-          **PHASE 6D — TRIM, SPLIT, AND TRACK-LOCAL RIPPLE DELETE**
-
-          - Users can trim an absolute timeline start or end, split at an exact interior timeline point, and ripple-delete a clip while shifting only later clips on that track.
-          - Split right-clip IDs are generated by Rust; exact edit state, compact undo/redo, and save/reopen remain owned by the shared project session.
-          - The semantic CLI exposes headless and attached trim, split, and ripple-delete commands; attached edits remain dirty until explicit save.
-
-          **PHASE 6E1 — POINTER TIMELINE EDITING AND CLIP-EDGE SNAPPING**
-
-          - Clip bodies support pointer moves, start/end handles support pointer trims, and valid move targets stay within same-kind lanes.
-          - Pointer deltas quantize once to the nearest 1 ms from the original exact timeline value; ghosts are presentation-only and existing Rust move/trim commands remain authoritative.
-          - The default-on Snap toggle performs one drop-time `timeline.snap` query with a fixed `1/8`-second threshold over timeline zero and all other canonical clip boundaries; no continuous snap loop or marker state is added.
-          - A temporary cyan guide can show the resolved boundary; stale project/session/revision results and attached CLI invalidation are rejected without retry.
-          - The semantic CLI exposes read-only headless and attached `or timeline snap` inspection without saving, dirtying, or incrementing revision.
-
-          **PHASE 7 — DESKTOP VIDEO PREVIEW AND PLAYBACK**
-
-          - Desktop users can seek to exact timeline times, play, pause, scrub, and step frames on the explicitly configured sequence frame lattice.
-          - Play and frame step require an explicit sequence frame rate. Seek remains exact and available when no rate is configured.
-          - Playback uses linked FFmpeg 8.1.3 software decoding and bounded native pixel-buffer presentation on macOS, Windows, and Linux. No hardware decode or shared GPU-surface path is enabled.
-          - Desktop application packages include their matching FFmpeg shared libraries and LGPL notices; the release also includes the matching source archive and per-platform build information.
-          - Android packages include the linked FFmpeg runtime and software preview path; project and media files use Android's Storage Access Framework with explicit synchronization for project documents.
-
-          **PHASE 8F — EXPORT, AUTOSAVE, AND DESKTOP MVP HARDENING**
-
-          - Desktop export writes Matroska with FFV1 video and stereo 48 kHz PCM S16LE audio through the linked LGPL software FFmpeg runtime. It runs as a bounded background job with progress and cancellation.
-          - Export evaluates the same timeline content, exact frame timing, transforms, crop, opacity, effects, transitions, and bundled-font text as preview. Export reads a captured project revision and does not mutate project state.
-          - In-progress output stays in a unique sibling staging directory; only a completed file is published to the chosen `.mkv` destination. Cancellation, missing media, or encode failures preserve an existing destination and leave a new destination absent.
-          - Periodic autosave writes the bounded recovery sidecar without replacing the canonical `.orproj` file. Explicit Save remains the canonical project-file action; recovery inspection and user-selected recovery remain available.
-
-          **DESKTOP WEBM DELIVERY PROFILE**
-
-          - Desktop packages can import ordinary H.264/AAC MP4 media and export WebM with VP9 video and Opus audio through the same timeline, text, effects, and audio mix path as preview.
-          - The hosted packaged journey creates and edits a project, adds a title, saves and reopens it, relinks an offline source, exports a 30-second result, then independently probes and decodes the output.
-          - Android continues to offer Matroska with FFV1/PCM; desktop WebM encoders are not claimed on Android.
-
-          **DOGFOOD: TRY ONE ORDINARY EDIT**
-
-          1. Create a project and import a local H.264/AAC MP4. Note any install, permission, or file-compatibility friction.
-          2. Preview it, place it on a video track, add a short title or caption, trim or split a clip, and use undo/redo.
-          3. Save, close, and reopen the project. If practical, move or temporarily rename a source and try the relink flow.
-          4. On desktop, export WebM; on Android, export Matroska. Open the result in an independent player and check its picture, sound, and duration.
-          5. Report your OS/device, source format and duration, steps that were confusing or failed, export time, and whether another app played the result. Do not send private media; describe the issue or attach a legally shareable sample.
-
-          Still unavailable: track reorder, multi-select, linked clips, automatic captions, folder import, and physical-device Android performance evidence.
-
-          OR remains a pre-release desktop video editor. This Developer Preview is for testing and is not a production release.
-
-          Core foundation:
-          - Typed Rust bridge
-          - Project identity, revision, and exact-time foundation
-          - ProjectDocument with `.orproj` v6 encoding and v1–v5 migration
-          - Bounded .orproj file loading and atomic save
-          - Command and query contracts
-          - Transactions
-          - Undo and redo
-          - Crash-recovery checkpoint core foundation
-          - File-backed ProjectSession with exact external-change protection
-          - Typed `MediaId`/`JobId`, structured metadata, and bounded external `ffprobe` adapter
-
-          **ATTACHED CLI TESTING**
-
-          - Use the `opencut-reinforced-cli-*` package for your desktop OS.
-          - Find the descriptor path in the running app at Settings > Advanced / Developer.
-          - Run `or session describe --attach "<descriptor-path>"` to inspect the attached session.
-          - `or project rename --attach ...`, `or history undo|redo --attach ...`, and `or project save --attach ...` operate on that same live project.
-          - Descriptor contents and authentication tokens are not displayed or included in the CLI packages.
-          - `or media probe --file "<local-file-path>" [--json]` inspects metadata without opening or modifying a project. It requires a system-provided `ffprobe`.
-          - `or media list --attach <descriptor> [--json]`, `or media add --attach <descriptor> --source <path>`, and `or media remove --attach <descriptor> --id <media-id>` operate on the same live media library. Attached import probes locally, then dispatches `media.add` with the described revision; stale edits are rejected without retry.
-          - Timeline edits made from the Flutter project workspace use the same live Rust host as attached CLI operations; timeline commands are also available through the semantic CLI.
-
-          Local IPC remains protocol v1 over Unix-domain sockets on macOS/Linux or Windows named pipes. There is no TCP listener. Unix endpoints use owner-only permissions; Windows endpoints use protected owner-only DACLs and reject remote clients.
-
-          Recovery decisions remain explicit. Periodic autosave updates only the recovery sidecar; it never silently overwrites the canonical project.
-
-          Not implemented:
-          - Track reorder, multi-select, and linked clips
-          - Automatic captions
-          - Filesystem watching
-          - Android Storage Access Framework integration
-
-          These are debug developer builds for testing only, with no production signing. The macOS app has only an ad-hoc signature and is not notarized; CLI builds are unsigned, and Android uses only the standard debug signing key. They are not performance benchmarks or production releases. Project formats and features may evolve before a future stable release.
+          This is a pre-release editor for testing, not a production release. Report crashes, data loss, unsupported common media, install friction, confusing interactions, and output compatibility.
           EOF
 
           sed "s/@SOURCE_COMMIT@/${GITHUB_SHA}/" "$RUNNER_TEMP/RELEASE-NOTES.md" > "$RUNNER_TEMP/RELEASE-NOTES.tmp"
