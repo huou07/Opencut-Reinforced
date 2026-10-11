@@ -981,3 +981,24 @@ source root. The local fix changes only those three assertions; all-ABI Android
 packaging and SAF output verification remain unproven pending a fresh exact-SHA
 run. Rust, Flutter, and descriptor jobs passed. Repository hygiene passed on
 the same SHA.
+
+Exact-SHA run [38165543230](https://github.com/huou07/Opencut-Reinforced/actions/runs/38165543230)
+on `81491556f6035a309cee129f25b7e762bd1dd11c` passed Rust, Flutter, descriptor,
+and Windows packaged verification. The Windows journey again imported,
+revised, saved/reopened/relinked, exported, and independently decoded the
+30-second 1080p H.264/AAC-to-VP9/Opus workflow: 169.702 seconds and 12,768,681
+bytes, with 720 video and 1,501 audio frames decoded. This is a successful
+journey with a repeated slow hosted Windows export (the previous run was
+182.114 seconds), not an acceptance failure. Linux failed before compilation
+while curl's TLS connection to `downloads.xiph.org` ended with
+`SSL_ERROR_SYSCALL`; this is an identified external download failure, not a
+codec source/build diagnostic. Android successfully cross-built the first ABI
+and then failed on the next ABI because FFmpeg's prior `cd` left the shell in
+its temporary source tree while the workflow invoked the codec builder with a
+relative repository path. The follow-up uses `$GITHUB_WORKSPACE` for that
+script. The macOS lifecycle integration-test step timed out after 35 minutes
+without an assertion result; its identical test selection passed on
+`38162539040`. Logs show the app launch attempt reported `open returned 1`,
+the test process remained alive until timeout, and cleanup terminated it. This
+is unresolved; the next exact-SHA run will distinguish a repeatable test hang
+from hosted-runner variance before any retry or product change.
