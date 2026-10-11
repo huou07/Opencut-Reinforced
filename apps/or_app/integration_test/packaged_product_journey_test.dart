@@ -362,6 +362,14 @@ Future<void> _reopenAndExport(
   final importedMediaId = importedMediaIds.single;
   await tester.tap(find.byKey(ValueKey('media-add-timeline-$importedMediaId')));
   await tester.pumpAndSettle();
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const ValueKey('timeline-insert-start'))
+        .evaluate()
+        .isNotEmpty,
+    'insert exported clip controls',
+  );
   // Same-track overlap is rejected; place the reimport after the source clip.
   await tester.enterText(
     find.byKey(const ValueKey('timeline-insert-start')),
@@ -482,6 +490,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
         .isNotEmpty,
     'failed replacement feedback',
     attempts: 1800,
+    diagnostic: () => 'status="${_exportStatusText(tester)}"',
   );
 
   await _pumpUntil(
