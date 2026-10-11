@@ -1561,6 +1561,14 @@ mod desktop {
     mod direct_frame_tests {
         use super::*;
 
+        fn local_media_uri(name: &str) -> String {
+            if cfg!(windows) {
+                format!("file:///C:/{name}")
+            } else {
+                format!("file:///{name}")
+            }
+        }
+
         fn program() -> PreviewProgram {
             let project = or_core::ProjectDocument::new("identity export");
             PreviewProgram {
@@ -1572,7 +1580,7 @@ mod desktop {
                 frame_rate: Some(RationalRate::new(24, 1).unwrap()),
                 content_end: Some(RationalTime::new(10, 1).unwrap()),
                 video_clips: vec![VideoClip {
-                    source: MediaSourceRef::local_file("file:///identity.mp4").unwrap(),
+                    source: MediaSourceRef::local_file(local_media_uri("identity.mp4")).unwrap(),
                     source_dimensions: Some((1920, 1080)),
                     timeline_start: RationalTime::ZERO,
                     source_start: RationalTime::ZERO,
@@ -1611,7 +1619,7 @@ mod desktop {
             program.video_clips[0].opacity = Opacity::OPAQUE;
 
             program.video_clips.push(VideoClip {
-                source: MediaSourceRef::local_file("file:///second.mp4").unwrap(),
+                source: MediaSourceRef::local_file(local_media_uri("second.mp4")).unwrap(),
                 source_dimensions: Some((1920, 1080)),
                 timeline_start: RationalTime::ZERO,
                 source_start: RationalTime::ZERO,
