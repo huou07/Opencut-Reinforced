@@ -108,7 +108,7 @@ vpx_configure_args=(
 if [[ "$platform" == windows ]]; then
   # FFmpeg's documented MSVC toolchain uses /MT; match it to avoid mixing the
   # UCRT imports from libvpx's default /MD archive into FFmpeg's msvcrt build.
-  vpx_configure_args+=(--static-crt)
+  vpx_configure_args+=(--enable-static-msvcrt)
 fi
 "$vpx_source/configure" "${vpx_configure_args[@]}"
 make -j2
