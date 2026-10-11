@@ -16,6 +16,8 @@ prefix="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 work="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
 opus_version=1.6.1
 opus_sha256=6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
+opus_upstream_url="https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz"
+opus_mirror_url="https://ftp.osuosl.org/pub/xiph/releases/opus/opus-$opus_version.tar.gz"
 vpx_commit=6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
 
 sha256_file() {
@@ -94,7 +96,7 @@ fi
 opus_archive="$work/opus-$opus_version.tar.gz"
 if [[ ! -f "$opus_archive" ]]; then
   curl --fail --location --silent --show-error --retry 3 --max-time 300 \
-    "https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz" \
+    "$opus_mirror_url" \
     --output "$opus_archive"
 fi
 actual_opus_sha256="$(sha256_file "$opus_archive")"
@@ -232,7 +234,8 @@ git -C "$vpx_source" archive --format=tar --prefix=libvpx-v1.17.0/ \
 vpx_archive_sha256="$(sha256_file "$work/libvpx-v1.17.0.tar")"
 cat > "$work/EXPORT-CODEC-SOURCES.txt" <<EOF
 libopus version: $opus_version
-libopus source: https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz
+libopus upstream source: $opus_upstream_url
+libopus download mirror: $opus_mirror_url
 libopus archive SHA-256: $opus_sha256
 libvpx version: v1.17.0
 libvpx source: https://chromium.googlesource.com/webm/libvpx

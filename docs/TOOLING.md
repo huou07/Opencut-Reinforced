@@ -63,7 +63,11 @@ remained stuck after Flutter reported an app-foreground failure; the timeout
 keeps an unresolved hosted launch from consuming the full macOS job window.
 
 The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify
-runtime packaging and loading. The Windows probe uses MSYS2 for `pkg-config`
+runtime packaging and loading. Their pinned Opus 1.6.1 archive comes from the
+OSU Open Source Lab Xiph mirror; its SHA-256 remains checked against the
+[official release checksum](https://opus-codec.org/release/stable/2026/01/14/libopus-1_6_1.html),
+and build provenance records both upstream and mirror URLs. The Windows probe
+uses MSYS2 for `pkg-config`
 path handling, so Visual Studio's `link.exe` must take precedence over
 MSYS2's `/usr/bin/link.exe` when Cargo links the MSVC target. The Windows
 build fetches zlib 1.3.2 from the upstream release asset and checks its pinned
