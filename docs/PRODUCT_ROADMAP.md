@@ -31,11 +31,20 @@ representative physical-device performance remains unmeasured. After the
 preview is available, the next product capability is reviewable local
 transcription-to-caption proposals through the existing caption command path.
 The artifact-path fix is at `58d49321f2f1d0fe487cb159f21d2d5f316bbab3`.
-Follow-up Platform Verification [38175927309](https://github.com/huou07/Opencut-Reinforced/actions/runs/38175927309)
-passed Rust, Flutter, descriptor, Android, macOS, and Windows checks but failed
-the Linux journey after it tapped the reimport action before snapshot readiness.
-A bounded enabled-action wait now guards that same timeline assertion; exact-SHA
-reverification is pending.
+Exact-SHA Platform Verification run
+[38178110877](https://github.com/huou07/Opencut-Reinforced/actions/runs/38178110877)
+passed all seven jobs on `407a8f1d7a844240af89c6b7d119904d3b2f3531`, including
+the Linux export/reimport timeline-readiness assertion and packaged journeys on
+all four supported platforms. Developer Preview workflow
+[38181421768](https://github.com/huou07/Opencut-Reinforced/actions/runs/38181421768)
+built all seven packages but did not publish: `tar -tf | grep -q` closed the
+archive listing pipe early under `pipefail`. The workflow now writes the
+bounded source-archive member list to a temporary file before checking license
+entries. A fresh exact-SHA platform run and preview publication are required.
+The local transcription feasibility evidence and first bounded AI
+protocol/proposal contracts are recorded in the
+[transcription integration note](evidence/local-transcription-poc.md); a real
+packaged provider and review/apply UI remain unimplemented.
 
 ## Product acceptance target
 

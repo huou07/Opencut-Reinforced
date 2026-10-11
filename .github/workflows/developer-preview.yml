@@ -1026,8 +1026,10 @@ jobs:
             expected_vpx_sha="$(sed -n 's/^libvpx source archive SHA-256: //p' "$dir/EXPORT-CODEC-SOURCES.txt")"
             test -n "$expected_vpx_sha"
             echo "$expected_vpx_sha  $dir/libvpx-v1.17.0.tar" | sha256sum --check
-            tar -tf "$dir/libvpx-v1.17.0.tar" | grep -Fxq 'libvpx-v1.17.0/LICENSE'
-            tar -tf "$dir/libvpx-v1.17.0.tar" | grep -Fxq 'libvpx-v1.17.0/PATENTS'
+            archive_members="$RUNNER_TEMP/libvpx-members-$target.txt"
+            tar -tf "$dir/libvpx-v1.17.0.tar" > "$archive_members"
+            grep -Fxq 'libvpx-v1.17.0/LICENSE' "$archive_members"
+            grep -Fxq 'libvpx-v1.17.0/PATENTS' "$archive_members"
           done
           for file in opus-1.6.1.tar.gz OPUS-COPYING LIBVPX-LICENSE LIBVPX-PATENTS EXPORT-CODEC-SOURCES.txt; do
             cmp "$provenance/macos/$file" "$provenance/linux/$file"

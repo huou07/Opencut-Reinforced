@@ -1082,3 +1082,16 @@ resource checks, macOS lifecycle and packaged journey, and the Windows
 packaged journey; Rust, Flutter, and descriptor checks also passed. Linux was
 the only failed job. This run used the fixed codec artifact paths, but did not
 pass the full Platform Verification gate because of the Linux test failure.
+
+Developer Preview run
+[38181421768](https://github.com/huou07/Opencut-Reinforced/actions/runs/38181421768)
+on `407a8f1d7a844240af89c6b7d119904d3b2f3531` built all seven application and
+CLI packages but failed before publication. The release assembly log reported
+GNU tar's stdout write error while checking required libvpx license members
+with `tar -tf archive | grep -q member` under `pipefail`; early consumer exit
+can close the listing pipe while tar is still writing. The workflow now
+materializes the archive member listing in a runner temporary file before
+checking exact license paths. A synthetic 1.5 MiB member listing passed through
+the new path. This workflow change still requires fresh exact-SHA Platform
+Verification and preview publication; the failed run did not publish a
+release.
