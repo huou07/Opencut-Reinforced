@@ -838,3 +838,21 @@ including process-death simulation, preserves recovery. Tests cover user
 discard, replacement by another session, and dirty teardown retaining
 recovery. The local Rust and widget checks pass; the latest exact-SHA hosted
 verification remains pending.
+
+## 2026-10-11 — ordinary MP4 packaged journey and Windows codec setup
+
+Exact-SHA run [38116245081](https://github.com/huou07/Opencut-Reinforced/actions/runs/38116245081)
+on `346d2402cf0a519cb840380512b5fc6b6c7bcb2d` passed the Linux packaged
+H.264/AAC MP4 import, edit, title, save/reopen, relink, and WebM VP9/Opus export
+journey, including independent output probing and full decode. Android's
+packaged build passed its SAF preview/resource journey. Windows stopped at the
+pinned libvpx build because the MSVC static-CRT option was incorrectly spelled
+`--static-crt`; the exact upstream spelling `--enable-static-msvcrt` is
+recorded in product commit `e6d1b5d`.
+
+On exact SHA `346d2402cf0a519cb840380512b5fc6b6c7bcb2d`, the macOS native Flutter
+lifecycle step later ran to the job's 100-minute timeout after Flutter logged
+`Failed to foreground app; open returned 1`. No macOS lifecycle result can be
+claimed from this run. The same three lifecycle tests passed on exact SHA
+`fae38c7` in run `38114223195`; this isolates the result as inconsistent hosted
+app launch behavior, not an accepted 346d2402 product result.
