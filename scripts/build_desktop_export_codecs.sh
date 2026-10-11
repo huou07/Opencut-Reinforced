@@ -60,13 +60,27 @@ elif [[ "$platform" == windows ]]; then
   win_cmake_generator="Visual Studio $vs_major $vs_year"
 elif [[ "$platform" == android ]]; then
   android_ndk="${ANDROID_NDK_HOME:-${ANDROID_HOME:-}/ndk/28.2.13676358}"
-  test -x "$android_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+  android_toolchain="$android_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
   case "$android_abi" in
-    armeabi-v7a) vpx_target=armv7-android-gcc ;;
-    arm64-v8a) vpx_target=arm64-android-gcc ;;
-    x86_64) vpx_target=x86_64-android-gcc ;;
+    armeabi-v7a) vpx_target=armv7-android-gcc; clang_prefix=armv7a-linux-androideabi ;;
+    arm64-v8a) vpx_target=arm64-android-gcc; clang_prefix=aarch64-linux-android ;;
+    x86_64) vpx_target=x86_64-android-gcc; clang_prefix=x86_64-linux-android ;;
     *) echo "unsupported Android ABI: $android_abi" >&2; exit 2 ;;
   esac
+  android_clang="$android_toolchain/${clang_prefix}26-clang"
+  android_clangxx="$android_toolchain/${clang_prefix}26-clang++"
+  android_vpx_tools=(
+    "CC=$android_clang"
+    "CXX=$android_clangxx"
+    "AR=$android_toolchain/llvm-ar"
+    "LD=$android_clang"
+    "AS=$android_clang"
+    "STRIP=$android_toolchain/llvm-strip"
+  )
+  for tool in "$android_clang" "$android_clangxx" \
+    "$android_toolchain/llvm-ar" "$android_toolchain/llvm-strip"; do
+    test -x "$tool"
+  done
 else
   echo "unsupported platform: $platform" >&2
   exit 2
@@ -137,15 +151,16 @@ vpx_configure_args=(
   --enable-pic \
   --enable-vp9
 )
-if [[ "$platform" == android ]]; then
-  vpx_configure_args+=("--sdk-path=$android_ndk")
-fi
 if [[ "$platform" == windows ]]; then
   # FFmpeg's documented MSVC toolchain uses /MT; match it to avoid mixing the
   # UCRT imports from libvpx's default /MD archive into FFmpeg's msvcrt build.
   vpx_configure_args+=(--enable-static-msvcrt)
 fi
-"$vpx_source/configure" "${vpx_configure_args[@]}"
+if [[ "$platform" == android ]]; then
+  env "${android_vpx_tools[@]}" "$vpx_source/configure" "${vpx_configure_args[@]}"
+else
+  "$vpx_source/configure" "${vpx_configure_args[@]}"
+fi
 make -j2
 make install
 

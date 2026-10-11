@@ -186,7 +186,9 @@ FFmpeg's MSVC C runtime and points the generated pkg-config entry at that
 archive for FFmpeg's link.
 The Android packaged candidate uses the same pinned codec sources, statically
 linked into its existing LGPL FFmpeg shared libraries for all three supported
-ABIs. Its CI artifact preserves both upstream notices, the libvpx patent
+ABIs. Its cross-build maps each ABI to the pinned NDK's API 26 Clang/LLVM
+tools; the exact-SHA hosted build remains the authority for toolchain
+compatibility. Its CI artifact preserves both upstream notices, the libvpx patent
 notice, and source identity; the Android package build stages those notices as
 assets. The upstream source licenses permit redistribution subject to their
 included BSD-style conditions and disclaimers. The Opus notice identifies
