@@ -26,12 +26,16 @@ H.264/AAC MP4-to-WebM VP9/Opus journeys, Android all-ABI packaging and SAF
 preview/resource acceptance, and Rust, Flutter, and descriptor checks. Windows
 passed codec-source setup but failed FFmpeg configure while linking its MSVC
 `stdbit.h` probe. The pinned compatibility header compiles; the failed probe
-alone adds FFmpeg's `-debug` link flag. The next Windows build disables debug
-symbols in the shipped runtime and retains the compatibility header. This is a
-targeted hypothesis awaiting exact-SHA verification. Keep longer-media profiling
-gated on a real quality, responsiveness, cancellation, or resource problem.
-Android remains Matroska-only; emulator acceptance does not establish
-physical-device performance.
+alone previously added FFmpeg's `-debug` link flag. Exact-SHA run
+`38126190565` on `2c43fccad8cb80c850c52f5291927e57843a6e6c` disproved disabling
+debug symbols as a fix: the probe still fails without `-debug`, while preceding
+MSVC link probes pass. Debug symbols remain enabled. The wrapper reports no
+linker diagnostic, so the next Windows configure failure will print the
+resolved linker candidates and replay the final probe with shell tracing before
+any correction. Keep longer-media profiling gated on a real quality,
+responsiveness, cancellation, or resource problem. Android remains
+Matroska-only; emulator acceptance does not establish physical-device
+performance.
 
 ## Product acceptance target
 

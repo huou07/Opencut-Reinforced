@@ -883,3 +883,13 @@ earlier generic MSVC link probes omit `-debug`; the failing stdbit link probe
 includes it. The follow-up disables FFmpeg debug symbols in the Windows release
 runtime, retains the pinned compatibility header, and requires exact-SHA hosted
 verification. No physical-device Android performance result is claimed.
+
+Exact-SHA run [38126190565](https://github.com/huou07/Opencut-Reinforced/actions/runs/38126190565)
+on `2c43fccad8cb80c850c52f5291927e57843a6e6c` disproved the hypothesis that
+MSVC's `-debug` linker flag caused the stdbit probe failure. `--disable-debug`
+removed that flag, but the probe's minimal `mslink` call still returned 1 with
+no emitted linker diagnostic; preceding basic and library probes linked. This
+run's Linux, macOS, Android, Rust, Flutter, and descriptor jobs passed. Debug
+symbols remain enabled. The next diagnostic will expose the linker executable
+resolved by FFmpeg's wrapper and preserve its return details before any further
+Windows build change.
