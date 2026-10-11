@@ -19,30 +19,19 @@ justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
 Current product focus: finish the cross-platform ordinary-MP4 editing journey
-and make a usable Developer Preview available for dogfooding. Exact-SHA run
-[38124449401](https://github.com/huou07/Opencut-Reinforced/actions/runs/38124449401)
-on `af73be02d5907b38851bb45b88132b2b3a136f4d` passed Linux and macOS packaged
-H.264/AAC MP4-to-WebM VP9/Opus journeys, Android all-ABI packaging and SAF
-preview/resource acceptance, and Rust, Flutter, and descriptor checks. Windows
-passed codec-source setup but failed FFmpeg configure while linking its MSVC
-`stdbit.h` probe. The pinned compatibility header compiles; the failed probe
-alone previously added FFmpeg's `-debug` link flag. Exact-SHA run
-`38126190565` on `2c43fccad8cb80c850c52f5291927e57843a6e6c` disproved disabling
-debug symbols as a fix. Run
-[38133514739](https://github.com/huou07/Opencut-Reinforced/actions/runs/38133514739)
-on `ff0f0fd5f276c7bae2c30780b37aaeee170c4b90` passed Linux, macOS and Android
-packaged journeys and all Rust, Flutter, and descriptor checks, but Windows
-again failed at the probe. The failure-only diagnostic runs in a fresh shell,
-so its `/usr/bin/link.exe` result does not prove which executable configure
-used. Run
-[38135332968](https://github.com/huou07/Opencut-Reinforced/actions/runs/38135332968)
-on `8de5b346e529ad142b405018fe8b83df370548dd` again passed every non-Windows
-job, but the probe still failed despite a build-shell assertion that MSVC's
-`link.exe` resolved first. The cause remains open. The next run traces
-`compat/windows/mslink` inside configure and captures that trace on failure.
-Profile longer media only when real evidence shows a quality, responsiveness,
-cancellation, or resource problem. Android remains Matroska-only; emulator
-acceptance does not establish physical-device performance.
+and make a usable Developer Preview available for dogfooding. On exact SHA
+`e1bc1d9e5fe29aa42e32d0f6ea3d7ec9e84e0d41`, run
+[38138251731](https://github.com/huou07/Opencut-Reinforced/actions/runs/38138251731)
+passed Linux, macOS, Android, Rust, Flutter, and descriptor checks. Windows
+successfully configured FFmpeg and linked its MSVC `stdbit.h` probe, then the
+workflow's VP9 guard failed because it searched `config.h`; FFmpeg emits codec
+component selections in `config_components.h`. The next exact-SHA run verifies
+that same VP9 requirement against the correct generated header and continues
+through the Windows packaged journey. Earlier Windows probe diagnoses in the
+history archive are superseded by this direct configure trace. Profile longer
+media only when real evidence shows a quality, responsiveness, cancellation,
+or resource problem. Android remains Matroska-only; emulator acceptance does
+not establish physical-device performance.
 
 ## Product acceptance target
 

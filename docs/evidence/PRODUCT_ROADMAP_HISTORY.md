@@ -936,3 +936,18 @@ its own fresh shell; that output is not evidence of the configure process's
 resolved linker. The next workflow change traces FFmpeg's wrapper from inside
 configure and records it for the independent failure step. No Windows package
 or cross-platform pass is claimed.
+
+Correction from exact-SHA run [38138251731](https://github.com/huou07/Opencut-Reinforced/actions/runs/38138251731)
+on `e1bc1d9e5fe29aa42e32d0f6ea3d7ec9e84e0d41`: the direct trace inside
+FFmpeg's configure process shows that the Visual Studio `cl` and adjacent
+`link.exe` were selected and the `stdbit.h` probe linked successfully. The
+configure summary completed; Windows then failed at OR's VP9 guard because it
+searched for `CONFIG_LIBVPX_VP9_ENCODER` in `config.h`. FFmpeg 8.1.3 generates
+codec component selections in `config_components.h`, which is also the header
+included by its libvpx encoder implementation. Thus the probe-failure
+interpretations in the preceding entries were incorrect; the linker PATH
+selection did resolve correctly. Linux packaged journey, macOS lifecycle and
+packaged journey, Android packaged SAF/runtime acceptance, Rust, Flutter, and
+descriptor checks all passed on this SHA. Windows packaging did not run because
+the VP9 guard stopped the job. The follow-up changes only the guard's inspected
+header, removes temporary wrapper tracing, and preserves the codec requirement.

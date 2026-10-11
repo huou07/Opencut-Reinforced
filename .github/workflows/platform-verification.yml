@@ -986,30 +986,13 @@ jobs:
           pkg-config --cflags --libs zlib
           # zlib is statically linked into the MSVC helper executables.
           cp "$RUNNER_TEMP/ZLIB-LICENSE.txt" "$prefix/ZLIB-LICENSE.txt"
-          # Trace FFmpeg's own wrapper inside the configure process: an
-          # Actions follow-up step starts a fresh shell and cannot show PATH
-          # resolution after this step's local environment changes.
-          original_mslink="$temp/ffmpeg-mslink.original"
-          cp ./compat/windows/mslink "$original_mslink"
-          sed -i '2i set -x' ./compat/windows/mslink
-          echo "FFmpeg configure shell cl: $(command -v cl || true)"
-          echo "FFmpeg configure shell link.exe: $(command -v link.exe || true)"
-          set +e
           ./configure "${configure_args[@]}"
-          configure_status=$?
-          set -e
-          cp "$original_mslink" ./compat/windows/mslink
-          if [[ "$configure_status" -ne 0 ]]; then
-            echo "FFmpeg configure log (last 240 lines):"
-            tail -n 240 ffbuild/config.log
-            exit "$configure_status"
-          fi
-          if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config.h; then
+          # Codec component selections are emitted in config_components.h;
+          # config.h contains FFmpeg's build/platform configuration instead.
+          if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config_components.h; then
             echo "FFmpeg did not configure the required libvpx VP9 encoder."
             echo "FFmpeg libvpx configure probes:"
             grep -n -B 8 -A 16 -i -E 'libvpx_vp9_encoder|vpx_codec_vp9_cx|VPX_IMG_FMT_HIGHBITDEPTH|vpxmd|LNK[0-9]{4}' ffbuild/config.log | tail -n 180 || true
-            echo "FFmpeg configure log (last 240 lines):"
-            tail -n 240 ffbuild/config.log
             exit 1
           fi
           make -j2
@@ -1092,30 +1075,6 @@ jobs:
           } > "$temp/FFMPEG-BUILD-INFO.txt"
           cat "$temp/FFMPEG-BUILD-INFO.txt"
           tar -czf "$temp/ffmpeg-8.1.3-install.tar.gz" -C "$temp" ffmpeg-8.1.3-install
-
-      - name: Diagnose failed Windows FFmpeg configure
-        if: failure() && steps.ffmpeg-build.outcome == 'failure'
-        shell: msys2 {0}
-        run: |
-          set +e
-          temp="$(cygpath -u "$RUNNER_TEMP")"
-          source="$temp/ffmpeg-8.1.3"
-          cd "$source" || exit 0
-          cl_path="$(command -v cl.exe || command -v cl || true)"
-          link_path="$(command -v link.exe || command -v link || true)"
-          cl_directory="$(dirname "$cl_path")"
-          echo "MSVC compiler: $cl_path"
-          echo "MSVC linker candidates: $cl_directory/link and $cl_directory/link.exe"
-          ls -l "$cl_path" "$cl_directory/link" "$cl_directory/link.exe" 2>&1 || true
-          echo "Failure-step PATH linker (fresh-shell context): $link_path"
-          echo "FFmpeg mslink trace from configure log:"
-          grep -n -C 5 -E 'compat/windows/mslink|link\.exe' ffbuild/config.log | tail -n 100 || true
-          echo "FFmpeg configure log (last 240 lines):"
-          tail -n 240 ffbuild/config.log 2>&1 || true
-          if [[ -f "$temp/ffmpeg-mslink.original" ]]; then
-            cp "$temp/ffmpeg-mslink.original" compat/windows/mslink
-          fi
-          exit 0
 
       - name: Build the production media packaging probe
         shell: msys2 {0}
