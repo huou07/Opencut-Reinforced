@@ -160,7 +160,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'media insertion into the timeline',
   );
 
-  final mediaClipIds = _keySuffixes(tester, 'timeline-clip-');
+  final mediaClipIds = _timelineClipIds(tester);
   final existingTrackIds = _keySuffixes(tester, 'timeline-track-lock-');
   final addTextTrack = find.byKey(const ValueKey('timeline-add-text-track'));
   await tester.ensureVisible(addTextTrack);
@@ -200,11 +200,12 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
         find.byKey(const ValueKey('timeline-text-content')).evaluate().isEmpty,
     'title editor submission',
   );
+  final priorFeedback = _visibleSnackBarMessage(tester);
   await _pumpUntil(
     tester,
     () =>
-        _timelineClipCount(tester) == mediaClipIds.length + 1 ||
-        _visibleSnackBarMessage(tester) != null,
+        _timelineClipIds(tester).length == mediaClipIds.length + 1 ||
+        _hasNewSnackBarMessage(tester, priorFeedback),
     'insert title over the imported video',
   );
   expect(
@@ -213,8 +214,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     reason: 'Title insertion feedback: ${_visibleSnackBarMessage(tester)}',
   );
 
-  final titleClipIds = _keySuffixes(tester, 'timeline-clip-')
-    ..removeAll(mediaClipIds);
+  final titleClipIds = _timelineClipIds(tester)..removeAll(mediaClipIds);
   expect(titleClipIds, hasLength(1));
   final titleClipId = titleClipIds.single;
   final titleClip = find.byKey(ValueKey('timeline-clip-$titleClipId'));
@@ -528,10 +528,12 @@ Set<String> _keySuffixes(WidgetTester tester, String prefix) => tester
     .map((value) => value.substring(prefix.length))
     .toSet();
 
-int _timelineClipCount(WidgetTester tester) => _keySuffixes(
+Set<String> _timelineClipIds(WidgetTester tester) => _keySuffixes(
   tester,
   'timeline-clip-',
-).where((suffix) => !suffix.startsWith('tooltip-')).length;
+).where((suffix) => !suffix.startsWith('tooltip-')).toSet();
+
+int _timelineClipCount(WidgetTester tester) => _timelineClipIds(tester).length;
 
 String? _visibleSnackBarMessage(WidgetTester tester) {
   for (final snackBar in tester.widgetList<SnackBar>(find.byType(SnackBar))) {
@@ -539,6 +541,11 @@ String? _visibleSnackBarMessage(WidgetTester tester) {
     if (content is Text) return content.data;
   }
   return null;
+}
+
+bool _hasNewSnackBarMessage(WidgetTester tester, String? previousMessage) {
+  final message = _visibleSnackBarMessage(tester);
+  return message != null && message != previousMessage;
 }
 
 bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
