@@ -181,6 +181,8 @@ Both are built as static libraries and linked into the existing dynamically
 replaceable FFmpeg shared libraries. The app and helper packages carry the
 upstream Opus COPYING text, libvpx LICENSE and PATENTS notices; Developer
 Preview source assets include the exact codec archives and build metadata.
+The Windows build uses libvpx's installed `lib/x64/vpxmd.lib` name and points
+the generated pkg-config entry at that archive for FFmpeg's MSVC link.
 The upstream source licenses permit redistribution subject to their included
 BSD-style conditions and disclaimers. The Opus notice identifies specific
 royalty-free patent grants; the libvpx patent notice grants rights only for

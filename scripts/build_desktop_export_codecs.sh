@@ -107,6 +107,15 @@ cd "$work/libvpx-build"
 make -j2
 make install
 
+if [[ "$platform" == windows ]]; then
+  # libvpx's MSVC target installs vpxmd.lib below lib/x64 and emits a pkg-config
+  # entry for libvpx, while FFmpeg's MSVC linker needs the target subdirectory
+  # and archive name to match that install layout.
+  test -f "$prefix/lib/x64/vpxmd.lib"
+  sed -i 's@^Libs:.*$@Libs: -L${libdir}/x64 -lvpxmd@' \
+    "$prefix/lib/pkgconfig/vpx.pc"
+fi
+
 pkgconfig="$prefix/lib/pkgconfig"
 mkdir -p "$pkgconfig"
 cat > "$pkgconfig/opus.pc" <<EOF
@@ -123,12 +132,20 @@ Libs.private: -lm
 Cflags: -I\${includedir}/opus
 EOF
 test -f "$prefix/lib/libopus.a" || test -f "$prefix/lib/opus.lib"
-test -f "$prefix/lib/libvpx.a" || test -f "$prefix/lib/vpx.lib"
+if [[ "$platform" == windows ]]; then
+  test -f "$prefix/lib/x64/vpxmd.lib"
+else
+  test -f "$prefix/lib/libvpx.a"
+fi
 test -f "$pkgconfig/vpx.pc"
 if [[ "$platform" == windows ]]; then
   # MSVC provides math/thread symbols in its C runtime rather than -lm/-lpthread.
   sed -i 's/ -lm$//' "$pkgconfig/vpx.pc"
   sed -i 's/^Libs\.private:.*/Libs.private:/' "$pkgconfig/opus.pc" "$pkgconfig/vpx.pc"
+  if ! PKG_CONFIG_PATH="$pkgconfig" pkg-config --static --libs vpx | grep -Fq -- '-lvpxmd'; then
+    echo "MSVC libvpx pkg-config flags do not name the installed vpxmd archive" >&2
+    exit 1
+  fi
   if PKG_CONFIG_PATH="$pkgconfig" pkg-config --static --libs vpx | grep -Eq -- '(^| )-l(m|pthread)( |$)'; then
     echo "MSVC libvpx pkg-config flags still contain POSIX-only libraries" >&2
     exit 1
