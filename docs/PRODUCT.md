@@ -292,16 +292,17 @@ Normal import, thumbnails, waveforms, proxies, preview, and export run on the
 packaged FFmpeg 8.1.3 runtime in supported packages: no system `ffmpeg`/`ffprobe`
 or developer `PATH` override is required for a packaged user journey.
 
-The verified packaged profile supports Matroska video/audio and standalone PCM
-WAV. This change adds standalone MP3 to the same import/decode path; its
-exact-SHA packaged cross-platform verification is pending:
+The existing verified packaged profile supports Matroska video/audio and
+standalone PCM WAV. The candidate adds standalone MP3 and H.264/AAC Matroska
+import; exact-SHA packaged cross-platform verification for these additions and
+the longer export journey is pending:
 
 | Container | Supported streams |
 | --- | --- |
-| Matroska (`.mkv`) | FFV1 video and/or PCM S16LE audio |
+| Matroska (`.mkv`) | FFV1/PCM S16LE, VP9/Opus, and candidate H.264/AAC streams |
 | RIFF/RF64 WAV (`.wav`) | Audio-only PCM S16LE |
-| MP3 (`.mp3`) | Audio-only MP3; candidate pending packaged verification |
-| Matroska/WebM (`.mkv`, `.webm`) | FFV1/PCM S16LE or VP9/Opus; packaged WebM round-trip import verification is pending |
+| MP3 (`.mp3`) | Audio-only MP3; packaged verification pending |
+| WebM (`.webm`) | VP9/Opus; round-trip import verification pending |
 
 An implementation candidate now adds ISO BMFF/MP4-family H.264 video and AAC
 audio import through the same FFmpeg decoder and Rust import path. The candidate
@@ -325,12 +326,16 @@ current Rust proof nor the pending desktop path establishes camera-source
 variation or physical-device performance. The import profile remains a
 candidate pending packaged acceptance and codec patent/distribution review.
 MP4 export remains out of scope; the lossless Matroska export remains available
-on desktop and Android.
+on desktop and Android. Matroska also accepts H.264 video and AAC audio through
+the existing packaged FFmpeg decoder path. A pinned 30-second Big Buck Bunny
+source is used only by the desktop packaged journey; its original soundtrack is
+not included. Exact packaged proof for that longer import/export journey is
+pending.
 
 A file whose signature is outside Matroska, RIFF/RF64 WAV, MP3, or ISO BMFF is rejected as an
 unsupported container before probing. WAV video or non-PCM audio, and Matroska
-streams outside FFV1/PCM S16LE, are rejected as unsupported codecs after
-probing. MP3 cover-art streams are ignored as attached pictures; MP3 video or
+streams outside FFV1/PCM S16LE, H.264/AAC, or VP9/Opus are rejected as
+unsupported codecs after probing. MP3 cover-art streams are ignored as attached pictures; MP3 video or
 non-MP3 audio is rejected. Unsupported media is not reported as corruption.
 Audio-only WAV and MP3 can be placed on an audio track and decoded by the same
 software preview path as Matroska audio. The bundled MP3 excerpt is CC0; the

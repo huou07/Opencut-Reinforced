@@ -15,6 +15,14 @@ silence, used only to exercise stream decode and surround-to-stereo downmix.
 The fixture has 1920×1080 H.264 video at 24 fps and 5.1 AAC audio at 48 kHz.
 Its SHA-256 is `7b88ad19dc59986f59a59033e3d7a51d16d5cb3e454796ae6556c61e642b057a`.
 
+The packaged desktop product journey fetches the same 30-second source MP4
+from the immutable upstream revision above and verifies its size
+(`22718509` bytes) and SHA-256
+`07b756a4c7b481829776645c153167ca14c9df802ddbea7dffda3d817aa5261a` before
+use. The journey remuxes only its H.264 video with the fixture's generated
+silent AAC track into Matroska; the downloaded original soundtrack is never
+used, and the source MP4 is not committed or shipped with OR.
+
 `phone_portrait_90_h264_aac.mp4` is a one-second stream-copy excerpt of the
 Samsung Galaxy S9 H.264/AAC portrait-orientation sample in the CC0
 [`shotstack/test-media` repository](https://github.com/shotstack/test-media/tree/b790a2b72325feecd189291c52663ed8123b1839/orientation).

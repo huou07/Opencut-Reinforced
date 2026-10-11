@@ -5,17 +5,30 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_FILE = "integration_test/packaged_product_journey_test.dart"
 TEST_NAME = "packaged desktop product journey"
+REPRESENTATIVE_MEDIA_URL = (
+    "https://raw.githubusercontent.com/chthomos/video-media-samples/"
+    "997cb58f16bc3433652506910734be75bc64d768/"
+    "big-buck-bunny-1080p-30sec.mp4"
+)
+REPRESENTATIVE_MEDIA_SIZE = 22_718_509
+REPRESENTATIVE_MEDIA_SHA256 = (
+    "07b756a4c7b481829776645c153167ca14c9df802ddbea7dffda3d817aa5261a"
+)
 FORBIDDEN_ENVIRONMENT = (
     "OR_FFMPEG_PATH",
     "OR_FFPROBE_PATH",
@@ -60,6 +73,87 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _download_representative_media(destination: Path) -> None:
+    request = Request(
+        REPRESENTATIVE_MEDIA_URL,
+        headers={"User-Agent": "Opencut-Reinforced-packaged-journey"},
+    )
+    for attempt in range(3):
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            with urlopen(request, timeout=180) as response, destination.open("wb") as output:
+                while chunk := response.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > REPRESENTATIVE_MEDIA_SIZE:
+                        destination.unlink(missing_ok=True)
+                        raise SystemExit(
+                            "Pinned representative media exceeded its size bound."
+                        )
+                    digest.update(chunk)
+                    output.write(chunk)
+        except (OSError, URLError) as error:
+            destination.unlink(missing_ok=True)
+            if attempt == 2:
+                raise SystemExit(
+                    f"Could not fetch pinned representative media: {error}"
+                ) from error
+            time.sleep(2**attempt)
+            continue
+        break
+    if (
+        size != REPRESENTATIVE_MEDIA_SIZE
+        or digest.hexdigest() != REPRESENTATIVE_MEDIA_SHA256
+    ):
+        destination.unlink(missing_ok=True)
+        raise SystemExit("Pinned representative media failed its size or SHA-256 check.")
+
+
+def _prepare_representative_media(
+    ffmpeg: Path, source: Path, silence_fixture: Path, destination: Path
+) -> None:
+    completed = subprocess.run(
+        [
+            str(ffmpeg),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            str(source),
+            "-stream_loop",
+            "-1",
+            "-i",
+            str(silence_fixture),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-map_chapters",
+            "-1",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            "-t",
+            "30",
+            "-map_metadata",
+            "-1",
+            "-f",
+            "matroska",
+            str(destination),
+        ],
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if completed.returncode != 0:
+        raise SystemExit(
+            "Packaged FFmpeg could not prepare the representative media: "
+            f"{completed.stderr[-2000:]}"
+        )
 
 
 def _restore_macos_bridge_alias(bridge: Path) -> None:
@@ -155,11 +249,61 @@ def main() -> int:
         if guarded.returncode == 0:
             raise SystemExit(f"The inert host {helper} guard unexpectedly succeeded.")
 
-    source = ROOT / "crates/or_media/tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4"
-    media = work / "big-buck-bunny.mp4"
-    shutil.copyfile(source, media)
-    replacement_media = work / "tiny-relinked.mkv"
-    shutil.copyfile(ROOT / "crates/or_media/tests/fixtures/tiny.mkv", replacement_media)
+    media = work / "big-buck-bunny.mkv"
+    representative_source = work / "big-buck-bunny-source.mp4"
+    _download_representative_media(representative_source)
+    _prepare_representative_media(
+        ffmpeg,
+        representative_source,
+        ROOT / "crates/or_media/tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4",
+        media,
+    )
+    input_probe = subprocess.run(
+        [
+            str(ffprobe),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=format_name,duration,size:stream=codec_type,codec_name,width,height,channels",
+            "-of",
+            "json",
+            str(media),
+        ],
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+        timeout=30,
+    )
+    if input_probe.returncode != 0:
+        raise SystemExit(
+            "Packaged ffprobe could not inspect the prepared representative media: "
+            f"{input_probe.stderr[-2000:]}"
+        )
+    input_probe_result = json.loads(input_probe.stdout)
+    representative_duration = float(input_probe_result["format"].get("duration", "0"))
+    input_streams = input_probe_result["streams"]
+    input_video = next(
+        (stream for stream in input_streams if stream["codec_type"] == "video"), None
+    )
+    input_audio = next(
+        (stream for stream in input_streams if stream["codec_type"] == "audio"), None
+    )
+    if (
+        input_video is None
+        or input_video.get("codec_name") != "h264"
+        or (input_video.get("width"), input_video.get("height")) != (1920, 1080)
+        or input_audio is None
+        or input_audio.get("codec_name") != "aac"
+        or input_audio.get("channels") != 6
+        or representative_duration < 29.9
+    ):
+        raise SystemExit(
+            "Packaged helpers did not prepare the pinned 30-second H.264/AAC test media: "
+            f"{input_probe_result}"
+        )
+    reimport_timeline_start = f"{math.ceil(representative_duration)}/1"
+    replacement_media = work / "relinked-bunny.mkv"
+    shutil.copyfile(media, replacement_media)
     unsupported = work / "unsupported.mp4"
     unsupported.write_bytes(b"not an OR supported media file\n")
     missing = work / "missing-source.mkv"
@@ -203,6 +347,7 @@ def main() -> int:
         {
             "OR_PACKAGED_JOURNEY_PROJECT": str(project),
             "OR_PACKAGED_JOURNEY_MEDIA": str(media),
+            "OR_PACKAGED_JOURNEY_REIMPORT_START": reimport_timeline_start,
             "OR_PACKAGED_JOURNEY_REPLACEMENT_MEDIA": str(replacement_media),
             "OR_PACKAGED_JOURNEY_UNSUPPORTED_MEDIA": str(unsupported),
             "OR_PACKAGED_JOURNEY_MISSING_MEDIA": str(missing),
@@ -315,8 +460,12 @@ def main() -> int:
         raise SystemExit("Export is not an independently recognizable WebM file.")
     if float(export_format.get("duration", "0")) <= 0:
         raise SystemExit("Export has no playable duration.")
-    if export.stat().st_size > 2_000_000:
-        raise SystemExit("The short WebM product-journal export exceeded its 2 MB budget.")
+    if float(export_format.get("duration", "0")) < 29.9:
+        raise SystemExit("The WebM export did not retain the full representative edit.")
+    if export.stat().st_size >= media.stat().st_size * 0.8:
+        raise SystemExit(
+            "The WebM export did not reduce the representative source size by 20%."
+        )
 
     helper_env = {
         key: value
@@ -355,7 +504,11 @@ def main() -> int:
             "The packaged ffprobe did not decode frames from both exported streams: "
             f"{decoded_frame_counts}"
         )
-
+    if decoded_frame_counts.get("video", 0) < 719:
+        raise SystemExit(
+            "The packaged output did not decode all 720 representative video frames: "
+            f"{decoded_frame_counts}"
+        )
     report = {
         "platform": device,
         "host_ffmpeg_path_lookup": "blocked",
@@ -369,6 +522,9 @@ def main() -> int:
         "project_sha256_after_failures": _sha256(project),
         "export_sha256": _sha256(export),
         "export_bytes": export.stat().st_size,
+        "source_bytes": media.stat().st_size,
+        "export_source_size_ratio": export.stat().st_size / media.stat().st_size,
+        "representative_media_sha256": REPRESENTATIVE_MEDIA_SHA256,
         "export_streams": streams,
         "export_format": export_format,
         "export_full_decode": decoded_frame_counts,
@@ -390,6 +546,11 @@ def main() -> int:
                 f"- Export: `{export.stat().st_size}` bytes at {video['width']}x{video['height']}; "
                 "WebM/VP9/Opus independently probed and fully decoded by packaged ffprobe "
                 f"(frames: {decoded_frame_counts}).\n"
+            )
+            output.write(
+                f"- Representative source: 30 seconds, 1080p H.264/AAC; "
+                f"{media.stat().st_size} bytes. Export/source size ratio: "
+                f"{export.stat().st_size / media.stat().st_size:.3f}.\n"
             )
             output.write(f"- Evidence report: `{report_path}`\n")
     return 0

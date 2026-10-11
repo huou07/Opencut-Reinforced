@@ -129,7 +129,7 @@ impl Error for MediaProbeError {}
 ///
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
 /// a project, or mutate project revision/history. Files outside the supported
-/// import profiles (Matroska/WebM with FFV1/PCM S16LE or VP9/Opus,
+/// import profiles (Matroska/WebM with FFV1/PCM S16LE, H.264/AAC, or VP9/Opus,
 /// audio-only PCM S16LE WAV or MP3, or MOV-family H.264/AAC) are rejected as
 /// unsupported formats.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
@@ -590,8 +590,8 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
 /// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// Matroska/WebM accepts FFV1/PCM S16LE or VP9/Opus; WAV and MP3 are audio-only;
-/// MOV/MP4 accepts H.264 video and/or AAC audio.
+/// Matroska/WebM accepts FFV1/PCM S16LE, H.264/AAC, or VP9/Opus; WAV and MP3
+/// are audio-only; MOV/MP4 accepts H.264 video and/or AAC audio.
 /// Unsupported streams are reported as unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
     let is_matroska = metadata
@@ -613,14 +613,18 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
     for stream in metadata.streams() {
         let supported = match stream {
             MediaStreamMetadata::Video(video) => video.codec_name().is_some_and(|codec| {
-                (is_matroska && matches!(codec, MATRIX_VIDEO_CODEC | WEBM_VIDEO_CODEC))
+                (is_matroska
+                    && matches!(
+                        codec,
+                        MATRIX_VIDEO_CODEC | WEBM_VIDEO_CODEC | MOV_VIDEO_CODEC
+                    ))
                     || (is_mov && codec == MOV_VIDEO_CODEC)
             }),
             MediaStreamMetadata::Audio(audio) => {
                 has_audio = true;
                 audio.codec_name().is_some_and(|codec| {
                     ((is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC)
-                        || (is_matroska && codec == WEBM_AUDIO_CODEC)
+                        || (is_matroska && matches!(codec, WEBM_AUDIO_CODEC | MOV_AUDIO_CODEC))
                         || (is_mp3 && codec == "mp3")
                         || (is_mov && codec == MOV_AUDIO_CODEC)
                 })
@@ -979,6 +983,17 @@ mod tests {
     }
 
     #[test]
+    fn import_matrix_accepts_h264_aac_matroska_media() {
+        for json in [
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":1920,"height":1080},{"index":1,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":6}]}"#.as_slice(),
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":1920,"height":1080}]}"#.as_slice(),
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+        ] {
+            enforce_import_matrix(&parse_probe_json(json, 4096).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
     fn import_matrix_accepts_audio_only_pcm_wav_and_rejects_non_audio_wav() {
         let audio = br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"48000","channels":2}]}"#;
         enforce_import_matrix(&parse_probe_json(audio, 1024).unwrap()).unwrap();
@@ -1050,10 +1065,10 @@ mod tests {
 
     #[test]
     fn import_matrix_rejects_foreign_codecs_and_containers() {
-        let video = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":16,"height":16}]}"#;
-        let audio = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#;
         let unnamed = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","width":16,"height":16}]}"#;
-        for json in [video as &[u8], audio as &[u8], unnamed as &[u8]] {
+        let hevc = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":16,"height":16}]}"#;
+        let pcm_float = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"pcm_f32le","sample_rate":"48000","channels":2}]}"#;
+        for json in [unnamed as &[u8], hevc as &[u8], pcm_float as &[u8]] {
             let metadata = parse_probe_json(json, 64).unwrap();
             assert_eq!(
                 enforce_import_matrix(&metadata).unwrap_err().code(),
