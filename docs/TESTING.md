@@ -734,6 +734,10 @@ hardening commit itself must pass both workflows.
   cannot satisfy the check. This updated packaged journey is pending exact-SHA
   hosted verification. Emulator timing is reported as emulator evidence and
   does not establish physical-device performance.
+- Android's cross-compiled FFmpeg configure step restricts `pkg-config` to the
+  per-ABI codec metadata directory, so host libraries cannot satisfy or
+  contaminate target codec checks. If configuration fails, the exact target's
+  FFmpeg `config.log` tail is retained in the job log for diagnosis.
 - It then selects two fixture videos in one native DocumentsUI multi-select
   action and verifies both SAF references reach the real media library. The
   selector long-presses the first file to enter selection mode, then selects

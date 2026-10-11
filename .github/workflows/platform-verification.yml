@@ -1327,9 +1327,16 @@ jobs:
               "${common_configure_args[@]}"
             )
             read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
-            PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" \
+            if ! PKG_CONFIG_LIBDIR="$codec_prefix/lib/pkgconfig" \
+              PKG_CONFIG_PATH="$codec_prefix/lib/pkgconfig" \
               PKG_CONFIG_ALLOW_CROSS=1 \
-              ./configure "${configure_args[@]}" "${export_configure_args[@]}"
+              ./configure "${configure_args[@]}" "${export_configure_args[@]}"; then
+              echo "Android FFmpeg configure failed for $abi; preserving the codec probe diagnostics."
+              if [[ -f ffbuild/config.log ]]; then
+                tail -n 180 ffbuild/config.log
+              fi
+              exit 1
+            fi
             grep -q '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' ffbuild/config_components.h
             grep -q '^#define CONFIG_LIBOPUS_ENCODER 1$' ffbuild/config_components.h
             grep -q '^#define CONFIG_WEBM_MUXER 1$' ffbuild/config_components.h
