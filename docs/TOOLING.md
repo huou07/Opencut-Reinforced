@@ -57,6 +57,11 @@ GitHub Actions is the canonical place for native platform builds. Contributors d
 - `Android APK build`: FFmpeg 8.1.3 shared-library builds and Rust cross-links for `arm64-v8a`, `armeabi-v7a`, and `x86_64`; APK checks for FFmpeg, Rust bridge, and Android texture JNI libraries on all three ABIs; and API 36 x86_64 SwiftShader emulator coverage for FFmpeg loading, Flutter/Rust bridge loading, and software preview presentation through Flutter `SurfaceProducer`. Physical MediaCodec and HardwareBuffer coverage is reported as `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.
 - `Developer Preview`: scheduled nightly or manual `main` builds; publication requires successful Platform Verification for the exact source commit and includes four app packages, three desktop CLI packages, checksums, and build information. The Android APK reuses that run's verified FFmpeg install, stages its shared libraries into `jniLibs`, and checks the bridge and FFmpeg libraries for all three packaged ABIs.
 
+The macOS native project-lifecycle integration step is bounded to 35 minutes.
+The same lifecycle group passed in 21 minutes on one hosted run but later
+remained stuck after Flutter reported an app-foreground failure; the timeout
+keeps an unresolved hosted launch from consuming the full macOS job window.
+
 The desktop jobs also build the production FFmpeg 8.1.3 link probe and verify
 runtime packaging and loading. The Windows probe uses MSYS2 for `pkg-config`
 path handling, so Visual Studio's `link.exe` must take precedence over

@@ -522,6 +522,7 @@ jobs:
           "Rust project bridge stores editable titles and manual captions"
 
       - name: Run native Flutter project lifecycle tests
+        timeout-minutes: 35
         working-directory: apps/or_app
         env:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
