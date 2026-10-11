@@ -32,11 +32,14 @@ debug symbols as a fix. Run
 [38133514739](https://github.com/huou07/Opencut-Reinforced/actions/runs/38133514739)
 on `ff0f0fd5f276c7bae2c30780b37aaeee170c4b90` passed Linux, macOS and Android
 packaged journeys and all Rust, Flutter, and descriptor checks, but Windows
-again failed at the probe. Failure capture identified the cause: MSVC provides
-`cl.exe`, not bare `cl`, so FFmpeg falls back to PATH lookup and selects
-MSYS2's `/usr/bin/link.exe` instead of the installed Visual Studio linker.
-The current candidate prepends the adjacent MSVC linker and asserts that
-`link.exe` resolves there before configure. Exact-SHA verification is pending.
+again failed at the probe. The failure-only diagnostic runs in a fresh shell,
+so its `/usr/bin/link.exe` result does not prove which executable configure
+used. Run
+[38135332968](https://github.com/huou07/Opencut-Reinforced/actions/runs/38135332968)
+on `8de5b346e529ad142b405018fe8b83df370548dd` again passed every non-Windows
+job, but the probe still failed despite a build-shell assertion that MSVC's
+`link.exe` resolved first. The cause remains open. The next run traces
+`compat/windows/mslink` inside configure and captures that trace on failure.
 Profile longer media only when real evidence shows a quality, responsiveness,
 cancellation, or resource problem. Android remains Matroska-only; emulator
 acceptance does not establish physical-device performance.

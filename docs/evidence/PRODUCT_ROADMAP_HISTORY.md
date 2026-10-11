@@ -925,3 +925,14 @@ resolved `link.exe` to `/usr/bin/link.exe` even though the adjacent MSVC
 fallback. The workflow now prepends Visual Studio's linker directory and
 asserts the resolution before configure. Exact-SHA hosted verification of that
 fix is pending; the run does not establish Windows packaged behavior.
+
+Exact-SHA run [38135332968](https://github.com/huou07/Opencut-Reinforced/actions/runs/38135332968)
+on `8de5b346e529ad142b405018fe8b83df370548dd` passed Linux and macOS packaged
+journeys, Android all-ABI/SAF acceptance, Rust, Flutter, and descriptor checks.
+Windows failed again at the FFmpeg stdbit link probe. The configure shell
+asserted that MSVC's `link.exe` resolved first, so prepending that directory
+did not fix the probe. The failure-only step reported `/usr/bin/link.exe` from
+its own fresh shell; that output is not evidence of the configure process's
+resolved linker. The next workflow change traces FFmpeg's wrapper from inside
+configure and records it for the independent failure step. No Windows package
+or cross-platform pass is claimed.
