@@ -965,3 +965,19 @@ encoder error. The timeout was not increased. The next acceptance edit records
 the already visible export status every ten seconds and on timeout, so the
 next run can distinguish slow progress from a reported failure without
 changing product behavior or its acceptance window.
+
+Exact-SHA run [38162539040](https://github.com/huou07/Opencut-Reinforced/actions/runs/38162539040)
+on `c3bcd95030d7fbcd7905a5a28d947e375f46497c` passed all non-Android jobs,
+including Linux, macOS, and Windows packaged journeys on the same real 1080p
+H.264/AAC sample. Each saved, reopened, relinked, exported 30 seconds of
+VP9/Opus, and independently decoded 720 video frames and 1,501 audio frames.
+Export times were Linux 47.299 seconds, macOS 57.394 seconds, and Windows
+182.114 seconds; the Windows journey passed, but its runtime is recorded as a
+dogfood performance concern rather than treated as a failed acceptance gate.
+Android reached FFmpeg's successful configure summary with VP9, Opus, and WebM
+enabled, then failed because the workflow searched for
+`ffbuild/config_components.h`. FFmpeg 8.1.3 writes `config_components.h` at the
+source root. The local fix changes only those three assertions; all-ABI Android
+packaging and SAF output verification remain unproven pending a fresh exact-SHA
+run. Rust, Flutter, and descriptor jobs passed. Repository hygiene passed on
+the same SHA.
