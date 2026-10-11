@@ -485,7 +485,7 @@ Future<void> _preserveProjectAcrossMissingProbe(
   await _pumpUntil(
     tester,
     () => find
-        .textContaining('could not publish the completed export')
+        .textContaining('Export destination is a folder')
         .evaluate()
         .isNotEmpty,
     'failed replacement feedback',

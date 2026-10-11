@@ -923,15 +923,17 @@ host FFmpeg lookup through
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, verify a missing source while the
 packaged probe is available, then verify an unavailable packaged probe against
-an existing source, failed replacement, and failed project reopen. It verifies
-transient failure messages finish clearing before continuing navigation, with
-a bounded wait rather than a fixed delay. The
+an existing source, a folder selected as an export destination, and failed
+project reopen. The export path rejects that folder before frame encoding and
+the journey checks its contents remain intact. It verifies transient failure
+messages finish clearing before continuing navigation, with a bounded wait
+rather than a fixed delay. The
 acceptance step checks that failures preserve the saved
 project and the failed destination, then uses the packaged `ffprobe` to validate
 FFV1 video and PCM S16LE audio in the export.
 If packaged export misses its existing acceptance window, the journey logs the
-current editor export status every ten seconds and at timeout for both the
-normal export and the failed-replacement path. This preserves the limit while
+current editor export status every ten seconds and at timeout for the normal
+export. This preserves the limit while
 distinguishing a stalled job from a reported encoder or publication error. UI
 steps that follow asynchronous timeline commands wait for their target control
 to exist before entering data, rather than relying on animation settling as

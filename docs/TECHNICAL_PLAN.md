@@ -787,7 +787,9 @@ lossless Matroska option; exact-SHA all-ABI packaging and the SAF output journey
 must pass before accepting the mobile profile. Both writers stage beside the destination and
 publish only after streams and trailer complete. Cancellation, offline media,
 and encode failures clean staging output, preserve an existing destination,
-and leave a new destination absent. The selected destination is an absolute
+and leave a new destination absent. An existing directory selected as the
+destination is rejected before frame encoding, avoiding expensive work that
+cannot be published. The selected destination is an absolute
 path with the extension required by the selected profile. Export does not
 mutate canonical project state or increment its revision.
 

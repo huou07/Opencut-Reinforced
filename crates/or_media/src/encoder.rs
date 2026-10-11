@@ -117,6 +117,11 @@ impl FfmpegSoftwareExportWriter {
             ));
         }
         let destination = destination.as_ref().to_path_buf();
+        if destination.is_dir() {
+            return Err(ExportEncodeError(
+                "Export destination is a folder. Choose a file name and try again.".to_owned(),
+            ));
+        }
         let staging_directory = create_staging_directory(&destination)?;
         let mut staging_guard = StagingDirectoryGuard::new(staging_directory.clone());
         let (container, staging_name, video_codec, audio_codec, pixel_format, video_scaler) =

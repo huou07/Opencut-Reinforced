@@ -295,6 +295,31 @@ fn webm_rejects_odd_dimensions_before_creating_output() {
 }
 
 #[test]
+fn export_rejects_a_folder_destination_before_creating_staging() {
+    ffmpeg::init().unwrap();
+    let directory = TestDirectory::new();
+    let destination = directory.0.join("failed-export.webm");
+    fs::create_dir(&destination).unwrap();
+    let sentinel = destination.join("preserve-me.txt");
+    fs::write(&sentinel, b"preserve this destination").unwrap();
+
+    let error = FfmpegSoftwareExportWriter::create_with_profile(
+        &destination,
+        SoftwareExportProfile::WebmVp9Opus,
+        64,
+        48,
+        30,
+        1,
+    )
+    .err()
+    .unwrap();
+
+    assert!(error.to_string().contains("Export destination is a folder"));
+    assert_eq!(fs::read(&sentinel).unwrap(), b"preserve this destination");
+    assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
+}
+
+#[test]
 fn exporting_over_an_existing_destination_replaces_it_atomically() {
     ffmpeg::init().unwrap();
     let directory = TestDirectory::new();
