@@ -733,6 +733,10 @@ void main() {
       final exportTimer = Stopwatch()..start();
       await tester.tap(exportButton);
       await tester.pump();
+      await _until(
+        tester,
+        () => find.text('Export video').evaluate().isNotEmpty,
+      );
       expect(find.text('Export video'), findsOneWidget);
       expect(find.text('WebM video'), findsOneWidget);
       await tester.tap(find.text('Continue'));
