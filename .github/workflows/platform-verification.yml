@@ -980,6 +980,8 @@ jobs:
           fi
           if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config.h; then
             echo "FFmpeg did not configure the required libvpx VP9 encoder."
+            echo "FFmpeg libvpx configure probes:"
+            grep -n -B 8 -A 16 -i -E 'libvpx_vp9_encoder|vpx_codec_vp9_cx|VPX_IMG_FMT_HIGHBITDEPTH|vpxmd|LNK[0-9]{4}' ffbuild/config.log | tail -n 180 || true
             echo "FFmpeg configure log (last 240 lines):"
             tail -n 240 ffbuild/config.log
             exit 1

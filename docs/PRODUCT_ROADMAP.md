@@ -18,13 +18,16 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish a genuinely useful compressed desktop export
-profile on top of the shared render path, prove the built package on all three
-desktop systems, then judge output quality and encode responsiveness on longer,
-representative media. Android remains Matroska-only until its packaged encoder
-profile is independently built and device-tested. This is implementation work
-in progress, not an accepted capability; the concise result belongs in Work
-stream E and exact run evidence belongs in the evidence ledger.
+Current product focus: finish and verify the shared WebM VP9/Opus profile on
+Windows. Linux and macOS packaged journeys now pass; Windows FFmpeg configure
+does not enable the required encoder. After that cross-platform export result,
+prioritize a packaged ordinary MP4/MOV user journey over further encode tuning.
+The current H.264/AAC Matroska journey already measures a 30-second WebM export;
+longer-media profiling should drive work only if it exposes an output-quality,
+responsiveness, cancellation, or resource problem. Android remains
+Matroska-only until its packaged encoder profile is independently built and
+device-tested. Android emulator evidence still does not stand in for physical
+device performance.
 
 ## Product acceptance target
 
@@ -87,9 +90,9 @@ journey unless results establish a real engine migration dependency.
 ## Current product status and highest-value gaps
 
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Export:** the lossless Matroska profile remains accepted. Desktop WebM VP9/Opus is an implementation candidate with successful local codec-enabled writer and helper decode checks; cross-platform packaged evidence is pending. Android stays Matroska-only until its own encoder package and device journey are verified.
-- **Known platform evidence gaps:** Android still lacks representative physical-device media/performance evidence. API 36 emulator behavior proves the exercised SAF journey only; it does not prove acoustic-device output or physical-device performance.
-- **Next work:** finish exact-SHA macOS, Windows, and Linux package verification plus the independent packaged WebM export journey. Then use longer representative media to assess picture quality, output size, encode time, cancellation, and memory. Continue the highest-value independent user-journey gap after those results; do not return to emulator micro-optimization without a measured failing threshold.
+- **Export:** the lossless Matroska profile remains accepted. On exact SHA `5c45a111435cac32ab6767bc5b9b8dffaaaf242a`, packaged Linux and macOS full user journeys independently exported and probed a 30.043-second WebM VP9/Opus file: Linux 11,684,838 bytes in 66,930 ms; macOS 11,674,373 bytes in 60,851 ms. Windows correctly failed closed because FFmpeg did not configure `libvpx_vp9_encoder`; focused configure-probe diagnostics are added for the next run. This is partial platform evidence, not cross-platform capability completion. Android remains Matroska-only.
+- **Known platform evidence gaps:** the overall Platform Verification run [38111281741](https://github.com/huou07/Opencut-Reinforced/actions/runs/38111281741) failed only the Windows VP9 configure guard; Linux, macOS, Android, Rust, Flutter, and descriptor jobs passed. Android SAF preview/resource acceptance passed in that run, but API 36 emulator observations do not prove physical-device performance or acoustic output.
+- **Next work:** resolve Windows VP9 configure detection/build from the emitted probe evidence and rerun packaged platform verification. Then add representative real MP4/MOV media to the packaged edit journey; the current packaged source is H.264/AAC in Matroska, so it does not yet prove the ordinary camera/container path. Assess longer-media output quality, cancellation, and resource use only where that journey reveals a material issue.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 

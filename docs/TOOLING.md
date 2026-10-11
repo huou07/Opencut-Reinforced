@@ -67,8 +67,9 @@ the Windows job reconstructs and checks the pinned Opus/libvpx pkg-config path
 in the consuming MSYS2 process, since validating it in the earlier codec-build
 step does not prove that a later shell can resolve it. After configure, the
 job also requires FFmpeg to enable its VP9 encoder and prints the configure
-log immediately if that capability is missing. The Windows texture
-adapter also parenthesizes `numeric_limits::max()` to avoid the
+log immediately if that capability is missing, including the libvpx symbol
+and linker probe context. The Windows texture adapter also parenthesizes
+`numeric_limits::max()` to avoid the
 function-like `max` macro from Windows headers. Its callback follows Flutter
 3.47.5's C++ `(width, height)` signature rather than the C callback's extra
 `user_data` parameter. Plugin registration creates its `unique_ptr` inside the
