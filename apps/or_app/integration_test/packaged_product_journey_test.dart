@@ -158,6 +158,65 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'media insertion into the timeline',
   );
 
+  final mediaClipIds = _keySuffixes(tester, 'timeline-clip-');
+  final existingTrackIds = _keySuffixes(tester, 'timeline-track-lock-');
+  final addTextTrack = find.byKey(const ValueKey('timeline-add-text-track'));
+  await tester.ensureVisible(addTextTrack);
+  await tester.tap(addTextTrack);
+  await _pumpUntil(
+    tester,
+    () =>
+        _keySuffixes(tester, 'timeline-track-lock-').length >
+        existingTrackIds.length,
+    'text track creation',
+  );
+  final addTitle = find.byKey(const ValueKey('timeline-add-title'));
+  await tester.ensureVisible(addTitle);
+  await tester.tap(addTitle);
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const ValueKey('timeline-text-content'))
+        .evaluate()
+        .isNotEmpty,
+    'title editor',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('timeline-text-content')),
+    'Opening scene',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('timeline-text-duration')),
+    '5/1',
+  );
+  await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+  await _pumpUntil(
+    tester,
+    () => _timelineClipCount(tester) == mediaClipIds.length + 1,
+    'insert title over the imported video',
+  );
+
+  final titleClipIds = _keySuffixes(tester, 'timeline-clip-')
+    ..removeAll(mediaClipIds);
+  expect(titleClipIds, hasLength(1));
+  final titleClipId = titleClipIds.single;
+  final titleClip = find.byKey(ValueKey('timeline-clip-$titleClipId'));
+  await tester.ensureVisible(titleClip);
+  await tester.tap(titleClip);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('timeline-edit-text-$titleClipId')));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.byKey(const ValueKey('timeline-text-content')),
+    'A real opening title',
+  );
+  await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+  await _pumpUntil(
+    tester,
+    () => find.text('Text: A real opening title').evaluate().isNotEmpty,
+    'revise title text before export',
+  );
+
   await _pumpUntil(
     tester,
     () => tester
@@ -233,6 +292,7 @@ Future<void> _reopenAndExport(
     () =>
         find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
         find.text('big-buck-bunny.mkv').evaluate().isNotEmpty &&
+        find.text('Text: A real opening title').evaluate().isNotEmpty &&
         _hasKeyPrefix(tester, 'timeline-clip-'),
     'saved project reopen with media and timeline',
     attempts: 900,
