@@ -3,6 +3,8 @@ use std::io::{self, BufRead, Write};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::TranscriptIdentity;
+
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const MAX_CONTROL_MESSAGE_BYTES: usize = 1024 * 1024;
 const MAX_ERROR_MESSAGE_BYTES: usize = 4096;
@@ -48,8 +50,7 @@ impl ManagedFileRef {
 #[serde(deny_unknown_fields)]
 pub struct TranscribeRequest {
     pub input: ManagedFileRef,
-    pub model_id: String,
-    pub model_version: String,
+    pub identity: TranscriptIdentity,
     pub language: Option<String>,
     pub max_duration_ms: u64,
 }
@@ -57,10 +58,7 @@ pub struct TranscribeRequest {
 impl TranscribeRequest {
     fn validate(&self) -> Result<(), ProtocolError> {
         self.input.validate()?;
-        if self.model_id.is_empty()
-            || self.model_id.len() > 128
-            || self.model_version.is_empty()
-            || self.model_version.len() > 128
+        if !valid_identity(&self.identity)
             || self.language.as_ref().is_some_and(|language| {
                 language.is_empty()
                     || language.len() > MAX_LANGUAGE_BYTES
@@ -73,6 +71,30 @@ impl TranscribeRequest {
         }
         Ok(())
     }
+}
+
+fn valid_identity(identity: &TranscriptIdentity) -> bool {
+    identity.media_sha256.len() == 64
+        && identity
+            .media_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        && !identity.provider_id.is_empty()
+        && identity.provider_id.len() <= 128
+        && !identity.model_id.is_empty()
+        && identity.model_id.len() <= 128
+        && !identity.model_version.is_empty()
+        && identity.model_version.len() <= 128
+        && !identity.model_license.is_empty()
+        && identity.model_license.len() <= 256
+        && [
+            identity.provider_id.as_str(),
+            identity.model_id.as_str(),
+            identity.model_version.as_str(),
+            identity.model_license.as_str(),
+        ]
+        .iter()
+        .all(|value| !value.contains(['\0', '\n', '\r']))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -243,6 +265,19 @@ mod tests {
         ProtocolEnvelope::new(Uuid::from_u128(1), message)
     }
 
+    fn identity() -> TranscriptIdentity {
+        TranscriptIdentity {
+            project_id: Uuid::from_u128(3),
+            project_revision: 7,
+            media_id: Uuid::from_u128(4),
+            media_sha256: "b".repeat(64),
+            provider_id: "whisper.cpp".to_owned(),
+            model_id: "whisper-tiny-en".to_owned(),
+            model_version: "1".to_owned(),
+            model_license: "MIT".to_owned(),
+        }
+    }
+
     #[test]
     fn transcribe_messages_roundtrip_in_one_newline_delimited_frame() {
         let message = request(ProviderMessage::StartTranscription {
@@ -252,8 +287,7 @@ mod tests {
                     size_bytes: 32,
                     sha256: "a".repeat(64),
                 },
-                model_id: "whisper-tiny-en".to_owned(),
-                model_version: "1".to_owned(),
+                identity: identity(),
                 language: Some("en".to_owned()),
                 max_duration_ms: 60_000,
             },
@@ -323,6 +357,25 @@ mod tests {
                     id: Uuid::from_u128(2),
                     size_bytes: crate::MAX_TRANSCRIPT_PROPOSAL_BYTES as u64 + 1,
                     sha256: "a".repeat(64),
+                },
+            })
+            .validate(),
+            Err(ProtocolError::InvalidMessage)
+        ));
+
+        let mut invalid_identity = identity();
+        invalid_identity.provider_id = "whisper\nother".to_owned();
+        assert!(matches!(
+            request(ProviderMessage::StartTranscription {
+                request: TranscribeRequest {
+                    input: ManagedFileRef {
+                        id: Uuid::from_u128(2),
+                        size_bytes: 1,
+                        sha256: "a".repeat(64),
+                    },
+                    identity: invalid_identity,
+                    language: None,
+                    max_duration_ms: 1_000,
                 },
             })
             .validate(),

@@ -33,7 +33,8 @@ pub struct TranscriptProposal {
 
 /// Identity supplied by the trusted project host before a provider is started.
 /// Provider output must match it exactly before it can enter the review path.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TranscriptIdentity {
     pub project_id: Uuid,
     pub project_revision: u64,

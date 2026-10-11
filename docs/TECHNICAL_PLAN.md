@@ -625,7 +625,10 @@ The V1 local sidecar uses child-process stdin/stdout with one bounded UTF-8 JSON
 object per line. Stdout carries protocol only; bounded diagnostics use stderr.
 Messages carry a protocol version and stable request/job ID and support
 readiness/capabilities, task start, progress, result, typed error, cancel,
-cancel acknowledgement, and shutdown. Control messages are at most 1 MiB
+cancel acknowledgement, and shutdown. Transcription starts carry both the
+managed normalized-audio file reference and the host-selected project/revision,
+original-media digest, provider, model version, and license identity so the
+provider can return a proposal bound to that request. Control messages are at most 1 MiB
 unless an existing repository bound is smaller. Large media and model artifacts
 use bounded managed-file references, not base64 payloads. Launch uses explicit
 argv without a shell, sanitized inherited environment, and managed per-job
