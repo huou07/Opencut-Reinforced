@@ -29,13 +29,17 @@ passed codec-source setup but failed FFmpeg configure while linking its MSVC
 alone previously added FFmpeg's `-debug` link flag. Exact-SHA run
 `38126190565` on `2c43fccad8cb80c850c52f5291927e57843a6e6c` disproved disabling
 debug symbols as a fix: the probe still fails without `-debug`, while preceding
-MSVC link probes pass. Debug symbols remain enabled. The wrapper reports no
-linker diagnostic. The first diagnostic stopped before reporting paths because
-the workflow exposes `cl.exe`, not bare `cl`; its next run checks both names and
-replays the final probe through the wrapper's `link.exe` fallback. Profile
-longer media only when real evidence shows a quality, responsiveness,
-cancellation, or resource problem. Android remains Matroska-only; emulator
-acceptance does not establish physical-device performance.
+MSVC link probes pass. Debug symbols remain enabled. Run
+[38130438314](https://github.com/huou07/Opencut-Reinforced/actions/runs/38130438314)
+on `22b0d07d6e2a0a6f913fd2d4edd90030cf05dfbe` again passed Linux, macOS and
+Android packaged journeys and all Rust, Flutter, and descriptor checks, but
+Windows failed at the same probe. Its inline diagnostics emitted no runtime
+output even though the handler checked both MSVC executable names. A separate
+failure-only Actions step now captures the preserved configure log and replays
+the exact wrapper link after the failed build step. Profile longer media only
+when real evidence shows a quality, responsiveness, cancellation, or resource
+problem. Android remains Matroska-only; emulator acceptance does not establish
+physical-device performance.
 
 ## Product acceptance target
 

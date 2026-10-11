@@ -902,3 +902,14 @@ because `command -v cl` returned no match under `set -e`; the toolchain exposes
 missing. The next diagnostic checks both names and replays the probe through
 that fallback. Linux and macOS packaged journeys, Android APK/SAF acceptance,
 Rust, Flutter, and descriptor checks all passed on this SHA.
+
+Exact-SHA run [38130438314](https://github.com/huou07/Opencut-Reinforced/actions/runs/38130438314)
+on `22b0d07d6e2a0a6f913fd2d4edd90030cf05dfbe` again passed the Linux and
+macOS packaged editing/export journeys, Android all-ABI package and SAF
+preview/resource journey, Rust, Flutter, and descriptor checks. Windows failed
+its FFmpeg build at the MSVC `stdbit.h` link probe. The in-step diagnostics
+added to this SHA produced no runtime output, leaving the linker cause
+unresolved. The next workflow revision moves capture into a failure-only
+Actions step so it can inspect the retained FFmpeg source/configure log after
+the failing step exits, and replay the exact wrapper link. No Windows packaged
+journey or cross-platform pass is claimed from this run.
