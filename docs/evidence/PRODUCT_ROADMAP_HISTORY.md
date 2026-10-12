@@ -1142,3 +1142,38 @@ verified every entry in `SHA256SUMS.txt`. This makes a multi-platform dogfood
 journey available; the release notes identify missing automatic captions,
 unsigned/ad-hoc signing, Android physical-device performance, and other preview
 limitations.
+
+## Android multi-source SAF import correction
+
+Platform Verification run
+[38196732759](https://github.com/huou07/Opencut-Reinforced/actions/runs/38196732759)
+on `13dcb51237668015e616c9d33bf66621697d161e` failed the Android SAF
+multi-import assertion at `android_saf_preview_test.dart:800`: the first two
+selected media imports succeeded and the audio-only third source returned
+`SOURCE_UNAVAILABLE`. This was a product failure, not a CI setup issue. The
+Flutter import path registered every selected SAF descriptor up front; after
+each successful project command, preview refresh replaced the native active
+source registry, invalidating descriptors for the remaining sources.
+
+Commit `39afed57adf3a04faba842f78ac73a9d68a1bbed` registers each granted
+source immediately before its import command, matching the preview refresh
+lifecycle. Registration failures that occur before native ownership is
+established preserve currently usable descriptors. A regression test verifies
+that a missing source does not clear an existing native descriptor. Existing
+per-source URI/grant validation, descriptor ownership, epoch checks, the
+64-source registry cap, and bounded worker queue remain in force.
+
+Exact-SHA Platform Verification run
+[38199486640](https://github.com/huou07/Opencut-Reinforced/actions/runs/38199486640)
+on that commit passed all seven jobs: Rust, Flutter, descriptor boundary, and
+Linux, macOS, Windows, and Android packaged checks. Android SAF report confirms
+one DocumentsUI selection imported the H.264/AAC MP4 sources and audio-only
+MP3, and passed caption import/export, relink, WebM export, process recovery,
+and relaunch checks. Export was independently decoded as VP9 video and Opus
+audio. At journey completion the report shows zero OS media file descriptors,
+zero in-flight frame leases, zero pending presentations, and zero queued
+operations; bounded presentation stress peaked at eight pending frame results.
+The same report records skipped emulator frames and a maximum 121.467 ms main
+draw during this workload. The emulator fixture proves the repaired SAF
+correctness and resource bounds only; representative physical-device
+responsiveness remains unverified. No physical-performance claim is made.
