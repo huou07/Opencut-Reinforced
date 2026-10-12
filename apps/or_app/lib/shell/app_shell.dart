@@ -1371,7 +1371,9 @@ class _AppShellState extends State<AppShell> {
       if (!model.installed) {
         final install = await _confirmSpeechModelDownload(model);
         if (!install || !mounted) return;
-        model = await _downloadSpeechModel(session, model);
+        final downloadedModel = await _downloadSpeechModel(session);
+        if (downloadedModel == null) return;
+        model = downloadedModel;
         if (!mounted) return;
       }
       if (!mounted) return;
@@ -1555,15 +1557,71 @@ class _AppShellState extends State<AppShell> {
       ) ??
       false;
 
-  Future<ProjectTranscriptionModel> _downloadSpeechModel(
+  Future<ProjectTranscriptionModel?> _downloadSpeechModel(
     ProjectSessionHandle session,
-    ProjectTranscriptionModel model,
   ) async {
     final download = await widget.projectGateway
         .beginTranscriptionModelDownload(session);
+    if (!mounted) {
+      await widget.projectGateway.cancelTranscriptionModelDownload(
+        session,
+        download.downloadId,
+      );
+      return null;
+    }
     final client = HttpClient();
-    var destination = File(download.destination);
-    try {
+    final destination = File(download.destination);
+    final downloadProgress = ValueNotifier<(int, bool)>((0, false));
+    var cancelled = false;
+    var verifying = false;
+    var dialogOpen = true;
+    BuildContext? dialogContext;
+    final dialog = showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        dialogContext = context;
+        return ValueListenableBuilder<(int, bool)>(
+          valueListenable: downloadProgress,
+          builder: (context, progress, _) {
+            final (received, isVerifying) = progress;
+            return AlertDialog(
+              title: const Text('Downloading local speech model'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LinearProgressIndicator(
+                    value: received / download.sizeBytes.toInt(),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    isVerifying
+                        ? 'Verifying and installing the model…'
+                        : '${(received / (1024 * 1024)).floor()} of ${(download.sizeBytes.toInt() / (1024 * 1024)).ceil()} MiB',
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: cancelled || verifying
+                      ? null
+                      : () {
+                          if (cancelled || verifying) return;
+                          cancelled = true;
+                          client.close(force: true);
+                          dialogOpen = false;
+                          Navigator.of(context).pop(false);
+                        },
+                  child: Text(cancelled ? 'Cancelling…' : 'Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    final transfer = () async {
       var uri = Uri.parse(download.source);
       HttpClientResponse? response;
       for (var redirect = 0; redirect <= 5; redirect++) {
@@ -1604,6 +1662,7 @@ class _AppShellState extends State<AppShell> {
             );
           }
           sink.add(chunk);
+          downloadProgress.value = (received, false);
         }
         await sink.flush();
       } finally {
@@ -1612,17 +1671,47 @@ class _AppShellState extends State<AppShell> {
       if (received != download.sizeBytes.toInt()) {
         throw const HttpException('The model download was incomplete.');
       }
+      if (cancelled) {
+        throw const HttpException('The model download was cancelled.');
+      }
+      verifying = true;
+      downloadProgress.value = (received, true);
       return await widget.projectGateway.finishTranscriptionModelDownload(
         session,
         download.downloadId,
       );
+    }();
+    try {
+      final model = await transfer;
+      final dialogUi = dialogContext;
+      if (dialogOpen && dialogUi != null && dialogUi.mounted) {
+        dialogOpen = false;
+        Navigator.of(dialogUi).pop(true);
+      }
+      if (mounted) await dialog;
+      return model;
     } catch (_) {
       await widget.projectGateway.cancelTranscriptionModelDownload(
         session,
         download.downloadId,
       );
+      final dialogUi = dialogContext;
+      if (dialogOpen && dialogUi != null && dialogUi.mounted) {
+        dialogOpen = false;
+        Navigator.of(dialogUi).pop(false);
+      }
+      if (mounted) {
+        try {
+          await dialog;
+        } on Object {
+          // The download dialog is already dismissed on cancellation.
+        }
+      }
+      if (cancelled) return null;
       rethrow;
     } finally {
+      dialogOpen = false;
+      downloadProgress.dispose();
       client.close(force: true);
     }
   }

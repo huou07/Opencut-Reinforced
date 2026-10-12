@@ -229,6 +229,19 @@ Phase 5E uses SQLite only for `<cache-root>/cache-index.sqlite3`, a rebuildable 
 
 The license of an inference runtime or source repository is not the license of the model weights, tokenizer, training data, or associated assets. Verify the exact model artifact and permitted use, modification, redistribution, attribution, and commercial terms before download, use, or bundling.
 
+The local transcription provider uses `whisper.cpp` v1.9.4 at commit
+`927cfce34f31707e17f2bff35c349632fb9e2c3a`, built as an optional desktop
+sidecar. Its upstream MIT license is included in each desktop application
+bundle beside a provenance notice; the provider adapter remains OR MIT code.
+The `ggml-tiny.en.bin` model is a separate 77,704,715-byte optional download
+from Hugging Face revision
+`5359861c739e955e79d9a303bcbc70fb988958b1`, pinned by SHA-256
+`921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f`.
+The model repository labels that artifact MIT licensed. OR asks before
+downloading it and does not bundle model weights. Neither this source/model
+license review nor the short local fixture establishes transcription quality,
+cross-platform runtime compatibility, or performance acceptance.
+
 At the upstream revisions checked for this blueprint on 2026-09-24, each of the following source projects publishes an MIT license. These checks cover runtime source only, not model artifacts or every transitive dependency:
 
 - [whisper.cpp source license](https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE)

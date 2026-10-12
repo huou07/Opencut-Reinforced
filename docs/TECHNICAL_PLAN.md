@@ -688,8 +688,9 @@ The application bridge now runs the bounded provider sidecar, downloads and
 installs the optional model through the verified model-store contract, checks
 source/proposal provenance, and exposes reviewable proposals to the existing
 caption import path. The Flutter user action asks before the model download,
-keeps audio processing local, supports job cancellation, and applies accepted
-text only through the captured-revision project command. Desktop packaging
+shows byte progress and can cancel the HTTPS transfer, keeps audio processing
+local, supports job cancellation, and applies accepted text only through the
+captured-revision project command. Desktop packaging
 must stage both pinned native executables and notices before enabling the
 feature in installed builds; Android remains unavailable until its runtime
 boundary is designed and verified. The integration feasibility result for

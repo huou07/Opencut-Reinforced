@@ -32,10 +32,12 @@ confidence estimate. OR must still turn those results into readable caption
 segments and let users review and edit the proposal before applying it through
 `timeline.captions.import` with the captured project revision.
 
-On 2026-10-12, the OR sidecar was built in Release mode and exercised over its
-real newline-delimited protocol on macOS arm64 with this exact pinned CLI,
-model, and upstream fixture. It returned one SHA-256/size-verified proposal
-containing the expected JFK transcript and shut down through the protocol.
+On 2026-10-12, OR source commit
+`5212c9e6f9fdbae51a681d0a299c90421a14c57e` was built in Release mode and its
+sidecar was exercised over the real newline-delimited protocol on macOS arm64
+with this exact pinned CLI, model, and upstream fixture. It returned one
+SHA-256/size-verified proposal containing the expected JFK transcript and shut
+down through the protocol.
 This verifies the source-sidecar integration, not the Flutter application,
 model-download UX, a clean installed package, multilingual quality, or
 cross-platform performance.

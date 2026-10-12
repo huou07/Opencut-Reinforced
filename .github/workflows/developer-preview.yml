@@ -104,6 +104,25 @@ jobs:
         with:
           toolchain: 1.98.0
 
+      - name: Build pinned local transcription runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/whisper.cpp-1.9.4"
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git "$source"
+          test "$(git -C "$source" rev-parse HEAD)" = 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S "$source" -B "$source/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DGGML_NATIVE=OFF
+          cmake --build "$source/build" --config Release --target whisper-cli -j 2
+          cargo build --locked --release -p or_whisper_provider
+          "$source/build/bin/whisper-cli" --version
+
       - name: Install Flutter 3.47.5
         shell: bash
         run: |
@@ -198,6 +217,21 @@ jobs:
           helpers="$app/Contents/MacOS"
           install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffmpeg" "$helpers/ffmpeg"
           install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffprobe" "$helpers/ffprobe"
+          install -m 755 "$RUNNER_TEMP/whisper.cpp-1.9.4/build/bin/whisper-cli" "$helpers/whisper-cli"
+          install -m 755 "$GITHUB_WORKSPACE/target/release/or-whisper-provider" "$helpers/or-whisper-provider"
+          whisper_notices="$app/Contents/Resources/ThirdPartyNotices/whisper.cpp"
+          mkdir -p "$whisper_notices"
+          cp "$RUNNER_TEMP/whisper.cpp-1.9.4/LICENSE" "$whisper_notices/LICENSE"
+          cat > "$whisper_notices/NOTICE.txt" <<'EOF'
+          whisper.cpp v1.9.4 (commit 927cfce34f31707e17f2bff35c349632fb9e2c3a)
+          is distributed under the included MIT license. The whisper-cli helper
+          is built from that source using the pinned Release configuration; the OR
+          provider adapter is built from this repository. Model weights are not
+          bundled and are downloaded only after user confirmation.
+          EOF
+          "$helpers/whisper-cli" --version
+          test -x "$helpers/or-whisper-provider"
+          test -s "$whisper_notices/LICENSE"
           for pattern in libavfilter*.dylib; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$frameworks/"
@@ -295,6 +329,26 @@ jobs:
           install: make pkgconf
           pacboy: clang:p
 
+      - name: Build pinned local transcription runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $env:RUNNER_TEMP 'whisper.cpp-1.9.4'
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git $source
+          if ((git -C $source rev-parse HEAD).Trim() -ne '927cfce34f31707e17f2bff35c349632fb9e2c3a') { throw 'whisper.cpp revision mismatch' }
+          $build = Join-Path $source 'build'
+          cmake -S $source -B $build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_STATIC=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_SERVER=OFF -DGGML_NATIVE=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          if ($LASTEXITCODE -ne 0) { throw 'whisper.cpp CMake configure failed' }
+          cmake --build $build --config Release --target whisper-cli --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'whisper.cpp build failed' }
+          cargo build --locked --release -p or_whisper_provider
+          if ($LASTEXITCODE -ne 0) { throw 'OR transcription provider build failed' }
+          $whisperCli = Get-ChildItem -Path (Join-Path $build 'bin') -Filter 'whisper-cli.exe' -File -Recurse | Select-Object -First 1
+          if ($null -eq $whisperCli) { throw 'whisper-cli.exe was not produced' }
+          & $whisperCli.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw 'whisper-cli smoke check failed' }
+          Add-Content -Path $env:GITHUB_ENV -Value "WHISPER_CLI_PATH=$($whisperCli.FullName)"
+
       - name: Install Flutter 3.47.5
         shell: pwsh
         run: |
@@ -388,6 +442,32 @@ jobs:
             if (-not (Test-Path $source -PathType Leaf)) { throw "FFmpeg helper missing: $helper" }
             Copy-Item -Path $source -Destination $bundle -Force
           }
+          Copy-Item -LiteralPath $env:WHISPER_CLI_PATH -Destination (Join-Path $bundle 'whisper-cli.exe') -Force
+          $provider = Join-Path $env:GITHUB_WORKSPACE 'target/release/or-whisper-provider.exe'
+          if (-not (Test-Path -LiteralPath $provider -PathType Leaf)) { throw 'OR transcription provider executable missing' }
+          Copy-Item -LiteralPath $provider -Destination (Join-Path $bundle 'or-whisper-provider.exe') -Force
+          $whisperNotices = Join-Path $bundle 'licenses/whisper.cpp'
+          New-Item -ItemType Directory -Force -Path $whisperNotices | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'whisper.cpp-1.9.4/LICENSE') (Join-Path $whisperNotices 'LICENSE')
+          @'
+          whisper.cpp v1.9.4 (commit 927cfce34f31707e17f2bff35c349632fb9e2c3a)
+          is distributed under the included MIT license. The whisper-cli helper
+          is built from that source using the pinned Release configuration; the OR
+          provider adapter is built from this repository. Model weights are not
+          bundled and are downloaded only after user confirmation.
+          '@ | Set-Content -LiteralPath (Join-Path $whisperNotices 'NOTICE.txt') -Encoding utf8
+          $savedPath = $env:PATH
+          Push-Location $bundle
+          try {
+            $env:PATH = "$bundle;$env:SystemRoot\System32"
+            & '.\whisper-cli.exe' --version
+          }
+          finally {
+            Pop-Location
+            $env:PATH = $savedPath
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged whisper-cli smoke check failed' }
+          if (-not (Test-Path (Join-Path $bundle 'or-whisper-provider.exe') -PathType Leaf)) { throw 'Packaged transcription provider missing' }
           $notices = Join-Path $bundle 'licenses/FFmpeg'
           New-Item -ItemType Directory -Force -Path $notices | Out-Null
           $zlibLicense = Join-Path $env:FFMPEG_INSTALL_PREFIX 'ZLIB-LICENSE.txt'
@@ -459,6 +539,25 @@ jobs:
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: 1.98.0
+
+      - name: Build pinned local transcription runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/whisper.cpp-1.9.4"
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git "$source"
+          test "$(git -C "$source" rev-parse HEAD)" = 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S "$source" -B "$source/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DGGML_NATIVE=OFF
+          cmake --build "$source/build" --config Release --target whisper-cli -j 2
+          cargo build --locked --release -p or_whisper_provider
+          "$source/build/bin/whisper-cli" --version
 
       - name: Install Flutter 3.47.5
         shell: bash
@@ -543,6 +642,21 @@ jobs:
           helpers="$bundle"
           install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffmpeg" "$helpers/ffmpeg"
           install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffprobe" "$helpers/ffprobe"
+          install -m 755 "$RUNNER_TEMP/whisper.cpp-1.9.4/build/bin/whisper-cli" "$helpers/whisper-cli"
+          install -m 755 "$GITHUB_WORKSPACE/target/release/or-whisper-provider" "$helpers/or-whisper-provider"
+          whisper_notices="$bundle/licenses/whisper.cpp"
+          mkdir -p "$whisper_notices"
+          cp "$RUNNER_TEMP/whisper.cpp-1.9.4/LICENSE" "$whisper_notices/LICENSE"
+          cat > "$whisper_notices/NOTICE.txt" <<'EOF'
+          whisper.cpp v1.9.4 (commit 927cfce34f31707e17f2bff35c349632fb9e2c3a)
+          is distributed under the included MIT license. The whisper-cli helper
+          is built from that source using the pinned Release configuration; the OR
+          provider adapter is built from this repository. Model weights are not
+          bundled and are downloaded only after user confirmation.
+          EOF
+          "$helpers/whisper-cli" --version
+          test -x "$helpers/or-whisper-provider"
+          test -s "$whisper_notices/LICENSE"
           for pattern in libavfilter.so*; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
           done
