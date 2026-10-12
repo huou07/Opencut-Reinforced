@@ -32,8 +32,15 @@ macOS UI did not expose Generate Captions to the test. A package-runtime restore
 hook, shared managed-file path helpers, and explicit media-persistence/action
 readiness assertions are now implemented but await hosted verification. The
 first verification at `20c1b65498904071f7101b217fda968cdaec8ffb` exposed a
-Clippy `needless_borrow` in the new shared-path call; the borrow is corrected
-and exact-SHA platform verification is pending.
+Clippy `needless_borrow` in the new shared-path call; that borrow is corrected.
+Verification on `84a41cd56c7426038ab07aec116217a089715157` passed Rust, Flutter,
+Linux and macOS but hit repeated upstream HTTP 503 responses fetching the
+pinned libvpx commit on Android and Windows. Its first Windows attempt also
+reported a transient SQLite cache-index lock in the independent-store test;
+the retry failed earlier during libvpx fetch, so that test result is unresolved.
+The build now retries only transient HTTP 429/5xx libvpx fetch failures, with
+the source commit still pinned; verification of this bounded recovery is
+pending.
 Android transcription remains unsupported. Full receipts are in the history
 archive.
 The packaged gate uses the pinned
