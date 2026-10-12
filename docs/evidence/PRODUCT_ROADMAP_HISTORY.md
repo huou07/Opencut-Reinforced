@@ -1279,3 +1279,19 @@ lifecycle test produced no case output: Flutter logged `Failed to foreground
 app; open returned 1`, and the step timed out after 35 minutes. This is a
 hosted launch failure without a product assertion. The required macOS run must
 still be repeated on the corrected candidate SHA.
+
+Platform Verification [38258271103](https://github.com/huou07/Opencut-Reinforced/actions/runs/38258271103)
+ran on exact product SHA `c74d6759fe3ff5b8b0845b9cc88fe8b0f376c0fd`.
+Linux, Windows and macOS packaged journeys passed, as did Rust, Flutter and
+the granted-descriptor boundary; Repository Hygiene also passed. Android built
+the APK and passed runtime bridge checks, then failed in the SAF folder-import
+journey after DocumentsUI selected `Footage`. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38258271103)
+shows `DocumentsProvider` rejecting `footage-nested` as not a descendant of
+`footage`. The separate-UID fixture exposed nested documents but did not
+implement `isChildDocument`; Android's
+[`DocumentsProvider` contract](https://developer.android.com/reference/android/provider/DocumentsProvider#isChildDocument(java.lang.String,java.lang.String))
+requires that method for `ACTION_OPEN_DOCUMENT_TREE`. The fixture now computes
+descendants from the same bounded child listing it exposes to DocumentsUI.
+This root-cause correction is unverified until a new exact-SHA hosted SAF
+journey passes; it does not change Android product code or reduce acceptance.

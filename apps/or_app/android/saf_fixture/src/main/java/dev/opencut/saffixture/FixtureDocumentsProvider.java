@@ -11,6 +11,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -50,26 +55,53 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     }
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOC_COLUMNS : projection);
-        if (parent.equals("root")) {
-            addDocument(cursor, "project");
-            addDocument(cursor, "footage");
-            addDocument(cursor, "media");
-            addDocument(cursor, "media-second");
-            addDocument(cursor, "media-audio");
-            addDocument(cursor, "relink-replacement");
-            addDocument(cursor, "captions");
-            if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
-            if (new File(getContext().getFilesDir(), "export.webm").isFile()) addDocument(cursor, "export-webm");
-            if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) addDocument(cursor, "caption-export");
-            if (new File(getContext().getFilesDir(), "caption-export.vtt").isFile()) addDocument(cursor, "caption-export-vtt");
-        } else if (parent.equals("footage")) {
-            addDocument(cursor, "folder-video");
-            addDocument(cursor, "folder-notes");
-            addDocument(cursor, "footage-nested");
-        } else if (parent.equals("footage-nested")) {
-            addDocument(cursor, "folder-audio");
-        }
+        for (String documentId : childDocumentIds(parent)) addDocument(cursor, documentId);
         return cursor;
+    }
+
+    @Override public boolean isChildDocument(String parentDocumentId, String documentId) {
+        if (parentDocumentId.equals(documentId)) return false;
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        pending.add(parentDocumentId);
+        while (!pending.isEmpty()) {
+            String parent = pending.removeFirst();
+            if (!visited.add(parent)) continue;
+            for (String child : childDocumentIds(parent)) {
+                if (child.equals(documentId)) return true;
+                if (isDirectory(child)) pending.addLast(child);
+            }
+        }
+        return false;
+    }
+
+    private List<String> childDocumentIds(String parent) {
+        List<String> children = new ArrayList<>();
+        if (parent.equals("root")) {
+            children.add("project");
+            children.add("footage");
+            children.add("media");
+            children.add("media-second");
+            children.add("media-audio");
+            children.add("relink-replacement");
+            children.add("captions");
+            if (new File(getContext().getFilesDir(), "export.mkv").isFile()) children.add("export");
+            if (new File(getContext().getFilesDir(), "export.webm").isFile()) children.add("export-webm");
+            if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) children.add("caption-export");
+            if (new File(getContext().getFilesDir(), "caption-export.vtt").isFile()) children.add("caption-export-vtt");
+        } else if (parent.equals("footage")) {
+            children.add("folder-video");
+            children.add("folder-notes");
+            children.add("footage-nested");
+        } else if (parent.equals("footage-nested")) {
+            children.add("folder-audio");
+        }
+        return children;
+    }
+
+    private static boolean isDirectory(String documentId) {
+        return documentId.equals("root") || documentId.equals("footage")
+            || documentId.equals("footage-nested");
     }
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();

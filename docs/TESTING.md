@@ -680,7 +680,9 @@ hardening commit itself must pass both workflows.
   folder-selected sources enter through the existing project gateway.
 - Python selector tests cover the DocumentsUI folder/tree flow and ensure
   selector actions stay within the native picker. Hosted Android SAF
-  integration verifies descendant imports and the persisted tree grant.
+  integration verifies nested descendant imports and the persisted tree grant.
+  Its separate-UID fixture implements `DocumentsProvider.isChildDocument`,
+  which Android requires for `ACTION_OPEN_DOCUMENT_TREE` descendant access.
 - The Kotlin SAF traversal, packaged desktop folder picker, and complete
   cross-platform journey require exact-SHA Platform Verification. Local
   Android runtime/emulator execution is `NOT RUN — LOCAL NATIVE EXECUTION
