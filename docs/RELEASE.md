@@ -4,13 +4,20 @@
 
 Stable releases: **none**.
 
-Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are unsigned or ad-hoc-signed testing builds, not production releases. The current product supports project save/reopen/recovery, media import, timeline editing, preview, manual titles/captions, subtitle interchange, and desktop Matroska/WebM export. Android WebM is claimed only after exact-SHA all-ABI and SAF output verification; Android physical-device performance remains unmeasured. Local English automatic captions are still in development: the preview workflow candidate now stages the desktop runtime and requires a real packaged user journey before upload, but that gate has not yet passed. Other AI workflows, folder import, advanced editing, and production signing remain open.
+Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced). They are unsigned or ad-hoc-signed testing builds, not production releases. The latest published product supports project save/reopen/recovery, media import, timeline editing, preview, manual titles/captions, subtitle interchange, and desktop Matroska/WebM export. Android WebM is claimed only after exact-SHA all-ABI and SAF output verification; Android physical-device performance remains unmeasured. Folder import passed exact-SHA packaged Platform Verification, but is not yet in the latest published preview. Local English automatic captions remain in development until the packaged user journey passes. Other AI workflows, advanced editing, and production signing remain open.
 
 The legacy checkpoint/evidence process is preserved in `docs/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
 
 ## Developer Preview
 
-Developer Previews are automated nightly or manually dispatched from `main` only. A preview is published only after the exact source commit has a successful Platform verification run. Its `dev-<12-character-commit-sha>` tag traces it to that source commit, and duplicate releases for the same commit are skipped.
+Developer Preview **releases** are automated nightly or manually dispatched from `main` only. A release is published only after the exact source commit has a successful Platform Verification push run. Its `dev-<12-character-commit-sha>` tag traces it to that source commit, and duplicate releases for the same commit are skipped.
+
+For earlier dogfooding, maintainers may manually dispatch the workflow on a
+non-main branch. That validation-only mode requires a successful Platform
+Verification run for the exact PR head SHA, builds the four installable app
+packages, and runs the packaged desktop transcription acceptance. It has no
+release/tag write permission; its app packages are seven-day Actions artifacts,
+not public releases. Main remains the only publication path.
 
 Publication requires successful Platform Verification for the exact source
 commit. The tag resolves to that commit, the release is a prerelease, and each

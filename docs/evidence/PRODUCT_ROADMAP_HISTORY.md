@@ -1333,3 +1333,28 @@ contains the driver, guest, and resource logs. Commit `fb6b3f0` adds
 test-only per-item gateway entry/completion timing and, on timeout, a bounded
 descriptor/resource snapshot. It leaves the 60-second acceptance limit and
 production code unchanged; a new exact-SHA run is needed to localize the stall.
+
+
+Platform Verification [38275213412](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412)
+ran on exact product SHA `a7f4bf4010c3d3283e788387839edbc6f83a0f3d`.
+Linux, macOS, Windows, Android, Rust, Flutter static/widget checks, the granted
+descriptor boundary, and Repository Hygiene all passed. Clean packaged desktop
+journeys passed on all three desktop operating systems. Android's separate-UID
+DocumentsUI journey imported H.264/AAC MP4 and MP3 together, then selected the
+`Footage` tree and imported its nested MP3 and Matroska files. The persisted
+SAF grant remained scoped to `tree/footage`; a broader provider-root grant was
+rejected. Caption import/export, relink with MediaId and timeline preservation,
+WebM export with independent video/audio decoding, project recovery, preview
+surface behavior, and resource-release assertions passed.
+
+The added gateway markers show all five Rust `importMedia` calls completed
+successfully in 1.8–6.8 ms. Android's half-second emulator export took 6.87 s;
+that fixture proves output correctness only. The report measured a 112.8 ms
+maximum main draw on this emulator, ended with zero duplicated media file
+descriptors and zero in-flight leases, and labels hardware `UNVERIFIED`. This
+is not physical-device performance evidence. The timeout on the preceding exact
+SHA `2428751` did not recur. Because that failure had no gateway-entry marker,
+its pre-gateway cause remains unresolved; the successful retry does not prove a
+root-cause repair. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412)
+contains the reports and guest/driver logs.
