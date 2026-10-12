@@ -195,7 +195,7 @@ void main() {
         offset: 0,
         limit: 10,
       );
-      expect(reopenedPage.items.single.text, 'Imported caption');
+      expect(reopenedPage.items.single.text, 'Imported caption, reviewed');
       expect(reopenedPage.items.single.timelineStart.canonical, '1/8');
       final reopenedSummary = await gateway.summary(reopened);
       final exportedPath = '${directory.path}/captions.srt';
