@@ -776,11 +776,17 @@ void main() {
       await _until(
         tester,
         () => find
-            .byKey(const ValueKey('project-media-panel'))
+            .byKey(const ValueKey('mobile-tool-sheet-close'))
+            .hitTestable()
             .evaluate()
             .isNotEmpty,
       );
-      await tester.tap(find.byKey(const ValueKey('media-import')));
+      final mediaImport = find.byKey(const ValueKey('media-import'));
+      await _until(
+        tester,
+        () => mediaImport.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.tap(mediaImport);
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
       await _until(tester, () => gateway.importCalls == 3);
       final importResults = gateway.importResults;
