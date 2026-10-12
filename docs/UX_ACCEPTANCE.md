@@ -54,6 +54,10 @@ headless or widget-level checks:
   remain reachable through the Focused Monochrome shell.
 - Create/open/close/switch/exit flows preserve dirty-state guards, explicit
   save, recovery inspection/apply/discard, and exact-base conflict behavior.
+- Projects exposes only the current create/open and active-project controls;
+  unimplemented search, filter, sort, and view controls are not shown.
+- Recent project persistence is not claimed; the Home empty state states this
+  limitation directly.
 - A new empty project does not inherit another project's canonical timeline.
 - Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
   slots follow the Focused Monochrome workspace layout; no marketing banners,

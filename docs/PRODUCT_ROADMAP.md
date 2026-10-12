@@ -18,44 +18,24 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current focus: prove local transcription-to-caption in clean desktop packages,
-then put those packages in front of dogfooders. The provider, bounded Whisper
-sidecar, verified optional model download, cancellable job, and
-revision-checked review/edit/apply flow are implemented. The Developer Preview
-workflow now has a validation-only branch mode intended to build installable
-packages from an exact-verified PR head without publishing a release. Its
-validation gate reaches the packaged transcription journey. Exact-SHA candidate
-`f5a6ec9bad8eb86978f8515a5eac49ebdc637d30` exposed the remaining cross-platform
-integration gaps: Linux Flutter rebuild removes staged runtime files, the host
-and provider derived different UUID audio paths on Windows, and the reopened
-macOS UI did not expose Generate Captions to the test. A package-runtime restore
-hook, shared managed-file path helpers, and explicit media-persistence/action
-readiness assertions are now implemented but await hosted verification. The
-first verification at `20c1b65498904071f7101b217fda968cdaec8ffb` exposed a
-Clippy `needless_borrow` in the new shared-path call; that borrow is corrected.
-Verification on `84a41cd56c7426038ab07aec116217a089715157` passed Rust, Flutter,
-Linux and macOS but hit repeated upstream HTTP 503 responses fetching the
-pinned libvpx commit on Android and Windows. Its first Windows attempt also
-reported a transient SQLite cache-index lock in the independent-store test;
-the retry failed earlier during libvpx fetch, so that test result is unresolved.
-The build now retries only transient HTTP 429/5xx libvpx fetch failures, with
-the source commit still pinned; verification of this bounded recovery is
-pending. The validation-only preview on `44b2197c688f0a229369983c2dad200c4d768332`
-accepted its exact-source gate but the Linux package seed treated a library
-glob literally because it was quoted. The quoting is corrected and needs a new
-exact-SHA platform/preview run.
-Android transcription remains unsupported. Full receipts are in the history
-archive.
-The packaged gate uses the pinned
-real JFK speech fixture and user-confirmed model download, then checks
-transcribe, review/edit/apply, save/reopen, and SRT export on macOS, Windows,
-and Linux before artifact upload. Platform Verification [38227008302](https://github.com/huou07/Opencut-Reinforced/actions/runs/38227008302)
-on `ae3305e106fb379888512fe67f7a1a3e52f13c50` passed all seven jobs, including
-the fixed Android SAF caption-import evidence contract; that run verifies
-cross-platform regression journeys, not Whisper packaging. Android
-transcription remains unsupported. Android's emulator correctness/resource
-checks pass; physical-device responsiveness remains unverified and does not
-justify more emulator-only tuning.
+Current product focus: put the exact-SHA desktop transcription candidate in
+front of dogfooders, and close the next first-run/install friction found there.
+The packaged local English transcription journey is now verified in the
+validation-only Developer Preview on exact PR SHA
+`1d63db88d787653c1875006625ddbfb4c34217e0`. Linux, macOS, and Windows each
+passed consented model download, transcription, caption review/edit/apply,
+save/reopen, and SRT export. Platform Verification
+[38313145653](https://github.com/huou07/Opencut-Reinforced/actions/runs/38313145653)
+passed all seven jobs on that SHA; validation-only Developer Preview
+[38316339457](https://github.com/huou07/Opencut-Reinforced/actions/runs/38316339457)
+passed its exact-source gate and all four app package jobs. Its temporary
+artifacts are available through the run through October 19, 2026. This is not a
+public release: packages are unsigned or ad-hoc signed debug builds, CLI and
+publication jobs were skipped, Android transcription is unsupported, and
+physical-device responsiveness remains unverified. The Android correctness and
+resource checks pass; the physical-device evidence gap does not justify more
+emulator-only tuning. Detailed prior diagnosis and exact run history remain in
+the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 
 Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
 targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
@@ -135,7 +115,7 @@ journey unless results establish a real engine migration dependency.
 - **Android multi-source import:** the initial exact-SHA run [38196732759](https://github.com/huou07/Opencut-Reinforced/actions/runs/38196732759) exposed a real SAF multi-import regression; root cause, fix, and final evidence are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md). Platform Verification [38199486640](https://github.com/huou07/Opencut-Reinforced/actions/runs/38199486640) on `39afed57adf3a04faba842f78ac73a9d68a1bbed` passed all seven jobs. Its Android DocumentsUI journey imported H.264/AAC MP4 and audio-only MP3 in one selection, then passed captions, relink, export, process recovery, and bounded-resource checks; desktop Linux, macOS, and Windows packaged journeys also passed. The fixture establishes emulator correctness, not representative media performance. The emulator logged skipped frames and a 121 ms maximum main-draw measurement under this acceptance workload; physical-device responsiveness remains unverified, so further emulator tuning is not the next task.
 - **Current product candidate:** `c329d8e26c994fb24af5f53d3f4c50e31087d1cd` stages the pinned whisper.cpp CLI and OR provider in desktop preview bundles and adds a real packaged transcription, caption review/edit/apply, save/reopen, and SRT export gate. Exact-SHA PR Platform Verification [38234509928](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234509928) passed all eight required checks, including macOS, Windows, Linux packaged journeys and Android SAF/resource acceptance. Those checks verify existing cross-platform behavior. The validation-only workflow passed its exact-SHA prepare gate on `4033f90a16c9042008e404c1d597db7eaed6c493`, built Android, and skipped all release-only jobs. Its macOS, Windows, and Linux packaged transcription gates failed; root causes and follow-up evidence are recorded in the history archive. Android transcription is unsupported and physical-device performance remains unverified.
 - **Folder import — exact-SHA verified:** `a7f4bf4010c3d3283e788387839edbc6f83a0f3d` passed Platform Verification [38275213412](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412), Repository Hygiene, and all Linux, macOS, Windows, Android, Rust, Flutter, and descriptor jobs. The clean desktop journeys and Android DocumentsUI flow passed; Android imported three selected files plus two nested files under the selected `Footage` grant, then passed preview, captions, relink, export, recovery, and descriptor/resource checks. A prior Android run timed out before the import gateway, but this run passed; its cause is still unlocalized. Emulator evidence does not establish physical-device performance. Detailed timing and scope evidence are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Next product gap:** prove the existing local transcription-to-caption workflow in clean, installable desktop packages, then make those exact packages available for focused dogfooding. The real-media workflow must cover consented model download, transcription, review/edit/apply, save/reopen, and playable SRT export. Record actual install friction and user-task feedback; Android transcription and physical-device performance remain explicitly unverified.
+- **Next product gap — first-run and project return:** these are complete Debug bundles, not native installers, and have not been exercised on clean end-user machines. The Project screen now shows only the supported create/open and active-project actions; Home states plainly that recent project history is not stored. Use the exact-SHA packages for ordinary edit/export and caption dogfooding, record install/first-project/media-permission/recovery/output friction, then implement safe cross-platform recent-project return and any packaging changes justified by the evidence. Do not claim clean-machine install/upgrade/uninstall evidence from hosted build success. Android transcription and physical-device responsiveness remain explicitly unverified.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 

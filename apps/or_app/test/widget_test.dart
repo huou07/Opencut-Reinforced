@@ -40,6 +40,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-projects')));
     await tester.pumpAndSettle();
     expect(find.text('No active project'), findsOneWidget);
+    expect(find.text('Create or open an .orproj project'), findsOneWidget);
+    expect(find.text('Search projects'), findsNothing);
+    expect(find.text('Sort: Edited'), findsNothing);
+    expect(find.text('Pinned'), findsNothing);
+    expect(find.text('Archived'), findsNothing);
   });
 
   testWidgets('compact shell reaches all five primary destinations', (

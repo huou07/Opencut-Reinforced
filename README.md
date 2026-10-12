@@ -18,9 +18,11 @@ periodically updates a recovery checkpoint without overwriting the canonical
 project file; Save remains explicit.
 
 The product is not yet a complete general-purpose editor: advanced editing,
-some media formats, automatic captions and other AI workflows, folder import,
-and production signing remain incomplete. Android physical-device performance
-has not yet been measured. Stable application releases: none. Debug Developer Preview prereleases are available from
+some media formats, and AI workflows beyond local English transcription remain
+incomplete. A validation-only candidate has passed the packaged desktop
+transcription and caption journey; this does not establish clean-machine
+installation or production signing. Android physical-device performance has
+not yet been measured. Stable application releases: none. Debug Developer Preview prereleases are available from
 [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); they
 are for testing, not production distribution. See the active outcome-based
 [product roadmap](docs/PRODUCT_ROADMAP.md) and

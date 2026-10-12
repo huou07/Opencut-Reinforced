@@ -33,7 +33,7 @@ class ProjectsScreen extends StatelessWidget {
 
     return OrPageLayout(
       title: 'Projects',
-      subtitle: 'Browse and organize project files',
+      subtitle: 'Create or open an .orproj project',
       action: canPickProjects
           ? FilledButton.icon(
               key: const ValueKey('projects-new-project'),
@@ -52,36 +52,6 @@ class ProjectsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OrPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: OrSpacing.x3,
-                  runSpacing: OrSpacing.x3,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: const [
-                    OrSearchField(label: 'Search projects'),
-                    OrDisabledChip('Sort: Edited'),
-                    OrDisabledChip('Grid view'),
-                    OrDisabledChip('List view'),
-                  ],
-                ),
-                const SizedBox(height: OrSpacing.x3),
-                const Wrap(
-                  spacing: OrSpacing.x2,
-                  runSpacing: OrSpacing.x2,
-                  children: [
-                    OrDisabledChip('All'),
-                    OrDisabledChip('Recent'),
-                    OrDisabledChip('Pinned'),
-                    OrDisabledChip('Archived'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: OrSpacing.x4),
           if (project case final active?)
             ActiveProjectCard(
               project: active,
