@@ -855,7 +855,7 @@ void main() {
         tester,
         () => find.text('Review SubRip captions').evaluate().isNotEmpty,
       );
-      await tester.tap(find.text('Import').last);
+      await tester.tap(find.text('Import captions'));
       await _until(tester, () => gateway.captionImportCalls == 1);
       var captionTracks = (await gateway.listTimelineTracks(session)).items
           .where((track) => track.kind == ProjectTimelineTrackKind.caption)
