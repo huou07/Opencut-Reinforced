@@ -1293,5 +1293,22 @@ implement `isChildDocument`; Android's
 [`DocumentsProvider` contract](https://developer.android.com/reference/android/provider/DocumentsProvider#isChildDocument(java.lang.String,java.lang.String))
 requires that method for `ACTION_OPEN_DOCUMENT_TREE`. The fixture now computes
 descendants from the same bounded child listing it exposes to DocumentsUI.
-This root-cause correction is unverified until a new exact-SHA hosted SAF
-journey passes; it does not change Android product code or reduce acceptance.
+The next exact-SHA run confirmed nested enumeration and import work; its
+remaining URI-scope assertion and hosted macOS launch result are recorded below.
+
+Platform Verification [38262615923](https://github.com/huou07/Opencut-Reinforced/actions/runs/38262615923)
+ran on exact product SHA `aa6b4d512c078fe96398d4fc074310b6c3a52bbb`.
+Linux, Windows, Rust, Flutter and descriptor-boundary checks passed; Repository
+Hygiene passed separately. Android completed folder enumeration and the import
+operation successfully, then failed the expected-source assertion: the test
+expected `tree/root/document/...`, while DocumentsUI had selected `Footage` and
+the correct returned references were `tree/footage/document/...`. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38262615923)
+contains the successful import result and exact mismatch. The integration test
+now checks both nested sources beneath the selected subtree and the persisted
+`tree/footage` grant, while rejecting a broader provider-root tree grant.
+
+The macOS job on `aa6b4d5` built the app but again failed to foreground it:
+`open returned 1`, followed by the 35-minute native lifecycle timeout before
+any test case ran. This remains a hosted launch limitation with no product
+assertion; the exact-SHA macOS lifecycle journey still needs a passing run.

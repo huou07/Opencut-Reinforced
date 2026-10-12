@@ -19,9 +19,10 @@ const _fixture = MethodChannel('or_saf_acceptance_fixture');
 const _presenter = MethodChannel('or_viewer_texture');
 String _source(String id) =>
     'content://dev.opencut.saffixture.documents/document/$id';
-String _treeSource(String id) =>
-    'content://dev.opencut.saffixture.documents/tree/root/document/$id';
-const _treeRoot = 'content://dev.opencut.saffixture.documents/tree/root';
+String _folderTreeSource(String id) =>
+    'content://dev.opencut.saffixture.documents/tree/footage/document/$id';
+const _folderTreeRoot =
+    'content://dev.opencut.saffixture.documents/tree/footage';
 
 Future<T> _stage<T>(String name, Future<T> Function() operation) async {
   debugPrint('ANDROID_SAF_STAGE_START $name');
@@ -852,14 +853,19 @@ void main() {
         limit: 2,
       );
       expect(folderImported.items.map((item) => item.sourceUri), [
-        _treeSource('folder-audio'),
-        _treeSource('folder-video'),
+        _folderTreeSource('folder-audio'),
+        _folderTreeSource('folder-video'),
       ]);
       expect(folderImported.items[0].formatNames, contains('mp3'));
       expect(folderImported.items[1].formatNames, contains('matroska'));
       final persistedTreeGrants =
           (await _control('status'))['persistedMediaUris'] as List<dynamic>;
-      expect(persistedTreeGrants, contains(_treeRoot));
+      // Keep the persisted permission scoped to the directory the user chose.
+      expect(persistedTreeGrants, contains(_folderTreeRoot));
+      expect(
+        persistedTreeGrants,
+        isNot(contains('content://dev.opencut.saffixture.documents/tree/root')),
+      );
 
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
