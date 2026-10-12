@@ -598,7 +598,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev libgtk-3-dev liblzma-dev libasound2-dev patchelf
+          sudo apt-get install -y clang cmake ninja-build pkg-config libclang-dev libgtk-3-dev liblzma-dev libasound2-dev patchelf xvfb xauth
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -767,7 +767,7 @@ jobs:
         env:
           OR_TEST_TRANSCRIPTION_MEDIA_PATH: ${{ runner.temp }}/whisper.cpp-1.9.4/samples/jfk.wav
         run: >-
-          flutter --ci test integration_test/core_bridge_test.dart -d linux
+          xvfb-run -a flutter --ci test integration_test/core_bridge_test.dart -d linux
           --plain-name
           "packaged local transcription reviews and persists real captions"
 

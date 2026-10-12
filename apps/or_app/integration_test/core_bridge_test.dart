@@ -6,7 +6,7 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart'
-    show LinearProgressIndicator, SnackBar, Text, TextFormField;
+    show AlertDialog, LinearProgressIndicator, SnackBar, Text, TextFormField;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -263,11 +263,18 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-open-project')));
       await _pumpUntilMediaLoaded(tester, media.mediaId);
 
-      await tester.tap(find.byKey(ValueKey('media-actions-${media.mediaId}')));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(ValueKey('media-generate-captions-${media.mediaId}')),
+      final mediaActions = find.byKey(
+        ValueKey('media-actions-${media.mediaId}'),
       );
+      await tester.ensureVisible(mediaActions);
+      await tester.tap(mediaActions);
+      await tester.pumpAndSettle();
+      final generateCaptions = find.byKey(
+        ValueKey('media-generate-captions-${media.mediaId}'),
+      );
+      expect(generateCaptions, findsOneWidget);
+      await tester.ensureVisible(generateCaptions);
+      await tester.tap(generateCaptions);
       await tester.pumpAndSettle();
       expect(find.text('Download local speech model?'), findsOneWidget);
       expect(find.textContaining('Audio is processed locally'), findsOneWidget);
@@ -289,7 +296,7 @@ void main() {
       final transcriptionClock = Stopwatch()..start();
 
       const reviewTitle = 'Review Local EN transcript captions';
-      await _pumpUntilFinder(
+      await _pumpUntilFinderOrSnackBar(
         tester,
         find.text(reviewTitle),
         timeout: const Duration(minutes: 8),
@@ -1470,6 +1477,36 @@ Future<void> _pumpUntilFinder(
     if (tester.any(finder)) return;
   }
   fail('Timed out waiting for $finder after $timeout.');
+}
+
+Future<void> _pumpUntilFinderOrSnackBar(
+  WidgetTester tester,
+  Finder finder, {
+  required Duration timeout,
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  final snackBars = find.byType(SnackBar);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (tester.any(finder)) return;
+    if (tester.any(snackBars)) {
+      final content = tester.widget<SnackBar>(snackBars.first).content;
+      final message = content is Text ? content.data : content.toString();
+      fail('Local transcription stopped before review: $message');
+    }
+  }
+  final dialog = find.byType(AlertDialog);
+  final statusText = tester
+      .widgetList<Text>(
+        find.descendant(of: dialog, matching: find.byType(Text)),
+      )
+      .map((text) => text.data)
+      .whereType<String>()
+      .join(' | ');
+  fail(
+    'Timed out waiting for $finder after $timeout. '
+    'Active dialog status: ${statusText.isEmpty ? 'none' : statusText}.',
+  );
 }
 
 Future<void> _pumpUntilMediaLoaded(WidgetTester tester, String mediaId) async {

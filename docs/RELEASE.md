@@ -17,7 +17,7 @@ non-main branch. That validation-only mode requires a successful Platform
 Verification run for the exact PR head SHA, builds the four installable app
 packages, and runs the packaged desktop transcription acceptance. It has no
 release/tag write permission; its app packages are seven-day Actions artifacts,
-not public releases. Main remains the only publication path.
+not public releases. A failed candidate may upload no desktop package. Main remains the only publication path.
 
 Publication requires successful Platform Verification for the exact source
 commit. The tag resolves to that commit, the release is a prerelease, and each
