@@ -151,13 +151,21 @@ void main() {
       expect(importPreview.formatName, 'SubRip');
       expect(importPreview.cueCount, BigInt.one);
       expect(importPreview.formattingLossCount, BigInt.zero);
-      final imported = await gateway.importTimelineCaptions(
+      expect(importPreview.cues.single.startMs, BigInt.from(125));
+      expect(importPreview.cues.single.endMs, BigInt.from(2_375));
+      final imported = await gateway.importReviewedTimelineCaptions(
         session,
         current,
-        captionFile.path,
+        [
+          ProjectCaptionCue(
+            startMs: importPreview.cues.single.startMs,
+            endMs: importPreview.cues.single.endMs,
+            text: 'Imported caption, reviewed',
+          ),
+        ],
       );
       expect(imported.succeeded, isTrue, reason: imported.message);
-      expect(imported.message, contains('Imported 1 SubRip captions'));
+      expect(imported.message, contains('Imported 1 reviewed captions'));
       current = imported.view!;
       final importedTrack = (await gateway.listTimelineTracks(session))
           .items
@@ -169,7 +177,7 @@ void main() {
         offset: 0,
         limit: 10,
       );
-      expect(importedPage.items.single.text, 'Imported caption');
+      expect(importedPage.items.single.text, 'Imported caption, reviewed');
       expect(importedPage.items.single.timelineStart.canonical, '1/8');
       expect(importedPage.items.single.timelineDuration.canonical, '9/4');
       final saved = await gateway.save(session);
@@ -1622,6 +1630,13 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String path,
   ) => _gateway.importTimelineCaptions(session, current, path);
+
+  @override
+  Future<ProjectActionResult> importReviewedTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    List<ProjectCaptionCue> cues,
+  ) => _gateway.importReviewedTimelineCaptions(session, current, cues);
 
   @override
   Future<ProjectCaptionImportPreview> previewTimelineCaptions(

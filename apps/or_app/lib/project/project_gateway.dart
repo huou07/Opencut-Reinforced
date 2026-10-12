@@ -148,12 +148,28 @@ class ProjectCaptionImportPreview {
     required this.cueCount,
     required this.formattingLossCount,
     required this.emptyCuesSkipped,
+    required this.maxCaptionTextBytes,
+    required this.cues,
   });
 
   final String formatName;
   final BigInt cueCount;
   final BigInt formattingLossCount;
   final BigInt emptyCuesSkipped;
+  final BigInt maxCaptionTextBytes;
+  final List<ProjectCaptionCue> cues;
+}
+
+class ProjectCaptionCue {
+  const ProjectCaptionCue({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+  });
+
+  final BigInt startMs;
+  final BigInt endMs;
+  final String text;
 }
 
 enum ProjectCaptionFileFormat { srt, webVtt }
@@ -830,6 +846,11 @@ abstract interface class ProjectGateway {
     ProjectSessionHandle session,
     ProjectReadModel current,
     String path,
+  );
+  Future<ProjectActionResult> importReviewedTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    List<ProjectCaptionCue> cues,
   );
   Future<ProjectCaptionImportPreview> previewTimelineCaptions(
     ProjectSessionHandle session,

@@ -20,6 +20,13 @@ capability done from plans, source inspection, or model claims alone.
 
 Current focus: gather real dogfood evidence while implementing local
 transcription-to-caption proposals through existing caption commands.
+The verified model-store primitive now validates manifests and atomically
+installs, verifies, removes, and recovers interrupted artifacts outside the
+project. Rust tests/Clippy and Platform Verification [38202679825](https://github.com/huou07/Opencut-Reinforced/actions/runs/38202679825)
+passed on `cb09835564b3154a75ca9d31419c161df82baa8c`. This is still an
+`or_ai` foundation only: the packaged provider, model download UI, and app
+transcription/review action do not exist, so no AI workflow is available to a
+user yet.
 Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
 targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
 Platform Verification [38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936)
@@ -28,10 +35,9 @@ passed all seven jobs, and Developer Preview
 published and downloaded all 13 assets to re-verify `SHA256SUMS.txt`. The
 release is an unsigned or ad-hoc-signed debug preview, not a stable release;
 Android verification covers emulator correctness and resource bounds only,
-not physical-device performance. The transcription WAV handoff at this SHA is
-foundation only: no provider, model installation, or app action is available
-yet. The existing pinned Whisper proof and proposal contract are recorded in
-the [transcription integration note](evidence/local-transcription-poc.md).
+not physical-device performance. The earlier transcription WAV handoff, pinned
+Whisper proof, and proposal contract are recorded in the
+[transcription integration note](evidence/local-transcription-poc.md).
 
 ## Product acceptance target
 

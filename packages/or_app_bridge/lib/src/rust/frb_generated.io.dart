@@ -135,6 +135,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ProjectCaptionCueView> dco_decode_list_project_caption_cue_view(
+    dynamic raw,
+  );
+
+  @protected
   List<ProjectMediaItemView> dco_decode_list_project_media_item_view(
     dynamic raw,
   );
@@ -213,6 +218,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectBridgeError dco_decode_project_bridge_error(dynamic raw);
+
+  @protected
+  ProjectCaptionCueView dco_decode_project_caption_cue_view(dynamic raw);
 
   @protected
   ProjectCaptionImportPreviewView
@@ -482,6 +490,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ProjectCaptionCueView> sse_decode_list_project_caption_cue_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ProjectMediaItemView> sse_decode_list_project_media_item_view(
     SseDeserializer deserializer,
   );
@@ -580,6 +593,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectBridgeError sse_decode_project_bridge_error(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectCaptionCueView sse_decode_project_caption_cue_view(
     SseDeserializer deserializer,
   );
 
@@ -907,6 +925,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_caption_cue_view(
+    List<ProjectCaptionCueView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_project_media_item_view(
     List<ProjectMediaItemView> self,
     SseSerializer serializer,
@@ -1023,6 +1047,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_bridge_error(
     ProjectBridgeError self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_caption_cue_view(
+    ProjectCaptionCueView self,
     SseSerializer serializer,
   );
 

@@ -1063,7 +1063,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('caption import explains formatting loss before applying', (
+  testWidgets('caption import reviews and applies user-corrected cues', (
     tester,
   ) async {
     _setViewport(tester, const Size(1280, 800));
@@ -1073,6 +1073,19 @@ void main() {
         cueCount: BigInt.from(2),
         formattingLossCount: BigInt.one,
         emptyCuesSkipped: BigInt.one,
+        maxCaptionTextBytes: BigInt.from(4096),
+        cues: [
+          ProjectCaptionCue(
+            startMs: BigInt.from(1250),
+            endMs: BigInt.from(3000),
+            text: 'First caption',
+          ),
+          ProjectCaptionCue(
+            startMs: BigInt.from(4000),
+            endMs: BigInt.from(5500),
+            text: 'Second caption',
+          ),
+        ],
       );
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/caption-import.orproj'
@@ -1085,12 +1098,14 @@ void main() {
     await tester.tap(importButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Import WebVTT captions?'), findsOneWidget);
+    expect(find.text('Review WebVTT captions'), findsOneWidget);
     expect(
       find.textContaining('styling or placement that will be simplified'),
       findsOneWidget,
     );
-    expect(find.textContaining('empty cues will be skipped'), findsOneWidget);
+    expect(find.textContaining('empty cues were skipped'), findsOneWidget);
+    expect(find.text('00:00:01.250 – 00:00:03.000'), findsOneWidget);
+    expect(find.byKey(const ValueKey('caption-import-text-0')), findsOneWidget);
     expect(gateway.captionImportCalls, 0);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -1100,12 +1115,64 @@ void main() {
     await tester.ensureVisible(importButton);
     await tester.tap(importButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Import').last);
+    final captionField = find.byKey(const ValueKey('caption-import-text-0'));
+    await tester.enterText(captionField, '🌻' * 1025);
+    await tester.pump();
+    expect(
+      find.text('Caption exceeds the 4096-byte project limit.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Import captions'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.enterText(captionField, 'Corrected caption');
+    await tester.enterText(
+      find.byKey(const ValueKey('caption-import-text-1')),
+      '',
+    );
+    await tester.pump();
+    expect(find.textContaining('1 blank cue will be skipped'), findsOneWidget);
+    expect(find.textContaining('1 caption will be added'), findsOneWidget);
+    await tester.tap(find.text('Import captions'));
     await tester.pumpAndSettle();
     expect(gateway.captionImportCalls, 1);
-    expect(gateway.importedCaptionPath, '/tmp/captions.vtt');
+    expect(gateway.lastReviewedCaptions?.first.text, 'Corrected caption');
+    expect(gateway.lastReviewedCaptions?.first.startMs, BigInt.from(1250));
     expect(picker.captionCleanupCalls, 2);
-    expect(find.textContaining('Imported captions from'), findsOneWidget);
+    expect(find.textContaining('Imported reviewed captions'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('caption review remains usable on a compact screen', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 640));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-caption-review.orproj'
+      ..captionPath = '/tmp/compact-captions.srt';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact caption review');
+
+    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
+    await tester.ensureVisible(importButton);
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review SubRip captions'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('caption-import-review-list')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(gateway.captionImportCalls, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -3529,12 +3596,21 @@ class _FakeProjectGateway implements ProjectGateway {
   );
   int captionImportCalls = 0;
   String? importedCaptionPath;
+  List<ProjectCaptionCue>? lastReviewedCaptions;
   ProjectCaptionImportPreview captionImportPreview =
       ProjectCaptionImportPreview(
         formatName: 'SubRip',
         cueCount: BigInt.one,
         formattingLossCount: BigInt.zero,
         emptyCuesSkipped: BigInt.zero,
+        maxCaptionTextBytes: BigInt.from(4096),
+        cues: [
+          ProjectCaptionCue(
+            startMs: BigInt.zero,
+            endMs: BigInt.from(1000),
+            text: 'A caption',
+          ),
+        ],
       );
   int previewSeekCalls = 0;
   int previewStateCalls = 0;
@@ -4164,6 +4240,21 @@ class _FakeProjectGateway implements ProjectGateway {
     return ProjectActionResult(
       succeeded: true,
       message: 'Imported captions from $path.',
+      view: _session(handle).view,
+    );
+  }
+
+  @override
+  Future<ProjectActionResult> importReviewedTimelineCaptions(
+    ProjectSessionHandle handle,
+    ProjectReadModel current,
+    List<ProjectCaptionCue> cues,
+  ) async {
+    captionImportCalls++;
+    lastReviewedCaptions = List.unmodifiable(cues);
+    return ProjectActionResult(
+      succeeded: true,
+      message: 'Imported reviewed captions.',
       view: _session(handle).view,
     );
   }

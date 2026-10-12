@@ -611,6 +611,15 @@ Cache keys are deterministic over source fingerprint, operation, parameters, and
 
 Workers may produce structured `JobResult`, `GeneratedAsset`, `AnalysisResult`, `CaptionProposal`, or `EditProposal` outputs. They may update disposable cache/job state but must not directly mutate the canonical ProjectDocument. If an output should change a project, the application layer checks its permissions and expected revision/preconditions, then applies it through a validated command/transaction. This preserves undo/redo and rejects stale analysis instead of applying it silently.
 
+SRT/WebVTT import uses the same review boundary for human-supplied caption
+content: parsing returns bounded cues with exact millisecond start/end times;
+the UI may edit cue text while the project remains unchanged; and Apply sends
+the reviewed cues with the captured project revision through one canonical
+caption-import command. Cancellation makes no project change. This review/apply
+path is also the expected application boundary for future transcription
+proposals; AI output must additionally pass transcript identity/provenance
+validation before it reaches review.
+
 ## 14. AI providers and local inference
 
 Checkpoint 10A owns the provider boundary for later AI features. Typed tasks go

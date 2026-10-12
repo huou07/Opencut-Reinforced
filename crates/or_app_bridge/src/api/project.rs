@@ -70,6 +70,15 @@ pub struct ProjectCaptionImportPreviewView {
     pub cue_count: u64,
     pub formatting_loss_count: u64,
     pub empty_cues_skipped: u64,
+    pub max_caption_text_bytes: u64,
+    pub cues: Vec<ProjectCaptionCueView>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectCaptionCueView {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
 }
 
 #[derive(Clone, Debug)]
@@ -779,16 +788,121 @@ impl ProjectHostHandle {
             code: error.code().to_owned(),
             message: error.to_string(),
         })?;
+        let format_name = match plan.format {
+            or_core::CaptionFileFormat::Srt => "SubRip",
+            or_core::CaptionFileFormat::WebVtt => "WebVTT",
+        }
+        .to_owned();
+        let mut cues = Vec::with_capacity(plan.captions.len());
+        for caption in plan.captions {
+            let end = caption
+                .start
+                .checked_add(caption.duration)
+                .map_err(|_| caption_time_error())?;
+            cues.push(ProjectCaptionCueView {
+                start_ms: rational_time_millis(caption.start)?,
+                end_ms: rational_time_millis(end)?,
+                text: caption.text,
+            });
+        }
         Ok(ProjectCaptionImportPreviewView {
-            format_name: match plan.format {
-                or_core::CaptionFileFormat::Srt => "SubRip",
-                or_core::CaptionFileFormat::WebVtt => "WebVTT",
-            }
-            .to_owned(),
-            cue_count: plan.captions.len() as u64,
+            cue_count: cues.len() as u64,
             formatting_loss_count: plan.cues_with_formatting_loss as u64,
             empty_cues_skipped: plan.empty_cues_skipped as u64,
+            max_caption_text_bytes: or_core::MAX_TIMELINE_CAPTION_BYTES as u64,
+            format_name,
+            cues,
         })
+    }
+
+    /// Applies user-reviewed caption cues through the same validated project
+    /// command used by caption-file import. The bridge never mutates project
+    /// state while the review dialog is open.
+    pub fn import_reviewed_timeline_captions(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        cues: Vec<ProjectCaptionCueView>,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision) =
+            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
+                Ok(identity) => identity,
+                Err(error) => return action_error(error),
+            };
+        if cues.is_empty() || cues.len() > or_core::MAX_IMPORTED_CAPTIONS {
+            return action_error(ProjectBridgeError {
+                code: "CAPTION_LIMIT_EXCEEDED".to_owned(),
+                message: "Choose between 1 and 10,000 non-empty caption cues.".to_owned(),
+            });
+        }
+        let mut clips = Vec::with_capacity(cues.len());
+        for cue in cues {
+            if cue.text.trim().is_empty() {
+                continue;
+            }
+            if cue.text.len() > or_core::MAX_TIMELINE_CAPTION_BYTES {
+                return action_error(ProjectBridgeError {
+                    code: "CAPTION_TEXT_TOO_LARGE".to_owned(),
+                    message: "A caption exceeds the project text limit.".to_owned(),
+                });
+            }
+            let (Ok(start_ms), Ok(end_ms)) =
+                (i64::try_from(cue.start_ms), i64::try_from(cue.end_ms))
+            else {
+                return action_error(caption_time_error());
+            };
+            if end_ms <= start_ms {
+                return action_error(ProjectBridgeError {
+                    code: "CAPTION_TIMING_INVALID".to_owned(),
+                    message: "A caption must end after it starts.".to_owned(),
+                });
+            }
+            let (Ok(timeline_start), Ok(end)) = (
+                RationalTime::new(start_ms, 1_000),
+                RationalTime::new(end_ms, 1_000),
+            ) else {
+                return action_error(caption_time_error());
+            };
+            let Ok(timeline_duration) = end.checked_sub(timeline_start) else {
+                return action_error(ProjectBridgeError {
+                    code: "CAPTION_TIMING_INVALID".to_owned(),
+                    message: "A caption has an invalid time range.".to_owned(),
+                });
+            };
+            clips.push(TimelineClipState {
+                clip_id: ClipId::generate(),
+                timeline_start,
+                timeline_duration,
+                content: ClipContent::Caption {
+                    text: cue.text,
+                    formatting: TextFormatting::DEFAULT,
+                },
+                settings: ClipSettings::Visual(VisualSettings::default()),
+            });
+        }
+        if clips.is_empty() {
+            return action_error(ProjectBridgeError {
+                code: "CAPTION_FILE_EMPTY".to_owned(),
+                message: "At least one caption must contain text.".to_owned(),
+            });
+        }
+        let imported_count = clips.len();
+        let result = self.dispatch_command(CommandEnvelope::import_timeline_captions(
+            project_id,
+            project_instance_id,
+            revision,
+            TrackId::generate(),
+            clips,
+        ));
+        if result.succeeded {
+            ProjectActionResult {
+                message: format!("Imported {imported_count} reviewed captions."),
+                ..result
+            }
+        } else {
+            result
+        }
     }
 
     pub fn summary(&self) -> Result<ProjectView, ProjectBridgeError> {
@@ -2633,6 +2747,22 @@ impl ProjectHostHandle {
     }
 }
 
+fn rational_time_millis(value: RationalTime) -> Result<u64, ProjectBridgeError> {
+    let scaled = i128::from(value.numerator()) * 1_000;
+    let denominator = i128::from(value.denominator());
+    if scaled < 0 || scaled % denominator != 0 {
+        return Err(caption_time_error());
+    }
+    u64::try_from(scaled / denominator).map_err(|_| caption_time_error())
+}
+
+fn caption_time_error() -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "CAPTION_TIME_OVERFLOW".to_owned(),
+        message: "A caption time is outside the supported project range.".to_owned(),
+    }
+}
+
 fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
     #[cfg(target_os = "android")]
     if source.starts_with("content://") {
@@ -3594,10 +3724,10 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectHostHandle,
-        audio_settings_view, configured_media_artifact_cache_root, effects_from_view,
-        media_artifact_event_view, operation_error_code, rational_time_view,
-        timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
+        CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectCaptionCueView,
+        ProjectHostHandle, audio_settings_view, configured_media_artifact_cache_root,
+        effects_from_view, media_artifact_event_view, operation_error_code, rational_time_millis,
+        rational_time_view, timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
         timeline_track_view, visual_settings_view,
     };
     use or_core::{ExportRequest, ExportResponse, ProjectFileSession};
@@ -4067,6 +4197,69 @@ mod tests {
             )
             .expect_err("a missing cache must be reported, not ignored");
         assert_eq!(error.code, "CACHE_UNAVAILABLE");
+    }
+
+    #[test]
+    fn caption_preview_returns_editable_exact_millisecond_cues_without_mutation() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+        let captions = directory.0.join("captions.srt");
+        std::fs::write(
+            &captions,
+            "1\n00:00:01,250 --> 00:00:03,000\nA caption to review\n\n",
+        )
+        .unwrap();
+        let before = handle.summary().unwrap();
+
+        let preview = handle
+            .preview_timeline_captions(captions.display().to_string())
+            .unwrap();
+
+        assert_eq!(preview.format_name, "SubRip");
+        assert_eq!(preview.cue_count, 1);
+        assert_eq!(preview.cues[0].start_ms, 1_250);
+        assert_eq!(preview.cues[0].end_ms, 3_000);
+        assert_eq!(preview.cues[0].text, "A caption to review");
+        assert_eq!(handle.summary().unwrap().revision, before.revision);
+    }
+
+    #[test]
+    fn reviewed_caption_import_is_revision_checked_and_uses_the_project_command() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+        let before = handle.summary().unwrap();
+        let cue = ProjectCaptionCueView {
+            start_ms: 1_250,
+            end_ms: 3_000,
+            text: "Corrected by the editor".to_owned(),
+        };
+
+        let stale = handle.import_reviewed_timeline_captions(
+            before.project_id.clone(),
+            before.project_instance_id.clone(),
+            before.revision + 1,
+            vec![cue.clone()],
+        );
+        assert!(!stale.succeeded);
+        assert_eq!(stale.error_code, "REVISION_CONFLICT");
+        assert_eq!(handle.summary().unwrap().revision, before.revision);
+
+        let applied = handle.import_reviewed_timeline_captions(
+            before.project_id,
+            before.project_instance_id,
+            before.revision,
+            vec![cue],
+        );
+        assert!(applied.succeeded, "{}", applied.message);
+        assert!(applied.message.contains("Imported 1 reviewed captions"));
+        assert_eq!(handle.summary().unwrap().revision, before.revision + 1);
+    }
+
+    #[test]
+    fn caption_time_view_rejects_negative_and_non_millisecond_values() {
+        assert!(rational_time_millis(RationalTime::new(1, 2).unwrap()).is_ok());
+        assert!(rational_time_millis(RationalTime::new(-1, 1).unwrap()).is_err());
+        assert!(rational_time_millis(RationalTime::new(1, 3).unwrap()).is_err());
     }
 
     #[test]

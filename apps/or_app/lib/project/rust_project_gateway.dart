@@ -651,6 +651,28 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> importReviewedTimelineCaptions(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    List<ProjectCaptionCue> cues,
+  ) async => _action(
+    await _host(session).importReviewedTimelineCaptions(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      cues: cues
+          .map(
+            (cue) => rust.ProjectCaptionCueView(
+              startMs: cue.startMs,
+              endMs: cue.endMs,
+              text: cue.text,
+            ),
+          )
+          .toList(growable: false),
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> exportTimelineCaptions(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -680,6 +702,16 @@ class RustProjectGateway implements ProjectGateway {
       cueCount: preview.cueCount,
       formattingLossCount: preview.formattingLossCount,
       emptyCuesSkipped: preview.emptyCuesSkipped,
+      maxCaptionTextBytes: preview.maxCaptionTextBytes,
+      cues: List.unmodifiable(
+        preview.cues.map(
+          (cue) => ProjectCaptionCue(
+            startMs: cue.startMs,
+            endMs: cue.endMs,
+            text: cue.text,
+          ),
+        ),
+      ),
     );
   }
 
