@@ -1103,3 +1103,42 @@ Platform Verification run [38185861652](https://github.com/huou07/Opencut-Reinfo
 Root cause reproduced locally against the pinned upstream libvpx commit `6df3ec34557879fff673706f4a1d9fbd0f3a6f0e`: `git archive` with `core.autocrlf=false` produced SHA-256 `aaa322cf8fbcd3be464e022c9748b736ba4f9bdcc4de81ce7a208148ed86010a`, matching the Linux/macOS exact-SHA logs. With `core.autocrlf=true`, it produced `9b35be70acb5ad09963528a4bf051ce3ea036d7139618f11c08f9613618a0ae8`, matching the Windows exact-SHA log. The archives differed starting at byte 1670, confirming Git's line-ending conversion changed archive content despite an identical pinned source commit.
 
 `scripts/build_desktop_export_codecs.sh` now disables `core.autocrlf` specifically for the source archive generation. The release gate still verifies each archive against its recorded digest, checks required license and patent entries, checks the pinned source commit, and compares provenance/source bytes across platforms. A fresh exact-SHA Platform Verification and Developer Preview run are required before publication; this correction has not yet been hosted-verified.
+
+## Timestamp-preserving transcription audio handoff and dogfood preview
+
+Platform Verification run
+[38188955493](https://github.com/huou07/Opencut-Reinforced/actions/runs/38188955493)
+on `8d3e177311ec93dd8dbfa633b71c2eb9481cb446` failed only when the macOS
+Flutter project-lifecycle test step hit its 35-minute runner timeout. It emitted
+no test assertion or test-case output before timeout. The same selected test
+group subsequently passed on `656cd656199ca6a236921c83ba9bdb5705f61d57` in run
+[38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936),
+along with all other required gates. In that successful run the three lifecycle
+tests took 14m29s, while the identical group had passed in 52 seconds on the
+previous exact-SHA run 38185861652. This confirms a large macOS integration-test
+latency/flakiness signal without a reproduced product assertion failure; it is
+not a reason to loosen the test or claim a product regression. The Linux,
+Windows, and macOS packaged real-media journeys all passed. The macOS 30-second
+VP9/Opus export took 54.115 seconds and produced 12,768,681 bytes. Android
+passed its emulator FFmpeg/bridge and SAF preview, export, relink, and recovery
+checks; its acceptance media is small and does not establish physical-device
+performance.
+
+The same source SHA adds the first FFmpeg-backed, bounded mono 16 kHz WAV
+handoff for future local transcription. The writer uses container-relative
+decoded PTS, inserts bounded silence for positive stream offsets and real
+forward gaps, rejects material overlaps, and checks cancellation. Generated
+offset/gap fixtures plus AAC/MP3 decoder tests passed; the WAV remains an
+internal media primitive, not a packaged or user-facing transcription feature.
+
+Developer Preview run
+[38194980068](https://github.com/huou07/Opencut-Reinforced/actions/runs/38194980068)
+published the exact-SHA tag
+[`dev-656cd656199c`](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c).
+It contains macOS, Windows, and Linux debug apps; Android debug APK; all three
+desktop CLI packages; build/source provenance; codec source archives; and a
+13-asset checksum manifest. The publisher downloaded the published assets and
+verified every entry in `SHA256SUMS.txt`. This makes a multi-platform dogfood
+journey available; the release notes identify missing automatic captions,
+unsigned/ad-hoc signing, Android physical-device performance, and other preview
+limitations.

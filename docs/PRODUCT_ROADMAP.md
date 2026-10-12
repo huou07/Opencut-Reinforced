@@ -18,21 +18,20 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current focus: publish the exact-SHA debug Developer Preview, then gather
-dogfood feedback. Platform Verification
-[38185861652](https://github.com/huou07/Opencut-Reinforced/actions/runs/38185861652)
-passed all seven jobs on `3c1e18f0f1119657bd6788717ab336e40a80887c`, including
-Android SAF preview/export/recovery. Preview build
-[38187844020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38187844020)
-built every package but did not publish: Windows' `core.autocrlf` changed the
-generated libvpx source archive bytes, tripping an invalid cross-platform
-byte-equality check. The archive is now generated with autocrlf disabled; a
-fresh exact-SHA platform run and preview publication are required. Android
-correctness/resource bounds pass for the small acceptance fixture; physical
-device performance remains unmeasured. The next creative capability is a
-reviewable local transcription-to-caption flow through existing caption
-commands; feasibility and proposal contracts are recorded in the
-[transcription integration note](evidence/local-transcription-poc.md).
+Current focus: gather real dogfood evidence while implementing local
+transcription-to-caption proposals through existing caption commands.
+Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
+targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
+Platform Verification [38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936)
+passed all seven jobs, and Developer Preview
+[38194980068](https://github.com/huou07/Opencut-Reinforced/actions/runs/38194980068)
+published and downloaded all 13 assets to re-verify `SHA256SUMS.txt`. The
+release is an unsigned or ad-hoc-signed debug preview, not a stable release;
+Android verification covers emulator correctness and resource bounds only,
+not physical-device performance. The transcription WAV handoff at this SHA is
+foundation only: no provider, model installation, or app action is available
+yet. The existing pinned Whisper proof and proposal contract are recorded in
+the [transcription integration note](evidence/local-transcription-poc.md).
 
 ## Product acceptance target
 
@@ -97,7 +96,7 @@ journey unless results establish a real engine migration dependency.
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Packaged edit/export:** exact-SHA run [38162539040](https://github.com/huou07/Opencut-Reinforced/actions/runs/38162539040) on `c3bcd95030d7fbcd7905a5a28d947e375f46497c` passed Linux, macOS, and Windows real-media journeys. Exact repeat on [38165543230](https://github.com/huou07/Opencut-Reinforced/actions/runs/38165543230) on `81491556f6035a309cee129f25b7e762bd1dd11c` passed Windows again. Both runs imported 1080p H.264/AAC, saved/reopened/relinked, exported 30 seconds of VP9/Opus, and independently decoded 720 video plus 1,501 audio frames. Hosted export times were Linux 47.299 s, macOS 57.394 s, and Windows 182.114 s then 169.702 s; monitor the Windows result through dogfood before changing quality/speed settings. Run 38165543230 also had a macOS lifecycle-suite timeout with no assertion failure (the identical suite passed on 38162539040) and a transient Linux TLS failure downloading Opus from `downloads.xiph.org`. Its Android loop exposed a repository-relative script path that fails after FFmpeg changes directories; the absolute-path repair is committed locally and awaits exact-SHA verification. Details are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Exact-SHA platform run:** run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290) on `33f7f355a5bb1c848551babe9c4c5c11c2a65316` passed Rust, Flutter, repository hygiene, descriptor-boundary, Linux, macOS, Windows, and Android gates. The desktop packaged journeys imported, edited, saved/reopened/relinked and independently decoded 30-second VP9/Opus exports: Linux 46.883 s, macOS 54.526 s, Windows 151.311 s, each with 720 video and 1,501 audio frames. Android built all three ABIs and its real DocumentsUI SAF journey wrote valid WebM with independently decoded video/audio; its small half-second fixture proves correctness only, not representative mobile performance. Full measurements and limits are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Next work:** verify the timeline-action readiness guard on a fresh exact SHA, complete Developer Preview packaging with the corrected codec-provenance paths, and publish only after all required assets and checksums verify. Then gather dogfood task evidence and implement the highest-value missing creative capability, beginning with local transcription/caption proposals. Do not continue Android emulator tuning unless a measured correctness/resource limit fails; physical-device performance remains an evidence gap.
+- **Next work:** gather task-level feedback from the dogfoodable preview while building the first real local transcription-to-caption flow. Preserve the shared `or_ai` request/proposal contract, verify provenance against the captured project revision and media digest, let users review/edit results, and apply only through the existing caption command path. The Android process-isolation/runtime choice remains an architecture question; do not claim mobile support until packaged behavior is proven. Physical-device performance remains an evidence gap. Do not spend more Android emulator effort without a measured correctness/resource failure.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 
