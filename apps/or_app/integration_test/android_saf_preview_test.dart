@@ -853,7 +853,7 @@ void main() {
       debugPrint('ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY');
       await _until(
         tester,
-        () => find.text('Import SubRip captions?').evaluate().isNotEmpty,
+        () => find.text('Review SubRip captions').evaluate().isNotEmpty,
       );
       await tester.tap(find.text('Import').last);
       await _until(tester, () => gateway.captionImportCalls == 1);

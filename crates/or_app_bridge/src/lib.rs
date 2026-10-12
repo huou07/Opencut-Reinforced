@@ -5,4 +5,5 @@ mod android_media_io;
 pub mod api;
 mod frb_generated;
 mod preview;
+mod transcription;
 mod viewer_texture;

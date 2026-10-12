@@ -100,6 +100,11 @@ impl CancellationToken {
         Self::default()
     }
 
+    /// Uses a job manager's cancellation state without adding a watcher thread.
+    pub fn from_shared_flag(cancelled: Arc<AtomicBool>) -> Self {
+        Self { cancelled }
+    }
+
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
     }
@@ -1398,7 +1403,10 @@ impl Error for CapabilitySelectionError {}
 mod tests {
     use super::*;
     use std::{
-        sync::{Barrier, atomic::AtomicUsize},
+        sync::{
+            Barrier,
+            atomic::{AtomicBool, AtomicUsize},
+        },
         thread,
     };
 
@@ -1512,6 +1520,15 @@ mod tests {
         let lease = FrameLease::from_software(software, vec![1, 2, 3, 4]).unwrap();
         assert_eq!(lease.software_bytes(), Some(&[1, 2, 3, 4][..]));
         assert!(FrameLease::from_software(descriptor, Vec::new()).is_err());
+    }
+
+    #[test]
+    fn cancellation_token_observes_shared_job_cancellation_without_a_watcher() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let token = CancellationToken::from_shared_flag(Arc::clone(&flag));
+        assert!(!token.is_cancelled());
+        flag.store(true, Ordering::SeqCst);
+        assert!(token.is_cancelled());
     }
 
     #[test]

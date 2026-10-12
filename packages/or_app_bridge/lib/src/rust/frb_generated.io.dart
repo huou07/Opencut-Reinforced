@@ -93,6 +93,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_project_timeline_visual_settings_view(dynamic raw);
 
   @protected
+  ProjectTranscriptProposalView
+  dco_decode_box_autoadd_project_transcript_proposal_view(dynamic raw);
+
+  @protected
   ProjectView dco_decode_box_autoadd_project_view(dynamic raw);
 
   @protected
@@ -109,6 +113,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CaptionFileFormatView dco_decode_caption_file_format_view(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
 
   @protected
   FontIdentityView dco_decode_font_identity_view(dynamic raw);
@@ -160,6 +167,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ProjectTranscriptSegmentView>
+  dco_decode_list_project_transcript_segment_view(dynamic raw);
+
+  @protected
   MediaArtifactBytesView dco_decode_media_artifact_bytes_view(dynamic raw);
 
   @protected
@@ -192,6 +203,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTextFormattingView?
   dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw);
+
+  @protected
+  ProjectTranscriptProposalView?
+  dco_decode_opt_box_autoadd_project_transcript_proposal_view(dynamic raw);
 
   @protected
   ProjectView? dco_decode_opt_box_autoadd_project_view(dynamic raw);
@@ -237,6 +252,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectMediaPageView dco_decode_project_media_page_view(dynamic raw);
+
+  @protected
+  ProjectModelDownloadView dco_decode_project_model_download_view(dynamic raw);
 
   @protected
   ProjectPreviewPreparationView dco_decode_project_preview_preparation_view(
@@ -299,6 +317,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTimelineVisualSettingsView
   dco_decode_project_timeline_visual_settings_view(dynamic raw);
+
+  @protected
+  ProjectTranscriptProposalView dco_decode_project_transcript_proposal_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTranscriptSegmentView dco_decode_project_transcript_segment_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTranscriptionJobView dco_decode_project_transcription_job_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTranscriptionModelView dco_decode_project_transcription_model_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectView dco_decode_project_view(dynamic raw);
@@ -442,6 +480,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTranscriptProposalView
+  sse_decode_box_autoadd_project_transcript_proposal_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectView sse_decode_box_autoadd_project_view(SseDeserializer deserializer);
 
   @protected
@@ -464,6 +508,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptionFileFormatView sse_decode_caption_file_format_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer);
@@ -515,6 +562,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ProjectTranscriptSegmentView>
+  sse_decode_list_project_transcript_segment_view(SseDeserializer deserializer);
+
+  @protected
   MediaArtifactBytesView sse_decode_media_artifact_bytes_view(
     SseDeserializer deserializer,
   );
@@ -555,6 +606,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTextFormattingView?
   sse_decode_opt_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptProposalView?
+  sse_decode_opt_box_autoadd_project_transcript_proposal_view(
     SseDeserializer deserializer,
   );
 
@@ -622,6 +679,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectMediaPageView sse_decode_project_media_page_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectModelDownloadView sse_decode_project_model_download_view(
     SseDeserializer deserializer,
   );
 
@@ -698,6 +760,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTimelineVisualSettingsView
   sse_decode_project_timeline_visual_settings_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptProposalView sse_decode_project_transcript_proposal_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptSegmentView sse_decode_project_transcript_segment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptionJobView sse_decode_project_transcription_job_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptionModelView sse_decode_project_transcription_model_view(
     SseDeserializer deserializer,
   );
 
@@ -862,6 +944,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_project_transcript_proposal_view(
+    ProjectTranscriptProposalView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_view(
     ProjectView self,
     SseSerializer serializer,
@@ -890,6 +978,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CaptionFileFormatView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_font_identity_view(
@@ -955,6 +1046,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_transcript_segment_view(
+    List<ProjectTranscriptSegmentView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_media_artifact_bytes_view(
     MediaArtifactBytesView self,
     SseSerializer serializer,
@@ -1002,6 +1099,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_project_text_formatting_view(
     ProjectTextFormattingView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_project_transcript_proposal_view(
+    ProjectTranscriptProposalView? self,
     SseSerializer serializer,
   );
 
@@ -1083,6 +1186,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_media_page_view(
     ProjectMediaPageView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_model_download_view(
+    ProjectModelDownloadView self,
     SseSerializer serializer,
   );
 
@@ -1173,6 +1282,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_timeline_visual_settings_view(
     ProjectTimelineVisualSettingsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_transcript_proposal_view(
+    ProjectTranscriptProposalView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_transcript_segment_view(
+    ProjectTranscriptSegmentView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_transcription_job_view(
+    ProjectTranscriptionJobView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_transcription_model_view(
+    ProjectTranscriptionModelView self,
     SseSerializer serializer,
   );
 

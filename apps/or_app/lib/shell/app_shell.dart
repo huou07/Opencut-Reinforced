@@ -320,6 +320,7 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
+              onGenerateCaptions: _generateCaptions,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
@@ -1340,6 +1341,289 @@ class _AppShellState extends State<AppShell> {
           }
         }
       }
+    }
+  }
+
+  Future<void> _generateCaptions(ProjectMediaItem media) async {
+    final session = _activeSession;
+    final snapshot = _activeProject;
+    if (session == null || snapshot == null || _busy) return;
+    if (media.audioDetails == null) {
+      _showUnavailable(
+        'Choose media with an audio stream to generate captions.',
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+    String? jobId;
+    Future<bool?>? transcriptionDialog;
+    var transcriptionDialogOpen = false;
+    ValueNotifier<ProjectTranscriptionJob?>? transcriptionDialogState;
+    try {
+      var model = await widget.projectGateway.transcriptionModel(session);
+      if (!model.providerAvailable) {
+        _showUnavailable(
+          'Local caption generation is not included in this installation.',
+        );
+        return;
+      }
+      if (!model.installed) {
+        final install = await _confirmSpeechModelDownload(model);
+        if (!install || !mounted) return;
+        model = await _downloadSpeechModel(session, model);
+        if (!mounted) return;
+      }
+      if (!mounted) return;
+
+      final dialogState = ValueNotifier<ProjectTranscriptionJob?>(null);
+      transcriptionDialogState = dialogState;
+      var cancelRequested = false;
+      transcriptionDialogOpen = true;
+      transcriptionDialog = showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => ValueListenableBuilder(
+          valueListenable: dialogState,
+          builder: (context, job, _) => AlertDialog(
+            title: const Text('Generating captions'),
+            content: Row(
+              children: [
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    job?.state == 'queued'
+                        ? 'Waiting to prepare audio…'
+                        : 'Preparing audio and transcribing locally…',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: cancelRequested
+                    ? null
+                    : () {
+                        cancelRequested = true;
+                        dialogState.value = job;
+                      },
+                child: Text(cancelRequested ? 'Cancelling…' : 'Cancel'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final started = await widget.projectGateway.startTranscription(
+        session,
+        snapshot,
+        media.mediaId,
+      );
+      jobId = started.jobId;
+      var job = started;
+      dialogState.value = job;
+      var cancelSent = false;
+      while (job.isActive && mounted && identical(session, _activeSession)) {
+        if (cancelRequested && !cancelSent) {
+          cancelSent = true;
+          await widget.projectGateway.cancelTranscription(session, job.jobId);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        job = await widget.projectGateway.transcriptionJob(
+          session,
+          started.jobId,
+        );
+        dialogState.value = job;
+      }
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(cancelRequested);
+      }
+      transcriptionDialogOpen = false;
+      await transcriptionDialog;
+      if (!mounted || !identical(session, _activeSession)) return;
+      if (cancelRequested || job.state == 'cancelled') return;
+      if (job.state != 'succeeded') {
+        _showUnavailable(
+          job.failureMessage ?? 'Local caption generation did not complete.',
+        );
+        return;
+      }
+
+      final proposal = await widget.projectGateway.transcriptionProposal(
+        session,
+        started.jobId,
+      );
+      if (proposal == null) {
+        _showUnavailable('The transcript proposal is no longer available.');
+        return;
+      }
+      if (proposal.projectId != snapshot.projectId ||
+          proposal.projectRevision != snapshot.revision ||
+          proposal.mediaId != media.mediaId) {
+        _showUnavailable(
+          'The project or source media changed during transcription. Generate captions again.',
+        );
+        return;
+      }
+      final preview = ProjectCaptionImportPreview(
+        formatName: 'Local ${proposal.language.toUpperCase()} transcript',
+        cueCount: BigInt.from(proposal.segments.length),
+        formattingLossCount: BigInt.zero,
+        emptyCuesSkipped: BigInt.zero,
+        maxCaptionTextBytes: proposal.maxCaptionTextBytes,
+        cues: proposal.segments
+            .map(
+              (segment) => ProjectCaptionCue(
+                startMs: segment.startMs,
+                endMs: segment.endMs,
+                text: segment.text,
+              ),
+            )
+            .toList(growable: false),
+      );
+      final reviewed = await _reviewCaptionImport(preview);
+      if (reviewed == null || !mounted) return;
+      setState(() => _busy = false);
+      await _runProjectActionAtSnapshot(
+        snapshot,
+        (session, current) => widget.projectGateway
+            .importReviewedTimelineCaptions(session, current, reviewed),
+        onSuccess: (message) => setState(() => _projectNotice = message),
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+    } on SocketException {
+      _showUnavailable(
+        'The speech model could not be downloaded. Check your internet connection.',
+      );
+    } catch (_) {
+      _showUnavailable('Local caption generation could not be completed.');
+    } finally {
+      if (transcriptionDialogOpen &&
+          mounted &&
+          Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
+      transcriptionDialogOpen = false;
+      if (transcriptionDialog != null) {
+        try {
+          await transcriptionDialog;
+        } on Object {
+          // The progress dialog is already dismissed when its job completes.
+        }
+      }
+      transcriptionDialogState?.dispose();
+      if (jobId != null) {
+        try {
+          await widget.projectGateway.clearTranscriptionProposal(
+            session,
+            jobId,
+          );
+        } on Object {
+          // Proposal data is in-memory and is also cleared when this project host closes.
+        }
+      }
+      if (mounted && _busy) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool> _confirmSpeechModelDownload(
+    ProjectTranscriptionModel model,
+  ) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Download local speech model?'),
+          content: Text(
+            '${model.language} speech recognition needs a ${(model.sizeBytes / BigInt.from(1024 * 1024)).toInt()} MiB model. It is licensed ${model.license} and will be saved in the app’s private model folder. The download is fetched from ${Uri.parse(model.source).host}. Audio is processed locally.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Download model'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<ProjectTranscriptionModel> _downloadSpeechModel(
+    ProjectSessionHandle session,
+    ProjectTranscriptionModel model,
+  ) async {
+    final download = await widget.projectGateway
+        .beginTranscriptionModelDownload(session);
+    final client = HttpClient();
+    var destination = File(download.destination);
+    try {
+      var uri = Uri.parse(download.source);
+      HttpClientResponse? response;
+      for (var redirect = 0; redirect <= 5; redirect++) {
+        if (uri.scheme != 'https') {
+          throw const FormatException('Model source must remain HTTPS.');
+        }
+        final request = await client.getUrl(uri);
+        request.followRedirects = false;
+        response = await request.close();
+        if (response.statusCode >= 300 && response.statusCode < 400) {
+          final location = response.headers.value(HttpHeaders.locationHeader);
+          if (location == null || redirect == 5) {
+            throw const HttpException(
+              'The model download redirect is invalid.',
+            );
+          }
+          uri = uri.resolve(location);
+          continue;
+        }
+        if (response.statusCode != HttpStatus.ok ||
+            (response.contentLength >= 0 &&
+                response.contentLength != download.sizeBytes.toInt())) {
+          throw const HttpException('The model download response is invalid.');
+        }
+        break;
+      }
+      if (response == null || response.statusCode != HttpStatus.ok) {
+        throw const HttpException('The model download did not complete.');
+      }
+      final sink = destination.openWrite(mode: FileMode.write);
+      var received = 0;
+      try {
+        await for (final chunk in response) {
+          received += chunk.length;
+          if (received > download.sizeBytes.toInt()) {
+            throw const HttpException(
+              'The model download exceeded its expected size.',
+            );
+          }
+          sink.add(chunk);
+        }
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      if (received != download.sizeBytes.toInt()) {
+        throw const HttpException('The model download was incomplete.');
+      }
+      return await widget.projectGateway.finishTranscriptionModelDownload(
+        session,
+        download.downloadId,
+      );
+    } catch (_) {
+      await widget.projectGateway.cancelTranscriptionModelDownload(
+        session,
+        download.downloadId,
+      );
+      rethrow;
+    } finally {
+      client.close(force: true);
     }
   }
 

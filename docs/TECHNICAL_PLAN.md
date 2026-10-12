@@ -684,11 +684,19 @@ repository's UUIDv4 IDs; expected identities and returned proposal fields are
 validated by reference for UUID, digest, and provenance bounds before any
 comparison or size estimation. Directly constructed proposals also receive
 the same conservative 8 MiB serialized-size bound as decoded results.
-It does not yet spawn providers, install models, or expose transcription in the
-application. The integration feasibility result for the pinned Whisper source
-and one optional model is recorded in
+The application bridge now runs the bounded provider sidecar, downloads and
+installs the optional model through the verified model-store contract, checks
+source/proposal provenance, and exposes reviewable proposals to the existing
+caption import path. The Flutter user action asks before the model download,
+keeps audio processing local, supports job cancellation, and applies accepted
+text only through the captured-revision project command. Desktop packaging
+must stage both pinned native executables and notices before enabling the
+feature in installed builds; Android remains unavailable until its runtime
+boundary is designed and verified. The integration feasibility result for
+the pinned Whisper source and one optional model is recorded in
 [`docs/evidence/local-transcription-poc.md`](evidence/local-transcription-poc.md);
-that short fixture is not a packaged-provider or performance acceptance result.
+the short fixture and local sidecar handshake are not packaged workflow,
+quality, or performance acceptance results.
 
 Runtime code licenses do not establish the license or redistribution rights for
 model weights, tokenizers, or associated assets. Verify each exact artifact.

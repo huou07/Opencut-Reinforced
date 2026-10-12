@@ -1645,6 +1645,59 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.previewTimelineCaptions(session, path);
 
   @override
+  Future<ProjectTranscriptionModel> transcriptionModel(
+    ProjectSessionHandle session,
+  ) => _gateway.transcriptionModel(session);
+
+  @override
+  Future<ProjectModelDownload> beginTranscriptionModelDownload(
+    ProjectSessionHandle session,
+  ) => _gateway.beginTranscriptionModelDownload(session);
+
+  @override
+  Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) => _gateway.finishTranscriptionModelDownload(session, downloadId);
+
+  @override
+  Future<void> cancelTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) => _gateway.cancelTranscriptionModelDownload(session, downloadId);
+
+  @override
+  Future<ProjectTranscriptionJob> startTranscription(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  ) => _gateway.startTranscription(session, current, mediaId);
+
+  @override
+  Future<ProjectTranscriptionJob> transcriptionJob(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => _gateway.transcriptionJob(session, jobId);
+
+  @override
+  Future<ProjectTranscriptProposal?> transcriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => _gateway.transcriptionProposal(session, jobId);
+
+  @override
+  Future<void> clearTranscriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => _gateway.clearTranscriptionProposal(session, jobId);
+
+  @override
+  Future<void> cancelTranscription(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => _gateway.cancelTranscription(session, jobId);
+
+  @override
   Future<ProjectActionResult> exportTimelineCaptions(
     ProjectSessionHandle session,
     ProjectReadModel current, {

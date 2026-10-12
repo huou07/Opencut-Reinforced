@@ -93,6 +93,11 @@ impl JobContext {
         self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Shares this job's cancellation state with bounded runtime work.
+    pub fn shared_cancellation_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+        Arc::clone(&self.cancelled)
+    }
+
     /// Reports bounded monotonic work progress when a total is known.
     pub fn report_progress(&self, completed: u64, total: u64) {
         if total == 0 {

@@ -33,6 +33,26 @@ pub struct ModelManifest {
     pub languages: Vec<String>,
 }
 
+/// The first supported optional model for local English caption proposals.
+/// Runtime and model licenses remain independently verified and presented.
+pub fn whisper_tiny_en_manifest() -> ModelManifest {
+    ModelManifest {
+        schema_version: 1,
+        model_id: "whisper-tiny-en".to_owned(),
+        version: "1.0".to_owned(),
+        tasks: vec![AiTask::Transcribe],
+        provider_id: "whisper.cpp".to_owned(),
+        runtime: "whisper.cpp/1.9.4".to_owned(),
+        source: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin".to_owned(),
+        sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f".to_owned(),
+        size_bytes: 77_704_715,
+        license: "MIT".to_owned(),
+        provenance: "ggerganov/whisper.cpp revision 5359861c739e955e79d9a303bcbc70fb988958b1".to_owned(),
+        hardware_requirements: vec!["CPU".to_owned()],
+        languages: vec!["en".to_owned()],
+    }
+}
+
 impl ModelManifest {
     pub fn validate(&self) -> Result<(), ModelValidationError> {
         if self.schema_version != 1
@@ -365,6 +385,21 @@ mod tests {
             hardware_requirements: vec!["cpu".to_owned()],
             languages: vec!["en".to_owned()],
         }
+    }
+
+    #[test]
+    fn shipped_transcription_manifest_matches_the_reviewed_artifact_identity() {
+        let manifest = whisper_tiny_en_manifest();
+        manifest.validate().unwrap();
+        assert_eq!(manifest.model_id, "whisper-tiny-en");
+        assert_eq!(manifest.runtime, "whisper.cpp/1.9.4");
+        assert_eq!(manifest.size_bytes, 77_704_715);
+        assert_eq!(
+            manifest.sha256,
+            "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f"
+        );
+        assert_eq!(manifest.license, "MIT");
+        assert_eq!(manifest.languages, ["en"]);
     }
 
     fn directory() -> PathBuf {

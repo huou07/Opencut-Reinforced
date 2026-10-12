@@ -65,6 +65,7 @@ pub enum JobKind {
     ThumbnailGenerate,
     WaveformGenerate,
     ProxyGenerate,
+    Transcription,
     Export,
 }
 
@@ -127,6 +128,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&JobKind::ProxyGenerate).unwrap(),
             "\"proxy_generate\""
+        );
+        assert_eq!(
+            serde_json::to_string(&JobKind::Transcription).unwrap(),
+            "\"transcription\""
         );
         assert_eq!(
             serde_json::to_string(&JobState::Queued).unwrap(),

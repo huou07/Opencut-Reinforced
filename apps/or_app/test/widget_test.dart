@@ -271,6 +271,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'local caption action explains when the packaged runtime is absent',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [_audioMediaFixture('media-audio', '/tmp/music.wav')];
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/transcription.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Transcription');
+
+      await tester.tap(find.byKey(const ValueKey('media-actions-media-audio')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('media-generate-captions-media-audio')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Local caption generation is not included in this installation.',
+        ),
+        findsOneWidget,
+      );
+      expect(gateway.startTranscriptionCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
@@ -3595,6 +3624,7 @@ class _FakeProjectGateway implements ProjectGateway {
     height: 0,
   );
   int captionImportCalls = 0;
+  int startTranscriptionCalls = 0;
   String? importedCaptionPath;
   List<ProjectCaptionCue>? lastReviewedCaptions;
   ProjectCaptionImportPreview captionImportPreview =
@@ -4264,6 +4294,71 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectSessionHandle handle,
     String path,
   ) async => captionImportPreview;
+
+  @override
+  Future<ProjectTranscriptionModel> transcriptionModel(
+    ProjectSessionHandle session,
+  ) async => ProjectTranscriptionModel(
+    modelId: 'whisper-tiny-en',
+    version: '1.0',
+    license: 'MIT',
+    language: 'English',
+    sizeBytes: BigInt.from(77704715),
+    source: 'https://example.invalid/model',
+    installed: false,
+    providerAvailable: false,
+  );
+
+  @override
+  Future<ProjectModelDownload> beginTranscriptionModelDownload(
+    ProjectSessionHandle session,
+  ) => Future.error(UnimplementedError());
+
+  @override
+  Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) => Future.error(UnimplementedError());
+
+  @override
+  Future<void> cancelTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) async {}
+
+  @override
+  Future<ProjectTranscriptionJob> startTranscription(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  ) async {
+    startTranscriptionCalls++;
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ProjectTranscriptionJob> transcriptionJob(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => Future.error(UnimplementedError());
+
+  @override
+  Future<ProjectTranscriptProposal?> transcriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async => null;
+
+  @override
+  Future<void> clearTranscriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async {}
+
+  @override
+  Future<void> cancelTranscription(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async {}
 
   @override
   Future<ProjectActionResult> exportTimelineCaptions(

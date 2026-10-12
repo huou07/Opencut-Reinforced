@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1538732583;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1215312907;
 
 // Section: executor
 
@@ -225,6 +225,59 @@ fn wire__crate__api__project__ProjectHostHandle_autosave_checkpoint_impl(
         },
     )
 }
+fn wire__crate__api__project__ProjectHostHandle_begin_transcription_model_download_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_begin_transcription_model_download",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::project::ProjectHostHandle::begin_transcription_model_download(
+                            &*api_that_guard,
+                        )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
 fn wire__crate__api__project__ProjectHostHandle_cancel_export_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -279,6 +332,140 @@ fn wire__crate__api__project__ProjectHostHandle_cancel_export_impl(
                         ))?;
                     std::result::Result::Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_cancel_transcription_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_cancel_transcription",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_job_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::project::ProjectHostHandle::cancel_transcription(
+                        &*api_that_guard,
+                        api_job_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_cancel_transcription_model_download_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "ProjectHostHandle_cancel_transcription_model_download", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>>>::sse_decode(&mut deserializer);
+let api_download_id = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move ||  {
+                        let mut api_that_guard = None;
+let decode_indices_ = flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false)]);
+        for i in decode_indices_ {
+            match i {
+                0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                _ => unreachable!(),
+            }
+        }
+        let api_that_guard = api_that_guard.unwrap();
+ let output_ok = crate::api::project::ProjectHostHandle::cancel_transcription_model_download(&*api_that_guard, api_download_id)?;   std::result::Result::Ok(output_ok)
+                    })())
+                } })
+}
+fn wire__crate__api__project__ProjectHostHandle_clear_transcription_proposal_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_clear_transcription_proposal",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_job_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::project::ProjectHostHandle::clear_transcription_proposal(
+                            &*api_that_guard,
+                            api_job_id,
+                        )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
             }
         },
     )
@@ -581,6 +768,31 @@ fn wire__crate__api__project__ProjectHostHandle_export_timeline_captions_impl(
             }
         },
     )
+}
+fn wire__crate__api__project__ProjectHostHandle_finish_transcription_model_download_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "ProjectHostHandle_finish_transcription_model_download", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>>>::sse_decode(&mut deserializer);
+let api_download_id = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move ||  {
+                        let mut api_that_guard = None;
+let decode_indices_ = flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false)]);
+        for i in decode_indices_ {
+            match i {
+                0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                _ => unreachable!(),
+            }
+        }
+        let api_that_guard = api_that_guard.unwrap();
+ let output_ok = crate::api::project::ProjectHostHandle::finish_transcription_model_download(&*api_that_guard, api_download_id)?;   std::result::Result::Ok(output_ok)
+                    })())
+                } })
 }
 fn wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
@@ -2892,6 +3104,66 @@ fn wire__crate__api__project__ProjectHostHandle_start_export_impl(
         },
     )
 }
+fn wire__crate__api__project__ProjectHostHandle_start_transcription_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_start_transcription",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_project_instance_id = <String>::sse_decode(&mut deserializer);
+            let api_expected_revision = <u64>::sse_decode(&mut deserializer);
+            let api_media_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::project::ProjectHostHandle::start_transcription(
+                        &*api_that_guard,
+                        api_project_id,
+                        api_project_instance_id,
+                        api_expected_revision,
+                        api_media_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
 fn wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3104,6 +3376,166 @@ fn wire__crate__api__project__ProjectHostHandle_timeline_sequence_settings_impl(
                         crate::api::project::ProjectHostHandle::timeline_sequence_settings(
                             &*api_that_guard,
                         )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_transcription_job_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_transcription_job",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_job_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::project::ProjectHostHandle::transcription_job(
+                        &*api_that_guard,
+                        api_job_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_transcription_model_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_transcription_model",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        Ok::<_, ()>(crate::api::project::ProjectHostHandle::transcription_model(
+                            &*api_that_guard,
+                        ))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__project__ProjectHostHandle_transcription_proposal_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_transcription_proposal",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_job_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::project::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::project::ProjectHostHandle::transcription_proposal(
+                        &*api_that_guard,
+                        api_job_id,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })(
                 ))
@@ -3787,6 +4219,13 @@ impl SseDecode for crate::api::project::CaptionFileFormatView {
     }
 }
 
+impl SseDecode for f32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_f32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for crate::api::project::FontIdentityView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3931,6 +4370,20 @@ impl SseDecode for Vec<crate::api::project::ProjectTimelineTrackView> {
     }
 }
 
+impl SseDecode for Vec<crate::api::project::ProjectTranscriptSegmentView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <crate::api::project::ProjectTranscriptSegmentView>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for crate::api::project::MediaArtifactBytesView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4062,6 +4515,19 @@ impl SseDecode for Option<crate::api::project::ProjectTextFormattingView> {
         if (<bool>::sse_decode(deserializer)) {
             return Some(
                 <crate::api::project::ProjectTextFormattingView>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::project::ProjectTranscriptProposalView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::project::ProjectTranscriptProposalView>::sse_decode(deserializer),
             );
         } else {
             return None;
@@ -4304,6 +4770,24 @@ impl SseDecode for crate::api::project::ProjectMediaPageView {
             offset: var_offset,
             limit: var_limit,
             next_offset: var_nextOffset,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::ProjectModelDownloadView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_downloadId = <String>::sse_decode(deserializer);
+        let mut var_destination = <String>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_sizeBytes = <u64>::sse_decode(deserializer);
+        let mut var_license = <String>::sse_decode(deserializer);
+        return crate::api::project::ProjectModelDownloadView {
+            download_id: var_downloadId,
+            destination: var_destination,
+            source: var_source,
+            size_bytes: var_sizeBytes,
+            license: var_license,
         };
     }
 }
@@ -4667,6 +5151,95 @@ impl SseDecode for crate::api::project::ProjectTimelineVisualSettingsView {
     }
 }
 
+impl SseDecode for crate::api::project::ProjectTranscriptProposalView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_projectId = <String>::sse_decode(deserializer);
+        let mut var_projectRevision = <u64>::sse_decode(deserializer);
+        let mut var_mediaId = <String>::sse_decode(deserializer);
+        let mut var_mediaSha256 = <String>::sse_decode(deserializer);
+        let mut var_providerId = <String>::sse_decode(deserializer);
+        let mut var_modelId = <String>::sse_decode(deserializer);
+        let mut var_modelVersion = <String>::sse_decode(deserializer);
+        let mut var_modelLicense = <String>::sse_decode(deserializer);
+        let mut var_language = <String>::sse_decode(deserializer);
+        let mut var_maxCaptionTextBytes = <u64>::sse_decode(deserializer);
+        let mut var_segments =
+            <Vec<crate::api::project::ProjectTranscriptSegmentView>>::sse_decode(deserializer);
+        return crate::api::project::ProjectTranscriptProposalView {
+            project_id: var_projectId,
+            project_revision: var_projectRevision,
+            media_id: var_mediaId,
+            media_sha256: var_mediaSha256,
+            provider_id: var_providerId,
+            model_id: var_modelId,
+            model_version: var_modelVersion,
+            model_license: var_modelLicense,
+            language: var_language,
+            max_caption_text_bytes: var_maxCaptionTextBytes,
+            segments: var_segments,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::ProjectTranscriptSegmentView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_startMs = <u64>::sse_decode(deserializer);
+        let mut var_endMs = <u64>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_confidence = <f32>::sse_decode(deserializer);
+        return crate::api::project::ProjectTranscriptSegmentView {
+            start_ms: var_startMs,
+            end_ms: var_endMs,
+            text: var_text,
+            confidence: var_confidence,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::ProjectTranscriptionJobView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_jobId = <String>::sse_decode(deserializer);
+        let mut var_state = <String>::sse_decode(deserializer);
+        let mut var_progressCompleted = <Option<u64>>::sse_decode(deserializer);
+        let mut var_progressTotal = <Option<u64>>::sse_decode(deserializer);
+        let mut var_failureMessage = <Option<String>>::sse_decode(deserializer);
+        return crate::api::project::ProjectTranscriptionJobView {
+            job_id: var_jobId,
+            state: var_state,
+            progress_completed: var_progressCompleted,
+            progress_total: var_progressTotal,
+            failure_message: var_failureMessage,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::ProjectTranscriptionModelView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_modelId = <String>::sse_decode(deserializer);
+        let mut var_version = <String>::sse_decode(deserializer);
+        let mut var_license = <String>::sse_decode(deserializer);
+        let mut var_language = <String>::sse_decode(deserializer);
+        let mut var_sizeBytes = <u64>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_installed = <bool>::sse_decode(deserializer);
+        let mut var_providerAvailable = <bool>::sse_decode(deserializer);
+        return crate::api::project::ProjectTranscriptionModelView {
+            model_id: var_modelId,
+            version: var_version,
+            license: var_license,
+            language: var_language,
+            size_bytes: var_sizeBytes,
+            source: var_source,
+            installed: var_installed,
+            provider_available: var_providerAvailable,
+        };
+    }
+}
+
 impl SseDecode for crate::api::project::ProjectView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4924,313 +5497,369 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__project__ProjectHostHandle_cancel_export_impl(
+        4 => wire__crate__api__project__ProjectHostHandle_begin_transcription_model_download_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__project__ProjectHostHandle_close_impl(
+        5 => wire__crate__api__project__ProjectHostHandle_cancel_export_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__project__ProjectHostHandle_delete_timeline_clip_impl(
+        6 => wire__crate__api__project__ProjectHostHandle_cancel_transcription_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__project__ProjectHostHandle_delete_timeline_marker_impl(
+        7 => wire__crate__api__project__ProjectHostHandle_cancel_transcription_model_download_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__project__ProjectHostHandle_export_status_impl(
+        8 => wire__crate__api__project__ProjectHostHandle_clear_transcription_proposal_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__project__ProjectHostHandle_export_timeline_captions_impl(
+        9 => wire__crate__api__project__ProjectHostHandle_close_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
+        10 => wire__crate__api__project__ProjectHostHandle_delete_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_visual_settings_impl(
+        11 => wire__crate__api__project__ProjectHostHandle_delete_timeline_marker_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__project__ProjectHostHandle_import_media_impl(
+        12 => wire__crate__api__project__ProjectHostHandle_export_status_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__project__ProjectHostHandle_import_reviewed_timeline_captions_impl(
+        13 => wire__crate__api__project__ProjectHostHandle_export_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__project__ProjectHostHandle_import_timeline_captions_impl(
+        14 => {
+            wire__crate__api__project__ProjectHostHandle_finish_transcription_model_download_impl(
+                port,
+                ptr,
+                rust_vec_len,
+                data_len,
+            )
+        }
+        15 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
+        16 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_visual_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__project__ProjectHostHandle_insert_timeline_text_clip_impl(
+        17 => wire__crate__api__project__ProjectHostHandle_import_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__project__ProjectHostHandle_list_media_page_impl(
+        18 => wire__crate__api__project__ProjectHostHandle_import_reviewed_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__project__ProjectHostHandle_list_timeline_clips_impl(
+        19 => wire__crate__api__project__ProjectHostHandle_import_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__project__ProjectHostHandle_list_timeline_markers_impl(
+        20 => wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__project__ProjectHostHandle_list_timeline_tracks_impl(
+        21 => wire__crate__api__project__ProjectHostHandle_insert_timeline_text_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__project__ProjectHostHandle_move_timeline_clip_impl(
+        22 => wire__crate__api__project__ProjectHostHandle_list_media_page_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__project__ProjectHostHandle_move_timeline_marker_impl(
+        23 => wire__crate__api__project__ProjectHostHandle_list_timeline_clips_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__project__ProjectHostHandle_preview_abort_prepared_impl(
+        24 => wire__crate__api__project__ProjectHostHandle_list_timeline_markers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__project__ProjectHostHandle_preview_complete_prepared_impl(
+        25 => wire__crate__api__project__ProjectHostHandle_list_timeline_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__project__ProjectHostHandle_preview_pause_impl(
+        26 => wire__crate__api__project__ProjectHostHandle_move_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__project__ProjectHostHandle_preview_play_impl(
+        27 => wire__crate__api__project__ProjectHostHandle_move_timeline_marker_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__project__ProjectHostHandle_preview_prepare_impl(
+        28 => wire__crate__api__project__ProjectHostHandle_preview_abort_prepared_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__project__ProjectHostHandle_preview_seek_impl(
+        29 => wire__crate__api__project__ProjectHostHandle_preview_complete_prepared_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__project__ProjectHostHandle_preview_state_impl(
+        30 => wire__crate__api__project__ProjectHostHandle_preview_pause_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__project__ProjectHostHandle_preview_step_impl(
+        31 => wire__crate__api__project__ProjectHostHandle_preview_play_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__project__ProjectHostHandle_preview_tick_impl(
+        32 => wire__crate__api__project__ProjectHostHandle_preview_prepare_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__project__ProjectHostHandle_preview_timeline_captions_impl(
+        33 => wire__crate__api__project__ProjectHostHandle_preview_seek_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__project__ProjectHostHandle_read_media_artifact_impl(
+        34 => wire__crate__api__project__ProjectHostHandle_preview_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__project__ProjectHostHandle_redo_impl(
+        35 => wire__crate__api__project__ProjectHostHandle_preview_step_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__project__ProjectHostHandle_relink_media_impl(
+        36 => wire__crate__api__project__ProjectHostHandle_preview_tick_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__project__ProjectHostHandle_remove_media_impl(
+        37 => wire__crate__api__project__ProjectHostHandle_preview_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__project__ProjectHostHandle_remove_timeline_track_impl(
+        38 => wire__crate__api__project__ProjectHostHandle_read_media_artifact_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__project__ProjectHostHandle_rename_impl(
+        39 => wire__crate__api__project__ProjectHostHandle_redo_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__project__ProjectHostHandle_rename_timeline_marker_impl(
+        40 => wire__crate__api__project__ProjectHostHandle_relink_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__project__ProjectHostHandle_request_media_thumbnail_impl(
+        41 => wire__crate__api__project__ProjectHostHandle_remove_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__project__ProjectHostHandle_request_media_waveform_impl(
+        42 => wire__crate__api__project__ProjectHostHandle_remove_timeline_track_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
+        43 => wire__crate__api__project__ProjectHostHandle_rename_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
+        44 => wire__crate__api__project__ProjectHostHandle_rename_timeline_marker_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__project__ProjectHostHandle_save_impl(
+        45 => wire__crate__api__project__ProjectHostHandle_request_media_thumbnail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_frame_rate_impl(
+        46 => wire__crate__api__project__ProjectHostHandle_request_media_waveform_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__project__ProjectHostHandle_set_timeline_track_state_impl(
+        47 => wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
+        48 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__project__ProjectHostHandle_start_export_impl(
+        49 => wire__crate__api__project__ProjectHostHandle_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
+        50 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_frame_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
+        51 => wire__crate__api__project__ProjectHostHandle_set_timeline_track_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__api__project__ProjectHostHandle_summary_impl(
+        52 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__project__ProjectHostHandle_timeline_sequence_settings_impl(
+        53 => wire__crate__api__project__ProjectHostHandle_start_export_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
+        54 => wire__crate__api__project__ProjectHostHandle_start_transcription_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+        55 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => {
+        56 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        57 => wire__crate__api__project__ProjectHostHandle_summary_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        58 => wire__crate__api__project__ProjectHostHandle_timeline_sequence_settings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        59 => wire__crate__api__project__ProjectHostHandle_transcription_job_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        60 => wire__crate__api__project__ProjectHostHandle_transcription_model_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        61 => wire__crate__api__project__ProjectHostHandle_transcription_proposal_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        62 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        63 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        64 => {
             wire__crate__api__project__ProjectHostHandle_update_timeline_clip_audio_settings_impl(
                 port,
                 ptr,
@@ -5238,7 +5867,7 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        56 => {
+        65 => {
             wire__crate__api__project__ProjectHostHandle_update_timeline_clip_visual_settings_impl(
                 port,
                 ptr,
@@ -5246,20 +5875,20 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        57 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
+        66 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5763,6 +6392,30 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectMediaPageView
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectModelDownloadView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.download_id.into_into_dart().into_dart(),
+            self.destination.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.size_bytes.into_into_dart().into_dart(),
+            self.license.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectModelDownloadView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectModelDownloadView>
+    for crate::api::project::ProjectModelDownloadView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectModelDownloadView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectPreviewPreparationView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6157,6 +6810,110 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTimelineVisua
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTranscriptProposalView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.project_id.into_into_dart().into_dart(),
+            self.project_revision.into_into_dart().into_dart(),
+            self.media_id.into_into_dart().into_dart(),
+            self.media_sha256.into_into_dart().into_dart(),
+            self.provider_id.into_into_dart().into_dart(),
+            self.model_id.into_into_dart().into_dart(),
+            self.model_version.into_into_dart().into_dart(),
+            self.model_license.into_into_dart().into_dart(),
+            self.language.into_into_dart().into_dart(),
+            self.max_caption_text_bytes.into_into_dart().into_dart(),
+            self.segments.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTranscriptProposalView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTranscriptProposalView>
+    for crate::api::project::ProjectTranscriptProposalView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTranscriptProposalView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTranscriptSegmentView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.start_ms.into_into_dart().into_dart(),
+            self.end_ms.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTranscriptSegmentView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTranscriptSegmentView>
+    for crate::api::project::ProjectTranscriptSegmentView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTranscriptSegmentView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTranscriptionJobView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.job_id.into_into_dart().into_dart(),
+            self.state.into_into_dart().into_dart(),
+            self.progress_completed.into_into_dart().into_dart(),
+            self.progress_total.into_into_dart().into_dart(),
+            self.failure_message.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTranscriptionJobView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTranscriptionJobView>
+    for crate::api::project::ProjectTranscriptionJobView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTranscriptionJobView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTranscriptionModelView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.model_id.into_into_dart().into_dart(),
+            self.version.into_into_dart().into_dart(),
+            self.license.into_into_dart().into_dart(),
+            self.language.into_into_dart().into_dart(),
+            self.size_bytes.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.installed.into_into_dart().into_dart(),
+            self.provider_available.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTranscriptionModelView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTranscriptionModelView>
+    for crate::api::project::ProjectTranscriptionModelView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTranscriptionModelView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6547,6 +7304,13 @@ impl SseEncode for crate::api::project::CaptionFileFormatView {
     }
 }
 
+impl SseEncode for f32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_f32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for crate::api::project::FontIdentityView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6670,6 +7434,16 @@ impl SseEncode for Vec<crate::api::project::ProjectTimelineTrackView> {
     }
 }
 
+impl SseEncode for Vec<crate::api::project::ProjectTranscriptSegmentView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::project::ProjectTranscriptSegmentView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::project::MediaArtifactBytesView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6782,6 +7556,16 @@ impl SseEncode for Option<crate::api::project::ProjectTextFormattingView> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::project::ProjectTextFormattingView>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::project::ProjectTranscriptProposalView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::project::ProjectTranscriptProposalView>::sse_encode(value, serializer);
         }
     }
 }
@@ -6961,6 +7745,17 @@ impl SseEncode for crate::api::project::ProjectMediaPageView {
         <u64>::sse_encode(self.offset, serializer);
         <u64>::sse_encode(self.limit, serializer);
         <Option<u64>>::sse_encode(self.next_offset, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::ProjectModelDownloadView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.download_id, serializer);
+        <String>::sse_encode(self.destination, serializer);
+        <String>::sse_encode(self.source, serializer);
+        <u64>::sse_encode(self.size_bytes, serializer);
+        <String>::sse_encode(self.license, serializer);
     }
 }
 
@@ -7184,6 +7979,61 @@ impl SseEncode for crate::api::project::ProjectTimelineVisualSettingsView {
         );
         <bool>::sse_encode(self.update_transition_in, serializer);
         <bool>::sse_encode(self.update_transition_out, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::ProjectTranscriptProposalView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.project_id, serializer);
+        <u64>::sse_encode(self.project_revision, serializer);
+        <String>::sse_encode(self.media_id, serializer);
+        <String>::sse_encode(self.media_sha256, serializer);
+        <String>::sse_encode(self.provider_id, serializer);
+        <String>::sse_encode(self.model_id, serializer);
+        <String>::sse_encode(self.model_version, serializer);
+        <String>::sse_encode(self.model_license, serializer);
+        <String>::sse_encode(self.language, serializer);
+        <u64>::sse_encode(self.max_caption_text_bytes, serializer);
+        <Vec<crate::api::project::ProjectTranscriptSegmentView>>::sse_encode(
+            self.segments,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::project::ProjectTranscriptSegmentView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.start_ms, serializer);
+        <u64>::sse_encode(self.end_ms, serializer);
+        <String>::sse_encode(self.text, serializer);
+        <f32>::sse_encode(self.confidence, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::ProjectTranscriptionJobView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.job_id, serializer);
+        <String>::sse_encode(self.state, serializer);
+        <Option<u64>>::sse_encode(self.progress_completed, serializer);
+        <Option<u64>>::sse_encode(self.progress_total, serializer);
+        <Option<String>>::sse_encode(self.failure_message, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::ProjectTranscriptionModelView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.model_id, serializer);
+        <String>::sse_encode(self.version, serializer);
+        <String>::sse_encode(self.license, serializer);
+        <String>::sse_encode(self.language, serializer);
+        <u64>::sse_encode(self.size_bytes, serializer);
+        <String>::sse_encode(self.source, serializer);
+        <bool>::sse_encode(self.installed, serializer);
+        <bool>::sse_encode(self.provider_available, serializer);
     }
 }
 

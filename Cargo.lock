@@ -1797,12 +1797,15 @@ dependencies = [
  "flutter_rust_bridge",
  "jni",
  "ndk-context",
+ "or_ai",
  "or_audio",
  "or_core",
  "or_ipc",
  "or_media",
  "or_render",
  "or_runtime",
+ "sha2",
+ "uuid",
 ]
 
 [[package]]
@@ -1873,6 +1876,16 @@ name = "or_runtime"
 version = "0.1.0"
 dependencies = [
  "or_core",
+]
+
+[[package]]
+name = "or_whisper_provider"
+version = "0.1.0"
+dependencies = [
+ "or_ai",
+ "serde_json",
+ "sha2",
+ "uuid",
 ]
 
 [[package]]

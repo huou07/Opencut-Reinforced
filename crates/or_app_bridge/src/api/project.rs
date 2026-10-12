@@ -2,6 +2,7 @@
 use crate::android_media_io::capability_for;
 use crate::frb_generated::StreamSink;
 use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, PreviewSnapshot};
+use crate::transcription::{ModelDownload, TranscriptionModelInfo, TranscriptionService};
 use flutter_rust_bridge::frb;
 use or_core::{
     ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
@@ -91,6 +92,138 @@ pub struct ProjectExportJobView {
     pub progress_completed: Option<u64>,
     pub progress_total: Option<u64>,
     pub failure_message: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTranscriptionModelView {
+    pub model_id: String,
+    pub version: String,
+    pub license: String,
+    pub language: String,
+    pub size_bytes: u64,
+    pub source: String,
+    pub installed: bool,
+    pub provider_available: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectModelDownloadView {
+    pub download_id: String,
+    pub destination: String,
+    pub source: String,
+    pub size_bytes: u64,
+    pub license: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTranscriptionJobView {
+    pub job_id: String,
+    pub state: String,
+    pub progress_completed: Option<u64>,
+    pub progress_total: Option<u64>,
+    pub failure_message: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTranscriptSegmentView {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectTranscriptProposalView {
+    pub project_id: String,
+    pub project_revision: u64,
+    pub media_id: String,
+    pub media_sha256: String,
+    pub provider_id: String,
+    pub model_id: String,
+    pub model_version: String,
+    pub model_license: String,
+    pub language: String,
+    pub max_caption_text_bytes: u64,
+    pub segments: Vec<ProjectTranscriptSegmentView>,
+}
+
+fn transcription_model_view(info: TranscriptionModelInfo) -> ProjectTranscriptionModelView {
+    ProjectTranscriptionModelView {
+        model_id: info.model_id,
+        version: info.version,
+        license: info.license,
+        language: info.language,
+        size_bytes: info.size_bytes,
+        source: info.source,
+        installed: info.installed,
+        provider_available: info.provider_available,
+    }
+}
+
+fn model_download_view(download: ModelDownload) -> ProjectModelDownloadView {
+    ProjectModelDownloadView {
+        download_id: download.download_id,
+        destination: download.destination,
+        source: download.source,
+        size_bytes: download.size_bytes,
+        license: download.license,
+    }
+}
+
+fn transcription_job_view(job: JobSnapshot) -> ProjectTranscriptionJobView {
+    ProjectTranscriptionJobView {
+        job_id: job.id.to_string(),
+        state: job_state_name(job.state).to_owned(),
+        progress_completed: job.progress.map(|progress| progress.completed),
+        progress_total: job.progress.map(|progress| progress.total),
+        failure_message: job.failure_message,
+    }
+}
+
+fn job_state_name(state: JobState) -> &'static str {
+    match state {
+        JobState::Queued => "queued",
+        JobState::Running => "running",
+        JobState::Succeeded => "succeeded",
+        JobState::Failed => "failed",
+        JobState::Cancelled => "cancelled",
+    }
+}
+
+fn transcription_proposal_view(
+    proposal: or_ai::TranscriptProposal,
+) -> ProjectTranscriptProposalView {
+    ProjectTranscriptProposalView {
+        project_id: proposal.project_id.to_string(),
+        project_revision: proposal.project_revision,
+        media_id: proposal.media_id.to_string(),
+        media_sha256: proposal.media_sha256,
+        provider_id: proposal.provider_id,
+        model_id: proposal.model_id,
+        model_version: proposal.model_version,
+        model_license: proposal.model_license,
+        language: proposal.language,
+        max_caption_text_bytes: or_core::MAX_TIMELINE_CAPTION_BYTES as u64,
+        segments: proposal
+            .segments
+            .into_iter()
+            .map(|segment| ProjectTranscriptSegmentView {
+                start_ms: segment.start_ms,
+                end_ms: segment.end_ms,
+                text: segment.text,
+                confidence: segment.confidence,
+            })
+            .collect(),
+    }
+}
+
+fn transcription_error(
+    error: crate::transcription::TranscriptionServiceError,
+) -> ProjectBridgeError {
+    ProjectBridgeError {
+        code: "TRANSCRIPTION_UNAVAILABLE".to_owned(),
+        message: error.to_string(),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -475,6 +608,7 @@ impl std::error::Error for ProjectBridgeError {}
 pub struct ProjectHostHandle {
     host: LiveProjectHost,
     media_artifact_service: Option<MediaArtifactService>,
+    transcription_service: Option<TranscriptionService>,
     preview_runtime: Arc<PreviewRuntime>,
 }
 
@@ -502,6 +636,7 @@ fn start_project_host(
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
+        transcription_service: TranscriptionService::new(),
         preview_runtime,
     })
 }
@@ -678,6 +813,162 @@ pub fn discard_recovery(path: String) -> RecoveryActionResult {
 }
 
 impl ProjectHostHandle {
+    pub fn transcription_model(&self) -> ProjectTranscriptionModelView {
+        let info = self
+            .transcription_service
+            .as_ref()
+            .map(TranscriptionService::model_info)
+            .unwrap_or_else(TranscriptionModelInfo::unavailable);
+        transcription_model_view(info)
+    }
+
+    pub fn begin_transcription_model_download(
+        &self,
+    ) -> Result<ProjectModelDownloadView, ProjectBridgeError> {
+        let download = self
+            .transcription_service()?
+            .begin_model_download()
+            .map_err(transcription_error)?;
+        Ok(model_download_view(download))
+    }
+
+    pub fn finish_transcription_model_download(
+        &self,
+        download_id: String,
+    ) -> Result<ProjectTranscriptionModelView, ProjectBridgeError> {
+        let info = self
+            .transcription_service()?
+            .finish_model_download(&download_id)
+            .map_err(transcription_error)?;
+        Ok(transcription_model_view(info))
+    }
+
+    pub fn cancel_transcription_model_download(
+        &self,
+        download_id: String,
+    ) -> Result<(), ProjectBridgeError> {
+        self.transcription_service()?
+            .cancel_model_download(&download_id)
+            .map_err(transcription_error)
+    }
+
+    pub fn start_transcription(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        media_id: String,
+    ) -> Result<ProjectTranscriptionJobView, ProjectBridgeError> {
+        let (project_id, project_instance_id, revision) =
+            parse_session_identity(&project_id, &project_instance_id, expected_revision)?;
+        let id = MediaId::from_str(&media_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_MEDIA_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let summary = self.host.describe().map_err(host_error)?;
+        if summary.summary.project_id != project_id
+            || summary.summary.project_instance_id != project_instance_id
+            || summary.summary.project_revision != revision
+        {
+            return Err(revision_conflict_error());
+        }
+        let request = QueryEnvelope::media_get(project_id, project_instance_id, id);
+        let media = match self
+            .host
+            .handle_application_request(ApplicationRequest::Query(request))
+            .map_err(host_error)?
+        {
+            ApplicationResponse::Query(result) => result
+                .media_item
+                .map(|item| *item)
+                .ok_or_else(unexpected_response_error)?,
+            ApplicationResponse::Error(error) => return Err(operation_bridge_error(error)),
+            _ => return Err(unexpected_response_error()),
+        };
+        let job = self
+            .transcription_service()?
+            .start(
+                uuid::Uuid::parse_str(&project_id.to_string()).map_err(|error| {
+                    ProjectBridgeError {
+                        code: "INVALID_PROJECT_ID".to_owned(),
+                        message: error.to_string(),
+                    }
+                })?,
+                revision.value(),
+                media,
+            )
+            .map_err(transcription_error)?;
+        Ok(transcription_job_view(job))
+    }
+
+    pub fn transcription_job(
+        &self,
+        job_id: String,
+    ) -> Result<ProjectTranscriptionJobView, ProjectBridgeError> {
+        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_JOB_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let job = self
+            .transcription_service()?
+            .snapshot(id)
+            .ok_or_else(|| ProjectBridgeError {
+                code: "JOB_NOT_FOUND".to_owned(),
+                message: "The transcription job is no longer available.".to_owned(),
+            })?;
+        Ok(transcription_job_view(job))
+    }
+
+    pub fn transcription_proposal(
+        &self,
+        job_id: String,
+    ) -> Result<Option<ProjectTranscriptProposalView>, ProjectBridgeError> {
+        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_JOB_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        Ok(self
+            .transcription_service()?
+            .proposal(id)
+            .map(transcription_proposal_view))
+    }
+
+    pub fn clear_transcription_proposal(&self, job_id: String) -> Result<(), ProjectBridgeError> {
+        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_JOB_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        self.transcription_service()?.clear_proposal(id);
+        Ok(())
+    }
+
+    pub fn cancel_transcription(&self, job_id: String) -> Result<String, ProjectBridgeError> {
+        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
+            code: "INVALID_JOB_ID".to_owned(),
+            message: error.to_string(),
+        })?;
+        let outcome = self
+            .transcription_service()?
+            .cancel(id)
+            .map_err(|_| ProjectBridgeError {
+                code: "JOB_NOT_FOUND".to_owned(),
+                message: "The transcription job is no longer available.".to_owned(),
+            })?;
+        Ok(match outcome {
+            or_core::JobCancelOutcome::CancelledQueued => "cancelled".to_owned(),
+            or_core::JobCancelOutcome::CancellationRequested => "cancelling".to_owned(),
+            or_core::JobCancelOutcome::AlreadyTerminal(state) => job_state_name(state).to_owned(),
+        })
+    }
+
+    fn transcription_service(&self) -> Result<&TranscriptionService, ProjectBridgeError> {
+        self.transcription_service.as_ref().ok_or_else(|| {
+            transcription_error(
+                crate::transcription::TranscriptionServiceError::ProviderUnavailable,
+            )
+        })
+    }
+
     pub fn export_timeline_captions(
         &self,
         project_id: String,
@@ -3766,6 +4057,7 @@ mod tests {
                 Arc::new(TestExportHandler),
             ),
             media_artifact_service: None,
+            transcription_service: None,
             preview_runtime: Arc::new(PreviewRuntime::new()),
         }
     }

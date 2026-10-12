@@ -18,15 +18,23 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current focus: gather real dogfood evidence while implementing local
-transcription-to-caption proposals through existing caption commands.
-The verified model-store primitive now validates manifests and atomically
-installs, verifies, removes, and recovers interrupted artifacts outside the
-project. Rust tests/Clippy and Platform Verification [38202679825](https://github.com/huou07/Opencut-Reinforced/actions/runs/38202679825)
-passed on `cb09835564b3154a75ca9d31419c161df82baa8c`. This is still an
-`or_ai` foundation only: the packaged provider, model download UI, and app
-transcription/review action do not exist, so no AI workflow is available to a
-user yet.
+Current focus: finish a local transcription-to-caption vertical slice through
+the existing caption command, then make it available and verify it in clean
+desktop packages. The verified model-store primitive validates manifests and
+atomically installs, verifies, removes, and recovers interrupted artifacts
+outside the project. The current in-progress implementation adds a bounded
+Whisper sidecar, explicit optional model download, local job/cancellation, and
+review/edit/apply through revision-checked caption import. The helper binaries
+are not yet staged in desktop packages, so installed builds must continue to
+report the feature unavailable. Android transcription remains unsupported.
+Platform Verification [38210314111](https://github.com/huou07/Opencut-Reinforced/actions/runs/38210314111)
+on `e953aadb4437bae2210f8e317846c399494c4bf3` reached and passed the real
+Android SAF media/export steps but failed a caption-review dialog assertion
+that still expected the old title; the current integration test targets the
+existing review title and needs a new exact-SHA platform run. Android's
+measured emulator correctness/resource evidence remains valid; physical-device
+responsiveness is still unverified and is not a reason for more emulator-only
+tuning.
 Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
 targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
 Platform Verification [38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936)
@@ -103,7 +111,7 @@ journey unless results establish a real engine migration dependency.
 - **Packaged edit/export:** exact-SHA run [38162539040](https://github.com/huou07/Opencut-Reinforced/actions/runs/38162539040) on `c3bcd95030d7fbcd7905a5a28d947e375f46497c` passed Linux, macOS, and Windows real-media journeys. Exact repeat on [38165543230](https://github.com/huou07/Opencut-Reinforced/actions/runs/38165543230) on `81491556f6035a309cee129f25b7e762bd1dd11c` passed Windows again. Both runs imported 1080p H.264/AAC, saved/reopened/relinked, exported 30 seconds of VP9/Opus, and independently decoded 720 video plus 1,501 audio frames. Hosted export times were Linux 47.299 s, macOS 57.394 s, and Windows 182.114 s then 169.702 s; monitor the Windows result through dogfood before changing quality/speed settings. Run 38165543230 also had a macOS lifecycle-suite timeout with no assertion failure (the identical suite passed on 38162539040) and a transient Linux TLS failure downloading Opus from `downloads.xiph.org`. Its Android loop exposed a repository-relative script path that fails after FFmpeg changes directories; the absolute-path repair was validated by the Android job in exact-SHA run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290). Details are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Exact-SHA platform run:** run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290) on `33f7f355a5bb1c848551babe9c4c5c11c2a65316` passed Rust, Flutter, repository hygiene, descriptor-boundary, Linux, macOS, Windows, and Android gates. The desktop packaged journeys imported, edited, saved/reopened/relinked and independently decoded 30-second VP9/Opus exports: Linux 46.883 s, macOS 54.526 s, Windows 151.311 s, each with 720 video and 1,501 audio frames. Android built all three ABIs and its real DocumentsUI SAF journey wrote valid WebM with independently decoded video/audio; its small half-second fixture proves correctness only, not representative mobile performance. Full measurements and limits are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Android multi-source import:** the initial exact-SHA run [38196732759](https://github.com/huou07/Opencut-Reinforced/actions/runs/38196732759) exposed a real SAF multi-import regression; root cause, fix, and final evidence are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md). Platform Verification [38199486640](https://github.com/huou07/Opencut-Reinforced/actions/runs/38199486640) on `39afed57adf3a04faba842f78ac73a9d68a1bbed` passed all seven jobs. Its Android DocumentsUI journey imported H.264/AAC MP4 and audio-only MP3 in one selection, then passed captions, relink, export, process recovery, and bounded-resource checks; desktop Linux, macOS, and Windows packaged journeys also passed. The fixture establishes emulator correctness, not representative media performance. The emulator logged skipped frames and a 121 ms maximum main-draw measurement under this acceptance workload; physical-device responsiveness remains unverified, so further emulator tuning is not the next task.
-- **Next work:** gather task-level feedback from the dogfoodable preview while building the first real local transcription-to-caption flow. Preserve the shared `or_ai` request/proposal contract, verify provenance against the captured project revision and media digest, let users review/edit results, and apply only through the existing caption command path. The Android process-isolation/runtime choice remains an architecture question; do not claim mobile AI support until packaged behavior is proven. Physical-device performance remains an evidence gap. Do not spend more Android emulator effort without a measured correctness/resource failure.
+- **Next work:** stage the pinned whisper.cpp CLI and OR provider in macOS, Windows, and Linux preview bundles with license/provenance notices, then verify a real packaged transcription, caption review/edit/apply, and save/reopen journey. Add user-visible download progress/cancellation before presenting the optional 77 MB model download as release-ready. Do not claim Android AI support until a packaged process-isolation/runtime path is proven. Gather task-level dogfood feedback as soon as that preview is available. Physical-device performance remains an evidence gap; do not spend more Android emulator effort without a measured correctness/resource failure.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 

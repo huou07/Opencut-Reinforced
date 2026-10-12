@@ -716,6 +716,77 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectTranscriptionModel> transcriptionModel(
+    ProjectSessionHandle session,
+  ) async => _transcriptionModel(await _host(session).transcriptionModel());
+
+  @override
+  Future<ProjectModelDownload> beginTranscriptionModelDownload(
+    ProjectSessionHandle session,
+  ) async =>
+      _modelDownload(await _host(session).beginTranscriptionModelDownload());
+
+  @override
+  Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) async => _transcriptionModel(
+    await _host(session)
+        .finishTranscriptionModelDownload(downloadId: downloadId),
+  );
+
+  @override
+  Future<void> cancelTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  ) => _host(session).cancelTranscriptionModelDownload(downloadId: downloadId);
+
+  @override
+  Future<ProjectTranscriptionJob> startTranscription(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  ) async => _transcriptionJob(
+    await _host(session).startTranscription(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      mediaId: mediaId,
+    ),
+  );
+
+  @override
+  Future<ProjectTranscriptionJob> transcriptionJob(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async =>
+      _transcriptionJob(await _host(session).transcriptionJob(jobId: jobId));
+
+  @override
+  Future<ProjectTranscriptProposal?> transcriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async {
+    final proposal = await _host(session).transcriptionProposal(jobId: jobId);
+    if (proposal == null) return null;
+    return _transcriptProposal(proposal);
+  }
+
+  @override
+  Future<void> clearTranscriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  ) => _host(session).clearTranscriptionProposal(jobId: jobId);
+
+  @override
+  Future<void> cancelTranscription(
+    ProjectSessionHandle session,
+    String jobId,
+  ) async {
+    await _host(session).cancelTranscription(jobId: jobId);
+  }
+
+  @override
   Future<ProjectActionResult> removeTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1242,6 +1313,64 @@ class RustProjectGateway implements ProjectGateway {
         progressTotal: value.progressTotal,
         failureMessage: value.failureMessage,
       );
+
+  static ProjectTranscriptionModel _transcriptionModel(
+    rust.ProjectTranscriptionModelView value,
+  ) => ProjectTranscriptionModel(
+    modelId: value.modelId,
+    version: value.version,
+    license: value.license,
+    language: value.language,
+    sizeBytes: value.sizeBytes,
+    source: value.source,
+    installed: value.installed,
+    providerAvailable: value.providerAvailable,
+  );
+
+  static ProjectModelDownload _modelDownload(
+    rust.ProjectModelDownloadView value,
+  ) => ProjectModelDownload(
+    downloadId: value.downloadId,
+    destination: value.destination,
+    source: value.source,
+    sizeBytes: value.sizeBytes,
+    license: value.license,
+  );
+
+  static ProjectTranscriptionJob _transcriptionJob(
+    rust.ProjectTranscriptionJobView value,
+  ) => ProjectTranscriptionJob(
+    jobId: value.jobId,
+    state: value.state,
+    progressCompleted: value.progressCompleted,
+    progressTotal: value.progressTotal,
+    failureMessage: value.failureMessage,
+  );
+
+  static ProjectTranscriptProposal _transcriptProposal(
+    rust.ProjectTranscriptProposalView value,
+  ) => ProjectTranscriptProposal(
+    projectId: value.projectId,
+    projectRevision: value.projectRevision,
+    mediaId: value.mediaId,
+    mediaSha256: value.mediaSha256,
+    providerId: value.providerId,
+    modelId: value.modelId,
+    modelVersion: value.modelVersion,
+    modelLicense: value.modelLicense,
+    language: value.language,
+    maxCaptionTextBytes: value.maxCaptionTextBytes,
+    segments: List.unmodifiable(
+      value.segments.map(
+        (segment) => ProjectTranscriptSegment(
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          text: segment.text,
+          confidence: segment.confidence,
+        ),
+      ),
+    ),
+  );
 
   static ProjectRecoveryActionResult _recoveryAction(
     rust.RecoveryActionResult result,

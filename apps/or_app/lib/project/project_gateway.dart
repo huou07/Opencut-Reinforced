@@ -198,6 +198,104 @@ class ProjectExportJob {
   bool get isActive => state == 'queued' || state == 'running';
 }
 
+class ProjectTranscriptionModel {
+  const ProjectTranscriptionModel({
+    required this.modelId,
+    required this.version,
+    required this.license,
+    required this.language,
+    required this.sizeBytes,
+    required this.source,
+    required this.installed,
+    required this.providerAvailable,
+  });
+
+  final String modelId;
+  final String version;
+  final String license;
+  final String language;
+  final BigInt sizeBytes;
+  final String source;
+  final bool installed;
+  final bool providerAvailable;
+}
+
+class ProjectModelDownload {
+  const ProjectModelDownload({
+    required this.downloadId,
+    required this.destination,
+    required this.source,
+    required this.sizeBytes,
+    required this.license,
+  });
+
+  final String downloadId;
+  final String destination;
+  final String source;
+  final BigInt sizeBytes;
+  final String license;
+}
+
+class ProjectTranscriptionJob {
+  const ProjectTranscriptionJob({
+    required this.jobId,
+    required this.state,
+    this.progressCompleted,
+    this.progressTotal,
+    this.failureMessage,
+  });
+
+  final String jobId;
+  final String state;
+  final BigInt? progressCompleted;
+  final BigInt? progressTotal;
+  final String? failureMessage;
+
+  bool get isActive => state == 'queued' || state == 'running';
+}
+
+class ProjectTranscriptSegment {
+  const ProjectTranscriptSegment({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+    required this.confidence,
+  });
+
+  final BigInt startMs;
+  final BigInt endMs;
+  final String text;
+  final double confidence;
+}
+
+class ProjectTranscriptProposal {
+  const ProjectTranscriptProposal({
+    required this.projectId,
+    required this.projectRevision,
+    required this.mediaId,
+    required this.mediaSha256,
+    required this.providerId,
+    required this.modelId,
+    required this.modelVersion,
+    required this.modelLicense,
+    required this.language,
+    required this.maxCaptionTextBytes,
+    required this.segments,
+  });
+
+  final String projectId;
+  final BigInt projectRevision;
+  final String mediaId;
+  final String mediaSha256;
+  final String providerId;
+  final String modelId;
+  final String modelVersion;
+  final String modelLicense;
+  final String language;
+  final BigInt maxCaptionTextBytes;
+  final List<ProjectTranscriptSegment> segments;
+}
+
 /// Read-only media data returned by the bounded project query.
 class ProjectMediaItem {
   const ProjectMediaItem({
@@ -856,6 +954,38 @@ abstract interface class ProjectGateway {
     ProjectSessionHandle session,
     String path,
   );
+  Future<ProjectTranscriptionModel> transcriptionModel(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectModelDownload> beginTranscriptionModelDownload(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  );
+  Future<void> cancelTranscriptionModelDownload(
+    ProjectSessionHandle session,
+    String downloadId,
+  );
+  Future<ProjectTranscriptionJob> startTranscription(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    String mediaId,
+  );
+  Future<ProjectTranscriptionJob> transcriptionJob(
+    ProjectSessionHandle session,
+    String jobId,
+  );
+  Future<ProjectTranscriptProposal?> transcriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  );
+  Future<void> clearTranscriptionProposal(
+    ProjectSessionHandle session,
+    String jobId,
+  );
+  Future<void> cancelTranscription(ProjectSessionHandle session, String jobId);
   Future<ProjectActionResult> exportTimelineCaptions(
     ProjectSessionHandle session,
     ProjectReadModel current, {
