@@ -1551,7 +1551,7 @@ void main() {
           'projectRevision': revision.toString(),
           'mediaImportRevision': importedRevision.toString(),
           'captionImportRevision': captionImportRevision.toString(),
-          'reviewedCaptionImportCalls': gateway.reviewedCaptionImportCalls,
+          'captionImportCalls': gateway.reviewedCaptionImportCalls,
           'captionExportCalls': gateway.captionExportCalls,
           'captionExportBytes': captionExport['captionExportBytes'],
           'captionExportValidSrt': captionExport['validSrtCaption'],
