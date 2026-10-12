@@ -698,7 +698,7 @@ jobs:
             "$runtime/licenses/FFmpeg" "$runtime/licenses/Opus" \
             "$runtime/licenses/libvpx"
           for pattern in libavcodec.so* libavfilter.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
-            cp -a "$prefix/lib/$pattern" "$runtime/lib/"
+            cp -a "$prefix/lib/"$pattern "$runtime/lib/"
           done
           install -m 755 "$prefix/bin/ffmpeg" "$runtime/ffmpeg"
           install -m 755 "$prefix/bin/ffprobe" "$runtime/ffprobe"

@@ -40,7 +40,10 @@ reported a transient SQLite cache-index lock in the independent-store test;
 the retry failed earlier during libvpx fetch, so that test result is unresolved.
 The build now retries only transient HTTP 429/5xx libvpx fetch failures, with
 the source commit still pinned; verification of this bounded recovery is
-pending.
+pending. The validation-only preview on `44b2197c688f0a229369983c2dad200c4d768332`
+accepted its exact-source gate but the Linux package seed treated a library
+glob literally because it was quoted. The quoting is corrected and needs a new
+exact-SHA platform/preview run.
 Android transcription remains unsupported. Full receipts are in the history
 archive.
 The packaged gate uses the pinned
