@@ -24,13 +24,15 @@ sidecar, verified optional model download, cancellable job, and
 revision-checked review/edit/apply flow are implemented. The Developer Preview
 workflow now has a validation-only branch mode intended to build installable
 packages from an exact-verified PR head without publishing a release. Its
-validation gate now reaches the packaged transcription journey, but exact-SHA
-candidate `b758ef9270d81611161b2bb6e9fe1aa2d4bc8655` exposed two shared issues:
-the bridge passed a native path where core requires a canonical file URI, and
-the test did not explicitly load the bridge from the package. A path-safe core
-constructor and package-bound candidate loading are implemented but await
-hosted verification. Android transcription remains unsupported. Full receipts
-are in the history archive.
+validation gate reaches the packaged transcription journey. Exact-SHA candidate
+`f5a6ec9bad8eb86978f8515a5eac49ebdc637d30` exposed the remaining cross-platform
+integration gaps: Linux Flutter rebuild removes staged runtime files, the host
+and provider derived different UUID audio paths on Windows, and the reopened
+macOS UI did not expose Generate Captions to the test. A package-runtime restore
+hook, shared managed-file path helpers, and explicit media-persistence/action
+readiness assertions are now implemented but await hosted verification.
+Android transcription remains unsupported. Full receipts are in the history
+archive.
 The packaged gate uses the pinned
 real JFK speech fixture and user-confirmed model download, then checks
 transcribe, review/edit/apply, save/reopen, and SRT export on macOS, Windows,

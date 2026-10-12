@@ -6,7 +6,14 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/material.dart'
-    show AlertDialog, LinearProgressIndicator, SnackBar, Text, TextFormField;
+    show
+        AlertDialog,
+        LinearProgressIndicator,
+        PopupMenuButton,
+        PopupMenuItem,
+        SnackBar,
+        Text,
+        TextFormField;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -252,6 +259,16 @@ void main() {
       expect((await projectGateway.save(session)).succeeded, isTrue);
       await projectGateway.close(session, discardUnsaved: false);
 
+      session = await projectGateway.openProject(projectPath);
+      final persistedMedia = (await projectGateway.listMediaPage(
+        session,
+        offset: 0,
+        limit: 10,
+      )).items.single;
+      expect(persistedMedia.mediaId, media.mediaId);
+      expect(persistedMedia.audioDetails, isNotNull);
+      await projectGateway.close(session, discardUnsaved: false);
+
       final picker = _NativeProjectPicker(projectPath)..openPath = projectPath;
       await tester.pumpWidget(
         OrApp(
@@ -266,6 +283,7 @@ void main() {
       final mediaActions = find.byKey(
         ValueKey('media-actions-${media.mediaId}'),
       );
+      await _pumpUntilMediaCaptionsAction(tester, media.mediaId);
       await tester.ensureVisible(mediaActions);
       await tester.tap(mediaActions);
       await tester.pumpAndSettle();
@@ -1516,6 +1534,33 @@ Future<void> _pumpUntilMediaLoaded(WidgetTester tester, String mediaId) async {
     await tester.pump(const Duration(milliseconds: 100));
   }
   fail('The opened project media $mediaId did not appear in the workspace.');
+}
+
+Future<void> _pumpUntilMediaCaptionsAction(
+  WidgetTester tester,
+  String mediaId,
+) async {
+  final actions = find.byKey(ValueKey('media-actions-$mediaId'));
+  final captionAction = ValueKey('media-generate-captions-$mediaId');
+  for (var attempt = 0; attempt < 300; attempt++) {
+    if (tester.any(actions)) {
+      final menu = tester.widget<PopupMenuButton<String>>(actions);
+      final context = tester.element(actions);
+      if (menu
+          .itemBuilder(context)
+          .any(
+            (entry) =>
+                entry is PopupMenuItem<String> && entry.key == captionAction,
+          )) {
+        return;
+      }
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  fail(
+    'Generate Captions did not become available after reopening media $mediaId. '
+    'Saved audio details were checked before opening the workspace.',
+  );
 }
 
 Future<void> _pumpUntilProjectPanelsLoaded(WidgetTester tester) async {

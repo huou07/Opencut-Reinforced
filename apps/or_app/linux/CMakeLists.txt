@@ -134,6 +134,26 @@ if(OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY)
     "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/ffprobe"
     DESTINATION "${CMAKE_INSTALL_PREFIX}"
     COMPONENT Runtime)
+  if(EXISTS "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/or-whisper-provider"
+      OR EXISTS "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/whisper-cli")
+    foreach(transcription_helper
+        "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/or-whisper-provider"
+        "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/whisper-cli")
+      if(NOT EXISTS "${transcription_helper}")
+        message(FATAL_ERROR "Packaged transcription helper is missing: ${transcription_helper}")
+      endif()
+    endforeach()
+    install(PROGRAMS
+      "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/or-whisper-provider"
+      "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/whisper-cli"
+      DESTINATION "${CMAKE_INSTALL_PREFIX}"
+      COMPONENT Runtime)
+  endif()
+  if(EXISTS "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/licenses")
+    install(DIRECTORY "${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY}/licenses/"
+      DESTINATION "${CMAKE_INSTALL_PREFIX}/licenses"
+      COMPONENT Runtime)
+  endif()
 endif()
 
 # Fully re-copy the assets directory on each build to avoid having stale files

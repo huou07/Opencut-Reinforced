@@ -685,12 +685,67 @@ jobs:
         working-directory: apps/or_app
         run: flutter pub get
 
+      - name: Seed Linux packaged media runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/or-packaged-transcription-runtime"
+          prefix="$FFMPEG_INSTALL_PREFIX"
+          whisper="$RUNNER_TEMP/whisper.cpp-1.9.4"
+          codec_notices="$RUNNER_TEMP/ffmpeg-verification/desktop-export-codecs"
+          rm -rf "$runtime"
+          mkdir -p "$runtime/lib" "$runtime/licenses/whisper.cpp" \
+            "$runtime/licenses/FFmpeg" "$runtime/licenses/Opus" \
+            "$runtime/licenses/libvpx"
+          for pattern in libavcodec.so* libavfilter.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
+            cp -a "$prefix/lib/$pattern" "$runtime/lib/"
+          done
+          install -m 755 "$prefix/bin/ffmpeg" "$runtime/ffmpeg"
+          install -m 755 "$prefix/bin/ffprobe" "$runtime/ffprobe"
+          install -m 755 "$whisper/build/bin/whisper-cli" "$runtime/whisper-cli"
+          install -m 755 "$GITHUB_WORKSPACE/target/release/or-whisper-provider" "$runtime/or-whisper-provider"
+          for library in "$runtime"/lib/libav*.so* "$runtime"/lib/libsw*.so*; do
+            if [ -L "$library" ]; then continue; fi
+            patchelf --set-rpath '$ORIGIN' "$library"
+          done
+          helper_rpath='$ORIGIN/lib'
+          patchelf --set-rpath "$helper_rpath" "$runtime/ffmpeg" "$runtime/ffprobe"
+          readelf -d "$runtime/ffmpeg" | grep -F "$helper_rpath"
+          cp "$whisper/LICENSE" "$runtime/licenses/whisper.cpp/LICENSE"
+          cat > "$runtime/licenses/whisper.cpp/NOTICE.txt" <<'EOF'
+          whisper.cpp v1.9.4 (commit 927cfce34f31707e17f2bff35c349632fb9e2c3a)
+          is distributed under the included MIT license. The whisper-cli helper
+          is built from that source using the pinned Release configuration; the OR
+          provider adapter is built from this repository. Model weights are not
+          bundled and are downloaded only after user confirmation.
+          EOF
+          cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$runtime/licenses/FFmpeg/COPYING.LGPLv2.1"
+          cp "$codec_notices/OPUS-COPYING" "$runtime/licenses/Opus/COPYING"
+          cp "$codec_notices/LIBVPX-LICENSE" "$runtime/licenses/libvpx/LICENSE"
+          cp "$codec_notices/LIBVPX-PATENTS" "$runtime/licenses/libvpx/PATENTS"
+          cat > "$runtime/licenses/FFmpeg/FFmpeg-NOTICE.txt" <<'EOF'
+          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
+          The corresponding FFmpeg source archive and exact build configuration
+          are distributed as Developer Preview release assets. FFmpeg shared
+          libraries are separate files beside the Rust bridge and may be replaced
+          with a compatible LGPL-compliant build under the applicable license terms.
+          The ffmpeg and ffprobe programs beside the application binary are built
+          from the same source and configuration for import, media previews,
+          and WebM export. FFmpeg's WebM export statically links libvpx and
+          libopus; their licenses and the libvpx patent notice are included in
+          the adjacent Opus and libvpx directories.
+          EOF
+          "$runtime/whisper-cli" --version
+          test -x "$runtime/or-whisper-provider"
+          echo "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY=$runtime" >> "$GITHUB_ENV"
+
       - name: Build Linux x64 debug app
         working-directory: apps/or_app
         env:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+          OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY: ${{ runner.temp }}/or-packaged-transcription-runtime
         run: flutter build linux --debug
 
       - name: Package FFmpeg runtime libraries and LGPL notices
@@ -763,6 +818,19 @@ jobs:
 
           ctypes.CDLL(sys.argv[1])
           PY
+          runtime="$RUNNER_TEMP/or-packaged-transcription-runtime"
+          rm -rf "$runtime"
+          mkdir -p "$runtime/lib"
+          for library in "$runtime_dir"/libav*.so* "$runtime_dir"/libsw*.so*; do
+            cp -a "$library" "$runtime/lib/"
+          done
+          install -m 755 "$bundle/ffmpeg" "$runtime/ffmpeg"
+          install -m 755 "$bundle/ffprobe" "$runtime/ffprobe"
+          install -m 755 "$bundle/whisper-cli" "$runtime/whisper-cli"
+          install -m 755 "$bundle/or-whisper-provider" "$runtime/or-whisper-provider"
+          cp -a "$bundle/licenses" "$runtime/licenses"
+          test -s "$runtime/licenses/whisper.cpp/LICENSE"
+          echo "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY=$runtime" >> "$GITHUB_ENV"
 
       - name: Verify packaged local transcription user journey
         timeout-minutes: 20
