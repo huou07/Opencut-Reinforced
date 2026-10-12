@@ -128,7 +128,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 **MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting. SRT and WebVTT imports expose each parsed cue for text review/correction before a single revision-checked command applies it; timing remains exact to the imported millisecond. Import/export preserve exact millisecond boundaries and report unsupported styling or placement. Packaged desktop and Android SAF caption journeys passed hosted verification at exact SHA `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2` in run [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020); that earlier run predates cue-level review, whose updated packaged verification is pending. Broader caption fidelity and any parser-library adoption remain subject to the explicit interoperability checks in the active roadmap.
 
-**IN DEVELOPMENT:** local English transcription produces a provenance-bound proposal for review and editable caption import through the existing project command. The optional model download requires confirmation and reports byte progress with cancellation. The provider and application flow are implemented but not yet staged in desktop packages; installed builds report the capability unavailable. Android support and packaged/runtime acceptance are not claimed.
+**IN DEVELOPMENT:** local English transcription produces a provenance-bound proposal for review and editable caption import through the existing project command. The optional model download requires confirmation and reports byte progress with cancellation. The preview workflow candidate stages the pinned whisper.cpp MIT helpers beside the desktop app and now gates package upload on a real-media UI journey through model download, transcription, review/edit/apply, save/reopen, and SRT export. That hosted package journey has not run yet, so local transcription is not accepted as an installed-build capability. Android support is not claimed.
 
 **PLANNED:** word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; ASS import or export.
 
@@ -198,7 +198,7 @@ A theme may set approved semantic tokens. It cannot execute code or redefine app
 
 ## AI assist
 
-**PLANNED:** automatic captions, translation, dubbing, silence and filler removal, scene detection, auto reframe, subject detection and tracking, background removal, highlight extraction, transcript editing, and optional declarative MotionScene generation.
+**PLANNED:** translation, dubbing, silence and filler removal, scene detection, auto reframe, subject detection and tracking, background removal, highlight extraction, transcript editing, and optional declarative MotionScene generation. Local English automatic captions are tracked above as in development.
 
 Phase 10 defines the provider-independent task boundary: `Transcribe`,
 `Translate`, `TextToSpeech`, `Segment`, `DetectScene`, `PlanEdit`,

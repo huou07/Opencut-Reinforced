@@ -5,7 +5,8 @@ import 'dart:typed_data';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey;
-import 'package:flutter/material.dart' show SnackBar, Text;
+import 'package:flutter/material.dart'
+    show LinearProgressIndicator, SnackBar, Text, TextFormField;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
@@ -211,6 +212,145 @@ void main() {
         contains('00:00:00,125 --> 00:00:02,375'),
       );
       await gateway.close(reopened, discardUnsaved: true);
+    },
+  );
+
+  testWidgets(
+    'packaged local transcription reviews and persists real captions',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1000);
+      addTearDown(tester.view.resetPhysicalSize);
+      final fixturePath =
+          Platform.environment['OR_TEST_TRANSCRIPTION_MEDIA_PATH'];
+      expect(fixturePath, isNotNull);
+      expect(File(fixturePath!).existsSync(), isTrue);
+
+      final directory = Directory.systemTemp.createTempSync(
+        'or-transcript-ui-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final projectPath = '${directory.path}/transcription.orproj';
+      const projectGateway = RustProjectGateway();
+      var session = await projectGateway.createProject(
+        projectPath,
+        'Local captions',
+      );
+      var current = await projectGateway.summary(session);
+      final imported = await projectGateway.importMedia(
+        session,
+        current,
+        fixturePath,
+      );
+      expect(imported.succeeded, isTrue, reason: imported.message);
+      current = imported.view!;
+      final media = (await projectGateway.listMediaPage(
+        session,
+        offset: 0,
+        limit: 10,
+      )).items.single;
+      expect(media.audioDetails, isNotNull);
+      expect((await projectGateway.save(session)).succeeded, isTrue);
+      await projectGateway.close(session, discardUnsaved: false);
+
+      final picker = _NativeProjectPicker(projectPath)..openPath = projectPath;
+      await tester.pumpWidget(
+        OrApp(
+          gateway: const RustCoreGateway(),
+          projectGateway: projectGateway,
+          projectFilePicker: picker,
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('home-open-project')));
+      await _pumpUntilMediaLoaded(tester, media.mediaId);
+
+      await tester.tap(find.byKey(ValueKey('media-actions-${media.mediaId}')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey('media-generate-captions-${media.mediaId}')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Download local speech model?'), findsOneWidget);
+      expect(find.textContaining('Audio is processed locally'), findsOneWidget);
+
+      final downloadClock = Stopwatch()..start();
+      await tester.tap(find.text('Download model'));
+      await _pumpUntilFinder(
+        tester,
+        find.text('Downloading local speech model'),
+        timeout: const Duration(minutes: 5),
+      );
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      await _pumpUntilFinder(
+        tester,
+        find.text('Generating captions'),
+        timeout: const Duration(minutes: 5),
+      );
+      final modelDownloadMs = downloadClock.elapsedMilliseconds;
+      final transcriptionClock = Stopwatch()..start();
+
+      const reviewTitle = 'Review Local EN transcript captions';
+      await _pumpUntilFinder(
+        tester,
+        find.text(reviewTitle),
+        timeout: const Duration(minutes: 8),
+      );
+      final transcriptionMs = transcriptionClock.elapsedMilliseconds;
+      await tester.pumpAndSettle();
+      final firstCue = find.byKey(const ValueKey('caption-import-text-0'));
+      final transcript = tester.widget<TextFormField>(firstCue).initialValue!;
+      expect(transcript.toLowerCase(), contains('fellow americans'));
+      final reviewedText = '$transcript [reviewed]';
+      await tester.enterText(firstCue, reviewedText);
+      await tester.tap(find.text('Import captions'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('workspace-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-close')));
+      await tester.pumpAndSettle();
+
+      picker.openPath = projectPath;
+      await tester.tap(find.byKey(const ValueKey('home-open-project')));
+      await _pumpUntilMediaLoaded(tester, media.mediaId);
+      await tester.tap(find.byKey(const ValueKey('workspace-close')));
+      await tester.pumpAndSettle();
+
+      session = await projectGateway.openProject(projectPath);
+      final reopened = await projectGateway.summary(session);
+      expect(reopened.name, 'Local captions');
+      final tracks = (await projectGateway.listTimelineTracks(session)).items;
+      final captionTracks = tracks
+          .where((track) => track.kind == ProjectTimelineTrackKind.caption)
+          .toList();
+      expect(captionTracks, hasLength(1));
+      final captionPage = await projectGateway.listTimelineClips(
+        session,
+        trackId: captionTracks.single.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      expect(captionPage.items, isNotEmpty);
+      expect(captionPage.items.first.text, reviewedText);
+
+      final exportPath = '${directory.path}/reviewed-captions.srt';
+      final exported = await projectGateway.exportTimelineCaptions(
+        session,
+        reopened,
+        path: exportPath,
+        format: ProjectCaptionFileFormat.srt,
+      );
+      expect(exported.succeeded, isTrue, reason: exported.message);
+      expect(
+        (await File(exportPath).readAsString()).toLowerCase(),
+        contains('[reviewed]'),
+      );
+      await projectGateway.close(session, discardUnsaved: true);
+      stdout.writeln(
+        'OR_LOCAL_TRANSCRIPTION_JOURNEY platform=${Platform.operatingSystem} '
+        'model_download_ms=$modelDownloadMs transcription_ms=$transcriptionMs '
+        'segments=${captionPage.items.length} result=PASS',
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -1317,6 +1457,28 @@ Future<void> _renameProject(WidgetTester tester, String name) async {
         .data,
     name,
   );
+}
+
+Future<void> _pumpUntilFinder(
+  WidgetTester tester,
+  Finder finder, {
+  required Duration timeout,
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (tester.any(finder)) return;
+  }
+  fail('Timed out waiting for $finder after $timeout.');
+}
+
+Future<void> _pumpUntilMediaLoaded(WidgetTester tester, String mediaId) async {
+  final actions = find.byKey(ValueKey('media-actions-$mediaId'));
+  for (var attempt = 0; attempt < 300; attempt++) {
+    if (tester.any(actions)) return;
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  fail('The opened project media $mediaId did not appear in the workspace.');
 }
 
 Future<void> _pumpUntilProjectPanelsLoaded(WidgetTester tester) async {

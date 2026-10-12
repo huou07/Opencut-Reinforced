@@ -267,6 +267,24 @@ jobs:
           EOF
           codesign --force --deep --sign - --timestamp=none "$app"
 
+      - name: Verify packaged local transcription user journey
+        timeout-minutes: 20
+        working-directory: apps/or_app
+        env:
+          OR_TEST_TRANSCRIPTION_MEDIA_PATH: ${{ runner.temp }}/whisper.cpp-1.9.4/samples/jfk.wav
+        run: >-
+          flutter --ci test integration_test/core_bridge_test.dart -d macos
+          --plain-name
+          "packaged local transcription reviews and persists real captions"
+
+      - name: Re-sign macOS app after runtime acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+          codesign --force --deep --sign - --timestamp=none "$app"
+          codesign --verify --deep --strict "$app"
+
       - name: Package complete app bundle
         shell: bash
         run: |
@@ -499,6 +517,16 @@ jobs:
           $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
           [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
 
+      - name: Verify packaged local transcription user journey
+        timeout-minutes: 20
+        working-directory: apps/or_app
+        env:
+          OR_TEST_TRANSCRIPTION_MEDIA_PATH: ${{ runner.temp }}/whisper.cpp-1.9.4/samples/jfk.wav
+        shell: pwsh
+        run: |
+          flutter --ci test integration_test/core_bridge_test.dart -d windows --plain-name "packaged local transcription reviews and persists real captions"
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged local transcription user journey failed' }
+
       - name: Package complete Debug output directory
         shell: pwsh
         run: |
@@ -695,6 +723,16 @@ jobs:
 
           ctypes.CDLL(sys.argv[1])
           PY
+
+      - name: Verify packaged local transcription user journey
+        timeout-minutes: 20
+        working-directory: apps/or_app
+        env:
+          OR_TEST_TRANSCRIPTION_MEDIA_PATH: ${{ runner.temp }}/whisper.cpp-1.9.4/samples/jfk.wav
+        run: >-
+          flutter --ci test integration_test/core_bridge_test.dart -d linux
+          --plain-name
+          "packaged local transcription reviews and persists real captions"
 
       - name: Package complete Linux bundle
         shell: bash

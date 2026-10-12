@@ -4,7 +4,7 @@
 
 Stable releases: **none**.
 
-Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are unsigned or ad-hoc-signed testing builds, not production releases. The current product supports project save/reopen/recovery, media import, timeline editing, preview, manual titles/captions, subtitle interchange, and desktop Matroska/WebM export. Android WebM is claimed only after exact-SHA all-ABI and SAF output verification; Android physical-device performance remains unmeasured. Automatic captions and other AI workflows, folder import, advanced editing, and production signing remain open.
+Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases). They are unsigned or ad-hoc-signed testing builds, not production releases. The current product supports project save/reopen/recovery, media import, timeline editing, preview, manual titles/captions, subtitle interchange, and desktop Matroska/WebM export. Android WebM is claimed only after exact-SHA all-ABI and SAF output verification; Android physical-device performance remains unmeasured. Local English automatic captions are still in development: the preview workflow candidate now stages the desktop runtime and requires a real packaged user journey before upload, but that gate has not yet passed. Other AI workflows, folder import, advanced editing, and production signing remain open.
 
 The legacy checkpoint/evidence process is preserved in `docs/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
 

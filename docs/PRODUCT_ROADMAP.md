@@ -18,24 +18,21 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current focus: finish a local transcription-to-caption vertical slice through
-the existing caption command, then make it available and verify it in clean
-desktop packages. The verified model-store primitive validates manifests and
-atomically installs, verifies, removes, and recovers interrupted artifacts
-outside the project. The current in-progress implementation adds a bounded
-Whisper sidecar, explicit optional model download with byte progress and
-cancellation, local job/cancellation, and review/edit/apply through
-revision-checked caption import. The helper binaries
-are not yet staged in desktop packages, so installed builds must continue to
-report the feature unavailable. Android transcription remains unsupported.
-Platform Verification [38210314111](https://github.com/huou07/Opencut-Reinforced/actions/runs/38210314111)
-on `e953aadb4437bae2210f8e317846c399494c4bf3` reached and passed the real
-Android SAF media/export steps but failed a caption-review dialog assertion
-that still expected the old title; the current integration test targets the
-existing review title and needs a new exact-SHA platform run. Android's
-measured emulator correctness/resource evidence remains valid; physical-device
-responsiveness is still unverified and is not a reason for more emulator-only
-tuning.
+Current focus: make local transcription-to-caption useful through the existing
+caption command and prove it in clean desktop packages. The provider, bounded
+Whisper sidecar, verified optional model download, cancellable job, and
+revision-checked review/edit/apply flow are implemented. The preview workflow
+candidate stages the MIT-licensed helpers beside the app executable; packaged
+feature acceptance is still pending. A new Developer Preview gate uses the
+pinned real JFK speech fixture and user-confirmed model download, then checks
+transcribe, review/edit/apply, save/reopen, and SRT export on macOS, Windows,
+and Linux before package upload. Platform Verification [38227008302](https://github.com/huou07/Opencut-Reinforced/actions/runs/38227008302)
+on `ae3305e106fb379888512fe67f7a1a3e52f13c50` passed all seven jobs, including
+the fixed Android SAF caption-import evidence contract; that run verifies
+cross-platform regression journeys, not Whisper packaging. Android
+transcription remains unsupported. Android's emulator correctness/resource
+checks pass; physical-device responsiveness remains unverified and does not
+justify more emulator-only tuning.
 Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
 targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
 Platform Verification [38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936)

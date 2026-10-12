@@ -1177,3 +1177,33 @@ The same report records skipped emulator frames and a maximum 121.467 ms main
 draw during this workload. The emulator fixture proves the repaired SAF
 correctness and resource bounds only; representative physical-device
 responsiveness remains unverified. No physical-performance claim is made.
+
+## Local transcription package runtime work — 2026-10-12
+
+The candidate desktop packaging implementation is in `0ba383f` and its
+follow-up evidence-field correction is `ae3305e106fb379888512fe67f7a1a3e52f13c50`.
+Exact-SHA Platform Verification
+[38227008302](https://github.com/huou07/Opencut-Reinforced/actions/runs/38227008302)
+passed all seven jobs on that SHA. Android's DocumentsUI journey, caption
+import/export, relink, recovery, and bounded-resource checks passed; the
+verifier accepted the restored stable `captionImportCalls` report field. This
+run validates regression behavior and does not execute the new Whisper package
+journey. Its resource report is a SwiftShader emulator correctness/resource
+observation, not physical-device responsiveness evidence.
+
+The delayed PR-triggered duplicate run
+[38227057973](https://github.com/huou07/Opencut-Reinforced/actions/runs/38227057973)
+passed six jobs but timed out after 35 minutes in the macOS native project
+lifecycle step. The app bundle built; Flutter logged `Failed to foreground app;
+open returned 1`, and the test group produced no case output before timeout.
+The same exact-SHA workflow-dispatch run 38227008302 passed that lifecycle
+group, as well as its packaged macOS journey. This is an intermittent hosted
+macOS integration-launch failure without a product assertion; preserve it as a
+runner reliability signal and do not count it as another product failure or
+erase it by retry.
+
+The Developer Preview workflow now contains a real desktop transcription
+journey gate using the pinned `whisper.cpp` JFK speech fixture, the production
+model-download and local-transcription UI, a human-edited proposal, project
+save/reopen, and SRT output. Its macOS, Windows, and Linux runs remain pending
+until an exact verified `main` commit reaches the main-only preview workflow.
