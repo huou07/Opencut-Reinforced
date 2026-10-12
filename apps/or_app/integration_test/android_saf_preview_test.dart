@@ -100,6 +100,28 @@ Future<void> _until(WidgetTester tester, bool Function() ready) async {
   expect(ready(), isTrue, reason: 'The real product action did not complete.');
 }
 
+Future<void> _untilMediaImports(
+  WidgetTester tester,
+  _ObservedGateway gateway,
+  int expected,
+) async {
+  try {
+    await _until(tester, () => gateway.importCalls == expected);
+  } catch (_) {
+    Map<String, int>? resources;
+    try {
+      resources = await _resources().timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('ANDROID_SAF_IMPORT_RESOURCE_SNAPSHOT_FAILED $error');
+    }
+    debugPrint(
+      'ANDROID_SAF_IMPORT_TIMEOUT expected=$expected actual=${gateway.importCalls} '
+      'providerFds=${_providerFds()} resources=$resources',
+    );
+    rethrow;
+  }
+}
+
 String? _exportStatus(WidgetTester tester) {
   final status = find.byKey(const ValueKey('export-status'));
   if (status.evaluate().isEmpty) return null;
@@ -392,14 +414,22 @@ class _ObservedGateway extends RustProjectGateway {
     ProjectReadModel current,
     String source,
   ) async {
+    final item = importCalls + 1;
     final watch = Stopwatch()..start();
+    debugPrint('ANDROID_SAF_IMPORT_GATEWAY_START item=$item');
+    var outcome = 'threw';
     try {
       final result = await super.importMedia(session, current, source);
       importResults.add(result);
+      outcome = result.succeeded ? 'success' : result.errorCode;
       return result;
     } finally {
       importCalls++;
       importMicros = watch.elapsedMicroseconds;
+      debugPrint(
+        'ANDROID_SAF_IMPORT_GATEWAY_COMPLETE item=$item outcome=$outcome '
+        'micros=$importMicros',
+      );
     }
   }
 
@@ -794,7 +824,7 @@ void main() {
       );
       await tester.tap(mediaImport);
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.importCalls == 3);
+      await _untilMediaImports(tester, gateway, 3);
       final importResults = gateway.importResults;
       final importResultSummary = jsonEncode(
         importResults
@@ -846,7 +876,7 @@ void main() {
       });
       await tester.tap(importFolderButton);
       debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.importCalls == 5);
+      await _untilMediaImports(tester, gateway, 5);
       final folderImported = await gateway.listMediaPage(
         session,
         offset: 68,
