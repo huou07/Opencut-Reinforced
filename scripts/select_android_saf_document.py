@@ -25,6 +25,7 @@ def select(device, guest_log, output, flow="open"):
         select(device, guest_log, output, "open")
         select(device, guest_log, output, "export")
         select(device, guest_log, output, "media")
+        select(device, guest_log, output, "media-folder")
         select(device, guest_log, output, "caption-import")
         select(device, guest_log, output, "caption-export")
         return
@@ -38,6 +39,7 @@ def select(device, guest_log, output, flow="open"):
     marker = {
         "open": "ANDROID_SAF_DOCUMENTS_UI_READY",
         "media": "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+        "media-folder": "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
         "media-relink": "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
         "export": "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
         "caption-import": "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
@@ -50,6 +52,7 @@ def select(device, guest_log, output, flow="open"):
     # instead of hanging, not to race a cold window.
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
+    folder_opened = False
     list_view_requested = False
     media_scroll_attempts = 0
     last_media_scroll_at = 0.0
@@ -165,6 +168,23 @@ def select(device, guest_log, output, flow="open"):
             (node for node in nodes if node.get("content-desc") == "List view"),
             None,
         )
+        footage_folder = next(
+            (node for node in nodes if node.get("text") == "Footage"), None
+        )
+        use_folder = next(
+            (
+                node for node in nodes
+                if (node.get("text") or "").casefold() in {"use this folder", "select folder"}
+            ),
+            None,
+        )
+        allow_folder = next(
+            (
+                node for node in nodes
+                if (node.get("text") or "").casefold() == "allow"
+            ),
+            None,
+        )
         scroll_view = next(
             (node for node in nodes if node.get("scrollable") == "true"),
             None,
@@ -178,6 +198,13 @@ def select(device, guest_log, output, flow="open"):
             target = document
         elif selected_root and flow == "caption-import" and caption_file is not None:
             target = caption_file
+        elif selected_root and flow == "media-folder":
+            if allow_folder is not None:
+                target = allow_folder
+            elif folder_opened and use_folder is not None:
+                target = use_folder
+            elif not folder_opened and footage_folder is not None:
+                target = footage_folder
         elif selected_root and flow in {"media", "media-relink"}:
             available_media = {
                 name for name, node in selectable_media.items() if node is not None
@@ -264,6 +291,8 @@ def select(device, guest_log, output, flow="open"):
                         adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
                     else:
                         adb("shell", "input", "tap", str(x), str(y))
+                        if flow == "media-folder" and target is footage_folder:
+                            folder_opened = True
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.
@@ -282,6 +311,12 @@ def select(device, guest_log, output, flow="open"):
                 list_view_requested = True
                 with selector_log.open("a", encoding="utf-8") as record:
                     record.write("action=tap target=list-view\n")
+            if (
+                flow == "media-folder" and target is allow_folder
+            ):
+                with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
+                    record.write("Selected Footage and confirmed descendant access for media-folder through native DocumentsUI.\n")
+                return
             if (
                 target is document
                 or target is caption_file
@@ -311,6 +346,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", required=True)
     parser.add_argument("--guest-log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--flow", choices=("open", "media", "media-relink", "export", "caption-import", "caption-export", "both", "both-relink"), default="open")
+    parser.add_argument("--flow", choices=("open", "media", "media-folder", "media-relink", "export", "caption-import", "caption-export", "both", "both-relink"), default="open")
     args = parser.parse_args()
     select(args.device, args.guest_log, args.output, args.flow)

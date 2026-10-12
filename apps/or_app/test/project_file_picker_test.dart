@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/project/export_profile.dart';
@@ -43,6 +45,80 @@ void main() {
     ]);
     expect(pickerCalled, isTrue);
   });
+
+  test('Android folder picker returns bounded, validated descendant URIs', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'openMediaFolder');
+          return {
+            'sourceUris': [
+              'content://com.example.documents/tree/camera/document/video%3A42',
+              'content://com.example.documents/tree/camera/document/audio%3A17',
+            ],
+          };
+        });
+    final picker = AndroidSafProjectPicker(channel: channel);
+
+    expect(await picker.openMediaFolderSources(), [
+      'content://com.example.documents/tree/camera/document/video%3A42',
+      'content://com.example.documents/tree/camera/document/audio%3A17',
+    ]);
+  });
+
+  test(
+    'desktop folder enumeration filters and sorts supported media',
+    () async {
+      final directory = Directory.systemTemp.createTempSync(
+        'or-folder-import-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      await File('${directory.path}/take-02.mkv').create();
+      await File('${directory.path}/take-01.MP4').create();
+      await File('${directory.path}/notes.txt').create();
+      await Directory('${directory.path}/nested').create();
+      await File('${directory.path}/nested/music.wav').create();
+
+      expect(await enumerateMediaFolderSources(directory), [
+        '${directory.path}/nested/music.wav',
+        '${directory.path}/take-01.MP4',
+        '${directory.path}/take-02.mkv',
+      ]);
+    },
+  );
+
+  test(
+    'desktop folder enumeration rejects empty and oversized folders',
+    () async {
+      final empty = Directory.systemTemp.createTempSync('or-empty-folder-');
+      addTearDown(() => empty.deleteSync(recursive: true));
+      await expectLater(
+        enumerateMediaFolderSources(empty),
+        throwsA(
+          isA<ProjectSafStorageException>().having(
+            (error) => error.message,
+            'message',
+            contains('No supported media files'),
+          ),
+        ),
+      );
+
+      final large = Directory.systemTemp.createTempSync('or-large-folder-');
+      addTearDown(() => large.deleteSync(recursive: true));
+      for (var index = 0; index < 513; index++) {
+        await File('${large.path}/clip-$index.mp4').create();
+      }
+      await expectLater(
+        enumerateMediaFolderSources(large),
+        throwsA(
+          isA<ProjectSafStorageException>().having(
+            (error) => error.message,
+            'message',
+            contains('more than 512'),
+          ),
+        ),
+      );
+    },
+  );
 
   test(
     'Android caption picker stages and cleans a private working file',

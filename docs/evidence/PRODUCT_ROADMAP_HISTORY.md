@@ -1218,3 +1218,8 @@ DocumentsUI/resource journey passed. This exact-SHA run does not include the
 new transcription runtime journey, which is gated by the main-only Developer
 Preview workflow. The emulator does not establish Android hardware
 responsiveness.
+
+The subsequent bounded folder-import candidate is being verified on its own
+exact product SHA. Until that hosted run completes, local picker/widget tests
+and selector tests are implementation evidence only, not packaged Android or
+desktop user-journey acceptance.

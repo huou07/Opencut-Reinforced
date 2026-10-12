@@ -504,6 +504,29 @@ void main() {
     expect(find.text('second.mkv'), findsOneWidget);
   });
 
+  testWidgets('Import Folder adds its discovered media through the gateway', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-folder.orproj'
+      ..mediaFolderPaths = ['/tmp/shoot/01.mkv', '/tmp/shoot/02.mp4'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import Folder');
+
+    await tester.tap(find.byKey(const ValueKey('media-import-folder')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaFolderOpenCalls, 1);
+    expect(gateway.importMediaSources, [
+      '/tmp/shoot/01.mkv',
+      '/tmp/shoot/02.mp4',
+    ]);
+    expect(find.text('01.mkv'), findsOneWidget);
+    expect(find.text('02.mp4'), findsOneWidget);
+  });
+
   testWidgets('media library loads later items through bounded pages', (
     tester,
   ) async {
@@ -3513,12 +3536,14 @@ class _FakeProjectPicker implements ProjectFilePicker {
   String? openPath;
   String? mediaPath;
   List<String>? mediaPaths;
+  List<String>? mediaFolderPaths;
   String? savePath;
   String? exportPath;
   String? captionPath;
   String? syncFailureMessage;
   int openCalls = 0;
   int mediaOpenCalls = 0;
+  int mediaFolderOpenCalls = 0;
   int saveCalls = 0;
   int exportPathCalls = 0;
   ExportProfile? lastExportProfile;
@@ -3547,6 +3572,12 @@ class _FakeProjectPicker implements ProjectFilePicker {
   Future<List<String>> openMediaSources() async {
     mediaOpenCalls++;
     return mediaPaths ?? [?mediaPath];
+  }
+
+  @override
+  Future<List<String>> openMediaFolderSources() async {
+    mediaFolderOpenCalls++;
+    return mediaFolderPaths ?? const [];
   }
 
   @override

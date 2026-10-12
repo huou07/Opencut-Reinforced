@@ -189,6 +189,29 @@ SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+FOLDER_ROOT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="Footage" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,200][296,260]" />
+</hierarchy>
+"""
+
+FOLDER_CONTENT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="folder-take.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,200][296,260]" />
+  <node index="1" text="Use this folder" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[200,700][300,760]" />
+</hierarchy>
+"""
+
+FOLDER_ALLOW = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="Allow" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[200,700][300,760]" />
+</hierarchy>
+"""
+
 
 class FakeAdb:
     """An `adb` that fails like a cold guest, then serves the real tree."""
@@ -217,6 +240,7 @@ class FakeAdb:
                 MEDIA_GRID_PARTIAL,
                 RELINK_MEDIA_LIST,
             ],
+            "media-folder": [DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT, FOLDER_ALLOW],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "caption-import": [DRAWER, PROVIDER, CAPTION],
             "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
@@ -226,7 +250,8 @@ class FakeAdb:
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
                      MEDIA_FIRST_TWO_SELECTED,
-                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     MEDIA_OPEN, DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT,
+                     FOLDER_ALLOW, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
             "both-relink": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
@@ -234,7 +259,8 @@ class FakeAdb:
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
                      MEDIA_FIRST_TWO_SELECTED,
-                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     MEDIA_OPEN, DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT,
+                     FOLDER_ALLOW, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
                      MEDIA_GRID_PARTIAL, RELINK_MEDIA_LIST],
         }[flow]
@@ -262,7 +288,7 @@ class FakeAdb:
                 tree_index = self.tree_index - 1
                 is_relink_selection = (
                     self.flow == "media-relink"
-                    or (self.flow == "both-relink" and tree_index >= 20)
+                    or (self.flow == "both-relink" and tree_index >= 25)
                 )
                 if (is_relink_selection and command[-2:] == ["160", "302"]
                         and self.guest_log is not None):
@@ -282,7 +308,7 @@ def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
         adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
@@ -334,6 +360,25 @@ class SelectorTests(unittest.TestCase):
             self.assertIn(
                 "Selected music.mp3,phone.mp4,tiny.mkv for media through native DocumentsUI.",
                 selected_report,
+            )
+
+    def test_media_folder_flow_selects_and_confirms_tree_access(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media-folder")
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media-folder")
+
+            self.assertEqual(
+                adb.actions,
+                [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3), ("tap", 4)],
+            )
+            self.assertIn(
+                "Selected Footage and confirmed descendant access",
+                (output / "documents-ui-selection.txt").read_text(),
             )
 
     def test_media_flow_scrolls_clipped_mp3_tile_before_tapping(self):
@@ -459,6 +504,7 @@ class SelectorTests(unittest.TestCase):
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n"
             )
@@ -467,7 +513,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both")
 
-            self.assertEqual(len(adb.actions), 19)
+            self.assertEqual(len(adb.actions), 24)
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
@@ -480,6 +526,7 @@ class SelectorTests(unittest.TestCase):
                         "ANDROID_SAF_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
                     ]
@@ -512,9 +559,14 @@ class SelectorTests(unittest.TestCase):
                     ("tap", 16),
                     ("tap", 17),
                     ("tap", 18),
+                    ("tap", 19),
                     ("tap", 20),
+                    ("tap", 21),
+                    ("tap", 22),
+                    ("tap", 23),
+                    ("tap", 25),
                 ],
-                "DocumentsUI selections must follow open, export, media, caption import and caption export",
+                "DocumentsUI selections must follow open, export, media, folder import, captions and export",
             )
 
     def test_combined_relink_flow_waits_for_the_real_relink_picker(self):
@@ -527,6 +579,7 @@ class SelectorTests(unittest.TestCase):
                         "ANDROID_SAF_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
@@ -539,7 +592,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both-relink")
 
-            self.assertEqual(len(adb.actions), 23)
+            self.assertEqual(len(adb.actions), 28)
             selections = (output / "documents-ui-selection.txt").read_text()
             self.assertIn("Selected relink-replacement.mkv for media-relink", selections)
 

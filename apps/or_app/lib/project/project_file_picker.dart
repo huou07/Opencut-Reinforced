@@ -11,6 +11,7 @@ abstract interface class ProjectFilePicker {
   bool get supportsExport;
   Future<String?> openProjectPath();
   Future<List<String>> openMediaSources();
+  Future<List<String>> openMediaFolderSources();
   Future<String?> saveProjectPath({required String suggestedName});
   Future<String?> saveExportPath({
     required String suggestedName,
@@ -25,6 +26,60 @@ abstract interface class ProjectFilePicker {
   Future<void> discardExportPath(String path);
   Future<void> cancelExportPublish(String path);
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path);
+}
+
+const _maxMediaFolderSources = 512;
+const _folderMediaExtensions = {
+  'mp4',
+  'm4v',
+  'm4a',
+  'mov',
+  'mkv',
+  'webm',
+  'wav',
+  'mp3',
+};
+
+/// Returns a stable, bounded list of supported container files under a folder.
+Future<List<String>> enumerateMediaFolderSources(Directory directory) async {
+  final sources = <String>[];
+  try {
+    await for (final entity in directory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.isEmpty
+          ? entity.path
+          : entity.uri.pathSegments.last;
+      final extension = name.contains('.')
+          ? name.split('.').last.toLowerCase()
+          : '';
+      if (!_folderMediaExtensions.contains(extension)) continue;
+      sources.add(entity.absolute.path);
+      if (sources.length > _maxMediaFolderSources) {
+        throw const ProjectSafStorageException(
+          'This folder contains more than 512 supported media files. Choose a smaller folder.',
+        );
+      }
+    }
+  } on ProjectSafStorageException {
+    rethrow;
+  } on FileSystemException {
+    throw const ProjectSafStorageException(
+      'The selected media folder could not be read.',
+    );
+  }
+  sources.sort((left, right) {
+    final folded = left.toLowerCase().compareTo(right.toLowerCase());
+    return folded == 0 ? left.compareTo(right) : folded;
+  });
+  if (sources.isEmpty) {
+    throw const ProjectSafStorageException(
+      'No supported media files were found in the selected folder.',
+    );
+  }
+  return List.unmodifiable(sources);
 }
 
 class ProjectFileSyncResult {
@@ -73,6 +128,14 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
     if (!isSupported) return const [];
     final files = await openFiles();
     return files.map((file) => file.path).toList(growable: false);
+  }
+
+  @override
+  Future<List<String>> openMediaFolderSources() async {
+    if (!isSupported) return const [];
+    final path = await getDirectoryPath(confirmButtonText: 'Import Folder');
+    if (path == null) return const [];
+    return enumerateMediaFolderSources(Directory(path));
   }
 
   @override
@@ -233,6 +296,54 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
         if (!sources.contains(rawSource)) sources.add(rawSource);
       }
       return sources;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android media storage is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<List<String>> openMediaFolderSources() async {
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'openMediaFolder',
+      );
+      if (response == null) return const [];
+      final rawSources = response['sourceUris'];
+      if (rawSources is! List<Object?>) {
+        throw const ProjectSafStorageException(
+          'The selected media folder is invalid.',
+        );
+      }
+      final sources = <String>[];
+      for (final rawSource in rawSources) {
+        if (rawSource is! String) {
+          throw const ProjectSafStorageException(
+            'The selected media folder contains an invalid source.',
+          );
+        }
+        final uri = Uri.tryParse(rawSource);
+        if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+          throw const ProjectSafStorageException(
+            'The selected media folder contains an invalid source.',
+          );
+        }
+        if (!sources.contains(rawSource)) sources.add(rawSource);
+        if (sources.length > _maxMediaFolderSources) {
+          throw const ProjectSafStorageException(
+            'This folder contains more than 512 supported media files. Choose a smaller folder.',
+          );
+        }
+      }
+      if (sources.isEmpty) {
+        throw const ProjectSafStorageException(
+          'No supported media files were found in the selected folder.',
+        );
+      }
+      return List.unmodifiable(sources);
     } on PlatformException catch (error) {
       throw _storageError(error.code);
     } on MissingPluginException {
@@ -474,6 +585,9 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
     'EXTERNAL_PROJECT_CHANGED' =>
       'The external project changed outside OR. Its changes were preserved.',
     'PROJECT_SYNC_FAILED' => 'The project is saved on this device, but could not be synchronized to the selected document.',
+    'MEDIA_FOLDER_TOO_LARGE' => 'This folder contains more than 512 supported media files. Choose a smaller folder.',
+    'MEDIA_FOLDER_EMPTY' =>
+      'No supported media files were found in the selected folder.',
     _ => 'The selected project or export location is unavailable.',
   });
 }

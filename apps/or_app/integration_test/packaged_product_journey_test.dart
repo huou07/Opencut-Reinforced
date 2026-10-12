@@ -663,6 +663,9 @@ class _JourneyPicker implements ProjectFilePicker {
   Future<List<String>> openMediaSources() async => [nextMediaPath];
 
   @override
+  Future<List<String>> openMediaFolderSources() async => mediaPaths;
+
+  @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>
       projectPath;
 

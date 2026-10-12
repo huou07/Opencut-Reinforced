@@ -19,6 +19,9 @@ const _fixture = MethodChannel('or_saf_acceptance_fixture');
 const _presenter = MethodChannel('or_viewer_texture');
 String _source(String id) =>
     'content://dev.opencut.saffixture.documents/document/$id';
+String _treeSource(String id) =>
+    'content://dev.opencut.saffixture.documents/tree/root/document/$id';
+const _treeRoot = 'content://dev.opencut.saffixture.documents/tree/root';
 
 Future<T> _stage<T>(String name, Future<T> Function() operation) async {
   debugPrint('ANDROID_SAF_STAGE_START $name');
@@ -827,6 +830,25 @@ void main() {
       expect(imported.items[2].formatNames, contains('mp3'));
       expect(imported.items[2].videoDetails, isNull);
       expect(imported.items[2].audioDetails, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('media-import-folder')));
+      debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
+      await _until(tester, () => gateway.importCalls == 5);
+      final folderImported = await gateway.listMediaPage(
+        session,
+        offset: 68,
+        limit: 2,
+      );
+      expect(folderImported.items.map((item) => item.sourceUri), [
+        _treeSource('folder-audio'),
+        _treeSource('folder-video'),
+      ]);
+      expect(folderImported.items[0].formatNames, contains('mp3'));
+      expect(folderImported.items[1].formatNames, contains('matroska'));
+      final persistedTreeGrants =
+          (await _control('status'))['persistedMediaUris'] as List<dynamic>;
+      expect(persistedTreeGrants, contains(_treeRoot));
+
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
       expect((await gateway.save(session)).succeeded, isTrue);

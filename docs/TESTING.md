@@ -673,6 +673,19 @@ hardening commit itself must pass both workflows.
   path. Local Android build/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
+## Bounded folder media import
+
+- Flutter picker tests cover recursive desktop extension filtering, stable
+  ordering, empty folders, and the 512-file limit; widget coverage checks that
+  folder-selected sources enter through the existing project gateway.
+- Python selector tests cover the DocumentsUI folder/tree flow and ensure
+  selector actions stay within the native picker. Hosted Android SAF
+  integration verifies descendant imports and the persisted tree grant.
+- The Kotlin SAF traversal, packaged desktop folder picker, and complete
+  cross-platform journey require exact-SHA Platform Verification. Local
+  Android runtime/emulator execution is `NOT RUN — LOCAL NATIVE EXECUTION
+  DISALLOWED BY POLICY`.
+
 ## Phase 9B Android media and render surface coverage
 
 - `LiveProjectHost::in_process_with_export_handler` is covered headlessly: it

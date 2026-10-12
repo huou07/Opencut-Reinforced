@@ -35,6 +35,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.timelineLoading = false,
     this.timelineLoadError,
     this.onImportMedia,
+    this.onImportMediaFolder,
     this.onLoadMoreMedia,
     this.onRefreshMedia,
     this.onRemoveMedia,
@@ -94,6 +95,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final bool timelineLoading;
   final String? timelineLoadError;
   final VoidCallback? onImportMedia;
+  final VoidCallback? onImportMediaFolder;
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
@@ -411,6 +413,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       ? widget.onAddMediaToTimeline
                       : null,
                   onImportMedia: widget.busy ? null : widget.onImportMedia,
+                  onImportMediaFolder: widget.busy
+                      ? null
+                      : widget.onImportMediaFolder,
                   onLoadMoreMedia: widget.onLoadMoreMedia,
                   onRefreshMedia: widget.onRefreshMedia,
                   onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
@@ -667,6 +672,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 mediaLoadingMore: widget.mediaLoadingMore,
                 mediaLoadError: widget.mediaLoadError,
                 onImportMedia: widget.busy ? null : widget.onImportMedia,
+                onImportMediaFolder: widget.busy
+                    ? null
+                    : widget.onImportMediaFolder,
                 onLoadMoreMedia: widget.onLoadMoreMedia,
                 onRefreshMedia: widget.onRefreshMedia,
                 onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
@@ -1021,6 +1029,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.mediaLoadingMore,
     required this.mediaLoadError,
     required this.onImportMedia,
+    required this.onImportMediaFolder,
     required this.onLoadMoreMedia,
     required this.onRefreshMedia,
     required this.onRemoveMedia,
@@ -1040,6 +1049,7 @@ class _EditorToolPanel extends StatelessWidget {
   final bool mediaLoadingMore;
   final String? mediaLoadError;
   final VoidCallback? onImportMedia;
+  final VoidCallback? onImportMediaFolder;
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
@@ -1068,6 +1078,7 @@ class _EditorToolPanel extends StatelessWidget {
         loadingMore: mediaLoadingMore,
         error: mediaLoadError,
         onImport: onImportMedia,
+        onImportFolder: onImportMediaFolder,
         onLoadMore: onLoadMoreMedia,
         onRefresh: onRefreshMedia,
         onRemove: onRemoveMedia,
@@ -1125,6 +1136,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.loadingMore,
     required this.error,
     required this.onImport,
+    required this.onImportFolder,
     required this.onLoadMore,
     required this.onRefresh,
     required this.onRemove,
@@ -1142,6 +1154,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   final bool loadingMore;
   final String? error;
   final VoidCallback? onImport;
+  final VoidCallback? onImportFolder;
   final VoidCallback? onLoadMore;
   final VoidCallback? onRefresh;
   final ValueChanged<ProjectMediaItem>? onRemove;
@@ -1196,11 +1209,23 @@ class _MediaLibraryPanel extends StatelessWidget {
               OrSpacing.x2,
               0,
             ),
-            child: OutlinedButton.icon(
-              key: const ValueKey('media-import'),
-              onPressed: onImport,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Import Media'),
+            child: Wrap(
+              spacing: OrSpacing.x1,
+              runSpacing: OrSpacing.x1,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('media-import'),
+                  onPressed: onImport,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Import Media'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('media-import-folder'),
+                  onPressed: onImportFolder,
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+                  label: const Text('Import Folder'),
+                ),
+              ],
             ),
           ),
           if (page != null)

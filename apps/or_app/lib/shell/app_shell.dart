@@ -306,6 +306,9 @@ class _AppShellState extends State<AppShell> {
               onImportMedia: widget.projectFilePicker.supportsMediaImport
                   ? _importMedia
                   : null,
+              onImportMediaFolder: widget.projectFilePicker.supportsMediaImport
+                  ? _importMediaFolder
+                  : null,
               onLoadMoreMedia: _loadMoreMedia,
               onRefreshMedia: _refreshMediaLibrary,
               onRemoveMedia: _removeMedia,
@@ -2349,14 +2352,27 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _importMedia() async {
+  Future<void> _importMedia() => _importMediaSources(folder: false);
+
+  Future<void> _importMediaFolder() => _importMediaSources(folder: true);
+
+  Future<void> _importMediaSources({required bool folder}) async {
     final session = _activeSession;
     if (session == null || _busy) return;
     List<String> sources;
     try {
-      sources = await widget.projectFilePicker.openMediaSources();
+      sources = folder
+          ? await widget.projectFilePicker.openMediaFolderSources()
+          : await widget.projectFilePicker.openMediaSources();
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return;
     } catch (_) {
-      _showUnavailable('A media file could not be selected.');
+      _showUnavailable(
+        folder
+            ? 'A media folder could not be selected.'
+            : 'A media file could not be selected.',
+      );
       return;
     }
     sources = sources.toSet().toList(growable: false);
@@ -2407,7 +2423,7 @@ class _AppShellState extends State<AppShell> {
           ? '${failures.first.substring(0, 177)}…'
           : failures.first;
       _showUnavailable(
-        'Imported $imported of ${sources.length} selected files. '
+        'Imported $imported of ${sources.length} ${folder ? 'folder files' : 'selected files'}. '
         '${failures.length} could not be imported. $failureSummary',
       );
     }
