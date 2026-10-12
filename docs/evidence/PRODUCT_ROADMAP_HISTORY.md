@@ -1254,8 +1254,9 @@ and never scrolled the directory. The second correction scrolls the specific
 DocumentsUI directory list when the expected listing is incomplete; a regression
 test covers that absent-row state. The candidate remains unaccepted until a new
 exact-SHA run completes. The Windows job in this run separately failed while
-downloading/building pinned zlib; its exact log will be reviewed when the run
-closes, since the same step passed on the previous candidate SHA.
+downloading pinned zlib: GitHub returned HTTP 504 from the release download
+endpoint before checksum or build work began. Windows completed that same step
+on the following candidate SHA, `581c641`.
 
 The second selector correction was exercised on exact SHA
 `581c641933cbc0cd0094090d04a02389e604d07f` by Platform Verification
@@ -1272,3 +1273,9 @@ test now waits for that real control to become enabled before tapping it. This
 was an acceptance synchronization race, not evidence that Android tree
 enumeration or folder import failed. Folder import remains unaccepted pending
 the corrected exact-SHA hosted run.
+
+The macOS job for `581c641` built the app bundle but its bounded native project
+lifecycle test produced no case output: Flutter logged `Failed to foreground
+app; open returned 1`, and the step timed out after 35 minutes. This is a
+hosted launch failure without a product assertion. The required macOS run must
+still be repeated on the corrected candidate SHA.
