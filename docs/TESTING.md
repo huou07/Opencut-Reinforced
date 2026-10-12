@@ -1007,6 +1007,10 @@ For multi-file import, the selector checks visible screen bounds as well as the
 enabled state of each filename. It scrolls that file's own list container when
 a row is clipped by Android's navigation area or the final filename is absent
 from an incomplete accessibility listing.
+After each media mutation, the SAF journey waits for the real Import Folder
+button to become enabled before tapping it. The gateway observation can finish
+before AppShell completes its read-model refresh and releases the busy state;
+the disabled control is not treated as an opened picker or a completed import.
 The updated end-to-end export check requires the selected document to contain
 sampled VP9 video and Opus audio after the Android method-channel publish
 operation and requires complete decode of both tracks through Android's native

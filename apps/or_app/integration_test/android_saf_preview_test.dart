@@ -831,7 +831,19 @@ void main() {
       expect(imported.items[2].videoDetails, isNull);
       expect(imported.items[2].audioDetails, isNotNull);
 
-      await tester.tap(find.byKey(const ValueKey('media-import-folder')));
+      final importFolderButton = find.byKey(
+        const ValueKey('media-import-folder'),
+      );
+      // Gateway completion is observed before AppShell finishes refreshing the
+      // project read model and releases its mutation busy state. Wait for the
+      // real control to become enabled so this remains a user journey rather
+      // than tapping a disabled button during that refresh.
+      await _until(tester, () {
+        if (importFolderButton.evaluate().isEmpty) return false;
+        return tester.widget<OutlinedButton>(importFolderButton).onPressed !=
+            null;
+      });
+      await tester.tap(importFolderButton);
       debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
       await _until(tester, () => gateway.importCalls == 5);
       final folderImported = await gateway.listMediaPage(

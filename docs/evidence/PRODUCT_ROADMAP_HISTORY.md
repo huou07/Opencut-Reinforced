@@ -1256,3 +1256,19 @@ test covers that absent-row state. The candidate remains unaccepted until a new
 exact-SHA run completes. The Windows job in this run separately failed while
 downloading/building pinned zlib; its exact log will be reviewed when the run
 closes, since the same step passed on the previous candidate SHA.
+
+The second selector correction was exercised on exact SHA
+`581c641933cbc0cd0094090d04a02389e604d07f` by Platform Verification
+[38250084884](https://github.com/huou07/Opencut-Reinforced/actions/runs/38250084884).
+Linux and Windows packaged journeys passed; Android reached the new folder
+acceptance but did not open the tree picker. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38250084884)
+shows the previous three-file DocumentsUI import completed, followed by the
+folder-test readiness marker without a new native picker launch. The test
+waited for the observed gateway-call count, which increments before AppShell
+finishes refreshing its project read model and releases the busy state; the
+real Import Folder button was correctly disabled during that interval. The
+test now waits for that real control to become enabled before tapping it. This
+was an acceptance synchronization race, not evidence that Android tree
+enumeration or folder import failed. Folder import remains unaccepted pending
+the corrected exact-SHA hosted run.
