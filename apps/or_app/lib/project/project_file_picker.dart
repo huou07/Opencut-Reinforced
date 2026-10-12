@@ -28,7 +28,7 @@ abstract interface class ProjectFilePicker {
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path);
 }
 
-const _maxMediaFolderSources = 512;
+const _maxMediaFolderSources = 64;
 const _folderMediaExtensions = {
   'mp4',
   'm4v',
@@ -59,7 +59,7 @@ Future<List<String>> enumerateMediaFolderSources(Directory directory) async {
       sources.add(entity.absolute.path);
       if (sources.length > _maxMediaFolderSources) {
         throw const ProjectSafStorageException(
-          'This folder contains more than 512 supported media files. Choose a smaller folder.',
+          'This folder contains more than 64 supported media files. Choose a smaller folder.',
         );
       }
     }
@@ -334,7 +334,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
         if (!sources.contains(rawSource)) sources.add(rawSource);
         if (sources.length > _maxMediaFolderSources) {
           throw const ProjectSafStorageException(
-            'This folder contains more than 512 supported media files. Choose a smaller folder.',
+            'This folder contains more than 64 supported media files. Choose a smaller folder.',
           );
         }
       }
@@ -585,7 +585,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
     'EXTERNAL_PROJECT_CHANGED' =>
       'The external project changed outside OR. Its changes were preserved.',
     'PROJECT_SYNC_FAILED' => 'The project is saved on this device, but could not be synchronized to the selected document.',
-    'MEDIA_FOLDER_TOO_LARGE' => 'This folder contains more than 512 supported media files. Choose a smaller folder.',
+    'MEDIA_FOLDER_TOO_LARGE' => 'This folder contains more than 64 supported media files. Choose a smaller folder.',
     'MEDIA_FOLDER_EMPTY' =>
       'No supported media files were found in the selected folder.',
     _ => 'The selected project or export location is unavailable.',

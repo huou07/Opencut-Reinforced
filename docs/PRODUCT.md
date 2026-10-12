@@ -289,10 +289,12 @@ separately gated.
 **MVP FOUNDATION:** import accepts selected local files, bounded recursive
 folders, or Android SAF documents under the supported import profiles below
 and adds each successful source through the existing `media.add` command.
-Folder import includes at most 512 supported files, does not follow desktop
+Folder import includes at most 64 supported files, does not follow desktop
 symbolic links, and reports an empty or oversized selection before mutating the
 project. Android uses a persistable SAF tree grant and bounds traversal by depth
-and total entries. Sources are probed
+and total entries. Its preview/import descriptor registry holds 64 sources;
+folder import clears stale preview registrations before using that capacity.
+Sources are probed
 independently; a failed item leaves project state unchanged while successful
 items remain imported and the user receives a combined result. Files outside
 the matrix fail with an accurate machine-readable unsupported-format reason.

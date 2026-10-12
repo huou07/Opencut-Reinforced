@@ -373,12 +373,14 @@ Folder import is a picker extension over the same `media.add` command path,
 not a separate ingest engine. Desktop uses the native directory picker and
 enumerates supported files recursively without following symbolic links. The
 Android adapter requests a SAF tree URI, enumerates descendants with a maximum
-depth of 64, 20,000 visited entries, and 512 supported media files, then
+depth of 64, 20,000 visited entries, and 64 supported media files, then
 persists the tree read grant and returns descendant document URIs. Folder and
 per-file failures remain visible to the existing import result handling;
 canonical project data retains source document identities, not tree handles.
-The hosted DocumentsUI journey is the acceptance boundary for the Android
-picker and persisted grant.
+The application clears stale preview registrations before folder import so
+the operation's 64-source bound agrees with Android's shared preview/import
+descriptor registry. The hosted DocumentsUI journey is the acceptance boundary
+for the Android picker and persisted grant.
 
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 

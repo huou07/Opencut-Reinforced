@@ -198,9 +198,10 @@ today.
 - The Media panel offers `Import Media` and `Import Folder`. Folder selection
   imports supported descendant files through the ordinary media import flow,
   preserves per-file success/failure feedback, and explains empty or oversized
-  folders. Desktop uses the native folder picker; Android uses the SAF folder
-  picker and retains its read grant. Mark this journey accepted only after the
-  packaged desktop and Android folder-import checks pass.
+  folders above the shared 64-file batch bound. Desktop uses the native folder
+  picker; Android uses the SAF folder picker and retains its read grant. Mark
+  this journey accepted only after packaged desktop and Android folder-import
+  checks pass.
 - For 8E, selecting an unlocked Audio clip exposes gain in dB, pan in percent,
   and exact rational fade-in/fade-out times in the Inspector. Apply and Reset
   use the canonical clip-update command and preserve exact clip timing. Desktop

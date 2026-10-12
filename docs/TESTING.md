@@ -676,7 +676,7 @@ hardening commit itself must pass both workflows.
 ## Bounded folder media import
 
 - Flutter picker tests cover recursive desktop extension filtering, stable
-  ordering, empty folders, and the 512-file limit; widget coverage checks that
+  ordering, empty folders, and the 64-file limit; widget coverage checks that
   folder-selected sources enter through the existing project gateway.
 - Python selector tests cover the DocumentsUI folder/tree flow and ensure
   selector actions stay within the native picker. Hosted Android SAF

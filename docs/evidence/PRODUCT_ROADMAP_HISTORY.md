@@ -1220,6 +1220,8 @@ Preview workflow. The emulator does not establish Android hardware
 responsiveness.
 
 The subsequent bounded folder-import candidate is being verified on its own
-exact product SHA. Until that hosted run completes, local picker/widget tests
-and selector tests are implementation evidence only, not packaged Android or
-desktop user-journey acceptance.
+exact product SHA. Its folder batch is capped at 64 to match Android's shared
+preview/import descriptor registry; the application clears stale preview
+registrations before an Android folder batch. Until that hosted run completes,
+local picker/widget tests and selector tests are implementation evidence only,
+not packaged Android or desktop user-journey acceptance.

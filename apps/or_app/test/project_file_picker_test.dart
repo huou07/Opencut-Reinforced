@@ -104,7 +104,7 @@ void main() {
 
       final large = Directory.systemTemp.createTempSync('or-large-folder-');
       addTearDown(() => large.deleteSync(recursive: true));
-      for (var index = 0; index < 513; index++) {
+      for (var index = 0; index < 65; index++) {
         await File('${large.path}/clip-$index.mp4').create();
       }
       await expectLater(
@@ -113,7 +113,7 @@ void main() {
           isA<ProjectSafStorageException>().having(
             (error) => error.message,
             'message',
-            contains('more than 512'),
+            contains('more than 64'),
           ),
         ),
       );

@@ -2380,6 +2380,18 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
+    if (folder && Platform.isAndroid) {
+      try {
+        // Preview and import share Android's 64-source descriptor registry.
+        await OrViewerTexture.clearMediaSources();
+      } on PlatformException catch (error) {
+        _showUnavailable(
+          error.message ?? 'Android media access could not be prepared.',
+        );
+        return;
+      }
+    }
+
     var imported = 0;
     final failures = <String>[];
     for (final source in sources) {

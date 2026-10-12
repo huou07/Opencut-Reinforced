@@ -31,7 +31,7 @@ private const val SAF_PICK_REQUEST = 0x4f52
 private const val MAX_PROJECT_BYTES = 64L * 1024 * 1024
 private const val MAX_CAPTION_BYTES = 8L * 1024 * 1024
 private const val MAX_CAPTION_EXPORT_BYTES = 16L * 1024 * 1024
-private const val MAX_MEDIA_FOLDER_FILES = 512
+private const val MAX_MEDIA_FOLDER_FILES = 64
 private const val MAX_MEDIA_FOLDER_ENTRIES = 20_000
 private const val MAX_MEDIA_FOLDER_DEPTH = 64
 private val MEDIA_FOLDER_EXTENSIONS = setOf("mp4", "m4v", "m4a", "mov", "mkv", "webm", "wav", "mp3")
@@ -509,7 +509,7 @@ class MainActivity : FlutterActivity() {
                             if (extension in MEDIA_FOLDER_EXTENSIONS) {
                                 candidates.add(documentId to name)
                                 if (candidates.size > MAX_MEDIA_FOLDER_FILES) {
-                                    throw SafFailure("MEDIA_FOLDER_TOO_LARGE", "This folder contains more than 512 supported media files. Choose a smaller folder.")
+                                    throw SafFailure("MEDIA_FOLDER_TOO_LARGE", "This folder contains more than 64 supported media files. Choose a smaller folder.")
                                 }
                             }
                         }
