@@ -568,7 +568,7 @@ fn run_provider(
                 context.report_progress((fraction * 100.0) as u64, 100);
             }
             Ok(ProviderMessage::Result { output }) => {
-                let path = managed_transcription_proposal_path(&request.managed_root, output.id);
+                let path = managed_transcription_proposal_path(request.managed_root, output.id);
                 let actual = file_reference(output.id, &path, MAX_TRANSCRIPT_PROPOSAL_BYTES)
                     .map_err(|_| "The local transcription proposal failed verification.")?;
                 if actual.size_bytes != output.size_bytes

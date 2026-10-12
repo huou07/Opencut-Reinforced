@@ -30,7 +30,10 @@ integration gaps: Linux Flutter rebuild removes staged runtime files, the host
 and provider derived different UUID audio paths on Windows, and the reopened
 macOS UI did not expose Generate Captions to the test. A package-runtime restore
 hook, shared managed-file path helpers, and explicit media-persistence/action
-readiness assertions are now implemented but await hosted verification.
+readiness assertions are now implemented but await hosted verification. The
+first verification at `20c1b65498904071f7101b217fda968cdaec8ffb` exposed a
+Clippy `needless_borrow` in the new shared-path call; the borrow is corrected
+and exact-SHA platform verification is pending.
 Android transcription remains unsupported. Full receipts are in the history
 archive.
 The packaged gate uses the pinned
