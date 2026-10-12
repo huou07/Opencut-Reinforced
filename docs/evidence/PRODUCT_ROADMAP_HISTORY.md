@@ -1225,3 +1225,18 @@ preview/import descriptor registry; the application clears stale preview
 registrations before an Android folder batch. Until that hosted run completes,
 local picker/widget tests and selector tests are implementation evidence only,
 not packaged Android or desktop user-journey acceptance.
+
+The first folder candidate run, [38240164385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38240164385)
+on `78737472c5d9c7e5a4ce7bd184bb0c689314d2e2`, passed Linux, macOS, Windows,
+Rust, Flutter, descriptor, and hygiene checks. The Android journey timed out in
+the DocumentsUI selector during the existing multi-file import step, before the
+new folder-picker interaction. Its retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38240164385)
+shows the last row extending below the usable screen while DocumentsUI still
+reported it enabled. The selector tapped the clipped row instead of scrolling
+its list container. The logged skipped-frame classification is not a separate
+acceptance failure: the journey exited because native picker selection never
+completed, before the Android report verifier ran. The selector now detects
+screen clipping and scrolls the row's own container; a regression test covers
+the enabled-but-clipped accessibility state. Folder import remains unaccepted
+until the corrected exact-SHA run completes.

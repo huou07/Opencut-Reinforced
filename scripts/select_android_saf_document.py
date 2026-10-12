@@ -20,6 +20,35 @@ def center(bounds):
     return [(left + right) // 2, (top + bottom) // 2]
 
 
+def is_fully_visible(node, screen_bounds):
+    if not screen_bounds:
+        return True
+    try:
+        left, top, right, bottom = bounds_values(node.get("bounds", ""))
+        screen_left, screen_top, screen_right, screen_bottom = bounds_values(screen_bounds)
+    except ValueError:
+        return False
+    screen_height = screen_bottom - screen_top
+    # Leave room for Android's navigation area, which may not appear in the
+    # accessibility tree even though a file row can extend underneath it.
+    bottom_inset = max(24, round(screen_height * 0.04))
+    return (
+        left >= screen_left
+        and right <= screen_right
+        and top >= screen_top
+        and bottom <= screen_bottom - bottom_inset
+    )
+
+
+def scrollable_ancestor(node, parent_by_node):
+    parent = parent_by_node.get(node)
+    while parent is not None:
+        if parent.get("scrollable") == "true":
+            return parent
+        parent = parent_by_node.get(parent)
+    return None
+
+
 def select(device, guest_log, output, flow="open"):
     if flow == "both":
         select(device, guest_log, output, "open")
@@ -89,6 +118,22 @@ def select(device, guest_log, output, flow="open"):
             continue
         (output / "documents-ui-last.xml").write_bytes(raw)
         nodes = list(root.iter("node"))
+        screen_node = next(
+            (
+                node
+                for node in root
+                if node.get("class") in {
+                    "android.widget.FrameLayout",
+                    "android.view.ViewGroup",
+                    "android.widget.ScrollView",
+                }
+            ),
+            None,
+        )
+        screen_bounds = screen_node.get("bounds", "") if screen_node is not None else ""
+        parent_by_node = {
+            child: parent for parent in nodes for child in parent
+        }
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
@@ -233,15 +278,19 @@ def select(device, guest_log, output, flow="open"):
                 target = list_view
             elif listing_complete and next_media is not None:
                 media_node = selectable_media[next_media]
-                if media_node.get("enabled") == "false":
+                clipped = not is_fully_visible(media_node, screen_bounds)
+                if media_node.get("enabled") == "false" or clipped:
                     if list_view is not None and not list_view_requested:
                         target = list_view
-                    elif scroll_view is not None and media_scroll_attempts < 6:
+                    elif media_scroll_attempts < 6:
                         retry_wait = time.monotonic() - last_media_scroll_at < 0.75
                         if not retry_wait:
-                            target = scroll_view
-                            pending_media = next_media
-                            scroll_for_media = True
+                            target = scrollable_ancestor(media_node, parent_by_node)
+                            if target is None:
+                                target = scroll_view
+                            if target is not None:
+                                pending_media = next_media
+                                scroll_for_media = True
                 else:
                     action = "long-press" if flow == "media" and not selected_media else "tap"
                     retry_wait = time.monotonic() - last_media_action_at < 1.5

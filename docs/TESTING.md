@@ -1003,6 +1003,9 @@ checks surface recreation and frame presentation.
 The separate SAF acceptance provider advertises directory creation on both its
 root and root document. The DocumentsUI export selector waits for an enabled
 Save action; a disabled button is not counted as a completed picker handoff.
+For multi-file import, the selector checks the visible screen bounds as well as
+the enabled state of each filename and scrolls that file's own list container
+when the final row is clipped by Android's navigation area.
 The updated end-to-end export check requires the selected document to contain
 sampled VP9 video and Opus audio after the Android method-channel publish
 operation and requires complete decode of both tracks through Android's native
