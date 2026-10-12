@@ -1906,27 +1906,25 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    if (Platform.isAndroid) {
-      try {
-        if (!await OrViewerTexture.setMediaSources(sources)) {
-          _showUnavailable('Android media access could not be opened.');
-          return;
-        }
-      } on PlatformException catch (error) {
-        _showUnavailable(
-          error.message ?? 'Android media access is unavailable.',
-        );
-        return;
-      } on MissingPluginException {
-        _showUnavailable('Android media access is unavailable.');
-        return;
-      }
-    }
-
     var imported = 0;
     final failures = <String>[];
     for (final source in sources) {
       if (!mounted || !identical(session, _activeSession)) return;
+      if (Platform.isAndroid) {
+        try {
+          if (!await OrViewerTexture.registerMediaSourceForImport(source)) {
+            failures.add('Android media access could not be opened.');
+            continue;
+          }
+        } on PlatformException catch (error) {
+          failures.add(error.message ?? 'Android media access is unavailable.');
+          continue;
+        } on MissingPluginException {
+          failures.add('Android media access is unavailable.');
+          continue;
+        }
+        if (!mounted || !identical(session, _activeSession)) return;
+      }
       final updated = await _runProjectAction((session, _) async {
         // Capture identity and revision immediately before Rust probes each file.
         final current = await widget.projectGateway.summary(session);

@@ -1185,6 +1185,19 @@ void main() {
       expect(_providerFds(), 2);
       await OrViewerTexture.clearMediaSources();
       expect(_providerFds(), 0);
+      await _control('resetMissing');
+      expect(await OrViewerTexture.setMediaSources([_source('good')]), isTrue);
+      expect(_providerFds(), 1);
+      expect(
+        await _bindingFailure(
+          OrViewerTexture.registerMediaSourceForImport(_source('missing')),
+        ),
+        'MEDIA_SOURCE_MISSING',
+      );
+      expect(_providerFds(), 1);
+      expect((await _resources())['duplicatedMediaFds'], 1);
+      await OrViewerTexture.clearMediaSources();
+      expect(_providerFds(), 0);
       expect(
         await _bindingFailure(
           OrViewerTexture.setMediaSources([_source('pipe')]),

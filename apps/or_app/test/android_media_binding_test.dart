@@ -49,6 +49,23 @@ void main() {
     );
   });
 
+  test(
+    'single import registration keeps the selected SAF source explicit',
+    () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'registerMediaSourceForImport');
+        expect(call.arguments, 'content://provider/document/import');
+        return true;
+      });
+      expect(
+        await OrViewerTexture.registerMediaSourceForImport(
+          'content://provider/document/import',
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('descriptor release cannot silently succeed when the native operation fails', () async {
     messenger.setMockMethodCallHandler(channel, (_) async => false);
     await expectLater(

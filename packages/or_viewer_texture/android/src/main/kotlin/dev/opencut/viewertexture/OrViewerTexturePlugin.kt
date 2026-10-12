@@ -158,6 +158,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             "textureId" -> { createProducer(); result.success(producer?.id()) }
             "frameAvailable" -> scheduleFrame(result)
             "setMediaSources" -> setMediaSources(call, result)
+            "registerMediaSourceForImport" -> registerMediaSourceForImport(call, result)
             "clearMediaSources" -> clearMediaSources(result)
             "resourceSnapshot" -> resourceSnapshot(result)
             else -> result.notImplemented()
@@ -178,6 +179,67 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         bindingEpoch.incrementAndGet()
         // Reserve one queue slot for a clear behind cancelled opens.
         submit(result, reserved = true) { clearNativeSources(); true }
+    }
+
+    private fun registerMediaSourceForImport(call: MethodCall, result: MethodChannel.Result) {
+        val source = call.arguments as? String
+            ?: return result.error("INVALID_MEDIA_SOURCES", "The Android media source is invalid.", null)
+        val uri = Uri.parse(source)
+        if (source.length > MAX_MEDIA_SOURCE_URI_CHARS || uri.scheme != "content" || uri.authority.isNullOrEmpty()) {
+            return result.error("INVALID_MEDIA_SOURCES", "The Android media source is invalid.", null)
+        }
+        val context = producerContext
+            ?: return result.error("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.", null)
+        val epoch = bindingEpoch.incrementAndGet()
+        submit(result) {
+            var registeredSource = false
+            fun checkCurrent() {
+                if (!nativeLoaded || !attached.get() || bindingEpoch.get() != epoch) {
+                    throw MediaFailure("STALE_PREVIEW_REQUEST", "A newer preview or project replaced this media request.")
+                }
+            }
+            try {
+                checkCurrent()
+                if (context.checkUriPermission(uri, Process.myPid(), Process.myUid(),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+                    throw MediaFailure("MEDIA_PERMISSION_REQUIRED", "Access to the selected media source is unavailable.")
+                }
+                val sources = registeredMediaSources.orEmpty()
+                if (source !in sources) {
+                    if (sources.size >= MAX_MEDIA_SOURCES) {
+                        throw MediaFailure("MEDIA_SOURCE_LIMIT", "Too many Android media sources are open. Close another project and retry.")
+                    }
+                    val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
+                        ?: throw MediaFailure("MEDIA_SOURCE_MISSING", "The selected media source is missing. Select it again and retry.")
+                    descriptor.use {
+                        checkCurrent()
+                        if (!nativeRegisterMediaFd(source, it.fd)) {
+                            try { Os.lseek(it.fileDescriptor, 0L, OsConstants.SEEK_CUR) }
+                            catch (error: ErrnoException) {
+                                if (error.errno == OsConstants.ESPIPE) {
+                                    throw MediaFailure("MEDIA_SOURCE_NOT_SEEKABLE", "This Android provider cannot seek. Choose a seekable media document.")
+                                }
+                            }
+                            throw MediaFailure("MEDIA_SOURCE_REGISTRATION_FAILED", "Android media registration failed. Select the source again and retry.")
+                        }
+                        registeredSource = true
+                        registrationCount++
+                    }
+                    checkCurrent()
+                    registeredMediaSources = (sources + source).distinct().sorted()
+                }
+                checkCurrent()
+                true
+            } catch (error: Exception) {
+                if (registeredSource) clearNativeSources()
+                when (error) {
+                    is MediaFailure -> throw error
+                    is SecurityException -> throw MediaFailure("MEDIA_PERMISSION_REQUIRED", "Access to the selected media source is unavailable.")
+                    is FileNotFoundException -> throw MediaFailure("MEDIA_SOURCE_MISSING", "The selected media source is missing. Select it again and retry.")
+                    else -> throw MediaFailure("MEDIA_SOURCE_UNAVAILABLE", "The selected media source could not be opened. Select it again and retry.")
+                }
+            }
+        }
     }
 
     private fun setMediaSources(call: MethodCall, result: MethodChannel.Result) {

@@ -15,6 +15,13 @@ abstract final class OrViewerTexture {
       }) ??
       false;
 
+  static Future<bool> registerMediaSourceForImport(String source) async =>
+      await _channel.invokeMethod<bool>(
+        'registerMediaSourceForImport',
+        source,
+      ) ??
+      false;
+
   static Future<void> clearMediaSources() async {
     if (await _channel.invokeMethod<bool>('clearMediaSources') != true) {
       throw PlatformException(
