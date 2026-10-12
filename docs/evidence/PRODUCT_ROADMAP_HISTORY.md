@@ -1240,3 +1240,19 @@ completed, before the Android report verifier ran. The selector now detects
 screen clipping and scrolls the row's own container; a regression test covers
 the enabled-but-clipped accessibility state. Folder import remains unaccepted
 until the corrected exact-SHA run completes.
+
+The first selector correction was verified on exact SHA
+`39c919235594b4456459ab8dbdd3979050471be8` by Platform Verification
+[38245348150](https://github.com/huou07/Opencut-Reinforced/actions/runs/38245348150).
+Rust, Flutter, Linux, and repository hygiene passed; Android completed the APK
+and runtime bridge steps but again timed out in the native multi-file picker
+before the folder interaction. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38245348150)
+shows list view with the last expected filename omitted from the accessibility
+tree. Since the list-view toggle was already active, the selector had no target
+and never scrolled the directory. The second correction scrolls the specific
+DocumentsUI directory list when the expected listing is incomplete; a regression
+test covers that absent-row state. The candidate remains unaccepted until a new
+exact-SHA run completes. The Windows job in this run separately failed while
+downloading/building pinned zlib; its exact log will be reviewed when the run
+closes, since the same step passed on the previous candidate SHA.

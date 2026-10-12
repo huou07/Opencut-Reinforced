@@ -137,6 +137,35 @@ MEDIA_LIST_WITH_CLIPPED_ENABLED_ITEM = b"""<?xml version='1.0' encoding='UTF-8'?
 </hierarchy>
 """
 
+MEDIA_LIST_WITH_LAST_FILE_BELOW_VIEWPORT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="" class="android.widget.FrameLayout"
+        package="com.google.android.documentsui" bounds="[0,0][320,640]">
+    <node index="0" text="" resource-id="com.google.android.documentsui:id/dir_list"
+          class="android.widget.GridView" package="com.google.android.documentsui"
+          scrollable="true" bounds="[0,120][320,640]">
+      <node index="0" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            enabled="true" bounds="[0,540][320,608]">
+        <node index="0" text="phone.mp4" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,559][187,581]" selected="false" />
+      </node>
+      <node index="1" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            enabled="true" bounds="[0,472][320,540]">
+        <node index="0" text="music.mp3" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,486][187,508]" selected="false" />
+      </node>
+    </node>
+    <node index="1" text="" class="android.widget.Button"
+          package="com.google.android.documentsui" content-desc="Grid view"
+          bounds="[248,126][296,174]" />
+  </node>
+</hierarchy>
+"""
+
 RELINK_MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="relink-replacement.mkv" class="android.widget.LinearLayout"
@@ -488,6 +517,44 @@ class SelectorTests(unittest.TestCase):
             selection_log = (output / "documents-ui-selector.log").read_text()
             self.assertIn("action=scroll target=tiny.mkv", selection_log)
             self.assertIn("action=long-press target=tiny.mkv", selection_log)
+
+    def test_media_flow_scrolls_list_when_last_file_is_not_in_accessibility_tree(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media")
+            adb.trees = [
+                DRAWER,
+                PROVIDER,
+                MEDIA_GRID_PARTIAL,
+                MEDIA_LIST_WITH_LAST_FILE_BELOW_VIEWPORT,
+                MEDIA_LIST,
+                MEDIA_FIRST_SELECTED,
+                MEDIA_FIRST_TWO_SELECTED,
+                MEDIA_SELECT,
+            ]
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(
+                adb.actions,
+                [
+                    ("tap", 0),
+                    ("tap", 1),
+                    ("tap", 2),
+                    ("swipe", 3),
+                    ("swipe", 4),
+                    ("tap", 5),
+                    ("tap", 6),
+                    ("tap", 7),
+                ],
+            )
+            self.assertIn(
+                "action=scroll target=tiny.mkv",
+                (output / "documents-ui-selector.log").read_text(),
+            )
 
     def test_media_relink_selects_exactly_one_replacement_video(self):
         with tempfile.TemporaryDirectory() as work:

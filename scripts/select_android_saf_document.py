@@ -234,6 +234,16 @@ def select(device, guest_log, output, flow="open"):
             (node for node in nodes if node.get("scrollable") == "true"),
             None,
         )
+        media_list = next(
+            (
+                node
+                for node in nodes
+                if node.get("resource-id", "").endswith(":id/dir_list")
+                and node.get("scrollable") == "true"
+            ),
+            None,
+        )
+        media_scroll_container = media_list if media_list is not None else scroll_view
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
@@ -265,17 +275,28 @@ def select(device, guest_log, output, flow="open"):
                 ),
                 None,
             )
-            # DocumentsUI can briefly expose only part of its provider listing
-            # while loading/relayout is in progress. Do not infer that a
-            # partial set is the whole acceptance selection; the known fixture
-            # names are the completion contract for this journey.
+                # DocumentsUI can briefly expose only part of its provider
+                # listing while loading or after a viewport clips the last row.
+                # Do not infer that partial names satisfy this acceptance path.
             listing_complete = available_media == expected_media
             if not listing_complete and list_view is not None and not list_view_requested:
                 # The acceptance provider can place one tile below the fold in
                 # DocumentsUI's default grid at compact emulator sizes. List
-                # view exposes the actual filename nodes without guessing at
-                # card coordinates or scrolling.
+                # view exposes stable filename labels before any needed scroll.
                 target = list_view
+            elif not listing_complete and media_scroll_container is not None:
+                # List view can still place the last filename below the
+                # viewport, where DocumentsUI omits it from the accessibility
+                # tree entirely. Scroll the actual directory list until all
+                # fixture names are exposed.
+                retry_wait = time.monotonic() - last_media_scroll_at < 0.75
+                if not retry_wait and media_scroll_attempts < 6:
+                    target = media_scroll_container
+                    pending_media = next(
+                        (name for name in selectable_media if name not in available_media),
+                        next_media,
+                    )
+                    scroll_for_media = True
             elif listing_complete and next_media is not None:
                 media_node = selectable_media[next_media]
                 clipped = not is_fully_visible(media_node, screen_bounds)
@@ -287,7 +308,7 @@ def select(device, guest_log, output, flow="open"):
                         if not retry_wait:
                             target = scrollable_ancestor(media_node, parent_by_node)
                             if target is None:
-                                target = scroll_view
+                                target = media_scroll_container
                             if target is not None:
                                 pending_media = next_media
                                 scroll_for_media = True
