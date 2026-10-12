@@ -1207,3 +1207,14 @@ journey gate using the pinned `whisper.cpp` JFK speech fixture, the production
 model-download and local-transcription UI, a human-edited proposal, project
 save/reopen, and SRT output. Its macOS, Windows, and Linux runs remain pending
 until an exact verified `main` commit reaches the main-only preview workflow.
+
+Exact-SHA Platform Verification
+[38234509928](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234509928)
+on `c329d8e26c994fb24af5f53d3f4c50e31087d1cd` passed Rust, Flutter
+static/widget, descriptor-boundary, Linux, macOS, Windows, and Android jobs;
+Repository Hygiene [38234510013](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234510013)
+also passed. The three desktop packaged product journeys and Android
+DocumentsUI/resource journey passed. This exact-SHA run does not include the
+new transcription runtime journey, which is gated by the main-only Developer
+Preview workflow. The emulator does not establish Android hardware
+responsiveness.
