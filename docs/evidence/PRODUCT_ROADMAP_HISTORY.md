@@ -1312,3 +1312,24 @@ The macOS job on `aa6b4d5` built the app but again failed to foreground it:
 `open returned 1`, followed by the 35-minute native lifecycle timeout before
 any test case ran. This remains a hosted launch limitation with no product
 assertion; the exact-SHA macOS lifecycle journey still needs a passing run.
+
+Platform Verification [38269354703](https://github.com/huou07/Opencut-Reinforced/actions/runs/38269354703)
+ran on exact product SHA `2428751ba9067d8fd643cb49683b35f23e7baa81`.
+Linux, Windows, macOS, Rust, Flutter, and descriptor-boundary checks passed;
+Repository Hygiene passed separately. Android failed before folder selection,
+while waiting for three media imports after the DocumentsUI picker returned.
+The native SAF handler logged a successful selection result and completion;
+the separate-UID fixture opened the three selected documents, but the test's
+gateway completion count did not advance within its 60-second bound. The
+artifact's report classified the run as `MAIN_THREAD_STALL`; guest logs include
+`Skipped 122 frames` in the surrounding acceptance journey and show the fixture
+provider process frozen at 15:48:44Z and unfrozen at 15:49:19Z after the test timeout.
+Hosted process snapshots recorded QEMU at 252–273% CPU and 5.2–6.1 GB RSS,
+with about 10.1 GB host `MemAvailable`. Those measurements show substantial
+emulator load but do not establish whether the stall is in descriptor
+registration, Rust probing, or hosted scheduling. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38269354703)
+contains the driver, guest, and resource logs. Commit `fb6b3f0` adds
+test-only per-item gateway entry/completion timing and, on timeout, a bounded
+descriptor/resource snapshot. It leaves the 60-second acceptance limit and
+production code unchanged; a new exact-SHA run is needed to localize the stall.
