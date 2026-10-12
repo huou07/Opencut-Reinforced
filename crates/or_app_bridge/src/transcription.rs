@@ -330,7 +330,7 @@ fn transcribe_media(
         .create_new(true)
         .open(&wav_path)
         .map_err(|_| "Transcription audio could not be created.")?;
-    let source = MediaSourceRef::local_file(input.source_path.to_string_lossy())
+    let source = MediaSourceRef::from_file_path(input.source_path)
         .map_err(|_| "The selected media path is invalid.")?;
     let budgets = RuntimeBudgets::new(
         or_runtime::BudgetLimits::new(1, 64 * 1024 * 1024).expect("nonzero render budget"),

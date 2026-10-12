@@ -83,7 +83,7 @@ pub fn prepare_media_import(path: &Path) -> Result<MediaItem, MediaImportError> 
         _ => MediaImportError::SourceUnavailable,
     })?;
     let metadata = probe_media_file(&canonical_path).map_err(MediaImportError::Probe)?;
-    let source_uri = MediaSourceUri::from_canonical_path(&canonical_path)
+    let source_uri = MediaSourceUri::from_file_path(&canonical_path)
         .map_err(MediaImportError::InvalidSourceUri)?;
     let source = MediaSourceRef::FileUri { uri: source_uri };
     MediaItem::new(MediaId::generate(), source, metadata).map_err(MediaImportError::InvalidMetadata)

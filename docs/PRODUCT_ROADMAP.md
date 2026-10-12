@@ -23,12 +23,14 @@ then put those packages in front of dogfooders. The provider, bounded Whisper
 sidecar, verified optional model download, cancellable job, and
 revision-checked review/edit/apply flow are implemented. The Developer Preview
 workflow now has a validation-only branch mode intended to build installable
-packages from an exact-verified PR head without publishing a release; that new
-workflow path is hosted-verified, but its first exact-SHA candidate run produced
-no desktop packages: Linux could not launch without a display, macOS did not open
-the media-action menu, and Windows did not reach caption review after
-transcription began. Targeted test/runner fixes are in progress. Android
-transcription remains unsupported. Full receipts are in the history archive.
+packages from an exact-verified PR head without publishing a release. Its
+validation gate now reaches the packaged transcription journey, but exact-SHA
+candidate `b758ef9270d81611161b2bb6e9fe1aa2d4bc8655` exposed two shared issues:
+the bridge passed a native path where core requires a canonical file URI, and
+the test did not explicitly load the bridge from the package. A path-safe core
+constructor and package-bound candidate loading are implemented but await
+hosted verification. Android transcription remains unsupported. Full receipts
+are in the history archive.
 The packaged gate uses the pinned
 real JFK speech fixture and user-confirmed model download, then checks
 transcribe, review/edit/apply, save/reopen, and SRT export on macOS, Windows,

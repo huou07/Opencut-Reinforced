@@ -232,6 +232,7 @@ jobs:
           app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
           bridge="$app/Contents/Frameworks/or_app_bridge.framework/Versions/A/or_app_bridge"
           runtime_dir="$(dirname "$bridge")"
+          echo "FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$runtime_dir" >> "$GITHUB_ENV"
           frameworks="$app/Contents/Frameworks"
           notices="$app/Contents/Resources/ThirdPartyNotices/FFmpeg"
           test -f "$bridge"
@@ -481,6 +482,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $bundle -PathType Container)) { throw 'Windows app bundle directory not found' }
           $bridge = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'apps/or_app/build/windows') -Filter '*or_app_bridge*.dll' -Recurse | Select-Object -First 1
           if ($null -eq $bridge) { throw 'Packaged or_app_bridge DLL not found' }
+          Add-Content -Path $env:GITHUB_ENV -Value "FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$($bridge.Directory.FullName)"
           $destinations = @($bridge.Directory.FullName)
           if ($destinations[0] -ne $bundle) { $destinations += $bundle }
           foreach ($pattern in @('avcodec*.dll', 'avformat*.dll', 'avutil*.dll', 'swresample*.dll', 'swscale*.dll', 'avfilter*.dll')) {
@@ -699,6 +701,7 @@ jobs:
           bridge="$(find "$bundle" -type f -name '*or_app_bridge*.so' -print -quit)"
           test -n "$bridge"
           runtime_dir="$(dirname "$bridge")"
+          echo "FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$runtime_dir" >> "$GITHUB_ENV"
           for pattern in libavcodec.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
           done
