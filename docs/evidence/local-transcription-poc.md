@@ -53,7 +53,18 @@ Then run `whisper-cli` with the pinned model, upstream fixture, and
 
 The existing v1.9.4 runtime is sufficient for the first integration proof; this
 does not justify replacing OR media/editing engines or updating the pin. The
-remaining engineering is the bounded sidecar lifecycle and packaging, optional
-verified model installation, media-to-audio handoff, readable segmenting, and
-review/apply UX over the existing command path. A separate-process Android
-runtime path and representative physical-device measurement remain open.
+FFmpeg-backed `SoftwareMediaDecoder::write_transcription_wav` now supplies
+bounded mono 16 kHz PCM WAV from ordinary WAV, AAC-in-MP4, and MP3 sources,
+without a system FFmpeg executable or playback-path changes. Audio source
+offsets and forward timestamp gaps are preserved as silence relative to the
+container media start; a generated 250 ms offset fixture verifies alignment.
+One stream time-base tick is tolerated between contiguous decoded frames and
+larger overlaps fail explicitly; real positive-start and packet-gap fixtures
+verify silence alignment. Silence writes also check cancellation. Focused media
+tests cover the WAV structure, duration rejection, cancellation, AAC and MP3
+decode. This is not a packaged
+transcription capability. Remaining work is the sidecar
+lifecycle/packaging, optional verified model installation, readable transcript
+segments, and review/apply UX through existing commands. A separate-process
+Android runtime path and representative physical-device measurement remain
+open.

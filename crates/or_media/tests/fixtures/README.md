@@ -46,3 +46,12 @@ and packaged Android SAF/audio-playback acceptance.
 
 The remaining tiny fixtures are generated specifically for deterministic
 correctness tests and contain no third-party media.
+`tiny_offset.mkv` combines `tiny.wav` with a one-second generated test-pattern
+video and moves the PCM audio stream 250 ms later while keeping the media
+timeline origin at zero. It verifies transcription handoff preserves a real
+audio stream offset as leading silence. SHA-256:
+`8ffe039d7cd3b44b5582af31b655e16d258e70f988a86cc0e446181b02bd57cc`.
+`tiny_gap.mkv` uses the same generated video and PCM source, dropping real
+audio packets from the middle while retaining source PTS. It verifies a
+forward timestamp gap becomes silence. SHA-256:
+`858c4abe961b68b6960c7fe230bc7f8f1caf6701eab293a5bc6998c2dd9c69fe`.

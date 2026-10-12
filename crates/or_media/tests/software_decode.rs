@@ -5,8 +5,11 @@ use or_media::{DecodeError, SnapshotQueue, SoftwareMediaDecoder};
 use or_runtime::{
     BudgetLimits, CancellationToken, RenderSnapshot, ResourceBudgetMetrics, RuntimeBudgets,
 };
-use std::path::{Path, PathBuf};
 use std::time::Instant;
+use std::{
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 
 const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
@@ -397,6 +400,127 @@ fn software_decoder_reads_audio_only_pcm_wav() {
         decoded_sample_frames += chunk.sample_frames();
     }
     assert_eq!(decoded_sample_frames, 12_000);
+}
+
+#[test]
+fn transcription_audio_streams_bounded_mono_16khz_pcm_wav() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(AUDIO_FIXTURE);
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let mut wav = Cursor::new(Vec::new());
+    let sample_frames = decoder
+        .write_transcription_wav(&mut wav, 1_000, &CancellationToken::new())
+        .unwrap();
+
+    assert_eq!(sample_frames, 8_000);
+    assert_eq!(wav.position() as usize, wav.get_ref().len());
+    let bytes = wav.into_inner();
+    assert_eq!(&bytes[..4], b"RIFF");
+    assert_eq!(&bytes[8..12], b"WAVE");
+    assert_eq!(u16::from_le_bytes(bytes[22..24].try_into().unwrap()), 1);
+    assert_eq!(
+        u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+        16_000
+    );
+    assert_eq!(u16::from_le_bytes(bytes[34..36].try_into().unwrap()), 16);
+    assert_eq!(
+        u32::from_le_bytes(bytes[40..44].try_into().unwrap()),
+        16_000
+    );
+    assert_eq!(bytes.len(), 44 + 16_000);
+}
+
+#[test]
+fn transcription_audio_preserves_nonzero_source_start_as_silence() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tiny_offset.mkv");
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let mut wav = Cursor::new(Vec::new());
+    let sample_frames = decoder
+        .write_transcription_wav(&mut wav, 1_000, &CancellationToken::new())
+        .unwrap();
+    let bytes = wav.into_inner();
+
+    assert_eq!(sample_frames, 12_000);
+    assert!(bytes[44..44 + 4_000 * 2].iter().all(|sample| *sample == 0));
+    assert!(bytes[44 + 4_000 * 2..].iter().any(|sample| *sample != 0));
+}
+
+#[test]
+fn transcription_audio_preserves_forward_timestamp_gaps_as_silence() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tiny_gap.mkv");
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let mut wav = Cursor::new(Vec::new());
+    let sample_frames = decoder
+        .write_transcription_wav(&mut wav, 1_000, &CancellationToken::new())
+        .unwrap();
+    let bytes = wav.into_inner();
+    let gap_start = 3_000;
+    let gap_end = 6_700;
+    let gap = &bytes[44 + gap_start * 2..44 + gap_end * 2];
+
+    assert!((8_000..=8_016).contains(&sample_frames));
+    assert!(gap.iter().all(|sample| *sample == 0));
+    assert!(
+        bytes[44..44 + gap_start * 2]
+            .iter()
+            .any(|sample| *sample != 0)
+    );
+    assert!(bytes[44 + gap_end * 2..].iter().any(|sample| *sample != 0));
+}
+
+#[test]
+fn transcription_audio_rejects_duration_overrun_and_cancellation() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(AUDIO_FIXTURE);
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let mut wav = Cursor::new(Vec::new());
+    assert!(matches!(
+        decoder.write_transcription_wav(&mut wav, 200, &CancellationToken::new()),
+        Err(DecodeError::TranscriptionAudioTooLarge)
+    ));
+
+    let mut nonempty = Cursor::new(vec![1]);
+    assert!(matches!(
+        decoder.write_transcription_wav(&mut nonempty, 1_000, &CancellationToken::new()),
+        Err(DecodeError::InvalidTranscriptionWavDestination)
+    ));
+    assert_eq!(nonempty.get_ref(), &[1]);
+
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    let mut wav = Cursor::new(Vec::new());
+    assert!(matches!(
+        decoder.write_transcription_wav(&mut wav, 1_000, &cancelled),
+        Err(DecodeError::Cancelled)
+    ));
+    assert!(wav.into_inner().is_empty());
+}
+
+#[test]
+fn transcription_audio_accepts_packaged_aac_and_mp3_decoders() {
+    for fixture in [PHONE_FIXTURE, MP3_FIXTURE] {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture);
+        let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+        let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+        let mut wav = Cursor::new(Vec::new());
+        let sample_frames = decoder
+            .write_transcription_wav(&mut wav, 60_000, &CancellationToken::new())
+            .unwrap();
+        let bytes = wav.into_inner();
+
+        assert!(sample_frames > 0, "fixture {fixture} produced no audio");
+        assert_eq!(&bytes[..4], b"RIFF");
+        assert_eq!(
+            u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+            16_000
+        );
+        assert_eq!(
+            u32::from_le_bytes(bytes[40..44].try_into().unwrap()) as usize,
+            bytes.len() - 44
+        );
+    }
 }
 
 #[test]

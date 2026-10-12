@@ -646,6 +646,18 @@ over that contract. The reference local ASR sidecar is whisper.cpp v1.9.4; its
 runtime and all model artifacts keep their separate dependency and licensing
 reviews. CI uses deterministic provider fakes and protocol fixtures.
 
+`SoftwareMediaDecoder::write_transcription_wav` reuses the packaged FFmpeg
+decoder/resampler to stream source audio into bounded mono 16 kHz signed
+16-bit little-endian PCM WAV for the provider's managed scratch input. Audio
+timestamps are relative to the container media start: positive stream starts
+and forward discontinuities are represented by bounded, cancellable silence.
+One container time-base tick is tolerated as timestamp quantization between
+contiguous frames; larger overlaps fail explicitly rather than shifting cue
+times. It checks cancellation during packet/frame work, caps requested audio
+at four hours and output at 512 MiB, and leaves temporary-file creation/removal
+to the job owner. This is a media handoff primitive only: it does not launch a
+provider, download models, or expose an application feature.
+
 The first `or_ai` implementation contains strict V1 newline-delimited message
 framing and bounded, provenance-bearing transcript proposal validation. The
 host must supply the expected project ID/revision, media ID/full digest, and
