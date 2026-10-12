@@ -18,33 +18,21 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: finish and publish the exact-SHA debug Developer
-Preview, then begin real user/task dogfooding. Exact-SHA Platform Verification
-run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290)
-passed on `33f7f355a5bb1c848551babe9c4c5c11c2a65316`, including Android SAF
-WebM export and independent decode. The first preview packaging run
-[38175016011](https://github.com/huou07/Opencut-Reinforced/actions/runs/38175016011)
-built the Android APK and desktop CLIs but exposed a shared desktop release
-workflow artifact-path defect; the preview was not published. Android emulator
-correctness and resource bounds pass for the small acceptance fixture, while
-representative physical-device performance remains unmeasured. After the
-preview is available, the next product capability is reviewable local
-transcription-to-caption proposals through the existing caption command path.
-The artifact-path fix is at `58d49321f2f1d0fe487cb159f21d2d5f316bbab3`.
-Exact-SHA Platform Verification run
-[38178110877](https://github.com/huou07/Opencut-Reinforced/actions/runs/38178110877)
-passed all seven jobs on `407a8f1d7a844240af89c6b7d119904d3b2f3531`, including
-the Linux export/reimport timeline-readiness assertion and packaged journeys on
-all four supported platforms. Developer Preview workflow
-[38181421768](https://github.com/huou07/Opencut-Reinforced/actions/runs/38181421768)
-built all seven packages but did not publish: `tar -tf | grep -q` closed the
-archive listing pipe early under `pipefail`. The workflow now writes the
-bounded source-archive member list to a temporary file before checking license
-entries. A fresh exact-SHA platform run and preview publication are required.
-The local transcription feasibility evidence and first bounded AI
-protocol/proposal contracts are recorded in the
-[transcription integration note](evidence/local-transcription-poc.md); a real
-packaged provider and review/apply UI remain unimplemented.
+Current focus: publish the exact-SHA debug Developer Preview, then gather
+dogfood feedback. Platform Verification
+[38185861652](https://github.com/huou07/Opencut-Reinforced/actions/runs/38185861652)
+passed all seven jobs on `3c1e18f0f1119657bd6788717ab336e40a80887c`, including
+Android SAF preview/export/recovery. Preview build
+[38187844020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38187844020)
+built every package but did not publish: Windows' `core.autocrlf` changed the
+generated libvpx source archive bytes, tripping an invalid cross-platform
+byte-equality check. The archive is now generated with autocrlf disabled; a
+fresh exact-SHA platform run and preview publication are required. Android
+correctness/resource bounds pass for the small acceptance fixture; physical
+device performance remains unmeasured. The next creative capability is a
+reviewable local transcription-to-caption flow through existing caption
+commands; feasibility and proposal contracts are recorded in the
+[transcription integration note](evidence/local-transcription-poc.md).
 
 ## Product acceptance target
 

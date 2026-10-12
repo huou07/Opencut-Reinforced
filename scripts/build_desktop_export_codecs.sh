@@ -229,7 +229,8 @@ fi
 cp "$work/opus-$opus_version/COPYING" "$work/OPUS-COPYING"
 git -C "$vpx_source" show "$vpx_commit:LICENSE" > "$work/LIBVPX-LICENSE"
 git -C "$vpx_source" show "$vpx_commit:PATENTS" > "$work/LIBVPX-PATENTS"
-git -C "$vpx_source" archive --format=tar --prefix=libvpx-v1.17.0/ \
+git -C "$vpx_source" -c core.autocrlf=false archive \
+  --format=tar --prefix=libvpx-v1.17.0/ \
   --output="$work/libvpx-v1.17.0.tar" HEAD
 vpx_archive_sha256="$(sha256_file "$work/libvpx-v1.17.0.tar")"
 cat > "$work/EXPORT-CODEC-SOURCES.txt" <<EOF

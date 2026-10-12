@@ -1095,3 +1095,11 @@ checking exact license paths. A synthetic 1.5 MiB member listing passed through
 the new path. This workflow change still requires fresh exact-SHA Platform
 Verification and preview publication; the failed run did not publish a
 release.
+
+## Developer Preview provenance correction
+
+Platform Verification run [38185861652](https://github.com/huou07/Opencut-Reinforced/actions/runs/38185861652) passed all seven jobs on `3c1e18f0f1119657bd6788717ab336e40a80887c`. Developer Preview run [38187844020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38187844020) built all seven platform/application packages, then failed before release publication because `EXPORT-CODEC-SOURCES.txt` differed at the generated libvpx source archive hash.
+
+Root cause reproduced locally against the pinned upstream libvpx commit `6df3ec34557879fff673706f4a1d9fbd0f3a6f0e`: `git archive` with `core.autocrlf=false` produced SHA-256 `aaa322cf8fbcd3be464e022c9748b736ba4f9bdcc4de81ce7a208148ed86010a`, matching the Linux/macOS exact-SHA logs. With `core.autocrlf=true`, it produced `9b35be70acb5ad09963528a4bf051ce3ea036d7139618f11c08f9613618a0ae8`, matching the Windows exact-SHA log. The archives differed starting at byte 1670, confirming Git's line-ending conversion changed archive content despite an identical pinned source commit.
+
+`scripts/build_desktop_export_codecs.sh` now disables `core.autocrlf` specifically for the source archive generation. The release gate still verifies each archive against its recorded digest, checks required license and patent entries, checks the pinned source commit, and compares provenance/source bytes across platforms. A fresh exact-SHA Platform Verification and Developer Preview run are required before publication; this correction has not yet been hosted-verified.
