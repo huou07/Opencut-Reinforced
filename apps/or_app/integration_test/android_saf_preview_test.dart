@@ -335,9 +335,10 @@ class _ObservedGateway extends RustProjectGateway {
   ProjectActionResult? lastRelinkResult;
   ProjectActionResult? lastSaveResult;
   int saveCalls = 0;
-  int captionImportCalls = 0,
+  int reviewedCaptionImportCalls = 0,
       captionExportStartedCalls = 0,
       captionExportCalls = 0;
+  ProjectActionResult? lastReviewedCaptionImportResult;
   bool closed = false;
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
@@ -420,15 +421,16 @@ class _ObservedGateway extends RustProjectGateway {
   }
 
   @override
-  Future<ProjectActionResult> importTimelineCaptions(
+  Future<ProjectActionResult> importReviewedTimelineCaptions(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String path,
+    List<ProjectCaptionCue> cues,
   ) async {
     try {
-      return await super.importTimelineCaptions(session, current, path);
+      return lastReviewedCaptionImportResult = await super
+          .importReviewedTimelineCaptions(session, current, cues);
     } finally {
-      captionImportCalls++;
+      reviewedCaptionImportCalls++;
     }
   }
 
@@ -856,7 +858,12 @@ void main() {
         () => find.text('Review SubRip captions').evaluate().isNotEmpty,
       );
       await tester.tap(find.text('Import captions'));
-      await _until(tester, () => gateway.captionImportCalls == 1);
+      await _until(tester, () => gateway.reviewedCaptionImportCalls == 1);
+      expect(
+        gateway.lastReviewedCaptionImportResult?.succeeded,
+        isTrue,
+        reason: gateway.lastReviewedCaptionImportResult?.message,
+      );
       var captionTracks = (await gateway.listTimelineTracks(session)).items
           .where((track) => track.kind == ProjectTimelineTrackKind.caption)
           .toList();
@@ -1544,7 +1551,7 @@ void main() {
           'projectRevision': revision.toString(),
           'mediaImportRevision': importedRevision.toString(),
           'captionImportRevision': captionImportRevision.toString(),
-          'captionImportCalls': gateway.captionImportCalls,
+          'reviewedCaptionImportCalls': gateway.reviewedCaptionImportCalls,
           'captionExportCalls': gateway.captionExportCalls,
           'captionExportBytes': captionExport['captionExportBytes'],
           'captionExportValidSrt': captionExport['validSrtCaption'],
