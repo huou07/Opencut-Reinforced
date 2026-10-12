@@ -62,9 +62,15 @@ One stream time-base tick is tolerated between contiguous decoded frames and
 larger overlaps fail explicitly; real positive-start and packet-gap fixtures
 verify silence alignment. Silence writes also check cancellation. Focused media
 tests cover the WAV structure, duration rejection, cancellation, AAC and MP3
-decode. This is not a packaged
-transcription capability. Remaining work is the sidecar
-lifecycle/packaging, optional verified model installation, readable transcript
-segments, and review/apply UX through existing commands. A separate-process
+decode. The pinned CLI's `--output-json-full` segment output now has a bounded
+adapter in `or_ai`: it reads the already-millisecond offsets emitted by the
+upstream serializer (which converts its internal 10 ms ticks), derives the
+explicitly uncalibrated mean token probability, and binds
+each segment to the identity supplied by the trusted host before validation. A
+fixture shaped from the pinned v1.9.4 serializer verifies the JFK transcript
+times and text. This remains a conversion primitive, not a packaged
+transcription capability. Remaining work is provider lifecycle and packaging,
+optional verified model installation, and human review/apply UX through
+existing commands. A separate-process
 Android runtime path and representative physical-device measurement remain
 open.

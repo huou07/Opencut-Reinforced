@@ -74,6 +74,72 @@ pub enum TranscriptValidationError {
 }
 
 impl TranscriptProposal {
+    /// Converts the pinned whisper.cpp CLI full-JSON result to OR's validated
+    /// proposal shape. The identity is supplied by the trusted host; fields
+    /// from provider output can never choose the project, media, revision, or
+    /// model provenance that the review path will accept.
+    pub fn from_whisper_cpp_json(
+        bytes: &[u8],
+        expected: &TranscriptIdentity,
+        media_duration_ms: u64,
+    ) -> Result<Self, TranscriptValidationError> {
+        if bytes.len() > MAX_TRANSCRIPT_PROPOSAL_BYTES {
+            return Err(TranscriptValidationError::ProposalTooLarge);
+        }
+        expected.validate()?;
+        if expected.provider_id != "whisper.cpp" {
+            return Err(TranscriptValidationError::InvalidProvenance);
+        }
+        let output: WhisperJsonOutput =
+            serde_json::from_slice(bytes).map_err(|_| TranscriptValidationError::InvalidSegment)?;
+        if output.transcription.len() > MAX_TRANSCRIPT_SEGMENTS {
+            return Err(TranscriptValidationError::TooManySegments);
+        }
+        let segments = output
+            .transcription
+            .into_iter()
+            .map(|segment| {
+                if segment.tokens.is_empty() {
+                    return Err(TranscriptValidationError::InvalidSegment);
+                }
+                let start_ms = whisper_offset_ms(segment.offsets.from)?;
+                let end_ms = whisper_offset_ms(segment.offsets.to)?;
+                let token_count = segment.tokens.len();
+                let mut probability_sum = 0.0_f64;
+                for token in segment.tokens {
+                    if !token.p.is_finite() || !(0.0..=1.0).contains(&token.p) {
+                        return Err(TranscriptValidationError::InvalidSegment);
+                    }
+                    probability_sum += f64::from(token.p);
+                }
+                let confidence = (probability_sum / token_count as f64) as f32;
+                if !confidence.is_finite() {
+                    return Err(TranscriptValidationError::InvalidSegment);
+                }
+                Ok(TranscriptSegment {
+                    start_ms,
+                    end_ms,
+                    text: segment.text,
+                    confidence,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let proposal = Self {
+            project_id: expected.project_id,
+            project_revision: expected.project_revision,
+            media_id: expected.media_id,
+            media_sha256: expected.media_sha256.clone(),
+            provider_id: expected.provider_id.clone(),
+            model_id: expected.model_id.clone(),
+            model_version: expected.model_version.clone(),
+            model_license: expected.model_license.clone(),
+            language: output.result.language,
+            segments,
+        };
+        proposal.validate(expected, media_duration_ms)?;
+        Ok(proposal)
+    }
+
     pub fn decode(
         bytes: &[u8],
         expected: &TranscriptIdentity,
@@ -146,6 +212,39 @@ impl TranscriptProposal {
         }
         Ok(())
     }
+}
+
+#[derive(Deserialize)]
+struct WhisperJsonOutput {
+    result: WhisperJsonResult,
+    transcription: Vec<WhisperJsonSegment>,
+}
+
+#[derive(Deserialize)]
+struct WhisperJsonResult {
+    language: String,
+}
+
+#[derive(Deserialize)]
+struct WhisperJsonSegment {
+    offsets: WhisperJsonOffsets,
+    text: String,
+    tokens: Vec<WhisperJsonToken>,
+}
+
+#[derive(Deserialize)]
+struct WhisperJsonOffsets {
+    from: i64,
+    to: i64,
+}
+
+#[derive(Deserialize)]
+struct WhisperJsonToken {
+    p: f32,
+}
+
+fn whisper_offset_ms(milliseconds: i64) -> Result<u64, TranscriptValidationError> {
+    u64::try_from(milliseconds).map_err(|_| TranscriptValidationError::InvalidSegment)
 }
 
 // JSON string escaping is counted exactly; fixed JSON punctuation, integer and
@@ -263,6 +362,62 @@ mod tests {
 
     fn test_uuid(id: u128) -> Uuid {
         Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0000 | id)
+    }
+
+    #[test]
+    fn converts_pinned_whisper_full_json_into_identity_bound_segments() {
+        // These are the output fields emitted by whisper.cpp v1.9.4
+        // examples/cli/cli.cpp with --output-json-full. Unused provider fields
+        // are intentionally tolerated so upstream can add diagnostics.
+        let bytes = br#"{
+          "systeminfo":"fixture",
+          "model":{"type":"tiny.en","multilingual":false},
+          "params":{"language":"en"},
+          "result":{"language":"en"},
+          "transcription":[
+            {"timestamps":{"from":"00:00:00,000","to":"00:00:07,960"},"offsets":{"from":0,"to":7960},"text":" And so my fellow Americans ask not what your country can do for you","tokens":[{"text":" And","p":0.9,"id":1},{"text":" so","p":0.7,"id":2}]},
+            {"timestamps":{"from":"00:00:07,960","to":"00:00:10,760"},"offsets":{"from":7960,"to":10760},"text":" ask what you can do for your country.","tokens":[{"text":" ask","p":0.8,"id":3}]}
+          ]
+        }"#;
+
+        let candidate =
+            TranscriptProposal::from_whisper_cpp_json(bytes, &identity(), 10_760).unwrap();
+        assert_eq!(candidate.project_id, identity().project_id);
+        assert_eq!(candidate.project_revision, 4);
+        assert_eq!(candidate.media_sha256, "a".repeat(64));
+        assert_eq!(candidate.language, "en");
+        assert_eq!(candidate.segments[0].start_ms, 0);
+        assert_eq!(candidate.segments[0].end_ms, 7_960);
+        assert_eq!(
+            candidate.segments[0].text.trim(),
+            "And so my fellow Americans ask not what your country can do for you"
+        );
+        assert!((candidate.segments[0].confidence - 0.8).abs() < f32::EPSILON);
+        assert_eq!(candidate.segments[1].start_ms, 7_960);
+        assert_eq!(candidate.segments[1].end_ms, 10_760);
+        candidate.validate(&identity(), 10_760).unwrap();
+    }
+
+    #[test]
+    fn rejects_malformed_whisper_segments_and_wrong_provider_identity() {
+        let malformed = br#"{"result":{"language":"en"},"transcription":[{"offsets":{"from":-1,"to":100},"text":"bad","tokens":[{"p":0.5}]}]}"#;
+        assert_eq!(
+            TranscriptProposal::from_whisper_cpp_json(malformed, &identity(), 1000),
+            Err(TranscriptValidationError::InvalidSegment)
+        );
+
+        let missing_tokens = br#"{"result":{"language":"en"},"transcription":[{"offsets":{"from":0,"to":100},"text":"bad","tokens":[]}] }"#;
+        assert_eq!(
+            TranscriptProposal::from_whisper_cpp_json(missing_tokens, &identity(), 1000),
+            Err(TranscriptValidationError::InvalidSegment)
+        );
+
+        let mut other_provider = identity();
+        other_provider.provider_id = "other-provider".to_owned();
+        assert_eq!(
+            TranscriptProposal::from_whisper_cpp_json(malformed, &other_provider, 1000),
+            Err(TranscriptValidationError::InvalidProvenance)
+        );
     }
 
     #[test]
