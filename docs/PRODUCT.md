@@ -208,8 +208,10 @@ only normal validated commands apply accepted results. Stored credentials never
 enter project, CLI, or agent output.
 
 Phase 10A owns one typed provider manager and a bounded local sidecar protocol
-for later AI work. Its model manifest foundation is separate from
-`ProjectDocument`; provider or model absence is a normal `Unavailable`
+for later AI work. `or_ai` now validates the versioned model manifest and can
+stream, checksum, and atomically install an optional bounded artifact outside
+`ProjectDocument`. The user-facing model manager and provider execution are
+not implemented yet; provider or model absence is a normal `Unavailable`
 capability, and no roadmap checkpoint requires cloud credentials or bundled
 model weights.
 

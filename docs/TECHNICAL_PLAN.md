@@ -635,16 +635,24 @@ argv without a shell, sanitized inherited environment, and managed per-job
 scratch. A local sidecar has no implied network authority; cloud access requires
 explicit application permission.
 
-The model artifact contract is owned by 10A: a versioned manifest records model
-ID/version, task capabilities, runtime/provider requirement, artifact source,
-expected SHA-256, size bound, license/provenance, hardware needs, and
-language/capability metadata. Managed files are checksum-verified outside
-`ProjectDocument`; weights are not bundled by default. A missing provider or
-model returns typed `Unavailable`. 10H owns the user-facing download,
-pause/resume, verify, update, remove, storage, license, and permission flows
-over that contract. The reference local ASR sidecar is whisper.cpp v1.9.4; its
-runtime and all model artifacts keep their separate dependency and licensing
-reviews. CI uses deterministic provider fakes and protocol fixtures.
+The model artifact contract is owned by 10A: `or_ai::ModelManifest` validates
+a versioned manifest containing model ID/version, task capabilities,
+runtime/provider requirement, artifact source, expected SHA-256, size bound,
+license/provenance, hardware needs, and language/capability metadata. Its
+bounded installer streams and verifies exact size and digest before atomically
+publishing a versioned file outside `ProjectDocument`; cancellation, mismatch,
+and an already-installed version leave no partial artifact. Network download
+policy and destination selection belong to the application, and the caller
+must run verification and installation as background work. A model-store file
+lock serializes installs and abandoned-staging cleanup across processes; a
+contended operation fails without deleting another process's staging file.
+Cleanup can run when the app opens its model store. Weights are not bundled by
+default. A missing provider or model returns typed `Unavailable`.
+10H owns the user-facing download, pause/resume, verify, update, remove,
+storage, license, and permission flows over that contract. The reference local
+ASR sidecar is whisper.cpp v1.9.4; its runtime and all model artifacts keep
+their separate dependency and licensing reviews. CI uses deterministic
+provider fakes and protocol fixtures.
 
 `SoftwareMediaDecoder::write_transcription_wav` reuses the packaged FFmpeg
 decoder/resampler to stream source audio into bounded mono 16 kHz signed
