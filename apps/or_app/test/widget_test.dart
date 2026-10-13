@@ -230,14 +230,15 @@ void main() {
     expect(gateway.createCalls, 0);
     await tester.enterText(
       find.byKey(const ValueKey('new-project-name')),
-      'Demo Project ',
+      'Demo: Project ',
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 1);
+    expect(picker.lastSuggestedProjectName, 'Demo_ Project.orproj');
     expect(gateway.lastCreatePath, '/tmp/or-widget-demo.orproj');
-    expect(gateway.lastCreateName, 'Demo Project ');
+    expect(gateway.lastCreateName, 'Demo: Project ');
     expect(gateway.inspectCalls, 1);
     expect(gateway.createCalls, 1);
     expect(
@@ -248,6 +249,29 @@ void main() {
     expect(find.text('Saved'), findsOneWidget);
     expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.text('No media loaded'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new project filename avoids Windows device names', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/device.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    await tester.tap(find.byKey(const ValueKey('home-new-project')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('new-project-name')),
+      'CON',
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    expect(picker.lastSuggestedProjectName, '_CON.orproj');
+    expect(gateway.lastCreateName, 'CON');
+    expect(gateway.createCalls, 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -3579,6 +3603,7 @@ class _FakeProjectPicker implements ProjectFilePicker {
   int mediaOpenCalls = 0;
   int mediaFolderOpenCalls = 0;
   int saveCalls = 0;
+  String? lastSuggestedProjectName;
   int exportPathCalls = 0;
   ExportProfile? lastExportProfile;
   int captionOpenCalls = 0;
@@ -3626,6 +3651,7 @@ class _FakeProjectPicker implements ProjectFilePicker {
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async {
     saveCalls++;
+    lastSuggestedProjectName = suggestedName;
     return savePath;
   }
 

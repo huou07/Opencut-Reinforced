@@ -50,6 +50,8 @@ headless or widget-level checks:
 ### Project and shell
 
 - New/open project workflows create or open a real Rust-owned project.
+- New Project derives a safe `.orproj` filename suggestion from the entered
+  title; the native save dialog lets the user choose another location or name.
 - Home, Projects, Templates, Asset Library, Settings, and Editor shell routes
   remain reachable through the Focused Monochrome shell.
 - Create/open/close/switch/exit flows preserve dirty-state guards, explicit

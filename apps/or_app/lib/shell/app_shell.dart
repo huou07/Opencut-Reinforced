@@ -412,7 +412,7 @@ class _AppShellState extends State<AppShell> {
       final name = await _askProjectName();
       if (name == null || !mounted) return;
       final selectedPath = await widget.projectFilePicker.saveProjectPath(
-        suggestedName: 'project.orproj',
+        suggestedName: _suggestedProjectFileName(name),
       );
       if (selectedPath == null || !mounted) return;
       final path = _withProjectExtension(selectedPath);
@@ -513,6 +513,24 @@ class _AppShellState extends State<AppShell> {
         confirmLabel: 'Continue',
       ),
     );
+  }
+
+  String _suggestedProjectFileName(String name) {
+    var baseName = name.trim();
+    if (baseName.toLowerCase().endsWith('.orproj')) {
+      baseName = baseName.substring(0, baseName.length - '.orproj'.length);
+    }
+    baseName = baseName
+        .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), '_')
+        .replaceAll(RegExp(r'[. ]+$'), '');
+    if (baseName.isEmpty) baseName = 'project';
+    if (RegExp(
+      r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
+      caseSensitive: false,
+    ).hasMatch(baseName)) {
+      baseName = '_$baseName';
+    }
+    return '$baseName.orproj';
   }
 
   String _withProjectExtension(String path) =>
