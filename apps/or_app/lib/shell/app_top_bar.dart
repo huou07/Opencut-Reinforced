@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 
 class AppTopBar extends StatelessWidget {
@@ -74,7 +75,10 @@ class AppTopBar extends StatelessWidget {
                   ),
                   child: const Text(
                     'OR',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: OrType.metadataCompactSize,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -82,7 +86,10 @@ class AppTopBar extends StatelessWidget {
                 const SizedBox(width: OrSpacing.x3),
                 const Text(
                   'Opencut Reinforced',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: OrType.metadataSize,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
               const SizedBox(width: OrSpacing.x4),
@@ -95,7 +102,7 @@ class AppTopBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: OrColors.textSecondary,
-                    fontSize: 13,
+                    fontSize: OrType.metadataSize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -122,7 +129,7 @@ class AppTopBar extends StatelessWidget {
                       color: statusIsError
                           ? OrColors.warning
                           : OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                     ),
                   ),
                   const SizedBox(width: OrSpacing.x3),
@@ -147,11 +154,13 @@ class AppTopBar extends StatelessWidget {
                     icon: const Icon(Icons.ios_share_outlined, size: 17),
                     label: const Text('Export'),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 36),
+                      minimumSize: const Size(0, OrControlSizes.button),
                       padding: const EdgeInsets.symmetric(
                         horizontal: OrSpacing.x3,
                       ),
-                      textStyle: const TextStyle(fontSize: 12),
+                      textStyle: const TextStyle(
+                        fontSize: OrType.metadataCompactSize,
+                      ),
                     ),
                   ),
                 const SizedBox(width: OrSpacing.x1),
@@ -185,17 +194,19 @@ class AppTopBar extends StatelessWidget {
                         'Ctrl/⌘ K',
                         style: TextStyle(
                           color: OrColors.textMuted,
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                     ],
                   ),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 36),
+                    minimumSize: const Size(0, OrControlSizes.button),
                     padding: const EdgeInsets.symmetric(
                       horizontal: OrSpacing.x3,
                     ),
-                    textStyle: const TextStyle(fontSize: 12),
+                    textStyle: const TextStyle(
+                      fontSize: OrType.metadataCompactSize,
+                    ),
                   ),
                 )
               else
@@ -232,7 +243,10 @@ class _PreviewBadge extends StatelessWidget {
       ),
       child: const Text(
         'Developer Preview',
-        style: TextStyle(color: OrColors.textSecondary, fontSize: 11),
+        style: TextStyle(
+          color: OrColors.textSecondary,
+          fontSize: OrType.tinySize,
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core_gateway.dart';
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
@@ -133,12 +134,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const Text(
             'Focused Monochrome',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: OrType.sectionTitleSize,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: OrSpacing.x2),
           const Text(
             'The built-in appearance for this Developer Preview.',
-            style: TextStyle(color: OrColors.textSecondary, fontSize: 13),
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.metadataSize,
+            ),
           ),
           const SizedBox(height: OrSpacing.x4),
           Wrap(
@@ -188,7 +195,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const Text(
                 'The editor layout is available for visual evaluation only.',
-                style: TextStyle(color: OrColors.textSecondary, fontSize: 13),
+                style: TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataSize,
+                ),
               ),
               const SizedBox(height: OrSpacing.x3),
               OutlinedButton.icon(
@@ -211,13 +221,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 const Text(
                   'Descriptor',
-                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                  style: TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataCompactSize,
+                  ),
                 ),
                 const SizedBox(height: OrSpacing.x1),
                 SelectableText(
                   widget.project!.descriptorPath,
                   key: const ValueKey('local-cli-descriptor-path'),
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: OrType.metadataCompactSize),
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 OutlinedButton.icon(
@@ -230,12 +243,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Text(
                   'or session describe --attach "<descriptor-path>"',
                   key: ValueKey('attached-cli-example'),
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: OrType.metadataCompactSize,
+                  ),
                 ),
                 const SizedBox(height: OrSpacing.x1),
                 const Text(
                   'The descriptor path is local to this device. Session credentials are never shown here.',
-                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                  style: TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataCompactSize,
+                  ),
                 ),
               ],
             ),
@@ -330,7 +349,7 @@ class _SectionButton extends StatelessWidget {
             _label,
             style: TextStyle(
               color: selected ? OrColors.text : OrColors.textSecondary,
-              fontSize: 13,
+              fontSize: OrType.metadataSize,
               fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
             ),
           ),
@@ -364,7 +383,10 @@ class _DiagnosticsView extends StatelessWidget {
           padding: EdgeInsets.only(top: OrSpacing.x3, bottom: OrSpacing.x2),
           child: Text(
             'Capabilities',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: OrType.metadataSize,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         for (final capability in diagnostics.capabilities)
@@ -383,7 +405,7 @@ class _DiagnosticsView extends StatelessWidget {
                   'v${capability.version}',
                   style: const TextStyle(
                     color: OrColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: OrType.metadataCompactSize,
                   ),
                 ),
               ],
@@ -413,7 +435,7 @@ class _DiagnosticRow extends StatelessWidget {
               label,
               style: const TextStyle(
                 color: OrColors.textSecondary,
-                fontSize: 13,
+                fontSize: OrType.metadataSize,
               ),
             ),
           ),

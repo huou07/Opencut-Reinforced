@@ -3689,13 +3689,19 @@ void main() {
       final lines = file.readAsLinesSync();
       for (var index = 0; index < lines.length; index++) {
         for (final match in RegExp(
-          r'fontSize:\s*([0-9]+(?:\.[0-9]+)?)',
+          r'fontSize:([^,\n]*)',
         ).allMatches(lines[index])) {
-          final size = double.parse(match.group(1)!);
-          if (size < 11) {
-            offenders.add(
-              '${file.path.split('lib/').last}:${index + 1} fontSize: $size',
-            );
+          // Covers plain literals and sizes chosen by a ternary.
+          for (final size in RegExp(
+            r'[0-9]+(\.[0-9]+)?',
+          ).allMatches(match.group(1) ?? '')) {
+            final parsed = double.parse(size.group(0)!);
+            if (parsed < 11) {
+              offenders.add(
+                '${file.path.split('lib/').last}:${index + 1} '
+                'fontSize: ${size.group(0)}',
+              );
+            }
           }
         }
       }
@@ -3877,6 +3883,56 @@ void main() {
             'only the structural divider and no drag-looking grip',
       );
     }
+  });
+
+  test('transient messages use the one shared snackbar surface', () {
+    // The shell used to raise a styled floating snackbar while the editor
+    // raised a bare default one, so the same confirmation changed identity
+    // by screen. Only the shared component may build one now.
+    final offenders = <String>[];
+    for (final file in _dartFilesUnder('lib')) {
+      if (file.path.endsWith('widgets/or_widgets.dart')) continue;
+      final lines = file.readAsLinesSync();
+      for (var index = 0; index < lines.length; index++) {
+        if (RegExp(r'\bSnackBar\(|showSnackBar').hasMatch(lines[index])) {
+          offenders.add('${file.path.split('lib/').last}:${index + 1}');
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'every transient message must go through OrSnackBar so the shell '
+          'and the editor cannot drift apart again:\n${offenders.join('\n')}',
+    );
+  });
+
+  testWidgets('the shared snackbar carries the OR message styling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => OrSnackBar.show(context, 'Saved project'),
+              child: const Text('save'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pump();
+
+    final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+    expect(snackBar.behavior, SnackBarBehavior.floating);
+    expect(snackBar.backgroundColor, OrColors.surface);
+    expect(snackBar.showCloseIcon, isTrue);
+    expect(snackBar.duration, OrSnackBar.displayDuration);
+    expect(find.text('Saved project'), findsOneWidget);
   });
 
   testWidgets('a focused control paints a visible focus ring', (tester) async {

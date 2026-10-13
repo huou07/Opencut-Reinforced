@@ -41,3 +41,16 @@ abstract final class OrTouchTargets {
   /// Touch-driven compact minimum.
   static const comfortable = 44.0;
 }
+
+/// Control height.
+///
+/// Controls were previously sized at 28, 36, 40 and 44 px depending on which
+/// screen you were on, so the same action changed identity between the shell
+/// and the editor.
+abstract final class OrControlSizes {
+  /// Standard minimum height for a prompted control.
+  static const button = 40.0;
+
+  /// Minimum for a control driven by touch rather than a pointer.
+  static const buttonTouch = 44.0;
+}

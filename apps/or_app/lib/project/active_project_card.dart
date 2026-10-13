@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../widgets/or_widgets.dart';
 import 'project_gateway.dart';
@@ -33,13 +34,19 @@ class ActiveProjectCard extends StatelessWidget {
           Text(
             project.name,
             key: const ValueKey('active-project-name'),
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: OrType.controlSize,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: OrSpacing.x1),
           Text(
             'Revision ${project.revision}',
             key: const ValueKey('active-project-revision'),
-            style: const TextStyle(fontSize: 12, color: OrColors.textSecondary),
+            style: const TextStyle(
+              fontSize: OrType.metadataCompactSize,
+              color: OrColors.textSecondary,
+            ),
           ),
           const SizedBox(height: OrSpacing.x3),
           Wrap(

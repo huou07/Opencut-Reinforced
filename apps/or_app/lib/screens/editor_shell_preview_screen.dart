@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
@@ -706,9 +707,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void _showTimelineEditError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    OrSnackBar.show(context, message);
   }
 
   Future<void> _showAddTimelineMarker() async {
@@ -809,7 +808,10 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
               key: const ValueKey('workspace-project-name'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: OrType.metadataCompactSize,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (current != null) ...[
@@ -817,7 +819,7 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
               'Revision ${current.revision}',
               key: const ValueKey('workspace-project-revision'),
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: OrType.tinySize,
                 color: OrColors.textSecondary,
               ),
             ),
@@ -904,7 +906,12 @@ class _ProjectNotice extends StatelessWidget {
             color: OrColors.textSecondary,
           ),
           const SizedBox(width: OrSpacing.x2),
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 12))),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: OrType.metadataCompactSize),
+            ),
+          ),
           if (staleCheckpoint && onDiscardRecovery != null)
             TextButton(
               key: const ValueKey('discard-stale-recovery'),
@@ -941,7 +948,10 @@ class _EditorPreviewHeader extends StatelessWidget {
           Expanded(
             child: Text(
               'Editor layout preview',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: OrType.metadataCompactSize,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           OrBadge('Non-functional'),
@@ -1010,7 +1020,7 @@ class _EditorToolRail extends StatelessWidget {
                                 overflow: TextOverflow.clip,
                                 style: const TextStyle(
                                   color: OrColors.textMuted,
-                                  fontSize: 11,
+                                  fontSize: OrType.tinySize,
                                 ),
                               ),
                             ],
@@ -1126,7 +1136,7 @@ class _EditorToolPanel extends StatelessWidget {
                     message,
                     style: const TextStyle(
                       color: OrColors.textSecondary,
-                      fontSize: 13,
+                      fontSize: OrType.metadataSize,
                       height: 1.4,
                     ),
                   ),
@@ -1255,7 +1265,10 @@ class _MediaLibraryPanel extends StatelessWidget {
               ),
               child: Text(
                 '${page!.totalCount} ${page!.totalCount == 1 ? 'item' : 'items'}',
-                style: const TextStyle(color: OrColors.textMuted, fontSize: 11),
+                style: const TextStyle(
+                  color: OrColors.textMuted,
+                  fontSize: OrType.tinySize,
+                ),
               ),
             ),
           if (loading && items.isEmpty)
@@ -1272,7 +1285,7 @@ class _MediaLibraryPanel extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: OrColors.textSecondary,
-                      fontSize: 12,
+                      fontSize: OrType.metadataCompactSize,
                     ),
                   ),
                 ),
@@ -1326,7 +1339,7 @@ class _MediaLibraryPanel extends StatelessWidget {
                         error!,
                         style: const TextStyle(
                           color: OrColors.textSecondary,
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                     ),
@@ -1420,7 +1433,7 @@ class _MediaLibraryItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: OrColors.text,
-                        fontSize: 11,
+                        fontSize: OrType.tinySize,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1431,7 +1444,7 @@ class _MediaLibraryItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: OrColors.textMuted,
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                           height: 1.35,
                         ),
                       ),
@@ -1458,7 +1471,7 @@ class _MediaLibraryItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: OrColors.text,
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                     ),
@@ -1891,7 +1904,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
           aspectRatio: aspectRatio,
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF0C0C0D),
+              color: OrColors.backgroundRecessed,
               border: Border.all(color: OrColors.borderStrong),
               borderRadius: BorderRadius.circular(OrRadii.small),
             ),
@@ -1914,7 +1927,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           'No media loaded',
                           style: TextStyle(
                             color: OrColors.textSecondary,
-                            fontSize: 13,
+                            fontSize: OrType.metadataSize,
                           ),
                         ),
                       ],
@@ -1957,7 +1970,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                               message,
                               style: const TextStyle(
                                 color: OrColors.textSecondary,
-                                fontSize: 13,
+                                fontSize: OrType.metadataSize,
                               ),
                             ),
                           ],
@@ -1986,7 +1999,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           'Updating preview',
                           style: TextStyle(
                             color: OrColors.textSecondary,
-                            fontSize: 11,
+                            fontSize: OrType.tinySize,
                           ),
                         ),
                       ),
@@ -2097,7 +2110,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textMuted,
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                       Text(
@@ -2105,7 +2118,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textMuted,
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                     ],
@@ -2184,7 +2197,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textSecondary,
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: OrType.tinySize,
                         ),
                       ),
                     ),
@@ -2210,7 +2223,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           key: const ValueKey('preview-rate-label'),
                           style: const TextStyle(
                             color: OrColors.textSecondary,
-                            fontSize: 11,
+                            fontSize: OrType.tinySize,
                           ),
                         ),
                       ),
@@ -2228,7 +2241,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: OrColors.danger,
-                        fontSize: 11,
+                        fontSize: OrType.tinySize,
                       ),
                     ),
                   ),
@@ -2684,7 +2697,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           vertical: OrSpacing.x1,
         ),
       ),
-      style: const TextStyle(fontSize: 11),
+      style: const TextStyle(fontSize: OrType.tinySize),
     );
   }
 
@@ -2709,7 +2722,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         vertical: OrSpacing.x1,
       ),
     ),
-    style: const TextStyle(fontSize: 11),
+    style: const TextStyle(fontSize: OrType.tinySize),
   );
 
   Widget _transitionField(String key, String label) =>
@@ -2778,7 +2791,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         vertical: OrSpacing.x1,
       ),
     ),
-    style: const TextStyle(fontSize: 11),
+    style: const TextStyle(fontSize: OrType.tinySize),
   );
 
   Widget _audioTimeField(String key, String label) => TextField(
@@ -2795,7 +2808,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         vertical: OrSpacing.x1,
       ),
     ),
-    style: const TextStyle(fontSize: 11),
+    style: const TextStyle(fontSize: OrType.tinySize),
   );
 
   Widget _audioEditor() => ListView(
@@ -2806,7 +2819,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         'AUDIO',
         style: TextStyle(
           color: OrColors.textMuted,
-          fontSize: 11,
+          fontSize: OrType.tinySize,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -2836,7 +2849,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           _error!,
           style: TextStyle(
             color: Theme.of(context).colorScheme.error,
-            fontSize: 11,
+            fontSize: OrType.tinySize,
           ),
         ),
       ],
@@ -2946,7 +2959,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'TRANSFORM',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2988,7 +3001,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'CROP',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3015,7 +3028,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'OPACITY',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3030,7 +3043,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'EFFECTS',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3060,7 +3073,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'TRANSITIONS',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3084,7 +3097,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                       _error!,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
-                        fontSize: 11,
+                        fontSize: OrType.tinySize,
                       ),
                     ),
                   ],
@@ -3221,7 +3234,7 @@ class _TimelineToolbar extends StatelessWidget {
                   : 'Timeline tools unavailable',
               style: const TextStyle(
                 color: OrColors.textSecondary,
-                fontSize: 12,
+                fontSize: OrType.metadataCompactSize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -3269,7 +3282,7 @@ class _TimelineToolbar extends StatelessWidget {
                     color: snapEnabled
                         ? OrColors.primaryText
                         : OrColors.textSecondary,
-                    fontSize: 11,
+                    fontSize: OrType.tinySize,
                     fontWeight: FontWeight.w600,
                   ),
                   side: BorderSide(
@@ -3555,7 +3568,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       key: const ValueKey('editor-timeline-region'),
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: Color(0xFF101011),
+        color: OrColors.backgroundRaised,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
       child: Column(
@@ -3589,7 +3602,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                       'Timeline engine not implemented',
                       style: TextStyle(
                         color: OrColors.textMuted,
-                        fontSize: widget.compact ? 10 : 11,
+                        fontSize: OrType.tinySize,
                       ),
                     ),
                   ),
@@ -3643,7 +3656,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 'No timeline tracks',
                 style: TextStyle(
                   color: OrColors.textSecondary,
-                  fontSize: 13,
+                  fontSize: OrType.metadataSize,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -3654,7 +3667,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 const Text(
                   'Import a video or audio file to start editing.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: OrColors.textMuted, fontSize: 12),
+                  style: TextStyle(
+                    color: OrColors.textMuted,
+                    fontSize: OrType.metadataCompactSize,
+                  ),
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 FilledButton.icon(
@@ -4003,7 +4019,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 'Selected clip ${selectedClip.clipId.substring(0, math.min(8, selectedClip.clipId.length))}',
                 style: const TextStyle(
                   color: OrColors.textSecondary,
-                  fontSize: 11,
+                  fontSize: OrType.tinySize,
                 ),
               ),
               IconButton(
@@ -4041,7 +4057,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: OrColors.textSecondary,
-                  fontSize: 11,
+                  fontSize: OrType.tinySize,
                 ),
               ),
             ),
@@ -4627,7 +4643,7 @@ class _TimelineRulerPainter extends CustomPainter {
     final textStyle = const TextStyle(
       color: OrColors.textMuted,
       fontFamily: 'monospace',
-      fontSize: 11,
+      fontSize: OrType.tinySize,
     );
     for (var index = 0; index <= 1000; index++) {
       final seconds = index * tickSeconds;
@@ -4738,7 +4754,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
                 'Snap: marker',
                 style: const TextStyle(
                   color: OrColors.primaryText,
-                  fontSize: 11,
+                  fontSize: OrType.tinySize,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -4764,7 +4780,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
             style: TextButton.styleFrom(
               minimumSize: const Size(0, 28),
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              textStyle: const TextStyle(fontSize: 11),
+              textStyle: const TextStyle(fontSize: OrType.tinySize),
             ),
           ),
         ),
@@ -4859,7 +4875,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: moving ? OrColors.primaryText : OrColors.text,
-                  fontSize: 11,
+                  fontSize: OrType.tinySize,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -5011,7 +5027,7 @@ class _TimelineTrackHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -5020,7 +5036,7 @@ class _TimelineTrackHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: OrType.tinySize,
                       color: OrColors.textMuted,
                     ),
                   ),
@@ -5155,7 +5171,7 @@ class _TimelineLoadMoreHeader extends StatelessWidget {
       style: TextButton.styleFrom(
         minimumSize: const Size(0, 28),
         padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
-        textStyle: const TextStyle(fontSize: 11),
+        textStyle: const TextStyle(fontSize: OrType.tinySize),
       ),
     ),
   );
@@ -5449,7 +5465,7 @@ class _TimelineTrackLane extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: OrColors.text,
-          fontSize: 11,
+          fontSize: OrType.tinySize,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -6639,7 +6655,10 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 const SizedBox(height: OrSpacing.x1),
                 const Text(
                   'New clips start at the preview playhead.',
-                  style: TextStyle(color: OrColors.textSecondary, fontSize: 11),
+                  style: TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.tinySize,
+                  ),
                 ),
               ],
             ),
@@ -7107,7 +7126,7 @@ class _TimelineRuler extends StatelessWidget {
                   style: const TextStyle(
                     color: OrColors.textMuted,
                     fontFamily: 'monospace',
-                    fontSize: 11,
+                    fontSize: OrType.tinySize,
                   ),
                 ),
               ),
@@ -7218,7 +7237,7 @@ class _MobileToolDock extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: OrColors.textMuted,
-                              fontSize: 11,
+                              fontSize: OrType.tinySize,
                             ),
                           ),
                         ],
@@ -7262,7 +7281,7 @@ class _UnavailableToolSheet extends StatelessWidget {
                   child: Text(
                     tool,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: OrType.sectionTitleSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -7277,7 +7296,10 @@ class _UnavailableToolSheet extends StatelessWidget {
             const SizedBox(height: OrSpacing.x2),
             const Text(
               'Unavailable in this Developer Preview',
-              style: TextStyle(color: OrColors.textSecondary, fontSize: 13),
+              style: TextStyle(
+                color: OrColors.textSecondary,
+                fontSize: OrType.metadataSize,
+              ),
             ),
             const SizedBox(height: OrSpacing.x4),
           ],
@@ -7308,7 +7330,7 @@ class _PanelHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: OrType.metadataCompactSize,
                   fontWeight: FontWeight.w600,
                 ),
               ),

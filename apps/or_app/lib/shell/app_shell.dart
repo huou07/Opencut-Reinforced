@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
-import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
 import '../project/project_file_picker.dart';
@@ -21,6 +20,7 @@ import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/templates_screen.dart';
+import '../widgets/or_widgets.dart';
 import 'app_navigation.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
@@ -3580,17 +3580,7 @@ class _AppShellState extends State<AppShell> {
 
   void _showUnavailable(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: OrColors.surface,
-          showCloseIcon: true,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+    OrSnackBar.show(context, message);
   }
 }
 

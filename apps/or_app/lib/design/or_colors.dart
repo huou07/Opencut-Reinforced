@@ -3,8 +3,16 @@ import 'package:flutter/material.dart';
 abstract final class OrColors {
   static const background = Color(0xFF090909);
   static const backgroundRaised = Color(0xFF0F0F10);
+
+  /// Recessed one step below backgroundRaised, for backing content that owns
+  /// the whole region (the viewer behind the frame).
+  static const backgroundRecessed = Color(0xFF0C0C0D);
   static const surface = Color(0xFF151516);
   static const surfaceHover = Color(0xFF1C1C1E);
+
+  /// Selected row or region fill, distinct from hover so the two states do not
+  /// collapse into one look.
+  static const surfaceSelected = Color(0xFF202022);
   static const border = Color(0xFF2A2A2D);
   static const borderStrong = Color(0xFF3A3A3E);
   static const text = Color(0xFFF5F5F5);

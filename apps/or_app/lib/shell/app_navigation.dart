@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 
 enum AppDestination {
@@ -115,7 +116,7 @@ class DesktopNavigation extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: OrColors.textSecondary,
-                        fontSize: 12,
+                        fontSize: OrType.metadataCompactSize,
                       ),
                     ),
                   ),
@@ -140,7 +141,7 @@ class _NavigationHeading extends StatelessWidget {
       label,
       style: const TextStyle(
         color: OrColors.textMuted,
-        fontSize: 11,
+        fontSize: OrType.tinySize,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.7,
       ),
@@ -174,10 +175,10 @@ class _DesktopDestination extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(7),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 40),
+            constraints: const BoxConstraints(minHeight: OrControlSizes.button),
             padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFF202022) : Colors.transparent,
+              color: selected ? OrColors.surfaceSelected : Colors.transparent,
               borderRadius: BorderRadius.circular(7),
             ),
             child: Row(
@@ -195,7 +196,7 @@ class _DesktopDestination extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: selected ? OrColors.text : OrColors.textSecondary,
-                      fontSize: 13,
+                      fontSize: OrType.metadataSize,
                       fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
                     ),
                   ),
@@ -291,7 +292,7 @@ class _CompactDestination extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: selected ? OrColors.text : OrColors.textMuted,
-                    fontSize: 11,
+                    fontSize: OrType.tinySize,
                   ),
                 ),
               ),

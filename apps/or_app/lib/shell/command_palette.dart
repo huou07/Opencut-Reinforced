@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import 'app_navigation.dart';
 
@@ -115,7 +116,10 @@ class _CommandPaletteDialogState extends State<_CommandPaletteDialog> {
             children: [
               const Text(
                 'Search commands',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: OrType.sectionTitleSize,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: OrSpacing.x3),
               TextField(
@@ -191,7 +195,7 @@ class OrPreviewCaption extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Text(
       'Developer Preview',
-      style: TextStyle(color: OrColors.textMuted, fontSize: 11),
+      style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
     );
   }
 }

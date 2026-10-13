@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'or_colors.dart';
 import 'or_spacing.dart';
+import 'or_typography.dart';
 
 abstract final class OrTheme {
   static ThemeData get dark {
@@ -14,6 +15,7 @@ abstract final class OrTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: OrColors.background,
+      textTheme: OrType.textTheme(OrColors.text, OrColors.textMuted),
       colorScheme: const ColorScheme.dark(
         primary: OrColors.primary,
         onPrimary: OrColors.primaryText,
@@ -40,6 +42,18 @@ abstract final class OrTheme {
         thickness: 1,
         space: 1,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: OrColors.backgroundRaised,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(OrRadii.panel),
+        ),
+        // A dialog title is a section title, not a page title, and the
+        // compact recovery viewer has no room to spare for the 30 px page
+        // scale inside its dialog.
+        titleTextStyle: OrType.sectionTitle.copyWith(color: OrColors.text),
+        contentTextStyle: OrType.body.copyWith(color: OrColors.textSecondary),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: OrColors.background,
@@ -47,7 +61,10 @@ abstract final class OrTheme {
           horizontal: OrSpacing.x3,
           vertical: OrSpacing.x2,
         ),
-        hintStyle: const TextStyle(color: OrColors.textMuted, fontSize: 13),
+        hintStyle: const TextStyle(
+          color: OrColors.textMuted,
+          fontSize: OrType.metadataSize,
+        ),
         enabledBorder: border,
         disabledBorder: border,
         focusedBorder: border.copyWith(
@@ -58,24 +75,30 @@ abstract final class OrTheme {
         style: FilledButton.styleFrom(
           backgroundColor: OrColors.primary,
           foregroundColor: OrColors.primaryText,
-          minimumSize: const Size(0, 40),
+          minimumSize: const Size(0, OrControlSizes.button),
           padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OrRadii.control),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontSize: OrType.bodySize,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: OrColors.text,
-          minimumSize: const Size(0, 40),
+          minimumSize: const Size(0, OrControlSizes.button),
           padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x4),
           side: const BorderSide(color: OrColors.borderStrong),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OrRadii.control),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          textStyle: const TextStyle(
+            fontSize: OrType.bodySize,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );

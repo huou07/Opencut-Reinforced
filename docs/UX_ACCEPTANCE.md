@@ -168,6 +168,20 @@ headless or widget-level checks:
   not communicated by color alone remain required for implemented UI.
 - Simple Mode, when present, is only a visibility setting over the same state
   and command model and does not remove core workflows.
+- The presentation contract is enforced by deterministic headless widget tests
+  rather than by review, so the following cannot silently regress:
+  - `OrColors` text tokens hold at least 4.5:1 against `background`,
+    `backgroundRaised` and `surface`, and the focus indicator holds at least
+    3:1 against the same surfaces, with translucent indicators composited
+    before measuring.
+  - `ThemeData` carries the DESIGN.md type scale, and no UI `TextStyle` uses a
+    font size below 11 px.
+  - The editor trim handle carries a hit area of at least 24 px on desktop and
+    44 px in the compact layout, while the painted bar stays restrained.
+  - A divider is either backed by a working resize handler or renders only the
+    structural rule; a drag-looking grip without a handler is a defect.
+  - Every transient message goes through the shared `OrSnackBar`, so the shell
+    and the editor cannot diverge.
 
 ## PRODUCTION REQUIRED FUTURE
 

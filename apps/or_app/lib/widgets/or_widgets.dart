@@ -2,6 +2,33 @@ import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../design/or_typography.dart';
+
+/// The one transient message surface.
+///
+/// Previously the shell raised a styled floating snackbar while the editor
+/// raised a bare default one, so the same confirmation looked different
+/// depending on which screen you were on.
+class OrSnackBar {
+  const OrSnackBar._();
+
+  /// How long a message stays up without interaction.
+  static const displayDuration = Duration(seconds: 4);
+
+  static void show(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: OrColors.surface,
+          showCloseIcon: true,
+          duration: displayDuration,
+        ),
+      );
+  }
+}
 
 class OrPageLayout extends StatelessWidget {
   const OrPageLayout({
@@ -90,7 +117,7 @@ class OrPageHeader extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: OrColors.text,
-                      fontSize: 30,
+                      fontSize: OrType.pageTitleSize,
                       fontWeight: FontWeight.w600,
                       height: 1.15,
                       letterSpacing: -0.6,
@@ -101,7 +128,7 @@ class OrPageHeader extends StatelessWidget {
                     subtitle,
                     style: const TextStyle(
                       color: OrColors.textSecondary,
-                      fontSize: 13,
+                      fontSize: OrType.metadataSize,
                     ),
                   ),
                 ],
@@ -154,7 +181,7 @@ class OrPanel extends StatelessWidget {
                     child: Text(
                       title!,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: OrType.bodySize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -186,7 +213,10 @@ class OrSectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: OrType.sectionTitleSize,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           ?trailing,
@@ -222,7 +252,10 @@ class OrEmptyState extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: OrType.controlSize,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: OrSpacing.x2),
           ConstrainedBox(
@@ -232,7 +265,7 @@ class OrEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: OrColors.textSecondary,
-                fontSize: 13,
+                fontSize: OrType.metadataSize,
                 height: 1.45,
               ),
             ),
@@ -265,7 +298,7 @@ class OrBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: color,
-          fontSize: 11,
+          fontSize: OrType.tinySize,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -303,7 +336,7 @@ class OrUnavailableButton extends StatelessWidget {
           side: BorderSide(
             color: primary ? OrColors.border : OrColors.borderStrong,
           ),
-          minimumSize: const Size(0, 44),
+          minimumSize: const Size(0, OrControlSizes.buttonTouch),
           textStyle: const TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
@@ -326,9 +359,9 @@ class OrDisabledChip extends StatelessWidget {
           foregroundColor: OrColors.textMuted,
           disabledForegroundColor: OrColors.textMuted,
           side: const BorderSide(color: OrColors.border),
-          minimumSize: const Size(0, 36),
+          minimumSize: const Size(0, OrControlSizes.button),
           padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-          textStyle: const TextStyle(fontSize: 12),
+          textStyle: const TextStyle(fontSize: OrType.metadataCompactSize),
         ),
         child: Text(label),
       ),
@@ -394,7 +427,10 @@ class _OrFocusRingState extends State<OrFocusRing> {
       onFocusChange: (focused) {
         if (focused != _focused) setState(() => _focused = focused);
       },
-      child: DecoratedBox(
+      // Motion here is functional feedback for an accessible indicator, and
+      // it collapses to no motion when the platform asks for reduced motion.
+      child: AnimatedContainer(
+        duration: OrMotion.resolve(context, OrMotion.panel),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(widget.radius),
           border: Border.all(
