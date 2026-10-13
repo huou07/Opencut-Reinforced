@@ -955,8 +955,10 @@ journey restores the framework symlink before hashing the package report.
 The journey waits for the frame-rate control to become enabled and its menu
 item to appear, and brings Save and media import into view before requiring
 both enabled state and actual hit-testability. This avoids treating an enabled
-callback as proof that a real pointer can reach the control. It blocks
-host FFmpeg lookup through
+callback as proof that a real pointer can reach the control. After reopening a
+recent project, it waits for the Close control to become enabled and
+hit-testable, then records its state if close does not finish. It blocks host
+FFmpeg lookup through
 `PATH` with inert failure guards while preserving system utilities.
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, verify a missing source while the

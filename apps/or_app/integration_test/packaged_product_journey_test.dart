@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
 import 'package:flutter/material.dart'
     show
         FilledButton,
+        AlertDialog,
         IconButton,
         OutlinedButton,
         PopupMenuButton,
@@ -318,11 +319,20 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
         find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
     'same-process recent project reopen',
   );
-  await tester.tap(find.byKey(const ValueKey('workspace-close')));
+  final closeButton = find.byKey(const ValueKey('workspace-close'));
+  await tester.ensureVisible(closeButton);
+  await _pumpUntil(
+    tester,
+    () => _enabledAndHitTestableTextButton(tester, closeButton),
+    'project close control readiness after recent project reopen',
+    diagnostic: () => _projectCloseDiagnostic(tester, closeButton),
+  );
+  await tester.tap(closeButton);
   await _pumpUntil(
     tester,
     () => find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
     'project close after recent project reopen',
+    diagnostic: () => _projectCloseDiagnostic(tester, closeButton),
   );
 }
 
@@ -625,6 +635,23 @@ Future<void> _pumpUntil(
   }
   final detail = diagnostic == null ? '' : ' ${diagnostic()}';
   fail('Timed out waiting for $operation.$detail');
+}
+
+bool _enabledAndHitTestableTextButton(WidgetTester tester, Finder finder) =>
+    finder.evaluate().isNotEmpty &&
+    tester.widget<TextButton>(finder).onPressed != null &&
+    finder.hitTestable().evaluate().isNotEmpty;
+
+String _projectCloseDiagnostic(WidgetTester tester, Finder closeButton) {
+  final closeEnabled = closeButton.evaluate().isNotEmpty
+      ? tester.widget<TextButton>(closeButton).onPressed != null
+      : false;
+  return 'closeEnabled=$closeEnabled '
+      'projectVisible=${find.byKey(const ValueKey("workspace-project-name")).evaluate().isNotEmpty} '
+      'savedBadge=${find.text("Saved").evaluate().isNotEmpty} '
+      'dirtyBadge=${find.text("Unsaved changes").evaluate().isNotEmpty} '
+      'recoveryDialog=${find.byType(AlertDialog).evaluate().isNotEmpty} '
+      'snackbar=${find.byType(SnackBar).evaluate().isNotEmpty}';
 }
 
 String _exportStatusText(WidgetTester tester) {
