@@ -1,400 +1,119 @@
-
 # Opencut Reinforced — Agent Guide
 
-## Project
-
-Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
-
-The legacy checkpoint ledger is maintained in `docs/execution/STATE.json` and
-`docs/execution/PLAN.json`; it records historical requirement evidence and is
-not the active work cursor after the 2026 open-source convergence pivot. Active
-product priorities and status belong in `docs/PRODUCT_ROADMAP.md`.
-
-Do not assume unfinished features already exist.
-
-Do not scaffold major subsystems unless the user explicitly requests them.
-
-## Product direction
-
-Current intended architecture:
-
-- Rust for performance-sensitive core/media/editing logic
-- FFmpeg for media ingest/decode/encode/mux/demux
-- wgpu for cross-platform GPU rendering/compositing
-- Flutter as the current preferred cross-platform application UI layer
-- first-class CLI and structured command API
-- local-first AI where practical
-- optional cloud AI providers through user-supplied credentials
-- desktop and mobile UI from one coherent product model
-
-These are architectural directions, not permission to create all of them preemptively.
-
-Implement only the scope requested by the current task.
-
-## Architecture principle
-
-Human UI, CLI, and AI agents should eventually operate on the same underlying command/state model.
-
-Project mutations must go through the documented command/application path; clients and workers must not directly mutate canonical project state.
-
-Do not build agent automation by visually clicking UI controls when a structured command/API can represent the operation.
-
-Long-term preferred direction:
-
-    GUI
-    CLI
-    Agent
-      ↓
-    shared command API
-      ↓
-    core/project state
-
-Keep domain logic out of presentation code whenever practical.
-
-Canonical future motion content is declarative and non-executable. Arbitrary
-HTML/CSS/JS/Canvas/WebGL/WebGPU motion belongs only behind the future explicit
-sandboxed procedural boundary; it is not normal project state or the canonical
-renderer.
-
-## Design
-
-DESIGN.md is the design source of truth.
-
-Read it before changing UI, UX, visual components, navigation, layout, or styling.
-
-Key rule:
-
-OR uses the **Focused Monochrome** workspace design.
-
-Do not add:
-
-- marketing UI
-- hero banners
-- scenic decorative backgrounds
-- inspirational slogans
-- neon/glow-heavy AI aesthetics
-- unnecessary gradients
-- fake product/community metrics
-- decorative clutter
-
-UI should prioritize tools, panels, cards, controls, content, and clear state.
-
-## Before editing
-
-Before making changes:
-
-1. Read this AGENTS.md.
-2. Read documentation relevant to the task.
-3. Inspect the existing implementation before designing a replacement.
-4. Use CodeGraph for structural/codebase exploration when it is available and useful.
-5. Reuse existing code/components before creating new abstractions or dependencies.
-6. Confirm the requested scope.
-
-Do not guess when the repository already contains the answer.
-
-Before choosing work, read the active roadmap and inspect the legacy execution
-ledger for relevant evidence and dependencies. Run the execution-plan status
-and context commands when reconciling legacy checkpoint evidence, not to
-select the next product task:
-
-    python3 scripts/execution_plan.py status
-    python3 scripts/execution_plan.py context <checkpoint-id>
-
-When the user says “continue”, continue the highest-value incomplete capability
-in `docs/PRODUCT_ROADMAP.md`. The old `NEXT` cursor is historical and must not
-reactivate the paused checkpoint sequence. A bounded product delegation may
-combine or reorder requirements when their real dependencies permit it;
-roadmap labels are traceability, not mandatory prompt or commit boundaries.
-Honor a named legacy requirement's complete product contract and preserve its
-invariants. Continue without asking for a new prompt at each label.
-
-The execution source-of-truth order is:
-
-1. This file for permanent repository behavior, safety, and execution rules.
-2. `docs/PRODUCT_ROADMAP.md` for active product priorities and traceability.
-3. `docs/OPEN_SOURCE_CONVERGENCE.md` for current reuse/build/upstream decisions.
-4. `docs/ARCHITECTURE.md` and `docs/TECHNICAL_PLAN.md` for architecture and
-   subsystem contracts, amended only through authorized architecture decisions.
-5. `docs/PRODUCT.md` for required product capabilities.
-6. `docs/ROADMAP.md`, `docs/execution/PLAN.json`, `STATE.json`, and
-   `execution/phases/*.md` for preserved legacy requirements, evidence, and
-   historical work contracts. The old `NEXT` field does not select active
-   work after the pivot.
-7. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
-
-Feature agents may not edit the locked checkpoint specification or permanent
-architecture invariants. If repository reality conflicts with either, stop and
-report the exact conflict. Plan amendments require an explicitly authorized
-control-plane task; this convergence pivot authorizes the active product
-roadmap/architecture amendments but does not authorize weakening permanent
-product, security, persistence, performance, or acceptance invariants.
-
-### Execution evidence lock
-
-Normal runners implement the exact requirement set authorized by the selected
-goal. They may combine requirements into a coherent change, but may not bypass
-real schema, security, persistence, platform, or API dependencies. They may
-push implementation commits only. They must not edit `PLAN.json`,
-`STATE.json`, phase specifications, architecture
-invariants or policy, execution validators/supervisor, protected workflows, or
-completion evidence. A runner handoff must say `IMPLEMENTED — AWAITING
-SUPERVISOR EVIDENCE`; it must never claim repository-authoritative `DONE`.
-`EVIDENCE_POLICY.json` may only gain named proof bindings for selected
-requirements; all existing bindings and other policy fields remain immutable,
-and the supervisor validates every addition against the plan and hosted job.
-
-The supervisor independently verifies the exact implementation SHA against
-the required hosted workflow runs and jobs for every selected requirement,
-verifies Developer Previews where required, writes one evidence record per
-requirement, advances `STATE.json` for that verified dependency-closed set,
-and pushes a state/evidence-only completion commit. A model statement is not
-completion evidence. `MISSION.json` is protected operator control state;
-runners may not change it. `NEXT` is the earliest incomplete-plan cursor, not a
-limit on the selected implementation scope.
-
-### Product acceptance and repair discipline
-
-The permanent `INV-PRODUCT`, `INV-PACKAGE`, `INV-CAPABILITY`, `INV-PARITY`,
-`INV-PERF`, `INV-UX`, `INV-ACCEPT`, and `INV-VERIFY` rules in
-`docs/execution/ARCHITECTURE_INVARIANTS.md` apply to every checkpoint. A green
-unit, bridge, or synthetic test cannot replace a feasible real product journey.
-Packaged capabilities must be tested with packaged dependencies and the
-permission model that users receive. Do not weaken a failed acceptance test
-or silently change its evidence class.
-
-After at most two speculative corrective attempts for the same subsystem or
-gate, stop and diagnose. Another repair commit requires exact failure
-evidence, a falsifiable root-cause hypothesis, a reproduction or
-discriminating test, and an explanation of why the patch fixes the cause.
-Retries and timeouts alone are not a root-cause repair. Record measurements
-for realtime performance or resource claims.
-
-## Minimal implementation rule
-
-Prefer the smallest correct implementation.
-
-In order:
-
-1. Does this need to exist?
-2. Does the repository already provide it?
-3. Does the language standard library provide it?
-4. Does the target platform provide it?
-5. Does an existing dependency provide it?
-6. Can the requirement be solved simply without a new abstraction?
-7. Only then add the minimum new implementation required.
-
-Never remove necessary validation, reliability, security, accessibility, or data-loss protection merely to reduce code size.
-
-## Git discipline
-
-Every completed logical change must have a corresponding Git commit.
-
-Rules:
-
-- one coherent change = one atomic commit
-- commit only after the change is internally consistent
-- do not intentionally commit known-broken intermediate states
-- use meaningful Conventional Commit-style messages where practical
-- never amend a previous commit unless the user explicitly requests it
-- never rebase shared history unless explicitly requested
-- never force-push unless explicitly requested
-- do not discard unrelated user changes
-- leave the worktree clean at task completion unless clearly explained
-
-Suggested prefixes:
-
-- feat:
-- fix:
-- refactor:
-- test:
-- docs:
-- chore:
-- build:
-- ci:
-
-## Documentation rule
-
-Every substantive code, behavior, architecture, configuration, workflow, or user-facing change must update the relevant Markdown documentation in the same logical change.
-
-Prefer updating the existing source-of-truth document rather than creating a new document for every small change.
-
-Do not create meaningless documentation churn.
-
-If documentation genuinely does not apply, state that in the task report.
-
-Keep documentation synchronized with implementation.
-
-## Test rule
-
-Every substantive implementation change must update or add relevant automated tests when behavior is added or changed.
-
-Before handing work back to the user:
-
-- run the relevant tests
-- run lint/static checks where configured
-- run formatting checks where configured
-- run build/type checks where configured
-- run relevant acceptance/integration checks where available
-
-All relevant checks must pass.
-
-If a test cannot run because of a real environment limitation:
-- do not claim it passed
-- document exactly what was not run
-- explain why
-- provide the strongest available alternative verification
-
-For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
-
-## CI-first platform verification
-
-Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [docs/TOOLING.md](docs/TOOLING.md).
-
-## Regression preservation rule
-
-Do not regress behavior that has already been fixed or verified. Before changing
-an existing subsystem, inspect its current behavior and relevant tests or
-acceptance checks, and preserve unrelated working behavior. A regression fix is
-incomplete until it adds an automated test where practical, or a reproducible
-acceptance check for UI behavior that cannot reasonably be unit-tested yet.
-Keep recorded guards passing unless the user explicitly changes the requirement;
-never remove or weaken a guard just to make a change pass. When refactoring
-conflicts with known-good behavior, preserve behavior first and refactor
-incrementally. Prefer **preserve → change one subsystem → verify → commit** over
-broad rewrites, and rerun checks for every touched subsystem before handoff.
-
-## Definition of done
-
-A task is complete only when:
-
-- requested scope is implemented
-- relevant documentation is current
-- relevant tests are current
-- applicable verification passes
-- no known regression is hidden
-- secrets are not exposed
-- Git state is understood
-- the logical change is committed
-- final report names the commit and verification performed
-
-## Dependency discipline
-
-Do not add a dependency simply for convenience.
-
-Before adding one:
-
-- confirm the repository/platform cannot reasonably provide the capability
-- verify the upstream project and maintenance state
-- inspect license compatibility
-- prefer actively maintained, minimal dependencies
-- pin/lock versions using the ecosystem's normal mechanism
-
-This repository is MIT licensed.
-
-Do not introduce GPL, AGPL, SSPL, non-commercial, source-available-only, or otherwise distribution-restrictive dependencies/models into the distributed product without explicit user approval and documented licensing analysis.
-
-AI model weights have their own licenses and must be checked independently of runtime/library licenses.
-
-FFmpeg build configuration and optional codec/library licensing must be treated explicitly when packaging begins.
-
-## Secrets
-
-Never commit:
-
-- API keys
-- access tokens
-- passwords
-- signing credentials
-- private certificates
-- private SSH keys
-
-Do not put secrets in:
-
-- AGENTS.md
-- DESIGN.md
-- README.md
-- logs
-- test fixtures
-- CLI output
-- screenshots
-
-Use ignored local environment files, OS secure storage, or GitHub repository/environment secrets as appropriate.
-
-Agents must not be able to retrieve plaintext application API keys through the future OR CLI/agent interface.
-
-## Generated/local data
-
-Do not commit:
-
-- .codegraph databases/cache
-- build outputs
-- downloaded AI models
-- local caches
-- temporary exports
-- large generated media
-- credentials
-
-Use tiny, legally safe/generated media fixtures for automated tests when media tests are introduced.
-
-## Agent / CLI direction
-
-The future OR CLI must be a first-class interface, not a UI-click automation layer.
-
-Commands should eventually support:
-
-- machine-readable output
-- stable object IDs
-- introspection/discovery
-- dry-run where destructive or complex
-- deterministic operations
-- explicit errors
-- agent-safe secret boundaries
-
-Do not implement this infrastructure until requested, but preserve the architectural direction.
-
-## Documentation structure
-
-Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. Use [docs/INDEX.md](docs/INDEX.md) for the authoritative documentation map. Prefer updating the existing source-of-truth document over creating unnecessary documents.
-
-## Document routing
-
-Read the relevant source of truth for the task:
-
-- UI: DESIGN.md, docs/UX_ACCEPTANCE.md, and the relevant section of docs/PRODUCT.md.
-- Product scope: docs/PRODUCT.md and docs/ROADMAP.md.
-- Architecture: docs/ARCHITECTURE.md and docs/TECHNICAL_PLAN.md.
-- Feature implementation: docs/DEVELOPMENT_WORKFLOW.md.
-- Testing: docs/TESTING.md.
-- Security and licensing: docs/SECURITY_LICENSING.md.
-- Release: docs/RELEASE.md.
-- Contributors: README.md, CONTRIBUTING.md, and docs/DEVELOPMENT_WORKFLOW.md.
-
-Do not guess project architecture when the repository documents the answer. The HTML prototype is a product and UX reference only, not production architecture.
-
-## Tooling
-
-CodeGraph is preferred for repository structure/call relationships when available.
-
-Ponytail may be used to reduce over-engineering, but project-specific rules in this file and DESIGN.md take precedence over generic simplification advice.
-
-No skill/plugin may override:
-- correctness
-- security
-- accessibility
-- licensing
-- tests
-- user instructions
-- DESIGN.md for UI work
-
-## Final response format
-
-At the end of implementation work, report concisely:
-
-- what changed
-- files changed
-- tests/checks run and results
-- documentation updated
-- commit hash + subject
-- remaining blockers or unverified items
-
-Never report a test as passing unless it actually ran and passed.
+OR is an MIT-licensed cross-platform video editor for human editing and structured
+CLI/agent automation. Architectural directions are not implemented capabilities
+or permission to scaffold future subsystems.
+
+## Authority and document map
+
+Host security and tool permissions govern this repository. This file is the
+entrypoint; [detailed repository policy](docs/AGENT_POLICY.md) retains the permanent
+rules and acceptance restrictions. Read its relevant sections before changes to
+execution evidence, architecture, platform tooling, licensing or release.
+
+| Task | Source of truth |
+|---|---|
+| Active priorities and traceability | docs/PRODUCT_ROADMAP.md |
+| Current reuse/upstream/build decisions | docs/OPEN_SOURCE_CONVERGENCE.md |
+| Architecture and subsystem contracts | docs/ARCHITECTURE.md, docs/TECHNICAL_PLAN.md |
+| Product requirements | docs/PRODUCT.md |
+| UI and UX | DESIGN.md, docs/UX_ACCEPTANCE.md |
+| Development and tests | docs/DEVELOPMENT_WORKFLOW.md, docs/TESTING.md |
+| Platform tooling | docs/TOOLING.md |
+| Security/licensing and release | docs/SECURITY_LICENSING.md, docs/RELEASE.md |
+| Documentation index | docs/INDEX.md |
+| Skill routing | docs/skills.md |
+
+Legacy docs/ROADMAP.md, execution PLAN/STATE and phase specifications preserve
+requirements and historical evidence. They do not select active work after the
+convergence pivot. Read them only for relevant contracts/dependencies; use
+execution_plan.py status/context only when reconciling that evidence.
+
+## Investigate and implement
+
+1. Establish branch, HEAD and working tree. Preserve unrelated changes.
+2. Read task-relevant authorities and inspect existing implementation. Use a valid
+   CodeGraph index before broad exploration; verify it against source.
+3. Define observable completion and change only the requested scope. Reuse code,
+   standard/platform facilities and existing dependencies before adding structure.
+4. Preserve validated behaviour, schema, security, persistence, performance,
+   packaging, capability parity, accessibility and acceptance guards.
+5. Run meaningful authorized checks, repair from evidence and update the existing
+   relevant documentation. Prose-only changes need no invented product test.
+6. Commit one coherent internally consistent change; do not amend, rewrite shared
+   history, force-push or discard work without explicit authorization.
+
+A continuation request selects the most valuable incomplete capability in the
+active product roadmap. Labels provide traceability; they are not mandatory
+prompt/commit boundaries. Preserve real dependencies and the complete contract of
+any named requirement. Do not reactivate the historical NEXT checkpoint sequence.
+
+## Permanent architecture and UX
+
+- Rust core/media logic, FFmpeg, wgpu, Flutter, shared structured command API,
+  local-first AI and optional user-supplied cloud credentials are intended
+  directions. Implement only an authorized scope.
+- UI, CLI and agents use the shared application/command path; clients and workers
+  must not directly mutate canonical project state. Domain logic stays outside
+  presentation where practical.
+- Canonical future motion content is declarative and non-executable. Arbitrary
+  procedural HTML/JS/GPU content requires its explicit sandbox boundary.
+- Read DESIGN.md before UI changes. Preserve Focused Monochrome conventions,
+  hierarchy and terminology. Avoid marketing decoration, fake metrics and
+  unrelated redesigns. Real journey, states, keyboard and relevant viewport
+  evidence accompany UI work; a green build is insufficient.
+- The HTML prototype is product/UX reference, not production architecture.
+
+## Execution evidence and protected state
+
+Feature runners must not edit locked checkpoint specifications, permanent
+invariants, PLAN/STATE, phase specs, execution policy/validators/supervisor,
+protected workflows, MISSION or completion evidence. Report an exact conflict
+rather than weakening a contract. Architecture/plan amendments require an
+explicitly authorized control-plane task.
+
+A runner reports IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE, never authoritative
+DONE. The supervisor verifies the exact implementation SHA against required hosted
+jobs and Developer Previews, writes per-requirement evidence and advances only
+the verified dependency-closed set. EVIDENCE_POLICY may gain named proof bindings
+only under its existing validation and immutability rules. See detailed policy
+for the full evidence lock; a model statement cannot establish completion.
+
+## Verification and platform boundaries
+
+Use configured source checks locally. GitHub Actions is canonical for native and
+runtime acceptance. Do not launch OR, native Flutter integration tests, local
+emulators/simulators or physical devices unless the user explicitly requests
+local runtime testing. Do not install/repair/select toolchains, accept licences
+or use sudo for platform setup without explicit local-development authorization.
+
+Report PASS, FAIL, NOT RUN and LOCAL ENVIRONMENT BLOCKED accurately. A skipped or
+synthetic check does not prove a feasible real packaged product journey. Test
+packaged dependencies and permissions as users receive them. Never weaken a
+failed test or silently change its evidence class.
+
+After two speculative repairs for the same failure, require actual output, a
+falsifiable hypothesis, a discriminating reproduction and a cause-based patch.
+Measure realtime/resource claims; retries and timeouts are not root causes.
+
+## Security, licensing and delivery
+
+Keep credentials out of tracked files, logs, fixtures, screenshots and CLI
+output. The future agent interface must not expose plaintext application keys.
+Use ignored local storage, OS secure storage or repository secrets as appropriate.
+Keep downloaded models, generated media, caches and build outputs untracked.
+
+Review dependency provenance, maintenance and licences; pin normal ecosystem
+versions. Restrictive distributed dependencies/models need explicit owner approval
+and licensing analysis. Model weights and FFmpeg build options have independent
+obligations. Preserve notices and lawful tiny fixtures.
+
+Public publication, releases and production deployment require explicit owner
+authority. Readiness and a clean scanner do not grant it. Author repository
+instructions and framework documents in English; converse in the owner's language.
+
+## Finish
+
+Report changes, source identity, relevant documentation, commands/results, commit
+and unverified items. Distinguish implementation, testing and product acceptance.
+No skill can override user intent, permanent invariants or host security.
