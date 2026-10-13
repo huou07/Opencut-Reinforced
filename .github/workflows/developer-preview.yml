@@ -881,8 +881,9 @@ jobs:
           cp docs/DEVELOPER_PREVIEW_INSTALL.md "$package_dir/README-FIRST.md"
           tar -czf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz" -C "$package_dir" .
           test -s "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz"
-          tar -tzf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz" | grep -Fxq "./README-FIRST.md"
-          tar -tzf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz" | grep -Fxq "./opencut-reinforced/or_app"
+          package_entries="$(tar -tzf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz")"
+          grep -Fxq "./README-FIRST.md" <<< "$package_entries"
+          grep -Fxq "./opencut-reinforced/or_app" <<< "$package_entries"
 
       - name: Upload Linux package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
