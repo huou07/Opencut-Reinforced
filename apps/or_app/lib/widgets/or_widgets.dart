@@ -359,3 +359,51 @@ class OrSearchField extends StatelessWidget {
     );
   }
 }
+
+/// A visible keyboard-focus ring for controls that carry their own decoration.
+///
+/// `ThemeData.focusColor` only tints Material's own overlays, so a control
+/// built from plain containers or icon buttons can receive focus with nothing
+/// distinct on screen. The border space is reserved whether or not the
+/// control is focused, so showing the ring never reflows the layout it
+/// annotates.
+class OrFocusRing extends StatefulWidget {
+  const OrFocusRing({
+    super.key,
+    required this.child,
+    this.radius = OrRadii.small,
+  });
+
+  final Widget child;
+  final double radius;
+
+  @override
+  State<OrFocusRing> createState() => _OrFocusRingState();
+}
+
+class _OrFocusRingState extends State<OrFocusRing> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      // This node only observes: the wrapped control keeps its own focus and
+      // traversal behaviour, and the ring simply follows it.
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) {
+        if (focused != _focused) setState(() => _focused = focused);
+      },
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.radius),
+          border: Border.all(
+            color: _focused ? OrColors.focus : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}

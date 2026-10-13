@@ -26,7 +26,7 @@ abstract final class OrTheme {
         outline: OrColors.border,
       ),
       dividerColor: OrColors.border,
-      focusColor: Color(0x443FC7FF),
+      focusColor: OrColors.focus,
       hoverColor: OrColors.surfaceHover,
       splashFactory: InkRipple.splashFactory,
       appBarTheme: const AppBarTheme(

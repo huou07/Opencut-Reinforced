@@ -9,10 +9,15 @@ abstract final class OrColors {
   static const borderStrong = Color(0xFF3A3A3E);
   static const text = Color(0xFFF5F5F5);
   static const textSecondary = Color(0xFFA6A6AB);
-  static const textMuted = Color(0xFF717176);
+  // 4.5:1 or better on background, backgroundRaised and surface, so muted
+  // metadata stays readable rather than merely decorative.
+  static const textMuted = Color(0xFF828288);
   static const primary = Color(0xFFF5F5F5);
   static const primaryText = Color(0xFF090909);
   static const selection = Color(0xFF3FC7FF);
+  // Always-visible keyboard focus. Opaque so it never composites down to an
+  // unreadable tint over the dark surfaces.
+  static const focus = Color(0xFF3FC7FF);
   static const ai = Color(0xFF9B7CFF);
   static const success = Color(0xFF47B881);
   static const warning = Color(0xFFD8A542);

@@ -981,38 +981,40 @@ class _EditorToolRail extends StatelessWidget {
                     label: isProjectWorkspace && tool.label == 'Media'
                         ? 'Media library'
                         : '${tool.label}, unavailable in this Developer Preview',
-                    child: InkWell(
-                      key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
-                      onTap: () => onSelected(tool.label),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        margin: const EdgeInsets.symmetric(vertical: 1),
-                        decoration: BoxDecoration(
-                          color: selected == tool.label
-                              ? OrColors.surface
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(OrRadii.small),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              tool.icon,
-                              size: 17,
-                              color: OrColors.textMuted,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              _shortToolLabel(tool.label),
-                              maxLines: 1,
-                              overflow: TextOverflow.clip,
-                              style: const TextStyle(
+                    child: OrFocusRing(
+                      child: InkWell(
+                        key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
+                        onTap: () => onSelected(tool.label),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          margin: const EdgeInsets.symmetric(vertical: 1),
+                          decoration: BoxDecoration(
+                            color: selected == tool.label
+                                ? OrColors.surface
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(OrRadii.small),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                tool.icon,
+                                size: 17,
                                 color: OrColors.textMuted,
-                                fontSize: 8,
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 3),
+                              Text(
+                                _shortToolLabel(tool.label),
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: const TextStyle(
+                                  color: OrColors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1253,7 +1255,7 @@ class _MediaLibraryPanel extends StatelessWidget {
               ),
               child: Text(
                 '${page!.totalCount} ${page!.totalCount == 1 ? 'item' : 'items'}',
-                style: const TextStyle(color: OrColors.textMuted, fontSize: 10),
+                style: const TextStyle(color: OrColors.textMuted, fontSize: 11),
               ),
             ),
           if (loading && items.isEmpty)
@@ -1429,7 +1431,7 @@ class _MediaLibraryItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: OrColors.textMuted,
-                          fontSize: 9,
+                          fontSize: 11,
                           height: 1.35,
                         ),
                       ),
@@ -1984,7 +1986,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           'Updating preview',
                           style: TextStyle(
                             color: OrColors.textSecondary,
-                            fontSize: 10,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -2095,7 +2097,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textMuted,
                           fontFamily: 'monospace',
-                          fontSize: 9,
+                          fontSize: 11,
                         ),
                       ),
                       Text(
@@ -2103,7 +2105,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textMuted,
                           fontFamily: 'monospace',
-                          fontSize: 9,
+                          fontSize: 11,
                         ),
                       ),
                     ],
@@ -2182,7 +2184,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         style: const TextStyle(
                           color: OrColors.textSecondary,
                           fontFamily: 'monospace',
-                          fontSize: 10,
+                          fontSize: 11,
                         ),
                       ),
                     ),
@@ -2208,7 +2210,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           key: const ValueKey('preview-rate-label'),
                           style: const TextStyle(
                             color: OrColors.textSecondary,
-                            fontSize: 10,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -2226,7 +2228,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: OrColors.danger,
-                        fontSize: 10,
+                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -2804,7 +2806,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         'AUDIO',
         style: TextStyle(
           color: OrColors.textMuted,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -2944,7 +2946,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'TRANSFORM',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2986,7 +2988,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'CROP',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3013,7 +3015,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'OPACITY',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3028,7 +3030,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'EFFECTS',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3058,7 +3060,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     'TRANSITIONS',
                     style: TextStyle(
                       color: OrColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3728,9 +3730,12 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           }
           final displayDuration = math.max(20.0, endSeconds);
           const maximumWidth = 100000.0;
+          final trackHeaderWidth = _timelineTrackHeaderWidthFor(
+            constraints.maxWidth,
+          );
           final viewportWidth = math.max(
             1.0,
-            constraints.maxWidth - _timelineTrackHeaderWidth,
+            constraints.maxWidth - trackHeaderWidth,
           );
           final preferredScale = _fitTimelineToView
               ? viewportWidth / displayDuration
@@ -3770,6 +3775,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               trackRows.add(
                 _TimelineLoadMoreHeader(
                   trackId: track.trackId,
+                  width: trackHeaderWidth,
                   loading: widget.loadingMoreTracks.contains(track.trackId),
                   busy: widget.busy,
                   onLoadMore: widget.onLoadMore,
@@ -3788,7 +3794,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
-                          width: _timelineTrackHeaderWidth,
+                          width: trackHeaderWidth,
                           child: Column(
                             children: [
                               const SizedBox(height: _timelineRulerHeight),
@@ -3997,7 +4003,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 'Selected clip ${selectedClip.clipId.substring(0, math.min(8, selectedClip.clipId.length))}',
                 style: const TextStyle(
                   color: OrColors.textSecondary,
-                  fontSize: 10,
+                  fontSize: 11,
                 ),
               ),
               IconButton(
@@ -4035,7 +4041,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: OrColors.textSecondary,
-                  fontSize: 10,
+                  fontSize: 11,
                 ),
               ),
             ),
@@ -4455,7 +4461,15 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   }
 }
 
-const double _timelineTrackHeaderWidth = 272;
+/// Width of the track-header gutter beside each timeline lane.
+///
+/// The gutter has to hold two 11 px labels plus the track controls inside a
+/// fixed-height lane, and the label column carries a "loaded / total" count
+/// that wraps when it is squeezed, overflowing the lane. The wide layout gets
+/// enough room for a three-digit count on one line; compact keeps the legacy
+/// width so the gutter still fits a small screen.
+double _timelineTrackHeaderWidthFor(double availableWidth) =>
+    OrBreakpoints.isCompact(availableWidth) ? 272 : 336;
 const double _timelineRulerHeight = 38;
 const double _timelineLaneHeight = 58;
 
@@ -4613,7 +4627,7 @@ class _TimelineRulerPainter extends CustomPainter {
     final textStyle = const TextStyle(
       color: OrColors.textMuted,
       fontFamily: 'monospace',
-      fontSize: 10,
+      fontSize: 11,
     );
     for (var index = 0; index <= 1000; index++) {
       final seconds = index * tickSeconds;
@@ -4724,7 +4738,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
                 'Snap: marker',
                 style: const TextStyle(
                   color: OrColors.primaryText,
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -4750,7 +4764,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
             style: TextButton.styleFrom(
               minimumSize: const Size(0, 28),
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              textStyle: const TextStyle(fontSize: 9),
+              textStyle: const TextStyle(fontSize: 11),
             ),
           ),
         ),
@@ -4845,7 +4859,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: moving ? OrColors.primaryText : OrColors.text,
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -4994,6 +5008,8 @@ class _TimelineTrackHeader extends StatelessWidget {
                 children: [
                   Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -5001,8 +5017,10 @@ class _TimelineTrackHeader extends StatelessWidget {
                   ),
                   Text(
                     countLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 9,
+                      fontSize: 11,
                       color: OrColors.textMuted,
                     ),
                   ),
@@ -5098,19 +5116,21 @@ class _TimelineTrackHeader extends StatelessWidget {
 class _TimelineLoadMoreHeader extends StatelessWidget {
   const _TimelineLoadMoreHeader({
     required this.trackId,
+    required this.width,
     required this.loading,
     required this.busy,
     required this.onLoadMore,
   });
 
   final String trackId;
+  final double width;
   final bool loading;
   final bool busy;
   final ValueChanged<String>? onLoadMore;
 
   @override
   Widget build(BuildContext context) => Container(
-    width: _timelineTrackHeaderWidth,
+    width: width,
     height: 32,
     alignment: Alignment.centerLeft,
     decoration: const BoxDecoration(
@@ -5135,7 +5155,7 @@ class _TimelineLoadMoreHeader extends StatelessWidget {
       style: TextButton.styleFrom(
         minimumSize: const Size(0, 28),
         padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
-        textStyle: const TextStyle(fontSize: 10),
+        textStyle: const TextStyle(fontSize: 11),
       ),
     ),
   );
@@ -5429,7 +5449,7 @@ class _TimelineTrackLane extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: OrColors.text,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -5478,11 +5498,13 @@ class _TimelineTrackLane extends StatelessWidget {
                   if (clip.contentKind ==
                       ProjectTimelineClipContentKind.media) ...[
                     _trimHandle(
+                      context,
                       clip,
                       start: true,
                       label: 'Trim start of $title',
                     ),
                     _trimHandle(
+                      context,
                       clip,
                       start: false,
                       label: 'Trim end of $title',
@@ -5498,17 +5520,29 @@ class _TimelineTrackLane extends StatelessWidget {
   }
 
   Widget _trimHandle(
+    BuildContext context,
     ProjectTimelineClip clip, {
     required bool start,
     required String label,
   }) {
     final onStart = start ? onTrimStart : onTrimEnd;
+    final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
+    final hitWidth = compact
+        ? OrTouchTargets.comfortable
+        : OrTouchTargets.minimum;
+    const visibleBar = 3.0;
+    // A hit surface centred exactly on an outer edge is unreachable, because
+    // hit testing treats a box's trailing edge as exclusive. Keeping the
+    // centre 1 px in from the edge keeps the target symmetric and reachable
+    // while still covering the edge on both sides.
+    const centreInset = 1.0;
+    final outer = -(hitWidth / 2) + centreInset;
     return Positioned(
-      left: start ? -5 : null,
-      right: start ? null : -5,
+      left: start ? outer : null,
+      right: start ? null : outer,
       top: -1,
       bottom: -1,
-      width: 11,
+      width: hitWidth,
       child: Semantics(
         button: true,
         label: label,
@@ -5529,9 +5563,9 @@ class _TimelineTrackLane extends StatelessWidget {
               : (details) => onTrimFinish!(clip, details),
           onPanCancel: onTrimCancel == null ? null : () => onTrimCancel!(clip),
           child: Align(
-            alignment: start ? Alignment.centerLeft : Alignment.centerRight,
+            alignment: Alignment.center,
             child: Container(
-              width: 3,
+              width: visibleBar,
               decoration: BoxDecoration(
                 color: OrColors.selection,
                 borderRadius: BorderRadius.circular(2),
@@ -7073,7 +7107,7 @@ class _TimelineRuler extends StatelessWidget {
                   style: const TextStyle(
                     color: OrColors.textMuted,
                     fontFamily: 'monospace',
-                    fontSize: 10,
+                    fontSize: 11,
                   ),
                 ),
               ),
@@ -7160,33 +7194,35 @@ class _MobileToolDock extends StatelessWidget {
                     : tool.label == 'Inspector' && hasClipSelection
                     ? 'Edit selected clip settings'
                     : '${tool.label} — unavailable in this Developer Preview',
-                child: InkWell(
-                  key: ValueKey('mobile-editor-tool-${_toolKey(tool.label)}'),
-                  onTap: () => onSelected(tool.label),
-                  child: SizedBox(
-                    width: 62,
-                    height: 56,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          tool.icon,
-                          size: 18,
-                          color: selected == tool.label
-                              ? OrColors.textSecondary
-                              : OrColors.textMuted,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _shortToolLabel(tool.label),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: OrColors.textMuted,
-                            fontSize: 9,
+                child: OrFocusRing(
+                  child: InkWell(
+                    key: ValueKey('mobile-editor-tool-${_toolKey(tool.label)}'),
+                    onTap: () => onSelected(tool.label),
+                    child: SizedBox(
+                      width: 62,
+                      height: 56,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            tool.icon,
+                            size: 18,
+                            color: selected == tool.label
+                                ? OrColors.textSecondary
+                                : OrColors.textMuted,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 3),
+                          Text(
+                            _shortToolLabel(tool.label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: OrColors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -7285,6 +7321,11 @@ class _PanelHeader extends StatelessWidget {
   }
 }
 
+/// The structural separator between the timeline and the rest of the shell.
+///
+/// Panel resizing is a prototype-reference behaviour, so this renders only a
+/// 1 px rule. It deliberately paints no grip: a drag-looking control with no
+/// resize handler is a dead affordance.
 class _ResizeDivider extends StatelessWidget {
   const _ResizeDivider({required this.horizontal});
 
@@ -7293,17 +7334,9 @@ class _ResizeDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: horizontal ? 7 : double.infinity,
-      alignment: Alignment.center,
-      color: OrColors.background,
-      child: Container(
-        width: horizontal ? 36 : 1,
-        height: horizontal ? 2 : double.infinity,
-        decoration: BoxDecoration(
-          color: OrColors.borderStrong,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
+      height: horizontal ? 1 : null,
+      width: horizontal ? null : 1,
+      color: OrColors.border,
     );
   }
 }

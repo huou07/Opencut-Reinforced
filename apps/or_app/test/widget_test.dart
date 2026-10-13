@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/core_gateway.dart';
@@ -19,6 +20,7 @@ import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 import 'package:or_app/shell/app_top_bar.dart';
+import 'package:or_app/widgets/or_widgets.dart';
 
 void main() {
   testWidgets('wide shell shows OR navigation and project destinations', (
@@ -2431,9 +2433,7 @@ void main() {
     await _createProject(tester, 'Pointer trim');
 
     await tester.drag(
-      find.byKey(
-        const ValueKey('timeline-trim-handle-start-trim-pointer-clip'),
-      ),
+      find.byKey(ValueKey('timeline-trim-handle-start-trim-pointer-clip')),
       const Offset(32, 0),
     );
     await tester.pumpAndSettle();
@@ -3710,78 +3710,138 @@ void main() {
     );
   });
 
-  testWidgets('trim handle hit area meets the minimum touch target', (
+  Future<_FakeProjectGateway> mountTrimTarget(
+    WidgetTester tester, {
+    required Size size,
+    required String clipId,
+    required String savePath,
+  }) async {
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'touch-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'touch-track': [
+          ProjectTimelineClip(
+            clipId: clipId,
+            mediaId: 'touch-media',
+            timelineStart: ProjectRationalTime(BigInt.one, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
+          ),
+        ],
+      };
+    _setViewport(tester, size);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = savePath,
+    );
+    await _createProject(tester, 'Touch target');
+    return gateway;
+  }
+
+  // DESIGN.md:456 requires usable touch targets; the visible bar stays
+  // restrained while the pointer target grows.
+  void expectRestrainedTrimHandle(
+    WidgetTester tester, {
+    required String clipId,
+    required double minimumWidth,
+  }) {
+    final handle = find.byKey(ValueKey('timeline-trim-handle-start-$clipId'));
+    expect(handle, findsOneWidget);
+    expect(
+      tester.getSize(handle).width,
+      greaterThanOrEqualTo(minimumWidth),
+      reason: 'the trim hit area must be at least $minimumWidth px wide',
+    );
+
+    final visibleBar = find.descendant(
+      of: handle,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).color == OrColors.selection,
+      ),
+    );
+    expect(
+      tester.getSize(visibleBar).width,
+      lessThanOrEqualTo(6),
+      reason: 'the visible trim bar must stay visually restrained',
+    );
+  }
+
+  testWidgets('desktop trim handle hit area meets the minimum target', (
     tester,
   ) async {
-    // DESIGN.md:456 requires usable touch targets; the visible bar stays
-    // restrained while the pointer target grows.
-    Future<void> mountAt(Size size, String clipId, String savePath) async {
-      final gateway = _FakeProjectGateway()
-        ..initialTimelineTracks = const [
-          ProjectTimelineTrack(
-            trackId: 'touch-track',
-            kind: ProjectTimelineTrackKind.video,
-            clipCount: 1,
-          ),
-        ]
-        ..initialTimelineClips = {
-          'touch-track': [
-            ProjectTimelineClip(
-              clipId: clipId,
-              mediaId: 'touch-media',
-              timelineStart: ProjectRationalTime(BigInt.one, 1),
-              sourceStart: ProjectRationalTime(BigInt.zero, 1),
-              timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
-            ),
-          ],
-        };
-      _setViewport(tester, size);
-      await _mount(
-        tester,
-        gateway: gateway,
-        picker: _FakeProjectPicker()..savePath = savePath,
-      );
-      await _createProject(tester, 'Touch target');
-    }
+    await mountTrimTarget(
+      tester,
+      size: const Size(1280, 800),
+      clipId: 'desktop-touch-clip',
+      savePath: '/tmp/desktop-touch.orproj',
+    );
+    expectRestrainedTrimHandle(
+      tester,
+      clipId: 'desktop-touch-clip',
+      minimumWidth: 24,
+    );
+  });
 
-    void checkHandle(String clipId, double minimumWidth) {
-      final handle = find.byKey(ValueKey('timeline-trim-handle-start-$clipId'));
-      expect(handle, findsOneWidget);
-      expect(
-        tester.getSize(handle).width,
-        greaterThanOrEqualTo(minimumWidth),
-        reason: 'the trim hit area must be at least $minimumWidth px wide',
-      );
+  testWidgets('compact trim handle hit area meets the minimum target', (
+    tester,
+  ) async {
+    await mountTrimTarget(
+      tester,
+      size: const Size(390, 844),
+      clipId: 'compact-touch-clip',
+      savePath: '/tmp/compact-touch.orproj',
+    );
+    expectRestrainedTrimHandle(
+      tester,
+      clipId: 'compact-touch-clip',
+      minimumWidth: 44,
+    );
+  });
 
-      final visibleBar = find.descendant(
-        of: handle,
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is Container &&
-              widget.decoration is BoxDecoration &&
-              (widget.decoration! as BoxDecoration).color == OrColors.selection,
+  testWidgets('a bounded track count stays readable inside the fixed lane', (
+    tester,
+  ) async {
+    // The track-header gutter must not squeeze a "loaded / total" count
+    // into an ellipsis, nor push it out of the lane it is laid out in.
+    final clips = [
+      for (var index = 0; index < 101; index++)
+        ProjectTimelineClip(
+          clipId: 'count-clip-$index',
+          mediaId: 'count-media',
+          timelineStart: ProjectRationalTime(BigInt.from(index * 2), 1),
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          timelineDuration: ProjectRationalTime(BigInt.one, 1),
         ),
-      );
-      expect(
-        tester.getSize(visibleBar).width,
-        lessThanOrEqualTo(6),
-        reason: 'the visible trim bar must stay visually restrained',
-      );
-    }
-
-    await mountAt(
-      const Size(1280, 800),
-      'desktop-touch-clip',
-      '/tmp/desktop-touch.orproj',
+    ];
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = [
+        const ProjectTimelineTrack(
+          trackId: 'count-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 101,
+        ),
+      ]
+      ..initialTimelineClips = {'count-track': clips};
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/count.orproj',
     );
-    checkHandle('desktop-touch-clip', 24);
-
-    await mountAt(
-      const Size(390, 844),
-      'compact-touch-clip',
-      '/tmp/compact-touch.orproj',
-    );
-    checkHandle('compact-touch-clip', 44);
+    await _createProject(tester, 'Count readability');
+    expect(find.text('100 / 101'), findsOneWidget);
+    expect(_trackCountIsEllipsized(tester), isFalse);
+    expect(tester.takeException(), isNull);
   });
 
   test('the editor divider never presents a drag grip without a handler', () {
@@ -3817,6 +3877,59 @@ void main() {
             'only the structural divider and no drag-looking grip',
       );
     }
+  });
+
+  testWidgets('a focused control paints a visible focus ring', (tester) async {
+    // DESIGN.md:455 requires a visible keyboard focus. ThemeData.focusColor
+    // alone is not enough for controls that own their own decoration, so the
+    // ring has to be real and reserved in layout even before focus.
+    final focusNode = FocusNode(debugLabel: 'probe control');
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: OrFocusRing(
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: InkWell(focusNode: focusNode, onTap: () {}),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final ring = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byType(OrFocusRing),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final before = (ring.decoration as BoxDecoration).border!;
+    expect(
+      before.top.color,
+      Colors.transparent,
+      reason: 'the ring must reserve its space while not focused',
+    );
+
+    focusNode.requestFocus();
+    await tester.pumpAndSettle();
+
+    final focusedRing = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byType(OrFocusRing),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final after = (focusedRing.decoration as BoxDecoration).border!;
+    expect(after.top.color, OrColors.focus);
+    expect(after.top.width, greaterThanOrEqualTo(2));
+
+    expect(_contrastRatio(OrColors.focus, OrColors.background), greaterThan(3));
+    expect(_contrastRatio(OrColors.focus, OrColors.surface), greaterThan(3));
   });
 
   testWidgets(
@@ -3936,6 +4049,17 @@ String? _classBody(String source, String className) {
   final end = source.indexOf('\n}', start);
   if (end < 0) return null;
   return source.substring(start, end);
+}
+
+/// True when the "loaded / total" track count no longer fits its gutter and
+/// has been replaced by an ellipsis, which would hide how many clips are
+/// still unloaded.
+bool _trackCountIsEllipsized(WidgetTester tester) {
+  final text = tester.widget<Text>(find.text('100 / 101'));
+  final renderer = tester.renderObject<RenderParagraph>(
+    find.descendant(of: find.byWidget(text), matching: find.byType(RichText)),
+  );
+  return renderer.didExceedMaxLines;
 }
 
 ProjectRecoveryInspection _inspection(ProjectRecoveryKind kind) =>

@@ -140,7 +140,7 @@ class _NavigationHeading extends StatelessWidget {
       label,
       style: const TextStyle(
         color: OrColors.textMuted,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.7,
       ),
@@ -291,7 +291,7 @@ class _CompactDestination extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: selected ? OrColors.text : OrColors.textMuted,
-                    fontSize: 10,
+                    fontSize: 11,
                   ),
                 ),
               ),

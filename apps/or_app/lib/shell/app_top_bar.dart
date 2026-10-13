@@ -232,7 +232,7 @@ class _PreviewBadge extends StatelessWidget {
       ),
       child: const Text(
         'Developer Preview',
-        style: TextStyle(color: OrColors.textSecondary, fontSize: 10),
+        style: TextStyle(color: OrColors.textSecondary, fontSize: 11),
       ),
     );
   }

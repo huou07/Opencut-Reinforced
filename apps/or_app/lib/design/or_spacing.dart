@@ -29,3 +29,15 @@ abstract final class OrBreakpoints {
   static bool isCompact(double width) => width < compact;
   static bool isWide(double width) => width >= wide;
 }
+
+/// Minimum pointer/contact area for a control.
+///
+/// DESIGN.md requires usable touch targets; the compact layout gets the
+/// larger figure because it is the one reached by touch.
+abstract final class OrTouchTargets {
+  /// Pointer-driven desktop minimum.
+  static const minimum = 24.0;
+
+  /// Touch-driven compact minimum.
+  static const comfortable = 44.0;
+}
