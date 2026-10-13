@@ -26,7 +26,8 @@ not yet been measured. Stable application releases: none. Debug Developer Previe
 [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); they
 are for testing, not production distribution. See the active outcome-based
 [product roadmap](docs/PRODUCT_ROADMAP.md) and
-[release limitations](docs/RELEASE.md).
+[release limitations](docs/RELEASE.md), plus the
+[Developer Preview install and dogfood guide](docs/DEVELOPER_PREVIEW_INSTALL.md).
 
 The former checkpoint plan and state remain preserved for traceability in
 [docs/execution/README.md](docs/execution/README.md); they do not select active

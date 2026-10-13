@@ -6,6 +6,8 @@ Stable releases: **none**.
 
 Developer Preview prereleases are **available** on [GitHub Releases](https://github.com/huou07/Opencut-Reinforced). They are unsigned or ad-hoc-signed testing builds, not production releases. The latest published product supports project save/reopen/recovery, media import, timeline editing, preview, manual titles/captions, subtitle interchange, and desktop Matroska/WebM export. Android WebM is claimed only after exact-SHA all-ABI and SAF output verification; Android physical-device performance remains unmeasured. Folder import passed exact-SHA packaged Platform Verification, but is not yet in the latest published preview. Local English automatic captions have now passed the packaged desktop journey on a validation-only PR candidate; they are not yet in the latest public preview. Other AI workflows, advanced editing, and production signing remain open.
 
+See the [Developer Preview install and dogfood guide](DEVELOPER_PREVIEW_INSTALL.md) for the current package formats, security limitations, user journey, feedback route, update behavior, and uninstall behavior.
+
 The legacy checkpoint/evidence process is preserved in `docs/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
 
 ## Developer Preview
