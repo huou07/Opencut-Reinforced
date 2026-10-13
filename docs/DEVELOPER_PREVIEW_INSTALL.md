@@ -1,9 +1,11 @@
 # Developer Preview: install, try, and remove
 
 Developer Preview packages are unsigned or ad-hoc-signed debug builds for
-testing. They are not production installers. Do not disable operating-system
-security protections to run them. If your system blocks a package, stop and
-report the platform and message through the [bug report form](https://github.com/huou07/Opencut-Reinforced/issues/new?template=bug_report.yml).
+testing, not production releases. The Linux `.deb` is tested on Debian 13 amd64
+and Ubuntu 24.04 amd64; other distributions should use the portable TAR.GZ. The
+`.deb` remains an unsigned test build. Do not disable
+operating-system security protections to run them. If your system blocks a
+package, stop and report the platform and message through the [bug report form](https://github.com/huou07/Opencut-Reinforced/issues/new?template=bug_report.yml).
 
 Download the artifact for your platform from the linked **Developer Preview**
 Actions run. Artifacts are temporary; the run page shows their expiry and the
@@ -25,12 +27,19 @@ source commit.
 
 ## Linux
 
-1. Download `developer-preview-linux` and extract the complete TAR.GZ folder.
-2. Keep the extracted files together and run `./opencut-reinforced/or_app` from
-   the folder where you extracted the archive.
-3. The package is an unsigned debug build and may require the desktop GTK
-   runtime libraries provided by your distribution. Do not install libraries
-   from an untrusted source to make it run.
+The `developer-preview-linux` artifact includes an amd64 `.deb` tested on
+Debian 13 and Ubuntu 24.04, plus a portable TAR.GZ bundle.
+
+On Debian 13 or Ubuntu 24.04 amd64, download the `.deb` and open it in your
+Software app, or install it with
+`sudo apt install ./opencut-reinforced-linux-x64-debug.deb`. The package adds an
+application launcher, installs OR's MIT license as package copyright, and keeps
+editor files under `/opt/opencut-reinforced`.
+
+For other Linux distributions, download and extract the TAR.GZ folder. Keep the
+files together and run `./opencut-reinforced/or_app` from the folder where you
+extracted the archive. The archive may require desktop GTK runtime libraries
+provided by your distribution.
 
 ## Android
 
@@ -56,9 +65,12 @@ or unredacted logs.
 
 ## Update and uninstall
 
-Keep project files in a separate folder from the application package. To update,
-download and extract the newer package, then replace the old app or extracted
-folder. Android can update in place only when the installed package has a
-compatible signing key. To uninstall, remove the app or extracted package (or
-uninstall it through Android settings). Project files and exports are stored
-separately and are not removed by uninstalling the app.
+Keep project files in a separate folder from the application package. To update a supported Debian 13 or Ubuntu 24.04 install, open the newer `.deb`
+in Software or run
+`sudo apt install ./opencut-reinforced-linux-x64-debug.deb`. For the other desktop
+archives, replace the old app or extracted folder. Android can update in place
+only when the installed package has a compatible signing key. To uninstall,
+remove the app or extracted package, remove the Debian package with your
+Software app or `sudo apt remove opencut-reinforced`, or uninstall it through
+Android settings. Project files and exports are stored separately and are not
+removed by uninstalling the app.

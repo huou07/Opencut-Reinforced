@@ -16,15 +16,16 @@ Developer Preview **releases** are automated nightly or manually dispatched from
 
 For earlier dogfooding, maintainers may manually dispatch the workflow on a
 non-main branch. That validation-only mode requires a successful Platform
-Verification run for the exact PR head SHA, builds the four installable app
-packages, and runs the packaged desktop transcription acceptance. It has no
+Verification run for the exact PR head SHA, builds five app packages, including
+a Debian 13 / Ubuntu 24.04 amd64 `.deb`, and runs the packaged desktop transcription
+acceptance. It has no
 release/tag write permission; its app packages are seven-day Actions artifacts,
 not public releases. A failed candidate may upload no desktop package. Main remains the only publication path.
 
 Publication requires successful Platform Verification for the exact source
 commit. The tag resolves to that commit, the release is a prerelease, and each
-of the thirteen required assets is non-empty and checksummed (except the
-checksum file itself): four app packages, three desktop CLI packages, two
+of the fourteen required assets is non-empty and checksummed (except the
+checksum file itself): five app packages, three desktop CLI packages, two
 build/provenance files, and the FFmpeg, Opus, and libvpx source archives.
 
 The packages are debug developer builds for testing, not production releases or performance benchmarks. macOS uses an ad-hoc debug signature and is not notarized; Android uses the standard debug signing key. No package has production signing. Desktop app archives carry their matching FFmpeg runtime libraries and license notices. Build information records codec source identities, configuration, toolchains, and license posture. Pinned libvpx license and patent notices are extracted from the exact Git commit blobs, so Windows checkout line-ending conversion cannot alter the distributed provenance. Build outputs are not committed to Git.

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Opencut Reinforced
+Comment=Open-source video editor
+Exec=/opt/opencut-reinforced/or_app
+Icon=video-x-generic
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+StartupWMClass=io.github.huou07.or_app
