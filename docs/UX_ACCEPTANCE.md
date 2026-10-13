@@ -68,6 +68,10 @@ headless or widget-level checks:
   Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
   attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
 - A new empty project does not inherit another project's canonical timeline.
+- A new project with no imported media offers an Import Media action in the
+  empty timeline alongside the existing track choices. It uses the same
+  platform picker and permission path as the Media panel on desktop and compact
+  layouts.
 - Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
   slots follow the Focused Monochrome workspace layout; no marketing banners,
   scenic backgrounds, glow-heavy decoration, or fake metrics are accepted.

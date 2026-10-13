@@ -499,6 +499,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
+            onImportMedia: widget.busy ? null : widget.onImportMedia,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
             onAddTextTrack: widget.onAddTextTrack,
@@ -582,6 +583,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
+            onImportMedia: widget.busy ? null : widget.onImportMedia,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
             onAddTextTrack: widget.onAddTextTrack,
@@ -3344,6 +3346,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.loading,
     required this.error,
     required this.busy,
+    required this.onImportMedia,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
     required this.onAddTextTrack,
@@ -3384,6 +3387,7 @@ class _TimelinePanel extends StatefulWidget {
   final bool loading;
   final String? error;
   final bool busy;
+  final VoidCallback? onImportMedia;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
@@ -3625,6 +3629,23 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 ),
               ),
               const SizedBox(height: OrSpacing.x2),
+              if (widget.mediaItems.isEmpty &&
+                  widget.isProjectWorkspace &&
+                  widget.onImportMedia != null) ...[
+                const Text(
+                  'Import a video or audio file to start editing.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: OrColors.textMuted, fontSize: 12),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                FilledButton.icon(
+                  key: const ValueKey('timeline-empty-import-media'),
+                  onPressed: widget.busy ? null : widget.onImportMedia,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Import Media'),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+              ],
               Wrap(
                 spacing: OrSpacing.x2,
                 runSpacing: OrSpacing.x2,

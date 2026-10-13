@@ -526,7 +526,11 @@ void main() {
     await _createProject(tester, 'Import Media');
 
     final queriesBeforeImport = gateway.mediaListCalls;
-    await tester.tap(find.byKey(const ValueKey('media-import')));
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
     await tester.pumpAndSettle();
 
     expect(picker.mediaOpenCalls, 1);
@@ -536,6 +540,29 @@ void main() {
     expect(find.text('imported.mov'), findsOneWidget);
     expect(find.text('Unsaved changes'), findsOneWidget);
     expect(find.text('No media loaded'), findsOneWidget);
+  });
+
+  testWidgets('compact empty timeline imports through the project picker', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-empty.orproj'
+      ..mediaPath = '/tmp/compact-import.mp4';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact empty project');
+
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaSources, ['/tmp/compact-import.mp4']);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Import Media adds each selected source through the gateway', (
