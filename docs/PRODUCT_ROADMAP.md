@@ -18,32 +18,20 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: get the verified Developer Preview into ordinary-user
-hands and learn from install, first-project, media, recovery, responsiveness,
-and output friction. Exact product SHA `a3db4f63319029ea683b6d4cc749df7fdba27a11`
-now records the last 12 opened projects in app-support storage and exposes
-them from Home and Projects. Desktop package journeys reopened from recents
-after app restart on Linux, macOS, and Windows. Android's real DocumentsUI
-journey read the persisted recent entry, rebound a fresh picker only after its
-retained read grant and URI-derived working-copy path validated, and verified
-SAF synchronization. The validation-only [Developer Preview run
-38335103077](https://github.com/huou07/Opencut-Reinforced/actions/runs/38335103077)
-has uploaded all four packages for seven days; it did not publish a release.
-The packaged local English transcription journey is now verified in the
-validation-only Developer Preview on exact PR SHA
-`1d63db88d787653c1875006625ddbfb4c34217e0`. Linux, macOS, and Windows each
-passed consented model download, transcription, caption review/edit/apply,
-save/reopen, and SRT export. Platform Verification
-[38313145653](https://github.com/huou07/Opencut-Reinforced/actions/runs/38313145653)
-passed all seven jobs on that SHA; validation-only Developer Preview
-[38316339457](https://github.com/huou07/Opencut-Reinforced/actions/runs/38316339457)
-passed its exact-source gate and all four app package jobs. Its temporary
-artifacts are available through the run through October 19, 2026. This is not a
-public release: packages are unsigned or ad-hoc signed debug builds, CLI and
-publication jobs were skipped, Android transcription is unsupported, and
-physical-device responsiveness remains unverified. The Android correctness and
-resource checks pass; the physical-device evidence gap does not justify more
-emulator-only tuning. Detailed prior diagnosis and exact run history remain in
+Current product focus: get the editor into ordinary-user hands and learn from
+install, first-project, media, recovery, responsiveness, and output friction.
+Latest candidate `f5cf1c26353feaebf49e9e5ca058414ad9798809` adds a direct first
+media-import action to an empty project timeline and waits for the real project
+Close control after recent-project reopen in packaged acceptance. Exact-SHA
+Platform Verification [38353664539](https://github.com/huou07/Opencut-Reinforced/actions/runs/38353664539)
+passed all seven jobs. Validation-only Developer Preview
+[38356797321](https://github.com/huou07/Opencut-Reinforced/actions/runs/38356797321)
+built all four packages and passed packaged desktop transcription/caption
+acceptance; its temporary artifacts expire October 20, 2026. The run summary
+contains a concise dogfood journey and feedback route. These are unsigned or
+ad-hoc-signed debug builds, not a public stable release. Clean-machine
+install/upgrade, Android transcription, and physical-device responsiveness
+remain unverified. Detailed historical evidence remains in this document and
 the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 
 Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
@@ -125,7 +113,8 @@ journey unless results establish a real engine migration dependency.
 - **Current product candidate:** `c329d8e26c994fb24af5f53d3f4c50e31087d1cd` stages the pinned whisper.cpp CLI and OR provider in desktop preview bundles and adds a real packaged transcription, caption review/edit/apply, save/reopen, and SRT export gate. Exact-SHA PR Platform Verification [38234509928](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234509928) passed all eight required checks, including macOS, Windows, Linux packaged journeys and Android SAF/resource acceptance. Those checks verify existing cross-platform behavior. The validation-only workflow passed its exact-SHA prepare gate on `4033f90a16c9042008e404c1d597db7eaed6c493`, built Android, and skipped all release-only jobs. Its macOS, Windows, and Linux packaged transcription gates failed; root causes and follow-up evidence are recorded in the history archive. Android transcription is unsupported and physical-device performance remains unverified.
 - **Folder import — exact-SHA verified:** `a7f4bf4010c3d3283e788387839edbc6f83a0f3d` passed Platform Verification [38275213412](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412), Repository Hygiene, and all Linux, macOS, Windows, Android, Rust, Flutter, and descriptor jobs. The clean desktop journeys and Android DocumentsUI flow passed; Android imported three selected files plus two nested files under the selected `Footage` grant, then passed preview, captions, relink, export, recovery, and descriptor/resource checks. A prior Android run timed out before the import gateway, but this run passed; its cause is still unlocalized. Emulator evidence does not establish physical-device performance. Detailed timing and scope evidence are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Recent project return — exact-SHA verified:** `a3db4f63319029ea683b6d4cc749df7fdba27a11` passed Platform Verification [38328757217, attempt 2](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217), with Repository Hygiene [38328757237](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757237). Linux, macOS, and Windows packaged journeys reopened a recent project after application restart. Android verified real project selection, the persisted recent URI, a fresh-picker SAF rebind, read-grant/path validation, and provider synchronization; its larger journey also passed multi-media import, captions, relink, process recovery, preview resource bounds, and independently decoded VP9/Opus WebM. Attempt 1's Android provider freeze and macOS launch timeout, and their exact-SHA passing rerun evidence, are detailed in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-- **Dogfood build available:** validation-only Developer Preview [38335103077](https://github.com/huou07/Opencut-Reinforced/actions/runs/38335103077) passed the exact-source gate and all four app package jobs on SHA `a3db4f63319029ea683b6d4cc749df7fdba27a11`. Linux, macOS, and Windows also passed the packaged real local transcription, caption review/edit/apply, project save/reopen, and SRT export journey. Temporary artifacts expire October 20, 2026; CLI and public release publication were skipped. These remain unsigned or ad-hoc-signed debug packages, not production installers.
+- **First-project handoff — exact-SHA verified:** `72fe14c` adds an empty-timeline Import Media action that uses the existing platform picker and permission path on desktop and compact layouts. Its first Platform Verification run exposed a close-control readiness race in the packaged test on Linux and Windows; a fresh rerun passed Windows but reproduced Linux. Commit `f5cf1c26353feaebf49e9e5ca058414ad9798809` now waits for the actual enabled, hit-testable Close control and reports its state if closing stalls. Platform Verification [38353664539](https://github.com/huou07/Opencut-Reinforced/actions/runs/38353664539) passed all seven jobs, including the Linux packaged journey. The UI change preserves project and import semantics.
+- **Current dogfood build available:** validation-only Developer Preview [38356797321](https://github.com/huou07/Opencut-Reinforced/actions/runs/38356797321) passed the exact-source gate and uploaded Android, Linux, macOS, and Windows packages for SHA `f5cf1c26353feaebf49e9e5ca058414ad9798809`. Linux, macOS, and Windows also passed the packaged local transcription, caption review/edit/apply, save/reopen, and SRT export journey. Artifacts expire October 20, 2026; publication and CLI packages were skipped. These unsigned or ad-hoc-signed debug packages are for testing, not production installers.
 - **Next product gap — clean first install and real-user feedback:** use the available packages for ordinary project tasks and collect first-project, installation, permissions, unsupported common media, recovery, responsiveness, and output feedback. Establish clean-machine install/upgrade/uninstall evidence and make supported packages easier to install. Android transcription and physical-device responsiveness remain unverified; the emulator has not justified more tuning without physical-device evidence.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
