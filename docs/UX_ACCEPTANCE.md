@@ -75,6 +75,9 @@ headless or widget-level checks:
   empty timeline alongside the existing track choices. It uses the same
   platform picker and permission path as the Media panel on desktop and compact
   layouts.
+- Add to Timeline pre-fills the exact timeline start at the current project
+  content end, so another full media item can be appended without entering
+  timing values. The timing field remains editable for deliberate placement.
 - Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
   slots follow the Focused Monochrome workspace layout; no marketing banners,
   scenic backgrounds, glow-heavy decoration, or fake metrics are accepted.

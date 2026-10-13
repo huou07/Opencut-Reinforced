@@ -2718,6 +2718,77 @@ void main() {
     },
   );
 
+  testWidgets('Add to Timeline defaults to the current content end', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-video',
+          sourceUri: Uri.file('/tmp/scene.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '4 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: null,
+          firstVideoDuration: ProjectRationalTime(BigInt.from(4), 1),
+        ),
+      ]
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'append-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'append-track': [
+          ProjectTimelineClip(
+            clipId: 'existing-clip',
+            mediaId: 'media-video',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      }
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-append.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Append clip');
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-add-timeline-media-video')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('timeline-insert-start')),
+          )
+          .controller!
+          .text,
+      '4/1',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTimelineStart?.canonical, '4/1');
+    expect(gateway.lastSession!.clips['append-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'timeline insert chooses exact duration for the selected stream',
     (tester) async {

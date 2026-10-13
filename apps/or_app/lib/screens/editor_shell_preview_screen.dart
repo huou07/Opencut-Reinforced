@@ -311,7 +311,12 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   void _onPreviewStateChanged(ProjectPreviewState state) {
+    final previous = _previewState.value;
     _previewState.value = state;
+    if (mounted &&
+        (previous == null || previous.contentEnd != state.contentEnd)) {
+      setState(() {});
+    }
   }
 
   void _onTimelineClipSelectionChanged(
@@ -402,6 +407,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   selectedTool: _selectedTool,
                   isProjectWorkspace: widget.isProjectWorkspace,
                   project: widget.project,
+                  previewState: _previewState.value,
                   mediaPage: widget.mediaPage,
                   timelineTracks: widget.timelineTracks,
                   mediaPreviews: widget.mediaPreviews,
@@ -667,6 +673,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 selectedTool: tool,
                 isProjectWorkspace: true,
                 project: widget.project,
+                previewState: _previewState.value,
                 mediaPage: widget.mediaPage,
                 timelineTracks: widget.timelineTracks,
                 mediaPreviews: widget.mediaPreviews,
@@ -1024,6 +1031,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.selectedTool,
     required this.isProjectWorkspace,
     required this.project,
+    required this.previewState,
     required this.mediaPage,
     required this.timelineTracks,
     required this.mediaPreviews,
@@ -1044,6 +1052,7 @@ class _EditorToolPanel extends StatelessWidget {
   final String selectedTool;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
+  final ProjectPreviewState? previewState;
   final ProjectMediaPage? mediaPage;
   final ProjectTimelineTracks? timelineTracks;
   final Map<String, ProjectMediaPreview> mediaPreviews;
@@ -1074,6 +1083,7 @@ class _EditorToolPanel extends StatelessWidget {
       return _MediaLibraryPanel(
         page: mediaPage,
         project: project,
+        previewState: previewState,
         tracks: timelineTracks,
         previews: mediaPreviews,
         loading: mediaLoading,
@@ -1132,6 +1142,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   const _MediaLibraryPanel({
     required this.page,
     required this.project,
+    required this.previewState,
     required this.tracks,
     required this.previews,
     required this.loading,
@@ -1150,6 +1161,7 @@ class _MediaLibraryPanel extends StatelessWidget {
 
   final ProjectMediaPage? page;
   final ProjectReadModel? project;
+  final ProjectPreviewState? previewState;
   final ProjectTimelineTracks? tracks;
   final Map<String, ProjectMediaPreview> previews;
   final bool loading;
@@ -1176,6 +1188,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = page?.items ?? const <ProjectMediaItem>[];
+    final currentPreviewState = previewState;
     final timelineSnapshotMatches =
         page != null &&
         project != null &&
@@ -1276,7 +1289,8 @@ class _MediaLibraryPanel extends StatelessWidget {
                         preview: previews[item.mediaId],
                         onAddToTimeline:
                             onAddMediaToTimeline == null ||
-                                !timelineSnapshotMatches
+                                !timelineSnapshotMatches ||
+                                currentPreviewState == null
                             ? null
                             : () => unawaited(
                                 _showInsertTimelineDialog(
@@ -1284,6 +1298,9 @@ class _MediaLibraryPanel extends StatelessWidget {
                                   project: project!,
                                   media: item,
                                   tracks: tracks!,
+                                  suggestedStart:
+                                      currentPreviewState.contentEnd ??
+                                      ProjectRationalTime(BigInt.zero, 1),
                                   onInsert: onAddMediaToTimeline!,
                                 ),
                               ),
@@ -5576,6 +5593,7 @@ Future<void> _showInsertTimelineDialog({
   required ProjectReadModel project,
   required ProjectMediaItem media,
   required ProjectTimelineTracks tracks,
+  required ProjectRationalTime suggestedStart,
   required Future<void> Function(
     ProjectReadModel,
     ProjectMediaItem,
@@ -5625,7 +5643,9 @@ Future<void> _showInsertTimelineDialog({
   }
   final labels = _timelineTrackLabels(tracks.items);
   var selectedTrack = compatible.first;
-  final timelineStartController = TextEditingController(text: '0/1');
+  final timelineStartController = TextEditingController(
+    text: suggestedStart.canonical,
+  );
   final sourceStartController = TextEditingController(text: '0/1');
   final durationController = TextEditingController(
     text: _defaultTimelineDuration(media, selectedTrack.kind)?.canonical ?? '',
