@@ -32,11 +32,8 @@ void main() {
     expect(find.text('New Project'), findsOneWidget);
     expect(find.text('Open Project'), findsOneWidget);
     expect(find.text('No recent projects yet'), findsOneWidget);
-    expect(
-      find.textContaining('import media, edit a timeline'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Matroska export workflows'), findsOneWidget);
+    expect(find.text('Recent Projects'), findsOneWidget);
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('nav-projects')));
     await tester.pumpAndSettle();
@@ -3373,12 +3370,20 @@ void main() {
     expect(find.byKey(const ValueKey('command-close-project')), findsOneWidget);
   });
 
-  testWidgets('desktop Editor Shell Preview stays distinct without a project', (
+  testWidgets('desktop shell preview stays under advanced settings', (
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
     await _mount(tester);
-    await tester.tap(find.byKey(const ValueKey('home-editor-preview')));
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-section-advanced')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-open-editor-preview')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Editor layout preview'), findsOneWidget);
@@ -3392,35 +3397,13 @@ void main() {
     expect(find.byKey(const ValueKey('nav-editorPreview')), findsNothing);
   });
 
-  testWidgets('compact Editor Shell Preview uses a tool sheet', (tester) async {
+  testWidgets('compact Home omits the visual-only editor shell action', (
+    tester,
+  ) async {
     _setViewport(tester, const Size(390, 844));
     await _mount(tester);
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('home-editor-preview')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-editor-preview')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No media loaded'), findsOneWidget);
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
-    expect(find.byKey(const ValueKey('preview-play')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('mobile-editor-tool-dock')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('editor-tool-media')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('mobile-editor-tool-media')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-    await tester.pumpAndSettle();
-    expect(find.text('Unavailable in this Developer Preview'), findsOneWidget);
-    await tester.tap(find.byTooltip('Close tool panel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.text('Developer Preview'), findsNothing);
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

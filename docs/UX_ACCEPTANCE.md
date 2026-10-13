@@ -68,6 +68,9 @@ headless or widget-level checks:
   Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
   attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
 - A new empty project does not inherit another project's canonical timeline.
+- Home focuses on creating, opening, and returning to projects. The visual-only
+  Editor Shell Preview is reachable from Settings → Advanced and is not offered
+  as a project action.
 - A new project with no imported media offers an Import Media action in the
   empty timeline alongside the existing track choices. It uses the same
   platform picker and permission path as the Media panel on desktop and compact

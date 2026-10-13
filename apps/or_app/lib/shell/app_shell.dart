@@ -265,7 +265,6 @@ class _AppShellState extends State<AppShell> {
       onNewProject: _createProject,
       onOpenProject: _openProject,
       onOpenRecentProject: _openRecentProject,
-      onOpenEditorPreview: () => _select(AppDestination.editorPreview),
       onOpenProjects: () => _select(AppDestination.projects),
     ),
     AppDestination.projects => ProjectsScreen(
