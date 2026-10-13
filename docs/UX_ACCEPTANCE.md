@@ -54,11 +54,17 @@ headless or widget-level checks:
   remain reachable through the Focused Monochrome shell.
 - Create/open/close/switch/exit flows preserve dirty-state guards, explicit
   save, recovery inspection/apply/discard, and exact-base conflict behavior.
-- Projects exposes only the current create/open and active-project controls;
-  unimplemented search, filter, sort, and view controls are not shown.
-- Recent project history is shown from Home and Projects after a successful
-  project open. Candidate persistence and Android SAF reauthorization remain
-  unaccepted until exact-SHA packaged hosted verification passes.
+- Projects exposes create/open, recent-project return, and active-project
+  controls; unimplemented search, filter, sort, and view controls are not shown.
+- Recent project history is stored in the app-support directory and shown from
+  Home and Projects after a successful project open. Linux, macOS, and Windows
+  packaged journeys reopened from that list after app restart. Android's real
+  DocumentsUI journey validated the persisted SAF URI, retained read grant,
+  URI-derived working-copy path, fresh-picker rebind, and provider
+  synchronization. Saving a renamed project updates its recent display name
+  without changing its last-opened time. Exact-SHA evidence: Platform
+  Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
+  attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
 - A new empty project does not inherit another project's canonical timeline.
 - Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
   slots follow the Focused Monochrome workspace layout; no marketing banners,
