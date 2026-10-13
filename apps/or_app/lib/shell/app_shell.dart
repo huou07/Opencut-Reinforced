@@ -752,7 +752,7 @@ class _AppShellState extends State<AppShell> {
       if (mounted) setState(() => _activeProject = saved);
       final path = _activeProjectPath;
       if (path != null) {
-        await _recordRecentProject(path, saved.name);
+        await _updateRecentProjectName(path, saved.name);
         if (!await _syncBeforeClose(path)) return false;
       }
     }
@@ -908,6 +908,28 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _updateRecentProjectName(String path, String name) async {
+    try {
+      final projects = await widget.recentProjectStore.updateName(
+        path: path,
+        name: name,
+        documentUri: widget.projectFilePicker.projectDocumentUriFor(path),
+      );
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        _showUnavailable(
+          'The project is saved, but its recent project name could not be updated.',
+        );
+      }
+    }
+  }
+
   Future<void> _handleProjectEvent(
     ProjectSessionHandle session,
     ProjectHostEvent event,
@@ -1054,7 +1076,7 @@ class _AppShellState extends State<AppShell> {
     if (updated == null || !mounted) return;
     final path = _activeProjectPath;
     if (path == null) return;
-    await _recordRecentProject(path, updated.name);
+    await _updateRecentProjectName(path, updated.name);
     if (!mounted) return;
     final notice = await _syncNotice(path);
     if (!mounted) return;

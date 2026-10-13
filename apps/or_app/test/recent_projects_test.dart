@@ -31,20 +31,22 @@ void main() {
       expect(await recent.load(), isEmpty);
 
       await recent.record(path: '/projects/first.orproj', name: 'First');
+      final openedAt = (await recent.load()).first.lastOpened;
       await recent.record(path: '/projects/second.orproj', name: 'Second');
-      final updated = await recent.record(
+      final updated = await recent.updateName(
         path: '/projects/first.orproj',
         name: 'Renamed First',
       );
 
       expect(updated.map((project) => project.name), [
-        'Renamed First',
         'Second',
+        'Renamed First',
       ]);
       expect((await store().load()).map((project) => project.path), [
-        '/projects/first.orproj',
         '/projects/second.orproj',
+        '/projects/first.orproj',
       ]);
+      expect(updated.last.lastOpened, openedAt);
     },
   );
 
@@ -58,7 +60,8 @@ void main() {
         documentUri: uri,
         name: 'First',
       );
-      final updated = await recent.record(
+      final openedAt = (await recent.load()).single.lastOpened;
+      final updated = await recent.updateName(
         path: '/data/user/0/or/files/or-projects/first.orproj',
         documentUri: uri,
         name: 'Renamed First',
@@ -67,6 +70,7 @@ void main() {
       expect(updated, hasLength(1));
       expect(updated.single.documentUri, uri);
       expect(updated.single.name, 'Renamed First');
+      expect(updated.single.lastOpened, openedAt);
     },
   );
 

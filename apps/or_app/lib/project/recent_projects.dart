@@ -77,6 +77,12 @@ abstract interface class RecentProjectStore {
     required String name,
     String? documentUri,
   });
+
+  Future<List<RecentProject>> updateName({
+    required String path,
+    required String name,
+    String? documentUri,
+  });
 }
 
 /// Stores only project locations and display metadata, never project contents.
@@ -156,6 +162,42 @@ class PersistentRecentProjectStore implements RecentProjectStore {
       ...projects.where((project) => project.identity != entry.identity),
     ].take(maxRecentProjects).toList(growable: false);
 
+    await _write(updated);
+    return List.unmodifiable(updated);
+  }
+
+  @override
+  Future<List<RecentProject>> updateName({
+    required String path,
+    required String name,
+    String? documentUri,
+  }) async {
+    final normalizedName = name.trim();
+    if (path.isEmpty ||
+        path.length > 4096 ||
+        normalizedName.isEmpty ||
+        normalizedName.length > 256) {
+      return load();
+    }
+    final identity = documentUri ?? path;
+    final projects = await load();
+    final index = projects.indexWhere(
+      (project) => project.identity == identity,
+    );
+    if (index == -1 || projects[index].name == normalizedName) return projects;
+    final updated = List<RecentProject>.of(projects);
+    final previous = updated[index];
+    updated[index] = RecentProject(
+      path: previous.path,
+      name: normalizedName,
+      lastOpened: previous.lastOpened,
+      documentUri: previous.documentUri,
+    );
+    await _write(updated);
+    return List.unmodifiable(updated);
+  }
+
+  Future<void> _write(List<RecentProject> projects) async {
     final file = await _file();
     await file.parent.create(recursive: true);
     final temporary = File(
@@ -165,7 +207,7 @@ class PersistentRecentProjectStore implements RecentProjectStore {
       await temporary.writeAsString(
         jsonEncode({
           'version': 1,
-          'projects': updated.map((project) => project.toJson()).toList(),
+          'projects': projects.map((project) => project.toJson()).toList(),
         }),
         flush: true,
       );
@@ -173,7 +215,6 @@ class PersistentRecentProjectStore implements RecentProjectStore {
     } finally {
       if (await temporary.exists()) await temporary.delete();
     }
-    return List.unmodifiable(updated);
   }
 }
 
@@ -205,5 +246,26 @@ class InMemoryRecentProjectStore implements RecentProjectStore {
       _projects.removeRange(maxRecentProjects, _projects.length);
     }
     return List.unmodifiable(_projects);
+  }
+
+  @override
+  Future<List<RecentProject>> updateName({
+    required String path,
+    required String name,
+    String? documentUri,
+  }) async {
+    final identity = documentUri ?? path;
+    final index = _projects.indexWhere(
+      (project) => project.identity == identity,
+    );
+    if (index == -1) return load();
+    final previous = _projects[index];
+    _projects[index] = RecentProject(
+      path: previous.path,
+      name: name.trim(),
+      lastOpened: previous.lastOpened,
+      documentUri: previous.documentUri,
+    );
+    return load();
   }
 }
