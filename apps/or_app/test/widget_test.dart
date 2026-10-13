@@ -12,6 +12,7 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 import 'package:or_app/shell/app_top_bar.dart';
@@ -67,6 +68,32 @@ void main() {
       expect(find.text(expectedText), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('recent project reopens through the guarded project workflow', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    const path = '/tmp/recent-project.orproj';
+    final recents = InMemoryRecentProjectStore([
+      RecentProject(
+        path: path,
+        name: 'Recent project',
+        lastOpened: DateTime.utc(2026, 10, 13),
+      ),
+    ]);
+    final gateway = _FakeProjectGateway();
+    await _mount(tester, gateway: gateway, recentProjectStore: recents);
+
+    await tester.tap(find.byKey(const ValueKey('recent-project-$path')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastOpenPath, path);
+    expect(
+      find.byKey(const ValueKey('workspace-project-name')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('medium desktop page header fits beside the navigation rail', (
@@ -1851,7 +1878,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('active-project-close')));
       await tester.pumpAndSettle();
       expect(gateway.closeCalls, 1);
-      expect(find.text('No recent projects yet'), findsOneWidget);
+      expect(find.text('Compact close'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1882,7 +1909,7 @@ void main() {
     expect(gateway.closeCalls, 1);
     expect(gateway.lastCloseDiscard, isTrue);
     expect(gateway.lastCloseDiscardRecoveryCheckpoint, isTrue);
-    expect(find.text('No recent projects yet'), findsOneWidget);
+    expect(find.text('Close me'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-new-project')));
     await tester.pumpAndSettle();
@@ -1901,7 +1928,7 @@ void main() {
     expect(gateway.closeCalls, 2);
     expect(gateway.lastCloseDiscard, isFalse);
     expect(gateway.lastCloseDiscardRecoveryCheckpoint, isFalse);
-    expect(find.text('No recent projects yet'), findsOneWidget);
+    expect(find.text('Save me'), findsOneWidget);
   });
 
   testWidgets('clean close retries a failed SAF synchronization', (
@@ -3463,12 +3490,14 @@ Future<void> _mount(
   WidgetTester tester, {
   _FakeProjectGateway? gateway,
   _FakeProjectPicker? picker,
+  RecentProjectStore? recentProjectStore,
 }) async {
   await tester.pumpWidget(
     OrApp(
       gateway: _FakeCoreGateway(),
       projectGateway: gateway ?? _FakeProjectGateway(),
       projectFilePicker: picker ?? _FakeProjectPicker(),
+      recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
     ),
   );
   await tester.pumpAndSettle();
@@ -3572,6 +3601,15 @@ class _FakeProjectPicker implements ProjectFilePicker {
     openCalls++;
     return openPath;
   }
+
+  @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async => path;
+
+  @override
+  String? projectDocumentUriFor(String path) => null;
 
   @override
   Future<List<String>> openMediaSources() async {

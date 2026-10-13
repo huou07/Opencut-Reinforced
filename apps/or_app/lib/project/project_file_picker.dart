@@ -10,6 +10,8 @@ abstract interface class ProjectFilePicker {
   bool get supportsMediaImport;
   bool get supportsExport;
   Future<String?> openProjectPath();
+  Future<String> restoreRecentProject(String path, {String? documentUri});
+  String? projectDocumentUriFor(String path);
   Future<List<String>> openMediaSources();
   Future<List<String>> openMediaFolderSources();
   Future<String?> saveProjectPath({required String suggestedName});
@@ -124,6 +126,15 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async => path;
+
+  @override
+  String? projectDocumentUriFor(String path) => null;
+
+  @override
   Future<List<String>> openMediaSources() async {
     if (!isSupported) return const [];
     final files = await openFiles();
@@ -228,6 +239,48 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
 
   @override
   Future<String?> openProjectPath() => _selectProject('openProject');
+
+  @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async {
+    if (documentUri == null) {
+      throw const ProjectSafStorageException(
+        'This recent project has no Android document permission. Use Open Project to choose it again.',
+      );
+    }
+    final uri = Uri.tryParse(documentUri);
+    if (uri == null || uri.scheme != 'content' || uri.authority.isEmpty) {
+      throw const ProjectSafStorageException(
+        'This recent project has no valid Android document permission. Use Open Project to choose it again.',
+      );
+    }
+    try {
+      final response = await _channel.invokeMapMethod<String, Object?>(
+        'restoreProject',
+        {'workingPath': path, 'documentUri': documentUri},
+      );
+      if (response?['workingPath'] != path ||
+          response?['documentUri'] != documentUri) {
+        throw const ProjectSafStorageException(
+          'The saved Android project location no longer matches. Use Open Project to choose it again.',
+        );
+      }
+      _documentUrisByWorkingPath[path] = documentUri;
+      return path;
+    } on PlatformException catch (error) {
+      throw _storageError(error.code);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Android project storage is unavailable. Restart the application and try again.',
+      );
+    }
+  }
+
+  @override
+  String? projectDocumentUriFor(String path) =>
+      _documentUrisByWorkingPath[path];
 
   @override
   Future<String?> saveProjectPath({required String suggestedName}) =>
@@ -582,6 +635,7 @@ class AndroidSafProjectPicker implements ProjectFilePicker {
     'EXPORT_BUSY' => 'The export is already being saved.',
     'PROJECT_NOT_EMPTY' => 'The selected document is not empty. Choose an empty document to create a project.',
     'PROJECT_ALREADY_MANAGED' => 'This document already has a project copy on this device. Open the project instead.',
+    'PROJECT_PERMISSION_LOST' => 'Project access is no longer available. Use Open Project to choose the document again.',
     'EXTERNAL_PROJECT_CHANGED' =>
       'The external project changed outside OR. Its changes were preserved.',
     'PROJECT_SYNC_FAILED' => 'The project is saved on this device, but could not be synchronized to the selected document.',

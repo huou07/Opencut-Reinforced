@@ -13,6 +13,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
 import '../project/project_file_picker.dart';
+import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
 import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
@@ -36,11 +37,13 @@ class AppShell extends StatefulWidget {
     required this.gateway,
     required this.projectGateway,
     required this.projectFilePicker,
+    required this.recentProjectStore,
   });
 
   final CoreGateway gateway;
   final ProjectGateway projectGateway;
   final ProjectFilePicker projectFilePicker;
+  final RecentProjectStore recentProjectStore;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -51,6 +54,9 @@ class _AppShellState extends State<AppShell> {
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
+  List<RecentProject> _recentProjects = const [];
+  bool _recentProjectsLoaded = false;
+  bool _recentProjectsUnavailable = false;
   String? _projectNotice;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
@@ -104,6 +110,7 @@ class _AppShellState extends State<AppShell> {
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _onExitRequested,
     );
+    unawaited(_loadRecentProjects());
   }
 
   @override
@@ -252,16 +259,24 @@ class _AppShellState extends State<AppShell> {
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
       canPickProjects: widget.projectFilePicker.isSupported,
+      recentProjects: _recentProjects,
+      recentProjectsLoaded: _recentProjectsLoaded,
+      recentProjectsUnavailable: _recentProjectsUnavailable,
       onNewProject: _createProject,
       onOpenProject: _openProject,
+      onOpenRecentProject: _openRecentProject,
       onOpenEditorPreview: () => _select(AppDestination.editorPreview),
       onOpenProjects: () => _select(AppDestination.projects),
     ),
     AppDestination.projects => ProjectsScreen(
       project: _activeProject,
       canPickProjects: widget.projectFilePicker.isSupported,
+      recentProjects: _recentProjects,
+      recentProjectsLoaded: _recentProjectsLoaded,
+      recentProjectsUnavailable: _recentProjectsUnavailable,
       onNewProject: _createProject,
       onOpenProject: _openProject,
+      onOpenRecentProject: _openRecentProject,
       onOpenWorkspace: _openWorkspace,
       onRenameProject: _renameProject,
       onSaveProject: _saveProject,
@@ -435,12 +450,22 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _openProject() async {
+  Future<void> _openProject() => _openProjectLocation();
+
+  Future<void> _openRecentProject(RecentProject recent) =>
+      _openProjectLocation(recent);
+
+  Future<void> _openProjectLocation([RecentProject? recent]) async {
     if (!_checkFileLifecycleAvailable()) return;
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final path = await widget.projectFilePicker.openProjectPath();
+      final path = recent == null
+          ? await widget.projectFilePicker.openProjectPath()
+          : await widget.projectFilePicker.restoreRecentProject(
+              recent.path,
+              documentUri: recent.documentUri,
+            );
       if (path == null || !mounted) return;
       if (path == _activeProjectPath) {
         _openWorkspace();
@@ -726,7 +751,10 @@ class _AppShellState extends State<AppShell> {
       final saved = result.view ?? await widget.projectGateway.summary(session);
       if (mounted) setState(() => _activeProject = saved);
       final path = _activeProjectPath;
-      if (path != null && !await _syncBeforeClose(path)) return false;
+      if (path != null) {
+        await _recordRecentProject(path, saved.name);
+        if (!await _syncBeforeClose(path)) return false;
+      }
     }
     if (beforeClose != null && !await beforeClose()) return false;
     await widget.projectGateway.close(
@@ -824,6 +852,8 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       setState(() => _activeProject = view);
+      await _recordRecentProject(path, view.name);
+      if (!mounted || !identical(session, _activeSession)) return;
       await Future.wait([
         _refreshMediaPage(
           session,
@@ -836,6 +866,45 @@ class _AppShellState extends State<AppShell> {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
       rethrow;
+    }
+  }
+
+  Future<void> _loadRecentProjects() async {
+    try {
+      final projects = await widget.recentProjectStore.load();
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = true;
+      });
+    }
+  }
+
+  Future<void> _recordRecentProject(String path, String name) async {
+    try {
+      final projects = await widget.recentProjectStore.record(
+        path: path,
+        name: name,
+        documentUri: widget.projectFilePicker.projectDocumentUriFor(path),
+      );
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        _showUnavailable(
+          'The project is open, but it could not be added to Recent Projects.',
+        );
+      }
     }
   }
 
@@ -985,6 +1054,8 @@ class _AppShellState extends State<AppShell> {
     if (updated == null || !mounted) return;
     final path = _activeProjectPath;
     if (path == null) return;
+    await _recordRecentProject(path, updated.name);
+    if (!mounted) return;
     final notice = await _syncNotice(path);
     if (!mounted) return;
     setState(() => _projectNotice = notice);

@@ -302,13 +302,43 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
     'project close before application exit',
   );
+  final recentProject = find.byKey(
+    ValueKey('recent-project-${picker.projectPath}'),
+  );
+  await _pumpUntil(
+    tester,
+    () => recentProject.evaluate().isNotEmpty,
+    'saved project in recent history',
+  );
+  await tester.tap(recentProject);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
+        find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
+    'same-process recent project reopen',
+  );
+  await tester.tap(find.byKey(const ValueKey('workspace-close')));
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
+    'project close after recent project reopen',
+  );
 }
 
 Future<void> _reopenAndExport(
   WidgetTester tester,
   _JourneyPicker picker,
 ) async {
-  await tester.tap(find.byKey(const ValueKey('home-open-project')));
+  final recentProject = find.byKey(
+    ValueKey('recent-project-${picker.projectPath}'),
+  );
+  await _pumpUntil(
+    tester,
+    () => recentProject.evaluate().isNotEmpty,
+    'project history after application restart',
+  );
+  await tester.tap(recentProject);
   await _pumpUntil(
     tester,
     () =>
@@ -658,6 +688,15 @@ class _JourneyPicker implements ProjectFilePicker {
 
   @override
   Future<String?> openProjectPath() async => openPath ?? projectPath;
+
+  @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async => path;
+
+  @override
+  String? projectDocumentUriFor(String path) => null;
 
   @override
   Future<List<String>> openMediaSources() async => [nextMediaPath];

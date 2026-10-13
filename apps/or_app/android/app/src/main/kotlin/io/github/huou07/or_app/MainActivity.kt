@@ -161,6 +161,39 @@ class MainActivity : FlutterActivity() {
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+            "restoreProject" -> {
+                val workingPath = call.argument<String>("workingPath")
+                val documentUri = call.argument<String>("documentUri")
+                if (workingPath == null || documentUri == null) {
+                    result.error("PROJECT_PICK_FAILED", "The saved project location is invalid.", null)
+                } else {
+                    runIo(result, "PROJECT_PICK_FAILED") {
+                        val uri = requireDocumentUri(Uri.parse(documentUri))
+                        val retainedGrant = contentResolver.persistedUriPermissions.any {
+                            it.uri == uri && it.isReadPermission
+                        }
+                        if (!retainedGrant) {
+                            throw SafFailure(
+                                "PROJECT_PERMISSION_LOST",
+                                "Project access is no longer available. Use Open Project to choose the document again.",
+                            )
+                        }
+                        val expectedWorkingCopy = requireManagedPath(
+                            workingPath,
+                            uri,
+                            failureCode = "PROJECT_PICK_FAILED",
+                        )
+                        val restored = projectLocation(uri, prepareWorkingCopy(uri))
+                        if (restored["workingPath"] != expectedWorkingCopy.absolutePath) {
+                            throw SafFailure(
+                                "PROJECT_PICK_FAILED",
+                                "The saved project location does not match its Android document.",
+                            )
+                        }
+                        restored
+                    }
+                }
+            }
             "createProject" -> {
                 val suggestedName = call.argument<String>("suggestedName")
                     ?.substringAfterLast('/')
@@ -959,11 +992,15 @@ class MainActivity : FlutterActivity() {
     private fun baselineFile(uri: Uri): File =
         File(workingDirectory(), "${uriKey(uri)}.sync-base")
 
-    private fun requireManagedPath(path: String, uri: Uri): File {
+    private fun requireManagedPath(
+        path: String,
+        uri: Uri,
+        failureCode: String = "PROJECT_SYNC_FAILED",
+    ): File {
         val requested = File(path).canonicalFile
         val expected = workingCopyFile(uri).canonicalFile
         if (requested != expected) {
-            throw SafFailure("PROJECT_SYNC_FAILED", "The managed project path is invalid.")
+            throw SafFailure(failureCode, "The managed project path is invalid.")
         }
         return expected
     }

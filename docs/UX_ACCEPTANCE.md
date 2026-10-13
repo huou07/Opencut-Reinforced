@@ -56,8 +56,9 @@ headless or widget-level checks:
   save, recovery inspection/apply/discard, and exact-base conflict behavior.
 - Projects exposes only the current create/open and active-project controls;
   unimplemented search, filter, sort, and view controls are not shown.
-- Recent project persistence is not claimed; the Home empty state states this
-  limitation directly.
+- Recent project history is shown from Home and Projects after a successful
+  project open. Candidate persistence and Android SAF reauthorization remain
+  unaccepted until exact-SHA packaged hosted verification passes.
 - A new empty project does not inherit another project's canonical timeline.
 - Viewer, left-panel, Inspector, timeline, status, dialog, and command-palette
   slots follow the Focused Monochrome workspace layout; no marketing banners,

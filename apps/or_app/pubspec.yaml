@@ -14,6 +14,7 @@ dependencies:
     path: ../../packages/or_app_bridge
   or_viewer_texture:
     path: ../../packages/or_viewer_texture
+  path_provider: ^2.1.6
 
 hooks:
   user_defines:

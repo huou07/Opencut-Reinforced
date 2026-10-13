@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../design/or_spacing.dart';
 import '../project/active_project_card.dart';
 import '../project/project_gateway.dart';
+import '../project/recent_projects.dart';
 import '../widgets/or_widgets.dart';
+import 'recent_projects_list.dart';
 
 class ProjectsScreen extends StatelessWidget {
   const ProjectsScreen({
@@ -16,6 +18,10 @@ class ProjectsScreen extends StatelessWidget {
     required this.onRenameProject,
     required this.onSaveProject,
     required this.onCloseProject,
+    required this.recentProjects,
+    required this.recentProjectsLoaded,
+    required this.recentProjectsUnavailable,
+    required this.onOpenRecentProject,
   });
 
   final ProjectReadModel? project;
@@ -26,6 +32,10 @@ class ProjectsScreen extends StatelessWidget {
   final VoidCallback onRenameProject;
   final VoidCallback onSaveProject;
   final VoidCallback onCloseProject;
+  final List<RecentProject> recentProjects;
+  final bool recentProjectsLoaded;
+  final bool recentProjectsUnavailable;
+  final ValueChanged<RecentProject> onOpenRecentProject;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +100,17 @@ class ProjectsScreen extends StatelessWidget {
                 ],
               ),
             ),
+          const SizedBox(height: OrSpacing.x6),
+          OrPanel(
+            title: 'Recent Projects',
+            padding: EdgeInsets.zero,
+            child: RecentProjectsList(
+              projects: recentProjects,
+              loaded: recentProjectsLoaded,
+              unavailable: recentProjectsUnavailable,
+              onOpen: onOpenRecentProject,
+            ),
+          ),
         ],
       ),
     );

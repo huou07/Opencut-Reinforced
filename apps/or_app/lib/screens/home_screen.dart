@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../project/recent_projects.dart';
+import 'recent_projects_list.dart';
 import '../widgets/or_widgets.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,6 +14,10 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenProject,
     required this.onOpenEditorPreview,
     required this.onOpenProjects,
+    required this.recentProjects,
+    required this.recentProjectsLoaded,
+    required this.recentProjectsUnavailable,
+    required this.onOpenRecentProject,
   });
 
   final bool canPickProjects;
@@ -19,6 +25,10 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenProject;
   final VoidCallback onOpenEditorPreview;
   final VoidCallback onOpenProjects;
+  final List<RecentProject> recentProjects;
+  final bool recentProjectsLoaded;
+  final bool recentProjectsUnavailable;
+  final ValueChanged<RecentProject> onOpenRecentProject;
 
   @override
   Widget build(BuildContext context) {
@@ -77,9 +87,11 @@ class HomeScreen extends StatelessWidget {
               child: const Text('View all'),
             ),
             padding: EdgeInsets.zero,
-            child: const OrEmptyState(
-              title: 'No recent projects yet',
-              message: 'Opened projects appear in the Projects workspace. Recent project history is not stored in this preview.',
+            child: RecentProjectsList(
+              projects: recentProjects.take(5).toList(growable: false),
+              loaded: recentProjectsLoaded,
+              unavailable: recentProjectsUnavailable,
+              onOpen: onOpenRecentProject,
             ),
           ),
           const SizedBox(height: OrSpacing.x6),

@@ -46,6 +46,40 @@ void main() {
     expect(pickerCalled, isTrue);
   });
 
+  test('Android recent project restore rebinds the SAF document URI', () async {
+    const path = '/data/user/0/or_app/files/or-projects/project.orproj';
+    const uri = 'content://com.example.documents/document/project%3A42';
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'restoreProject');
+          expect(call.arguments, {'workingPath': path, 'documentUri': uri});
+          return {'workingPath': path, 'documentUri': uri};
+        });
+    final picker = AndroidSafProjectPicker(channel: channel);
+
+    expect(await picker.restoreRecentProject(path, documentUri: uri), path);
+    expect(picker.projectDocumentUriFor(path), uri);
+  });
+
+  test(
+    'Android recent project restore rejects an invalid URI before IPC',
+    () async {
+      var channelCalled = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            channelCalled = true;
+            return null;
+          });
+      final picker = AndroidSafProjectPicker(channel: channel);
+
+      await expectLater(
+        picker.restoreRecentProject('/data/project.orproj'),
+        throwsA(isA<ProjectSafStorageException>()),
+      );
+      expect(channelCalled, isFalse);
+    },
+  );
+
   test('Android folder picker returns bounded, validated descendant URIs', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

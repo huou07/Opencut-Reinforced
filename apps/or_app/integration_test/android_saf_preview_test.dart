@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
 import 'package:or_app_bridge/or_app_bridge.dart' as rust;
@@ -600,6 +601,31 @@ void main() {
         'opened=${gateway.openedPath}',
       );
       expect(projectPicker.selectedProjectPath, gateway.openedPath);
+      final storedRecents = await PersistentRecentProjectStore().load();
+      expect(storedRecents, hasLength(1));
+      expect(storedRecents.single.path, gateway.openedPath);
+      expect(storedRecents.single.name, 'SAF preview acceptance');
+      final projectDocumentUri = projectPicker.projectDocumentUriFor(
+        gateway.openedPath!,
+      );
+      expect(projectDocumentUri, isNotNull);
+      expect(storedRecents.single.documentUri, projectDocumentUri);
+      // A fresh picker has no in-memory URI map. Restoring the persisted recent
+      // must revalidate Android's retained grant and rebind the managed copy.
+      final restoredPicker = AndroidSafProjectPicker();
+      expect(
+        await restoredPicker.restoreRecentProject(
+          gateway.openedPath!,
+          documentUri: storedRecents.single.documentUri,
+        ),
+        gateway.openedPath,
+      );
+      expect(
+        (await restoredPicker.synchronizeProjectPath(gateway.openedPath!))
+            ?.verified,
+        isTrue,
+      );
+      debugPrint('ANDROID_SAF_RECENT_PROJECT_RESTORED');
       debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
       final session = gateway.session!;
       final revision = (await _stage(
