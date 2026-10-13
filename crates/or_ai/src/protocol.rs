@@ -1,4 +1,5 @@
 use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -44,6 +45,16 @@ impl ManagedFileRef {
         }
         Ok(())
     }
+}
+
+/// Returns the UUID-derived path used to exchange decoded transcription audio.
+pub fn managed_transcription_input_path(root: &Path, id: Uuid) -> PathBuf {
+    root.join(format!("{id}.wav"))
+}
+
+/// Returns the UUID-derived path used to exchange a transcription proposal.
+pub fn managed_transcription_proposal_path(root: &Path, id: Uuid) -> PathBuf {
+    root.join(format!("{id}.proposal.json"))
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -236,6 +247,20 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
+
+    #[test]
+    fn managed_transcription_paths_are_derived_from_the_file_identity() {
+        let id = Uuid::parse_str("a3b2ad96-0cdf-4dce-9291-1ae80e490765").unwrap();
+        let root = Path::new("/private/jobs");
+        assert_eq!(
+            managed_transcription_input_path(root, id),
+            root.join("a3b2ad96-0cdf-4dce-9291-1ae80e490765.wav")
+        );
+        assert_eq!(
+            managed_transcription_proposal_path(root, id),
+            root.join("a3b2ad96-0cdf-4dce-9291-1ae80e490765.proposal.json")
+        );
+    }
 
     fn request(message: ProviderMessage) -> ProtocolEnvelope {
         ProtocolEnvelope::new(Uuid::from_u128(1), message)

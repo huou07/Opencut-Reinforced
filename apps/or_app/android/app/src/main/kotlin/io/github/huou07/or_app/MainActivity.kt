@@ -20,6 +20,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -30,6 +31,10 @@ private const val SAF_PICK_REQUEST = 0x4f52
 private const val MAX_PROJECT_BYTES = 64L * 1024 * 1024
 private const val MAX_CAPTION_BYTES = 8L * 1024 * 1024
 private const val MAX_CAPTION_EXPORT_BYTES = 16L * 1024 * 1024
+private const val MAX_MEDIA_FOLDER_FILES = 64
+private const val MAX_MEDIA_FOLDER_ENTRIES = 20_000
+private const val MAX_MEDIA_FOLDER_DEPTH = 64
+private val MEDIA_FOLDER_EXTENSIONS = setOf("mp4", "m4v", "m4a", "mov", "mkv", "webm", "wav", "mp3")
 
 class MainActivity : FlutterActivity() {
     private external fun initializeAudioContext(context: Context): Boolean
@@ -147,6 +152,7 @@ class MainActivity : FlutterActivity() {
                 mimeType = "*/*",
                 allowMultiple = true,
             )
+            "openMediaFolder" -> launchMediaFolderPicker(result)
             "openProject" -> launchPicker(
                 Intent.ACTION_OPEN_DOCUMENT,
                 "openProject",
@@ -155,6 +161,39 @@ class MainActivity : FlutterActivity() {
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 requiredModes = Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+            "restoreProject" -> {
+                val workingPath = call.argument<String>("workingPath")
+                val documentUri = call.argument<String>("documentUri")
+                if (workingPath == null || documentUri == null) {
+                    result.error("PROJECT_PICK_FAILED", "The saved project location is invalid.", null)
+                } else {
+                    runIo(result, "PROJECT_PICK_FAILED") {
+                        val uri = requireDocumentUri(Uri.parse(documentUri))
+                        val retainedGrant = contentResolver.persistedUriPermissions.any {
+                            it.uri == uri && it.isReadPermission
+                        }
+                        if (!retainedGrant) {
+                            throw SafFailure(
+                                "PROJECT_PERMISSION_LOST",
+                                "Project access is no longer available. Use Open Project to choose the document again.",
+                            )
+                        }
+                        val expectedWorkingCopy = requireManagedPath(
+                            workingPath,
+                            uri,
+                            failureCode = "PROJECT_PICK_FAILED",
+                        )
+                        val restored = projectLocation(uri, prepareWorkingCopy(uri))
+                        if (restored["workingPath"] != expectedWorkingCopy.absolutePath) {
+                            throw SafFailure(
+                                "PROJECT_PICK_FAILED",
+                                "The saved project location does not match its Android document.",
+                            )
+                        }
+                        restored
+                    }
+                }
+            }
             "createProject" -> {
                 val suggestedName = call.argument<String>("suggestedName")
                     ?.substringAfterLast('/')
@@ -258,6 +297,36 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun launchMediaFolderPicker(result: MethodChannel.Result) {
+        if (pendingPick != null) {
+            result.error("PROJECT_PICKER_BUSY", "A document request is already open.", null)
+            return
+        }
+        try {
+            pendingPick = PendingPick(
+                "openMediaFolder",
+                result,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+                    )
+                },
+                SAF_PICK_REQUEST,
+            )
+        } catch (_: Exception) {
+            pendingPick = null
+            result.error(
+                "PROJECT_PICK_FAILED",
+                "The media folder picker could not be opened.",
+                null,
+            )
+        }
+    }
+
     private fun launchPicker(
         action: String,
         method: String,
@@ -316,6 +385,19 @@ class MainActivity : FlutterActivity() {
             return
         }
         val resultFlags = selectedIntent.flags
+        if (pending.method == "openMediaFolder") {
+            val treeUri = selectedIntent.data
+            if (treeUri == null) {
+                pending.result.success(null)
+                return
+            }
+            runIo(pending.result, "PROJECT_PICK_FAILED") {
+                val sources = enumerateMediaFolder(treeUri)
+                takePersistableTreeGrant(treeUri, resultFlags)
+                mapOf("sourceUris" to sources)
+            }
+            return
+        }
         if (pending.method == "openMedia") {
             val uris = buildList {
                 selectedIntent.clipData?.let { clips ->
@@ -380,6 +462,110 @@ class MainActivity : FlutterActivity() {
             contentResolver.takePersistableUriPermission(uri, modes)
         } catch (_: SecurityException) {
             throw SafFailure("PROJECT_PICK_FAILED", "The document permission could not be retained.")
+        }
+    }
+
+    private fun takePersistableTreeGrant(treeUri: Uri, resultFlags: Int) {
+        if (treeUri.scheme != "content" || treeUri.authority.isNullOrBlank() ||
+            !DocumentsContract.isTreeUri(treeUri)
+        ) {
+            throw SafFailure("PROJECT_PICK_FAILED", "Choose a valid media folder.")
+        }
+        if (resultFlags and Intent.FLAG_GRANT_READ_URI_PERMISSION == 0) {
+            throw SafFailure("PROJECT_PICK_FAILED", "The folder provider did not grant read access.")
+        }
+        try {
+            contentResolver.takePersistableUriPermission(
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: SecurityException) {
+            throw SafFailure("PROJECT_PICK_FAILED", "The media folder permission could not be retained.")
+        }
+    }
+
+    private fun enumerateMediaFolder(treeUri: Uri): List<String> {
+        val rootId = try {
+            DocumentsContract.getTreeDocumentId(treeUri)
+        } catch (_: IllegalArgumentException) {
+            throw SafFailure("PROJECT_PICK_FAILED", "Choose a valid media folder.")
+        }
+        val pending = ArrayDeque<Pair<String, Int>>()
+        val visited = HashSet<String>()
+        val candidates = ArrayList<Pair<String, String>>()
+        pending.add(rootId to 0)
+        var visitedEntries = 0
+        while (pending.isNotEmpty()) {
+            val (parentId, depth) = pending.removeFirst()
+            if (depth > MAX_MEDIA_FOLDER_DEPTH) {
+                throw SafFailure("MEDIA_FOLDER_TOO_LARGE", "The selected folder structure is too deep to scan safely.")
+            }
+            if (!visited.add(parentId)) continue
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeUri,
+                parentId,
+            )
+            val directories = ArrayList<Pair<String, String>>()
+            try {
+                contentResolver.query(
+                    childrenUri,
+                    arrayOf(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                        DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    ),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    )
+                    val nameColumn = cursor.getColumnIndexOrThrow(
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    )
+                    val mimeColumn = cursor.getColumnIndexOrThrow(
+                        DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    )
+                    while (cursor.moveToNext()) {
+                        visitedEntries++
+                        if (visitedEntries > MAX_MEDIA_FOLDER_ENTRIES) {
+                            throw SafFailure("MEDIA_FOLDER_TOO_LARGE", "The selected folder contains too many items to scan safely.")
+                        }
+                        val documentId = cursor.getString(idColumn)
+                        val name = cursor.getString(nameColumn).orEmpty()
+                        val mimeType = cursor.getString(mimeColumn)
+                        if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                            directories.add(documentId to name)
+                        } else {
+                            val extension = name.substringAfterLast('.', "").lowercase()
+                            if (extension in MEDIA_FOLDER_EXTENSIONS) {
+                                candidates.add(documentId to name)
+                                if (candidates.size > MAX_MEDIA_FOLDER_FILES) {
+                                    throw SafFailure("MEDIA_FOLDER_TOO_LARGE", "This folder contains more than 64 supported media files. Choose a smaller folder.")
+                                }
+                            }
+                        }
+                    }
+                } ?: throw SafFailure("PROJECT_PICK_FAILED", "The selected media folder could not be read.")
+            } catch (error: SafFailure) {
+                throw error
+            } catch (_: Exception) {
+                throw SafFailure("PROJECT_PICK_FAILED", "The selected media folder could not be read.")
+            }
+            directories.sortWith(compareBy({ it.second.lowercase() }, { it.first }))
+            directories.forEach { (documentId, _) ->
+                if (!visited.contains(documentId)) pending.addLast(documentId to (depth + 1))
+            }
+        }
+        if (candidates.isEmpty()) {
+            throw SafFailure("MEDIA_FOLDER_EMPTY", "No supported media files were found in the selected folder.")
+        }
+        candidates.sortWith(
+            compareBy({ it.second.lowercase() }, { it.first }),
+        )
+        return candidates.map { (documentId, _) ->
+            DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId).toString()
         }
     }
 
@@ -806,11 +992,15 @@ class MainActivity : FlutterActivity() {
     private fun baselineFile(uri: Uri): File =
         File(workingDirectory(), "${uriKey(uri)}.sync-base")
 
-    private fun requireManagedPath(path: String, uri: Uri): File {
+    private fun requireManagedPath(
+        path: String,
+        uri: Uri,
+        failureCode: String = "PROJECT_SYNC_FAILED",
+    ): File {
         val requested = File(path).canonicalFile
         val expected = workingCopyFile(uri).canonicalFile
         if (requested != expected) {
-            throw SafFailure("PROJECT_SYNC_FAILED", "The managed project path is invalid.")
+            throw SafFailure(failureCode, "The managed project path is invalid.")
         }
         return expected
     }

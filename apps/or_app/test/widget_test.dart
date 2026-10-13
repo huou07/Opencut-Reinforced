@@ -12,6 +12,7 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 import 'package:or_app/shell/app_top_bar.dart';
@@ -31,15 +32,17 @@ void main() {
     expect(find.text('New Project'), findsOneWidget);
     expect(find.text('Open Project'), findsOneWidget);
     expect(find.text('No recent projects yet'), findsOneWidget);
-    expect(
-      find.textContaining('import media, edit a timeline'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Matroska export workflows'), findsOneWidget);
+    expect(find.text('Recent Projects'), findsOneWidget);
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('nav-projects')));
     await tester.pumpAndSettle();
     expect(find.text('No active project'), findsOneWidget);
+    expect(find.text('Create or open an .orproj project'), findsOneWidget);
+    expect(find.text('Search projects'), findsNothing);
+    expect(find.text('Sort: Edited'), findsNothing);
+    expect(find.text('Pinned'), findsNothing);
+    expect(find.text('Archived'), findsNothing);
   });
 
   testWidgets('compact shell reaches all five primary destinations', (
@@ -62,6 +65,32 @@ void main() {
       expect(find.text(expectedText), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('recent project reopens through the guarded project workflow', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    const path = '/tmp/recent-project.orproj';
+    final recents = InMemoryRecentProjectStore([
+      RecentProject(
+        path: path,
+        name: 'Recent project',
+        lastOpened: DateTime.utc(2026, 10, 13),
+      ),
+    ]);
+    final gateway = _FakeProjectGateway();
+    await _mount(tester, gateway: gateway, recentProjectStore: recents);
+
+    await tester.tap(find.byKey(const ValueKey('recent-project-$path')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastOpenPath, path);
+    expect(
+      find.byKey(const ValueKey('workspace-project-name')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('medium desktop page header fits beside the navigation rail', (
@@ -198,14 +227,15 @@ void main() {
     expect(gateway.createCalls, 0);
     await tester.enterText(
       find.byKey(const ValueKey('new-project-name')),
-      'Demo Project ',
+      'Demo: Project ',
     );
     await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 1);
+    expect(picker.lastSuggestedProjectName, 'Demo_ Project.orproj');
     expect(gateway.lastCreatePath, '/tmp/or-widget-demo.orproj');
-    expect(gateway.lastCreateName, 'Demo Project ');
+    expect(gateway.lastCreateName, 'Demo: Project ');
     expect(gateway.inspectCalls, 1);
     expect(gateway.createCalls, 1);
     expect(
@@ -216,6 +246,29 @@ void main() {
     expect(find.text('Saved'), findsOneWidget);
     expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.text('No media loaded'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new project filename avoids Windows device names', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/device.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    await tester.tap(find.byKey(const ValueKey('home-new-project')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('new-project-name')),
+      'CON',
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    expect(picker.lastSuggestedProjectName, '_CON.orproj');
+    expect(gateway.lastCreateName, 'CON');
+    expect(gateway.createCalls, 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -470,7 +523,11 @@ void main() {
     await _createProject(tester, 'Import Media');
 
     final queriesBeforeImport = gateway.mediaListCalls;
-    await tester.tap(find.byKey(const ValueKey('media-import')));
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
     await tester.pumpAndSettle();
 
     expect(picker.mediaOpenCalls, 1);
@@ -480,6 +537,29 @@ void main() {
     expect(find.text('imported.mov'), findsOneWidget);
     expect(find.text('Unsaved changes'), findsOneWidget);
     expect(find.text('No media loaded'), findsOneWidget);
+  });
+
+  testWidgets('compact empty timeline imports through the project picker', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-empty.orproj'
+      ..mediaPath = '/tmp/compact-import.mp4';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact empty project');
+
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaSources, ['/tmp/compact-import.mp4']);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Import Media adds each selected source through the gateway', (
@@ -502,6 +582,29 @@ void main() {
     expect(gateway.lastSession!.view.revision, BigInt.from(2));
     expect(find.text('first.mkv'), findsOneWidget);
     expect(find.text('second.mkv'), findsOneWidget);
+  });
+
+  testWidgets('Import Folder adds its discovered media through the gateway', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-folder.orproj'
+      ..mediaFolderPaths = ['/tmp/shoot/01.mkv', '/tmp/shoot/02.mp4'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import Folder');
+
+    await tester.tap(find.byKey(const ValueKey('media-import-folder')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaFolderOpenCalls, 1);
+    expect(gateway.importMediaSources, [
+      '/tmp/shoot/01.mkv',
+      '/tmp/shoot/02.mp4',
+    ]);
+    expect(find.text('01.mkv'), findsOneWidget);
+    expect(find.text('02.mp4'), findsOneWidget);
   });
 
   testWidgets('media library loads later items through bounded pages', (
@@ -1823,7 +1926,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('active-project-close')));
       await tester.pumpAndSettle();
       expect(gateway.closeCalls, 1);
-      expect(find.text('No recent projects yet'), findsOneWidget);
+      expect(find.text('Compact close'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1854,7 +1957,7 @@ void main() {
     expect(gateway.closeCalls, 1);
     expect(gateway.lastCloseDiscard, isTrue);
     expect(gateway.lastCloseDiscardRecoveryCheckpoint, isTrue);
-    expect(find.text('No recent projects yet'), findsOneWidget);
+    expect(find.text('Close me'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-new-project')));
     await tester.pumpAndSettle();
@@ -1873,7 +1976,7 @@ void main() {
     expect(gateway.closeCalls, 2);
     expect(gateway.lastCloseDiscard, isFalse);
     expect(gateway.lastCloseDiscardRecoveryCheckpoint, isFalse);
-    expect(find.text('No recent projects yet'), findsOneWidget);
+    expect(find.text('Save me'), findsOneWidget);
   });
 
   testWidgets('clean close retries a failed SAF synchronization', (
@@ -2615,6 +2718,77 @@ void main() {
     },
   );
 
+  testWidgets('Add to Timeline defaults to the current content end', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-video',
+          sourceUri: Uri.file('/tmp/scene.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '4 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: null,
+          firstVideoDuration: ProjectRationalTime(BigInt.from(4), 1),
+        ),
+      ]
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'append-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'append-track': [
+          ProjectTimelineClip(
+            clipId: 'existing-clip',
+            mediaId: 'media-video',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      }
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-append.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Append clip');
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-add-timeline-media-video')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('timeline-insert-start')),
+          )
+          .controller!
+          .text,
+      '4/1',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTimelineStart?.canonical, '4/1');
+    expect(gateway.lastSession!.clips['append-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'timeline insert chooses exact duration for the selected stream',
     (tester) async {
@@ -3267,12 +3441,20 @@ void main() {
     expect(find.byKey(const ValueKey('command-close-project')), findsOneWidget);
   });
 
-  testWidgets('desktop Editor Shell Preview stays distinct without a project', (
+  testWidgets('desktop shell preview stays under advanced settings', (
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
     await _mount(tester);
-    await tester.tap(find.byKey(const ValueKey('home-editor-preview')));
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-section-advanced')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-open-editor-preview')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Editor layout preview'), findsOneWidget);
@@ -3286,35 +3468,13 @@ void main() {
     expect(find.byKey(const ValueKey('nav-editorPreview')), findsNothing);
   });
 
-  testWidgets('compact Editor Shell Preview uses a tool sheet', (tester) async {
+  testWidgets('compact Home omits the visual-only editor shell action', (
+    tester,
+  ) async {
     _setViewport(tester, const Size(390, 844));
     await _mount(tester);
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('home-editor-preview')),
-    );
-    await tester.tap(find.byKey(const ValueKey('home-editor-preview')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No media loaded'), findsOneWidget);
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
-    expect(find.byKey(const ValueKey('preview-play')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('mobile-editor-tool-dock')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('editor-tool-media')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('mobile-editor-tool-media')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-    await tester.pumpAndSettle();
-    expect(find.text('Unavailable in this Developer Preview'), findsOneWidget);
-    await tester.tap(find.byTooltip('Close tool panel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Timeline engine not implemented'), findsOneWidget);
+    expect(find.text('Developer Preview'), findsNothing);
+    expect(find.text('Open Editor Shell Preview'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -3435,12 +3595,14 @@ Future<void> _mount(
   WidgetTester tester, {
   _FakeProjectGateway? gateway,
   _FakeProjectPicker? picker,
+  RecentProjectStore? recentProjectStore,
 }) async {
   await tester.pumpWidget(
     OrApp(
       gateway: _FakeCoreGateway(),
       projectGateway: gateway ?? _FakeProjectGateway(),
       projectFilePicker: picker ?? _FakeProjectPicker(),
+      recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
     ),
   );
   await tester.pumpAndSettle();
@@ -3513,13 +3675,16 @@ class _FakeProjectPicker implements ProjectFilePicker {
   String? openPath;
   String? mediaPath;
   List<String>? mediaPaths;
+  List<String>? mediaFolderPaths;
   String? savePath;
   String? exportPath;
   String? captionPath;
   String? syncFailureMessage;
   int openCalls = 0;
   int mediaOpenCalls = 0;
+  int mediaFolderOpenCalls = 0;
   int saveCalls = 0;
+  String? lastSuggestedProjectName;
   int exportPathCalls = 0;
   ExportProfile? lastExportProfile;
   int captionOpenCalls = 0;
@@ -3544,14 +3709,30 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 
   @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async => path;
+
+  @override
+  String? projectDocumentUriFor(String path) => null;
+
+  @override
   Future<List<String>> openMediaSources() async {
     mediaOpenCalls++;
     return mediaPaths ?? [?mediaPath];
   }
 
   @override
+  Future<List<String>> openMediaFolderSources() async {
+    mediaFolderOpenCalls++;
+    return mediaFolderPaths ?? const [];
+  }
+
+  @override
   Future<String?> saveProjectPath({required String suggestedName}) async {
     saveCalls++;
+    lastSuggestedProjectName = suggestedName;
     return savePath;
   }
 

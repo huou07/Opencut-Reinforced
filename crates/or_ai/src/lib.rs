@@ -15,7 +15,8 @@ pub use model::{
 };
 pub use protocol::{
     AiTask, MAX_CONTROL_MESSAGE_BYTES, ManagedFileRef, ProtocolEnvelope, ProtocolError,
-    ProviderErrorCode, ProviderMessage, TranscribeRequest, read_message, write_message,
+    ProviderErrorCode, ProviderMessage, TranscribeRequest, managed_transcription_input_path,
+    managed_transcription_proposal_path, read_message, write_message,
 };
 pub use transcription::{
     MAX_TRANSCRIPT_PROPOSAL_BYTES, MAX_TRANSCRIPT_SEGMENTS, MAX_TRANSCRIPT_TEXT_BYTES,

@@ -11,7 +11,8 @@ use std::{
 
 use or_ai::{
     MAX_TRANSCRIPT_PROPOSAL_BYTES, ManagedFileRef, ProtocolEnvelope, ProviderErrorCode,
-    ProviderMessage, TranscribeRequest, TranscriptProposal, read_message, write_message,
+    ProviderMessage, TranscribeRequest, TranscriptProposal, managed_transcription_input_path,
+    managed_transcription_proposal_path, read_message, write_message,
 };
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -201,7 +202,7 @@ fn handle_transcription(
         },
     )?;
     let output_id = Uuid::new_v4();
-    let output_path = managed_path(&config.managed_root, output_id, ".proposal.json");
+    let output_path = managed_transcription_proposal_path(&config.managed_root, output_id);
     let json_prefix = managed_path(&config.managed_root, Uuid::new_v4(), ".whisper");
     let whisper_json = PathBuf::from(format!("{}.json", json_prefix.to_string_lossy()));
     let whisper_output = WhisperOutput(whisper_json.clone());
@@ -423,7 +424,7 @@ fn verified_input(
     if reference.validate().is_err() || reference.size_bytes > MAX_INPUT_BYTES {
         return Err(VerificationError::Unavailable);
     }
-    let path = managed_path(root, reference.id, ".wav");
+    let path = managed_transcription_input_path(root, reference.id);
     let metadata = fs::symlink_metadata(&path).map_err(|_| VerificationError::Unavailable)?;
     if !metadata.is_file() || metadata.len() != reference.size_bytes {
         return Err(VerificationError::Unavailable);
@@ -557,7 +558,7 @@ mod tests {
     }
 
     fn input(root: &Path, id: Uuid, bytes: &[u8]) -> ManagedFileRef {
-        fs::write(managed_path(root, id, ".wav"), bytes).unwrap();
+        fs::write(managed_transcription_input_path(root, id), bytes).unwrap();
         ManagedFileRef {
             id,
             size_bytes: bytes.len() as u64,
@@ -569,7 +570,7 @@ mod tests {
     fn provider_paths_derive_only_from_uuid_file_references() {
         let id = Uuid::parse_str("a3b2ad96-0cdf-4dce-9291-1ae80e490765").unwrap();
         assert_eq!(
-            managed_path(Path::new("/private/jobs"), id, ".wav"),
+            managed_transcription_input_path(Path::new("/private/jobs"), id),
             PathBuf::from("/private/jobs/a3b2ad96-0cdf-4dce-9291-1ae80e490765.wav")
         );
         assert_eq!(
@@ -628,7 +629,8 @@ mod tests {
         let bytes = b"external";
         fs::write(&outside_path, bytes).unwrap();
         let id = Uuid::new_v4();
-        std::os::unix::fs::symlink(&outside_path, managed_path(&root.0, id, ".wav")).unwrap();
+        std::os::unix::fs::symlink(&outside_path, managed_transcription_input_path(&root.0, id))
+            .unwrap();
         let reference = ManagedFileRef {
             id,
             size_bytes: bytes.len() as u64,

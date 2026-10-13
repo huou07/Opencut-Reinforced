@@ -673,6 +673,25 @@ hardening commit itself must pass both workflows.
   path. Local Android build/runtime verification is
   `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
+## Bounded folder media import
+
+- Flutter picker tests cover recursive desktop extension filtering, stable
+  ordering, empty folders, and the 64-file limit; widget coverage checks that
+  folder-selected sources enter through the existing project gateway.
+- Python selector tests cover the DocumentsUI folder/tree flow and ensure
+  selector actions stay within the native picker. Hosted Android SAF
+  integration verifies nested descendant imports and the persisted tree grant.
+  Its separate-UID fixture implements `DocumentsProvider.isChildDocument`,
+  which Android requires for `ACTION_OPEN_DOCUMENT_TREE` descendant access;
+  the journey also verifies imported references and retained permission stay
+  scoped to the directory selected in DocumentsUI. If an import stalls, the
+  integration log records whether the shared gateway was entered, per-item
+  probe duration, descriptor count, and a bounded renderer resource snapshot.
+- The Kotlin SAF traversal, packaged desktop folder picker, and complete
+  cross-platform journey require exact-SHA Platform Verification. Local
+  Android runtime/emulator execution is `NOT RUN — LOCAL NATIVE EXECUTION
+  DISALLOWED BY POLICY`.
+
 ## Phase 9B Android media and render surface coverage
 
 - `LiveProjectHost::in_process_with_export_handler` is covered headlessly: it
@@ -936,8 +955,10 @@ journey restores the framework symlink before hashing the package report.
 The journey waits for the frame-rate control to become enabled and its menu
 item to appear, and brings Save and media import into view before requiring
 both enabled state and actual hit-testability. This avoids treating an enabled
-callback as proof that a real pointer can reach the control. It blocks
-host FFmpeg lookup through
+callback as proof that a real pointer can reach the control. After reopening a
+recent project, it waits for the Close control to become enabled and
+hit-testable, then records its state if close does not finish. It blocks host
+FFmpeg lookup through
 `PATH` with inert failure guards while preserving system utilities.
 Separate app processes create/import/edit/save, relaunch and
 reopen/export over an existing destination, verify a missing source while the
@@ -990,6 +1011,14 @@ checks surface recreation and frame presentation.
 The separate SAF acceptance provider advertises directory creation on both its
 root and root document. The DocumentsUI export selector waits for an enabled
 Save action; a disabled button is not counted as a completed picker handoff.
+For multi-file import, the selector checks visible screen bounds as well as the
+enabled state of each filename. It scrolls that file's own list container when
+a row is clipped by Android's navigation area or the final filename is absent
+from an incomplete accessibility listing.
+After each media mutation, the SAF journey waits for the real Import Folder
+button to become enabled before tapping it. The gateway observation can finish
+before AppShell completes its read-model refresh and releases the busy state;
+the disabled control is not treated as an opened picker or a completed import.
 The updated end-to-end export check requires the selected document to contain
 sampled VP9 video and Opus audio after the Android method-channel publish
 operation and requires complete decode of both tracks through Android's native

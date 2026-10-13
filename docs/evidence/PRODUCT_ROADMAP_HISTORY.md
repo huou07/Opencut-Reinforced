@@ -1207,3 +1207,177 @@ journey gate using the pinned `whisper.cpp` JFK speech fixture, the production
 model-download and local-transcription UI, a human-edited proposal, project
 save/reopen, and SRT output. Its macOS, Windows, and Linux runs remain pending
 until an exact verified `main` commit reaches the main-only preview workflow.
+
+Exact-SHA Platform Verification
+[38234509928](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234509928)
+on `c329d8e26c994fb24af5f53d3f4c50e31087d1cd` passed Rust, Flutter
+static/widget, descriptor-boundary, Linux, macOS, Windows, and Android jobs;
+Repository Hygiene [38234510013](https://github.com/huou07/Opencut-Reinforced/actions/runs/38234510013)
+also passed. The three desktop packaged product journeys and Android
+DocumentsUI/resource journey passed. This exact-SHA run does not include the
+new transcription runtime journey, which is gated by the main-only Developer
+Preview workflow. The emulator does not establish Android hardware
+responsiveness.
+
+The subsequent bounded folder-import candidate is being verified on its own
+exact product SHA. Its folder batch is capped at 64 to match Android's shared
+preview/import descriptor registry; the application clears stale preview
+registrations before an Android folder batch. Until that hosted run completes,
+local picker/widget tests and selector tests are implementation evidence only,
+not packaged Android or desktop user-journey acceptance.
+
+The first folder candidate run, [38240164385](https://github.com/huou07/Opencut-Reinforced/actions/runs/38240164385)
+on `78737472c5d9c7e5a4ce7bd184bb0c689314d2e2`, passed Linux, macOS, Windows,
+Rust, Flutter, descriptor, and hygiene checks. The Android journey timed out in
+the DocumentsUI selector during the existing multi-file import step, before the
+new folder-picker interaction. Its retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38240164385)
+shows the last row extending below the usable screen while DocumentsUI still
+reported it enabled. The selector tapped the clipped row instead of scrolling
+its list container. The logged skipped-frame classification is not a separate
+acceptance failure: the journey exited because native picker selection never
+completed, before the Android report verifier ran. The selector now detects
+screen clipping and scrolls the row's own container; a regression test covers
+the enabled-but-clipped accessibility state. Folder import remains unaccepted
+until the corrected exact-SHA run completes.
+
+The first selector correction was verified on exact SHA
+`39c919235594b4456459ab8dbdd3979050471be8` by Platform Verification
+[38245348150](https://github.com/huou07/Opencut-Reinforced/actions/runs/38245348150).
+Rust, Flutter, Linux, and repository hygiene passed; Android completed the APK
+and runtime bridge steps but again timed out in the native multi-file picker
+before the folder interaction. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38245348150)
+shows list view with the last expected filename omitted from the accessibility
+tree. Since the list-view toggle was already active, the selector had no target
+and never scrolled the directory. The second correction scrolls the specific
+DocumentsUI directory list when the expected listing is incomplete; a regression
+test covers that absent-row state. The candidate remains unaccepted until a new
+exact-SHA run completes. The Windows job in this run separately failed while
+downloading pinned zlib: GitHub returned HTTP 504 from the release download
+endpoint before checksum or build work began. Windows completed that same step
+on the following candidate SHA, `581c641`.
+
+The second selector correction was exercised on exact SHA
+`581c641933cbc0cd0094090d04a02389e604d07f` by Platform Verification
+[38250084884](https://github.com/huou07/Opencut-Reinforced/actions/runs/38250084884).
+Linux and Windows packaged journeys passed; Android reached the new folder
+acceptance but did not open the tree picker. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38250084884)
+shows the previous three-file DocumentsUI import completed, followed by the
+folder-test readiness marker without a new native picker launch. The test
+waited for the observed gateway-call count, which increments before AppShell
+finishes refreshing its project read model and releases the busy state; the
+real Import Folder button was correctly disabled during that interval. The
+test now waits for that real control to become enabled before tapping it. This
+was an acceptance synchronization race, not evidence that Android tree
+enumeration or folder import failed. Folder import remains unaccepted pending
+the corrected exact-SHA hosted run.
+
+The macOS job for `581c641` built the app bundle but its bounded native project
+lifecycle test produced no case output: Flutter logged `Failed to foreground
+app; open returned 1`, and the step timed out after 35 minutes. This is a
+hosted launch failure without a product assertion. The required macOS run must
+still be repeated on the corrected candidate SHA.
+
+Platform Verification [38258271103](https://github.com/huou07/Opencut-Reinforced/actions/runs/38258271103)
+ran on exact product SHA `c74d6759fe3ff5b8b0845b9cc88fe8b0f376c0fd`.
+Linux, Windows and macOS packaged journeys passed, as did Rust, Flutter and
+the granted-descriptor boundary; Repository Hygiene also passed. Android built
+the APK and passed runtime bridge checks, then failed in the SAF folder-import
+journey after DocumentsUI selected `Footage`. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38258271103)
+shows `DocumentsProvider` rejecting `footage-nested` as not a descendant of
+`footage`. The separate-UID fixture exposed nested documents but did not
+implement `isChildDocument`; Android's
+[`DocumentsProvider` contract](https://developer.android.com/reference/android/provider/DocumentsProvider#isChildDocument(java.lang.String,java.lang.String))
+requires that method for `ACTION_OPEN_DOCUMENT_TREE`. The fixture now computes
+descendants from the same bounded child listing it exposes to DocumentsUI.
+The next exact-SHA run confirmed nested enumeration and import work; its
+remaining URI-scope assertion and hosted macOS launch result are recorded below.
+
+Platform Verification [38262615923](https://github.com/huou07/Opencut-Reinforced/actions/runs/38262615923)
+ran on exact product SHA `aa6b4d512c078fe96398d4fc074310b6c3a52bbb`.
+Linux, Windows, Rust, Flutter and descriptor-boundary checks passed; Repository
+Hygiene passed separately. Android completed folder enumeration and the import
+operation successfully, then failed the expected-source assertion: the test
+expected `tree/root/document/...`, while DocumentsUI had selected `Footage` and
+the correct returned references were `tree/footage/document/...`. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38262615923)
+contains the successful import result and exact mismatch. The integration test
+now checks both nested sources beneath the selected subtree and the persisted
+`tree/footage` grant, while rejecting a broader provider-root tree grant.
+
+The macOS job on `aa6b4d5` built the app but again failed to foreground it:
+`open returned 1`, followed by the 35-minute native lifecycle timeout before
+any test case ran. This remains a hosted launch limitation with no product
+assertion; the exact-SHA macOS lifecycle journey still needs a passing run.
+
+Platform Verification [38269354703](https://github.com/huou07/Opencut-Reinforced/actions/runs/38269354703)
+ran on exact product SHA `2428751ba9067d8fd643cb49683b35f23e7baa81`.
+Linux, Windows, macOS, Rust, Flutter, and descriptor-boundary checks passed;
+Repository Hygiene passed separately. Android failed before folder selection,
+while waiting for three media imports after the DocumentsUI picker returned.
+The native SAF handler logged a successful selection result and completion;
+the separate-UID fixture opened the three selected documents, but the test's
+gateway completion count did not advance within its 60-second bound. The
+artifact's report classified the run as `MAIN_THREAD_STALL`; guest logs include
+`Skipped 122 frames` in the surrounding acceptance journey and show the fixture
+provider process frozen at 15:48:44Z and unfrozen at 15:49:19Z after the test timeout.
+Hosted process snapshots recorded QEMU at 252–273% CPU and 5.2–6.1 GB RSS,
+with about 10.1 GB host `MemAvailable`. Those measurements show substantial
+emulator load but do not establish whether the stall is in descriptor
+registration, Rust probing, or hosted scheduling. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38269354703)
+contains the driver, guest, and resource logs. Commit `fb6b3f0` adds
+test-only per-item gateway entry/completion timing and, on timeout, a bounded
+descriptor/resource snapshot. It leaves the 60-second acceptance limit and
+production code unchanged; a new exact-SHA run is needed to localize the stall.
+
+
+Platform Verification [38275213412](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412)
+ran on exact product SHA `a7f4bf4010c3d3283e788387839edbc6f83a0f3d`.
+Linux, macOS, Windows, Android, Rust, Flutter static/widget checks, the granted
+descriptor boundary, and Repository Hygiene all passed. Clean packaged desktop
+journeys passed on all three desktop operating systems. Android's separate-UID
+DocumentsUI journey imported H.264/AAC MP4 and MP3 together, then selected the
+`Footage` tree and imported its nested MP3 and Matroska files. The persisted
+SAF grant remained scoped to `tree/footage`; a broader provider-root grant was
+rejected. Caption import/export, relink with MediaId and timeline preservation,
+WebM export with independent video/audio decoding, project recovery, preview
+surface behavior, and resource-release assertions passed.
+
+The added gateway markers show all five Rust `importMedia` calls completed
+successfully in 1.8–6.8 ms. Android's half-second emulator export took 6.87 s;
+that fixture proves output correctness only. The report measured a 112.8 ms
+maximum main draw on this emulator, ended with zero duplicated media file
+descriptors and zero in-flight leases, and labels hardware `UNVERIFIED`. This
+is not physical-device performance evidence. The timeout on the preceding exact
+SHA `2428751` did not recur. Because that failure had no gateway-entry marker,
+its pre-gateway cause remains unresolved; the successful retry does not prove a
+root-cause repair. The retained
+[`android-saf-process-recovery` artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38275213412)
+contains the reports and guest/driver logs.
+
+
+Validation-only Developer Preview dispatch [38286437542](https://github.com/huou07/Opencut-Reinforced/actions/runs/38286437542) ran on exact PR SHA `4033f90a16c9042008e404c1d597db7eaed6c493`, after Platform Verification [38281539863](https://github.com/huou07/Opencut-Reinforced/actions/runs/38281539863) and Repository Hygiene [38281539848](https://github.com/huou07/Opencut-Reinforced/actions/runs/38281539848) passed. The prepare gate accepted the exact branch, SHA, pull-request event, and successful run; all three CLI jobs and the publication job were skipped. The Android package succeeded. The Linux transcription job built the app but could not start it in the headless runner (`Unable to start the app on the device`); unlike Platform Verification's packaged journey, this direct integration launch omitted Xvfb. The macOS gate failed before opening the Generate Captions menu item. The Windows gate downloaded the model and began transcription but timed out after eight minutes waiting for caption review. The then-current test did not report whether transcription had failed or remained active. Follow-up changes add Linux Xvfb, detect surfaced error snackbars, and include the active dialog text in timeout diagnostics; desktop transcription is not yet verified. No desktop candidate package was uploaded, and no release or tag was created.
+
+The next validation-only Developer Preview candidate [38293559262](https://github.com/huou07/Opencut-Reinforced/actions/runs/38293559262) ran on exact PR SHA `b758ef9270d81611161b2bb6e9fe1aa2d4bc8655`; the run is terminal. Android APK build and package succeeded, all CLI jobs and the publication job were skipped. Linux failed before Flutter initialized because its test process loaded a bridge without finding `libavutil.so.60`; unlike the proven packaged journey, the transcription step had not selected the bridge from the package directory. macOS and Windows both reached the actual transcription job and reported `The selected media path is invalid.` Source inspection found `transcribe_media` converted a native `Path` lossily to text and called the core API that accepts only a validated `file:` URI. The repair adds `MediaSourceRef::from_file_path` (preserving platform path encoding) and explicitly points all three hosted candidate journeys at the bridge inside the built package. Focused regression tests and hosted exact-SHA verification are pending. No desktop package was uploaded, no release/tag was created, and this candidate provides no transcription completion evidence.
+
+Validation-only Developer Preview [38301589578](https://github.com/huou07/Opencut-Reinforced/actions/runs/38301589578) ran on exact PR SHA `f5a6ec9bad8eb86978f8515a5eac49ebdc637d30`. The source/release gate passed; Android APK build succeeded; CLI and publish jobs were skipped. All three desktop app build steps succeeded, but the transcription journey did not pass, so no desktop package artifacts were uploaded. Linux's test rebuild invoked the existing CMake clean-bundle install rule, deleting the FFmpeg libraries before the rebuilt bridge loaded. macOS did not expose the Generate Captions menu item after reopening the project; the next acceptance now checks persisted audio metadata and waits for the action to become available. Windows reached the provider and reported that private transcription audio failed verification. Comparing the host and provider paths identified the mismatch: the host wrote `audio.wav`, while the provider derived `<managed-id>.wav`. The new change centralizes both input and proposal paths in `or_ai`, writes the WAV using its managed UUID path, restores transcription helpers/licenses with the existing Linux runtime hook, and improves the macOS persistence/readiness diagnostic. Exact-SHA platform and packaged-candidate verification remain pending.
+
+Platform Verification [38304231816](https://github.com/huou07/Opencut-Reinforced/actions/runs/38304231816) ran on exact PR SHA `20c1b65498904071f7101b217fda968cdaec8ffb`. Flutter static/widget checks and Repository Hygiene passed. The Rust job failed `cargo clippy` on a needless borrow in the new proposal-path call; the exact error reproduced locally, and the redundant borrow was removed. Other platform jobs were still running when the corrective commit was prepared, so their incomplete results do not count as verification for either SHA.
+
+Platform Verification [38305268594](https://github.com/huou07/Opencut-Reinforced/actions/runs/38305268594) ran on exact PR SHA `84a41cd56c7426038ab07aec116217a089715157`. Repository Hygiene, Rust/Clippy, Flutter, Linux packaged journey, and macOS native/package journey passed. In attempt 1, Android failed during the pinned libvpx checkout with HTTP 503; Windows' persistent cache test `independent_stores_coordinate_budget_updates_through_sqlite` returned `Index("database is locked")` at the first joined `CacheStore::put`, while the other 40 cache tests passed. Rerunning failed jobs on the same SHA reproduced the upstream HTTP 503 during libvpx fetch on both Android (`chromium.googlesource.com`) and Windows (`chromium.googlesource.com`), so Windows did not reach the cache test on attempt 2. The source host's transient 503 is now handled by at most two delayed retries for HTTP 429/5xx only, clearing incomplete partial clones and rechecking the pinned commit. The Windows cache contention remains unconfirmed and must be observed in a complete retry; no cache limits or acceptance tests were changed.
+
+Validation-only Developer Preview [38312462175](https://github.com/huou07/Opencut-Reinforced/actions/runs/38312462175) was dispatched on exact PR SHA `44b2197c688f0a229369983c2dad200c4d768332` after Platform Verification passed. Its exact-source gate succeeded, but Linux failed in `Seed Linux packaged media runtime` because `"$prefix/lib/$pattern"` quoted the wildcard and `cp` could not find literal `libavcodec.so*`. The correction leaves the directory quoted and expands only the verified library-name glob. Other package jobs were still running when recorded; this is not a completed preview or artifact claim.
+
+The corrected candidate passed exact-SHA Platform Verification [38313145653](https://github.com/huou07/Opencut-Reinforced/actions/runs/38313145653) and validation-only Developer Preview [38316339457](https://github.com/huou07/Opencut-Reinforced/actions/runs/38316339457) on PR SHA `1d63db88d787653c1875006625ddbfb4c34217e0`. Platform Verification passed its seven jobs: Rust, Flutter, descriptor boundary, Linux, macOS, Windows, and Android. In the validation-only preview, the exact-source gate succeeded; Linux, macOS, and Windows each passed the packaged real JFK speech workflow through consented Whisper model download, transcription, caption review/edit/apply, project save/reopen, and SRT export. Android built the debug APK and verified its three packaged FFmpeg ABIs; Android transcription remains unsupported. The preview uploaded `developer-preview-linux` (45,859,207 bytes), `developer-preview-macos` (48,285,086 bytes), `developer-preview-windows` (52,045,982 bytes), and `developer-preview-android` (103,448,404 bytes); each temporary artifact expires October 19, 2026. CLI and publication jobs were skipped: no release or tag was created. This verifies packaged debug behavior, not clean-machine install/upgrade/uninstall, production signing, or physical-device performance.
+
+Platform Verification [38318462544](https://github.com/huou07/Opencut-Reinforced/actions/runs/38318462544) ran on exact PR SHA `83b141730bdb13a78ad4db0ab332fe8813136b96`. Windows, Android, Linux, Rust, Flutter, descriptor-boundary checks, and Repository Hygiene passed. Android's hosted DocumentsUI/resource journey passed. macOS built the native app, then logged `Failed to foreground app; open returned 1` on runner macOS 26.6.2 and emitted no lifecycle test result before the 35-minute timeout. This is not macOS product acceptance evidence; the launch/test-startup issue needs reevaluation on the current candidate.
+
+Platform Verification [38325038374](https://github.com/huou07/Opencut-Reinforced/actions/runs/38325038374) ran on exact PR SHA `189cd5e045479c9aad364ff52ee64f3cc2cc8181`. Windows, Linux, macOS (including native project lifecycle and clean packaged journey), Rust, Flutter, and the descriptor boundary passed; Repository Hygiene [38325038383](https://github.com/huou07/Opencut-Reinforced/actions/runs/38325038383) passed. Android's real DocumentsUI project selection, recent-entry persistence assertion, fresh-picker SAF rebind, and provider synchronization all completed; `ANDROID_SAF_RECENT_PROJECT_RESTORED` appears before the later failure. The subsequent three-document media import completed its first two gateway calls in 18.4 ms and 9.5 ms, then stalled before the third gateway call. The retained [Android SAF artifact](https://github.com/huou07/Opencut-Reinforced/actions/runs/38325038374) shows `expected=3 actual=2`, the separate `dev.opencut.saffixture` provider frozen at 00:30:33Z, and `com.android.externalstorage` frozen at 00:30:15Z. At capture, QEMU was using about 7.2 GiB RSS and 203% CPU while host `MemAvailable` was about 7.7 GiB. This identifies a provider/emulator stall before the third product gateway action; it does not show a recent-project restore defect or establish a representative-device performance limit. Android acceptance remains pending an exact-SHA passing run; no acceptance threshold or timeout was weakened.
+
+Exact-SHA follow-up `a3db4f63319029ea683b6d4cc749df7fdba27a11` corrected the recent-row name update to preserve `lastOpened`, then passed Platform Verification [38328757217, attempt 2](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217) and Repository Hygiene [38328757237](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757237). Attempt 1 of Platform Verification passed Android (including the recent rebind), Windows, Linux, Rust, Flutter, and the descriptor boundary, but macOS timed out in native lifecycle before any test result; logs show `Failed to foreground app; open returned 1` immediately after app build. The failed Android import from the earlier `189cd5e` run did not recur. Rerunning only macOS on the same exact SHA passed native project lifecycle and the clean packaged journey, establishing the foreground failure as intermittent hosted runner startup behavior rather than a reproducible project regression.
+
+Validation-only Developer Preview [38335103077](https://github.com/huou07/Opencut-Reinforced/actions/runs/38335103077) passed its exact-source gate and all four app package jobs for SHA `a3db4f63319029ea683b6d4cc749df7fdba27a11`. Linux, macOS, and Windows each passed the packaged local transcription journey through consented model download, transcription, caption review/edit/apply, project save/reopen, and SRT export. The run uploaded `developer-preview-linux` (47,916,785 bytes), `developer-preview-macos` (50,330,827 bytes), `developer-preview-windows` (54,148,069 bytes), and `developer-preview-android` (105,907,095 bytes), each expiring October 20, 2026. CLI and publication jobs were skipped: no tag or public release was created. Packages are debug builds, not clean-machine installation or production-signing evidence.

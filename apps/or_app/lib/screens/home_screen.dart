@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
+import '../project/recent_projects.dart';
+import 'recent_projects_list.dart';
 import '../widgets/or_widgets.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -10,15 +11,21 @@ class HomeScreen extends StatelessWidget {
     required this.canPickProjects,
     required this.onNewProject,
     required this.onOpenProject,
-    required this.onOpenEditorPreview,
     required this.onOpenProjects,
+    required this.recentProjects,
+    required this.recentProjectsLoaded,
+    required this.recentProjectsUnavailable,
+    required this.onOpenRecentProject,
   });
 
   final bool canPickProjects;
   final VoidCallback onNewProject;
   final VoidCallback onOpenProject;
-  final VoidCallback onOpenEditorPreview;
   final VoidCallback onOpenProjects;
+  final List<RecentProject> recentProjects;
+  final bool recentProjectsLoaded;
+  final bool recentProjectsUnavailable;
+  final ValueChanged<RecentProject> onOpenRecentProject;
 
   @override
   Widget build(BuildContext context) {
@@ -77,70 +84,11 @@ class HomeScreen extends StatelessWidget {
               child: const Text('View all'),
             ),
             padding: EdgeInsets.zero,
-            child: const OrEmptyState(
-              title: 'No recent projects yet',
-              message: 'Opened projects appear in the Projects workspace. Recent project history is not stored in this preview.',
-            ),
-          ),
-          const SizedBox(height: OrSpacing.x6),
-          OrPanel(
-            title: 'Developer Preview',
-            trailing: const OrBadge('Pre-MVP'),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = OrBreakpoints.isCompact(constraints.maxWidth);
-                final copy = const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Create a project, import media, edit a timeline, preview, and export a video.',
-                      style: TextStyle(
-                        color: OrColors.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: OrSpacing.x2),
-                    Text(
-                      'This preview supports project, media, timeline, playback, recovery, and Matroska export workflows. More formats and editing tools are still in development.',
-                      style: TextStyle(
-                        color: OrColors.textSecondary,
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                );
-
-                if (compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      copy,
-                      const SizedBox(height: OrSpacing.x4),
-                      OutlinedButton.icon(
-                        key: const ValueKey('home-editor-preview'),
-                        onPressed: onOpenEditorPreview,
-                        icon: const Icon(Icons.view_quilt_outlined),
-                        label: const Text('Open Editor Shell Preview'),
-                      ),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: copy),
-                    const SizedBox(width: OrSpacing.x6),
-                    OutlinedButton.icon(
-                      key: const ValueKey('home-editor-preview'),
-                      onPressed: onOpenEditorPreview,
-                      icon: const Icon(Icons.view_quilt_outlined),
-                      label: const Text('Open Editor Shell Preview'),
-                    ),
-                  ],
-                );
-              },
+            child: RecentProjectsList(
+              projects: recentProjects.take(5).toList(growable: false),
+              loaded: recentProjectsLoaded,
+              unavailable: recentProjectsUnavailable,
+              onOpen: onOpenRecentProject,
             ),
           ),
         ],

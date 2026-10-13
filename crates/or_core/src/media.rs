@@ -106,7 +106,7 @@ impl MediaSourceUri {
             .map_err(|_| MediaSourceUriError::Invalid)
     }
 
-    pub(crate) fn from_canonical_path(path: &Path) -> Result<Self, MediaSourceUriError> {
+    pub(crate) fn from_file_path(path: &Path) -> Result<Self, MediaSourceUriError> {
         let uri = Url::from_file_path(path).map_err(|_| MediaSourceUriError::Invalid)?;
         Self::parse(uri.as_str())
     }
@@ -207,6 +207,15 @@ pub enum MediaSourceRef {
 impl MediaSourceRef {
     pub fn local_file(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
         MediaSourceUri::parse(uri).map(|uri| Self::FileUri { uri })
+    }
+
+    /// Builds a local media reference from a native absolute path.
+    ///
+    /// The path is converted to a validated `file:` URI without a lossy
+    /// string conversion. The path must be absolute; it is not canonicalized
+    /// or checked for existence here.
+    pub fn from_file_path(path: impl AsRef<Path>) -> Result<Self, MediaSourceUriError> {
+        MediaSourceUri::from_file_path(path.as_ref()).map(|uri| Self::FileUri { uri })
     }
 
     pub fn android_saf_document_uri(uri: impl AsRef<str>) -> Result<Self, MediaSourceUriError> {
@@ -908,6 +917,15 @@ mod tests {
         let uri = url::Url::from_file_path(&path).unwrap();
         let source = MediaSourceRef::local_file(uri.as_str()).unwrap();
         assert_eq!(source.to_file_path().unwrap(), path);
+    }
+
+    #[test]
+    fn native_file_path_source_encodes_unicode_and_spaces_without_loss() {
+        let path = std::env::temp_dir().join("Opencut preview-媒体 clip.mov");
+        let source = MediaSourceRef::from_file_path(&path).unwrap();
+        assert_eq!(source.to_file_path().unwrap(), path);
+        assert!(source.uri().starts_with("file:"));
+        assert!(source.uri().contains("%20"));
     }
 
     #[test]

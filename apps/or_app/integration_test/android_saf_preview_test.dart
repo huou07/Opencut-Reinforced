@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
 import 'package:or_app/rust_core_gateway.dart';
 import 'package:or_app_bridge/or_app_bridge.dart' as rust;
@@ -19,6 +20,10 @@ const _fixture = MethodChannel('or_saf_acceptance_fixture');
 const _presenter = MethodChannel('or_viewer_texture');
 String _source(String id) =>
     'content://dev.opencut.saffixture.documents/document/$id';
+String _folderTreeSource(String id) =>
+    'content://dev.opencut.saffixture.documents/tree/footage/document/$id';
+const _folderTreeRoot =
+    'content://dev.opencut.saffixture.documents/tree/footage';
 
 Future<T> _stage<T>(String name, Future<T> Function() operation) async {
   debugPrint('ANDROID_SAF_STAGE_START $name');
@@ -94,6 +99,28 @@ Future<void> _until(WidgetTester tester, bool Function() ready) async {
     await tester.pump(const Duration(milliseconds: 100));
   }
   expect(ready(), isTrue, reason: 'The real product action did not complete.');
+}
+
+Future<void> _untilMediaImports(
+  WidgetTester tester,
+  _ObservedGateway gateway,
+  int expected,
+) async {
+  try {
+    await _until(tester, () => gateway.importCalls == expected);
+  } catch (_) {
+    Map<String, int>? resources;
+    try {
+      resources = await _resources().timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('ANDROID_SAF_IMPORT_RESOURCE_SNAPSHOT_FAILED $error');
+    }
+    debugPrint(
+      'ANDROID_SAF_IMPORT_TIMEOUT expected=$expected actual=${gateway.importCalls} '
+      'providerFds=${_providerFds()} resources=$resources',
+    );
+    rethrow;
+  }
 }
 
 String? _exportStatus(WidgetTester tester) {
@@ -340,6 +367,88 @@ class _ObservedGateway extends RustProjectGateway {
       captionExportCalls = 0;
   ProjectActionResult? lastReviewedCaptionImportResult;
   bool closed = false;
+  bool traceImportRefresh = false;
+
+  @override
+  Future<ProjectReadModel> summary(ProjectSessionHandle session) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START summary');
+    try {
+      return await super.summary(session);
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE summary');
+      }
+    }
+  }
+
+  @override
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START media-page');
+    try {
+      return await super.listMediaPage(session, offset: offset, limit: limit);
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE media-page');
+      }
+    }
+  }
+
+  @override
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle session,
+  ) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START tracks');
+    try {
+      return await super.listTimelineTracks(session);
+    } finally {
+      if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_COMPLETE tracks');
+    }
+  }
+
+  @override
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle session, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START clips');
+    try {
+      return await super.listTimelineClips(
+        session,
+        trackId: trackId,
+        offset: offset,
+        limit: limit,
+      );
+    } finally {
+      if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_COMPLETE clips');
+    }
+  }
+
+  @override
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START markers');
+    try {
+      return await super.listTimelineMarkers(
+        session,
+        offset: offset,
+        limit: limit,
+      );
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE markers');
+      }
+    }
+  }
+
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
     openedPath = path;
@@ -388,14 +497,22 @@ class _ObservedGateway extends RustProjectGateway {
     ProjectReadModel current,
     String source,
   ) async {
+    final item = importCalls + 1;
     final watch = Stopwatch()..start();
+    debugPrint('ANDROID_SAF_IMPORT_GATEWAY_START item=$item');
+    var outcome = 'threw';
     try {
       final result = await super.importMedia(session, current, source);
       importResults.add(result);
+      outcome = result.succeeded ? 'success' : result.errorCode;
       return result;
     } finally {
       importCalls++;
       importMicros = watch.elapsedMicroseconds;
+      debugPrint(
+        'ANDROID_SAF_IMPORT_GATEWAY_COMPLETE item=$item outcome=$outcome '
+        'micros=$importMicros',
+      );
     }
   }
 
@@ -566,6 +683,31 @@ void main() {
         'opened=${gateway.openedPath}',
       );
       expect(projectPicker.selectedProjectPath, gateway.openedPath);
+      final storedRecents = await PersistentRecentProjectStore().load();
+      expect(storedRecents, hasLength(1));
+      expect(storedRecents.single.path, gateway.openedPath);
+      expect(storedRecents.single.name, 'SAF preview acceptance');
+      final projectDocumentUri = projectPicker.projectDocumentUriFor(
+        gateway.openedPath!,
+      );
+      expect(projectDocumentUri, isNotNull);
+      expect(storedRecents.single.documentUri, projectDocumentUri);
+      // A fresh picker has no in-memory URI map. Restoring the persisted recent
+      // must revalidate Android's retained grant and rebind the managed copy.
+      final restoredPicker = AndroidSafProjectPicker();
+      expect(
+        await restoredPicker.restoreRecentProject(
+          gateway.openedPath!,
+          documentUri: storedRecents.single.documentUri,
+        ),
+        gateway.openedPath,
+      );
+      expect(
+        (await restoredPicker.synchronizeProjectPath(gateway.openedPath!))
+            ?.verified,
+        isTrue,
+      );
+      debugPrint('ANDROID_SAF_RECENT_PROJECT_RESTORED');
       debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
       final session = gateway.session!;
       final revision = (await _stage(
@@ -790,7 +932,9 @@ void main() {
       );
       await tester.tap(mediaImport);
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.importCalls == 3);
+      gateway.traceImportRefresh = true;
+      await _untilMediaImports(tester, gateway, 3);
+      gateway.traceImportRefresh = false;
       final importResults = gateway.importResults;
       final importResultSummary = jsonEncode(
         importResults
@@ -827,6 +971,42 @@ void main() {
       expect(imported.items[2].formatNames, contains('mp3'));
       expect(imported.items[2].videoDetails, isNull);
       expect(imported.items[2].audioDetails, isNotNull);
+
+      final importFolderButton = find.byKey(
+        const ValueKey('media-import-folder'),
+      );
+      // Gateway completion is observed before AppShell finishes refreshing the
+      // project read model and releases its mutation busy state. Wait for the
+      // real control to become enabled so this remains a user journey rather
+      // than tapping a disabled button during that refresh.
+      await _until(tester, () {
+        if (importFolderButton.evaluate().isEmpty) return false;
+        return tester.widget<OutlinedButton>(importFolderButton).onPressed !=
+            null;
+      });
+      await tester.tap(importFolderButton);
+      debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
+      await _untilMediaImports(tester, gateway, 5);
+      final folderImported = await gateway.listMediaPage(
+        session,
+        offset: 68,
+        limit: 2,
+      );
+      expect(folderImported.items.map((item) => item.sourceUri), [
+        _folderTreeSource('folder-audio'),
+        _folderTreeSource('folder-video'),
+      ]);
+      expect(folderImported.items[0].formatNames, contains('mp3'));
+      expect(folderImported.items[1].formatNames, contains('matroska'));
+      final persistedTreeGrants =
+          (await _control('status'))['persistedMediaUris'] as List<dynamic>;
+      // Keep the persisted permission scoped to the directory the user chose.
+      expect(persistedTreeGrants, contains(_folderTreeRoot));
+      expect(
+        persistedTreeGrants,
+        isNot(contains('content://dev.opencut.saffixture.documents/tree/root')),
+      );
+
       final importedRevision = (await gateway.summary(session)).revision;
       expect(importedRevision, greaterThan(revision));
       expect((await gateway.save(session)).succeeded, isTrue);

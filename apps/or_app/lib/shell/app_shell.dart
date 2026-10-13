@@ -13,6 +13,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
 import '../project/project_file_picker.dart';
+import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
 import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
@@ -36,11 +37,13 @@ class AppShell extends StatefulWidget {
     required this.gateway,
     required this.projectGateway,
     required this.projectFilePicker,
+    required this.recentProjectStore,
   });
 
   final CoreGateway gateway;
   final ProjectGateway projectGateway;
   final ProjectFilePicker projectFilePicker;
+  final RecentProjectStore recentProjectStore;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -51,6 +54,9 @@ class _AppShellState extends State<AppShell> {
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
+  List<RecentProject> _recentProjects = const [];
+  bool _recentProjectsLoaded = false;
+  bool _recentProjectsUnavailable = false;
   String? _projectNotice;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
@@ -104,6 +110,7 @@ class _AppShellState extends State<AppShell> {
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _onExitRequested,
     );
+    unawaited(_loadRecentProjects());
   }
 
   @override
@@ -252,16 +259,23 @@ class _AppShellState extends State<AppShell> {
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
       canPickProjects: widget.projectFilePicker.isSupported,
+      recentProjects: _recentProjects,
+      recentProjectsLoaded: _recentProjectsLoaded,
+      recentProjectsUnavailable: _recentProjectsUnavailable,
       onNewProject: _createProject,
       onOpenProject: _openProject,
-      onOpenEditorPreview: () => _select(AppDestination.editorPreview),
+      onOpenRecentProject: _openRecentProject,
       onOpenProjects: () => _select(AppDestination.projects),
     ),
     AppDestination.projects => ProjectsScreen(
       project: _activeProject,
       canPickProjects: widget.projectFilePicker.isSupported,
+      recentProjects: _recentProjects,
+      recentProjectsLoaded: _recentProjectsLoaded,
+      recentProjectsUnavailable: _recentProjectsUnavailable,
       onNewProject: _createProject,
       onOpenProject: _openProject,
+      onOpenRecentProject: _openRecentProject,
       onOpenWorkspace: _openWorkspace,
       onRenameProject: _renameProject,
       onSaveProject: _saveProject,
@@ -305,6 +319,9 @@ class _AppShellState extends State<AppShell> {
               timelineLoadError: _timelineLoadError,
               onImportMedia: widget.projectFilePicker.supportsMediaImport
                   ? _importMedia
+                  : null,
+              onImportMediaFolder: widget.projectFilePicker.supportsMediaImport
+                  ? _importMediaFolder
                   : null,
               onLoadMoreMedia: _loadMoreMedia,
               onRefreshMedia: _refreshMediaLibrary,
@@ -394,7 +411,7 @@ class _AppShellState extends State<AppShell> {
       final name = await _askProjectName();
       if (name == null || !mounted) return;
       final selectedPath = await widget.projectFilePicker.saveProjectPath(
-        suggestedName: 'project.orproj',
+        suggestedName: _suggestedProjectFileName(name),
       );
       if (selectedPath == null || !mounted) return;
       final path = _withProjectExtension(selectedPath);
@@ -432,12 +449,22 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _openProject() async {
+  Future<void> _openProject() => _openProjectLocation();
+
+  Future<void> _openRecentProject(RecentProject recent) =>
+      _openProjectLocation(recent);
+
+  Future<void> _openProjectLocation([RecentProject? recent]) async {
     if (!_checkFileLifecycleAvailable()) return;
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final path = await widget.projectFilePicker.openProjectPath();
+      final path = recent == null
+          ? await widget.projectFilePicker.openProjectPath()
+          : await widget.projectFilePicker.restoreRecentProject(
+              recent.path,
+              documentUri: recent.documentUri,
+            );
       if (path == null || !mounted) return;
       if (path == _activeProjectPath) {
         _openWorkspace();
@@ -485,6 +512,24 @@ class _AppShellState extends State<AppShell> {
         confirmLabel: 'Continue',
       ),
     );
+  }
+
+  String _suggestedProjectFileName(String name) {
+    var baseName = name.trim();
+    if (baseName.toLowerCase().endsWith('.orproj')) {
+      baseName = baseName.substring(0, baseName.length - '.orproj'.length);
+    }
+    baseName = baseName
+        .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), '_')
+        .replaceAll(RegExp(r'[. ]+$'), '');
+    if (baseName.isEmpty) baseName = 'project';
+    if (RegExp(
+      r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
+      caseSensitive: false,
+    ).hasMatch(baseName)) {
+      baseName = '_$baseName';
+    }
+    return '$baseName.orproj';
   }
 
   String _withProjectExtension(String path) =>
@@ -723,7 +768,10 @@ class _AppShellState extends State<AppShell> {
       final saved = result.view ?? await widget.projectGateway.summary(session);
       if (mounted) setState(() => _activeProject = saved);
       final path = _activeProjectPath;
-      if (path != null && !await _syncBeforeClose(path)) return false;
+      if (path != null) {
+        await _updateRecentProjectName(path, saved.name);
+        if (!await _syncBeforeClose(path)) return false;
+      }
     }
     if (beforeClose != null && !await beforeClose()) return false;
     await widget.projectGateway.close(
@@ -821,6 +869,8 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       setState(() => _activeProject = view);
+      await _recordRecentProject(path, view.name);
+      if (!mounted || !identical(session, _activeSession)) return;
       await Future.wait([
         _refreshMediaPage(
           session,
@@ -833,6 +883,67 @@ class _AppShellState extends State<AppShell> {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
       rethrow;
+    }
+  }
+
+  Future<void> _loadRecentProjects() async {
+    try {
+      final projects = await widget.recentProjectStore.load();
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = true;
+      });
+    }
+  }
+
+  Future<void> _recordRecentProject(String path, String name) async {
+    try {
+      final projects = await widget.recentProjectStore.record(
+        path: path,
+        name: name,
+        documentUri: widget.projectFilePicker.projectDocumentUriFor(path),
+      );
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        _showUnavailable(
+          'The project is open, but it could not be added to Recent Projects.',
+        );
+      }
+    }
+  }
+
+  Future<void> _updateRecentProjectName(String path, String name) async {
+    try {
+      final projects = await widget.recentProjectStore.updateName(
+        path: path,
+        name: name,
+        documentUri: widget.projectFilePicker.projectDocumentUriFor(path),
+      );
+      if (!mounted) return;
+      setState(() {
+        _recentProjects = projects;
+        _recentProjectsLoaded = true;
+        _recentProjectsUnavailable = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        _showUnavailable(
+          'The project is saved, but its recent project name could not be updated.',
+        );
+      }
     }
   }
 
@@ -982,6 +1093,8 @@ class _AppShellState extends State<AppShell> {
     if (updated == null || !mounted) return;
     final path = _activeProjectPath;
     if (path == null) return;
+    await _updateRecentProjectName(path, updated.name);
+    if (!mounted) return;
     final notice = await _syncNotice(path);
     if (!mounted) return;
     setState(() => _projectNotice = notice);
@@ -2349,19 +2462,44 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _importMedia() async {
+  Future<void> _importMedia() => _importMediaSources(folder: false);
+
+  Future<void> _importMediaFolder() => _importMediaSources(folder: true);
+
+  Future<void> _importMediaSources({required bool folder}) async {
     final session = _activeSession;
     if (session == null || _busy) return;
     List<String> sources;
     try {
-      sources = await widget.projectFilePicker.openMediaSources();
+      sources = folder
+          ? await widget.projectFilePicker.openMediaFolderSources()
+          : await widget.projectFilePicker.openMediaSources();
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return;
     } catch (_) {
-      _showUnavailable('A media file could not be selected.');
+      _showUnavailable(
+        folder
+            ? 'A media folder could not be selected.'
+            : 'A media file could not be selected.',
+      );
       return;
     }
     sources = sources.toSet().toList(growable: false);
     if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
       return;
+    }
+
+    if (folder && Platform.isAndroid) {
+      try {
+        // Preview and import share Android's 64-source descriptor registry.
+        await OrViewerTexture.clearMediaSources();
+      } on PlatformException catch (error) {
+        _showUnavailable(
+          error.message ?? 'Android media access could not be prepared.',
+        );
+        return;
+      }
     }
 
     var imported = 0;
@@ -2407,7 +2545,7 @@ class _AppShellState extends State<AppShell> {
           ? '${failures.first.substring(0, 177)}…'
           : failures.first;
       _showUnavailable(
-        'Imported $imported of ${sources.length} selected files. '
+        'Imported $imported of ${sources.length} ${folder ? 'folder files' : 'selected files'}. '
         '${failures.length} could not be imported. $failureSummary',
       );
     }

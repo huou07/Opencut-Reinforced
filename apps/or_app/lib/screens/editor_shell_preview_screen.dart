@@ -35,6 +35,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.timelineLoading = false,
     this.timelineLoadError,
     this.onImportMedia,
+    this.onImportMediaFolder,
     this.onLoadMoreMedia,
     this.onRefreshMedia,
     this.onRemoveMedia,
@@ -94,6 +95,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final bool timelineLoading;
   final String? timelineLoadError;
   final VoidCallback? onImportMedia;
+  final VoidCallback? onImportMediaFolder;
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
@@ -309,7 +311,12 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   void _onPreviewStateChanged(ProjectPreviewState state) {
+    final previous = _previewState.value;
     _previewState.value = state;
+    if (mounted &&
+        (previous == null || previous.contentEnd != state.contentEnd)) {
+      setState(() {});
+    }
   }
 
   void _onTimelineClipSelectionChanged(
@@ -400,6 +407,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   selectedTool: _selectedTool,
                   isProjectWorkspace: widget.isProjectWorkspace,
                   project: widget.project,
+                  previewState: _previewState.value,
                   mediaPage: widget.mediaPage,
                   timelineTracks: widget.timelineTracks,
                   mediaPreviews: widget.mediaPreviews,
@@ -411,6 +419,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       ? widget.onAddMediaToTimeline
                       : null,
                   onImportMedia: widget.busy ? null : widget.onImportMedia,
+                  onImportMediaFolder: widget.busy
+                      ? null
+                      : widget.onImportMediaFolder,
                   onLoadMoreMedia: widget.onLoadMoreMedia,
                   onRefreshMedia: widget.onRefreshMedia,
                   onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
@@ -494,6 +505,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
+            onImportMedia: widget.busy ? null : widget.onImportMedia,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
             onAddTextTrack: widget.onAddTextTrack,
@@ -577,6 +589,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             loading: widget.timelineLoading,
             error: widget.timelineLoadError,
             busy: widget.busy,
+            onImportMedia: widget.busy ? null : widget.onImportMedia,
             onAddVideoTrack: widget.onAddVideoTrack,
             onAddAudioTrack: widget.onAddAudioTrack,
             onAddTextTrack: widget.onAddTextTrack,
@@ -660,6 +673,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 selectedTool: tool,
                 isProjectWorkspace: true,
                 project: widget.project,
+                previewState: _previewState.value,
                 mediaPage: widget.mediaPage,
                 timelineTracks: widget.timelineTracks,
                 mediaPreviews: widget.mediaPreviews,
@@ -667,6 +681,9 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 mediaLoadingMore: widget.mediaLoadingMore,
                 mediaLoadError: widget.mediaLoadError,
                 onImportMedia: widget.busy ? null : widget.onImportMedia,
+                onImportMediaFolder: widget.busy
+                    ? null
+                    : widget.onImportMediaFolder,
                 onLoadMoreMedia: widget.onLoadMoreMedia,
                 onRefreshMedia: widget.onRefreshMedia,
                 onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
@@ -1014,6 +1031,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.selectedTool,
     required this.isProjectWorkspace,
     required this.project,
+    required this.previewState,
     required this.mediaPage,
     required this.timelineTracks,
     required this.mediaPreviews,
@@ -1021,6 +1039,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.mediaLoadingMore,
     required this.mediaLoadError,
     required this.onImportMedia,
+    required this.onImportMediaFolder,
     required this.onLoadMoreMedia,
     required this.onRefreshMedia,
     required this.onRemoveMedia,
@@ -1033,6 +1052,7 @@ class _EditorToolPanel extends StatelessWidget {
   final String selectedTool;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
+  final ProjectPreviewState? previewState;
   final ProjectMediaPage? mediaPage;
   final ProjectTimelineTracks? timelineTracks;
   final Map<String, ProjectMediaPreview> mediaPreviews;
@@ -1040,6 +1060,7 @@ class _EditorToolPanel extends StatelessWidget {
   final bool mediaLoadingMore;
   final String? mediaLoadError;
   final VoidCallback? onImportMedia;
+  final VoidCallback? onImportMediaFolder;
   final VoidCallback? onLoadMoreMedia;
   final VoidCallback? onRefreshMedia;
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
@@ -1062,12 +1083,14 @@ class _EditorToolPanel extends StatelessWidget {
       return _MediaLibraryPanel(
         page: mediaPage,
         project: project,
+        previewState: previewState,
         tracks: timelineTracks,
         previews: mediaPreviews,
         loading: mediaLoading,
         loadingMore: mediaLoadingMore,
         error: mediaLoadError,
         onImport: onImportMedia,
+        onImportFolder: onImportMediaFolder,
         onLoadMore: onLoadMoreMedia,
         onRefresh: onRefreshMedia,
         onRemove: onRemoveMedia,
@@ -1119,12 +1142,14 @@ class _MediaLibraryPanel extends StatelessWidget {
   const _MediaLibraryPanel({
     required this.page,
     required this.project,
+    required this.previewState,
     required this.tracks,
     required this.previews,
     required this.loading,
     required this.loadingMore,
     required this.error,
     required this.onImport,
+    required this.onImportFolder,
     required this.onLoadMore,
     required this.onRefresh,
     required this.onRemove,
@@ -1136,12 +1161,14 @@ class _MediaLibraryPanel extends StatelessWidget {
 
   final ProjectMediaPage? page;
   final ProjectReadModel? project;
+  final ProjectPreviewState? previewState;
   final ProjectTimelineTracks? tracks;
   final Map<String, ProjectMediaPreview> previews;
   final bool loading;
   final bool loadingMore;
   final String? error;
   final VoidCallback? onImport;
+  final VoidCallback? onImportFolder;
   final VoidCallback? onLoadMore;
   final VoidCallback? onRefresh;
   final ValueChanged<ProjectMediaItem>? onRemove;
@@ -1161,6 +1188,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = page?.items ?? const <ProjectMediaItem>[];
+    final currentPreviewState = previewState;
     final timelineSnapshotMatches =
         page != null &&
         project != null &&
@@ -1196,11 +1224,23 @@ class _MediaLibraryPanel extends StatelessWidget {
               OrSpacing.x2,
               0,
             ),
-            child: OutlinedButton.icon(
-              key: const ValueKey('media-import'),
-              onPressed: onImport,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Import Media'),
+            child: Wrap(
+              spacing: OrSpacing.x1,
+              runSpacing: OrSpacing.x1,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('media-import'),
+                  onPressed: onImport,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Import Media'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('media-import-folder'),
+                  onPressed: onImportFolder,
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+                  label: const Text('Import Folder'),
+                ),
+              ],
             ),
           ),
           if (page != null)
@@ -1249,7 +1289,8 @@ class _MediaLibraryPanel extends StatelessWidget {
                         preview: previews[item.mediaId],
                         onAddToTimeline:
                             onAddMediaToTimeline == null ||
-                                !timelineSnapshotMatches
+                                !timelineSnapshotMatches ||
+                                currentPreviewState == null
                             ? null
                             : () => unawaited(
                                 _showInsertTimelineDialog(
@@ -1257,6 +1298,9 @@ class _MediaLibraryPanel extends StatelessWidget {
                                   project: project!,
                                   media: item,
                                   tracks: tracks!,
+                                  suggestedStart:
+                                      currentPreviewState.contentEnd ??
+                                      ProjectRationalTime(BigInt.zero, 1),
                                   onInsert: onAddMediaToTimeline!,
                                 ),
                               ),
@@ -3319,6 +3363,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.loading,
     required this.error,
     required this.busy,
+    required this.onImportMedia,
     required this.onAddVideoTrack,
     required this.onAddAudioTrack,
     required this.onAddTextTrack,
@@ -3359,6 +3404,7 @@ class _TimelinePanel extends StatefulWidget {
   final bool loading;
   final String? error;
   final bool busy;
+  final VoidCallback? onImportMedia;
   final VoidCallback? onAddVideoTrack;
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
@@ -3600,6 +3646,23 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 ),
               ),
               const SizedBox(height: OrSpacing.x2),
+              if (widget.mediaItems.isEmpty &&
+                  widget.isProjectWorkspace &&
+                  widget.onImportMedia != null) ...[
+                const Text(
+                  'Import a video or audio file to start editing.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: OrColors.textMuted, fontSize: 12),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                FilledButton.icon(
+                  key: const ValueKey('timeline-empty-import-media'),
+                  onPressed: widget.busy ? null : widget.onImportMedia,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Import Media'),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+              ],
               Wrap(
                 spacing: OrSpacing.x2,
                 runSpacing: OrSpacing.x2,
@@ -5530,6 +5593,7 @@ Future<void> _showInsertTimelineDialog({
   required ProjectReadModel project,
   required ProjectMediaItem media,
   required ProjectTimelineTracks tracks,
+  required ProjectRationalTime suggestedStart,
   required Future<void> Function(
     ProjectReadModel,
     ProjectMediaItem,
@@ -5579,7 +5643,9 @@ Future<void> _showInsertTimelineDialog({
   }
   final labels = _timelineTrackLabels(tracks.items);
   var selectedTrack = compatible.first;
-  final timelineStartController = TextEditingController(text: '0/1');
+  final timelineStartController = TextEditingController(
+    text: suggestedStart.canonical,
+  );
   final sourceStartController = TextEditingController(text: '0/1');
   final durationController = TextEditingController(
     text: _defaultTimelineDuration(media, selectedTrack.kind)?.canonical ?? '',

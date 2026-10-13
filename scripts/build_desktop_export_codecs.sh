@@ -139,11 +139,34 @@ cmake --build "$opus_build" --config Release --parallel 2
 cmake --install "$opus_build" --config Release
 
 vpx_source="$work/libvpx"
-if [[ ! -d "$vpx_source/.git" ]]; then
-  git -c advice.detachedHead=false clone --filter=blob:none \
-    https://chromium.googlesource.com/webm/libvpx "$vpx_source"
-fi
-git -C "$vpx_source" checkout --detach "$vpx_commit"
+ensure_vpx_source() {
+  local attempt fetch_log="$work/libvpx-fetch.log"
+  for attempt in 1 2 3; do
+    : > "$fetch_log"
+    if [[ ! -d "$vpx_source/.git" ]] &&
+      ! git -c advice.detachedHead=false clone --filter=blob:none \
+        https://chromium.googlesource.com/webm/libvpx "$vpx_source" >"$fetch_log" 2>&1; then
+      :
+    elif [[ -d "$vpx_source/.git" ]] &&
+      git -C "$vpx_source" checkout --detach "$vpx_commit" >>"$fetch_log" 2>&1 &&
+      [[ "$(git -C "$vpx_source" rev-parse HEAD)" == "$vpx_commit" ]]; then
+      cat "$fetch_log"
+      return 0
+    fi
+
+    cat "$fetch_log" >&2
+    if ! grep -Eq 'HTTP (429|500|502|503|504)' "$fetch_log"; then return 1; fi
+    rm -rf "$vpx_source"
+    if [[ "$attempt" -lt 3 ]]; then
+      local delay=$((attempt * 5))
+      echo "Retrying pinned libvpx source fetch after transient HTTP failure (attempt $((attempt + 1))/3) in ${delay}s." >&2
+      sleep "$delay"
+    fi
+  done
+  return 1
+}
+
+ensure_vpx_source
 test "$(git -C "$vpx_source" rev-parse HEAD)" = "$vpx_commit"
 mkdir -p "$vpx_build"
 cd "$vpx_build"

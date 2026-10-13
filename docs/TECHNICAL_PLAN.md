@@ -369,6 +369,19 @@ The packaged media inspector could not start. Check the app installation and try
 
 Android project New/Open use SAF document URIs only at the Flutter/native storage boundary. The native adapter reads at most 64 MiB into an app-private managed working copy; Rust then validates and opens it through the normal `ProjectFileSession`. Save and recovery update that local copy first; explicit provider sync compares the remote bytes with a private baseline and verifies readback where supported. A provider failure leaves the local project intact, and no atomic-replace guarantee is made for `DocumentProvider` writes. Android media import retains its SAF URI identity and preview opens bounded seekable provider descriptors. Export uses the shared evaluated project snapshot and bounded Rust export job, stages locally, and publishes through the selected SAF document without exposing provider paths to project state. The established lossless profile uses FFV1 + PCM S16LE; Android WebM VP9/Opus is a candidate built from the same pinned codec sources as desktop and requires exact-SHA all-ABI and SAF output acceptance before it is considered supported. Android playback uses CPAL's AAudio backend, which requires Android 8.0/API 26; the app and all Rust target linkers use API 26. Hosted Android CI verifies the user journey and resource bounds on API 36 x86_64 SwiftShader. CI builds each target and runs Flutter widget tests. Hosted macOS, Linux, and Windows jobs run the Phase 7 runtime, software decode, recovery, and stale-output conformance suites; native Flutter lifecycle, offline-media, timeline-edit, and preview transport integration runs on macOS.
 
+Folder import is a picker extension over the same `media.add` command path,
+not a separate ingest engine. Desktop uses the native directory picker and
+enumerates supported files recursively without following symbolic links. The
+Android adapter requests a SAF tree URI, enumerates descendants with a maximum
+depth of 64, 20,000 visited entries, and 64 supported media files, then
+persists the tree read grant and returns descendant document URIs. Folder and
+per-file failures remain visible to the existing import result handling;
+canonical project data retains source document identities, not tree handles.
+The application clears stale preview registrations before folder import so
+the operation's 64-source bound agrees with Android's shared preview/import
+descriptor registry. The hosted DocumentsUI journey is the acceptance boundary
+for the Android picker and persisted grant.
+
 Keep high-volume media transport separate from ordinary bridge messages. The bridge remains a control and ordinary structured-data path; do not send full-rate decoded video frames or large frame buffers as copied Dart objects. The render path should use a native/external display resource where supported and retain a correctness fallback.
 
 ## 10. Preview rendering and frame model

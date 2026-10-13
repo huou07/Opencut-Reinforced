@@ -20,11 +20,41 @@ def center(bounds):
     return [(left + right) // 2, (top + bottom) // 2]
 
 
+def is_fully_visible(node, screen_bounds):
+    if not screen_bounds:
+        return True
+    try:
+        left, top, right, bottom = bounds_values(node.get("bounds", ""))
+        screen_left, screen_top, screen_right, screen_bottom = bounds_values(screen_bounds)
+    except ValueError:
+        return False
+    screen_height = screen_bottom - screen_top
+    # Leave room for Android's navigation area, which may not appear in the
+    # accessibility tree even though a file row can extend underneath it.
+    bottom_inset = max(24, round(screen_height * 0.04))
+    return (
+        left >= screen_left
+        and right <= screen_right
+        and top >= screen_top
+        and bottom <= screen_bottom - bottom_inset
+    )
+
+
+def scrollable_ancestor(node, parent_by_node):
+    parent = parent_by_node.get(node)
+    while parent is not None:
+        if parent.get("scrollable") == "true":
+            return parent
+        parent = parent_by_node.get(parent)
+    return None
+
+
 def select(device, guest_log, output, flow="open"):
     if flow == "both":
         select(device, guest_log, output, "open")
         select(device, guest_log, output, "export")
         select(device, guest_log, output, "media")
+        select(device, guest_log, output, "media-folder")
         select(device, guest_log, output, "caption-import")
         select(device, guest_log, output, "caption-export")
         return
@@ -38,6 +68,7 @@ def select(device, guest_log, output, flow="open"):
     marker = {
         "open": "ANDROID_SAF_DOCUMENTS_UI_READY",
         "media": "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+        "media-folder": "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
         "media-relink": "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
         "export": "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
         "caption-import": "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
@@ -50,6 +81,7 @@ def select(device, guest_log, output, flow="open"):
     # instead of hanging, not to race a cold window.
     deadline = time.monotonic() + 300
     opened_roots = selected_root = False
+    folder_opened = False
     list_view_requested = False
     media_scroll_attempts = 0
     last_media_scroll_at = 0.0
@@ -86,6 +118,22 @@ def select(device, guest_log, output, flow="open"):
             continue
         (output / "documents-ui-last.xml").write_bytes(raw)
         nodes = list(root.iter("node"))
+        screen_node = next(
+            (
+                node
+                for node in root
+                if node.get("class") in {
+                    "android.widget.FrameLayout",
+                    "android.view.ViewGroup",
+                    "android.widget.ScrollView",
+                }
+            ),
+            None,
+        )
+        screen_bounds = screen_node.get("bounds", "") if screen_node is not None else ""
+        parent_by_node = {
+            child: parent for parent in nodes for child in parent
+        }
         # Restrict clicks to the native system picker, never Flutter widgets.
         nodes = [node for node in nodes if node.get("package", "").endswith(".documentsui")]
         document = next((node for node in nodes if node.get("text") == "acceptance.orproj"), None)
@@ -165,10 +213,37 @@ def select(device, guest_log, output, flow="open"):
             (node for node in nodes if node.get("content-desc") == "List view"),
             None,
         )
+        footage_folder = next(
+            (node for node in nodes if node.get("text") == "Footage"), None
+        )
+        use_folder = next(
+            (
+                node for node in nodes
+                if (node.get("text") or "").casefold() in {"use this folder", "select folder"}
+            ),
+            None,
+        )
+        allow_folder = next(
+            (
+                node for node in nodes
+                if (node.get("text") or "").casefold() == "allow"
+            ),
+            None,
+        )
         scroll_view = next(
             (node for node in nodes if node.get("scrollable") == "true"),
             None,
         )
+        media_list = next(
+            (
+                node
+                for node in nodes
+                if node.get("resource-id", "").endswith(":id/dir_list")
+                and node.get("scrollable") == "true"
+            ),
+            None,
+        )
+        media_scroll_container = media_list if media_list is not None else scroll_view
         drawer = next((node for node in nodes if node.get("content-desc") in
                        ("Show roots", "Show navigation drawer", "Open navigation drawer")), None)
         target = None
@@ -178,6 +253,13 @@ def select(device, guest_log, output, flow="open"):
             target = document
         elif selected_root and flow == "caption-import" and caption_file is not None:
             target = caption_file
+        elif selected_root and flow == "media-folder":
+            if allow_folder is not None:
+                target = allow_folder
+            elif folder_opened and use_folder is not None:
+                target = use_folder
+            elif not folder_opened and footage_folder is not None:
+                target = footage_folder
         elif selected_root and flow in {"media", "media-relink"}:
             available_media = {
                 name for name, node in selectable_media.items() if node is not None
@@ -193,28 +275,43 @@ def select(device, guest_log, output, flow="open"):
                 ),
                 None,
             )
-            # DocumentsUI can briefly expose only part of its provider listing
-            # while loading/relayout is in progress. Do not infer that a
-            # partial set is the whole acceptance selection; the known fixture
-            # names are the completion contract for this journey.
+                # DocumentsUI can briefly expose only part of its provider
+                # listing while loading or after a viewport clips the last row.
+                # Do not infer that partial names satisfy this acceptance path.
             listing_complete = available_media == expected_media
             if not listing_complete and list_view is not None and not list_view_requested:
                 # The acceptance provider can place one tile below the fold in
                 # DocumentsUI's default grid at compact emulator sizes. List
-                # view exposes the actual filename nodes without guessing at
-                # card coordinates or scrolling.
+                # view exposes stable filename labels before any needed scroll.
                 target = list_view
+            elif not listing_complete and media_scroll_container is not None:
+                # List view can still place the last filename below the
+                # viewport, where DocumentsUI omits it from the accessibility
+                # tree entirely. Scroll the actual directory list until all
+                # fixture names are exposed.
+                retry_wait = time.monotonic() - last_media_scroll_at < 0.75
+                if not retry_wait and media_scroll_attempts < 6:
+                    target = media_scroll_container
+                    pending_media = next(
+                        (name for name in selectable_media if name not in available_media),
+                        next_media,
+                    )
+                    scroll_for_media = True
             elif listing_complete and next_media is not None:
                 media_node = selectable_media[next_media]
-                if media_node.get("enabled") == "false":
+                clipped = not is_fully_visible(media_node, screen_bounds)
+                if media_node.get("enabled") == "false" or clipped:
                     if list_view is not None and not list_view_requested:
                         target = list_view
-                    elif scroll_view is not None and media_scroll_attempts < 6:
+                    elif media_scroll_attempts < 6:
                         retry_wait = time.monotonic() - last_media_scroll_at < 0.75
                         if not retry_wait:
-                            target = scroll_view
-                            pending_media = next_media
-                            scroll_for_media = True
+                            target = scrollable_ancestor(media_node, parent_by_node)
+                            if target is None:
+                                target = media_scroll_container
+                            if target is not None:
+                                pending_media = next_media
+                                scroll_for_media = True
                 else:
                     action = "long-press" if flow == "media" and not selected_media else "tap"
                     retry_wait = time.monotonic() - last_media_action_at < 1.5
@@ -264,6 +361,8 @@ def select(device, guest_log, output, flow="open"):
                         adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
                     else:
                         adb("shell", "input", "tap", str(x), str(y))
+                        if flow == "media-folder" and target is footage_folder:
+                            folder_opened = True
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 # The window can move between the dump and the tap. Re-dump and
                 # decide again from the fresh tree.
@@ -282,6 +381,12 @@ def select(device, guest_log, output, flow="open"):
                 list_view_requested = True
                 with selector_log.open("a", encoding="utf-8") as record:
                     record.write("action=tap target=list-view\n")
+            if (
+                flow == "media-folder" and target is allow_folder
+            ):
+                with (output / "documents-ui-selection.txt").open("a", encoding="utf-8") as record:
+                    record.write("Selected Footage and confirmed descendant access for media-folder through native DocumentsUI.\n")
+                return
             if (
                 target is document
                 or target is caption_file
@@ -311,6 +416,6 @@ if __name__ == "__main__":
     parser.add_argument("--device", required=True)
     parser.add_argument("--guest-log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--flow", choices=("open", "media", "media-relink", "export", "caption-import", "caption-export", "both", "both-relink"), default="open")
+    parser.add_argument("--flow", choices=("open", "media", "media-folder", "media-relink", "export", "caption-import", "caption-export", "both", "both-relink"), default="open")
     args = parser.parse_args()
     select(args.device, args.guest_log, args.output, args.flow)

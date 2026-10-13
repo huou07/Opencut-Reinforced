@@ -11,6 +11,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,7 +43,8 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
         row.add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, "root");
         row.add(DocumentsContract.Root.COLUMN_TITLE, "OR SAF acceptance");
         row.add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY
-            | DocumentsContract.Root.FLAG_SUPPORTS_CREATE);
+            | DocumentsContract.Root.FLAG_SUPPORTS_CREATE
+            | DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD);
         row.add(DocumentsContract.Root.COLUMN_MIME_TYPES, "application/json\nvideo/x-matroska\nvideo/webm\nvideo/mp4\naudio/wav\naudio/mpeg\napplication/x-subrip\ntext/vtt\ntext/plain");
         return cursor;
     }
@@ -49,31 +55,65 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
     }
     @Override public Cursor queryChildDocuments(String parent, String[] projection, String sortOrder) {
         MatrixCursor cursor = new MatrixCursor(projection == null ? DOC_COLUMNS : projection);
-        if (parent.equals("root")) {
-            addDocument(cursor, "project");
-            addDocument(cursor, "media");
-            addDocument(cursor, "media-second");
-            addDocument(cursor, "media-audio");
-            addDocument(cursor, "relink-replacement");
-            addDocument(cursor, "captions");
-            if (new File(getContext().getFilesDir(), "export.mkv").isFile()) addDocument(cursor, "export");
-            if (new File(getContext().getFilesDir(), "export.webm").isFile()) addDocument(cursor, "export-webm");
-            if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) addDocument(cursor, "caption-export");
-            if (new File(getContext().getFilesDir(), "caption-export.vtt").isFile()) addDocument(cursor, "caption-export-vtt");
-        }
+        for (String documentId : childDocumentIds(parent)) addDocument(cursor, documentId);
         return cursor;
+    }
+
+    @Override public boolean isChildDocument(String parentDocumentId, String documentId) {
+        if (parentDocumentId.equals(documentId)) return false;
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        pending.add(parentDocumentId);
+        while (!pending.isEmpty()) {
+            String parent = pending.removeFirst();
+            if (!visited.add(parent)) continue;
+            for (String child : childDocumentIds(parent)) {
+                if (child.equals(documentId)) return true;
+                if (isDirectory(child)) pending.addLast(child);
+            }
+        }
+        return false;
+    }
+
+    private List<String> childDocumentIds(String parent) {
+        List<String> children = new ArrayList<>();
+        if (parent.equals("root")) {
+            children.add("project");
+            children.add("footage");
+            children.add("media");
+            children.add("media-second");
+            children.add("media-audio");
+            children.add("relink-replacement");
+            children.add("captions");
+            if (new File(getContext().getFilesDir(), "export.mkv").isFile()) children.add("export");
+            if (new File(getContext().getFilesDir(), "export.webm").isFile()) children.add("export-webm");
+            if (new File(getContext().getFilesDir(), "caption-export.srt").isFile()) children.add("caption-export");
+            if (new File(getContext().getFilesDir(), "caption-export.vtt").isFile()) children.add("caption-export-vtt");
+        } else if (parent.equals("footage")) {
+            children.add("folder-video");
+            children.add("folder-notes");
+            children.add("footage-nested");
+        } else if (parent.equals("footage-nested")) {
+            children.add("folder-audio");
+        }
+        return children;
+    }
+
+    private static boolean isDirectory(String documentId) {
+        return documentId.equals("root") || documentId.equals("footage")
+            || documentId.equals("footage-nested");
     }
     private void addDocument(MatrixCursor cursor, String id) {
         MatrixCursor.RowBuilder row = cursor.newRow();
         row.add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, id);
-        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "phone.mp4" : id.equals("media-audio") ? "music.mp3" : id.equals("relink-replacement") ? "relink-replacement.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("export-webm") ? "export.webm" : "export.mkv");
-        row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : id.equals("media-audio") ? "audio/mpeg" : id.equals("media-second") ? "video/mp4" : id.equals("captions") || id.equals("caption-export") ? "application/x-subrip" : id.equals("caption-export-vtt") ? "text/vtt" : id.equals("export-webm") ? "video/webm" : "video/x-matroska");
-        row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root")
+        row.add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, id.equals("root") ? "OR SAF acceptance" : id.equals("footage") ? "Footage" : id.equals("footage-nested") ? "Audio" : id.equals("folder-video") ? "folder-take.mkv" : id.equals("folder-audio") ? "folder-music.mp3" : id.equals("folder-notes") ? "notes.txt" : id.equals("project") ? "acceptance.orproj" : id.equals("media") ? "tiny.mkv" : id.equals("media-second") ? "phone.mp4" : id.equals("media-audio") ? "music.mp3" : id.equals("relink-replacement") ? "relink-replacement.mkv" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("export-webm") ? "export.webm" : "export.mkv");
+        row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, id.equals("root") || id.equals("footage") || id.equals("footage-nested") ? DocumentsContract.Document.MIME_TYPE_DIR : id.equals("project") ? "application/json" : id.equals("media-audio") || id.equals("folder-audio") ? "audio/mpeg" : id.equals("media-second") ? "video/mp4" : id.equals("folder-notes") ? "text/plain" : id.equals("captions") || id.equals("caption-export") ? "application/x-subrip" : id.equals("caption-export-vtt") ? "text/vtt" : id.equals("export-webm") ? "video/webm" : "video/x-matroska");
+        row.add(DocumentsContract.Document.COLUMN_FLAGS, id.equals("root") || id.equals("footage") || id.equals("footage-nested")
             ? DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
             : id.equals("export") || id.equals("export-webm") || id.equals("caption-export") || id.equals("caption-export-vtt")
                 ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE
                 : id.equals("project") ? DocumentsContract.Document.FLAG_SUPPORTS_WRITE : 0);
-        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("captions") ? "captions.srt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("captions") ? "captions.srt" : id.equals("media-audio") || id.equals("folder-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
         row.add(DocumentsContract.Document.COLUMN_SIZE, file.length());
     }
 
@@ -124,7 +164,7 @@ public final class FixtureDocumentsProvider extends DocumentsProvider {
                 throw new FileNotFoundException("Blocked-open cancelled");
             }
         }
-        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("media-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
+        File file = new File(getContext().getFilesDir(), id.equals("project") ? "acceptance.orproj" : id.equals("export") ? "export.mkv" : id.equals("export-webm") ? "export.webm" : id.equals("captions") ? "captions.srt" : id.equals("caption-export") ? "caption-export.srt" : id.equals("caption-export-vtt") ? "caption-export.vtt" : id.equals("media-audio") || id.equals("folder-audio") ? "music.mp3" : id.equals("media-second") ? "tiny_h264_aac.mp4" : "tiny.mkv");
         if (id.equals("pipe")) {
             try {
                 ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();

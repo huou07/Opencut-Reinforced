@@ -100,6 +100,72 @@ MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+MEDIA_LIST_WITH_CLIPPED_ENABLED_ITEM = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="" class="android.widget.FrameLayout"
+        package="com.google.android.documentsui" bounds="[0,0][320,640]">
+    <node index="0" text="" resource-id="com.google.android.documentsui:id/dir_list"
+          class="android.widget.GridView" package="com.google.android.documentsui"
+          scrollable="true" bounds="[0,120][320,640]">
+      <node index="0" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            clickable="true" enabled="true" bounds="[0,608][320,650]">
+        <node index="0" text="tiny.mkv" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,620][187,642]" selected="false" />
+      </node>
+      <node index="1" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            clickable="true" enabled="true" bounds="[0,540][320,608]">
+        <node index="0" text="phone.mp4" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,559][187,581]" selected="false" />
+      </node>
+      <node index="2" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            clickable="true" enabled="true" bounds="[0,472][320,540]">
+        <node index="0" text="" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,486][187,508]" selected="false">
+          <node index="0" text="music.mp3" class="android.widget.TextView"
+                package="com.google.android.documentsui" enabled="true"
+                bounds="[72,486][187,508]" selected="false" />
+        </node>
+      </node>
+    </node>
+  </node>
+</hierarchy>
+"""
+
+MEDIA_LIST_WITH_LAST_FILE_BELOW_VIEWPORT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="" class="android.widget.FrameLayout"
+        package="com.google.android.documentsui" bounds="[0,0][320,640]">
+    <node index="0" text="" resource-id="com.google.android.documentsui:id/dir_list"
+          class="android.widget.GridView" package="com.google.android.documentsui"
+          scrollable="true" bounds="[0,120][320,640]">
+      <node index="0" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            enabled="true" bounds="[0,540][320,608]">
+        <node index="0" text="phone.mp4" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,559][187,581]" selected="false" />
+      </node>
+      <node index="1" text="" resource-id="com.google.android.documentsui:id/item_root"
+            class="android.widget.LinearLayout" package="com.google.android.documentsui"
+            enabled="true" bounds="[0,472][320,540]">
+        <node index="0" text="music.mp3" class="android.widget.TextView"
+              package="com.google.android.documentsui" enabled="true"
+              bounds="[72,486][187,508]" selected="false" />
+      </node>
+    </node>
+    <node index="1" text="" class="android.widget.Button"
+          package="com.google.android.documentsui" content-desc="Grid view"
+          bounds="[248,126][296,174]" />
+  </node>
+</hierarchy>
+"""
+
 RELINK_MEDIA_LIST = b"""<?xml version='1.0' encoding='UTF-8'?>
 <hierarchy rotation="0">
   <node index="0" text="relink-replacement.mkv" class="android.widget.LinearLayout"
@@ -189,6 +255,29 @@ SAVE = b"""<?xml version='1.0' encoding='UTF-8'?>
 </hierarchy>
 """
 
+FOLDER_ROOT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="Footage" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,200][296,260]" />
+</hierarchy>
+"""
+
+FOLDER_CONTENT = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="folder-take.mkv" class="android.widget.LinearLayout"
+        package="com.android.documentsui" bounds="[24,200][296,260]" />
+  <node index="1" text="Use this folder" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[200,700][300,760]" />
+</hierarchy>
+"""
+
+FOLDER_ALLOW = b"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="Allow" class="android.widget.Button"
+        package="com.android.documentsui" enabled="true" bounds="[200,700][300,760]" />
+</hierarchy>
+"""
+
 
 class FakeAdb:
     """An `adb` that fails like a cold guest, then serves the real tree."""
@@ -217,6 +306,7 @@ class FakeAdb:
                 MEDIA_GRID_PARTIAL,
                 RELINK_MEDIA_LIST,
             ],
+            "media-folder": [DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT, FOLDER_ALLOW],
             "export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
             "caption-import": [DRAWER, PROVIDER, CAPTION],
             "caption-export": [DRAWER, PROVIDER, SAVE_DISABLED, SAVE],
@@ -226,7 +316,8 @@ class FakeAdb:
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
                      MEDIA_FIRST_TWO_SELECTED,
-                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     MEDIA_OPEN, DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT,
+                     FOLDER_ALLOW, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE],
             "both-relink": [DRAWER, PROVIDER, DOCUMENT, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
@@ -234,7 +325,8 @@ class FakeAdb:
                      MEDIA_LIST,
                      MEDIA_FIRST_SELECTED,
                      MEDIA_FIRST_TWO_SELECTED,
-                     MEDIA_OPEN, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
+                     MEDIA_OPEN, DRAWER, PROVIDER, FOLDER_ROOT, FOLDER_CONTENT,
+                     FOLDER_ALLOW, DRAWER, PROVIDER, CAPTION, DRAWER, PROVIDER,
                      SAVE_DISABLED, SAVE, DRAWER, PROVIDER,
                      MEDIA_GRID_PARTIAL, RELINK_MEDIA_LIST],
         }[flow]
@@ -262,7 +354,7 @@ class FakeAdb:
                 tree_index = self.tree_index - 1
                 is_relink_selection = (
                     self.flow == "media-relink"
-                    or (self.flow == "both-relink" and tree_index >= 20)
+                    or (self.flow == "both-relink" and tree_index >= 25)
                 )
                 if (is_relink_selection and command[-2:] == ["160", "302"]
                         and self.guest_log is not None):
@@ -282,7 +374,7 @@ def run(transient_dumps, flow="open"):
     with tempfile.TemporaryDirectory() as work:
         root = Path(work)
         guest = root / "guest.log"
-        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
+        guest.write_text("ANDROID_SAF_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY\nANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\nANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n")
         output = root / "out"
         adb = FakeAdb(transient_dumps, flow)
         with mock.patch.object(subprocess, "check_output", adb.check_output):
@@ -336,6 +428,25 @@ class SelectorTests(unittest.TestCase):
                 selected_report,
             )
 
+    def test_media_folder_flow_selects_and_confirms_tree_access(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media-folder")
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media-folder")
+
+            self.assertEqual(
+                adb.actions,
+                [("tap", 0), ("tap", 1), ("tap", 2), ("tap", 3), ("tap", 4)],
+            )
+            self.assertIn(
+                "Selected Footage and confirmed descendant access",
+                (output / "documents-ui-selection.txt").read_text(),
+            )
+
     def test_media_flow_scrolls_clipped_mp3_tile_before_tapping(self):
         with tempfile.TemporaryDirectory() as work:
             root = Path(work)
@@ -369,6 +480,79 @@ class SelectorTests(unittest.TestCase):
             )
             self.assertIn(
                 "action=scroll target=music.mp3",
+                (output / "documents-ui-selector.log").read_text(),
+            )
+
+    def test_media_flow_scrolls_enabled_file_row_behind_navigation_bar(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media")
+            adb.trees = [
+                DRAWER,
+                PROVIDER,
+                MEDIA_LIST_WITH_CLIPPED_ENABLED_ITEM,
+                MEDIA_LIST,
+                MEDIA_FIRST_SELECTED,
+                MEDIA_FIRST_TWO_SELECTED,
+                MEDIA_SELECT,
+            ]
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(
+                adb.actions,
+                [
+                    ("tap", 0),
+                    ("tap", 1),
+                    ("swipe", 2),
+                    ("swipe", 3),
+                    ("tap", 4),
+                    ("tap", 5),
+                    ("tap", 6),
+                ],
+            )
+            selection_log = (output / "documents-ui-selector.log").read_text()
+            self.assertIn("action=scroll target=tiny.mkv", selection_log)
+            self.assertIn("action=long-press target=tiny.mkv", selection_log)
+
+    def test_media_flow_scrolls_list_when_last_file_is_not_in_accessibility_tree(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            guest = root / "guest.log"
+            guest.write_text("ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n")
+            output = root / "out"
+            adb = FakeAdb(transient_dumps=0, flow="media")
+            adb.trees = [
+                DRAWER,
+                PROVIDER,
+                MEDIA_GRID_PARTIAL,
+                MEDIA_LIST_WITH_LAST_FILE_BELOW_VIEWPORT,
+                MEDIA_LIST,
+                MEDIA_FIRST_SELECTED,
+                MEDIA_FIRST_TWO_SELECTED,
+                MEDIA_SELECT,
+            ]
+            with mock.patch.object(subprocess, "check_output", adb.check_output):
+                selector.select("emulator-5554", guest, output, "media")
+
+            self.assertEqual(
+                adb.actions,
+                [
+                    ("tap", 0),
+                    ("tap", 1),
+                    ("tap", 2),
+                    ("swipe", 3),
+                    ("swipe", 4),
+                    ("tap", 5),
+                    ("tap", 6),
+                    ("tap", 7),
+                ],
+            )
+            self.assertIn(
+                "action=scroll target=tiny.mkv",
                 (output / "documents-ui-selector.log").read_text(),
             )
 
@@ -459,6 +643,7 @@ class SelectorTests(unittest.TestCase):
                 "ANDROID_SAF_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY\n"
+                "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY\n"
                 "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY\n"
             )
@@ -467,7 +652,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both")
 
-            self.assertEqual(len(adb.actions), 19)
+            self.assertEqual(len(adb.actions), 24)
             self.assertTrue((output / "documents-ui-selection.txt").exists())
 
     def test_combined_flow_matches_project_export_then_media_journey(self):
@@ -480,6 +665,7 @@ class SelectorTests(unittest.TestCase):
                         "ANDROID_SAF_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
                     ]
@@ -512,9 +698,14 @@ class SelectorTests(unittest.TestCase):
                     ("tap", 16),
                     ("tap", 17),
                     ("tap", 18),
+                    ("tap", 19),
                     ("tap", 20),
+                    ("tap", 21),
+                    ("tap", 22),
+                    ("tap", 23),
+                    ("tap", 25),
                 ],
-                "DocumentsUI selections must follow open, export, media, caption import and caption export",
+                "DocumentsUI selections must follow open, export, media, folder import, captions and export",
             )
 
     def test_combined_relink_flow_waits_for_the_real_relink_picker(self):
@@ -527,6 +718,7 @@ class SelectorTests(unittest.TestCase):
                         "ANDROID_SAF_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY",
+                        "ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY",
                         "ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY",
@@ -539,7 +731,7 @@ class SelectorTests(unittest.TestCase):
             with mock.patch.object(subprocess, "check_output", adb.check_output):
                 selector.select("emulator-5554", guest, output, "both-relink")
 
-            self.assertEqual(len(adb.actions), 23)
+            self.assertEqual(len(adb.actions), 28)
             selections = (output / "documents-ui-selection.txt").read_text()
             self.assertIn("Selected relink-replacement.mkv for media-relink", selections)
 

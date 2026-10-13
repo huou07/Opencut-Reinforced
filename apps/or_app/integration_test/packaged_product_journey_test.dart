@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
 import 'package:flutter/material.dart'
     show
         FilledButton,
+        AlertDialog,
         IconButton,
         OutlinedButton,
         PopupMenuButton,
@@ -302,13 +303,52 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
     'project close before application exit',
   );
+  final recentProject = find.byKey(
+    ValueKey('recent-project-${picker.projectPath}'),
+  );
+  await _pumpUntil(
+    tester,
+    () => recentProject.evaluate().isNotEmpty,
+    'saved project in recent history',
+  );
+  await tester.tap(recentProject);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.text('Packaged Journey Edited').evaluate().isNotEmpty &&
+        find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
+    'same-process recent project reopen',
+  );
+  final closeButton = find.byKey(const ValueKey('workspace-close'));
+  await tester.ensureVisible(closeButton);
+  await _pumpUntil(
+    tester,
+    () => _enabledAndHitTestableTextButton(tester, closeButton),
+    'project close control readiness after recent project reopen',
+    diagnostic: () => _projectCloseDiagnostic(tester, closeButton),
+  );
+  await tester.tap(closeButton);
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
+    'project close after recent project reopen',
+    diagnostic: () => _projectCloseDiagnostic(tester, closeButton),
+  );
 }
 
 Future<void> _reopenAndExport(
   WidgetTester tester,
   _JourneyPicker picker,
 ) async {
-  await tester.tap(find.byKey(const ValueKey('home-open-project')));
+  final recentProject = find.byKey(
+    ValueKey('recent-project-${picker.projectPath}'),
+  );
+  await _pumpUntil(
+    tester,
+    () => recentProject.evaluate().isNotEmpty,
+    'project history after application restart',
+  );
+  await tester.tap(recentProject);
   await _pumpUntil(
     tester,
     () =>
@@ -597,6 +637,23 @@ Future<void> _pumpUntil(
   fail('Timed out waiting for $operation.$detail');
 }
 
+bool _enabledAndHitTestableTextButton(WidgetTester tester, Finder finder) =>
+    finder.evaluate().isNotEmpty &&
+    tester.widget<TextButton>(finder).onPressed != null &&
+    finder.hitTestable().evaluate().isNotEmpty;
+
+String _projectCloseDiagnostic(WidgetTester tester, Finder closeButton) {
+  final closeEnabled = closeButton.evaluate().isNotEmpty
+      ? tester.widget<TextButton>(closeButton).onPressed != null
+      : false;
+  return 'closeEnabled=$closeEnabled '
+      'projectVisible=${find.byKey(const ValueKey("workspace-project-name")).evaluate().isNotEmpty} '
+      'savedBadge=${find.text("Saved").evaluate().isNotEmpty} '
+      'dirtyBadge=${find.text("Unsaved changes").evaluate().isNotEmpty} '
+      'recoveryDialog=${find.byType(AlertDialog).evaluate().isNotEmpty} '
+      'snackbar=${find.byType(SnackBar).evaluate().isNotEmpty}';
+}
+
 String _exportStatusText(WidgetTester tester) {
   final status = find.byKey(const ValueKey('export-status'));
   if (status.evaluate().isEmpty) return '<not visible>';
@@ -660,7 +717,19 @@ class _JourneyPicker implements ProjectFilePicker {
   Future<String?> openProjectPath() async => openPath ?? projectPath;
 
   @override
+  Future<String> restoreRecentProject(
+    String path, {
+    String? documentUri,
+  }) async => path;
+
+  @override
+  String? projectDocumentUriFor(String path) => null;
+
+  @override
   Future<List<String>> openMediaSources() async => [nextMediaPath];
+
+  @override
+  Future<List<String>> openMediaFolderSources() async => mediaPaths;
 
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async =>

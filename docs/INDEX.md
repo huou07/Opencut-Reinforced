@@ -27,7 +27,8 @@ This map points to the current source of truth. Read the documents relevant to y
 | [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md) | Evidence-backed reuse/build/upstream decisions and license boundaries |
 | [TESTING.md](TESTING.md) | Current bootstrap checks, planned verification layers, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
-| [RELEASE.md](RELEASE.md) | Future application release process; no app binaries are released today |
+| [RELEASE.md](RELEASE.md) | Developer Preview distribution and future stable release requirements |
+| [DEVELOPER_PREVIEW_INSTALL.md](DEVELOPER_PREVIEW_INSTALL.md) | Install, try, update, and remove temporary Developer Preview packages |
 | [TOOLING.md](TOOLING.md) | Local development baseline, hosted platform verification, optional tools, and repository safeguards |
 | [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) | Preserved prototype behavior and future UI regression guards |
 | [execution/README.md](execution/README.md) | Machine-readable architecture lock, checkpoint graph, and execution contract |

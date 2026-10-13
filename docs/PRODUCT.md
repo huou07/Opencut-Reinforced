@@ -37,11 +37,11 @@ next implementation task.
 
 ## Project and workflow
 
-**MVP FOUNDATION:** create and open projects with initial project options; recent project access; periodic recovery checkpoints; explicit crash-safe atomic Save and recovery; clear saved or unsaved state; reliable save and reopen. Autosave updates a recovery checkpoint and never silently overwrites the canonical project file.
+**MVP FOUNDATION:** create and open projects with initial project options; periodic recovery checkpoints; explicit crash-safe atomic Save and recovery; clear saved or unsaved state; reliable save and reopen. Autosave updates a recovery checkpoint and never silently overwrites the canonical project file.
 
-**PLANNED:** pinned and archived project organization; full project settings; manual snapshots; before-agent and before-template snapshots; version history; backup; project migrations; collect project and consolidate media; offline-media detection and bulk relink; proxy and optimized media; disposable cache; workspace presets; Simple and Advanced workspace modes. The media library supports replacing one item's source through a re-probed, undoable `media.relink` command while preserving its MediaId and timeline references.
+**PLANNED:** pinned and archived project organization; full project settings; manual snapshots; before-agent and before-template snapshots; version history; backup; project migrations; collect project and consolidate media; offline-media detection and bulk relink; proxy and optimized media; disposable cache; workspace presets; Simple and Advanced workspace modes. Recent-project history is exact-SHA verified on desktop packaged journeys and Android's real SAF rebind journey. Saving a renamed project updates the recent display name without changing its last-opened time. Clean-machine install/upgrade/uninstall remains unverified. The media library supports replacing one item's source through a re-probed, undoable `media.relink` command while preserving its MediaId and timeline references.
 
-**Workflow references:** Home and Projects support quick create, open, recent work, pinning, archive state, search, filters, sort, and grid or list presentation. Project-safety workflows include snapshot preview, restore, and duplicate. Import media and folders, template entry, and return-to-project navigation are represented as product workflows.
+**Workflow references:** Home and Projects expose project creation, opening, and recent-project return; pinning, archive state, search, filters, sorting, and grid or list presentation remain planned. Project-safety workflows include snapshot preview, restore, and duplicate. Import media and folders, template entry, and return-to-project navigation are represented as product workflows.
 
 ## Editor core
 
@@ -128,7 +128,7 @@ These controls act on project objects through domain commands. AI-assisted opera
 
 **MVP FOUNDATION:** manually create and edit caption clips on caption tracks with exact timing and basic text formatting. SRT and WebVTT imports expose each parsed cue for text review/correction before a single revision-checked command applies it; timing remains exact to the imported millisecond. Import/export preserve exact millisecond boundaries and report unsupported styling or placement. Packaged desktop and Android SAF caption journeys passed hosted verification at exact SHA `0df7ea4c9e03d8a9034766ab8e4f19e747ee44e2` in run [38026118020](https://github.com/huou07/Opencut-Reinforced/actions/runs/38026118020); that earlier run predates cue-level review, whose updated packaged verification is pending. Broader caption fidelity and any parser-library adoption remain subject to the explicit interoperability checks in the active roadmap.
 
-**IN DEVELOPMENT:** local English transcription produces a provenance-bound proposal for review and editable caption import through the existing project command. The optional model download requires confirmation and reports byte progress with cancellation. The preview workflow candidate stages the pinned whisper.cpp MIT helpers beside the desktop app and now gates package upload on a real-media UI journey through model download, transcription, review/edit/apply, save/reopen, and SRT export. That hosted package journey has not run yet, so local transcription is not accepted as an installed-build capability. Android support is not claimed.
+**VERIFIED IN DESKTOP DEBUG PACKAGES:** local English transcription produces a provenance-bound proposal for review and editable caption import through the existing project command. The optional model download requires confirmation and reports byte progress with cancellation. Validation-only Developer Preview [38316339457](https://github.com/huou07/Opencut-Reinforced/actions/runs/38316339457) on exact SHA `1d63db88d787653c1875006625ddbfb4c34217e0` passed the packaged real-media UI journey on Linux, macOS, and Windows: confirmed model download, transcription, review/edit/apply, save/reopen, and SRT export. This verifies the debug package journey, not installation on a clean end-user machine or production-signed distribution. Android support is not claimed.
 
 **PLANNED:** word timestamps; caption segmentation; inline transcript editing; text-based timeline editing; filler-word and pause removal; caption templates; speaker styles; karaoke and word highlighting; translation and bilingual captions; ASS import or export.
 
@@ -286,9 +286,15 @@ separately gated.
 
 ## Media import
 
-**MVP FOUNDATION:** import validates one or more selected local files or
-Android SAF documents against the supported import profiles below and adds each
-successful source through the existing `media.add` command. Sources are probed
+**MVP FOUNDATION:** import accepts selected local files, bounded recursive
+folders, or Android SAF documents under the supported import profiles below
+and adds each successful source through the existing `media.add` command.
+Folder import includes at most 64 supported files, does not follow desktop
+symbolic links, and reports an empty or oversized selection before mutating the
+project. Android uses a persistable SAF tree grant and bounds traversal by depth
+and total entries. Its preview/import descriptor registry holds 64 sources;
+folder import clears stale preview registrations before using that capacity.
+Sources are probed
 independently; a failed item leaves project state unchanged while successful
 items remain imported and the user receives a combined result. Files outside
 the matrix fail with an accurate machine-readable unsupported-format reason.

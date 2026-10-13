@@ -16,6 +16,7 @@ use std::{
 use or_ai::{
     AiTask, MAX_TRANSCRIPT_PROPOSAL_BYTES, ManagedFileRef, ModelManifest, ProtocolEnvelope,
     ProviderErrorCode, ProviderMessage, TranscribeRequest, TranscriptIdentity, TranscriptProposal,
+    managed_transcription_input_path, managed_transcription_proposal_path,
 };
 use or_core::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
@@ -324,13 +325,14 @@ fn transcribe_media(
     let source_identity = source_file_identity(input.source_path, context)?;
     let temporary = TempDirectory::new("or-transcription-")
         .map_err(|_| "A private temporary workspace for transcription could not be created.")?;
-    let wav_path = temporary.path.join("audio.wav");
+    let wav_id = Uuid::new_v4();
+    let wav_path = managed_transcription_input_path(&temporary.path, wav_id);
     let mut wav = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&wav_path)
         .map_err(|_| "Transcription audio could not be created.")?;
-    let source = MediaSourceRef::local_file(input.source_path.to_string_lossy())
+    let source = MediaSourceRef::from_file_path(input.source_path)
         .map_err(|_| "The selected media path is invalid.")?;
     let budgets = RuntimeBudgets::new(
         or_runtime::BudgetLimits::new(1, 64 * 1024 * 1024).expect("nonzero render budget"),
@@ -359,7 +361,7 @@ fn transcribe_media(
         return Err("The source media changed during transcription. Try again.".to_owned());
     }
     let media_sha256 = source_identity.sha256;
-    let wav_reference = file_reference(Uuid::new_v4(), &wav_path, MAX_TRANSCRIPTION_WAV_BYTES)
+    let wav_reference = file_reference(wav_id, &wav_path, MAX_TRANSCRIPTION_WAV_BYTES)
         .map_err(|_| "Transcription audio exceeded its safe size limit.")?;
     let duration_ms = sample_frames
         .checked_mul(1_000)
@@ -566,9 +568,7 @@ fn run_provider(
                 context.report_progress((fraction * 100.0) as u64, 100);
             }
             Ok(ProviderMessage::Result { output }) => {
-                let path = request
-                    .managed_root
-                    .join(format!("{}.proposal.json", output.id));
+                let path = managed_transcription_proposal_path(request.managed_root, output.id);
                 let actual = file_reference(output.id, &path, MAX_TRANSCRIPT_PROPOSAL_BYTES)
                     .map_err(|_| "The local transcription proposal failed verification.")?;
                 if actual.size_bytes != output.size_bytes
