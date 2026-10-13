@@ -563,7 +563,7 @@ jobs:
 
   linux:
     name: Linux native build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Check out repository
@@ -574,7 +574,7 @@ jobs:
       - name: Install Flutter Linux build packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang cmake libclang-dev libasound2-dev nasm ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth
+          sudo apt-get install -y build-essential clang cmake desktop-file-utils dpkg-dev libclang-dev libasound2-dev nasm ninja-build pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -803,6 +803,22 @@ jobs:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: python3 scripts/run_packaged_desktop_journey.py
+
+      - name: Verify Debian package installation and user-data safety
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/debug/bundle"
+          package="$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.deb"
+          bash scripts/package_linux_deb.sh "$bundle" "$package" "$GITHUB_SHA"
+          bash scripts/test_linux_deb_install.sh "$package"
+          for image in ubuntu:24.04 debian:13-slim; do
+            echo "Testing clean package installation in $image"
+            docker run --rm \
+              --volume "$package:/tmp/opencut-reinforced.deb:ro" \
+              --volume "$GITHUB_WORKSPACE/scripts/test_linux_deb_install.sh:/tmp/test_linux_deb_install.sh:ro" \
+              "$image" bash -euc \
+              'apt-get update; bash /tmp/test_linux_deb_install.sh /tmp/opencut-reinforced.deb'
+          done
 
       - name: Preserve Linux FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'
