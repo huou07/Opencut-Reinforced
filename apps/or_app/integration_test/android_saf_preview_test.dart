@@ -367,6 +367,88 @@ class _ObservedGateway extends RustProjectGateway {
       captionExportCalls = 0;
   ProjectActionResult? lastReviewedCaptionImportResult;
   bool closed = false;
+  bool traceImportRefresh = false;
+
+  @override
+  Future<ProjectReadModel> summary(ProjectSessionHandle session) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START summary');
+    try {
+      return await super.summary(session);
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE summary');
+      }
+    }
+  }
+
+  @override
+  Future<ProjectMediaPage> listMediaPage(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START media-page');
+    try {
+      return await super.listMediaPage(session, offset: offset, limit: limit);
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE media-page');
+      }
+    }
+  }
+
+  @override
+  Future<ProjectTimelineTracks> listTimelineTracks(
+    ProjectSessionHandle session,
+  ) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START tracks');
+    try {
+      return await super.listTimelineTracks(session);
+    } finally {
+      if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_COMPLETE tracks');
+    }
+  }
+
+  @override
+  Future<ProjectTimelineClipPage> listTimelineClips(
+    ProjectSessionHandle session, {
+    required String trackId,
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START clips');
+    try {
+      return await super.listTimelineClips(
+        session,
+        trackId: trackId,
+        offset: offset,
+        limit: limit,
+      );
+    } finally {
+      if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_COMPLETE clips');
+    }
+  }
+
+  @override
+  Future<ProjectTimelineMarkerPage> listTimelineMarkers(
+    ProjectSessionHandle session, {
+    required int offset,
+    required int limit,
+  }) async {
+    if (traceImportRefresh) debugPrint('ANDROID_SAF_REFRESH_START markers');
+    try {
+      return await super.listTimelineMarkers(
+        session,
+        offset: offset,
+        limit: limit,
+      );
+    } finally {
+      if (traceImportRefresh) {
+        debugPrint('ANDROID_SAF_REFRESH_COMPLETE markers');
+      }
+    }
+  }
+
   @override
   Future<ProjectSessionHandle> openProject(String path) async {
     openedPath = path;
@@ -850,7 +932,9 @@ void main() {
       );
       await tester.tap(mediaImport);
       debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
+      gateway.traceImportRefresh = true;
       await _untilMediaImports(tester, gateway, 3);
+      gateway.traceImportRefresh = false;
       final importResults = gateway.importResults;
       final importResultSummary = jsonEncode(
         importResults
