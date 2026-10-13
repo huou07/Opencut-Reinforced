@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/core_gateway.dart';
 import 'package:or_app/design/or_colors.dart';
 import 'package:or_app/design/or_spacing.dart';
+import 'package:or_app/design/or_theme.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
@@ -3578,6 +3581,361 @@ void main() {
     expect(find.text('No media loaded'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // -- Phase 0 design, accessibility and keyboard guards ---------------------
+  // These assert the DESIGN.md / docs/UX_ACCEPTANCE.md presentation contract.
+  // They are deliberately written against the intended behavior so that they
+  // fail on the defect and pass on the repair.
+
+  test(
+    'OrColors text and focus tokens meet WCAG contrast on every surface',
+    () {
+      const surfaces = {
+        'background': OrColors.background,
+        'backgroundRaised': OrColors.backgroundRaised,
+        'surface': OrColors.surface,
+      };
+      const bodyTokens = {
+        'text': OrColors.text,
+        'textSecondary': OrColors.textSecondary,
+        'textMuted': OrColors.textMuted,
+      };
+
+      final failures = <String>[];
+      for (final token in bodyTokens.entries) {
+        for (final surface in surfaces.entries) {
+          final ratio = _contrastRatio(token.value, surface.value);
+          if (ratio < 4.5) {
+            failures.add(
+              'OrColors.${token.key} on ${surface.key} is '
+              '${ratio.toStringAsFixed(2)}:1 (needs 4.5:1)',
+            );
+          }
+        }
+      }
+
+      final focus = OrTheme.dark.focusColor;
+      for (final surface in surfaces.entries) {
+        final ratio = _contrastRatio(focus, surface.value);
+        if (ratio < 3.0) {
+          failures.add(
+            'the focus indicator on ${surface.key} is '
+            '${ratio.toStringAsFixed(2)}:1 (needs 3:1)',
+          );
+        }
+      }
+
+      expect(
+        failures,
+        isEmpty,
+        reason:
+            'DESIGN.md:454 requires sufficient contrast and a visible keyboard '
+            'focus indicator:\n${failures.join('\n')}',
+      );
+    },
+  );
+
+  test('ThemeData exposes the DESIGN.md typography scale', () {
+    final textTheme = OrTheme.dark.textTheme;
+    final scale = <String, TextStyle?>{
+      'displayLarge': textTheme.displayLarge,
+      'headlineSmall': textTheme.headlineSmall,
+      'titleMedium': textTheme.titleMedium,
+      'labelLarge': textTheme.labelLarge,
+      'bodyMedium': textTheme.bodyMedium,
+      'bodySmall': textTheme.bodySmall,
+      'labelSmall': textTheme.labelSmall,
+    };
+    // DESIGN.md:154-162 suggested hierarchy.
+    const bounds = <String, (double, double)>{
+      'displayLarge': (36, 48),
+      'headlineSmall': (28, 32),
+      'titleMedium': (18, 20),
+      'labelLarge': (14, 15),
+      'bodyMedium': (14, 15),
+      'bodySmall': (12, 13),
+      'labelSmall': (11, 12),
+    };
+
+    final failures = <String>[];
+    for (final entry in scale.entries) {
+      final style = entry.value;
+      final range = bounds[entry.key]!;
+      if (style == null || style.fontSize == null) {
+        failures.add('${entry.key} has no font size');
+        continue;
+      }
+      final size = style.fontSize!;
+      if (size < range.$1 || size > range.$2) {
+        failures.add(
+          '${entry.key} is $size px (DESIGN.md wants '
+          '${range.$1.toInt()}-${range.$2.toInt()} px)',
+        );
+      }
+    }
+
+    expect(
+      failures,
+      isEmpty,
+      reason:
+          'the theme must carry the DESIGN.md scale:\n'
+          '${failures.join('\n')}',
+    );
+  });
+
+  test('no UI TextStyle uses a font size below the DESIGN.md 11 px floor', () {
+    final offenders = <String>[];
+    for (final file in _dartFilesUnder('lib')) {
+      final lines = file.readAsLinesSync();
+      for (var index = 0; index < lines.length; index++) {
+        for (final match in RegExp(
+          r'fontSize:\s*([0-9]+(?:\.[0-9]+)?)',
+        ).allMatches(lines[index])) {
+          final size = double.parse(match.group(1)!);
+          if (size < 11) {
+            offenders.add(
+              '${file.path.split('lib/').last}:${index + 1} fontSize: $size',
+            );
+          }
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'DESIGN.md:162 sets a 11-12 px tiny/status floor; smaller text is '
+          'not readable:\n${offenders.join('\n')}',
+    );
+  });
+
+  testWidgets('trim handle hit area meets the minimum touch target', (
+    tester,
+  ) async {
+    // DESIGN.md:456 requires usable touch targets; the visible bar stays
+    // restrained while the pointer target grows.
+    Future<void> mountAt(Size size, String clipId, String savePath) async {
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'touch-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'touch-track': [
+            ProjectTimelineClip(
+              clipId: clipId,
+              mediaId: 'touch-media',
+              timelineStart: ProjectRationalTime(BigInt.one, 1),
+              sourceStart: ProjectRationalTime(BigInt.zero, 1),
+              timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
+            ),
+          ],
+        };
+      _setViewport(tester, size);
+      await _mount(
+        tester,
+        gateway: gateway,
+        picker: _FakeProjectPicker()..savePath = savePath,
+      );
+      await _createProject(tester, 'Touch target');
+    }
+
+    void checkHandle(String clipId, double minimumWidth) {
+      final handle = find.byKey(ValueKey('timeline-trim-handle-start-$clipId'));
+      expect(handle, findsOneWidget);
+      expect(
+        tester.getSize(handle).width,
+        greaterThanOrEqualTo(minimumWidth),
+        reason: 'the trim hit area must be at least $minimumWidth px wide',
+      );
+
+      final visibleBar = find.descendant(
+        of: handle,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration! as BoxDecoration).color == OrColors.selection,
+        ),
+      );
+      expect(
+        tester.getSize(visibleBar).width,
+        lessThanOrEqualTo(6),
+        reason: 'the visible trim bar must stay visually restrained',
+      );
+    }
+
+    await mountAt(
+      const Size(1280, 800),
+      'desktop-touch-clip',
+      '/tmp/desktop-touch.orproj',
+    );
+    checkHandle('desktop-touch-clip', 24);
+
+    await mountAt(
+      const Size(390, 844),
+      'compact-touch-clip',
+      '/tmp/compact-touch.orproj',
+    );
+    checkHandle('compact-touch-clip', 44);
+  });
+
+  test('the editor divider never presents a drag grip without a handler', () {
+    const editorPath = 'lib/screens/editor_shell_preview_screen.dart';
+    final source = File(editorPath).readAsStringSync();
+    final body = _classBody(source, '_ResizeDivider');
+
+    expect(
+      body,
+      isNotNull,
+      reason: 'the editor shell must keep a structural timeline divider',
+    );
+
+    final hasResizeHandler = RegExp(
+      r'onVerticalDrag|onHorizontalDrag|onPanUpdate|onPanStart|onPanEnd|'
+      r'GestureDetector|MouseRegion',
+    ).hasMatch(body!);
+    final paintedContainers = RegExp(r'\bContainer\(').allMatches(body).length;
+
+    if (hasResizeHandler) {
+      expect(
+        paintedContainers,
+        greaterThanOrEqualTo(2),
+        reason: 'a resizable divider must render a visible grip',
+      );
+    } else {
+      expect(
+        paintedContainers,
+        1,
+        reason:
+            'docs/UX_ACCEPTANCE.md:23-24 keeps panel resizing at prototype '
+            'reference tier, so a divider with no resize handler must render '
+            'only the structural divider and no drag-looking grip',
+      );
+    }
+  });
+
+  testWidgets(
+    'transport actions are reachable by keyboard through the gateway',
+    (tester) async {
+      final gateway = _FakeProjectGateway()
+        ..preview = ProjectPreviewState(
+          position: ProjectRationalTime(BigInt.zero, 1),
+          contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+          sequenceFrameRate: const ProjectRationalRate(24, 1),
+          playing: false,
+          generation: BigInt.zero,
+          frameSequence: BigInt.zero,
+          width: 0,
+          height: 0,
+        );
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/keyboard-transport.orproj';
+      _setViewport(tester, const Size(1280, 800));
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Keyboard transport');
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
+            .onPressed,
+        isNotNull,
+        reason: 'the keyboard guard needs an enabled pointer control to mirror',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(gateway.previewPlayCalls, 1, reason: 'Space must play');
+      expect(gateway.previewPauseCalls, 0);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(gateway.previewPauseCalls, 1, reason: 'Space again must pause');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(
+        gateway.previewSeekCalls,
+        greaterThan(0),
+        reason: 'Right must seek forward through previewSeek',
+      );
+
+      final beforeStep = gateway.previewStepCalls;
+      await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+      await tester.pumpAndSettle();
+      expect(
+        gateway.previewStepCalls,
+        beforeStep + 1,
+        reason: 'Comma must step one frame back',
+      );
+      expect(gateway.lastPreviewStep, ProjectPreviewFrameStep.previous);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.period);
+      await tester.pumpAndSettle();
+      expect(
+        gateway.previewStepCalls,
+        beforeStep + 2,
+        reason: 'Period must step one frame forward',
+      );
+      expect(gateway.lastPreviewStep, ProjectPreviewFrameStep.next);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+double _contrastRatio(Color foreground, Color background) {
+  // WCAG relative luminance; a translucent foreground is composited over the
+  // surface first, which is how the user actually perceives it.
+  final alpha = foreground.a;
+  final composited = alpha >= 1
+      ? foreground
+      : Color.lerp(background, foreground, alpha)!;
+
+  double luminance(Color color) {
+    final argb = color.toARGB32();
+    double channel(int bits) {
+      final scaled = bits / 255.0;
+      return scaled <= 0.03928
+          ? scaled / 12.92
+          : math.pow((scaled + 0.055) / 1.055, 2.4).toDouble();
+    }
+
+    return 0.2126 * channel((argb >> 16) & 0xFF) +
+        0.7152 * channel((argb >> 8) & 0xFF) +
+        0.0722 * channel(argb & 0xFF);
+  }
+
+  final lighter = math.max(luminance(composited), luminance(background));
+  final darker = math.min(luminance(composited), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+List<File> _dartFilesUnder(String relativeRoot) {
+  final root = Directory(relativeRoot);
+  if (!root.existsSync()) {
+    throw StateError(
+      'expected $relativeRoot to be resolvable from the package',
+    );
+  }
+  return root
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.dart'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+}
+
+String? _classBody(String source, String className) {
+  final start = source.indexOf('class $className');
+  if (start < 0) return null;
+  final end = source.indexOf('\n}', start);
+  if (end < 0) return null;
+  return source.substring(start, end);
 }
 
 ProjectRecoveryInspection _inspection(ProjectRecoveryKind kind) =>
@@ -3824,6 +4182,8 @@ class _FakeProjectGateway implements ProjectGateway {
         ],
       );
   int previewSeekCalls = 0;
+  int previewPlayCalls = 0;
+  int previewPauseCalls = 0;
   int previewStateCalls = 0;
   int previewStepCalls = 0;
   ProjectRationalTime? lastPreviewSeek;
@@ -4037,13 +4397,16 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
-  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) async =>
-      _copyPreview(playing: true, advanceGeneration: true);
+  Future<ProjectPreviewState> previewPlay(ProjectSessionHandle session) async {
+    previewPlayCalls++;
+    return _copyPreview(playing: true, advanceGeneration: true);
+  }
 
   @override
-  Future<ProjectPreviewState> previewPause(
-    ProjectSessionHandle session,
-  ) async => _copyPreview(playing: false);
+  Future<ProjectPreviewState> previewPause(ProjectSessionHandle session) async {
+    previewPauseCalls++;
+    return _copyPreview(playing: false);
+  }
 
   @override
   Future<ProjectPreviewState> previewStep(
