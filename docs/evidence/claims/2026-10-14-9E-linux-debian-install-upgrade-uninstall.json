@@ -1,0 +1,24 @@
+{
+  "requirement": "9E",
+  "claim": "A freshly installed Linux .deb starts from its installed location, survives a package upgrade without losing user data, and can be purged without leaving package files or deleting that user data.",
+  "implementation_sha": "53de6d51c6d45c7ec7ae0a2989455972118406c1",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38570870756",
+    "jobs": [
+      "Linux native build"
+    ],
+    "job_ids": [
+      "115876166405"
+    ],
+    "detail": "The hosted job packaged the Linux bundle and ran scripts/test_linux_deb_install.sh for clean apt installs in ubuntu:24.04 and debian:13-slim. It installed a lower-version package, upgraded to the current package, checked the desktop launcher and installed files, launched the app under Xvfb, purged it, and checked package/filesystem cleanup and user-data sentinel preservation."
+  },
+  "verified_at_utc": "2026-10-14T14:02:36Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "Coverage is amd64 Ubuntu 24.04 and Debian 13 slim containers; other distributions and architectures are not established.",
+    "The preserved user-data sentinel is a plain text marker, not an .orproj file; this install check does not establish project editing, saving, or recovery semantics.",
+    "The launch smoke check establishes startup under Xvfb, not interactive usability, signing, or production release readiness."
+  ],
+  "source": "docs/PRODUCT_ROADMAP.md, Work stream A (legacy 9E)"
+}

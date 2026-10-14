@@ -1,0 +1,24 @@
+{
+  "requirement": "9E",
+  "claim": "The Windows ZIP package can be extracted into the user's Programs directory, launched there, replaced in place without deleting user data, and removed while leaving that data intact.",
+  "implementation_sha": "53de6d51c6d45c7ec7ae0a2989455972118406c1",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38570870756",
+    "jobs": [
+      "Windows native build"
+    ],
+    "job_ids": [
+      "115876166752"
+    ],
+    "detail": "The hosted job passed Verify Windows ZIP install, replacement, and removal using python scripts/test_desktop_archive_install.py apps/or_app/build/windows/x64/runner/Debug. The helper created and extracted the ZIP, installed under %LOCALAPPDATA%\\\\Programs, launched with build-only environment overrides removed and only the app and Windows system paths available, replaced the app from a fresh extraction, and verified user-data preservation and app removal."
+  },
+  "verified_at_utc": "2026-10-14T14:02:36Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "This tests the ZIP's manual per-user placement and replacement path with the same build payload; it does not establish an OS-native installer, registry integration, or version-differential updater.",
+    "The launch smoke check establishes the installed app remains alive for its timeout, not interactive usability or performance.",
+    "Signing and production release readiness are not established."
+  ],
+  "source": "docs/PRODUCT_ROADMAP.md, Work stream A (legacy 9E)"
+}
