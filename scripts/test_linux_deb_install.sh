@@ -98,6 +98,9 @@ apt_get apt-get purge --yes "$package_name"
 test ! -e "$app"
 test ! -e "$desktop"
 test ! -e "$copyright_file"
-test "$(dpkg-query -W -f='${db:Status-Status}' "$package_name")" = "not-installed"
+if dpkg-query -W -f='${Status}' "$package_name" >/dev/null 2>&1; then
+  echo "package $package_name remains registered after purge" >&2
+  exit 1
+fi
 test -s "$sentinel"
 echo "Debian package install, upgrade, launcher, runtime start, purge, and project-data preservation passed."
