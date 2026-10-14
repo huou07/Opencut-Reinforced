@@ -190,6 +190,18 @@ headless or widget-level checks:
     and selection in both is carried by a fill and a border rather than by
     colour alone.
 
+### Reproduced but not yet fixed
+
+- The compact editor overflows its column by 31 px at a 320x480 viewport.
+  This reproduces headlessly rather than only on a device.
+  `OrBreakpoints` selects the compact layout on width alone, so a short
+  viewport still receives the desktop 4:2 viewer/timeline split while the
+  viewer's transport has a fixed height. 390x844 is clean, as is every
+  width at 320x560 or taller: height, not width, is the trigger.
+  Fixing it means letting the viewer's surface and transport absorb a short
+  viewport, which changes the viewer's layout rather than removing a single
+  defect, so it is held back rather than half-applied.
+
 ## PRODUCTION REQUIRED FUTURE
 
 These items are required by the execution plan but are not production claims
