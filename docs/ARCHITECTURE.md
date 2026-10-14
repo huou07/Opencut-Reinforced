@@ -1,5 +1,7 @@
 # Opencut Reinforced Architecture
 
+Last reviewed: 2026-10-14
+
 ## Status
 
 The active product architecture follows the 2026 convergence decision in
@@ -34,7 +36,7 @@ audio clock, and the shared 7F0 contract defines explicit sequence timing
 and viewer presentation. The 7F implementation connects a desktop preview
 runtime to the product viewer and transport controls; hosted verification is
 required before the checkpoint can advance. For authoritative current checkpoint and phase status,
-see [docs/execution/STATE.json](execution/STATE.json); this document does not
+see [docs/archive/execution/STATE.json](archive/execution/STATE.json); this document does not
 copy mutable `NEXT` state. Planned and future components below do not imply
 implemented code. See [ROADMAP.md](ROADMAP.md) and
 [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) for human-readable design detail.
@@ -232,10 +234,10 @@ data or the default renderer.
 
 ## Architecture execution lock
 
-The machine-readable authority is [docs/execution/README.md](execution/README.md),
-with permanent invariants in [ARCHITECTURE_INVARIANTS.md](execution/ARCHITECTURE_INVARIANTS.md),
-the immutable checkpoint graph in [PLAN.json](execution/PLAN.json), and mutable
-progress in [STATE.json](execution/STATE.json). The lock separates a semantic
+The machine-readable authority is [docs/archive/execution/README.md](archive/execution/README.md),
+with permanent invariants in [ARCHITECTURE_INVARIANTS.md](archive/execution/ARCHITECTURE_INVARIANTS.md),
+the immutable checkpoint graph in [PLAN.json](archive/execution/PLAN.json), and mutable
+progress in [STATE.json](archive/execution/STATE.json). The lock separates a semantic
 control plane from a realtime runtime plane and does not claim that future
 runtime crates or platform bindings already exist. The 7A `or_runtime`
 contract is implemented without platform bindings; later runtime crates remain

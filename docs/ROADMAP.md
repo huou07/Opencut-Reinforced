@@ -10,7 +10,20 @@
 
 ## Status
 
-No dates or delivery promises are implied. Phase 2 is complete as Architecture Blueprint V1, Phase 3's executable architecture skeleton is complete, and Phase 4 is complete as a project/application foundation, not a finished editor. Phase 5 is DONE / FOUNDATION COMPLETE: Phase 5A–5F are complete. Phase 6 — Timeline MVP is DONE: 6A, 6B, 6C, 6D, 6E1, 6E2A, and 6E2B are complete. Phase 7 is IN PROGRESS; checkpoint 7H is the current hardening and Developer Preview gate and awaits supervisor evidence. Later phases depend on implementation capacity, platform evidence, and licensing or security review.
+> **Archival.** This file records the original phased plan and is kept for
+> traceability of past work. It does not select active work. Current priorities
+> and traceability live in [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md). The
+> authoritative record of what each phase/checkpoint actually verified is the
+> machine ledger in [execution/](archive/execution/STATE.json); do not copy a
+> checkpoint status into this file, because prose drifts from receipts.
+
+No dates or delivery promises are implied. Phases 2 through 9 were completed
+under the checkpoint ledger, which recorded per-checkpoint verification evidence
+in `docs/archive/execution/evidence/`. That ledger was paused at the 2026-10-09
+convergence pivot; phases 5 through 8 are recorded DONE with receipts and phase 9
+was IN PROGRESS at the pause. Later phases depend on implementation capacity,
+platform evidence, and licensing or security review, and are re-planned through
+the product roadmap rather than by resuming the checkpoint sequence.
 
 ## Phases
 
@@ -268,7 +281,7 @@ Phase 6 completion is recorded after 6E2B. Media-to-timeline drag insertion, tra
 ### Phase 7 — Preview and playback
 **Status: IN PROGRESS — 7H AWAITING SUPERVISOR EVIDENCE**
 
-Locked contract: [PHASE_7.md](execution/phases/PHASE_7.md).
+Locked contract: [PHASE_7.md](archive/execution/phases/PHASE_7.md).
 
 - **7A:** realtime architecture, `RenderSnapshot`, `FrameDescriptor`/
   `FrameLease`, budgets, capability selection, fallback, and dependency gates.
@@ -302,7 +315,7 @@ Before the hardware/media pipeline architecture is considered settled, complete 
 ### Phase 8 — Desktop MVP
 **Status: PLANNED**
 
-Locked contract: [PHASE_8.md](execution/phases/PHASE_8.md).
+Locked contract: [PHASE_8.md](archive/execution/phases/PHASE_8.md).
 
 - **8A:** one schema-v6 project-model gate for typed Video/Audio/Text/Caption
   timeline content, track state, and the settings required by 8B–8E.
@@ -332,7 +345,7 @@ AI generation and community features are not MVP requirements. AI features may b
 ### Phase 9 — Android
 **Status: PLANNED**
 
-Locked contract: [PHASE_9.md](execution/phases/PHASE_9.md). Checkpoints are
+Locked contract: [PHASE_9.md](archive/execution/phases/PHASE_9.md). Checkpoints are
 9A0 (Android FFmpeg/shared-library, Rust cross-link, APK, bridge, and hosted
 x86_64 emulator gate), 9A (typed SAF source and app-private durability/I/O),
 9B (Android SAF software preview and render surface), 9B1 (packaged desktop
@@ -352,7 +365,7 @@ budgets, cancellation behavior, and preview fallback errors; physical
 ### Phase 10 — Captions, transcript, and AI assist
 **Status: PLANNED**
 
-Locked contract: [PHASE_10.md](execution/phases/PHASE_10.md). Checkpoints are
+Locked contract: [PHASE_10.md](archive/execution/phases/PHASE_10.md). Checkpoints are
 10A (complete provider, local sidecar V1, and model-manifest foundation), 10B (transcription), 10C (caption proposal/apply),
 10D (transcript editing), 10E (translation), 10F (scene/silence/filler), 10G
 (EditPlan/dry-run/diff), and 10H (permissions/model manager).
@@ -362,7 +375,7 @@ Add transcription, caption editing and export, translation, dubbing foundations,
 ### Phase 11 — Templates, assets, themes, and motion scenes
 **Status: PLANNED**
 
-Locked contract: [PHASE_11.md](execution/phases/PHASE_11.md): 11A declarative
+Locked contract: [PHASE_11.md](archive/execution/phases/PHASE_11.md): 11A declarative
 templates, 11B asset manifests/rights, 11C themes, 11D static community
 packaging, 11E MotionScene V1/deterministic evaluation, and 11F motion
 materialization plus agent/CLI workflow.
@@ -375,7 +388,7 @@ evaluator, and normal OR encoder remain the canonical path.
 ### Phase 12 — Dubbing and voice
 **Status: PLANNED**
 
-Locked contract: [PHASE_12.md](execution/phases/PHASE_12.md): 12A voiceover, 12B
+Locked contract: [PHASE_12.md](archive/execution/phases/PHASE_12.md): 12A voiceover, 12B
 subtitle-to-speech, 12C translation/dubbing, 12D speaker mapping/pronunciation,
 12E timing, and 12F regeneration/ducking. Voice cloning remains prohibited
 pending its own consent checkpoint.
@@ -385,7 +398,7 @@ Add voiceover, subtitle-to-speech, translated dubbing, speaker mapping, pronunci
 ### Phase 13 — Advanced editing, color, and audio
 **Status: PLANNED**
 
-Locked contract: [PHASE_13.md](execution/phases/PHASE_13.md): 13A typed
+Locked contract: [PHASE_13.md](archive/execution/phases/PHASE_13.md): 13A typed
 keyframes, 13B speed/rate mapping, 13C advanced transforms/color pipeline,
 13D LUTs, 13E audio/mixer, 13F effects, 13G linked/group semantics, and 13H
 nested timelines/multicamera. The normal color path is SDR Rec.709/sRGB with
@@ -397,7 +410,7 @@ Evaluate and add advanced keyframe, speed, color, effects, transition, audio, an
 ### Phase 14 — AI generation
 **Status: PLANNED**
 
-Locked contract: [PHASE_14.md](execution/phases/PHASE_14.md): 14A generated
+Locked contract: [PHASE_14.md](archive/execution/phases/PHASE_14.md): 14A generated
 image, 14B video, 14C music/SFX, 14D voice, 14E provider/model/jobs, 14F
 provenance/review-before-timeline, and 14G AI MotionScene generation/review.
 
@@ -406,7 +419,7 @@ Evaluate image, video, music, sound-effect, and voice generation only after runt
 ### Phase 15 — Community ecosystem
 **Status: PLANNED**
 
-Locked contract: [PHASE_15.md](execution/phases/PHASE_15.md): 15A static
+Locked contract: [PHASE_15.md](archive/execution/phases/PHASE_15.md): 15A static
 registry, 15B manifests/checksums, 15C license/compatibility/dependency
 validation, and 15D reviewable publishing.
 
@@ -415,7 +428,7 @@ Start with a validated static registry and reviewable publishing. An OR-hosted b
 ### Phase 16 — Plugins, advanced interchange, OpenFX, and procedural motion
 **Status: PLANNED**
 
-Locked contract: [PHASE_16.md](execution/phases/PHASE_16.md): 16A plugin
+Locked contract: [PHASE_16.md](archive/execution/phases/PHASE_16.md): 16A plugin
 security/capabilities, 16B wasmi 1.1.0 sandbox/declarative-first, 16C
 permissions/resources/network, 16D versioned APIs, 16E direct bounded Rust/serde
 OTIO plus EDL/XML and Lottie 1.0/dotLottie 2.0 interchange, 16F optional
@@ -432,4 +445,4 @@ through 8F in the machine plan.
 
 ## Dependencies
 
-Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is DONE through 6E2B. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B adds the marker UI, bridge/gateway integration, and GUI Snap V2. Track reorder and multi-select remain future work. Phase 8B provides media-to-timeline insertion and timeline zoom; the 8C implementation adds typed transform, crop, and opacity editing with preview evaluation. Export remains a later Desktop MVP checkpoint. Phase 7 now provides desktop video preview and playback through the software path; no hardware decode path is approved. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](execution/README.md).
+Phase 4's project lifecycle foundation is complete. Phase 5A established bounded read-only metadata inspection, Phase 5B added persistent project media identity, source references, migration, shared media commands/query, CLI parity, and desktop library integration, Phase 5C added the bounded background Job Manager and disposable thumbnail/waveform cache foundations, Phase 5D added production cache-invalidation fingerprints and generated library PNG previews, Phase 5E added a persistent disposable cache index with automatic LRU eviction, and Phase 5F added the disposable file-backed Proxy V1 generation foundation. Phase 5 is DONE / FOUNDATION COMPLETE; Phase 6 — Timeline MVP is DONE through 6E2B. Phase 6B establishes application-owned basic timeline operations and semantic CLI parity; Phase 6C adds a real project track/clip view through the same Rust commands, bounded queries, and live host; Phase 6D adds exact trim, split, and track-local ripple-delete editing through the same Rust-owned path; Phase 6E1 adds pointer move/trim editing and canonical drop-time snapping; Phase 6E2A adds persistent markers and core/CLI Snap V2; Phase 6E2B adds the marker UI, bridge/gateway integration, and GUI Snap V2. Track reorder and multi-select remain future work. Phase 8B provides media-to-timeline insertion and timeline zoom; the 8C implementation adds typed transform, crop, and opacity editing with preview evaluation. Export remains a later Desktop MVP checkpoint. Phase 7 now provides desktop video preview and playback through the software path; no hardware decode path is approved. Phases 3 and 4 establish the command, project, and job foundations required by nearly every later feature. Media and timeline work in Phases 5 and 6 precede reliable preview and export. Desktop MVP depends on save and recovery, media ingest, timeline operations, preview, basic editing tools, and export. Android reuses those core contracts but requires dedicated storage and resource validation. AI, templates, community, and plugins depend on structured project data, safe commands, and trust boundaries. See the machine-readable [execution plan](archive/execution/README.md).

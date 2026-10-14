@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths-ignore:
-      - docs/execution/STATE.json
-      - docs/execution/evidence/**
+      - docs/archive/execution/STATE.json
+      - docs/archive/execution/evidence/**
   workflow_dispatch:
 
 permissions:

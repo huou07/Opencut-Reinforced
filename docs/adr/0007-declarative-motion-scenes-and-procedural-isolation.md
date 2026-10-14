@@ -12,7 +12,7 @@ cross-platform, seekable, inspectable, and usable without an AI service. It
 must not turn arbitrary web code into canonical project state or create a
 second render and encoding authority.
 
-The current execution state remains governed by `docs/execution/STATE.json`.
+The current execution state remains governed by `docs/archive/execution/STATE.json`.
 This ADR records future architecture only; it does not implement MotionScene,
 rendering, a live MotionClip, a browser runtime, or any dependency.
 

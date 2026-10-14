@@ -1,5 +1,7 @@
 # Testing Strategy
 
+Last reviewed: 2026-10-14
+
 ## Status
 
 Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. Phase 6A adds timeline-domain validation, strict `.orproj` v3 codec and v1/v2 migration, recovery and storage compatibility, query-wire regression, and referenced-media removal guard coverage. Phase 6B adds application command/history/query coverage, headless and attached semantic CLI tests, save/reopen and undo-save storage checks, recovery snapshot/apply/reload checks, and transaction/precondition regression coverage. Phase 6C adds bridge DTO tests, Flutter widget coverage for read-only track/clip presentation and command interactions, bounded and stale page handling, and a hosted native Rust-host timeline lifecycle test through save/reopen. Phase 6D adds exact trim/split/ripple core invariants, compact history/conflict/overflow/capacity guards, CLI changed-only save and attached dirty-state parity, Flutter action/dialog acceptance, and hosted typed-bridge save/reopen coverage. Phase 6E2A adds marker ID/domain/order/bounds tests, strict v4 codec and v1/v2/v3 migration tests, clean-open/explicit-save storage tests, v1 recovery with v3 and v4 nested snapshots, semantic marker command/history/conflict/transaction/revision tests, bounded marker query and sub-1 MiB page tests, Snap V1/V2 schema/tie/read-only tests, headless/attached CLI parity, and local IPC coverage without changing Flutter marker APIs or UI. Phase 7A adds deterministic `or_runtime` coverage for exact snapshot revision/time identity, frame descriptor and lease ownership, bounded queue pressure/close/cancellation, separate render/audio/decode budget release, and software-first capability/provider selection. Phase 7B adds deterministic `or_render` contract coverage, offscreen wgpu synthetic rendering, row-padded readback normalization, resource-owned frame lifetime, and handle-only viewer presentation checks. Phase 7C0 adds a locked, hosted Linux FFmpeg 8.1.3 shared-library compile/link/load probe under an LGPL-only configuration. 7F1 adds deterministic viewer-mailbox tests and hosted macOS/Linux/Windows builds that compile a desktop packaging probe against production `or_media`, stage official FFmpeg 8.1.3 shared libraries beside that probe in the app bundle, verify loading without developer FFmpeg search paths, and preserve source/build provenance. The shared Flutter bridge remains FFmpeg-independent; Phase 9A0 separately builds and packages the approved Android shared libraries and validates the native runtime on an x86_64 emulator. It does not add FFmpeg dependencies to Android product code or to Flutter widget tests. Phase 7F builds the native Flutter pixel-buffer texture adapters but does not add a product viewer or playback controls. The 7C implementation adds bounded/stale/cancellable `or_media` queues, exact timestamp/seek checks, owned software RGBA frame tests, and a linked audio resample/range test with a tiny generated FFV1/PCM fixture. CI runs the production crate against the approved FFmpeg 8.1.3 shared prefix. Checkpoint 8F adds local export/autosave coverage; its authoritative milestone status remains gated on hosted supervisor evidence. The test layers below distinguish implemented coverage from future product tests.
@@ -529,11 +531,16 @@ fabricated. Architecture-policy tests ensure `or_core` remains barred from
 fixtures require eleven non-empty assets, including
 `FFMPEG-BUILD-INFO.txt` and `ffmpeg-8.1.3-source.tar.xz`.
 
-Hosted evidence is not inferred from workflow-level success alone. The
-supervisor requires push-triggered `Repository hygiene` and `Platform
-verification` runs whose `head_sha` is the implementation SHA, then checks the
+> **Archival (2026-10-14).** The supervisor described below belonged to the
+> paused execution framework. It explains how the pre-pivot receipts in
+> `docs/archive/execution/evidence/` were produced; it no longer runs. The
+> current rule is in [evidence/claims/README.md](evidence/claims/README.md).
+
+Hosted evidence was not inferred from workflow-level success alone. The
+supervisor required push-triggered `Repository hygiene` and `Platform
+verification` runs whose `head_sha` was the implementation SHA, then checked the
 policy-required job names and completed-success conclusions. Product CI
-failures leave the checkpoint `NEXT` and create no completion evidence. The
+failures left the checkpoint `NEXT` and created no completion evidence. The
 state/evidence completion commit intentionally skips Platform verification via
 the metadata-only push filter, but still runs Repository hygiene; the
 hardening commit itself must pass both workflows.
@@ -918,8 +925,8 @@ without repeatable evidence.
 The execution policy now distinguishes static, unit, integration, native,
 packaged, user-journey, clean-environment, relaunch, performance, resource,
 and cross-platform evidence. The exact required classes for a checkpoint are
-in `docs/execution/PLAN.json`; named hosted job steps proving them are in
-`docs/execution/EVIDENCE_POLICY.json`. The supervisor records successful
+in `docs/archive/execution/PLAN.json`; named hosted job steps proving them are in
+`docs/archive/execution/EVIDENCE_POLICY.json`. The supervisor records successful
 exact-SHA step proofs. A lower-level bridge or synthetic check is not a
 substitute for the required Android SAF journey or 9B1 packaged desktop
 journey.

@@ -1,0 +1,19 @@
+{
+  "requirement": "A-first-project-import-action",
+  "claim": "An empty new project presents a working Import Media action that reaches the existing platform picker, instead of a visual-only shell with no way to begin.",
+  "implementation_sha": "f5cf1c26353feaebf49e9e5ca058414ad9798809",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38353664539",
+    "jobs": ["linux", "macos", "windows", "android", "rust", "flutter", "descriptor-boundary"],
+    "detail": "All seven jobs passed, including the Linux packaged first-project journey that previously reproduced a close-control readiness race."
+  },
+  "verified_at_utc": "2026-10-12T00:00:00Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "The repair waits for an enabled, hit-testable Close control and reports its state if closing stalls; it does not prove the underlying close race is fixed, only that the packaged test no longer asserts on an unready control.",
+    "The UI change preserves existing project and import semantics; no domain behaviour changed."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, First-project handoff - exact-SHA verified"
+}

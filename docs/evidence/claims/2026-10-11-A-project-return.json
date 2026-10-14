@@ -1,0 +1,21 @@
+{
+  "requirement": "A-project-return",
+  "claim": "A recently opened project can be reopened from the Home surface after an application restart on desktop, and on Android through a persisted recent URI rebound with a fresh SAF picker grant.",
+  "implementation_sha": "a3db4f63319029ea683b6d4cc749df7fdba27a11",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38328757217",
+    "attempt": 2,
+    "jobs": ["linux", "macos", "windows", "android"],
+    "also_passed": [{"workflow": "Repository Hygiene", "run_id": "38328757237"}],
+    "detail": "Linux, macOS and Windows packaged journeys reopened a recent project after restart. Android verified real project selection, persisted recent URI, fresh-picker SAF rebind, read-grant/path validation and provider synchronization, plus multi-media import, captions, relink, export, process recovery and independently decoded VP9/Opus WebM."
+  },
+  "verified_at_utc": "2026-10-11T00:00:00Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "Android evidence is from an emulator, not a physical device.",
+    "Attempt 1 failed with an Android provider freeze and a macOS launch timeout; both passed on the exact-SHA rerun. The failure causes are recorded in the history archive and were not independently diagnosed."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Recent project return - exact-SHA verified"
+}

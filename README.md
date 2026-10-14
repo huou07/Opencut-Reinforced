@@ -30,7 +30,7 @@ are for testing, not production distribution. See the active outcome-based
 [Developer Preview install and dogfood guide](docs/DEVELOPER_PREVIEW_INSTALL.md).
 
 The former checkpoint plan and state remain preserved for traceability in
-[docs/execution/README.md](docs/execution/README.md); they do not select active
+[docs/archive/execution/README.md](docs/archive/execution/README.md); they do not select active
 product work. The [convergence audit](docs/OPEN_SOURCE_CONVERGENCE.md) records
 which components OR should keep, reuse, evaluate, or defer based on inspected
 upstream evidence.
@@ -72,7 +72,7 @@ iOS and web are not current release targets.
 
 ## Design and documentation
 
-The application design source of truth is [DESIGN.md](DESIGN.md). The full documentation map is [docs/INDEX.md](docs/INDEX.md), including the [product vision](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), and [execution control plane](docs/execution/README.md).
+The application design source of truth is [DESIGN.md](DESIGN.md). The full documentation map is [docs/INDEX.md](docs/INDEX.md), including the [product vision](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and the [active product roadmap](docs/PRODUCT_ROADMAP.md). What has been verified, by which run, and what that evidence does not establish is recorded in [docs/evidence/claims/](docs/evidence/claims/). Notable changes are in [CHANGELOG.md](CHANGELOG.md). The original phased [roadmap](docs/ROADMAP.md) and the paused [execution control plane](docs/archive/execution/README.md) are preserved as archival history.
 
 ## Contributing
 

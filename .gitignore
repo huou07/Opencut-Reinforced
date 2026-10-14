@@ -15,3 +15,13 @@ coverage/
 
 # Local agent runtime state (checkpoints, caches); never commit.
 .opencode/
+
+# Python caches from repository tooling (scripts/check_*.py).
+__pycache__/
+*.pyc
+
+# Preserved migration artifacts from the macOS -> Debian move (2026-10-13).
+# Includes a 6 MB Git bundle, a 30 MB session log and a staged patch. Every
+# ref they carry is also present in the repository's own history; they exist
+# only so the move can be audited once. See docs/PAUSE_MIGRATION_HANDOFF.md.
+/migration-preserved/

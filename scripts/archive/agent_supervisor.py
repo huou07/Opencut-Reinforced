@@ -29,23 +29,23 @@ class SupervisorError(RuntimeError):
 
 EXPLICIT_PROTECTED_PATHS = {
     "AGENTS.md",
-    "docs/execution/PLAN.json",
-    "docs/execution/STATE.json",
-    "docs/execution/EVIDENCE_POLICY.json",
-    "docs/execution/ARCHITECTURE_INVARIANTS.md",
-    "docs/execution/architecture-policy.json",
+    "docs/archive/execution/PLAN.json",
+    "docs/archive/execution/STATE.json",
+    "docs/archive/execution/EVIDENCE_POLICY.json",
+    "docs/archive/execution/ARCHITECTURE_INVARIANTS.md",
+    "docs/archive/execution/architecture-policy.json",
     "scripts/agent_supervisor.py",
     "scripts/execution_plan.py",
     "scripts/execution_evidence.py",
     "scripts/check_execution_plan.py",
     "scripts/check_architecture_policy.py",
     "scripts/test_execution_infra.py",
-    "docs/execution/AMENDMENT_BASELINE.json",
-    "docs/execution/DELEGATION.json",
-    "docs/execution/MISSION.json",
+    "docs/archive/execution/AMENDMENT_BASELINE.json",
+    "docs/archive/execution/DELEGATION.json",
+    "docs/archive/execution/MISSION.json",
 }
-AMENDMENT_MARKER = "docs/execution/AMENDMENT_BASELINE.json"
-DELEGATION_MARKER = "docs/execution/DELEGATION.json"
+AMENDMENT_MARKER = "docs/archive/execution/AMENDMENT_BASELINE.json"
+DELEGATION_MARKER = "docs/archive/execution/DELEGATION.json"
 AMENDMENT_CONTROL_PATHS = EXPLICIT_PROTECTED_PATHS | {
     "AGENTS.md",
     "docs/INDEX.md",
@@ -53,22 +53,22 @@ AMENDMENT_CONTROL_PATHS = EXPLICIT_PROTECTED_PATHS | {
     "docs/TESTING.md",
     "docs/adr/README.md",
     "docs/adr/0008-product-acceptance-and-execution-quality.md",
-    "docs/execution/README.md",
-    "docs/execution/PHASE_SPEC_TEMPLATE.md",
-    "docs/execution/AGENT_EXECUTION.md",
-    "docs/execution/phases/PHASE_9.md",
-    "docs/execution/evidence/README.md",
+    "docs/archive/execution/README.md",
+    "docs/archive/execution/PHASE_SPEC_TEMPLATE.md",
+    "docs/archive/execution/AGENT_EXECUTION.md",
+    "docs/archive/execution/phases/PHASE_9.md",
+    "docs/archive/execution/evidence/README.md",
 }
 PROTECTED_DIRECTORY_PREFIXES = (
-    "docs/execution/phases/",
-    "docs/execution/evidence/",
+    "docs/archive/execution/phases/",
+    "docs/archive/execution/evidence/",
     ".github/workflows/",
 )
 REPAIR_ALLOWED_CONTROL_PATHS = {
-    "docs/execution/PLAN.json",
-    "docs/execution/STATE.json",
-    "docs/execution/architecture-policy.json",
-    "docs/execution/AGENT_EXECUTION.md",
+    "docs/archive/execution/PLAN.json",
+    "docs/archive/execution/STATE.json",
+    "docs/archive/execution/architecture-policy.json",
+    "docs/archive/execution/AGENT_EXECUTION.md",
     "scripts/agent_supervisor.py",
     "scripts/execution_plan.py",
     "scripts/check_execution_plan.py",
@@ -76,7 +76,7 @@ REPAIR_ALLOWED_CONTROL_PATHS = {
     "scripts/execution_evidence.py",
     "scripts/test_execution_infra.py",
 }
-REPAIR_ALLOWED_PREFIXES = ("docs/execution/phases/",)
+REPAIR_ALLOWED_PREFIXES = ("docs/archive/execution/phases/",)
 REPAIR_TEST_PREFIXES = (
     "apps/or_app/test/",
     "apps/or_app/integration_test/",
@@ -84,11 +84,11 @@ REPAIR_TEST_PREFIXES = (
 RESUME_FOLLOWUP_CONTROL_PATHS = {
     "AGENTS.md",
     "docs/ARCHITECTURE.md",
-    "docs/execution/AGENT_EXECUTION.md",
-    "docs/execution/MISSION.json",
-    "docs/execution/README.md",
-    "docs/execution/PLAN.json",
-    "docs/execution/EVIDENCE_POLICY.json",
+    "docs/archive/execution/AGENT_EXECUTION.md",
+    "docs/archive/execution/MISSION.json",
+    "docs/archive/execution/README.md",
+    "docs/archive/execution/PLAN.json",
+    "docs/archive/execution/EVIDENCE_POLICY.json",
     "docs/INDEX.md",
     "docs/OPEN_SOURCE_CONVERGENCE.md",
     "docs/PRODUCT.md",
@@ -141,7 +141,7 @@ def is_protected_execution_path(path: str) -> bool:
 
 def _all_protected_paths(repo_root: Path) -> list[str]:
     paths = set(EXPLICIT_PROTECTED_PATHS)
-    for prefix in ("docs/execution/phases", "docs/execution/evidence", ".github/workflows"):
+    for prefix in ("docs/archive/execution/phases", "docs/archive/execution/evidence", ".github/workflows"):
         directory = repo_root / prefix
         if directory.is_dir():
             paths.update(
@@ -193,7 +193,7 @@ def allow_additive_evidence_policy_change(
     plan: Mapping[str, Any],
     checkpoint_ids: Sequence[str],
 ) -> list[str]:
-    path = "docs/execution/EVIDENCE_POLICY.json"
+    path = "docs/archive/execution/EVIDENCE_POLICY.json"
     prior_bytes = before.get(path)
     current_bytes = (repo_root / path).read_bytes()
     if prior_bytes == current_bytes:
@@ -554,8 +554,8 @@ def validate_state_commit_paths(paths: Sequence[str], checkpoint_ids: str | Sequ
     """Allow only STATE.json and the matching supervisor evidence records."""
 
     ids = [checkpoint_ids] if isinstance(checkpoint_ids, str) else list(checkpoint_ids)
-    expected = {"docs/execution/STATE.json"} | {
-        f"docs/execution/evidence/{checkpoint_id}.json" for checkpoint_id in ids
+    expected = {"docs/archive/execution/STATE.json"} | {
+        f"docs/archive/execution/evidence/{checkpoint_id}.json" for checkpoint_id in ids
     }
     actual = {path.replace("\\", "/") for path in paths}
     if actual != expected:
@@ -762,8 +762,8 @@ def validate_resume_supervisor_extension(before: bytes, after: bytes) -> None:
         def visit_If(self, node: ast.If) -> ast.AST | None:
             condition = ast.unparse(node.test)
             body = ast.unparse(node)
-            if condition == "'docs/execution/EVIDENCE_POLICY.json' in changed":
-                if "allowed.add('docs/execution/EVIDENCE_POLICY.json')" in body:
+            if condition == "'docs/archive/execution/EVIDENCE_POLICY.json' in changed":
+                if "allowed.add('docs/archive/execution/EVIDENCE_POLICY.json')" in body:
                     self.removed.add("policy")
                     return None
             if condition == "'scripts/agent_supervisor.py' in protected":
@@ -815,7 +815,7 @@ def validate_resume_supervisor_extension(before: bytes, after: bytes) -> None:
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "path" for target in node.targets)
         and isinstance(node.value, ast.Constant)
-        and node.value.value == "docs/execution/EVIDENCE_POLICY.json"
+        and node.value.value == "docs/archive/execution/EVIDENCE_POLICY.json"
     ]
     evidence_returns = [
         node
@@ -947,7 +947,7 @@ def _preflight_goal_data(repo_root: Path, goal: str) -> dict[str, Any]:
     execution_plan.validate_contract_transition(plan, state, policy, candidate)
     resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
     evidence_policy = execution_evidence.load_policy(
-        repo_root / "docs/execution/EVIDENCE_POLICY.json"
+        repo_root / "docs/archive/execution/EVIDENCE_POLICY.json"
     )
     execution_evidence.required_class_sources(
         execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"]), evidence_policy
@@ -1062,7 +1062,7 @@ def prepare_goal(
     execution_plan.validate_plan(plan, state, repo_root)
     resolution = execution_plan.resolve_goal(plan, state, goal, repo_root)
     evidence_policy = execution_evidence.load_policy(
-        repo_root / "docs/execution/EVIDENCE_POLICY.json"
+        repo_root / "docs/archive/execution/EVIDENCE_POLICY.json"
     )
     execution_evidence.required_class_sources(
         execution_plan.checkpoint_for_id(plan, resolution["checkpoint_id"]), evidence_policy
@@ -1380,20 +1380,20 @@ def _resume_baseline(
     except subprocess.CalledProcessError as exc:
         raise SupervisorError("resume SHA is not a descendant of the prior state baseline") from exc
     changed = git_output(repo_root, "diff", "--name-only", f"{baseline}..{resume_sha}").splitlines()
-    if "docs/execution/EVIDENCE_POLICY.json" in changed:
+    if "docs/archive/execution/EVIDENCE_POLICY.json" in changed:
         old_policy = _json_at_revision(
-            repo_root, baseline, "docs/execution/EVIDENCE_POLICY.json"
+            repo_root, baseline, "docs/archive/execution/EVIDENCE_POLICY.json"
         )
         new_policy = _json_at_revision(
-            repo_root, resume_sha, "docs/execution/EVIDENCE_POLICY.json"
+            repo_root, resume_sha, "docs/archive/execution/EVIDENCE_POLICY.json"
         )
-        plan = _json_at_revision(repo_root, resume_sha, "docs/execution/PLAN.json")
+        plan = _json_at_revision(repo_root, resume_sha, "docs/archive/execution/PLAN.json")
         validate_evidence_policy_additions(
             old_policy, new_policy, plan, checkpoint_ids
         )
     allowed = set(allowed_paths)
-    if "docs/execution/EVIDENCE_POLICY.json" in changed:
-        allowed.add("docs/execution/EVIDENCE_POLICY.json")
+    if "docs/archive/execution/EVIDENCE_POLICY.json" in changed:
+        allowed.add("docs/archive/execution/EVIDENCE_POLICY.json")
     protected = [
         path
         for path in changed
@@ -1515,7 +1515,7 @@ def validate_resume_test_additions(before: bytes, after: bytes) -> None:
 
 
 def _control_baseline(repo_root: Path, revision: str) -> str:
-    baseline = git_output(repo_root, "log", "-1", "--format=%H", revision, "--", "docs/execution/STATE.json")
+    baseline = git_output(repo_root, "log", "-1", "--format=%H", revision, "--", "docs/archive/execution/STATE.json")
     marker = git_output(repo_root, "log", "-1", "--format=%H", revision, "--", AMENDMENT_MARKER)
     if marker and git_output(repo_root, "merge-base", baseline, marker) == baseline:
         return marker
@@ -1594,7 +1594,7 @@ def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
 
     if not git_output(repo_root, "ls-tree", "--name-only", baseline, "--", AMENDMENT_MARKER):
         return
-    new_state = _json_at_revision(repo_root, baseline, "docs/execution/STATE.json")
+    new_state = _json_at_revision(repo_root, baseline, "docs/archive/execution/STATE.json")
     if new_state.get("current_next") != "9B":
         return  # Later supervisor completions retain the provenance marker.
     try:
@@ -1616,7 +1616,7 @@ def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
     changed = set(git_output(repo_root, "diff", "--name-only", f"{parent}..{baseline}").splitlines())
     if marker["changed_paths"] != sorted(changed) or not changed <= AMENDMENT_CONTROL_PATHS:
         raise SupervisorError("amendment baseline contains non-control-plane changes")
-    old_state = _json_at_revision(repo_root, parent, "docs/execution/STATE.json")
+    old_state = _json_at_revision(repo_root, parent, "docs/archive/execution/STATE.json")
     if old_state.get("current_next") != "9B" or new_state.get("current_next") != "9B":
         raise SupervisorError("amendment baseline changed the active checkpoint")
     old_statuses = old_state.get("checkpoints", {})
@@ -1629,8 +1629,8 @@ def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
     retained_fields -= {"checkpoints", "last_updated"}
     if any(old_state.get(field) != new_state.get(field) for field in retained_fields):
         raise SupervisorError("amendment baseline changed retained execution state")
-    old_plan = _json_at_revision(repo_root, parent, "docs/execution/PLAN.json")
-    new_plan = _json_at_revision(repo_root, baseline, "docs/execution/PLAN.json")
+    old_plan = _json_at_revision(repo_root, parent, "docs/archive/execution/PLAN.json")
+    new_plan = _json_at_revision(repo_root, baseline, "docs/archive/execution/PLAN.json")
     if git_output(repo_root, "ls-tree", "--name-only", parent, "--", AMENDMENT_MARKER):
         _validate_amendment_baseline(repo_root, parent)
         if old_plan != new_plan:
@@ -1647,8 +1647,8 @@ def _validate_amendment_baseline(repo_root: Path, baseline: str) -> None:
     for key in ("expected_project_schema_effect_category", "expected_ipc_effect_category"):
         if checkpoint[key] != execution_plan.checkpoint_for_id(old_plan, "9B")[key]:
             raise SupervisorError("amendment baseline changed the 9B model contract")
-    evidence_path = repo_root / "docs/execution/evidence/9B.json"
-    if evidence_path.exists() or "docs/execution/evidence/9B.json" in changed:
+    evidence_path = repo_root / "docs/archive/execution/evidence/9B.json"
+    if evidence_path.exists() or "docs/archive/execution/evidence/9B.json" in changed:
         raise SupervisorError("amendment baseline created 9B completion evidence")
 
 
@@ -1705,7 +1705,7 @@ def _state_leaves_checkpoint_next(
         raise SupervisorError(f"invalid STATE.json at {revision}")
     if not next_checkpoints and any(value != "DONE" for value in statuses.values()):
         raise SupervisorError(f"invalid STATE.json at {revision}")
-    plan = _json_at_revision(repo_root, revision, "docs/execution/PLAN.json")
+    plan = _json_at_revision(repo_root, revision, "docs/archive/execution/PLAN.json")
     try:
         checkpoints = execution_plan._checkpoint_map(plan, repo_root)
         if set(statuses) != set(checkpoints):
@@ -1752,7 +1752,7 @@ def _state_baseline_for_checkpoint(
     failed_fingerprint = _active_checkpoint_fingerprint(repo_root, failed_sha, checkpoint_id)
     baseline: str | None = None
     for revision in history:
-        state_path = "docs/execution/STATE.json"
+        state_path = "docs/archive/execution/STATE.json"
         if not git_output(repo_root, "ls-tree", revision, "--", state_path):
             if baseline is not None:
                 return baseline
@@ -1782,10 +1782,10 @@ def _state_baseline_for_checkpoint(
 def _active_checkpoint_fingerprint(
     repo_root: Path, revision: str, checkpoint_id: str
 ) -> dict[str, Any]:
-    plan = _json_at_revision(repo_root, revision, "docs/execution/PLAN.json")
+    plan = _json_at_revision(repo_root, revision, "docs/archive/execution/PLAN.json")
     checkpoint = execution_plan.checkpoint_for_id(plan, checkpoint_id)
     policy_bytes = _git_file_bytes(
-        repo_root, revision, "docs/execution/EVIDENCE_POLICY.json"
+        repo_root, revision, "docs/archive/execution/EVIDENCE_POLICY.json"
     )
     try:
         evidence_policy = json.loads(policy_bytes)
@@ -1823,7 +1823,7 @@ def _active_checkpoint_fingerprint(
         ).hexdigest(),
         "architecture_invariants_sha256": hashlib.sha256(
             _git_file_bytes(
-                repo_root, revision, "docs/execution/ARCHITECTURE_INVARIANTS.md"
+                repo_root, revision, "docs/archive/execution/ARCHITECTURE_INVARIANTS.md"
             )
         ).hexdigest(),
         "evidence_policy_sha256": hashlib.sha256(policy_bytes).hexdigest(),
@@ -1881,7 +1881,7 @@ def _state_at_repair_revision(
     failed_state: Mapping[str, Any],
     baseline_versions: Mapping[str, int],
 ) -> None:
-    current = _json_at_revision(repo_root, revision, "docs/execution/STATE.json")
+    current = _json_at_revision(repo_root, revision, "docs/archive/execution/STATE.json")
     current_without_versions = {
         key: value for key, value in current.items() if key != "verified_contract_versions"
     }
@@ -1900,7 +1900,7 @@ def _state_at_repair_revision(
             raise SupervisorError(str(exc)) from exc
         if versions != baseline_versions:
             raise SupervisorError("repair history changed verified versions before completion")
-    evidence_path = f"docs/execution/evidence/{failed_state['current_next']}.json"
+    evidence_path = f"docs/archive/execution/evidence/{failed_state['current_next']}.json"
     exists = subprocess.run(
         ["git", "cat-file", "-e", f"{revision}:{evidence_path}"],
         cwd=repo_root,
@@ -1929,8 +1929,8 @@ def validate_repair_resume_history(
         raise SupervisorError("FAILED_SHA is not an ancestor of current HEAD") from exc
 
     baseline = _state_baseline_for_checkpoint(repo_root, failed_sha, checkpoint_id)
-    baseline_state = _json_at_revision(repo_root, baseline, "docs/execution/STATE.json")
-    baseline_plan = _json_at_revision(repo_root, baseline, "docs/execution/PLAN.json")
+    baseline_state = _json_at_revision(repo_root, baseline, "docs/archive/execution/STATE.json")
+    baseline_plan = _json_at_revision(repo_root, baseline, "docs/archive/execution/PLAN.json")
     active = execution_plan.checkpoint_for_id(baseline_plan, checkpoint_id)
     if (
         baseline_state.get("current_next") != checkpoint_id
@@ -1954,7 +1954,7 @@ def validate_repair_resume_history(
             + ", ".join(sorted(protected))
         )
 
-    failed_state = _json_at_revision(repo_root, failed_sha, "docs/execution/STATE.json")
+    failed_state = _json_at_revision(repo_root, failed_sha, "docs/archive/execution/STATE.json")
     if failed_state != baseline_state:
         raise SupervisorError("original implementation changed STATE.json")
     if (
@@ -1977,12 +1977,12 @@ def validate_repair_resume_history(
     else:
         baseline_state["verified_contract_versions"] = dict(baseline_versions)
 
-    current_plan = _json_at_revision(repo_root, head, "docs/execution/PLAN.json")
-    current_state = _json_at_revision(repo_root, head, "docs/execution/STATE.json")
+    current_plan = _json_at_revision(repo_root, head, "docs/archive/execution/PLAN.json")
+    current_state = _json_at_revision(repo_root, head, "docs/archive/execution/STATE.json")
     current_policy = _json_at_revision(
-        repo_root, head, "docs/execution/architecture-policy.json"
+        repo_root, head, "docs/archive/execution/architecture-policy.json"
     )
-    failed_plan = _json_at_revision(repo_root, failed_sha, "docs/execution/PLAN.json")
+    failed_plan = _json_at_revision(repo_root, failed_sha, "docs/archive/execution/PLAN.json")
     if _active_checkpoint_fingerprint(repo_root, failed_sha, checkpoint_id) != (
         _active_checkpoint_fingerprint(repo_root, head, checkpoint_id)
     ):
@@ -2127,7 +2127,7 @@ def _verified_report(result: Mapping[str, Any], plan: Mapping[str, Any]) -> str:
             proof["class"] for proof in item_record.get("evidence_classes", [])
         ) or "no additional class proofs"
         lines.append(
-            f"evidence: docs/execution/evidence/{item['id']}.json; "
+            f"evidence: docs/archive/execution/evidence/{item['id']}.json; "
             f"implementation SHA {item_record['implementation_sha']}; classes: {classes}"
         )
     before_next = result.get("before_state_current_next")
@@ -2388,19 +2388,19 @@ def run_goal(
                     git_output(repo_root, "diff", "--name-only", f"{resume_sha}..{head}").splitlines()
                 )
                 validate_historical_resume_paths(sorted(later_paths))
-                if "docs/execution/EVIDENCE_POLICY.json" in later_paths:
+                if "docs/archive/execution/EVIDENCE_POLICY.json" in later_paths:
                     validate_evidence_policy_additions(
                         _json_at_revision(
-                            repo_root, resume_sha, "docs/execution/EVIDENCE_POLICY.json"
+                            repo_root, resume_sha, "docs/archive/execution/EVIDENCE_POLICY.json"
                         ),
                         _json_at_revision(
-                            repo_root, head, "docs/execution/EVIDENCE_POLICY.json"
+                            repo_root, head, "docs/archive/execution/EVIDENCE_POLICY.json"
                         ),
                         plan,
                         batch_ids,
                     )
                 historical_plan = _json_at_revision(
-                    repo_root, resume_sha or "", "docs/execution/PLAN.json"
+                    repo_root, resume_sha or "", "docs/archive/execution/PLAN.json"
                 )
                 validate_historical_plan_compatibility(historical_plan, plan)
                 allowed_paths = sorted(set(allowed_paths) | RESUME_FOLLOWUP_CONTROL_PATHS)
@@ -2446,8 +2446,8 @@ def run_goal(
         else:
             if runner is None:
                 raise SupervisorError("--runner is required unless --resume-sha is supplied")
-            before_plan_bytes = (repo_root / "docs/execution/PLAN.json").read_bytes()
-            before_state_bytes = (repo_root / "docs/execution/STATE.json").read_bytes()
+            before_plan_bytes = (repo_root / "docs/archive/execution/PLAN.json").read_bytes()
+            before_state_bytes = (repo_root / "docs/archive/execution/STATE.json").read_bytes()
             allowed_paths = selected_runner_allowed_paths(plan, batch_ids)
             protected_before = capture_protected_surfaces(repo_root)
             baseline_head = git_output(repo_root, "rev-parse", "HEAD")
@@ -2457,9 +2457,9 @@ def run_goal(
                 checkpoint_prompt(repo_root, resolution, batch_ids, plan=plan),
             )
             git_output(repo_root, "fetch", "--prune", "origin")
-            if (repo_root / "docs/execution/PLAN.json").read_bytes() != before_plan_bytes:
+            if (repo_root / "docs/archive/execution/PLAN.json").read_bytes() != before_plan_bytes:
                 raise SupervisorError("runner changed immutable PLAN.json")
-            if (repo_root / "docs/execution/STATE.json").read_bytes() != before_state_bytes:
+            if (repo_root / "docs/archive/execution/STATE.json").read_bytes() != before_state_bytes:
                 raise SupervisorError("runner changed STATE.json; only the supervisor may advance state")
             allowed_paths = [
                 *allowed_paths,

@@ -17,8 +17,22 @@ Use only skills exposed by the current agent session.
 | Diagnose a failing authorized source or hosted check | verify-debug |
 | Sustain an authorized outcome across repeated failures, handoffs or quota pressure | sustained-repair |
 | Review auth, dependencies, CI or publication risk | security-review |
-| Report roadmap progress, next outcome or readiness through AEH | project-steward |
+| Report roadmap progress, next outcome or readiness through the control workspace | project-steward |
 | Maintain instruction or skill contracts | skill-maintainer |
+
+This repository is registered in the host control workspace (AEH) under the slug
+`or`, with `bash scripts/check-repo.sh` as its verification gate. From the AEH
+workspace root:
+
+```sh
+python3 scripts/hub.py status or    # read-only: Git and recorded verification
+python3 scripts/hub.py verify or    # explicit: runs scripts/check-repo.sh
+python3 scripts/hub.py where or     # absolute path
+```
+
+`status` never executes project code. AEH holds no product or task state for OR;
+the authoritative progress source is `docs/PRODUCT_ROADMAP.md`, and a verified
+claim is a record under `docs/evidence/claims/`.
 
 AEH's prompt-assist and ui-ux-review are candidates, not assumed installed here.
 For UI work, DESIGN.md and docs/UX_ACCEPTANCE.md remain authoritative; generic

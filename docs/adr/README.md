@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 These records capture decisions that are difficult to reverse. They supplement
-the machine execution plan; they do not replace `docs/execution/PLAN.json`,
+the machine execution plan; they do not replace `docs/archive/execution/PLAN.json`,
 `STATE.json`, or the permanent invariants.
 
 ## Records
@@ -17,3 +17,9 @@ the machine execution plan; they do not replace `docs/execution/PLAN.json`,
 
 All records are architecture intent. A later implementation checkpoint must
 provide its own dependency, platform, licensing, test, and migration evidence.
+
+Status is part of a record, not a formality. [0006](0006-autonomous-agent-execution-contract.md)
+is marked **Superseded in part** because its mechanism — the checkpoint graph and
+the supervisor — was paused on 2026-10-14 and archived. Its reasoning still
+applies; its machinery does not run. Read the record before reintroducing
+anything it describes.

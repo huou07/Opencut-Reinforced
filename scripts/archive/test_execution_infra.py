@@ -31,7 +31,7 @@ def checkpoint(checkpoint_id: str, prerequisites: list[str], next_id: str | None
         "id": checkpoint_id,
         "phase": 6,
         "title": checkpoint_id,
-        "spec_document": "docs/execution/phases/PHASE_6.md",
+        "spec_document": "docs/archive/execution/phases/PHASE_6.md",
         "prerequisite_checkpoint_ids": prerequisites,
         "milestone_membership": ["test"],
         "user_visible": False,
@@ -67,7 +67,7 @@ def fixture_plan_state(ids: list[str] = ["A", "B"]) -> tuple[dict[str, object], 
         "phases": {
             "6": {
                 "title": "Test phase",
-                "spec_document": "docs/execution/phases/PHASE_6.md",
+                "spec_document": "docs/archive/execution/phases/PHASE_6.md",
             }
         },
         "checkpoints": plan_checkpoints,
@@ -190,28 +190,28 @@ def make_repair_history(
         historical_state
         if historical_state is not None
         else git_blob_from_main(
-            "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/execution/STATE.json"
+            "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/archive/execution/STATE.json"
         )
     )
     commit_test_files(
         root,
         {
-            "docs/execution/PLAN.json": git_blob_from_main(
-                "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/execution/PLAN.json"
+            "docs/archive/execution/PLAN.json": git_blob_from_main(
+                "76cecbc1d255084a1b5e04941cd62e321bd1c562", "docs/archive/execution/PLAN.json"
             ),
-            "docs/execution/STATE.json": historical_state_value,
+            "docs/archive/execution/STATE.json": historical_state_value,
         },
         "execution infrastructure adds state",
     )
     tracked = (
-        "docs/execution/PLAN.json",
-        "docs/execution/STATE.json",
-        "docs/execution/architecture-policy.json",
-        "docs/execution/AGENT_EXECUTION.md",
-        "docs/execution/EVIDENCE_POLICY.json",
-        "docs/execution/ARCHITECTURE_INVARIANTS.md",
-        "docs/execution/phases/PHASE_7.md",
-        "docs/execution/phases/PHASE_16.md",
+        "docs/archive/execution/PLAN.json",
+        "docs/archive/execution/STATE.json",
+        "docs/archive/execution/architecture-policy.json",
+        "docs/archive/execution/AGENT_EXECUTION.md",
+        "docs/archive/execution/EVIDENCE_POLICY.json",
+        "docs/archive/execution/ARCHITECTURE_INVARIANTS.md",
+        "docs/archive/execution/phases/PHASE_7.md",
+        "docs/archive/execution/phases/PHASE_16.md",
         ".github/workflows/platform-verification.yml",
         ".github/workflows/developer-preview.yml",
         "crates/or_core/src/project_document.rs",
@@ -225,23 +225,23 @@ def make_repair_history(
     # This fixture exercises the historical 7F1 repair contract, so keep its
     # plan, state, and source versions at that revision as the roadmap advances.
     for path in (
-        "docs/execution/PLAN.json",
-        "docs/execution/STATE.json",
+        "docs/archive/execution/PLAN.json",
+        "docs/archive/execution/STATE.json",
         "crates/or_core/src/project_document.rs",
         "crates/or_core/src/project_recovery.rs",
         "crates/or_ipc/src/protocol.rs",
     ):
         base_files[path] = git_blob_from_main("ed1633a", path)
-    base_files["docs/execution/phases/PHASE_8.md"] = (
-        REPO_ROOT / "docs/execution/phases/PHASE_8.md"
+    base_files["docs/archive/execution/phases/PHASE_8.md"] = (
+        REPO_ROOT / "docs/archive/execution/phases/PHASE_8.md"
     ).read_bytes()
     if original_changes:
         base_files.update(original_changes)
     if previous_contract_active:
         previous_files = dict(base_files)
-        previous_plan = json.loads(previous_files["docs/execution/PLAN.json"])
+        previous_plan = json.loads(previous_files["docs/archive/execution/PLAN.json"])
         execution_plan.checkpoint_for_id(previous_plan, "7F1")["title"] = "Earlier 7F1 contract"
-        previous_files["docs/execution/PLAN.json"] = json.dumps(previous_plan, indent=2) + "\n"
+        previous_files["docs/archive/execution/PLAN.json"] = json.dumps(previous_plan, indent=2) + "\n"
         commit_test_files(root, previous_files, "trusted maintenance changes active contract")
     commit_test_files(root, base_files, "final 7F1 state baseline")
 
@@ -254,14 +254,14 @@ def make_repair_history(
         failed_files.update(failed_changes)
     failed_sha = commit_test_files(root, failed_files, "ci: original 7F1 gate attempt")
 
-    plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
+    plan = json.loads((root / "docs/archive/execution/PLAN.json").read_text(encoding="utf-8"))
     future_checkpoint = execution_plan.checkpoint_for_id(plan, "16G")
     future_checkpoint["dependency_change_policy"] += " Future gate detail reviewed."
-    state_bytes = (root / "docs/execution/STATE.json").read_bytes()
+    state_bytes = (root / "docs/archive/execution/STATE.json").read_bytes()
     maintenance_files: dict[str, bytes | str] = {
-        "docs/execution/PLAN.json": json.dumps(plan, indent=2) + "\n",
-        "docs/execution/STATE.json": state_bytes,
-        "docs/execution/phases/PHASE_8.md": b"future phase 8 reviewed\n",
+        "docs/archive/execution/PLAN.json": json.dumps(plan, indent=2) + "\n",
+        "docs/archive/execution/STATE.json": state_bytes,
+        "docs/archive/execution/phases/PHASE_8.md": b"future phase 8 reviewed\n",
         "scripts/execution_plan.py": (REPO_ROOT / "scripts/execution_plan.py").read_bytes(),
         "scripts/test_execution_infra.py": (
             REPO_ROOT / "scripts/test_execution_infra.py"
@@ -581,7 +581,7 @@ class ExecutionPlanTests(unittest.TestCase):
         invalid_allowlists = (
             None,
             [""],
-            ["docs/execution/STATE.json"],
+            ["docs/archive/execution/STATE.json"],
             ["scripts/agent_supervisor.py"],
             [".github/workflows/"],
             ["../something"],
@@ -715,7 +715,7 @@ class ExecutionPlanTests(unittest.TestCase):
 
         def evidence_existed_at_7f1(checkpoint_id: str) -> bool:
             return subprocess.run(
-                ["git", "cat-file", "-e", f"ed1633a:docs/execution/evidence/{checkpoint_id}.json"],
+                ["git", "cat-file", "-e", f"ed1633a:docs/archive/execution/evidence/{checkpoint_id}.json"],
                 cwd=REPO_ROOT,
                 capture_output=True,
             ).returncode == 0
@@ -735,7 +735,7 @@ class ExecutionPlanTests(unittest.TestCase):
 
     def test_or_core_dependency_policy_covers_frozen_runtime_engines(self) -> None:
         policy = execution_plan.load_json(
-            REPO_ROOT / "docs/execution/architecture-policy.json"
+            REPO_ROOT / "docs/archive/execution/architecture-policy.json"
         )
         patterns = policy["or_core_forbidden_direct_dependency_name_patterns"]
         self.assertIsInstance(patterns, list)
@@ -803,15 +803,15 @@ class ExecutionPlanTests(unittest.TestCase):
         state["current_next"] = "7B"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "docs/execution/phases").mkdir(parents=True)
-            (root / "docs/execution/evidence").mkdir(parents=True)
-            (root / "docs/execution/phases/PHASE_6.md").write_text("phase\n", encoding="utf-8")
-            (root / "docs/execution/EVIDENCE_POLICY.json").write_text(
+            (root / "docs/archive/execution/phases").mkdir(parents=True)
+            (root / "docs/archive/execution/evidence").mkdir(parents=True)
+            (root / "docs/archive/execution/phases/PHASE_6.md").write_text("phase\n", encoding="utf-8")
+            (root / "docs/archive/execution/EVIDENCE_POLICY.json").write_text(
                 json.dumps(evidence_policy()), encoding="utf-8"
             )
             with self.assertRaises(execution_plan.PlanError):
                 execution_plan.validate_plan(plan, state, root)
-            (root / "docs/execution/evidence/7A.json").write_text(
+            (root / "docs/archive/execution/evidence/7A.json").write_text(
                 json.dumps(valid_evidence()), encoding="utf-8"
             )
             self.assertEqual(
@@ -1110,15 +1110,15 @@ class QualityEvidenceTests(unittest.TestCase):
             subprocess.run(["git", "config", "user.name", "Execution Test"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.email", "execution-test@example.invalid"], cwd=root, check=True)
             parent = commit_test_files(root, {
-                "docs/execution/PLAN.json": git_blob_from_main("5b6a496", "docs/execution/PLAN.json"),
-                "docs/execution/STATE.json": git_blob_from_main("5b6a496", "docs/execution/STATE.json"),
+                "docs/archive/execution/PLAN.json": git_blob_from_main("5b6a496", "docs/archive/execution/PLAN.json"),
+                "docs/archive/execution/STATE.json": git_blob_from_main("5b6a496", "docs/archive/execution/STATE.json"),
             }, "original 9B implementation")
-            changed = sorted(("docs/execution/PLAN.json", "docs/execution/STATE.json", agent_supervisor.AMENDMENT_MARKER))
+            changed = sorted(("docs/archive/execution/PLAN.json", "docs/archive/execution/STATE.json", agent_supervisor.AMENDMENT_MARKER))
             marker = {"schema_version": 1, "checkpoint_id": "9B", "prior_implementation_sha": parent,
                       "prior_failed_run_id": 37043830370, "changed_paths": changed}
             amendment = commit_test_files(root, {
-                "docs/execution/PLAN.json": json.dumps(plan),
-                "docs/execution/STATE.json": json.dumps(state),
+                "docs/archive/execution/PLAN.json": json.dumps(plan),
+                "docs/archive/execution/STATE.json": json.dumps(state),
                 agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
             }, "chore(execution): amend 9B quality baseline")
             agent_supervisor._validate_amendment_baseline(root, amendment)
@@ -1126,8 +1126,8 @@ class QualityEvidenceTests(unittest.TestCase):
             altered_state = json.loads(json.dumps(state))
             altered_state["verified_contract_versions"]["project_schema"] = 8
             bad_versions = commit_test_files(root, {
-                "docs/execution/PLAN.json": json.dumps(plan),
-                "docs/execution/STATE.json": json.dumps(altered_state),
+                "docs/archive/execution/PLAN.json": json.dumps(plan),
+                "docs/archive/execution/STATE.json": json.dumps(altered_state),
                 agent_supervisor.AMENDMENT_MARKER: json.dumps(marker),
             }, "untrusted schema advance")
             with self.assertRaisesRegex(agent_supervisor.SupervisorError, "retained execution state"):
@@ -1150,9 +1150,9 @@ class QualityEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(agent_supervisor.SupervisorError, "must introduce"):
                 agent_supervisor._validate_amendment_baseline(root, untrusted_followup)
             subprocess.run(["git", "checkout", "-q", implementation], cwd=root, check=True)
-            state = json.loads((root / "docs/execution/STATE.json").read_text())
+            state = json.loads((root / "docs/archive/execution/STATE.json").read_text())
             state["last_updated"] = "2026-10-04"
-            inherited = commit_test_files(root, {"docs/execution/STATE.json": json.dumps(state)}, "untrusted later state baseline")
+            inherited = commit_test_files(root, {"docs/archive/execution/STATE.json": json.dumps(state)}, "untrusted later state baseline")
             with self.assertRaisesRegex(agent_supervisor.SupervisorError, "must introduce"):
                 agent_supervisor._validate_amendment_baseline(root, inherited)
             marker["prior_implementation_sha"] = inherited
@@ -1688,21 +1688,21 @@ class SupervisorBoundaryTests(unittest.TestCase):
     def test_porcelain_status_paths_preserve_status_columns(self) -> None:
         self.assertEqual(
             agent_supervisor.parse_porcelain_status_paths(
-                " M docs/execution/STATE.json\n"
-                "?? docs/execution/evidence/7A.json\n"
+                " M docs/archive/execution/STATE.json\n"
+                "?? docs/archive/execution/evidence/7A.json\n"
             ),
             [
-                "docs/execution/STATE.json",
-                "docs/execution/evidence/7A.json",
+                "docs/archive/execution/STATE.json",
+                "docs/archive/execution/evidence/7A.json",
             ],
         )
 
     def test_runner_state_and_control_surface_mutations_are_rejected(self) -> None:
         before = {
-            "docs/execution/STATE.json": b"state",
-            "docs/execution/PLAN.json": b"plan",
-            "docs/execution/phases/PHASE_7.md": b"phase",
-            "docs/execution/evidence/fake.json": None,
+            "docs/archive/execution/STATE.json": b"state",
+            "docs/archive/execution/PLAN.json": b"plan",
+            "docs/archive/execution/phases/PHASE_7.md": b"phase",
+            "docs/archive/execution/evidence/fake.json": None,
             "scripts/agent_supervisor.py": b"supervisor",
         }
         for path in before:
@@ -1745,12 +1745,12 @@ class SupervisorBoundaryTests(unittest.TestCase):
         }
         forbidden_paths = (
             ".github/workflows/release.yml",
-            "docs/execution/STATE.json",
-            "docs/execution/PLAN.json",
-            "docs/execution/EVIDENCE_POLICY.json",
-            "docs/execution/phases/PHASE_7.md",
+            "docs/archive/execution/STATE.json",
+            "docs/archive/execution/PLAN.json",
+            "docs/archive/execution/EVIDENCE_POLICY.json",
+            "docs/archive/execution/phases/PHASE_7.md",
             "scripts/agent_supervisor.py",
-            "docs/execution/evidence/7C0.json",
+            "docs/archive/execution/evidence/7C0.json",
         )
         before = {
             path: b"baseline"
@@ -1874,11 +1874,11 @@ class SupervisorBoundaryTests(unittest.TestCase):
         allowed_path = ".github/workflows/platform-verification.yml"
         additional_paths = (
             ".github/workflows/release.yml",
-            "docs/execution/STATE.json",
-            "docs/execution/PLAN.json",
-            "docs/execution/phases/PHASE_7.md",
+            "docs/archive/execution/STATE.json",
+            "docs/archive/execution/PLAN.json",
+            "docs/archive/execution/phases/PHASE_7.md",
             "scripts/agent_supervisor.py",
-            "docs/execution/evidence/7C0.json",
+            "docs/archive/execution/evidence/7C0.json",
         )
         cases = [([allowed_path], True)]
         cases.extend(([allowed_path, path], False) for path in additional_paths)
@@ -1903,7 +1903,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
                     baseline_paths = {
                         allowed_path,
                         *additional_paths,
-                        "docs/execution/STATE.json",
+                        "docs/archive/execution/STATE.json",
                     }
                     for relative_path in baseline_paths:
                         path = root / relative_path
@@ -1947,13 +1947,13 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
     def test_state_commit_path_rejects_any_third_file(self) -> None:
         agent_supervisor.validate_state_commit_paths(
-            ["docs/execution/STATE.json", "docs/execution/evidence/7A.json"], "7A"
+            ["docs/archive/execution/STATE.json", "docs/archive/execution/evidence/7A.json"], "7A"
         )
         with self.assertRaises(agent_supervisor.SupervisorError):
             agent_supervisor.validate_state_commit_paths(
                 [
-                    "docs/execution/STATE.json",
-                    "docs/execution/evidence/7A.json",
+                    "docs/archive/execution/STATE.json",
+                    "docs/archive/execution/evidence/7A.json",
                     "README.md",
                 ],
                 "7A",
@@ -1994,7 +1994,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
             [
                 "scripts/agent_supervisor.py",
                 "scripts/execution_plan.py",
-                "docs/execution/AGENT_EXECUTION.md",
+                "docs/archive/execution/AGENT_EXECUTION.md",
             ]
         )
         with self.assertRaisesRegex(agent_supervisor.SupervisorError, "product files changed"):
@@ -2028,7 +2028,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
                     check=True,
                 ).stdout.strip()
 
-            state_sha = commit("state", {"docs/execution/STATE.json": '{"current_next":"A"}\n'})
+            state_sha = commit("state", {"docs/archive/execution/STATE.json": '{"current_next":"A"}\n'})
             control_sha = commit("trusted control", {"scripts/agent_supervisor.py": "trusted\n"})
             before_marker = commit("candidate before marker", {"src/product.txt": "candidate\n"})
             marker_contents = json.dumps(
@@ -2066,7 +2066,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
 
             advanced_state = commit(
                 "state advanced",
-                {"docs/execution/STATE.json": '{"current_next":"B"}\n'},
+                {"docs/archive/execution/STATE.json": '{"current_next":"B"}\n'},
             )
             self.assertIsNone(
                 agent_supervisor._delegation_resume_baseline(
@@ -2084,8 +2084,8 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 cwd=root,
                 check=True,
             )
-            (root / "docs/execution").mkdir(parents=True)
-            (root / "docs/execution/STATE.json").write_text('{"current_next":"A"}\n')
+            (root / "docs/archive/execution").mkdir(parents=True)
+            (root / "docs/archive/execution/STATE.json").write_text('{"current_next":"A"}\n')
             subprocess.run(["git", "add", "-A"], cwd=root, check=True)
             subprocess.run(["git", "commit", "-qm", "state"], cwd=root, check=True)
             state_sha = subprocess.run(
@@ -2095,7 +2095,7 @@ class SupervisorBoundaryTests(unittest.TestCase):
                 text=True,
                 check=True,
             ).stdout.strip()
-            (root / "docs/execution/DELEGATION.json").write_text(
+            (root / "docs/archive/execution/DELEGATION.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -2172,8 +2172,8 @@ def validate_resume_preconditions():
 import ast
 
 def _resume_baseline():
-    if "docs/execution/EVIDENCE_POLICY.json" in changed:
-        allowed.add("docs/execution/EVIDENCE_POLICY.json")
+    if "docs/archive/execution/EVIDENCE_POLICY.json" in changed:
+        allowed.add("docs/archive/execution/EVIDENCE_POLICY.json")
     if protected:
         if "scripts/agent_supervisor.py" in protected:
             validate_resume_supervisor_extension(before, after)
@@ -2202,7 +2202,7 @@ def validate_resume_supervisor_extension(before, after):
     pass
 
 def allow_additive_evidence_policy_change(before, root, plan, selected):
-    path = "docs/execution/EVIDENCE_POLICY.json"
+    path = "docs/archive/execution/EVIDENCE_POLICY.json"
     validate_evidence_policy_additions(before, root, plan, selected)
     execution_evidence.load_policy(root / path)
     return [path]
@@ -2256,18 +2256,18 @@ class GuardTests:
     def test_platform_path_filter_only_skips_metadata_changes(self) -> None:
         self.assertFalse(
             execution_evidence.platform_verification_runs_for_push(
-                ["docs/execution/STATE.json", "docs/execution/evidence/7A.json"]
+                ["docs/archive/execution/STATE.json", "docs/archive/execution/evidence/7A.json"]
             )
         )
         self.assertTrue(
             execution_evidence.platform_verification_runs_for_push(
-                ["docs/execution/STATE.json", "scripts/execution_plan.py"]
+                ["docs/archive/execution/STATE.json", "scripts/execution_plan.py"]
             )
         )
         workflow = (REPO_ROOT / ".github/workflows/platform-verification.yml").read_text(encoding="utf-8")
         self.assertIn("paths-ignore:", workflow)
-        self.assertIn("docs/execution/STATE.json", workflow)
-        self.assertIn("docs/execution/evidence/**", workflow)
+        self.assertIn("docs/archive/execution/STATE.json", workflow)
+        self.assertIn("docs/archive/execution/evidence/**", workflow)
 
     def test_prompt_requires_runner_handoff_contract(self) -> None:
         prompt = agent_supervisor.checkpoint_prompt(
@@ -2277,7 +2277,7 @@ class GuardTests:
                 "checkpoint_id": "7A",
                 "title": "Realtime architecture and capability foundation",
                 "phase": 7,
-                "spec_document": "docs/execution/phases/PHASE_7.md",
+                "spec_document": "docs/archive/execution/phases/PHASE_7.md",
                 "next_checkpoint_relation": "7B",
             },
         )
@@ -2349,9 +2349,9 @@ class GuardTests:
         invoke_runner.assert_not_called()
 
     def test_prepare_goal_does_not_mutate_plan_state_or_evidence(self) -> None:
-        plan_path = REPO_ROOT / "docs/execution/PLAN.json"
-        state_path = REPO_ROOT / "docs/execution/STATE.json"
-        evidence_dir = REPO_ROOT / "docs/execution/evidence"
+        plan_path = REPO_ROOT / "docs/archive/execution/PLAN.json"
+        state_path = REPO_ROOT / "docs/archive/execution/STATE.json"
+        evidence_dir = REPO_ROOT / "docs/archive/execution/evidence"
         before = {
             plan_path: plan_path.read_bytes(),
             state_path: state_path.read_bytes(),
@@ -2414,8 +2414,8 @@ class PreflightTests(unittest.TestCase):
         return values[arguments]
 
     def test_desktop_mvp_preflight_is_read_only_and_uses_no_runner_or_github(self) -> None:
-        state_path = REPO_ROOT / "docs/execution/STATE.json"
-        plan_path = REPO_ROOT / "docs/execution/PLAN.json"
+        state_path = REPO_ROOT / "docs/archive/execution/STATE.json"
+        plan_path = REPO_ROOT / "docs/archive/execution/PLAN.json"
         before_state = state_path.read_bytes()
         before_plan = plan_path.read_bytes()
         stdout = StringIO()
@@ -2520,7 +2520,7 @@ class RepairResumeTests(unittest.TestCase):
                 check=True,
             ).stdout.strip()
             missing_state = subprocess.run(
-                ["git", "ls-tree", bootstrap, "--", "docs/execution/STATE.json"],
+                ["git", "ls-tree", bootstrap, "--", "docs/archive/execution/STATE.json"],
                 cwd=root,
                 capture_output=True,
                 text=True,
@@ -2551,7 +2551,7 @@ class RepairResumeTests(unittest.TestCase):
                 check=True,
             ).stdout.strip()
             previous_state = agent_supervisor._json_at_revision(
-                root, previous, "docs/execution/STATE.json"
+                root, previous, "docs/archive/execution/STATE.json"
             )
             self.assertEqual(previous_state["current_next"], "7F1")
             self.assertEqual(previous_state["checkpoints"]["7F1"], "NEXT")
@@ -2577,7 +2577,7 @@ class RepairResumeTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(
                 agent_supervisor.SupervisorError,
-                "cannot read docs/execution/STATE.json",
+                "cannot read docs/archive/execution/STATE.json",
             ):
                 agent_supervisor._state_baseline_for_checkpoint(root, failed_sha, "7F1")
 
@@ -2661,7 +2661,7 @@ class RepairResumeTests(unittest.TestCase):
     def test_repair_requires_the_same_checkpoint_to_remain_next(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, _head = self._history(directory)
-            state_path = "docs/execution/STATE.json"
+            state_path = "docs/archive/execution/STATE.json"
             state = json.loads((root / state_path).read_text(encoding="utf-8"))
             state["current_next"] = "7F"
             commit_test_files(root, {state_path: json.dumps(state, indent=2) + "\n"}, "move NEXT")
@@ -2670,7 +2670,7 @@ class RepairResumeTests(unittest.TestCase):
     def test_repair_rejects_existing_active_checkpoint_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, _head = self._history(directory)
-            evidence = root / "docs/execution/evidence/7F1.json"
+            evidence = root / "docs/archive/execution/evidence/7F1.json"
             evidence.parent.mkdir(parents=True)
             evidence.write_text("{}\n", encoding="utf-8")
             self._reject(root, failed_sha, "completion evidence already exists")
@@ -2678,7 +2678,7 @@ class RepairResumeTests(unittest.TestCase):
     def test_original_implementation_protected_path_check_still_applies(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
-            protected = "docs/execution/architecture-policy.json"
+            protected = "docs/archive/execution/architecture-policy.json"
             failed_sha, _head = make_repair_history(
                 root,
                 failed_changes={
@@ -2689,8 +2689,8 @@ class RepairResumeTests(unittest.TestCase):
 
     def test_original_implementation_cannot_change_active_checkpoint_contract(self) -> None:
         for label, path in (
-            ("plan", "docs/execution/PLAN.json"),
-            ("phase", "docs/execution/phases/PHASE_7.md"),
+            ("plan", "docs/archive/execution/PLAN.json"),
+            ("phase", "docs/archive/execution/phases/PHASE_7.md"),
         ):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
                 if label == "plan":
@@ -2706,14 +2706,14 @@ class RepairResumeTests(unittest.TestCase):
                 self._reject(root, failed_sha, "fingerprint")
 
     def test_original_implementation_cannot_change_state(self) -> None:
-        state = json.loads((REPO_ROOT / "docs/execution/STATE.json").read_text(encoding="utf-8"))
+        state = json.loads((REPO_ROOT / "docs/archive/execution/STATE.json").read_text(encoding="utf-8"))
         state["last_updated"] = "changed by implementation"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
             failed_sha, _head = make_repair_history(
                 root,
                 failed_changes={
-                    "docs/execution/STATE.json": json.dumps(state, indent=2) + "\n"
+                    "docs/archive/execution/STATE.json": json.dumps(state, indent=2) + "\n"
                 },
             )
             self._reject(root, failed_sha, "original implementation changed protected")
@@ -2749,11 +2749,11 @@ class RepairResumeTests(unittest.TestCase):
                 "maintenance changed non-control-plane files",
             ),
             "evidence_policy": (
-                "docs/execution/EVIDENCE_POLICY.json",
+                "docs/archive/execution/EVIDENCE_POLICY.json",
                 "maintenance changed the active checkpoint contract fingerprint",
             ),
             "evidence": (
-                {"docs/execution/evidence/7F1.json": b"{}\n"},
+                {"docs/archive/execution/evidence/7F1.json": b"{}\n"},
                 "completion evidence already exists",
             ),
         }
@@ -2775,11 +2775,11 @@ class RepairResumeTests(unittest.TestCase):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
                 root, failed_sha, _head = self._history(directory)
                 if path == "plan":
-                    plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
+                    plan = json.loads((root / "docs/archive/execution/PLAN.json").read_text(encoding="utf-8"))
                     execution_plan.checkpoint_for_id(plan, "7F1")["title"] = "redefined"
-                    files = {"docs/execution/PLAN.json": json.dumps(plan, indent=2) + "\n"}
+                    files = {"docs/archive/execution/PLAN.json": json.dumps(plan, indent=2) + "\n"}
                 else:
-                    files = {"docs/execution/phases/PHASE_7.md": b"redefined active phase\n"}
+                    files = {"docs/archive/execution/phases/PHASE_7.md": b"redefined active phase\n"}
                 commit_test_files(root, files, f"redefine active {path}")
                 self._reject(root, failed_sha, "active checkpoint contract fingerprint")
 
@@ -2788,7 +2788,7 @@ class RepairResumeTests(unittest.TestCase):
         for mutation in mutations:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 root, failed_sha, _head = self._history(directory)
-                state_path = "docs/execution/STATE.json"
+                state_path = "docs/archive/execution/STATE.json"
                 state = json.loads((root / state_path).read_text(encoding="utf-8"))
                 if mutation == "status":
                     state["checkpoints"]["7F"] = "DONE"
@@ -2807,8 +2807,8 @@ class RepairResumeTests(unittest.TestCase):
     def test_repair_orchestration_verifies_current_head_and_never_runs_a_runner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, failed_sha, head = self._history(directory)
-            plan = json.loads((root / "docs/execution/PLAN.json").read_text(encoding="utf-8"))
-            state = json.loads((root / "docs/execution/STATE.json").read_text(encoding="utf-8"))
+            plan = json.loads((root / "docs/archive/execution/PLAN.json").read_text(encoding="utf-8"))
+            state = json.loads((root / "docs/archive/execution/STATE.json").read_text(encoding="utf-8"))
             resolution = {
                 "checkpoint_id": "7F1",
                 "goal_complete_after_current": True,
@@ -2898,7 +2898,7 @@ class SupervisorTests(unittest.TestCase):
 
     def test_historical_resume_allows_only_named_pivot_control_docs(self) -> None:
         agent_supervisor.validate_historical_resume_paths(
-            ["docs/execution/MISSION.json", "docs/PRODUCT_ROADMAP.md"]
+            ["docs/archive/execution/MISSION.json", "docs/PRODUCT_ROADMAP.md"]
         )
         with self.assertRaisesRegex(
             agent_supervisor.SupervisorError, "product files changed after the candidate"
@@ -3101,7 +3101,7 @@ class SupervisorTests(unittest.TestCase):
 
     def test_pre_host_failure_stops_before_hosted_polling_state_change_or_retry(self) -> None:
         plan, state = seven_f_one_plan_state()
-        state_path = REPO_ROOT / "docs/execution/STATE.json"
+        state_path = REPO_ROOT / "docs/archive/execution/STATE.json"
         before_state = state_path.read_bytes()
         baseline_sha = "a" * 40
         implementation_sha = "b" * 40
@@ -3361,18 +3361,18 @@ class SupervisorTests(unittest.TestCase):
     def test_batch_completion_commit_paths_are_exact(self) -> None:
         agent_supervisor.validate_state_commit_paths(
             [
-                "docs/execution/STATE.json",
-                "docs/execution/evidence/A.json",
-                "docs/execution/evidence/B.json",
+                "docs/archive/execution/STATE.json",
+                "docs/archive/execution/evidence/A.json",
+                "docs/archive/execution/evidence/B.json",
             ],
             ["A", "B"],
         )
         with self.assertRaises(agent_supervisor.SupervisorError):
             agent_supervisor.validate_state_commit_paths(
                 [
-                    "docs/execution/STATE.json",
-                    "docs/execution/evidence/A.json",
-                    "docs/execution/evidence/B.json",
+                    "docs/archive/execution/STATE.json",
+                    "docs/archive/execution/evidence/A.json",
+                    "docs/archive/execution/evidence/B.json",
                     "README.md",
                 ],
                 ["A", "B"],

@@ -1,5 +1,7 @@
 # OR UI/UX Acceptance Invariants
 
+Last reviewed: 2026-10-14
+
 ## Purpose
 
 This checklist separates the frozen HTML prototype reference from behavior
@@ -327,5 +329,5 @@ today.
   plugins, and interchange.
 
 Future regression guards must name their checkpoint and remain aligned with
-`docs/execution/PLAN.json`; do not weaken an implemented guard to make a new
+`docs/archive/execution/PLAN.json`; do not weaken an implemented guard to make a new
 feature pass.

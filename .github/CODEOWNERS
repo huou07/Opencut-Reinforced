@@ -1,0 +1,31 @@
+# Default owner for everything; list narrower scopes only when a real
+# reviewer exists. An entry pointing at a person who does not review is worse
+# than no entry, because it looks like coverage that is not there.
+
+* @huou07
+
+# Domain and media invariants. Changes here can corrupt user projects.
+# A skipped review on these paths is a real risk, not a formality.
+/crates/or_core/        @huou07
+/crates/or_media/       @huou07
+
+# Architecture decisions, roadmap and permanent policy. These change what the
+# rest of the repository is allowed to become.
+/docs/adr/              @huou07
+/docs/ARCHITECTURE.md   @huou07
+/docs/TECHNICAL_PLAN.md @huou07
+/docs/AGENT_POLICY.md   @huou07
+/AGENTS.md              @huou07
+/DESIGN.md              @huou07
+
+# Verification gates. A weakening here silently removes a safety net for
+# everyone else.
+/scripts/check-repo.sh           @huou07
+/scripts/check_doc_links.py      @huou07
+/scripts/check_doc_freshness.sh  @huou07
+/scripts/check_claims.py         @huou07
+/.github/workflows/              @huou07
+
+# Release and packaging surface.
+/scripts/package_linux_deb.sh    @huou07
+/docs/RELEASE.md                 @huou07

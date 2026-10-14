@@ -19,7 +19,21 @@ When a required local check is environment-blocked and an equivalent Actions job
 
 ## Local development baseline
 
-Install only the tools needed for the part you are changing. The repository pins Rust 1.98.0; Flutter CI uses Flutter 3.47.5 stable.
+Install only the tools needed for the part you are changing. The workspace MSRV
+is **Rust 1.89** (`rust-version` in the root `Cargo.toml`); the pinned build
+toolchain is **Rust 1.98.0**, declared in `crates/or_app_bridge/rust-toolchain.toml`.
+Flutter CI uses Flutter 3.47.5 stable.
+
+These are two different numbers for two different things: 1.89 is the oldest
+compiler the crate metadata claims to support, 1.98.0 is what the bridge is
+built with. A contributor must satisfy both.
+
+Known gap: there is no workspace-root `rust-toolchain.toml`. The toolchain pin
+lives in one sub-crate, so `rustup` applies it only when the working directory
+is inside that crate. Building the rest of the workspace on an unmanaged host
+uses whatever default toolchain is active. Promoting the pin to the workspace
+root would fix this, but it changes which compiler every crate builds with, so
+it is an explicit decision with hosted verification — not a documentation fix.
 
 Rust checks run from the repository root:
 
@@ -93,25 +107,34 @@ bridge builds therefore receive the per-ABI FFmpeg install root through
 runner install before building the APK. The hook forwards `FFMPEG_DIR`,
 `PKG_CONFIG_PATH`, and `PKG_CONFIG_ALLOW_CROSS` to Cargo for each Android ABI.
 
-The execution supervisor treats these workflows as evidence gates, not merely
-status badges. It uses the GitHub REST API with Python's standard library to
+> **Archival (2026-10-14).** The supervisor that read these workflows as
+> evidence gates belonged to the paused execution framework and no longer runs.
+> Its behaviour is preserved here because it explains how the pre-pivot receipts
+> in `docs/archive/execution/evidence/` were produced. It is not the current
+> verification mechanism.
+
+The execution supervisor treated these workflows as evidence gates, not merely
+status badges. It used the GitHub REST API with Python's standard library to
 match exact `head_sha`, `main` branch, push event, completed status, successful
-conclusion, workflow file/name, and every policy-required job. `GH_TOKEN` is
-preferred over `GITHUB_TOKEN`; public unauthenticated reads remain supported.
-Authenticated polling is 15 seconds, unauthenticated polling is 90 seconds,
-and the default hosted wait is 7200 seconds. Rate-limit exhaustion stops the
-supervisor. Tokens never enter logs, subprocess arguments, or evidence.
+conclusion, workflow file/name, and every policy-required job. `GH_TOKEN` was
+preferred over `GITHUB_TOKEN`; public unauthenticated reads remained supported.
+Authenticated polling was 15 seconds, unauthenticated polling 90 seconds, and
+the default hosted wait 7200 seconds. Rate-limit exhaustion stopped the
+supervisor. Tokens never entered logs, subprocess arguments, or evidence.
 
-For checkpoints that require a preview, the supervisor verifies the existing
+For checkpoints that required a preview, the supervisor verified the existing
 Developer Preview workflow, exact `dev-<first-12-of-SHA>` tag target,
-prerelease flag, successful publish job, all seven package archives,
-`SHA256SUMS.txt`, `BUILD-INFO.txt`, `FFMPEG-BUILD-INFO.txt`, and
-`ffmpeg-8.1.3-source.tar.xz` under the required eleven-asset contract. It may dispatch that existing workflow
-only with an appropriate authenticated token; it never publishes a release
-directly.
+prerelease flag, successful publish job, the five app packages, three desktop CLI
+packages, `SHA256SUMS.txt`, `BUILD-INFO.txt`, `FFMPEG-BUILD-INFO.txt`, and
+`ffmpeg-8.1.3-source.tar.xz`. It could dispatch that existing workflow only with
+an appropriate authenticated token; it never published a release directly.
 
-Pushes changing only `docs/execution/STATE.json` and/or
-`docs/execution/evidence/**` skip Platform verification because the
+Today, verify a requirement by reading its recorded claim in
+[evidence/claims/](evidence/claims/README.md) and inspecting that run's jobs
+directly. Nothing in the repository decides on its own that a requirement is met.
+
+Pushes changing only `docs/archive/execution/STATE.json` and/or
+`docs/archive/execution/evidence/**` skip Platform verification because the
 implementation SHA has already passed it. Repository hygiene still runs for
 that state/evidence commit. Any product, source, configuration, or workflow
 change continues to trigger Platform verification.
@@ -145,7 +168,8 @@ Review third-party agent tooling before installing it. Do not install additional
 
 ## Repository / GitHub safeguards
 
-- `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access.
+- `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access. It then runs three documentation gates: `check_doc_links.py` (relative Markdown links resolve), `check_doc_freshness.sh` (documents making current claims carry a recent `Last reviewed` date), and `check_claims.py` (claim records are well formed and honest about evidence class).
+- What it no longer checks, because the checkpoint framework was paused on 2026-10-14: the execution plan graph, and the `or_core` dependency-boundary architecture policy. Both validators are preserved under `scripts/archive/`. Until they are reinstated, both rules are review obligations rather than automated guarantees. See [SECURITY_LICENSING.md](SECURITY_LICENSING.md).
 - `.github/workflows/repo-hygiene.yml` runs on pull requests, pushes to `main`, and manual dispatch. The repository requires Actions references to use full commit SHAs; the workflow pins `actions/checkout` accordingly.
 - GitHub Actions is enabled. The default `GITHUB_TOKEN` permission is read-only, and workflows cannot approve pull request reviews by default.
 - Dependabot alerts and security updates are enabled. `.github/dependabot.yml` configures weekly updates for GitHub Actions only.

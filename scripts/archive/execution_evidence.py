@@ -225,8 +225,8 @@ def validate_policy(policy: Mapping[str, Any]) -> None:
         "completion_status": "DONE",
         "successor_status": "NEXT",
         "allowed_commit_paths": [
-            "docs/execution/STATE.json",
-            "docs/execution/evidence/{checkpoint_id}.json",
+            "docs/archive/execution/STATE.json",
+            "docs/archive/execution/evidence/{checkpoint_id}.json",
         ],
         "commit_subject_template": "chore(execution): complete {checkpoint_id} after verified CI",
     }:
@@ -1153,8 +1153,8 @@ def platform_verification_runs_for_push(changed_paths: Sequence[str]) -> bool:
     if not changed_paths:
         return False
     return any(
-        path != "docs/execution/STATE.json"
-        and not path.startswith("docs/execution/evidence/")
+        path != "docs/archive/execution/STATE.json"
+        and not path.startswith("docs/archive/execution/evidence/")
         for path in changed_paths
     )
 

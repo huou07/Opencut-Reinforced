@@ -1,5 +1,7 @@
 # Opencut Reinforced Product Vision
 
+Last reviewed: 2026-10-14
+
 ## Status and maturity labels
 
 This is the complete product requirement inventory, not a list of implemented
@@ -19,7 +21,7 @@ workflows. Labels describe intended capability depth:
 Where a product area spans stages, each group of capabilities is labeled separately.
 
 The legacy checkpoint graph and evidence remain in
-[docs/execution/README.md](execution/README.md). They preserve requirement
+[docs/archive/execution/README.md](archive/execution/README.md). They preserve requirement
 traceability; after the authorized 2026 product pivot they do not select the
 next implementation task.
 

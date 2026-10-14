@@ -10,10 +10,11 @@ Last reviewed: 2026-10-13.
 
 Opencut Reinforced (OR) is a public MIT-licensed, cross-platform video editor designed for both direct human editing and deep agent/CLI automation.
 
-The legacy checkpoint ledger is maintained in `docs/execution/STATE.json` and
-`docs/execution/PLAN.json`; it records historical requirement evidence and is
-not the active work cursor after the 2026 open-source convergence pivot. Active
-product priorities and status belong in `docs/PRODUCT_ROADMAP.md`.
+The legacy checkpoint ledger is archived at `docs/archive/execution/STATE.json` and
+`PLAN.json`; it records historical requirement evidence and is not the active
+work cursor after the 2026 open-source convergence pivot. Active product
+priorities and status belong in `docs/PRODUCT_ROADMAP.md`, and completion claims
+are backed by records under `docs/evidence/claims/`.
 
 Do not assume unfinished features already exist.
 
@@ -97,13 +98,9 @@ Before making changes:
 
 Do not guess when the repository already contains the answer.
 
-Before choosing work, read the active roadmap and inspect the legacy execution
-ledger for relevant evidence and dependencies. Run the execution-plan status
-and context commands when reconciling legacy checkpoint evidence, not to
-select the next product task:
-
-    python3 scripts/execution_plan.py status
-    python3 scripts/execution_plan.py context <checkpoint-id>
+Before choosing work, read the active roadmap. Inspect the archived execution
+ledger for relevant evidence and dependencies only when reconciling a past
+checkpoint claim; it never selects the next product task.
 
 When the user says “continue”, continue the highest-value incomplete capability
 in `docs/PRODUCT_ROADMAP.md`. The old `NEXT` cursor is historical and must not
@@ -121,13 +118,12 @@ The execution source-of-truth order is:
 4. `docs/ARCHITECTURE.md` and `docs/TECHNICAL_PLAN.md` for architecture and
    subsystem contracts, amended only through authorized architecture decisions.
 5. `docs/PRODUCT.md` for required product capabilities.
-6. `docs/ROADMAP.md`, `docs/execution/PLAN.json`, `STATE.json`, and
-   `execution/phases/*.md` for preserved legacy requirements, evidence, and
-   historical work contracts. The old `NEXT` field does not select active
-   work after the pivot.
+6. `docs/archive/execution/` — the preserved legacy checkpoint graph, phase
+   specifications and their receipts. Archival: it answers "what was verified
+   then", never "what to do now".
 7. `DESIGN.md` and `docs/UX_ACCEPTANCE.md` for presentation and UX truth.
 
-Feature agents may not edit the locked checkpoint specification or permanent
+Feature agents may not edit the archived checkpoint specification or permanent
 architecture invariants. If repository reality conflicts with either, stop and
 report the exact conflict. Plan amendments require an explicitly authorized
 control-plane task; this convergence pivot authorizes the active product
@@ -139,29 +135,28 @@ product, security, persistence, performance, or acceptance invariants.
 Normal runners implement the exact requirement set authorized by the selected
 goal. They may combine requirements into a coherent change, but may not bypass
 real schema, security, persistence, platform, or API dependencies. They may
-push implementation commits only. They must not edit `PLAN.json`,
-`STATE.json`, phase specifications, architecture
-invariants or policy, execution validators/supervisor, protected workflows, or
-completion evidence. A runner handoff must say `IMPLEMENTED — AWAITING
-SUPERVISOR EVIDENCE`; it must never claim repository-authoritative `DONE`.
-`EVIDENCE_POLICY.json` may only gain named proof bindings for selected
-requirements; all existing bindings and other policy fields remain immutable,
-and the supervisor validates every addition against the plan and hosted job.
+push implementation commits only. They must not edit the archived checkpoint
+specifications, architecture invariants or policy, execution
+validators/supervisor, protected workflows, or existing completion evidence.
+A runner handoff must say `IMPLEMENTED — AWAITING VERIFICATION EVIDENCE`; it
+must never claim repository-authoritative `DONE`.
 
-The supervisor independently verifies the exact implementation SHA against
-the required hosted workflow runs and jobs for every selected requirement,
-verifies Developer Previews where required, writes one evidence record per
-requirement, advances `STATE.json` for that verified dependency-closed set,
-and pushes a state/evidence-only completion commit. A model statement is not
-completion evidence. `MISSION.json` is protected operator control state;
-runners may not change it. `NEXT` is the earliest incomplete-plan cursor, not a
-limit on the selected implementation scope.
+A requirement becomes evidenced when a claim record under
+`docs/evidence/claims/` binds the exact implementation SHA to the hosted run and
+job that verified it, with a UTC timestamp. A model statement is not completion
+evidence. Claim records for requirements a runner did not implement must not be
+edited by that runner.
+
+The archived supervisor remains the historical mechanism that produced the
+pre-pivot receipts. It is paused and no longer advances state: `MISSION.json`
+records `legacy_execution: PAUSED`. Read it when reconciling those receipts; do
+not restart it and do not treat its `STATE.json` as current product status.
 
 ### Product acceptance and repair discipline
 
 The permanent `INV-PRODUCT`, `INV-PACKAGE`, `INV-CAPABILITY`, `INV-PARITY`,
 `INV-PERF`, `INV-UX`, `INV-ACCEPT`, and `INV-VERIFY` rules in
-`docs/execution/ARCHITECTURE_INVARIANTS.md` apply to every checkpoint. A green
+`docs/archive/execution/ARCHITECTURE_INVARIANTS.md` apply to every checkpoint. A green
 unit, bridge, or synthetic test cannot replace a feasible real product journey.
 Packaged capabilities must be tested with packaged dependencies and the
 permission model that users receive. Do not weaken a failed acceptance test
@@ -253,7 +248,7 @@ For documentation-only or local-tooling-only changes where an automated product 
 
 ## CI-first platform verification
 
-Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [docs/TOOLING.md](docs/TOOLING.md).
+Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [TOOLING.md](TOOLING.md).
 
 ## Regression preservation rule
 
@@ -359,14 +354,15 @@ Do not implement this infrastructure until requested, but preserve the architect
 
 ## Documentation structure
 
-Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. Use [docs/INDEX.md](docs/INDEX.md) for the authoritative documentation map. Prefer updating the existing source-of-truth document over creating unnecessary documents.
+Keep AGENTS.md concise: repository rules and a map, not a project encyclopedia. Use [INDEX.md](INDEX.md) for the authoritative documentation map. Prefer updating the existing source-of-truth document over creating unnecessary documents.
 
 ## Document routing
 
 Read the relevant source of truth for the task:
 
 - UI: DESIGN.md, docs/UX_ACCEPTANCE.md, and the relevant section of docs/PRODUCT.md.
-- Product scope: docs/PRODUCT.md and docs/ROADMAP.md.
+- Product scope: docs/PRODUCT.md; active priorities: docs/PRODUCT_ROADMAP.md
+  (`docs/ROADMAP.md` is archival).
 - Architecture: docs/ARCHITECTURE.md and docs/TECHNICAL_PLAN.md.
 - Feature implementation: docs/DEVELOPMENT_WORKFLOW.md.
 - Testing: docs/TESTING.md.

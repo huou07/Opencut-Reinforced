@@ -1,5 +1,7 @@
 # Opencut Reinforced — Agent Guide
 
+Last reviewed: 2026-10-14
+
 OR is an MIT-licensed cross-platform video editor for human editing and structured
 CLI/agent automation. Architectural directions are not implemented capabilities
 or permission to scaffold future subsystems.
@@ -23,17 +25,24 @@ execution evidence, architecture, platform tooling, licensing or release.
 | Security/licensing and release | docs/SECURITY_LICENSING.md, docs/RELEASE.md |
 | Documentation index | docs/INDEX.md |
 | Skill routing | docs/skills.md |
+| What was verified, and what it does not prove | docs/evidence/claims/ |
 
-Legacy docs/ROADMAP.md, execution PLAN/STATE and phase specifications preserve
-requirements and historical evidence. They do not select active work after the
-convergence pivot. Read them only for relevant contracts/dependencies; use
-execution_plan.py status/context only when reconciling that evidence.
+`docs/ROADMAP.md` and everything under `docs/archive/` are archival. They
+preserve requirements, checkpoints and receipts. They never select active work
+after the convergence pivot. Read them only when reconciling past evidence.
+
+This project is registered in the host control workspace (AEH) under the slug
+`or`. From the workspace root, `python3 scripts/hub.py status or` reads Git and
+recorded verification without executing project code; `hub.py verify or` runs
+`bash scripts/check-repo.sh` explicitly. AEH holds no product or task state —
+the authoritative progress source is `docs/PRODUCT_ROADMAP.md`.
 
 ## Investigate and implement
 
 1. Establish branch, HEAD and working tree. Preserve unrelated changes.
-2. Read task-relevant authorities and inspect existing implementation. Use a valid
-   CodeGraph index before broad exploration; verify it against source.
+2. Read task-relevant authorities and inspect existing implementation. When a
+   valid CodeGraph index is available, use it before broad exploration and
+   verify what it reports against source; without one, explore normally.
 3. Define observable completion and change only the requested scope. Reuse code,
    standard/platform facilities and existing dependencies before adding structure.
 4. Preserve validated behaviour, schema, security, persistence, performance,
@@ -64,28 +73,36 @@ any named requirement. Do not reactivate the historical NEXT checkpoint sequence
   evidence accompany UI work; a green build is insufficient.
 - The HTML prototype is product/UX reference, not production architecture.
 
-## Execution evidence and protected state
+## Evidence and protected state
 
-Feature runners must not edit locked checkpoint specifications, permanent
-invariants, PLAN/STATE, phase specs, execution policy/validators/supervisor,
-protected workflows, MISSION or completion evidence. Report an exact conflict
-rather than weakening a contract. Architecture/plan amendments require an
-explicitly authorized control-plane task.
+Feature runners must not edit archived checkpoint specifications, permanent
+invariants, phase specs, architecture policy, protected workflows, or claim
+records for requirements they did not implement. Report an exact conflict rather
+than weakening a contract. Architecture/plan amendments require an explicitly
+authorized control-plane task.
 
-A runner reports IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE, never authoritative
-DONE. The supervisor verifies the exact implementation SHA against required hosted
-jobs and Developer Previews, writes per-requirement evidence and advances only
-the verified dependency-closed set. EVIDENCE_POLICY may gain named proof bindings
-only under its existing validation and immutability rules. See detailed policy
-for the full evidence lock; a model statement cannot establish completion.
+A runner reports IMPLEMENTED — AWAITING VERIFICATION EVIDENCE, never
+authoritative DONE. A requirement becomes evidenced when a record under
+`docs/evidence/claims/` binds the exact implementation SHA to the hosted run and
+job that verified it, names its evidence class, and states what it does not
+establish. `scripts/check_claims.py` validates those records; a model statement
+cannot establish completion.
+
+Two protections were lost when the checkpoint framework was paused on
+2026-10-14 and must be reviewed by hand until they are reinstated: the
+`or_core` dependency-boundary policy checker, and the automated validation of the
+execution plan graph. See `docs/SECURITY_LICENSING.md`.
 
 ## Verification and platform boundaries
 
-Use configured source checks locally. GitHub Actions is canonical for native and
-runtime acceptance. Do not launch OR, native Flutter integration tests, local
-emulators/simulators or physical devices unless the user explicitly requests
-local runtime testing. Do not install/repair/select toolchains, accept licences
-or use sudo for platform setup without explicit local-development authorization.
+Use configured source checks locally. `bash scripts/check-repo.sh` is the
+repository gate: tracked-file hygiene, plus Markdown link resolution, document
+review freshness, and claim-record validity. GitHub Actions is canonical for
+native and runtime acceptance. Do not launch OR, native Flutter integration
+tests, local emulators/simulators or physical devices unless the user explicitly
+requests local runtime testing. Do not install/repair/select toolchains, accept
+licences or use sudo for platform setup without explicit local-development
+authorization.
 
 Report PASS, FAIL, NOT RUN and LOCAL ENVIRONMENT BLOCKED accurately. A skipped or
 synthetic check does not prove a feasible real packaged product journey. Test

@@ -8,7 +8,7 @@ Developer Preview prereleases are **available** on [GitHub Releases](https://git
 
 See the [Developer Preview install and dogfood guide](DEVELOPER_PREVIEW_INSTALL.md) for the current package formats, security limitations, user journey, feedback route, update behavior, and uninstall behavior.
 
-The legacy checkpoint/evidence process is preserved in `docs/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
+The legacy checkpoint/evidence process is preserved in `docs/archive/execution/` for provenance. Current product work and capability evidence follow the outcome-based roadmap; a passing product check is still separate from publishing a stable release.
 
 ## Developer Preview
 
@@ -16,11 +16,17 @@ Developer Preview **releases** are automated nightly or manually dispatched from
 
 For earlier dogfooding, maintainers may manually dispatch the workflow on a
 non-main branch. That validation-only mode requires a successful Platform
-Verification run for the exact PR head SHA, builds five app packages, including
-a Debian 13 / Ubuntu 24.04 amd64 `.deb`, and runs the packaged desktop transcription
-acceptance. It has no
+Verification run for the exact PR head SHA, builds the five app packages
+described below, including a Debian 13 / Ubuntu 24.04 amd64 `.deb`, and runs the
+packaged desktop transcription acceptance. It has no
 release/tag write permission; its app packages are seven-day Actions artifacts,
 not public releases. A failed candidate may upload no desktop package. Main remains the only publication path.
+
+**What "five app packages" means.** The Developer Preview workflow has four
+build jobs, but the Linux job produces two artifacts, so a complete run yields
+five packages: macOS, Windows, Linux tarball, Debian/Ubuntu amd64 `.deb`, and
+Android APK. A candidate that fails a platform legitimately uploads fewer. Count
+packages, not jobs — the two numbers will otherwise be compared by mistake.
 
 Publication requires successful Platform Verification for the exact source
 commit. The tag resolves to that commit, the release is a prerelease, and each

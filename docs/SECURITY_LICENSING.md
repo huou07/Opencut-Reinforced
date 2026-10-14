@@ -1,13 +1,24 @@
 # Security and Licensing
 
+Last reviewed: 2026-10-14
+
 ## Status
 
 This is product guidance, not legal advice. OR is pre-MVP; review exact dependency versions, build options, assets, and model artifacts again before distribution.
 
-The architecture execution lock is [docs/execution/README.md](execution/README.md).
-Its policy checker keeps `or_core` free of runtime/platform dependencies and
-requires an explicit gate before adding wgpu, FFmpeg bindings, native interop,
-AI runtimes, model artifacts, or provider integrations. Checkpoint 7C0 approves
+The architecture execution lock is archived at
+[archive/execution/README.md](archive/execution/README.md). Its rules — keeping
+`or_core` free of runtime/platform dependencies, and requiring an explicit gate
+before adding wgpu, FFmpeg bindings, native interop, AI runtimes, model
+artifacts, or provider integrations — remain permanent requirements, but they are
+now **unenforced by an automated checker**. The policy checker that enforced them
+(`scripts/archive/check_architecture_policy.py`) belonged to the paused execution
+framework and is no longer run by `scripts/check-repo.sh`.
+
+That is a real loss of a safety net. Until the boundary is enforced again, treat
+"no forbidden dependency in `or_core`" as a review obligation on every change
+that adds a dependency, rather than as something the repository guarantees.
+Checkpoint 7C0 approves
 the FFmpeg binding and package strategy for the future media layer; it does not
 add the binding to the production workspace. Runtime capability selection,
 software fallback, model manifests, and secret boundaries are architecture
@@ -54,7 +65,7 @@ This inventory covers direct dependencies, not every transitive crate or Dart pa
 
 Phase 7A adds the internal `or_runtime` workspace crate with only the existing
 `or_core` path dependency and Rust standard-library synchronization primitives.
-It inherits MSRV Rust 1.85 and the repository MIT license, adds no third-party
+It inherits MSRV Rust 1.89 and the repository MIT license, adds no third-party
 runtime or platform library, and carries no native handles, credentials, media
 paths, or provider secrets. Checkpoint 7C0 separately selects the FFmpeg
 binding/version/configuration below; other future runtime dependencies still
@@ -72,7 +83,7 @@ confirms continued 5.1–8.1 support in 6.0.0. The selected FFmpeg version is
 The binding has suitable wrappers
 for demux, codec/decode, frames, software resampling, and software scaling.
 Its build uses bindgen 0.72 plus the runtime `clang` crate, `pkg-config`, and a
-C compiler; MSVC also uses the vcpkg path. The project MSRV remains Rust 1.85.
+C compiler; MSVC also uses the vcpkg path. The project MSRV remains Rust 1.89.
 Linux/macOS source builds use FFmpeg's `configure`/`make`; CMake is not a direct
 `ffmpeg-sys` link requirement. A Windows vcpkg port may have separate CMake
 requirements, which belong in that platform's later build gate.

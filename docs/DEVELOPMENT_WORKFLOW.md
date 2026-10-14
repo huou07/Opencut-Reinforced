@@ -1,45 +1,58 @@
 # Development Workflow
 
+Last reviewed: 2026-10-14
+
 ## Status
 
-This workflow applies to the Phase 3 architecture skeleton and all later implementation. Phase 4A–4F provide project/application foundations, shared command/query/transaction dispatch, exact-base file sessions, bounded `.orproj` storage, recovery, local IPC, and semantic CLI operations. Phase 4UI-1 provides the Flutter visual shell; Phase 4UI-2 connects desktop create/open/save, explicit recovery, dirty-state guards, and Flutter-hosted IPC to one Rust live project host. Phase 5A adds typed media/job identities, structured metadata, a bounded read-only local probe, and CLI inspection. Phase 5B adds the persistent media library, v1-to-v2 migration, prepared import, shared media commands/query, headless and attached CLI operations, and desktop Flutter integration. Phase 5C adds a bounded background Job Manager and a disposable thumbnail/waveform CacheStore. Phase 5D adds bounded source-fingerprint v1, system-`ffmpeg` thumbnail/waveform PNG generation through the Job Manager and CacheStore, typed bridge requests and artifact events, and read-only desktop Media-panel preview consumption. Phase 5E adds a persistent disposable SQLite index and sequence-based LRU eviction under cache pressure. Cache/jobs/index metadata do not mutate canonical project state or increment `ProjectRevision`. Phase 5 is DONE / FOUNDATION COMPLETE. Phase 6A adds the timeline domain and `.orproj` v3 persistence, including v1/v2 migrations and the `MEDIA_IN_USE` removal guard. Phase 6B adds shared track/clip commands, bounded queries, session-local undo/redo, and headless/attached CLI parity. Phase 6C connects those commands and bounded read models to real project track/clip visualization and exact-time dialogs. Phase 6D adds exact trim, split, and track-local ripple-delete commands, compact history recipes, CLI parity, typed bridge methods, and Flutter action dialogs. Phase 6E1 adds pointer move/trim editing, a fixed-threshold canonical snap query, same-kind lane targeting, nearest-ms gesture quantization, stale-result guards, and read-only headless/attached snap inspection. Phase 6E2A adds persistent global markers, schema-v4 migration, marker commands/history/query, marker-aware Snap V2, and headless/attached CLI parity while deliberately leaving Flutter on Snap V1 for that foundation checkpoint. Phase 6E2B adds typed marker bridge/gateway reads, marker UI, canonical marker commands, and Flutter Snap V2 integration with stale guards. Phase 6 is DONE through 6E2B. Phase 7C adds linked software demux/decode and bounded snapshot output queues; 7F0 defines the explicit sequence-rate persistence and exact frame lattice plus the shared viewer transport contract. The 7F implementation connects desktop viewer preview, exact seek/scrubbing, frame-step, play/pause, playhead/ruler, and explicit frame-rate controls to Rust runtime work; native integration verification runs only in hosted CI. Hardware decode and audio-device output remain future work. Phase 8B connects typed track-state commands, bounded single-clip selection and duplicate through the existing insert command, dedicated-handle media-to-timeline drag insertion, and view-only timeline zoom with horizontal scrolling. The 8C implementation adds Inspector editing for typed transform, crop, and opacity values and applies them in preview rendering. Track reorder, multi-select, and linked clips remain future work. See [ROADMAP.md](ROADMAP.md) for the current phase boundary.
+This workflow applies to the current implementation and every later one. The
+phased build history and its completion receipts are preserved in
+[ROADMAP.md](ROADMAP.md) (archival) and
+[execution/](archive/execution/README.md) (archival machine ledger). Active
+priorities and traceability live in [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md);
+this document does not restate them and must never copy a checkpoint status.
 
-## Execution-plan-first workflow
+## Roadmap-first workflow
 
-Before any feature, architecture, or automation work, read the current machine
-state:
+Before any feature, architecture, or automation work, establish what is actually
+next:
+
+1. Read [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) and identify the most valuable
+   incomplete capability. A continuation request ("continue", "next task")
+   selects that capability, not a historical checkpoint.
+2. Check the current machine and repository state:
 
 ```sh
-python3 scripts/execution_plan.py status
-python3 scripts/execution_plan.py context <checkpoint-id>
+git status --short
+git log --oneline -5
 ```
 
-The immutable graph in `docs/execution/PLAN.json` selects the only valid next
-checkpoint; `docs/execution/STATE.json` records `DONE`, `NEXT`, and `PLANNED`.
-“Continue” means the current `NEXT`. A named phase or milestone is resolved by
-the plan, not by prose or model judgment. Without an external fresh-process
-supervisor, one model context executes one checkpoint and stops. Feature agents
-may not edit locked phase specifications or permanent invariants. A conflict
-requires a separate plan amendment/architecture decision rather than a silent
-scope expansion.
+3. Read the task-relevant authorities named in the table in `../AGENTS.md`.
 
-### Execution evidence lock
+The legacy checkpoint graph in `docs/archive/execution/PLAN.json` and its `NEXT` cursor
+are **history, not a work selector**. They are preserved because their receipts
+are real evidence of past work, and they are read only when reconciling that
+evidence or answering a question about a past checkpoint. Do not restart the
+checkpoint sequence, and do not reintroduce the old rule that one model context
+executes exactly one checkpoint.
 
-The feature runner implements one checkpoint and pushes implementation commits
-only. It must leave `PLAN.json`, `STATE.json`, `EVIDENCE_POLICY.json`, phase
-specifications, architecture policy/invariants, execution validators and
-supervisor, protected workflows, and completion evidence unchanged. Its final
-handoff begins `IMPLEMENTED — AWAITING SUPERVISOR EVIDENCE` and leaves the
-checkpoint `NEXT`; a model claim of `DONE` is not authoritative.
+Where the roadmap and the archived ledger disagree about what happened, both are
+true about different things: the ledger records what was verified at the time,
+the roadmap records what the product still needs. Report the disagreement rather
+than editing either to match.
 
-The supervisor captures those protected surfaces before invoking the runner,
-then independently binds successful push-triggered Repository hygiene and
-Platform verification runs—and every required job—to the exact implementation
-SHA. It writes evidence and performs the single state transition only after
-those checks. The resulting commit may contain only `STATE.json` and the one
-checkpoint evidence file. Repository hygiene must pass for that state commit
-before the next fresh runner starts. Use `--resume-sha` to continue hosted
-verification after an interruption without rerunning implementation.
+### Evidence discipline after the pivot
+
+A feature runner implements and pushes; it does not declare a requirement done.
+A completion claim needs a claim record under
+[evidence/claims/](evidence/claims/README.md) naming the exact implementation
+SHA, the hosted run and job that verified it, and the UTC time. A model
+statement is not evidence, and a green local check is not product acceptance.
+
+Feature runners must not edit archived execution specifications, permanent
+architecture invariants, the architecture policy, or claim records for
+requirements they did not implement. Report an exact conflict rather than
+weakening a contract. Architecture or plan amendments require an explicitly
+authorized control-plane task.
 
 Never silently auto-apply a recovery checkpoint over a canonical project whose exact saved base cannot be proven.
 

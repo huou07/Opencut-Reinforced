@@ -1,0 +1,20 @@
+{
+  "requirement": "C-add-to-timeline-position",
+  "claim": "Add to Timeline inserts at the occupied timeline's content end rather than at the timeline origin.",
+  "implementation_sha": "3bf2e6e8980c093072b217ba33c6c91a67e1aa82",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38366017857",
+    "jobs": ["linux", "macos", "windows", "android"],
+    "detail": "Seven jobs passed for this SHA; packaged desktop and Android journeys cover create, import, edit, preview, persistence and export paths."
+  },
+  "verified_at_utc": "2026-10-13T00:00:00Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "Android evidence is from an emulator.",
+    "This record covers insertion position only; it does not establish timeline editing quality or responsiveness.",
+    "The companion change at 4d4c6fb091b5930cb1cbed0769ba83acd1693df9 (Home no longer presents the visual-only editor shell as a usable project) was exercised in the same session but has no separate record."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Most recent interaction work - exact-SHA verified"
+}

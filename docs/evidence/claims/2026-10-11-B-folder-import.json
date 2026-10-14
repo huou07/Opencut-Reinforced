@@ -1,0 +1,21 @@
+{
+  "requirement": "B-folder-import",
+  "claim": "Selecting a folder imports the selected files plus files in its nested subdirectories, through the existing platform picker and permission path, on desktop and Android.",
+  "implementation_sha": "a7f4bf4010c3d3283e788387839edbc6f83a0f3d",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38275213412",
+    "jobs": ["linux", "macos", "windows", "android", "rust", "flutter", "descriptor-boundary"],
+    "also_passed": ["Repository Hygiene"],
+    "detail": "Android DocumentsUI journey imported three selected files plus two nested files under the selected Footage grant, then passed preview, captions, relink, export, recovery and descriptor/resource checks."
+  },
+  "verified_at_utc": "2026-10-11T00:00:00Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "Android evidence is from an emulator; emulator evidence does not establish physical-device performance or responsiveness.",
+    "A prior Android run timed out before reaching the import gateway and passed on rerun; that cause is still unlocalized.",
+    "Large-library cache behaviour and broader offline-media/bulk-relink workflows were not covered."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Folder import - exact-SHA verified"
+}
