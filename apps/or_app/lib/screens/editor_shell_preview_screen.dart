@@ -234,7 +234,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
 
   @override
   State<EditorShellPreviewScreen> createState() =>
-      _EditorShellPreviewScreenState();
+      EditorShellPreviewScreenState();
 }
 
 class _EditorTool {
@@ -258,7 +258,17 @@ const _editorTools = [
   _EditorTool('More', Icons.more_horiz_outlined),
 ];
 
-class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
+class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
+  // The keyboard layer sits above both panels, so a command stays reachable
+  // from whichever panel holds focus, while each command still runs through
+  // the panel that owns the state it changes.
+  final GlobalKey<_ViewerPanelState> _viewerKey = GlobalKey(
+    debugLabel: 'editor viewer',
+  );
+  final GlobalKey<_TimelinePanelState> _timelineKey = GlobalKey(
+    debugLabel: 'editor timeline',
+  );
+
   String _selectedTool = 'Media';
   String? _selectedTrackId;
   String? _selectedClipId;
@@ -346,6 +356,30 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     }
     return null;
   }
+
+  // The shell's Shortcuts map drives these, because that map is the layer
+  // that receives keys; each command still runs through the panel that owns
+  // the state it changes.
+  void togglePlayPause() => _viewerKey.currentState?.togglePlayPause();
+
+  void stepFrame(bool backwards) =>
+      _viewerKey.currentState?.stepFrame(backwards);
+
+  void seekBy(double seconds) => _viewerKey.currentState?.seekBy(seconds);
+
+  void zoomTimelineBy(double factor) => _timelineKey.currentState?.changeZoom(
+    (_timelineKey.currentState?.timelineZoom ?? 1) * factor,
+  );
+
+  void fitTimeline() => _timelineKey.currentState?.fitToView();
+
+  void duplicateSelectedClip() =>
+      _timelineKey.currentState?.duplicateSelectedClip();
+
+  void confirmDeleteSelectedClip() =>
+      _timelineKey.currentState?.confirmDeleteSelectedClip();
+
+  void clearSelection() => _timelineKey.currentState?.clearSelection();
 
   @override
   Widget build(BuildContext context) {
@@ -435,6 +469,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               const VerticalDivider(width: 1),
               Expanded(
                 child: _ViewerPanel(
+                  key: _viewerKey,
                   compact: false,
                   gateway: widget.projectGateway,
                   session: widget.projectSession,
@@ -494,6 +529,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 2,
           child: _TimelinePanel(
+            key: _timelineKey,
             compact: false,
             previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
@@ -545,6 +581,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 4,
           child: _ViewerPanel(
+            key: _viewerKey,
             compact: true,
             gateway: widget.projectGateway,
             session: widget.projectSession,
@@ -578,6 +615,7 @@ class _EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 2,
           child: _TimelinePanel(
+            key: _timelineKey,
             compact: true,
             previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
@@ -1003,6 +1041,15 @@ class _EditorToolRail extends StatelessWidget {
                             color: selected == tool.label
                                 ? OrColors.surface
                                 : Colors.transparent,
+                            // Selection also carries a border, so the rail and
+                            // the mobile dock both express it without relying
+                            // on colour alone.
+                            border: Border.all(
+                              color: selected == tool.label
+                                  ? OrColors.selection
+                                  : Colors.transparent,
+                              width: 1.5,
+                            ),
                             borderRadius: BorderRadius.circular(OrRadii.small),
                           ),
                           child: Column(
@@ -1605,6 +1652,7 @@ String _mediaDisplayName(String sourceUri) {
 
 class _ViewerPanel extends StatefulWidget {
   const _ViewerPanel({
+    super.key,
     required this.compact,
     required this.gateway,
     required this.session,
@@ -1622,8 +1670,20 @@ class _ViewerPanel extends StatefulWidget {
   State<_ViewerPanel> createState() => _ViewerPanelState();
 }
 
+/// The transport commands the editor's key layer dispatches through.
+///
+/// Implemented by the viewer panel, which owns the preview state, so a key and
+/// the transport buttons call the same code.
+mixin _ViewerCommands {
+  void togglePlayPause();
+
+  void stepFrame(bool backwards);
+
+  void seekBy(double seconds);
+}
+
 class _ViewerPanelState extends State<_ViewerPanel>
-    with WidgetsBindingObserver {
+    with _ViewerCommands, WidgetsBindingObserver {
   static const _rateChoices = [
     _FrameRateChoice(
       rate: ProjectRationalRate(24000, 1001),
@@ -1800,6 +1860,66 @@ class _ViewerPanelState extends State<_ViewerPanel>
       _tickInFlight = false;
       if (!_applicationResumed) unawaited(_pauseWhileInactive());
     }
+  }
+
+  /// The transport surface a keyboard command dispatches through.
+  ///
+  /// Implemented by the viewer panel so the key handler calls exactly the
+  /// code the transport buttons call, and nothing else.
+  @override
+  void togglePlayPause() {
+    if (widget.gateway == null ||
+        widget.session == null ||
+        _busy ||
+        _preview == null) {
+      return;
+    }
+    if (_preview!.playing) {
+      unawaited(_run((gateway, session) => gateway.previewPause(session)));
+    } else if (_preview!.contentEnd != null) {
+      unawaited(_run((gateway, session) => gateway.previewPlay(session)));
+    }
+  }
+
+  /// Step one frame. Presentation only.
+  @override
+  void stepFrame(bool backwards) {
+    if (widget.gateway == null || widget.session == null || _busy) return;
+    unawaited(
+      _run(
+        (gateway, session) => gateway.previewStep(
+          session,
+          backwards
+              ? ProjectPreviewFrameStep.previous
+              : ProjectPreviewFrameStep.next,
+        ),
+      ),
+    );
+  }
+
+  /// Seek by a signed number of seconds, clamped to the loaded content.
+  /// Presentation only: no project revision is involved.
+  @override
+  void seekBy(double seconds) {
+    if (widget.gateway == null ||
+        widget.session == null ||
+        _busy ||
+        _preview == null) {
+      return;
+    }
+    final end = _preview!.contentEnd;
+    if (end == null) return;
+    final target = _preview!.position.secondsForDisplay + seconds;
+    if (target.isNaN || target.isInfinite) return;
+    final clamped = target.clamp(0.0, end.secondsForDisplay).toDouble();
+    unawaited(
+      _run(
+        (gateway, session) => gateway.previewSeek(
+          session,
+          ProjectRationalTime(BigInt.from((clamped * 1000).round()), 1000),
+        ),
+      ),
+    );
   }
 
   Future<void> _pauseWhileInactive() async {
@@ -3366,6 +3486,7 @@ class _UnavailableTimelineAction extends StatelessWidget {
 
 class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
+    super.key,
     required this.compact,
     required this.previewState,
     required this.isProjectWorkspace,
@@ -3408,6 +3529,7 @@ class _TimelinePanel extends StatefulWidget {
   });
 
   final bool compact;
+
   final ValueListenable<ProjectPreviewState?> previewState;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
@@ -3519,6 +3641,7 @@ class _TimelinePanel extends StatefulWidget {
 class _TimelinePanelState extends State<_TimelinePanel> {
   final Map<String, GlobalKey> _laneKeys = {};
   final FocusNode _timelineFocusNode = FocusNode(debugLabel: 'Timeline');
+
   final ScrollController _horizontalController = ScrollController();
   _TimelinePointerGesture? _gesture;
   _TimelineSnapGuide? _snapGuide;
@@ -3721,7 +3844,6 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     return Focus(
       focusNode: _timelineFocusNode,
       autofocus: true,
-      onKeyEvent: _handleTimelineKey,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final labels = _timelineTrackLabels(snapshot.items);
@@ -4092,6 +4214,62 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     );
   }
 
+  /// Current zoom, so a zoom key steps from where the timeline already is.
+  double get timelineZoom => _timelineZoom;
+
+  void changeZoom(double zoom) => _changeTimelineZoom(zoom);
+
+  void fitToView() {
+    if (_fitTimelineToView) return;
+    setState(() => _fitTimelineToView = true);
+    if (_horizontalController.hasClients) {
+      _horizontalController.jumpTo(0);
+    }
+  }
+
+  void duplicateSelectedClip() {
+    final project = widget.project;
+    final clip = _selectedClip;
+    final track = _selectedTrack;
+    if (project == null ||
+        clip == null ||
+        track == null ||
+        track.state.locked ||
+        widget.busy ||
+        widget.onDuplicateClip == null) {
+      return;
+    }
+    unawaited(widget.onDuplicateClip!(project, track, clip));
+  }
+
+  void confirmDeleteSelectedClip() {
+    final clip = _selectedClip;
+    final track = _selectedTrack;
+    final project = widget.project;
+    final onDelete = widget.onDeleteClip;
+    if (clip == null ||
+        track == null ||
+        track.state.locked ||
+        project == null ||
+        onDelete == null ||
+        widget.busy) {
+      return;
+    }
+    unawaited(
+      _confirmDeleteTimelineClip(
+        context: context,
+        project: project,
+        clip: clip,
+        onDelete: onDelete,
+      ),
+    );
+  }
+
+  void clearSelection() {
+    if (_selectedClipId == null) return;
+    _clearSelection();
+  }
+
   void _changeTimelineZoom(double zoom) {
     final leftTime = _horizontalController.hasClients && _pixelsPerSecond > 0
         ? _horizontalController.offset / _pixelsPerSecond
@@ -4147,47 +4325,6 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       return;
     }
     unawaited(onDuplicate(project, track, clip));
-  }
-
-  KeyEventResult _handleTimelineKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.escape &&
-        _selectedClipId != null) {
-      _clearSelection();
-      return KeyEventResult.handled;
-    }
-    final clip = _selectedClip;
-    final track = _selectedTrack;
-    if (clip == null || track == null || widget.busy) {
-      return KeyEventResult.ignored;
-    }
-    final hasShortcutModifier =
-        HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed;
-    if (hasShortcutModifier &&
-        event.logicalKey == LogicalKeyboardKey.keyD &&
-        !track.state.locked &&
-        widget.onDuplicateClip != null) {
-      _duplicateSelectedClip();
-      return KeyEventResult.handled;
-    }
-    if ((event.logicalKey == LogicalKeyboardKey.delete ||
-            event.logicalKey == LogicalKeyboardKey.backspace) &&
-        !track.state.locked &&
-        widget.onDeleteClip != null &&
-        widget.project != null &&
-        node.context != null) {
-      unawaited(
-        _confirmDeleteTimelineClip(
-          context: node.context!,
-          project: widget.project!,
-          clip: clip,
-          onDelete: widget.onDeleteClip!,
-        ),
-      );
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   void _beginMoveGesture(
@@ -7213,34 +7350,65 @@ class _MobileToolDock extends StatelessWidget {
                     : tool.label == 'Inspector' && hasClipSelection
                     ? 'Edit selected clip settings'
                     : '${tool.label} — unavailable in this Developer Preview',
-                child: OrFocusRing(
-                  child: InkWell(
-                    key: ValueKey('mobile-editor-tool-${_toolKey(tool.label)}'),
-                    onTap: () => onSelected(tool.label),
-                    child: SizedBox(
-                      width: 62,
-                      height: 56,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            tool.icon,
-                            size: 18,
+                // The dock carries the same semantics as the desktop tool
+                // rail, so an icon-only control is not silent to a screen
+                // reader on one layout and not the other.
+                child: Semantics(
+                  button: true,
+                  selected: selected == tool.label,
+                  label: tool.label == 'Media' && isProjectWorkspace
+                      ? 'Media library'
+                      : tool.label == 'Inspector' && hasClipSelection
+                      ? 'Clip settings'
+                      : tool.label,
+                  child: OrFocusRing(
+                    child: InkWell(
+                      key: ValueKey(
+                        'mobile-editor-tool-${_toolKey(tool.label)}',
+                      ),
+                      onTap: () => onSelected(tool.label),
+                      child: Container(
+                        width: 62,
+                        height: 56,
+                        // Selection is carried by a fill and a border as
+                        // well as colour, so it survives a colour-blind or
+                        // greyscale reading.
+                        decoration: BoxDecoration(
+                          color: selected == tool.label
+                              ? OrColors.surface
+                              : Colors.transparent,
+                          border: Border.all(
                             color: selected == tool.label
-                                ? OrColors.textSecondary
-                                : OrColors.textMuted,
+                                ? OrColors.selection
+                                : Colors.transparent,
+                            width: 1.5,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            _shortToolLabel(tool.label),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: OrColors.textMuted,
-                              fontSize: OrType.tinySize,
+                          borderRadius: BorderRadius.circular(OrRadii.small),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              tool.icon,
+                              size: 18,
+                              color: selected == tool.label
+                                  ? OrColors.textSecondary
+                                  : OrColors.textMuted,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 3),
+                            Text(
+                              _shortToolLabel(tool.label),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: selected == tool.label
+                                    ? OrColors.textSecondary
+                                    : OrColors.textMuted,
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

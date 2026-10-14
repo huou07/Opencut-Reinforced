@@ -22,6 +22,7 @@ import '../screens/settings_screen.dart';
 import '../screens/templates_screen.dart';
 import '../widgets/or_widgets.dart';
 import 'app_navigation.dart';
+import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
 
@@ -135,53 +136,143 @@ class _AppShellState extends State<AppShell> {
 
         return Shortcuts(
           shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                _OpenCommandPaletteIntent(),
-            SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-                _OpenCommandPaletteIntent(),
-            SingleActivator(LogicalKeyboardKey.keyS, control: true):
-                _SaveProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.keyS, meta: true):
-                _SaveProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-                _UndoProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
-                _UndoProjectIntent(),
-            SingleActivator(
-              LogicalKeyboardKey.keyZ,
-              control: true,
-              shift: true,
-            ): _RedoProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-                _RedoProjectIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyK):
+                OpenCommandPaletteIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyS): SaveProjectIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true):
+                RedoProjectIntent(),
+            SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(
+              -1,
+            ),
+            SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(
+              1,
+            ),
+            SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+                StepPreviewFrameIntent(true),
+            SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+                StepPreviewFrameIntent(false),
+            SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(
+              true,
+            ),
+            SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(
+              false,
+            ),
+            SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
+            SingleActivator(LogicalKeyboardKey.numpadAdd): ZoomTimelineIntent(
+              1.25,
+            ),
+            SingleActivator(LogicalKeyboardKey.minus): ZoomTimelineIntent(0.8),
+            SingleActivator(LogicalKeyboardKey.numpadSubtract):
+                ZoomTimelineIntent(0.8),
+            SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyD):
+                DuplicateTimelineClipIntent(),
+            SingleActivator(LogicalKeyboardKey.delete):
+                DeleteTimelineClipIntent(),
+            SingleActivator(LogicalKeyboardKey.backspace):
+                DeleteTimelineClipIntent(),
+            SingleActivator(LogicalKeyboardKey.escape):
+                ClearTimelineSelectionIntent(),
           },
           child: Actions(
             actions: {
-              _OpenCommandPaletteIntent:
-                  CallbackAction<_OpenCommandPaletteIntent>(
+              OpenCommandPaletteIntent:
+                  CallbackAction<OpenCommandPaletteIntent>(
                     onInvoke: (_) {
                       unawaited(_openCommandPalette());
                       return null;
                     },
                   ),
-              _SaveProjectIntent: CallbackAction<_SaveProjectIntent>(
+              SaveProjectIntent: CallbackAction<SaveProjectIntent>(
                 onInvoke: (_) {
                   if (!_textInputFocused) unawaited(_saveProject());
                   return null;
                 },
               ),
-              _UndoProjectIntent: CallbackAction<_UndoProjectIntent>(
+              UndoProjectIntent: CallbackAction<UndoProjectIntent>(
                 onInvoke: (_) {
                   if (!_textInputFocused) unawaited(_undoProject());
                   return null;
                 },
               ),
-              _RedoProjectIntent: CallbackAction<_RedoProjectIntent>(
+              RedoProjectIntent: CallbackAction<RedoProjectIntent>(
                 onInvoke: (_) {
                   if (!_textInputFocused) unawaited(_redoProject());
                   return null;
                 },
               ),
+              // Editor transport. The shell owns the map, because its own
+              // Shortcuts is the layer that actually receives keys; the
+              // editor hands the commands up through a GlobalKey.
+              PlayPausePreviewIntent: CallbackAction<PlayPausePreviewIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.togglePlayPause();
+                  }
+                  return null;
+                },
+              ),
+              StepPreviewFrameIntent: CallbackAction<StepPreviewFrameIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.stepFrame(intent.backwards);
+                  }
+                  return null;
+                },
+              ),
+              SeekPreviewIntent: CallbackAction<SeekPreviewIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.seekBy(intent.seconds);
+                  }
+                  return null;
+                },
+              ),
+              ZoomTimelineIntent: CallbackAction<ZoomTimelineIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.zoomTimelineBy(intent.factor);
+                  }
+                  return null;
+                },
+              ),
+              FitTimelineIntent: CallbackAction<FitTimelineIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.fitTimeline();
+                  }
+                  return null;
+                },
+              ),
+              DuplicateTimelineClipIntent:
+                  CallbackAction<DuplicateTimelineClipIntent>(
+                    onInvoke: (_) {
+                      if (editor && !_textInputFocused) {
+                        _editorKey.currentState?.duplicateSelectedClip();
+                      }
+                      return null;
+                    },
+                  ),
+              DeleteTimelineClipIntent:
+                  CallbackAction<DeleteTimelineClipIntent>(
+                    onInvoke: (_) {
+                      if (editor && !_textInputFocused) {
+                        _editorKey.currentState?.confirmDeleteSelectedClip();
+                      }
+                      return null;
+                    },
+                  ),
+              ClearTimelineSelectionIntent:
+                  CallbackAction<ClearTimelineSelectionIntent>(
+                    onInvoke: (_) {
+                      if (editor && !_textInputFocused) {
+                        _editorKey.currentState?.clearSelection();
+                      }
+                      return null;
+                    },
+                  ),
             },
             child: Focus(
               autofocus: true,
@@ -253,6 +344,12 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// The editor's command surface, so the shell's single Shortcuts map can
+  /// drive the transport and timeline the editor owns.
+  final GlobalKey<EditorShellPreviewScreenState> _editorKey = GlobalKey(
+    debugLabel: 'editor shell preview',
+  );
+
   bool get _textInputFocused =>
       FocusManager.instance.primaryFocus?.context?.widget is EditableText;
 
@@ -297,6 +394,7 @@ class _AppShellState extends State<AppShell> {
       _activeSession == null
           ? const EditorShellPreviewScreen()
           : EditorShellPreviewScreen(
+              key: _editorKey,
               isProjectWorkspace: true,
               project: _activeProject,
               projectGateway: widget.projectGateway,
@@ -3704,22 +3802,6 @@ class _RecoveryPreparation {
   final bool proceed;
   final String? notice;
   final _RecoveryMutation? mutation;
-}
-
-class _OpenCommandPaletteIntent extends Intent {
-  const _OpenCommandPaletteIntent();
-}
-
-class _SaveProjectIntent extends Intent {
-  const _SaveProjectIntent();
-}
-
-class _UndoProjectIntent extends Intent {
-  const _UndoProjectIntent();
-}
-
-class _RedoProjectIntent extends Intent {
-  const _RedoProjectIntent();
 }
 
 bool _sameProjectIdentity(ProjectReadModel first, ProjectReadModel second) =>

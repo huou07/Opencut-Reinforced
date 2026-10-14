@@ -182,6 +182,13 @@ headless or widget-level checks:
     structural rule; a drag-looking grip without a handler is a defect.
   - Every transient message goes through the shared `OrSnackBar`, so the shell
     and the editor cannot diverge.
+  - Editor transport and timeline keys resolve through the shell's single
+    `Shortcuts`/`Actions` map and dispatch the same `ProjectGateway` preview
+    calls as the pointer transport controls; a command does not fire while a
+    text field holds focus.
+  - The mobile tool dock exposes the same semantics as the desktop tool rail,
+    and selection in both is carried by a fill and a border rather than by
+    colour alone.
 
 ## PRODUCTION REQUIRED FUTURE
 

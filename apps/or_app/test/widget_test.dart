@@ -3850,6 +3850,58 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the mobile tool dock matches the desktop rail semantically', (
+    tester,
+  ) async {
+    // An icon-only control must not be silent on one layout and not the
+    // other, and its selection must be perceivable without colour.
+    final picker = _FakeProjectPicker()..savePath = '/tmp/dock-parity.orproj';
+    _setViewport(tester, const Size(390, 844));
+    await _mount(tester, picker: picker);
+    await _createProject(tester, 'Dock parity');
+    final handle = tester.ensureSemantics();
+
+    final key = find.byKey(const ValueKey('mobile-editor-tool-media'));
+    expect(key, findsOneWidget);
+
+    expect(
+      tester.getSemantics(key).flagsCollection.isButton,
+      isTrue,
+      reason: 'the dock must expose a button the way the tool rail does',
+    );
+    expect(
+      tester.getSemantics(key).label.trim(),
+      isNotEmpty,
+      reason: 'an icon-only dock control needs a semantic label',
+    );
+
+    // Selecting a tool marks it selected for a screen reader and paints a
+    // border, so selection is never carried by colour alone.
+    await tester.tap(key);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(key).flagsCollection.isSelected,
+      ui.Tristate.isTrue,
+    );
+
+    final box = tester
+        .widgetList<Container>(
+          find.descendant(of: key, matching: find.byType(Container)),
+        )
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere(
+          (decoration) => decoration.border?.top.color == OrColors.selection,
+        );
+
+    expect(box.border, isNotNull, reason: 'selection needs a non-colour cue');
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
   test('the editor divider never presents a drag grip without a handler', () {
     const editorPath = 'lib/screens/editor_shell_preview_screen.dart';
     final source = File(editorPath).readAsStringSync();
