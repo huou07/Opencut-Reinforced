@@ -24,6 +24,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | Active outcome-based product roadmap and legacy requirement mapping |
 | [evidence/PRODUCT_ROADMAP_HISTORY.md](evidence/PRODUCT_ROADMAP_HISTORY.md) | Archived exact-run product journey investigations; historical status snapshots only |
 | [evidence/local-transcription-poc.md](evidence/local-transcription-poc.md) | Pinned whisper.cpp and model feasibility proof for local caption proposals |
+| [evidence/dont-giveup-soon-archived-skill.md](evidence/dont-giveup-soon-archived-skill.md) | Archived text of the retired project-local persistence skill; archival data, not an activatable instruction |
 | [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md) | Evidence-backed reuse/build/upstream decisions and license boundaries |
 | [TESTING.md](TESTING.md) | Current bootstrap checks, planned verification layers, and reporting rules |
 | [SECURITY_LICENSING.md](SECURITY_LICENSING.md) | Product trust boundaries, dependency and content licenses |
