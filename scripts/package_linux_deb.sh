@@ -132,7 +132,7 @@ version="0.0.0~preview.$run_number.$run_attempt+$(cut -c1-12 <<< "$source_sha")"
 } > "$stage/DEBIAN/control"
 
 mkdir -p "$(dirname -- "$output")"
-dpkg-deb --build --root-owner-group --compression=xz --compression-level=6 "$stage" "$output"
+dpkg-deb --build --root-owner-group -Zxz -z6 "$stage" "$output"
 dpkg-deb --info "$output"
 package_entries="$(dpkg-deb --contents "$output")"
 for entry in "usr/share/applications/$desktop_entry" "usr/share/doc/$package_name/copyright" "opt/opencut-reinforced/or_app"; do
