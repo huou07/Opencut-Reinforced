@@ -114,7 +114,7 @@ dependency_output="$(cd "$work" && dpkg-shlibdeps -O --ignore-missing-info -S"de
 dependencies="$(sed -n 's/^shlibs:Depends=//p' <<< "$dependency_output")"
 test -n "$dependencies"
 # Flutter loads EGL at runtime, so dpkg-shlibdeps cannot discover this dependency.
-dependencies+=", libegl1"
+dependencies+=", libegl1, libgles2"
 
 run_number="${GITHUB_RUN_NUMBER:-0}"
 run_attempt="${GITHUB_RUN_ATTEMPT:-1}"
