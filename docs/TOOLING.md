@@ -35,6 +35,34 @@ uses whatever default toolchain is active. Promoting the pin to the workspace
 root would fix this, but it changes which compiler every crate builds with, so
 it is an explicit decision with hosted verification — not a documentation fix.
 
+### Local toolchain PATH
+
+`cargo` and `rustc` are on `PATH`, but `rustup` is not, and Flutter's Rust
+native-assets hook needs `rustup` on `PATH` to build the bridge. Without it,
+`flutter test` fails with:
+
+```
+RustBuilder: Failed to invoke "rustup [show, active-toolchain]"
+RustProcessException: Failed to invoke rustup; is it installed?
+```
+
+That failure is an environment gap, not a source defect. To fix it for a local
+run, export both the toolchain home and the binary path:
+
+```sh
+export RUSTUP_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/rustup
+export CARGO_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/cargo
+export PATH="/home/huou07/.cargo/bin:/home/agents-worker/.agent-workbench-runtime-v6/opt/flutter/bin:$PATH"
+rustup show active-toolchain   # expect 1.98.0-x86_64-unknown-linux-gnu
+```
+
+Known gap: the `rustup` binary currently resolves from the owner's home
+directory. That is not a stable location for the worker to depend on — a
+permission change there would silently break local Flutter verification. The
+durable fix is for the owner to place `rustup` and the Flutter SDK under the
+shared `/opt/agent-workbench` tree alongside the other tools, which is an
+owner action and not something an agent should assume.
+
 Rust checks run from the repository root:
 
 ```sh

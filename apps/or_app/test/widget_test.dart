@@ -3902,86 +3902,83 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets(
-    'the empty timeline names every way out through semantics',
-    (tester) async {
-      // A new project opens on an empty timeline, so these three controls are
-      // the only way forward. A screenshot proves they are painted; only
-      // semantics proves a screen-reader user can tell what they do. Every
-      // operable control in this state must therefore be a labelled button.
-      final picker = _FakeProjectPicker()..savePath = '/tmp/semantics-exit.orproj';
-      _setViewport(tester, const Size(1280, 800));
-      await _mount(tester, picker: picker);
-      await _createProject(tester, 'Semantics exits');
-      final handle = tester.ensureSemantics();
+  testWidgets('the empty timeline names every way out through semantics', (
+    tester,
+  ) async {
+    // A new project opens on an empty timeline, so these three controls are
+    // the only way forward. A screenshot proves they are painted; only
+    // semantics proves a screen-reader user can tell what they do. Every
+    // operable control in this state must therefore be a labelled button.
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/semantics-exit.orproj';
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(tester, picker: picker);
+    await _createProject(tester, 'Semantics exits');
+    final handle = tester.ensureSemantics();
 
-      for (final key in const [
-        ValueKey('timeline-empty-import-media'),
-        ValueKey('timeline-empty-add-video'),
-        ValueKey('timeline-empty-add-audio'),
-      ]) {
-        final finder = find.byKey(key);
-        expect(
-          finder,
-          findsOneWidget,
-          reason: 'the empty timeline must keep $key reachable',
-        );
-
-        final semantics = tester.getSemantics(finder);
-        expect(
-          semantics.flagsCollection.isButton,
-          isTrue,
-          reason: '$key must expose a button to assistive technology',
-        );
-        expect(
-          semantics.label.trim(),
-          isNotEmpty,
-          reason: '$key needs an accessible name, not just an icon',
-        );
-      }
-
-      expect(tester.takeException(), isNull);
-      handle.dispose();
-    },
-  );
-
-  testWidgets(
-    'importing media announces the source it added',
-    (tester) async {
-      // The representative journey, end to end and without sight: create a
-      // project, import a file, and confirm the imported media becomes
-      // perceivable. This asserts the outcome of a real interaction rather
-      // than the presence of a widget.
-      final gateway = _FakeProjectGateway();
-      final picker = _FakeProjectPicker()
-        ..savePath = '/tmp/semantics-import.orproj'
-        ..mediaPath = '/tmp/semantics-import.mp4';
-      _setViewport(tester, const Size(1280, 800));
-      await _mount(tester, gateway: gateway, picker: picker);
-      await _createProject(tester, 'Semantics import');
-
-      final handle = tester.ensureSemantics();
-      await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
-      await tester.pumpAndSettle();
-
-      expect(picker.mediaOpenCalls, 1, reason: 'the import must really run');
-      expect(gateway.importMediaCalls, 1);
-
-      // The added item must be perceivable, not only painted. Reading the
-      // semantics node for the rendered label is the same assertion the
-      // dock-parity test makes, applied to the imported media.
-      final imported = find.text('semantics-import.mp4');
-      expect(imported, findsOneWidget);
+    for (final key in const [
+      ValueKey('timeline-empty-import-media'),
+      ValueKey('timeline-empty-add-video'),
+      ValueKey('timeline-empty-add-audio'),
+    ]) {
+      final finder = find.byKey(key);
       expect(
-        tester.getSemantics(imported).label,
-        contains('semantics-import.mp4'),
-        reason: 'the imported source must be announced once it is on the page',
+        finder,
+        findsOneWidget,
+        reason: 'the empty timeline must keep $key reachable',
       );
 
-      expect(tester.takeException(), isNull);
-      handle.dispose();
-    },
-  );
+      final semantics = tester.getSemantics(finder);
+      expect(
+        semantics.flagsCollection.isButton,
+        isTrue,
+        reason: '$key must expose a button to assistive technology',
+      );
+      expect(
+        semantics.label.trim(),
+        isNotEmpty,
+        reason: '$key needs an accessible name, not just an icon',
+      );
+    }
+
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
+  testWidgets('importing media announces the source it added', (tester) async {
+    // The representative journey, end to end and without sight: create a
+    // project, import a file, and confirm the imported media becomes
+    // perceivable. This asserts the outcome of a real interaction rather
+    // than the presence of a widget.
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/semantics-import.orproj'
+      ..mediaPath = '/tmp/semantics-import.mp4';
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Semantics import');
+
+    final handle = tester.ensureSemantics();
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1, reason: 'the import must really run');
+    expect(gateway.importMediaCalls, 1);
+
+    // The added item must be perceivable, not only painted. Reading the
+    // semantics node for the rendered label is the same assertion the
+    // dock-parity test makes, applied to the imported media.
+    final imported = find.text('semantics-import.mp4');
+    expect(imported, findsOneWidget);
+    expect(
+      tester.getSemantics(imported).label,
+      contains('semantics-import.mp4'),
+      reason: 'the imported source must be announced once it is on the page',
+    );
+
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
 
   test('the editor divider never presents a drag grip without a handler', () {
     const editorPath = 'lib/screens/editor_shell_preview_screen.dart';
