@@ -745,22 +745,14 @@ jobs:
           provider adapter is built from this repository. Model weights are not
           bundled and are downloaded only after user confirmation.
           EOF
-          cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$runtime/licenses/FFmpeg/COPYING.LGPLv2.1"
-          cp "$codec_notices/OPUS-COPYING" "$runtime/licenses/Opus/COPYING"
-          cp "$codec_notices/LIBVPX-LICENSE" "$runtime/licenses/libvpx/LICENSE"
-          cp "$codec_notices/LIBVPX-PATENTS" "$runtime/licenses/libvpx/PATENTS"
-          cat > "$runtime/licenses/FFmpeg/FFmpeg-NOTICE.txt" <<'EOF'
-          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
-          The corresponding FFmpeg source archive and exact build configuration
-          are distributed as Developer Preview release assets. FFmpeg shared
-          libraries are separate files beside the Rust bridge and may be replaced
-          with a compatible LGPL-compliant build under the applicable license terms.
-          The ffmpeg and ffprobe programs beside the application binary are built
-          from the same source and configuration for import, media previews,
-          and WebM export. FFmpeg's WebM export statically links libvpx and
-          libopus; their licenses and the libvpx patent notice are included in
-          the adjacent Opus and libvpx directories.
-          EOF
+          # The FFmpeg/Opus/libvpx layout is shared with platform-verification
+          # rather than written out again here. Writing it per workflow and per
+          # platform is how the Platform Verification Linux job came to be missing
+          # it while this workflow had it, and why that failure was silent.
+          bash scripts/stage_codec_licences.sh stage \
+            "$runtime" \
+            "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" \
+            "$codec_notices"
           "$runtime/whisper-cli" --version
           test -x "$runtime/or-whisper-provider"
           echo "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY=$runtime" >> "$GITHUB_ENV"
@@ -816,28 +808,12 @@ jobs:
           helper_rpath='$ORIGIN/'"$(realpath --relative-to="$helpers" "$runtime_dir")"
           patchelf --set-rpath "$helper_rpath" "$helpers/ffmpeg" "$helpers/ffprobe"
           readelf -d "$helpers/ffmpeg" | grep -F "$helper_rpath"
-          notices="$bundle/licenses/FFmpeg"
-          mkdir -p "$notices"
-          cp "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" "$notices/COPYING.LGPLv2.1"
-          opus_notices="$bundle/licenses/Opus"
-          vpx_notices="$bundle/licenses/libvpx"
-          mkdir -p "$opus_notices" "$vpx_notices"
-          codec_notices="$RUNNER_TEMP/ffmpeg-verification/desktop-export-codecs"
-          cp "$codec_notices/OPUS-COPYING" "$opus_notices/COPYING"
-          cp "$codec_notices/LIBVPX-LICENSE" "$vpx_notices/LICENSE"
-          cp "$codec_notices/LIBVPX-PATENTS" "$vpx_notices/PATENTS"
-          cat > "$notices/FFmpeg-NOTICE.txt" <<'EOF'
-          This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
-          The corresponding FFmpeg source archive and exact build configuration
-          are distributed as Developer Preview release assets. FFmpeg shared
-          libraries are separate files beside the Rust bridge and may be replaced
-          with a compatible LGPL-compliant build under the applicable license terms.
-          The ffmpeg and ffprobe programs beside the application binary are built
-          from the same source and configuration for import, media previews,
-          and WebM export. FFmpeg's WebM export statically links libvpx and
-          libopus; their licenses and the libvpx patent notice are included in
-          the adjacent Opus and libvpx directories.
-          EOF
+          # Same layout as the seeded runtime above: this job distributes two
+          # directories, so both need the licence tree. One script, two targets.
+          bash scripts/stage_codec_licences.sh stage \
+            "$bundle" \
+            "$RUNNER_TEMP/ffmpeg-verification/FFmpeg-COPYING.LGPLv2.1" \
+            "$RUNNER_TEMP/ffmpeg-verification/desktop-export-codecs"
           env -u LD_LIBRARY_PATH python3 - "$bridge" <<'PY'
           import ctypes
           import sys

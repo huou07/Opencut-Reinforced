@@ -15,18 +15,66 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "source SHA must be 40 lowercase hexadecimal characters" >&2; exit 2; }
-test -x "$bundle/or_app"
-test -x "$bundle/ffmpeg"
-test -x "$bundle/ffprobe"
-test -s "$bundle/licenses/FFmpeg/COPYING.LGPLv2.1"
-test -s "$bundle/licenses/FFmpeg/FFmpeg-NOTICE.txt"
-test -s "$bundle/licenses/Opus/COPYING"
-test -s "$bundle/licenses/libvpx/LICENSE"
-test -s "$bundle/licenses/libvpx/PATENTS"
-command -v dpkg-deb >/dev/null
-command -v dpkg-shlibdeps >/dev/null
-command -v readelf >/dev/null
-command -v desktop-file-validate >/dev/null
+
+# Preconditions are checked by a reporter rather than bare `test` calls, and all
+# failures are reported at once. A bare `test -x` under `set -e` exits with no
+# output at all, so a missing bundle file presents as "the step failed in 13 ms
+# and printed nothing" — which is what happened here and cost a full CI round to
+# even locate. A packaging script that cannot say what it is missing is its own
+# defect, separate from whatever it was missing.
+missing=()
+
+require_file() {  # path, kind (executable|non-empty)
+  local path="$1" kind="$2"
+  if [[ ! -e "$path" ]]; then
+    missing+=("missing: $path")
+  elif [[ "$kind" == "executable" && ! -x "$path" ]]; then
+    missing+=("not executable: $path")
+  elif [[ "$kind" == "non-empty" && ! -s "$path" ]]; then
+    missing+=("empty: $path")
+  fi
+}
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 || missing+=("missing tool on PATH: $1 (install the package that provides it)")
+}
+
+if [[ ! -d "$bundle" ]]; then
+  echo "packaging failed: the Flutter Linux bundle does not exist: $bundle" >&2
+  echo "  build it first, for example: (cd apps/or_app && flutter build linux --debug)" >&2
+  exit 1
+fi
+
+require_file "$bundle/or_app" executable
+require_file "$bundle/ffmpeg" executable
+require_file "$bundle/ffprobe" executable
+require_tool dpkg-deb
+require_tool dpkg-shlibdeps
+require_tool readelf
+require_tool desktop-file-validate
+
+# The licence file list lives in stage_codec_licences.sh, which is what every
+# job calls to create it. Asking that script to verify keeps the requirement and
+# the producer on one list: this script used to carry its own copy, which is how
+# it came to demand files no platform-verification job was staging.
+if ! bash "$script_dir/stage_codec_licences.sh" verify "$bundle"; then
+  missing+=("the packaged licence tree is incomplete (listed above)")
+fi
+
+if (( ${#missing[@]} )); then
+  echo "packaging failed: $(( ${#missing[@]} )) precondition(s) not met for $bundle" >&2
+  printf '  %s\n' "${missing[@]}" >&2
+  cat >&2 <<'HINT'
+
+  The licences/ tree is staged by the CI job, not by this script. A bundle built
+  by hand will not have it. In .github/workflows/platform-verification.yml the
+  "Package FFmpeg beside the desktop probe" step calls
+  scripts/stage_codec_licences.sh; if a licences/ file is reported missing above,
+  check that step rather than this one.
+HINT
+  exit 1
+fi
+
 desktop-file-validate "$repo_root/apps/or_app/linux/packaging/$desktop_entry"
 
 work="$(mktemp -d)"

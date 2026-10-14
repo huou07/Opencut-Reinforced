@@ -24,6 +24,7 @@ required_files=(
   docs/INDEX.md
   docs/PRODUCT.md
   docs/PROJECT_FORMAT.md
+  scripts/stage_codec_licences.sh
   docs/ARCHITECTURE.md
   docs/TECHNICAL_PLAN.md
   docs/DEVELOPMENT_WORKFLOW.md
@@ -161,11 +162,14 @@ fi
 # Lint the repository's own shell gates. A gate that fails to parse is worse
 # than no gate: it looks like a passing check.
 if command -v shellcheck >/dev/null 2>&1; then
-  for shell_script in scripts/check_doc_freshness.sh scripts/check-repo.sh; do
+  # Every shell script the repository ships, not a hand-picked list. A gate that
+  # lints only the files someone remembered to add is how an unlinted script
+  # reaches CI and fails there instead.
+  while IFS= read -r shell_script; do
     if ! shellcheck -S warning "$shell_script"; then
       fail "shellcheck reported problems in $shell_script"
     fi
-  done
+  done < <(find scripts -name '*.sh' -not -path 'scripts/archive/*' | sort)
 else
   printf 'WARN: shellcheck not available; shell gates were not linted\n' >&2
 fi
