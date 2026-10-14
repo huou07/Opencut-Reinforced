@@ -11,8 +11,8 @@
 set -uo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
-cd "$repo_root"
+repo_root="$(git -C "$script_dir/.." rev-parse --show-toplevel)" || exit 1
+cd "$repo_root" || exit 1
 
 max_days="${1:-120}"
 failed=0

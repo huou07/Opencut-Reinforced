@@ -10,14 +10,20 @@ The architecture execution lock is archived at
 [archive/execution/README.md](archive/execution/README.md). Its rules — keeping
 `or_core` free of runtime/platform dependencies, and requiring an explicit gate
 before adding wgpu, FFmpeg bindings, native interop, AI runtimes, model
-artifacts, or provider integrations — remain permanent requirements, but they are
-now **unenforced by an automated checker**. The policy checker that enforced them
-(`scripts/archive/check_architecture_policy.py`) belonged to the paused execution
-framework and is no longer run by `scripts/check-repo.sh`.
+artifacts, or provider integrations — remain permanent requirements.
 
-That is a real loss of a safety net. Until the boundary is enforced again, treat
-"no forbidden dependency in `or_core`" as a review obligation on every change
-that adds a dependency, rather than as something the repository guarantees.
+The dependency boundary is enforced again. `scripts/check_or_core_deps.py` reads
+`crates/or_core/Cargo.toml` and fails repository hygiene when a direct
+dependency matches a GPU, media, audio, text-shaping, scripting or AI-runtime
+pattern. It replaces `scripts/archive/check_architecture_policy.py`, which
+enforced the same rule only as a side effect of validating the paused execution
+plan, and it fails loudly when it can no longer read the manifest rather than
+passing on an empty result.
+
+What remains a review obligation: whether a dependency that passes the boundary
+is the *right* one, and the accompanying provenance, maintenance and licence
+review below. The checker proves a category is absent; it does not judge a
+category that is allowed.
 Checkpoint 7C0 approves
 the FFmpeg binding and package strategy for the future media layer; it does not
 add the binding to the production workspace. Runtime capability selection,

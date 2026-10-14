@@ -88,10 +88,17 @@ job that verified it, names its evidence class, and states what it does not
 establish. `scripts/check_claims.py` validates those records; a model statement
 cannot establish completion.
 
-Two protections were lost when the checkpoint framework was paused on
-2026-10-14 and must be reviewed by hand until they are reinstated: the
-`or_core` dependency-boundary policy checker, and the automated validation of the
-execution plan graph. See `docs/SECURITY_LICENSING.md`.
+`scripts/check_or_core_deps.py` enforces the `or_core` dependency boundary in
+repository hygiene: GPU, media, audio, text-shaping, scripting and AI-runtime
+layers must not be reachable from the crate that owns canonical project state.
+Adding a dependency that trips it is a gated decision, not a formatting change —
+record an architecture decision rather than widening the pattern list.
+
+Execution-plan graph validation was lost with the paused framework and has not
+been reinstated. It guarded a frozen ledger, so there is nothing live to
+validate; the equivalent live rule is that `PRODUCT_ROADMAP.md` must not restate
+a checkpoint status, which `docs/DEVELOPMENT_WORKFLOW.md` states and
+`scripts/check_doc_freshness.sh` keeps current.
 
 ## Verification and platform boundaries
 

@@ -1,0 +1,32 @@
+# Gitleaks configuration for this repository.
+#
+# Purpose: keep secret scanning strict, and record every suppression with a
+# reason so a future reviewer can challenge it. An unexplained allowlist entry
+# is how a real leak survives.
+#
+#   gitleaks detect --source . -c .gitleaks.toml
+#
+# Repository hygiene does not run gitleaks — CI secret scanning and push
+# protection do. This file exists so a local run and a review agree on what is
+# suppressed.
+
+[extend]
+# Use gitleaks' own defaults for rules; add only repository-specific exceptions.
+useDefault = true
+
+[[allowlists]]
+description = """
+False positive, verified 2026-10-14. `docs/execution/automation/README.md` was a
+prose document about orchestrator capability discovery and was removed before
+this commit. The `generic-api-key` rule matched a run of ordinary English words
+in a sentence enumerating capability-discovery fields; entropy 3.55 is ordinary
+prose. The file is not tracked at HEAD and does not exist on disk.
+
+Kept as a path-scoped exception rather than deleting history, because the commit
+also contains real work and rewriting published history is worse than a
+documented, narrowly scoped suppression. If the path is ever reintroduced with
+actual key material, remove this entry before merging.
+"""
+paths = [
+  '''docs/execution/automation/README\.md''',
+]

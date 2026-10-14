@@ -150,6 +150,26 @@ if ! python3 scripts/check_claims.py; then
   failed=1
 fi
 
+# `or_core` owns canonical project state, so GPU, media, audio, text-shaping,
+# scripting and AI-runtime layers must not be reachable from it. This replaces
+# the boundary check that only ran as a side effect of the paused execution
+# plan validator.
+if ! python3 scripts/check_or_core_deps.py; then
+  failed=1
+fi
+
+# Lint the repository's own shell gates. A gate that fails to parse is worse
+# than no gate: it looks like a passing check.
+if command -v shellcheck >/dev/null 2>&1; then
+  for shell_script in scripts/check_doc_freshness.sh scripts/check-repo.sh; do
+    if ! shellcheck -S warning "$shell_script"; then
+      fail "shellcheck reported problems in $shell_script"
+    fi
+  done
+else
+  printf 'WARN: shellcheck not available; shell gates were not linted\n' >&2
+fi
+
 if (( failed != 0 )); then
   printf 'Repository hygiene checks failed.\n' >&2
   exit 1
