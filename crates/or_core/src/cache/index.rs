@@ -2,12 +2,36 @@ use super::{CACHE_INDEX_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey}
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params, types::Type,
 };
-use std::{collections::HashMap, fs, path::Path, time::Duration};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock, Weak},
+    time::Duration,
+};
 
 pub(super) const MAX_CACHE_INDEX_ENTRIES: usize = 100_000;
 const CACHE_INDEX_FILE: &str = "cache-index.sqlite3";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(1);
 const MAX_SCANNED_DIRECTORY_ENTRIES: usize = MAX_CACHE_INDEX_ENTRIES * 4;
+
+// Serialize cold starts per root; SQLite coordinates the subsequent operations.
+fn initialization_lock(root: &Path) -> Arc<Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> = OnceLock::new();
+
+    let registry = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut locks = registry
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    locks.retain(|_, lock| lock.strong_count() > 0);
+    if let Some(lock) = locks.get(root).and_then(Weak::upgrade) {
+        return lock;
+    }
+
+    let lock = Arc::new(Mutex::new(()));
+    locks.insert(root.to_path_buf(), Arc::downgrade(&lock));
+    lock
+}
 
 #[derive(Default)]
 pub(super) struct IndexState {
@@ -26,7 +50,13 @@ impl std::fmt::Debug for IndexState {
 impl IndexState {
     pub(super) fn connection(&mut self, root: &Path) -> Result<&mut Connection, CacheError> {
         if self.connection.is_none() {
-            self.connection = Some(open_and_reconcile(root)?);
+            let initialization_lock = initialization_lock(root);
+            let _guard = initialization_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.connection.is_none() {
+                self.connection = Some(open_and_reconcile(root)?);
+            }
         }
         Ok(self
             .connection
