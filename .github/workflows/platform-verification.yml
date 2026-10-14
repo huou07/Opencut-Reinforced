@@ -561,6 +561,11 @@ jobs:
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: python3 scripts/run_packaged_desktop_journey.py
 
+      - name: Verify macOS ZIP install, replacement, and removal
+        run: >-
+          python3 scripts/test_desktop_archive_install.py
+          apps/or_app/build/macos/Build/Products/Debug/or_app.app
+
   linux:
     name: Linux native build
     runs-on: ubuntu-24.04
@@ -782,16 +787,6 @@ jobs:
           if readelf -d "$helpers/ffprobe" | grep -F "$FFMPEG_INSTALL_PREFIX"; then exit 1; fi
           env -u LD_LIBRARY_PATH "$helpers/ffprobe" -hide_banner -version
           env -u LD_LIBRARY_PATH "$helpers/ffmpeg" -hide_banner -encoders | grep -q " png "
-          # Stage the third-party licence tree that Debian packaging requires.
-          # This job used to omit it entirely while developer-preview.yml staged
-          # it, so package_linux_deb.sh failed on its first missing-file check and
-          # exited under `set -e` before printing anything: a 13 ms failure with no
-          # output. The layout now lives in one script that both workflows call,
-          # because five hand-written copies of one contract is how they drifted.
-          bash scripts/stage_codec_licences.sh stage \
-            "$helpers" \
-            "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1" \
-            "$RUNNER_TEMP/desktop-export-codecs"
 
       - name: Measure packaged decoder sessions
         run: |
@@ -813,6 +808,20 @@ jobs:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: python3 scripts/run_packaged_desktop_journey.py
+
+      - name: Stage package notices after the Flutter journey build
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/debug/bundle"
+          # The packaged journey runs `flutter test -d linux`, whose install step
+          # clears the bundle and removes files staged by earlier build steps.
+          # Stage notices after that final bundle mutation so the .deb contains
+          # the complete third-party license tree.
+          bash scripts/stage_codec_licences.sh stage \
+            "$bundle" \
+            "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1" \
+            "$RUNNER_TEMP/desktop-export-codecs"
+          bash scripts/stage_codec_licences.sh verify "$bundle"
 
       - name: Verify Debian package installation and user-data safety
         run: |
@@ -1198,6 +1207,12 @@ jobs:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: python scripts/run_packaged_desktop_journey.py
+
+      - name: Verify Windows ZIP install, replacement, and removal
+        shell: pwsh
+        run: >-
+          python scripts/test_desktop_archive_install.py
+          apps/or_app/build/windows/x64/runner/Debug
 
       - name: Preserve Windows FFmpeg source and runtime provenance
         if: always() && steps.ffmpeg-build.outcome == 'success'
