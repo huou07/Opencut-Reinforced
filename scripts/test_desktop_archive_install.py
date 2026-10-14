@@ -90,7 +90,7 @@ def launch_from_install(executable: Path, install_dir: Path, *, windows: bool) -
     ):
         env.pop(name, None)
     if windows:
-        system_root = Path(env["SystemRoot"])
+        system_root = Path(env["SYSTEMROOT"])
         env["PATH"] = os.pathsep.join(
             (str(executable.parent), str(system_root / "System32"), str(system_root))
         )
