@@ -29,8 +29,13 @@ The 2026-10-15 local run used Flutter 3.47.7/Dart 3.13.5, Rust 1.98.0 and Debian
 system media libraries against 21bfb3aa6891 plus the working diff. It passed in
 18.02s on the final warm run, with at least 7,752,691,712 bytes MemAvailable.
 This is developer evidence, not packaged acceptance or a performance benchmark.
-CI pins Flutter 3.47.5; the targeted Linux UI workflow must independently verify
-its exact source. Existing macOS/Windows/Android/package safeguards remain intact.
+The independent [Linux UI run 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316)
+passed analyzer, six focused component/semantics tests and the actual Linux
+journey at exact source `66164227f3e39aa32567890eb88850d54ff9aa37`, using the
+canonical Flutter 3.47.5 pin. Its seven-day artifact contains selected states,
+semantics and resource metadata. Local verification also passed all 97 widget
+tests and the repository guard. Existing macOS/Windows/Android/package safeguards
+remain intact; they were not rerun for this debug-only claim.
 
 Actual semantics inspection found that custom clip/trim nodes had button flags
 and labels but no activation action. Their tap action now opens the existing

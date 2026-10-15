@@ -55,9 +55,10 @@ The 2026-10-15 quality pass adds a bounded Linux debug journey and executable
 semantics actions for custom timeline clips/trim handles. Local Rust-backed
 create/import/recovery/edit/undo/seek/save-reopen and selected screenshots ran;
 [testing evidence](TESTING.md#evidence-selection-and-bounded-linux-preflight)
-records scope and rendering limitations. The targeted hosted UI lane remains
-pending until its exact source passes. This does not advance packaged, preview
-rendering, media playback or cross-platform acceptance claims.
+records scope and rendering limitations. Exact source `66164227f3e39aa32567890eb88850d54ff9aa37`
+passed [hosted Linux UI preflight 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316).
+This accepts the scoped Linux debug journey; it does not advance packaged,
+preview rendering, media playback or cross-platform acceptance claims.
 
 ## Product acceptance target
 
