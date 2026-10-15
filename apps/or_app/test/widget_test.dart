@@ -1313,6 +1313,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('timeline clip exposes an executable semantic activation', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'semantic-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'semantic-track': [
+          ProjectTimelineClip(
+            clipId: 'semantic-clip',
+            mediaId: 'semantic-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/semantic-clip.orproj',
+    );
+    await _createProject(tester, 'Semantic clip');
+    final handle = tester.ensureSemantics();
+    final clip = find.bySemanticsLabel(RegExp('starts 0/1, duration 2/1'));
+    final node = tester.getSemantics(clip);
+    expect(node.flagsCollection.isButton, isTrue);
+    expect(
+      node.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+      isTrue,
+      reason: node.toStringDeep(),
+    );
+    for (final label in [
+      'Trim start of Media semantic',
+      'Trim end of Media semantic',
+    ]) {
+      final trim = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(
+        trim.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+        reason: trim.toStringDeep(),
+      );
+    }
+    tester.binding.performSemanticsAction(
+      ui.SemanticsActionEvent(
+        type: ui.SemanticsAction.tap,
+        nodeId: node.id,
+        viewId: tester.view.viewId,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-duplicate-semantic-clip')),
+      findsOneWidget,
+    );
+    handle.dispose();
+  });
+
   testWidgets('timeline duplicate preserves exact source range', (
     tester,
   ) async {

@@ -6,6 +6,45 @@ Last reviewed: 2026-10-14
 
 Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. Phase 6A adds timeline-domain validation, strict `.orproj` v3 codec and v1/v2 migration, recovery and storage compatibility, query-wire regression, and referenced-media removal guard coverage. Phase 6B adds application command/history/query coverage, headless and attached semantic CLI tests, save/reopen and undo-save storage checks, recovery snapshot/apply/reload checks, and transaction/precondition regression coverage. Phase 6C adds bridge DTO tests, Flutter widget coverage for read-only track/clip presentation and command interactions, bounded and stale page handling, and a hosted native Rust-host timeline lifecycle test through save/reopen. Phase 6D adds exact trim/split/ripple core invariants, compact history/conflict/overflow/capacity guards, CLI changed-only save and attached dirty-state parity, Flutter action/dialog acceptance, and hosted typed-bridge save/reopen coverage. Phase 6E2A adds marker ID/domain/order/bounds tests, strict v4 codec and v1/v2/v3 migration tests, clean-open/explicit-save storage tests, v1 recovery with v3 and v4 nested snapshots, semantic marker command/history/conflict/transaction/revision tests, bounded marker query and sub-1 MiB page tests, Snap V1/V2 schema/tie/read-only tests, headless/attached CLI parity, and local IPC coverage without changing Flutter marker APIs or UI. Phase 7A adds deterministic `or_runtime` coverage for exact snapshot revision/time identity, frame descriptor and lease ownership, bounded queue pressure/close/cancellation, separate render/audio/decode budget release, and software-first capability/provider selection. Phase 7B adds deterministic `or_render` contract coverage, offscreen wgpu synthetic rendering, row-padded readback normalization, resource-owned frame lifetime, and handle-only viewer presentation checks. Phase 7C0 adds a locked, hosted Linux FFmpeg 8.1.3 shared-library compile/link/load probe under an LGPL-only configuration. 7F1 adds deterministic viewer-mailbox tests and hosted macOS/Linux/Windows builds that compile a desktop packaging probe against production `or_media`, stage official FFmpeg 8.1.3 shared libraries beside that probe in the app bundle, verify loading without developer FFmpeg search paths, and preserve source/build provenance. The shared Flutter bridge remains FFmpeg-independent; Phase 9A0 separately builds and packages the approved Android shared libraries and validates the native runtime on an x86_64 emulator. It does not add FFmpeg dependencies to Android product code or to Flutter widget tests. Phase 7F builds the native Flutter pixel-buffer texture adapters but does not add a product viewer or playback controls. The 7C implementation adds bounded/stale/cancellable `or_media` queues, exact timestamp/seek checks, owned software RGBA frame tests, and a linked audio resample/range test with a tiny generated FFV1/PCM fixture. CI runs the production crate against the approved FFmpeg 8.1.3 shared prefix. Checkpoint 8F adds local export/autosave coverage; its authoritative milestone status remains gated on hosted supervisor evidence. The test layers below distinguish implemented coverage from future product tests.
 
+## Evidence selection and bounded Linux preflight
+
+Use the shared AEH evidence vocabulary for new claims while retaining historical
+phase/claim records. Source checks establish VERIFIED_SOURCE; actual Flutter
+semantics establish VERIFIED_SEMANTIC; asserted command outcomes establish
+VERIFIED_BEHAVIORAL. Target screenshots/measurements establish selected
+VERIFIED_VISUAL claims; actual app/package runs establish only their named
+VERIFIED_NATIVE scope. ACCEPTED still requires the authoritative exact-SHA
+hosted claim/owner gate. These classes do not automatically promote one another.
+
+`python3 scripts/run_linux_ui_preflight.py` runs one native Linux debug app
+under Xvfb with a generated one-second, 16,044-byte WAV and temporary project/
+application state. The production Rust gateway handles create, invalid import,
+retry/import, timeline insertion, keyboard duplicate, undo, seek and save/reopen.
+Only the file picker is substituted; OS picker and installed package acceptance
+remain separate. Export setup is opened/cancelled without a media render.
+Two rendered app-state PNGs, a clip semantics dump and source/command/resource
+metadata are written under ignored apps/or_app/build/ui-preflight.
+
+The 2026-10-15 local run used Flutter 3.47.7/Dart 3.13.5, Rust 1.98.0 and Debian's
+system media libraries against 21bfb3aa6891 plus the working diff. It passed in
+18.02s on the final warm run, with at least 7,752,691,712 bytes MemAvailable.
+This is developer evidence, not packaged acceptance or a performance benchmark.
+CI pins Flutter 3.47.5; the targeted Linux UI workflow must independently verify
+its exact source. Existing macOS/Windows/Android/package safeguards remain intact.
+
+Actual semantics inspection found that custom clip/trim nodes had button flags
+and labels but no activation action. Their tap action now opens the existing
+clip/exact-trim action path. The regression invokes the real semantics action;
+standard widgets were retained without blanket wrappers. Decorative waveform/
+grid pixels need no semantic nodes. Timeline mutation assertions read Rust state;
+the screenshots cannot substitute for those assertions.
+
+The screenshot set exposes rendering limitations separately: the Linux audio-only
+preflight can show Viewer texture unavailable, and inspector/media text may be
+crowded in the default 1280x720 debug window. This run does not accept preview
+video rendering, full visual polish, performance, audio playback or other OSes.
+Review platform-specific native screenshots rather than imposing pixel identity.
+
 ## Current Phase 3 checks
 
 - Rust unit tests cover core bootstrap values and bridge DTO mapping; CLI contract tests execute the real binary and verify human output, JSON, help, and invalid input.
@@ -50,7 +89,7 @@ GitHub-hosted Actions is canonical for platform correctness, linker-dependent bu
 
 Android FFmpeg cross-link probes target API 26, matching the packaged app's `minSdk` and the Opus/libvpx target. Keeping these API levels aligned preserves Opus production hardening while ensuring the probe uses the same Android C library exports available to supported installs.
 
-Local native/runtime execution is disallowed by default: do not launch OR, an emulator/simulator, or an attached device for verification; do not run native Flutter integration tests that launch OR, manually smoke-test the GUI, or open a built/downloaded Developer Preview. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+The owner now permits the bounded Linux developer preflight described above. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.

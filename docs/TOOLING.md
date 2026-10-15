@@ -4,6 +4,12 @@ This tooling supports contributors and maintainers; it is not part of the Opencu
 
 ## Verification model
 
+The owner permits the bounded Debian Linux developer journey described in
+[TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight), using
+`scripts/run_linux_ui_preflight.py`. This explicit exception permits a small
+Xvfb/native run; the default restrictions below still apply outside that scope.
+It does not authorize an emulator, long render or cross-platform packaging.
+
 Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
 
 By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. If local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.

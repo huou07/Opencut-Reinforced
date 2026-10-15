@@ -43,7 +43,9 @@ Human UI, CLI, and AI agents should eventually operate on the same underlying co
 
 Project mutations must go through the documented command/application path; clients and workers must not directly mutate canonical project state.
 
-Do not build agent automation by visually clicking UI controls when a structured command/API can represent the operation.
+Use the structured command/API for ordinary agent operations. To verify a UI
+claim, exercise its real controls and assert the resulting shared project state;
+a direct API call cannot establish UI behavior. Screenshots answer visual claims.
 
 Long-term preferred direction:
 
@@ -247,6 +249,13 @@ If a test cannot run because of a real environment limitation:
 For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
 
 ## CI-first platform verification
+
+The owner-authorized exception is the bounded Debian Linux developer preflight
+in [TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight).
+It uses one native job/compiler worker, small synthetic fixtures, a shared lock,
+headroom checks and a timeout. No emulator, cross-platform package matrix or
+long media render. Local Linux debug evidence does not replace hosted package
+acceptance. Existing authorization does not require another permission request.
 
 Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [TOOLING.md](TOOLING.md).
 

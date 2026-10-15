@@ -5624,6 +5624,7 @@ class _TimelineTrackLane extends StatelessWidget {
         child: Semantics(
           button: true,
           selected: clip.clipId == selectedClipId,
+          onTap: () => onOpenClip(clip),
           label:
               '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
           hint: 'Drag to move. Activate for clip actions.',
@@ -5699,7 +5700,8 @@ class _TimelineTrackLane extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        hint: 'Drag to adjust the timeline edge.',
+        onTap: () => onOpenClip(clip),
+        hint: 'Drag to adjust the timeline edge. Activate for exact trim actions.',
         child: _TimelinePointerSurface(
           key: ValueKey(
             'timeline-trim-handle-${start ? 'start' : 'end'}-${clip.clipId}',

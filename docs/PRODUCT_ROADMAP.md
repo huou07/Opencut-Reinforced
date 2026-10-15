@@ -51,6 +51,14 @@ not physical-device performance. The earlier transcription WAV handoff, pinned
 Whisper proof, and proposal contract are recorded in the
 [transcription integration note](evidence/local-transcription-poc.md).
 
+The 2026-10-15 quality pass adds a bounded Linux debug journey and executable
+semantics actions for custom timeline clips/trim handles. Local Rust-backed
+create/import/recovery/edit/undo/seek/save-reopen and selected screenshots ran;
+[testing evidence](TESTING.md#evidence-selection-and-bounded-linux-preflight)
+records scope and rendering limitations. The targeted hosted UI lane remains
+pending until its exact source passes. This does not advance packaged, preview
+rendering, media playback or cross-platform acceptance claims.
+
 ## Product acceptance target
 
 A non-developer can install a supported package, understand the workspace,
