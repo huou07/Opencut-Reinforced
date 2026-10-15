@@ -22,6 +22,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Canonical high-level architecture and current implementation status |
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
+| [Continuation prompt](prompts/CONTINUE-OR.md) | Independent agent handoff; first-project journey and current host/CI boundaries |
 | [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | **Active** outcome-based product roadmap and legacy requirement mapping |
 | [evidence/claims/README.md](evidence/claims/README.md) | Claim evidence: what was verified, by which run, and what it does not establish |
 | [evidence/PRODUCT_ROADMAP_HISTORY.md](evidence/PRODUCT_ROADMAP_HISTORY.md) | Archived exact-run product journey investigations; historical status snapshots only |

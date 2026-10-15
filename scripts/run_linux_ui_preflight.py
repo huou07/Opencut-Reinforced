@@ -24,6 +24,31 @@ def available_memory() -> int:
     raise RuntimeError("MemAvailable is unavailable")
 
 
+def writable_cargo_cache(environment: dict[str, str]) -> None:
+    """Copy only public registry/Git sources; never copy credentials or config."""
+    seed = Path(environment.get("CARGO_HOME", ""))
+    if not seed.is_absolute() or not seed.is_dir() or os.access(seed, os.W_OK):
+        return
+    target = APP / ".dart_tool/aeh-cargo"
+    if target.is_symlink():
+        raise RuntimeError("BLOCKED: redirected project Cargo cache")
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="or-cargo-seed-", dir=APP / ".dart_tool") as staging:
+            prepared = Path(staging) / "cargo"
+            prepared.mkdir()
+            for name in ("registry", "git"):
+                if (seed / name).is_dir():
+                    shutil.copytree(seed / name, prepared / name, symlinks=True)
+            (prepared / "AEH_PROVENANCE.json").write_text(json.dumps({
+                "seed": str(seed), "copied": ["registry", "git"],
+                "excluded": "credentials, config and installed executables",
+            }, indent=2) + "\n")
+            prepared.rename(target)
+    environment["CARGO_HOME"] = str(target)
+    environment["CARGO_NET_OFFLINE"] = "true"
+
+
 def main() -> int:
     if available_memory() < 6 * GIB or shutil.disk_usage(APP).free < 6 * GIB:
         raise RuntimeError("BLOCKED: require 6 GiB available RAM and disk before starting")
@@ -41,6 +66,7 @@ def main() -> int:
         env = dict(os.environ, CARGO_BUILD_JOBS="1", CMAKE_BUILD_PARALLEL_LEVEL="1",
                    LIBGL_ALWAYS_SOFTWARE="1", GDK_BACKEND="x11",
                    OR_UI_ARTIFACT_DIR=str(artifacts))
+        writable_cargo_cache(env)
         command = ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24",
                    "flutter", "test", "--no-pub", "-d", "linux",
                    "integration_test/linux_editor_preflight_test.dart"]
@@ -78,8 +104,8 @@ def main() -> int:
                 except ProcessLookupError:
                     pass
         evidence = {
-            "source": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-            "dirty": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+            "source": subprocess.check_output(["git", "-c", f"safe.directory={ROOT}", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            "dirty": subprocess.check_output(["git", "-c", f"safe.directory={ROOT}", "status", "--porcelain"], cwd=ROOT, text=True),
             "command": command, "exit_code": result, "reason": reason,
             "elapsed_seconds": round(time.monotonic() - started, 2),
             "minimum_available_ram_bytes": minimum,
