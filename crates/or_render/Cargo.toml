@@ -9,7 +9,7 @@ license.workspace = true
 or_core = { path = "../or_core" }
 or_runtime = { path = "../or_runtime" }
 # wgpu 25.0.2 is the pinned render backend; its upstream license is MIT OR Apache-2.0.
-wgpu = { version = "=25.0.2", default-features = false, features = [
+wgpu = { version = "=30.0.1", default-features = false, features = [
     "wgsl",
     "vulkan",
     "gles",
