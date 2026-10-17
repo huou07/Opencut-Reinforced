@@ -214,8 +214,9 @@ headless or widget-level checks:
   omitted when their region is shorter than 60 px. A headless regression
   mounts the editor at 320x480 and 320x440; taller compact viewports such as
   390x844 remain clean. This is source implementation with local developer
-  evidence (Flutter 3.47.7, 98 widget tests and a clean analyzer); exact-SHA
-  hosted verification is recorded in
+  evidence (Flutter 3.47.7, a clean analyzer, and the widget suite — run
+  `flutter test` for the current count rather than a number written here);
+  exact-SHA hosted verification is recorded in
   [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
 - The create-project journey at the emulator-sized 320x640 viewport, which the
   Android SAF acceptance run uses, had no working overflow guard: the committed
@@ -229,6 +230,15 @@ headless or widget-level checks:
 
 These items are required by the execution plan but are not production claims
 today.
+
+> **Status correction, 2026-10-17.** Part of Phase 7 has shipped since this
+> section was written. `docs/RELEASE.md` claims desktop play/pause, exact seek,
+> scrubbing and frame stepping, and a texture-backed viewer surface exists in
+> `apps/or_app/lib/screens/editor_shell_preview_screen.dart`. Read the Phase 7
+> bullets below as the remaining acceptance conditions for that work, not as
+> evidence that the feature is absent. The earlier contradiction between this
+> section and RELEASE.md was a documentation defect; the source and the hosted
+> evidence decide, and anything not covered by them stays `UNVERIFIED`.
 
 ### Phase 7 playback and preview
 
