@@ -17,6 +17,32 @@ do not discard, blindly stage or publish unrelated changes. The public Actions
 API returned no runs for that inspected HEAD; older roadmap runs do not validate
 this tree.
 
+Dated inspection, 2026-10-17 (paused mid-session): branch
+feat/semantics-journey-guards, HEAD 16b74e1f56b00868ad1d968700f0301feb0054e6, in
+sync with origin apart from the local handoff commit that records this note.
+`git status --short` was `?? docs/prompts/FINISH-OR.md`, the session prompt
+written by the harness and not this worker's file to commit; nothing else was
+dirty and no background job was left running. Landed this session: 726f194 runs
+the bounded Linux preflight from a writable project-local Flutter SDK overlay
+because the shared SDK cache is read-only under a workspace-restricted sandbox,
+and decides cache reuse with a real write probe because `os.access` reports
+those ACLs as writable; 5255a0d keeps already-rendered media previews when a
+later 50-item library page loads; 6232528 records that fix's evidence and
+corrects a stale UX-acceptance sentence; 16b74e1 restores real overflow
+detection on the 320x640 create-project guard, whose committed probe replaced
+`FlutterError.onError` and so could never fail. The last completed command was
+`python3 scripts/run_linux_ui_preflight.py` (deferred behind a headroom watcher
+while an unrelated `h07p-lab` VM held ~2.4 GB): the Linux debug journey passed in
+8 s after the overlay build, exit 0, recorded in
+apps/or_app/build/ui-preflight/run.json. Hosted CI for 16b74e1 was still running
+when the owner paused: Repository hygiene and Linux UI preflight had passed, and
+Platform verification run 39018753306 was in progress, so its macOS, Windows and
+Android jobs are unconfirmed for that SHA. PR #15 remains open and unmerged. Next
+action: read `gh run view 39018753306`, repair a genuine failure if one appears,
+otherwise continue to the next roadmap journey — the broader offline-media and
+bulk-relink workflow is still unimplemented, and real-user feedback, Android
+transcription and physical-device responsiveness remain unverified.
+
 ## Implement the next useful outcome
 
 The active roadmap identifies ordinary-user feedback as the highest-value gap.
