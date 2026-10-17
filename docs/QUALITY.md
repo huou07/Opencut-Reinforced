@@ -24,32 +24,56 @@ Not claimed: pixel-identical parity across platforms, Android audio, a packaged
 |---|---|---|---|---|
 | Correctness | acceptance gate passes | `bash scripts/acceptance.sh` | acceptance | see recorded result |
 | Correctness (source) | hygiene, docs, claims, core dependency boundary | `bash scripts/check-repo.sh` | verify | see recorded result |
-| Performance | no benchmark budget exists yet | not measured | none — UNVERIFIED | gap |
+| Performance | no enforced budget; see "Performance: no budget, and why" | not measured | none — UNVERIFIED | gap, recorded rather than hidden |
 | Reliability | project save/reopen, undo/redo, autosave and recovery in the named journeys | widget + preflight journeys | acceptance / hosted | partially verified |
 | Accessibility / UX | 4.5:1 contrast, >= 11 px type, 24/44 px hit areas, keyboard alternatives | headless guards in `docs/UX_ACCEPTANCE.md` | widget tests | verified for the covered screens |
-| Security | no secrets in tracked files; dependency boundary enforced | `check-repo.sh`, `check_or_core_deps.py`, gitleaks in publication flow | verify / hosted | local secret scan is NOT wired into the gate — gap |
+| Security | no secrets in tracked files or history; dependency boundary enforced | `gitleaks detect` (acceptance, and pinned in `repo-hygiene.yml`), `check_or_core_deps.py` | acceptance / verify / hosted | local scan runs when gitleaks is installed; `check-repo.sh` alone still does not scan |
 | Compatibility | ubuntu/macOS/Windows/Android hosted jobs | CI matrix | hosted CI | hosted authority |
-| Maintainability | index complete, links resolve, claims exact-SHA | doc gates | verify | verified |
-| Cost | resource use of the bounded preflight | preflight headroom checks | acceptance (manual) | partially verified |
+| Maintainability | index complete, links resolve, every current-claim doc dated, claims exact-SHA and resolvable in Git | doc and claim gates | verify | verified |
+| Cost | resource use of the bounded preflight | preflight headroom checks and per-stage budgets | acceptance (manual) | partially verified |
 
-## Known gaps, in priority order
+## Performance: no budget, and why
 
-1. `scripts/check_claims.py` validates only the SHA shape and field presence, so a
-   fabricated receipt passes; it must also require the SHA to exist in Git and be
-   an ancestor of HEAD, and require the hosted run identity.
-2. Local secret scanning is not part of the gate (`check-repo.sh` deliberately
-   does not run gitleaks), so a leaked secret would not block a local pass.
-3. No performance budget is enforced anywhere; `TESTING.md` explicitly disclaims
-   the preflight as a benchmark.
-4. Two Python suites (`scripts/test_android_preview_runner.py`,
-   `scripts/test_verify_android_saf_recovery.py`) are referenced by nothing.
-5. `docs/INDEX.md` omits `AGENT_POLICY.md`, `PAUSE_MIGRATION_HANDOFF.md` and
-   `docs/skills.md`.
-6. **Host gap, 2026-10-17:** the Flutter widget lane cannot run on this
-   workstation. The native-assets hook tries to download Rust components
-   (`rust-std-aarch64-apple-darwin` and others) and fails with
-   `component download failed`; `scripts/acceptance.sh` therefore reports that
-   lane as UNVERIFIED with the reason rather than a false PASS. Hosted CI owns it.
+OR has **no enforced performance budget**. That is a recorded gap, not an
+oversight, and the reasons are specific:
+
+- No frame-time or latency budget can be measured honestly on the available
+  hosts. The Linux preflight renders through software (`LIBGL_ALWAYS_SOFTWARE`)
+  under Xvfb, and the Android lane runs a SwiftShader emulator; a frame time
+  measured there describes the absence of a GPU, not the product. `TESTING.md`
+  already disclaims the preflight as a performance benchmark.
+- The only real measurements are hosted export wall times recorded in the
+  roadmap history (Linux 47.299 s, macOS 57.394 s, Windows 182.114 s and
+  169.702 s for the same 30-second VP9/Opus journey). They come from
+  GitHub-hosted runners of unstated hardware class, and the Windows spread
+  between those two runs is a runner-variance signal. Turning them into a
+  threshold would encode CI runner variance as a product requirement.
+- A budget needs a named representative device or runner class, a repeatable
+  measurement command, and a recorded baseline with its variance. None of those
+  exist yet, so any number written today would be prose.
+
+What *is* enforced, and fails on regression, are resource ceilings rather than
+performance budgets: the disposable artifact cache's 8 MiB per-entry and 256 MiB
+total budgets with LRU eviction (`cache::tests`, `media_artifacts::tests`), the
+bounded media page (50) and timeline clip page (100), the at-most-64
+simultaneously active Android preview sources, and the preflight's own headroom
+and per-stage time limits. Those bound resource use; they do not measure speed.
+
+To add a real budget: pick one named runner or device class, add a benchmark
+command that reports a single number with its variance, record a baseline, and
+then enforce a threshold with margin in `acceptance` or hosted CI.
+
+## Known gaps
+
+1. **No performance budget** — see the section above for the reason and what a
+   real budget requires.
+2. **Local Flutter widget lane, 2026-10-17:** this workstation cannot run it.
+   The `flutter` wrapper rewrites `bin/cache/engine.stamp` beside its own script
+   and the shared SDK cache is read-only for this user, so the runner exits
+   before any test starts. `scripts/acceptance.sh` reports that lane `UNVERIFIED`
+   with the exact reason rather than a false PASS, and hosted CI owns it.
+3. **Android, macOS, Windows, packaging and codec lanes** remain hosted-CI
+   authority and are never claimed from this workstation.
 
 ## Evidence rules
 
