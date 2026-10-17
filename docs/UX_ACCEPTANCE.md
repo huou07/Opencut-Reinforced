@@ -1,6 +1,6 @@
 # OR UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
 
 ## Purpose
 
@@ -192,17 +192,24 @@ headless or widget-level checks:
     and selection in both is carried by a fill and a border rather than by
     colour alone.
 
-### Reproduced but not yet fixed
+### Reproduced and fixed
 
-- The compact editor overflows its column by 31 px at a 320x480 viewport.
-  This reproduces headlessly rather than only on a device.
-  `OrBreakpoints` selects the compact layout on width alone, so a short
-  viewport still receives the desktop 4:2 viewer/timeline split while the
-  viewer's transport has a fixed height. 390x844 is clean, as is every
-  width at 320x560 or taller: height, not width, is the trigger.
-  Fixing it means letting the viewer's surface and transport absorb a short
-  viewport, which changes the viewer's layout rather than removing a single
-  defect, so it is held back rather than half-applied.
+- The compact editor overflowed its column by 31 px at a 320x480 viewport.
+  This reproduced headlessly rather than only on a device. The proximate
+  cause was the viewer's "No media loaded" placeholder, not the transport:
+  the compact 4:2 viewer/timeline split plus the fixed transport left the
+  viewer surface only 55.7 px tall, and the icon-and-text column needed more.
+  A 320x440 viewport additionally squeezed the fixed 34 px timeline view
+  controls into an 8.7 px strip. Both now absorb a short viewport: the viewer
+  placeholder keeps its icon and exposes the message through semantics when
+  the surface is shorter than 56 px or narrower than 120 px (matching the
+  existing texture-unavailable path), and the timeline view controls are
+  omitted when their region is shorter than 60 px. A headless regression
+  mounts the editor at 320x480 and 320x440; taller compact viewports such as
+  390x844 remain clean. This is source implementation with local developer
+  evidence (Flutter 3.47.7, 98 widget tests and a clean analyzer); exact-SHA
+  hosted verification is recorded in
+  [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
 
 ## PRODUCTION REQUIRED FUTURE
 

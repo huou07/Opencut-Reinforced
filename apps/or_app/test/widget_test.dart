@@ -3272,6 +3272,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('short compact viewport editor does not overflow', (tester) async {
+    // 320x480 reproduced a 31px overflow of the viewer placeholder; 320x440
+    // additionally reproduced the fixed-height timeline view controls
+    // overflowing their remaining strip.
+    for (final size in const [Size(320, 480), Size(320, 440)]) {
+      // Replace the previous tree so each viewport gets a fresh app state.
+      await tester.pumpWidget(const SizedBox.shrink());
+      _setViewport(tester, size);
+      final clip = ProjectTimelineClip(
+        clipId: 'short-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.one, 2),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'short-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'short-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/short-compact.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Short viewport ${size.height.round()}');
+      expect(find.text('V1'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'editor overflowed at ${size.width}x${size.height}',
+      );
+    }
+  });
+
   testWidgets('candidate recovery offers recover discard and cancel', (
     tester,
   ) async {
