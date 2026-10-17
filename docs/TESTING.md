@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-18
 
 ## Status
 
@@ -560,6 +560,15 @@ measure decode latency, render CPU/GPU time where available, present latency,
 dropped frames, audio underruns, queue depth, memory, cache hit/miss, and export
 throughput. This remains local performance diagnosis, not telemetry or network
 reporting.
+
+`LOCAL_PERFORMANCE_BUDGET = ENFORCED (coarse regression guard)`:
+`scripts/bench_quality.py` measures two best-of-N rows on the named Debian
+OptiPlex-class host (CLI cold start `or version --json` <= 200 ms; the ignored
+`software_export` WebM fixture <= 1500 ms), and `scripts/acceptance.sh` runs it
+so a breach fails the admission gate. Baselines, margin, the exact machine class
+and what the budget does not establish are in
+[QUALITY.md](QUALITY.md#performance-one-bounded-budget-and-its-limits). It sets
+no FPS, GPU, physical-device or hosted-runner threshold.
 
 Before claiming a hardware optimization, use controlled, repeatable media fixtures and benchmark scenarios. Representative workload classes may include:
 

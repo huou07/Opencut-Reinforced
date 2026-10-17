@@ -5,7 +5,7 @@ Authority: this is OR's definition of "good" for the product. It does not replac
 project's gates; where they disagree, the source and the exact-SHA hosted runs
 decide.
 
-Last reviewed: 2026-10-17.
+Last reviewed: 2026-10-18.
 
 ## Supported targets
 
@@ -24,7 +24,7 @@ Not claimed: pixel-identical parity across platforms, Android audio, a packaged
 |---|---|---|---|---|
 | Correctness | acceptance gate passes | `bash scripts/acceptance.sh` | acceptance | see recorded result |
 | Correctness (source) | hygiene, docs, claims, core dependency boundary | `bash scripts/check-repo.sh` | verify | see recorded result |
-| Performance | no enforced budget; see "Performance: no budget, and why" | not measured | none — UNVERIFIED | gap, recorded rather than hidden |
+| Performance | one bounded local budget: CLI cold start <= 200 ms and the FFmpeg export lane <= 1500 ms, best of N, on the named Debian OptiPlex-class host | `python3 scripts/bench_quality.py`, run by `bash scripts/acceptance.sh` | acceptance | enforced locally; interactive frame-time/latency still UNVERIFIED |
 | Reliability | project save/reopen, undo/redo, autosave and recovery in the named journeys | widget + preflight journeys | acceptance / hosted | partially verified |
 | Accessibility / UX | 4.5:1 contrast, >= 11 px type, 24/44 px hit areas, keyboard alternatives | headless guards in `docs/UX_ACCEPTANCE.md` | widget tests | verified for the covered screens |
 | Security | no secrets in tracked files or history; dependency boundary enforced | `gitleaks detect` (acceptance, and pinned in `repo-hygiene.yml`), `check_or_core_deps.py` | acceptance / verify / hosted | local scan runs when gitleaks is installed; `check-repo.sh` alone still does not scan |
@@ -32,41 +32,60 @@ Not claimed: pixel-identical parity across platforms, Android audio, a packaged
 | Maintainability | index complete, links resolve, every current-claim doc dated, claims exact-SHA and resolvable in Git | doc and claim gates | verify | verified |
 | Cost | resource use of the bounded preflight | preflight headroom checks and per-stage budgets | acceptance (manual) | partially verified |
 
-## Performance: no budget, and why
+## Performance: one bounded budget, and its limits
 
-OR has **no enforced performance budget**. That is a recorded gap, not an
-oversight, and the reasons are specific:
+OR enforces one small performance budget, measured only on the named host class
+below. It exists so an accidental catastrophic regression fails locally instead
+of waiting for a user to notice.
 
-- No frame-time or latency budget can be measured honestly on the available
-  hosts. The Linux preflight renders through software (`LIBGL_ALWAYS_SOFTWARE`)
-  under Xvfb, and the Android lane runs a SwiftShader emulator; a frame time
-  measured there describes the absence of a GPU, not the product. `TESTING.md`
-  already disclaims the preflight as a performance benchmark.
-- The only real measurements are hosted export wall times recorded in the
-  roadmap history (Linux 47.299 s, macOS 57.394 s, Windows 182.114 s and
-  169.702 s for the same 30-second VP9/Opus journey). They come from
-  GitHub-hosted runners of unstated hardware class, and the Windows spread
-  between those two runs is a runner-variance signal. Turning them into a
-  threshold would encode CI runner variance as a product requirement.
-- A budget needs a named representative device or runner class, a repeatable
-  measurement command, and a recorded baseline with its variance. None of those
-  exist yet, so any number written today would be prose.
+| Row | What it times | Baseline (2026-10-18, idle) | Budget (best of N) |
+|---|---|---|---|
+| CLI cold start | `or version --json`, fresh process, N=15 | 1.1 ms best / 2.0 ms median | <= 200 ms |
+| FFmpeg export lane | the ignored `software_export` WebM fixture (64x48, 10 frames, VP9/Opus), N=5 | 35.1 ms best / 42.1 ms median | <= 1500 ms |
 
-What *is* enforced, and fails on regression, are resource ceilings rather than
-performance budgets: the disposable artifact cache's 8 MiB per-entry and 256 MiB
-total budgets with LRU eviction (`cache::tests`, `media_artifacts::tests`), the
-bounded media page (50) and timeline clip page (100), the at-most-64
-simultaneously active Android preview sources, and the preflight's own headroom
-and per-stage time limits. Those bound resource use; they do not measure speed.
+`python3 scripts/bench_quality.py` measures both rows and
+`bash scripts/acceptance.sh` runs it, so a breach fails the admission gate. The
+budget is enforced on the **best of N** runs, not the mean, so a host busy with
+sibling builds does not fail spuriously; a systematic regression still trips. A
+host that cannot produce an honest number is reported `UNVERIFIED` with the
+exact command that would settle it, never a fabricated threshold.
 
-To add a real budget: pick one named runner or device class, add a benchmark
-command that reports a single number with its variance, record a baseline, and
-then enforce a threshold with margin in `acceptance` or hosted CI.
+Named machine class: **Debian 13 (trixie) x86_64, OptiPlex-class workstation,
+13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD** — the host the baseline was
+measured on. The budget is a property of this class. GitHub-hosted runners have
+their own variance and keep their own thresholds; no number measured here is
+claimed as a hosted-runner budget.
+
+What is **not** covered, and stays a recorded gap:
+
+- No frame-time or latency budget. The Linux preflight renders through software
+  (`LIBGL_ALWAYS_SOFTWARE`) under Xvfb, and the Android lane runs a SwiftShader
+  emulator; a frame time measured there describes the absence of a GPU, not the
+  product. `TESTING.md` disclaims the preflight as a performance benchmark, and
+  the roadmap's "responsive preview" promise still has no measurement.
+- The only packaged export wall times are hosted values recorded in the roadmap
+  history (Linux 47.299 s, macOS 57.394 s, Windows 182.114 s and 169.702 s for
+  the same 30-second VP9/Opus journey) from GitHub-hosted runners of unstated
+  hardware class. The Windows spread is runner variance; turning those numbers
+  into a product requirement would encode CI noise as a budget.
+- Physical-device Android responsiveness remains unmeasured.
+
+Resource ceilings also stay enforced and fail on regression: the disposable
+artifact cache's 8 MiB per-entry and 256 MiB total budgets with LRU eviction
+(`cache::tests`, `media_artifacts::tests`), the bounded media page (50) and
+timeline clip page (100), the at-most-64 simultaneously active Android preview
+sources, and the preflight's own headroom and per-stage time limits. Those bound
+resource use; they do not measure speed.
+
+To extend the budget: add one row to `scripts/bench_quality.py` with the command
+it times, a baseline measured on this named host and a stated margin, then let
+`acceptance` enforce it.
 
 ## Known gaps
 
-1. **No performance budget** — see the section above for the reason and what a
-   real budget requires.
+1. **No interactive performance budget** — the local CLI/export budget above is
+   a coarse regression guard; frame time, seek latency and preview
+   responsiveness remain unmeasured (see the section above).
 2. **Local Flutter widget lane, 2026-10-17:** this workstation cannot run it.
    The `flutter` wrapper rewrites `bin/cache/engine.stamp` beside its own script
    and the shared SDK cache is read-only for this user, so the runner exits
@@ -83,4 +102,8 @@ then enforce a threshold with margin in `acceptance` or hosted CI.
 - Release gate: GitHub Actions (`ui-preflight`, `platform-verification`,
   `developer-preview`) — the only authority for native, packaged and
   cross-platform claims.
+- The acceptance gate writes the machine-readable report `.hub/gate-report.json`
+  declared by `.aeh/quality.json`: it names every lane the local run did not
+  execute, the gates it actually covered, and the local runner class. The report
+  is runtime state and is gitignored.
 - A skipped, missing or unavailable check is `UNVERIFIED`; it is never PASS.
