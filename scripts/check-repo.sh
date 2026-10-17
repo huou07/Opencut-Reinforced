@@ -151,6 +151,14 @@ if ! python3 scripts/check_claims.py; then
   failed=1
 fi
 
+# The claim validator now resolves each `implementation_sha` in Git, so its
+# reject-a-fabricated-receipt behaviour needs its own regression guard. It also
+# needs full history, which is why repo-hygiene.yml checks out with
+# `fetch-depth: 0` instead of the default shallow clone.
+if ! python3 scripts/test_check_claims.py; then
+  fail "the claim-evidence validator regression checks failed"
+fi
+
 # `or_core` owns canonical project state, so GPU, media, audio, text-shaping,
 # scripting and AI-runtime layers must not be reachable from it. This replaces
 # the boundary check that only ran as a side effect of the paused execution
