@@ -25,3 +25,6 @@ __pycache__/
 # ref they carry is also present in the repository's own history; they exist
 # only so the move can be audited once. See docs/PAUSE_MIGRATION_HANDOFF.md.
 /migration-preserved/
+
+# AEH gate report and verification ledger: runtime state, never commit.
+.hub/

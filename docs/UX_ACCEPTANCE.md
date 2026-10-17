@@ -1,6 +1,6 @@
 # OR UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
 
 ## Purpose
 
@@ -68,7 +68,14 @@ headless or widget-level checks:
   synchronization. Saving a renamed project updates its recent display name
   without changing its last-opened time. Exact-SHA evidence: Platform
   Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
-  attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
+  attempt 2. Clean-machine install/upgrade/uninstall is verified separately at
+  `53de6d51c6d45c7ec7ae0a2989455972118406c1`: Platform Verification
+  [38570870756](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870756)
+  and Repository Hygiene
+  [38570870938](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870938)
+  installed, upgraded, launched and removed the Linux `.deb` and the macOS and
+  Windows ZIP packages while preserving user data. Those are debug packages, not
+  stable installers.
 - A new empty project does not inherit another project's canonical timeline.
 - Home focuses on creating, opening, and returning to projects. The visual-only
   Editor Shell Preview is reachable from Settings → Advanced and is not offered
@@ -192,22 +199,46 @@ headless or widget-level checks:
     and selection in both is carried by a fill and a border rather than by
     colour alone.
 
-### Reproduced but not yet fixed
+### Reproduced and fixed
 
-- The compact editor overflows its column by 31 px at a 320x480 viewport.
-  This reproduces headlessly rather than only on a device.
-  `OrBreakpoints` selects the compact layout on width alone, so a short
-  viewport still receives the desktop 4:2 viewer/timeline split while the
-  viewer's transport has a fixed height. 390x844 is clean, as is every
-  width at 320x560 or taller: height, not width, is the trigger.
-  Fixing it means letting the viewer's surface and transport absorb a short
-  viewport, which changes the viewer's layout rather than removing a single
-  defect, so it is held back rather than half-applied.
+- The compact editor overflowed its column by 31 px at a 320x480 viewport.
+  This reproduced headlessly rather than only on a device. The proximate
+  cause was the viewer's "No media loaded" placeholder, not the transport:
+  the compact 4:2 viewer/timeline split plus the fixed transport left the
+  viewer surface only 55.7 px tall, and the icon-and-text column needed more.
+  A 320x440 viewport additionally squeezed the fixed 34 px timeline view
+  controls into an 8.7 px strip. Both now absorb a short viewport: the viewer
+  placeholder keeps its icon and exposes the message through semantics when
+  the surface is shorter than 56 px or narrower than 120 px (matching the
+  existing texture-unavailable path), and the timeline view controls are
+  omitted when their region is shorter than 60 px. A headless regression
+  mounts the editor at 320x480 and 320x440; taller compact viewports such as
+  390x844 remain clean. This is source implementation with local developer
+  evidence (Flutter 3.47.7, a clean analyzer, and the widget suite — run
+  `flutter test` for the current count rather than a number written here);
+  exact-SHA hosted verification is recorded in
+  [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+- The create-project journey at the emulator-sized 320x640 viewport, which the
+  Android SAF acceptance run uses, had no working overflow guard: the committed
+  test installed its own `FlutterError.onError`, and `takeException()` reads only
+  the framework's recorded error, so its assertion could not fail. The test now
+  uses the shared create-project helper and the framework error handler; it
+  mounts the empty workspace at 320x640 and passes with no overflow. This
+  corrects a vacuous guard rather than reporting a reproduced defect.
 
 ## PRODUCTION REQUIRED FUTURE
 
 These items are required by the execution plan but are not production claims
 today.
+
+> **Status correction, 2026-10-17.** Part of Phase 7 has shipped since this
+> section was written. `docs/RELEASE.md` claims desktop play/pause, exact seek,
+> scrubbing and frame stepping, and a texture-backed viewer surface exists in
+> `apps/or_app/lib/screens/editor_shell_preview_screen.dart`. Read the Phase 7
+> bullets below as the remaining acceptance conditions for that work, not as
+> evidence that the feature is absent. The earlier contradiction between this
+> section and RELEASE.md was a documentation defect; the source and the hosted
+> evidence decide, and anything not covered by them stays `UNVERIFIED`.
 
 ### Phase 7 playback and preview
 

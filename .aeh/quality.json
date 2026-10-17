@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "project": "OR",
+  "product_type": "cross-platform-video-editor",
+  "supported_platforms": [
+    "linux-x64",
+    "macos-arm64",
+    "windows-x64",
+    "android-arm64-v8a",
+    "android-armeabi-v7a",
+    "android-x86_64"
+  ],
+  "required_gates": [
+    "source-integrity",
+    "product-build"
+  ],
+  "release_gates": [
+    "platform-verification",
+    "release-gate",
+    "packaging"
+  ],
+  "external_requirements": [
+    "hosted-macos-runner",
+    "hosted-windows-runner",
+    "hosted-android-emulator-or-device",
+    "hosted-packaging-runners",
+    "physical-android-device-performance-measurement"
+  ],
+  "hosted_ci": "required",
+  "gates": {
+    "source-integrity": {
+      "gate": "verify"
+    },
+    "product-build": {
+      "gate": "acceptance"
+    },
+    "platform-verification": {
+      "gate": "release"
+    },
+    "release-gate": {
+      "gate": "release"
+    },
+    "packaging": {
+      "gate": "release"
+    }
+  },
+  "report": ".hub/gate-report.json",
+  "policies": {
+    "missing_evidence": "block",
+    "stale_evidence": "block",
+    "skipped_required_gate": "block",
+    "production_changes": "require_approval"
+  }
+}

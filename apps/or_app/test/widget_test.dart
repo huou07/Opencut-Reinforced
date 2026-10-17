@@ -647,6 +647,60 @@ void main() {
     expect(find.text('clip-54.mp4'), findsOneWidget);
   });
 
+  testWidgets('loading a later media page keeps earlier library previews', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final png = await _tinyPngBytes();
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = List.generate(
+        55,
+        (index) => _mediaFixture('media-$index', '/tmp/clip-$index.mp4'),
+      );
+    for (var index = 0; index < 55; index++) {
+      gateway.artifactRequestResponses['media-$index:thumbnail'] =
+          ProjectMediaArtifactRequest(
+            mediaId: 'media-$index',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.ready,
+            cacheKey: 'thumbnail-$index',
+          );
+      gateway.artifactResponses['thumbnail-$index'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      );
+    }
+    final picker = _FakeProjectPicker()..savePath = '/tmp/large-library.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Large Library');
+
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+
+    final panelScroll = find.descendant(
+      of: find.byKey(const ValueKey('project-media-panel')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('media-load-more')),
+      160,
+      scrollable: panelScroll.first,
+    );
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListOffsets, [0, 50]);
+
+    await tester.drag(panelScroll.first, const Offset(0, 5000));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('probe backend unavailability is shown honestly', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway()..nextImportBackendUnavailable = true;
@@ -1313,6 +1367,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('timeline clip exposes an executable semantic activation', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'semantic-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'semantic-track': [
+          ProjectTimelineClip(
+            clipId: 'semantic-clip',
+            mediaId: 'semantic-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/semantic-clip.orproj',
+    );
+    await _createProject(tester, 'Semantic clip');
+    final handle = tester.ensureSemantics();
+    final clip = find.bySemanticsLabel(RegExp('starts 0/1, duration 2/1'));
+    final node = tester.getSemantics(clip);
+    expect(node.flagsCollection.isButton, isTrue);
+    expect(
+      node.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+      isTrue,
+      reason: node.toStringDeep(),
+    );
+    for (final label in [
+      'Trim start of Media semantic',
+      'Trim end of Media semantic',
+    ]) {
+      final trim = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(
+        trim.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+        reason: trim.toStringDeep(),
+      );
+    }
+    tester.binding.performSemanticsAction(
+      ui.SemanticsActionEvent(
+        type: ui.SemanticsAction.tap,
+        nodeId: node.id,
+        viewId: tester.view.viewId,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-duplicate-semantic-clip')),
+      findsOneWidget,
+    );
+    handle.dispose();
+  });
+
   testWidgets('timeline duplicate preserves exact source range', (
     tester,
   ) async {
@@ -1881,22 +1999,25 @@ void main() {
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
-  testWidgets('ZZ probe create at 320x640', (tester) async {
+  testWidgets('compact 320x640 create-project journey does not overflow', (
+    tester,
+  ) async {
+    // The Android SAF acceptance journey creates a project at the emulator's
+    // 320x640 viewport. This test replaced a probe that installed its own
+    // FlutterError.onError; the framework then never recorded the error, so its
+    // `takeException()` assertion could not fail and the journey had no real
+    // overflow guard.
     _setViewport(tester, const Size(320, 640));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()..savePath = '/tmp/zz-ovf.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-create.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
-    FlutterError.onError = (details) {
-      FlutterError.dumpErrorToConsole(details);
-    };
-    await tester.tap(find.byKey(const ValueKey('home-new-project')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('new-project-name')),
-      'Ov',
+    await _createProject(tester, 'Compact create');
+
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -3206,6 +3327,47 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('short compact viewport editor does not overflow', (
+    tester,
+  ) async {
+    // 320x480 reproduced a 31px overflow of the viewer placeholder; 320x440
+    // additionally reproduced the fixed-height timeline view controls
+    // overflowing their remaining strip.
+    for (final size in const [Size(320, 480), Size(320, 440)]) {
+      // Replace the previous tree so each viewport gets a fresh app state.
+      await tester.pumpWidget(const SizedBox.shrink());
+      _setViewport(tester, size);
+      final clip = ProjectTimelineClip(
+        clipId: 'short-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.one, 2),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'short-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'short-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/short-compact.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Short viewport ${size.height.round()}');
+      expect(find.text('V1'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'editor overflowed at ${size.width}x${size.height}',
+      );
+    }
   });
 
   testWidgets('candidate recovery offers recover discard and cancel', (

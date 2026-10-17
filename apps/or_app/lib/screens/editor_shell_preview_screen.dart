@@ -2004,6 +2004,43 @@ class _ViewerPanelState extends State<_ViewerPanel>
     });
   }
 
+  /// Placeholder content for the viewer surface.
+  ///
+  /// A short compact viewport can squeeze the surface below the height the
+  /// icon-and-text column needs. Keep the icon and expose the message through
+  /// semantics instead of letting the column overflow.
+  Widget _viewerPlaceholder({required IconData icon, required String message}) {
+    return Center(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight < 56 || constraints.maxWidth < 120) {
+            return Semantics(
+              label: message,
+              liveRegion: true,
+              child: Icon(icon, size: 18, color: OrColors.textMuted),
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: OrColors.textMuted),
+              const SizedBox(height: OrSpacing.x2),
+              Text(
+                message,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataSize,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildViewerSurface() {
     final textureId = _textureId;
     final preview = _preview;
@@ -2033,25 +2070,9 @@ class _ViewerPanelState extends State<_ViewerPanel>
               fit: StackFit.expand,
               children: [
                 if (preview?.contentEnd == null)
-                  const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.movie_outlined,
-                          size: 22,
-                          color: OrColors.textMuted,
-                        ),
-                        SizedBox(height: OrSpacing.x2),
-                        Text(
-                          'No media loaded',
-                          style: TextStyle(
-                            color: OrColors.textSecondary,
-                            fontSize: OrType.metadataSize,
-                          ),
-                        ),
-                      ],
-                    ),
+                  _viewerPlaceholder(
+                    icon: Icons.movie_outlined,
+                    message: 'No media loaded',
                   )
                 else if (textureId != null)
                   Texture(
@@ -2060,43 +2081,13 @@ class _ViewerPanelState extends State<_ViewerPanel>
                     filterQuality: FilterQuality.medium,
                   )
                 else
-                  Center(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final message = hasSession
-                            ? 'Viewer texture unavailable'
-                            : 'Open a project to preview';
-                        final icon = hasSession
-                            ? Icons.error_outline
-                            : Icons.movie_outlined;
-                        if (constraints.maxHeight < 56 ||
-                            constraints.maxWidth < 120) {
-                          return Semantics(
-                            label: message,
-                            liveRegion: true,
-                            child: Icon(
-                              icon,
-                              size: 18,
-                              color: OrColors.textMuted,
-                            ),
-                          );
-                        }
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, size: 22, color: OrColors.textMuted),
-                            const SizedBox(height: OrSpacing.x2),
-                            Text(
-                              message,
-                              style: const TextStyle(
-                                color: OrColors.textSecondary,
-                                fontSize: OrType.metadataSize,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                  _viewerPlaceholder(
+                    icon: hasSession
+                        ? Icons.error_outline
+                        : Icons.movie_outlined,
+                    message: hasSession
+                        ? 'Viewer texture unavailable'
+                        : 'Open a project to preview',
                   ),
                 if (_busy)
                   const Center(
@@ -3924,7 +3915,9 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
           return Column(
             children: [
-              _timelineViewControls(),
+              // The fixed-height view controls cannot fit a region this
+              // short; drop them rather than overflow an unusable strip.
+              if (constraints.maxHeight >= 60) _timelineViewControls(),
               Expanded(
                 child: Scrollbar(
                   child: SingleChildScrollView(
@@ -5624,6 +5617,7 @@ class _TimelineTrackLane extends StatelessWidget {
         child: Semantics(
           button: true,
           selected: clip.clipId == selectedClipId,
+          onTap: () => onOpenClip(clip),
           label:
               '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
           hint: 'Drag to move. Activate for clip actions.',
@@ -5699,7 +5693,8 @@ class _TimelineTrackLane extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        hint: 'Drag to adjust the timeline edge.',
+        onTap: () => onOpenClip(clip),
+        hint: 'Drag to adjust the timeline edge. Activate for exact trim actions.',
         child: _TimelinePointerSurface(
           key: ValueKey(
             'timeline-trim-handle-${start ? 'start' : 'end'}-${clip.clipId}',

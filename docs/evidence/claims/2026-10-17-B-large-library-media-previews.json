@@ -1,0 +1,22 @@
+{
+  "requirement": "B-large-library-media-previews",
+  "claim": "Loading a later page of the media library keeps the thumbnail or waveform already generated for previously loaded items instead of dropping every earlier preview and falling back to the neutral placeholder.",
+  "implementation_sha": "5255a0dbd123d289c49a93e82a8d84b36a9a9c7d",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39017187079",
+    "jobs": ["Flutter static and widget checks"],
+    "detail": "The job ran dart format, flutter analyze and the full flutter test suite on the canonical Flutter 3.47.5 pin. apps/or_app/test/widget_test.dart contains the regression that mounts 55 media items with cached previews, loads the second 50-item page and scrolls back to the top, requiring the first item's thumbnail to survive; the same assertion found no media-preview-image-media-0 before the fix. The repository hygiene job of the same run set passed the preflight-preparation checks added alongside it. Linux UI preflight run 39017187058 passed separately at the same SHA with the analyzer, the focused component/semantics tests and the real Linux create/import/edit/undo/seek/save-reopen journey under a bounded Xvfb display."
+  },
+  "verified_at_utc": "2026-10-17T08:29:29Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "Hosted widget evidence is component/semantics evidence: it proves the preview state survives a later page load in the Flutter widget tree, not GPU rendering or native artifact decoding.",
+    "The Linux UI preflight journey substitutes the file picker and runs a debug app; it is not packaged acceptance or an OS-picker check.",
+    "Android SAF behaviour, macOS and Windows packaged journeys, and physical-device responsiveness are separate gates and are not established by this record.",
+    "Only disposable Flutter presentation state changed: no command was dispatched and canonical project state and ProjectRevision are unchanged.",
+    "The broader offline-media and bulk-relink workflow named by the roadmap remains unimplemented and unverified."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Work stream B; docs/TESTING.md, Phase 5D coverage; docs/UX_ACCEPTANCE.md, Production implemented"
+}
