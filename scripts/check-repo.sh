@@ -34,6 +34,13 @@ required_files=(
   docs/RELEASE.md
   docs/TOOLING.md
   docs/UX_ACCEPTANCE.md
+  docs/QUALITY.md
+  docs/AGENT-AUTHORITY.md
+  docs/PAUSE_MIGRATION_HANDOFF.md
+  docs/evidence/PRODUCT_ROADMAP_HISTORY.md
+  docs/prompts/CONTINUE-OR.md
+  docs/prompts/FINISH-OR.md
+  docs/prompts/NEXT-OR.md
   docs/skills.md
   docs/evidence/claims/README.md
   docs/adr/README.md
@@ -44,6 +51,7 @@ required_files=(
   docs/adr/0005-ai-provider-boundary.md
   docs/adr/0006-autonomous-agent-execution-contract.md
   docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md
+  docs/adr/0008-product-acceptance-and-execution-quality.md
 )
 
 for path in "${required_files[@]}"; do

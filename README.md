@@ -1,5 +1,7 @@
 # Opencut Reinforced
 
+Last reviewed: 2026-10-17.
+
 A free and open-source cross-platform video editor designed around one structured editing core shared by the human interface, CLI automation, and AI agents.
 
 ## Status

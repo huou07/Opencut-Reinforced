@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
 
 This map points to the current source of truth. Read the documents relevant to your task; there is no need to read every file for every change.
 
@@ -10,6 +10,8 @@ This map points to the current source of truth. Read the documents relevant to y
 | --- | --- |
 | [README.md](../README.md) | Public project overview, status, product direction, platforms, and links |
 | [AGENTS.md](../AGENTS.md) | Repository rules, safety constraints, and agent document routing |
+| [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md) | What this host authorizes an agent to do without asking again, and what it does not |
+| [AGENT_POLICY.md](AGENT_POLICY.md) | Permanent execution, evidence and acceptance rules |
 | [DESIGN.md](../DESIGN.md) | Approved OR Focused Monochrome application design language |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Contributor workflow and pull request expectations |
 | [SECURITY.md](../SECURITY.md) | How to report a repository vulnerability |
@@ -19,10 +21,13 @@ This map points to the current source of truth. Read the documents relevant to y
 | Document | Purpose |
 | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | Full product vision, feature scope, and maturity labels |
+| [QUALITY.md](QUALITY.md) | OR's quality bar: attributes, targets, enforcing gate and known gaps |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Canonical high-level architecture and current implementation status |
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
 | [Continuation prompt](prompts/CONTINUE-OR.md) | Independent agent handoff; first-project journey and current host/CI boundaries |
+| [PAUSE_MIGRATION_HANDOFF.md](PAUSE_MIGRATION_HANDOFF.md) | Append-only pause and Debian-migration log; superseded facts are marked, not edited |
+| [skills.md](skills.md) | Project skill routing and which procedures are loadable |
 | [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | **Active** outcome-based product roadmap and legacy requirement mapping |
 | [evidence/claims/README.md](evidence/claims/README.md) | Claim evidence: what was verified, by which run, and what it does not establish |
 | [evidence/PRODUCT_ROADMAP_HISTORY.md](evidence/PRODUCT_ROADMAP_HISTORY.md) | Archived exact-run product journey investigations; historical status snapshots only |

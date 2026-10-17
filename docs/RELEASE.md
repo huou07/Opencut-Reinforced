@@ -1,5 +1,7 @@
 # Application Release Plan
 
+Last reviewed: 2026-10-17.
+
 ## Current status
 
 Stable releases: **none**.

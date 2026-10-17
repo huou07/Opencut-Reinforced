@@ -1,5 +1,7 @@
 # Development Tooling
 
+Last reviewed: 2026-10-17.
+
 This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
 
 ## Verification model

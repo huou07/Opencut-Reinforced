@@ -1,6 +1,6 @@
 # Agent authority on this host
 
-Date: 2026-10-17. Source: the owner's direct instruction in the AEH session of
+Last reviewed: 2026-10-17. Source: the owner's direct instruction in the AEH session of
 that date. This file exists so a later agent does not have to ask again. It
 grants no host privilege, no credential beyond what is named here, and it does
 not override the evidence rules in `AGENTS.md`, `docs/TESTING.md` or
