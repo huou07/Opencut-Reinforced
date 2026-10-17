@@ -176,6 +176,18 @@ if ! python3 scripts/test_linux_ui_preflight.py; then
   fail "the bounded Linux preflight preparation checks failed"
 fi
 
+# Two hermetic Android report/runner suites existed without a runner, which made
+# them dead weight: nothing could fail if they rotted. They need no device or
+# network. `test_verify_android_saf_recovery.py` imports the verifier as
+# `scripts.verify_android_saf_recovery`, so it runs as a module from the root.
+if ! python3 -m scripts.test_verify_android_saf_recovery; then
+  fail "the Android SAF recovery report checks failed"
+fi
+
+if ! python3 scripts/test_android_preview_runner.py; then
+  fail "the Android preview runner control-flow checks failed"
+fi
+
 # Lint the repository's own shell gates. A gate that fails to parse is worse
 # than no gate: it looks like a passing check.
 if command -v shellcheck >/dev/null 2>&1; then
@@ -196,4 +208,4 @@ if (( failed != 0 )); then
   exit 1
 fi
 
-printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-evidence and preflight-preparation checks).\n' "$tracked_count"
+printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-source-identity, preflight-preparation and Android-report checks).\n' "$tracked_count"
