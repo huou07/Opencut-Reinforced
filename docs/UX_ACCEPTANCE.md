@@ -68,7 +68,14 @@ headless or widget-level checks:
   synchronization. Saving a renamed project updates its recent display name
   without changing its last-opened time. Exact-SHA evidence: Platform
   Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
-  attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
+  attempt 2. Clean-machine install/upgrade/uninstall is verified separately at
+  `53de6d51c6d45c7ec7ae0a2989455972118406c1`: Platform Verification
+  [38570870756](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870756)
+  and Repository Hygiene
+  [38570870938](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870938)
+  installed, upgraded, launched and removed the Linux `.deb` and the macOS and
+  Windows ZIP packages while preserving user data. Those are debug packages, not
+  stable installers.
 - A new empty project does not inherit another project's canonical timeline.
 - Home focuses on creating, opening, and returning to projects. The visual-only
   Editor Shell Preview is reachable from Settings → Advanced and is not offered
