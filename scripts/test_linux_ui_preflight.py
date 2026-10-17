@@ -261,7 +261,9 @@ class InterruptSafetyTests(unittest.TestCase):
             self.assertFalse(backup.exists())
             self.assertEqual(manifest.read_bytes(), original)
 
-    def _plan(self, temporary: str, status: str) -> tuple[int, str, Path]:
+    def _plan(self, temporary: str, status: str,
+              required_tools: tuple[str, ...] = (),
+              flutter_root: Path | None = None) -> tuple[int, str, Path]:
         app = Path(temporary) / "or-app"
         app.mkdir(exist_ok=True)
         out = io.StringIO()
@@ -277,6 +279,13 @@ class InterruptSafetyTests(unittest.TestCase):
             preflight, "linux_rust_target", return_value="x86_64-unknown-linux-gnu"
         ), patch.object(
             preflight, "cache_is_writable", return_value=True
+        ), patch.object(
+            # Tool availability and the Flutter root are host properties like the
+            # caches above. The CI hygiene runner has no Flutter SDK, so a test
+            # that left them real failed there while passing on a workstation.
+            preflight, "REQUIRED_TOOLS", required_tools
+        ), patch.object(
+            preflight, "flutter_root_from", return_value=flutter_root or app
         ), contextlib.redirect_stdout(out):
             code = preflight.main(["--plan"])
         return code, out.getvalue(), app
@@ -294,6 +303,14 @@ class InterruptSafetyTests(unittest.TestCase):
             code, output, app = self._plan(temporary, "")
             self.assertEqual(code, 0)
             self.assertIn("PLAN: ready", output)
+            self.assertFalse((app / "build").exists())
+
+    def test_plan_refuses_when_a_required_tool_is_missing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            code, output, app = self._plan(
+                temporary, "", required_tools=("definitely-not-installed-h07p",))
+            self.assertEqual(code, 3)
+            self.assertIn("missing required tools", output)
             self.assertFalse((app / "build").exists())
 
 
