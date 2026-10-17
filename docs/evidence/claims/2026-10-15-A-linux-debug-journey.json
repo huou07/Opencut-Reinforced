@@ -1,0 +1,21 @@
+{
+  "requirement": "A-linux-debug-journey",
+  "claim": "A bounded hosted Linux debug app journey passed the analyzer, focused semantic/component tests, and the real create, invalid-import, retry/import, timeline insertion, keyboard duplicate, undo, seek and save/reopen journey under Xvfb.",
+  "implementation_sha": "66164227f3e39aa32567890eb88850d54ff9aa37",
+  "verification": {
+    "workflow": "Linux UI preflight",
+    "run_id": "38679257316",
+    "jobs": ["editor"],
+    "detail": "The editor job used the canonical Flutter 3.47.5 pin, ran the analyzer and six focused component/semantics tests, then the real Linux journey under a bounded Xvfb display. Its seven-day artifact retains selected states, a clip semantics dump and resource metadata."
+  },
+  "verified_at_utc": "2026-10-15T04:01:11Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "This is a Linux debug app with a substituted file picker; it is not an installed package or an OS-picker check.",
+    "The audio-only preflight can show 'Viewer texture unavailable', so it does not accept preview video rendering or audio playback.",
+    "The 1280x720 debug window can crowd inspector/media text; it is not a visual-polish or performance benchmark.",
+    "macOS, Windows and Android are not exercised by this workflow."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, 2026-10-15 quality pass; docs/TESTING.md, Evidence selection and bounded Linux preflight"
+}

@@ -1,0 +1,21 @@
+{
+  "requirement": "F-packaged-local-transcription",
+  "claim": "A validation-only Developer Preview on Linux, macOS and Windows confirmed the packaged optional model download, local English transcription into a reviewable proposal, caption edit/apply through the normal project command, save/reopen, and SRT export.",
+  "implementation_sha": "1d63db88d787653c1875006625ddbfb4c34217e0",
+  "verification": {
+    "workflow": "Developer Preview",
+    "run_id": "38316339457",
+    "jobs": ["linux-debug-app", "macos-debug-app", "windows-debug-app", "source-eligibility"],
+    "detail": "The exact-source prepare gate passed and all three desktop debug packages were built. The packaged journeys passed model download with confirmation and byte progress, transcription, review/edit/apply, save/reopen and SRT export. CLI and publish jobs were skipped by design."
+  },
+  "verified_at_utc": "2026-10-12T22:23:04Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "These are debug validation-only packages, not installers or a production release.",
+    "Android transcription is unsupported; no mobile evidence is claimed.",
+    "The optional model download needs network access and is not bundled.",
+    "A clean-machine install and the longer import/export journey are separate unverified boundaries."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Current product candidate; docs/PRODUCT.md, VERIFIED IN DESKTOP DEBUG PACKAGES"
+}
