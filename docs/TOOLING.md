@@ -27,25 +27,27 @@ When a required local check is environment-blocked and an equivalent Actions job
 
 Install only the tools needed for the part you are changing. The workspace MSRV
 is **Rust 1.89** (`rust-version` in the root `Cargo.toml`); the pinned build
-toolchain is **Rust 1.98.0**, declared in `crates/or_app_bridge/rust-toolchain.toml`.
+toolchain is **Rust 1.98.0**, declared in the root `rust-toolchain.toml` and
+`crates/or_app_bridge/rust-toolchain.toml`.
 Flutter CI uses Flutter 3.47.5 stable.
 
 These are two different numbers for two different things: 1.89 is the oldest
 compiler the crate metadata claims to support, 1.98.0 is what the bridge is
 built with. A contributor must satisfy both.
 
-Known gap: there is no workspace-root `rust-toolchain.toml`. The toolchain pin
-lives in one sub-crate, so `rustup` applies it only when the working directory
-is inside that crate. Building the rest of the workspace on an unmanaged host
-uses whatever default toolchain is active. Promoting the pin to the workspace
-root would fix this, but it changes which compiler every crate builds with, so
-it is an explicit decision with hosted verification — not a documentation fix.
+The workspace-root `rust-toolchain.toml` selects the same 1.98.0 compiler as
+the bridge and hosted builds. It requests only host tools; the bridge's nested
+configuration retains cross-compilation targets for platform builders. Use the
+rustup Cargo proxy on PATH: Debian's standalone `/usr/bin/cargo` does not apply
+rustup toolchain selection.
 
 ### Local toolchain PATH
 
-`cargo` and `rustc` are on `PATH`, but `rustup` is not, and Flutter's Rust
-native-assets hook needs `rustup` on `PATH` to build the bridge. Without it,
-`flutter test` fails with:
+On the inspected Debian host (2026-10-17), the system PATH selects Debian Rust
+1.85; Rust 1.98.0 and Flutter 3.47.7 are restored under the owner home and are
+shared with workers through H07P policy.
+Flutter's Rust native-assets hook also needs `rustup` on PATH. Without it,
+`flutter test` can fail with:
 
 ```
 RustBuilder: Failed to invoke "rustup [show, active-toolchain]"
@@ -56,18 +58,46 @@ That failure is an environment gap, not a source defect. To fix it for a local
 run, export both the toolchain home and the binary path:
 
 ```sh
-export RUSTUP_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/rustup
-export CARGO_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/cargo
-export PATH="/home/huou07/.cargo/bin:/home/agents-worker/.agent-workbench-runtime-v6/opt/flutter/bin:$PATH"
-rustup show active-toolchain   # expect 1.98.0-x86_64-unknown-linux-gnu
+export CARGO_HOME=/home/huou07/.cargo
+export RUSTUP_HOME=/home/huou07/.rustup
+export PATH="$CARGO_HOME/bin:/home/huou07/.local/share/flutter/bin:$PATH"
+rustup show active-toolchain   # expect stable-x86_64-unknown-linux-gnu (Rust 1.98.0)
 ```
 
-Known gap: the `rustup` binary currently resolves from the owner's home
-directory. That is not a stable location for the worker to depend on — a
-permission change there would silently break local Flutter verification. The
-durable fix is for the owner to place `rustup` and the Flutter SDK under the
-shared `/opt/agent-workbench` tree alongside the other tools, which is an
-owner action and not something an agent should assume.
+Workers use the owner-home rustup proxy. Keep the toolchain read-only; Rustup
+native-assets builds need write access to its temporary directory, so configure
+that exact path through the Playground GUI for the selected worker and verify
+the enforced revision before running the preflight. Keep Rustup, Flutter
+settings and harness credential stores private.
+The Linux preflight gives Flutter temporary XDG config/cache/data directories and
+copies only readable public Cargo registry/Git and pub.dev caches into ignored
+`apps/or_app/.dart_tool/aeh-cargo` and `aeh-pub-cache` when the shared caches
+are not writable. It excludes Cargo config and credentials, resolves dependencies
+offline with the checked-in lockfile, and runs the Linux UI test with
+`--no-pub`. The bounded runner uses one compiler worker, a shared lock, a
+600-second limit, and stops below 2 GiB available RAM. Do not copy another
+machine's `target`, `build`, `.dart_tool` or Flutter ephemeral directories.
+Preserve source, locks and user data.
+
+The inspected Flutter SDK is 3.47.7; CI pins 3.47.5, so local Flutter output is
+not exact-version CI evidence. Four focused preflight tests pass. The Linux
+runner temporarily narrows the bridge's nested `rust-toolchain.toml` to the
+host target and restores its original bytes in `finally`; it avoids downloading
+unused cross-platform Rust targets. See the 2026-10-17 Debian run in
+[TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight).
+
+With the PATH above, the Debian inspection passed:
+
+- `cargo check --workspace --all-targets --locked --offline -j 2`, including
+  media, audio, render and Flutter bridge source checks against local libraries.
+- `cargo test -p or_core -p or_ipc -p or_cli --locked --offline`.
+- `flutter pub get --offline` without tracked lockfile changes, followed by
+  `flutter analyze --no-pub`.
+- `bash scripts/check-repo.sh`.
+
+This is local source evidence at baseline `21bfb3aa6891` plus the toolchain/doc
+patch, not packaged/native runtime acceptance or a hosted claim record. The
+full native app and platform packaging still use their dedicated CI gates.
 
 Rust checks run from the repository root:
 
@@ -190,6 +220,12 @@ codegraph status .
 
 Initialize an index with `codegraph init` when needed.
 
+## Playwright
+
+`playwright-cli` (Microsoft's agent-facing [playwright-cli](https://github.com/microsoft/playwright-cli), installed as `@playwright/cli`) is an agent-local browser driver, not a repository dependency. It lets an agent read the DOM and accessibility tree of a rendered page instead of guessing, which is what the HTML prototype in `prototypes/` and the UX acceptance work in `docs/UX_ACCEPTANCE.md` need. It adds no package to this workspace and no test target to CI.
+
+Like CodeGraph it is machine-local tooling, so it belongs on the developer's `PATH` rather than in `Cargo.toml`. It is used only when a task needs a rendered page; Rust and Flutter analysis stay in their own tooling, and hosted Actions remains canonical for native acceptance. It drives a Playwright-provided Chromium build by default and requires no branded Chrome and no root.
+
 ## Ponytail
 
 Ponytail helps coding agents prefer small, necessary implementations while retaining correctness and safety checks. The official upstream is [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail).
@@ -223,6 +259,7 @@ Review third-party agent tooling before installing it. Do not install additional
 
 - CodeGraph
 - Ponytail
+- Playwright (`playwright-cli`, agent-local; added 2026-10-15 for rendered-page inspection of the prototype and UX work)
 
 ### Android 9B preview repair and hosted proof
 

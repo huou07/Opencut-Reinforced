@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
 
 ## Status
 
@@ -29,6 +29,19 @@ The 2026-10-15 local run used Flutter 3.47.7/Dart 3.13.5, Rust 1.98.0 and Debian
 system media libraries against 21bfb3aa6891 plus the working diff. It passed in
 18.02s on the final warm run, with at least 7,752,691,712 bytes MemAvailable.
 This is developer evidence, not packaged acceptance or a performance benchmark.
+
+The 2026-10-17 real Debian rerun used the live Playground-enforced policy at
+revision 17 and the `codex-worker` UID. Rust 1.98.0 was readable, the worker
+created and removed a file in `.rustup/tmp`, and the Linux debug app built; its
+single editor journey passed at source `219bcf721f653576b31d5bf52645e86ab4b98f88`
+plus the working diff in 79.1s, with a minimum 6,014,963,712 bytes MemAvailable.
+The nested bridge toolchain manifest hash was unchanged after the run. The runner
+temporarily selected `x86_64-unknown-linux-gnu` so Rustup would not fetch unused
+Apple/Android/Windows targets. `flutter pub get --offline --enforce-lockfile`
+reported cached content-hash mismatches but exited successfully; the tracked
+`pubspec.lock` was unchanged. This remains debug Linux developer evidence, not
+packaged acceptance, an OS-picker check, or a performance benchmark.
+
 The independent [Linux UI run 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316)
 passed analyzer, six focused component/semantics tests and the actual Linux
 journey at exact source `66164227f3e39aa32567890eb88850d54ff9aa37`, using the
