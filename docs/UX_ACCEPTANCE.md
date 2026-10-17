@@ -217,6 +217,13 @@ headless or widget-level checks:
   evidence (Flutter 3.47.7, 98 widget tests and a clean analyzer); exact-SHA
   hosted verification is recorded in
   [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+- The create-project journey at the emulator-sized 320x640 viewport, which the
+  Android SAF acceptance run uses, had no working overflow guard: the committed
+  test installed its own `FlutterError.onError`, and `takeException()` reads only
+  the framework's recorded error, so its assertion could not fail. The test now
+  uses the shared create-project helper and the framework error handler; it
+  mounts the empty workspace at 320x640 and passes with no overflow. This
+  corrects a vacuous guard rather than reporting a reproduced defect.
 
 ## PRODUCTION REQUIRED FUTURE
 

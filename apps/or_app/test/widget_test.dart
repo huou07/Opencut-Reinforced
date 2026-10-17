@@ -1999,22 +1999,25 @@ void main() {
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
-  testWidgets('ZZ probe create at 320x640', (tester) async {
+  testWidgets('compact 320x640 create-project journey does not overflow', (
+    tester,
+  ) async {
+    // The Android SAF acceptance journey creates a project at the emulator's
+    // 320x640 viewport. This test replaced a probe that installed its own
+    // FlutterError.onError; the framework then never recorded the error, so its
+    // `takeException()` assertion could not fail and the journey had no real
+    // overflow guard.
     _setViewport(tester, const Size(320, 640));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()..savePath = '/tmp/zz-ovf.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-create.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
-    FlutterError.onError = (details) {
-      FlutterError.dumpErrorToConsole(details);
-    };
-    await tester.tap(find.byKey(const ValueKey('home-new-project')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('new-project-name')),
-      'Ov',
+    await _createProject(tester, 'Compact create');
+
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
