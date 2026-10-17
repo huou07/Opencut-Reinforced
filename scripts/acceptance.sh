@@ -6,9 +6,12 @@
 # checks repository hygiene and documents, and weaker than hosted CI, which owns
 # native, packaged and cross-platform acceptance.
 #
-# Anything that needs FFmpeg/codec fixtures, a GPU, Android, macOS, Windows or a
-# packaged artifact stays the authority of GitHub Actions and is NOT simulated
-# here. A check that cannot run is reported as UNVERIFIED, never as a pass.
+# Codec-fixture lanes run here when the pinned FFmpeg 8 binaries are installed
+# (FFmpeg 8 is required: the proxy filter graph uses `scale=...:reset_sar=1`,
+# which Debian 13's FFmpeg 7 rejects). Anything that needs a GPU, Android, macOS,
+# Windows or a packaged artifact stays the authority of GitHub Actions and is NOT
+# simulated here. A check that cannot run is reported as UNVERIFIED, never as a
+# pass, and every unselected lane is named in the final record.
 #
 # Usage: bash scripts/acceptance.sh [--timeout N]
 set -uo pipefail
@@ -21,6 +24,13 @@ if [[ "${1:-}" == "--timeout" && -n "${2:-}" ]]; then CHECK_TIMEOUT=$2; fi
 
 failed=0
 unverified=()
+unverified_lane() {
+  local name=$1 reason=$2
+  printf '\n== %s ==\n' "$name"
+  printf 'RESULT: UNVERIFIED — %s\n' "$reason"
+  unverified+=("$name: $reason")
+}
+
 run() {
   local name=$1; shift
   printf '\n== %s ==\n' "$name"
@@ -36,13 +46,50 @@ run() {
 run 'Repository hygiene, document and claim gates' \
   bash scripts/check-repo.sh
 
-# The documented local Rust lanes. The workspace also contains media, audio, AI
-# and whisper crates whose tests need codec fixtures or provider credentials;
-# those are hosted-CI authority and are not claimed here.
+# The documented local Rust lanes.
 run 'Rust core and CLI tests' \
   cargo test -p or_core -p or_cli --locked
 run 'Rust bridge, IPC and runtime tests' \
   cargo test -p or_app_bridge -p or_ipc -p or_runtime --locked
+
+# The media lanes and the eight tests the media crates mark `#[ignore]` were
+# previously omitted entirely, so a green gate said nothing about them. They are
+# runnable here once the pinned FFmpeg 8 binaries are on PATH: the proxy filter
+# graph uses `scale=...:reset_sar=1`, an FFmpeg 8 option, so Debian 13's FFmpeg 7
+# fails it. Widen to them when FFmpeg 8 is installed; otherwise name every
+# omitted lane as UNVERIFIED instead of silently dropping it.
+FFMPEG8_DIR="${HOME}/.local/ffmpeg8"
+if [[ -x "$FFMPEG8_DIR/ffmpeg" && -x "$FFMPEG8_DIR/ffprobe" ]]; then
+  export PATH="$FFMPEG8_DIR:$PATH"
+  printf '\n== Media codec toolchain ==\n'
+  printf 'using FFmpeg 8 from %s (%s)\n' "$FFMPEG8_DIR" "$("$FFMPEG8_DIR/ffmpeg" -version | head -n1)"
+  run 'Media probe integration tests (real FFmpeg 8)' \
+    cargo test -p or_core --test media_probe_integration --locked -- --ignored
+  run 'Media artifact integration tests (real FFmpeg 8)' \
+    cargo test -p or_core --test media_artifacts_integration --locked -- --ignored
+  run 'Media crate tests' \
+    cargo test -p or_media --locked
+  run 'Media crate codec-enabled export writer' \
+    cargo test -p or_media --test software_export --locked -- --ignored
+else
+  unverified_lane 'Media probe integration tests (5 ignored tests)' \
+    "FFmpeg 8 is not installed at $FFMPEG8_DIR, and the proxy filter graph needs its reset_sar option"
+  unverified_lane 'Media artifact integration tests (2 ignored tests)' \
+    "FFmpeg 8 is not installed at $FFMPEG8_DIR, and the proxy filter graph needs its reset_sar option"
+  unverified_lane 'or_media crate tests and the codec-enabled export writer' \
+    "or_media was not selected because the pinned FFmpeg 8 binaries are not installed at $FFMPEG8_DIR"
+fi
+
+# Crates the bounded local gate deliberately does not select. They stay named so
+# the record never reads as broader coverage than it has.
+unverified_lane 'or_render tests' \
+  'not selected by this bounded local gate; GPU/offscreen-render behaviour is hosted-CI authority'
+unverified_lane 'or_audio tests' \
+  'not selected by this bounded local gate; there is no audio device on this host and audio behaviour is hosted-CI authority'
+unverified_lane 'or_ai tests' \
+  'not selected by this bounded local gate; provider credentials and hosted model runtimes are owner/hosted-CI authority'
+unverified_lane 'or_whisper_provider tests' \
+  'not selected by this bounded local gate; the model download and runtime are owner/hosted-CI authority'
 
 if command -v flutter >/dev/null 2>&1; then
   # The Flutter test runner can fail to start for host reasons: the native-assets
@@ -82,6 +129,25 @@ else
   unverified+=("Flutter widget tests: flutter is not installed")
 fi
 
+# The bounded Linux UI preflight is the one runtime lane this workstation can
+# execute end to end: a native Flutter debug app under Xvfb with real Rust state,
+# canonical screenshots and a semantics dump. It refuses to run on a dirty tree
+# and on insufficient RAM/disk so its temporary toolchain rewrite stays
+# attributable; those preconditions are UNVERIFIED, not failures.
+printf '\n== Bounded Linux UI preflight (native editor journey under Xvfb) ==\n'
+preflight_rc=0
+timeout --signal=TERM --kill-after=30 "${CHECK_TIMEOUT}s" \
+  python3 scripts/run_linux_ui_preflight.py || preflight_rc=$?
+case "$preflight_rc" in
+  0) printf 'RESULT: PASS — Bounded Linux UI preflight\n' ;;
+  3)
+    printf 'RESULT: UNVERIFIED — the bounded preflight reported a host precondition (clean tree, RAM, disk or tool availability)\n'
+    unverified+=("Bounded Linux UI preflight: host precondition not met; see its report")
+    ;;
+  124|137) printf 'RESULT: FAIL (timeout %ss) — Bounded Linux UI preflight\n' "$CHECK_TIMEOUT"; failed=1 ;;
+  *) printf 'RESULT: FAIL (exit %s) — Bounded Linux UI preflight\n' "$preflight_rc"; failed=1 ;;
+esac
+
 if command -v gitleaks >/dev/null 2>&1; then
   # The repository has GitHub's hosted secret scanning and push protection, but
   # that is a hosting control: nothing local scanned for secrets before this.
@@ -94,7 +160,7 @@ else
   unverified+=("Secret scan: gitleaks is not installed")
 fi
 
-printf '\nNOTE: Android, macOS, Windows, packaging and codec lanes remain UNVERIFIED here.\n'
+printf '\nNOTE: Android, macOS, Windows and packaged-acceptance lanes remain hosted-CI authority and are UNVERIFIED here.\n'
 if (( failed )); then
   printf '\nPROJECT_ACCEPTANCE=FAIL\n'
   exit 1

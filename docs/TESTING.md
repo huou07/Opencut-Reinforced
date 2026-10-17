@@ -580,20 +580,27 @@ Use tiny, self-created or legally safe media fixtures. Keep fixture provenance a
 
 A check that did not run must never be reported as passing. Report its exact status and reason. Keep a failing or unavailable check visible rather than silently omitting it. Prototype simulation tests are not production application tests.
 
-## Execution-plan infrastructure
+The codec-fixture lanes and the eight tests marked `#[ignore]` in
+`crates/or_core/tests/media_probe_integration.rs`,
+`crates/or_core/tests/media_artifacts_integration.rs` and
+`crates/or_media/tests/software_export.rs` need FFmpeg 8 binaries on `PATH`: the
+proxy filter graph uses the `scale` filter's `reset_sar` option, which FFmpeg 7
+rejects, and the export writer needs a codec-enabled profile. Hosted CI builds
+the pinned FFmpeg 8.1.3 profile; a local gate widens to those lanes only when an
+FFmpeg 8 build (for example `~/.local/ffmpeg8` with `libvpx-vp9` and `libopus`)
+is installed, and otherwise names them as `UNVERIFIED` instead of omitting them.
 
-The standard-library-only execution infrastructure has focused tests for valid
-plan/state validation, duplicate IDs, missing dependencies, cycles, multiple
-`NEXT` states, unfinished prerequisites, unknown state IDs, grandfathered
-pre-boundary completion, required evidence after the 7A boundary,
-dirty-worktree refusal, non-zero runner exit, protected runner-state mutation,
-exact-SHA workflow and required-job matching, wrong branch/event/conclusion,
-rate/token behavior, timeout behavior without real sleeps, preview release
-contracts, exact resume guards, metadata-only platform filtering, and
-exactly-one-checkpoint transitions. The repository hygiene check runs both the
-execution-plan and architecture-policy checkers and requires the evidence
-policy, evidence directory documentation, and evidence module. These checks
-use fake API data and do not mutate the real plan or state.
+## Execution-plan infrastructure (archived)
+
+> **Archival (2026-10-14).** The execution-plan and architecture-policy
+> validators described in earlier revisions of this section belonged to the
+> paused checkpoint framework. They now live under `scripts/archive/` and the
+> repository hygiene check no longer invokes them. The live
+> `scripts/check-repo.sh` gate runs the document-link, document-freshness,
+> claim-evidence and claim-validator regression checks, the `or_core`
+> dependency-boundary check (`scripts/check_or_core_deps.py`), the bounded
+> preflight-preparation checks and the Android report/runner checks. The
+> archived validators are historical material, not current gates.
 
 The maintenance guard also locks the current post-7F0 transition
 `7F0 -> 7F1 -> 7F` and the later `8F -> 9A0 -> 9A` Android gate, verifies the

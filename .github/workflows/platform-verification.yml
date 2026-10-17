@@ -2,6 +2,9 @@ name: Platform verification
 
 on:
   pull_request:
+  # The merge queue runs the same matrix against the merge-group ref, so the
+  # aggregate release-gate below is evaluated for the exact tree that would land.
+  merge_group:
   push:
     branches:
       - main
@@ -1803,3 +1806,31 @@ jobs:
           path: ${{ runner.temp }}/descriptor-permission.json
           if-no-files-found: error
           retention-days: 14
+
+  # The one aggregate check the owner can require for merge. It runs even when a
+  # dependency failed or was skipped (`if: always()`), and it fails unless every
+  # required platform job reports `success`: a skipped or neutral job is not
+  # success and cannot satisfy a gate. Keep this job's name stable — the branch
+  # ruleset requires the `release-gate` check.
+  release-gate:
+    name: release-gate
+    if: always()
+    needs:
+      - rust
+      - flutter-static
+      - macos
+      - linux
+      - windows
+      - android
+      - granted-descriptor-capability
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require every required platform job to have succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 scripts/release_gate.py --needs-json "$NEEDS_JSON"

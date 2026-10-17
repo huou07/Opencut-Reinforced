@@ -3,12 +3,68 @@
 
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def run_runner(arguments: list[str], *, env: dict[str, str],
+               timeout: int) -> subprocess.CompletedProcess[str]:
+    """Run the Android preview runner and reap its whole process session.
+
+    The runner starts background collectors and helper processes. They inherit
+    the runner's session, but a plain `subprocess.run` waits only for the direct
+    child: an orphaned grandchild can still append to the caller's output
+    directory while a `TemporaryDirectory` is being removed, which surfaces as
+    `OSError: [Errno 39] Directory not empty` during teardown. Starting the
+    runner in its own session and killing that session after it returns removes
+    every descendant before the test cleans up.
+    """
+    # Capture through files, never pipes: a leftover background writer that
+    # inherited a pipe would keep `communicate()` waiting for EOF and turn every
+    # run into a timeout. `wait()` returns when the runner itself exits; the
+    # session kill below then removes any survivor before the caller reads the
+    # output and removes its temporary directory.
+    with tempfile.TemporaryFile(mode="w+") as stdout_file, \
+            tempfile.TemporaryFile(mode="w+") as stderr_file:
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "scripts/run-android-preview-check.sh"),
+             *arguments],
+            cwd=ROOT,
+            env=env,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            start_new_session=True,
+        )
+        timed_out = False
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+        finally:
+            kill_session(process)
+            process.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read()
+        stderr = stderr_file.read()
+    if timed_out:
+        raise subprocess.TimeoutExpired(
+            process.args, timeout, output=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(
+        process.args, process.returncode, stdout, stderr)
+
+
+def kill_session(process: subprocess.Popen[str]) -> None:
+    """Kill every process left in the runner's session, including orphans."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 class AndroidPreviewRunnerTests(unittest.TestCase):
@@ -72,22 +128,16 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 "OR_ANDROID_SAF_FLOW": "export",
             }
             try:
-                result = subprocess.run(
+                result = run_runner(
                     [
-                        "bash",
-                        str(ROOT / "scripts/run-android-preview-check.sh"),
                         "saf",
                         "integration_test.dart",
                         "driver.dart",
                         "fixture.apk",
                         "recovery.apk",
                     ],
-                    cwd=ROOT,
                     env=env,
-                    text=True,
-                    capture_output=True,
                     timeout=20,
-                    check=False,
                 )
             except subprocess.TimeoutExpired as error:
                 self.fail(
@@ -164,22 +214,16 @@ class AndroidPreviewRunnerTests(unittest.TestCase):
                 "GITHUB_WORKSPACE": str(ROOT),
                 "OR_ANDROID_ACCEPTANCE_OUTPUT": str(output),
             }
-            result = subprocess.run(
+            result = run_runner(
                 [
-                    "bash",
-                    str(ROOT / "scripts/run-android-preview-check.sh"),
                     "saf",
                     "integration_test.dart",
                     "driver.dart",
                     "fixture.apk",
                     "recovery.apk",
                 ],
-                cwd=ROOT,
                 env=env,
-                text=True,
-                capture_output=True,
-                    timeout=20,
-                check=False,
+                timeout=20,
             )
             event_output = events.read_text() if events.exists() else "none"
             guest_output = (

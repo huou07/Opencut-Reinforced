@@ -1538,32 +1538,71 @@ fn main() {
         .unwrap()
     }
 
+    /// How long a media-artifact test may observe no progress before it fails.
+    ///
+    /// These tests spawn real child processes, including a one-time `rustc`
+    /// build of the fake FFmpeg stub, so a shared hosted runner can take tens of
+    /// seconds to advance the state machine or publish an event. A fixed total
+    /// deadline turns that runner latency into a product failure; failing only
+    /// after a period without observable progress keeps a slow but advancing run
+    /// valid.
+    const WAIT_STALL_TIMEOUT: Duration = Duration::from_secs(60);
+    const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+    /// The no-progress budget. `OR_MEDIA_ARTIFACT_TEST_WAIT_MS` exists so the
+    /// regression guard can prove this wait can fail: the gate injects a 1 ms
+    /// budget and requires the media tests to go red.
+    fn wait_stall_timeout() -> Duration {
+        std::env::var("OR_MEDIA_ARTIFACT_TEST_WAIT_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(WAIT_STALL_TIMEOUT)
+    }
+
     fn wait_for_state(service: &MediaArtifactService, job_id: JobId, expected: JobState) {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while service.job_snapshot(job_id).map(|snapshot| snapshot.state) != Some(expected) {
+        let stall_timeout = wait_stall_timeout();
+        let mut observed = service.job_snapshot(job_id).map(|snapshot| snapshot.state);
+        let mut progressed_at = Instant::now();
+        loop {
+            if observed == Some(expected) {
+                return;
+            }
+            thread::sleep(WAIT_POLL_INTERVAL);
+            let next = service.job_snapshot(job_id).map(|snapshot| snapshot.state);
+            if next != observed {
+                observed = next;
+                progressed_at = Instant::now();
+            }
             assert!(
-                Instant::now() < deadline,
-                "artifact job did not reach {expected:?}"
+                progressed_at.elapsed() < stall_timeout,
+                "artifact job did not reach {expected:?}: no state progress for                  {stall_timeout:?} (last observed {observed:?})"
             );
-            thread::sleep(Duration::from_millis(5));
         }
     }
 
     fn wait_for_process_count(directory: &TestDirectory, expected: usize) {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while directory.process_count() < expected {
+        let stall_timeout = wait_stall_timeout();
+        let mut observed = directory.process_count();
+        let mut progressed_at = Instant::now();
+        while observed < expected {
+            thread::sleep(WAIT_POLL_INTERVAL);
+            let next = directory.process_count();
+            if next != observed {
+                observed = next;
+                progressed_at = Instant::now();
+            }
             assert!(
-                Instant::now() < deadline,
-                "fake ffmpeg process did not start"
+                progressed_at.elapsed() < stall_timeout,
+                "fake ffmpeg process did not start: no process-count progress for                  {stall_timeout:?} (last count {observed}, expected {expected})"
             );
-            thread::sleep(Duration::from_millis(5));
         }
     }
 
     fn wait_event(receiver: &mpsc::Receiver<MediaArtifactEvent>) -> MediaArtifactEvent {
         receiver
-            .recv_timeout(Duration::from_secs(5))
-            .expect("artifact event was not published")
+            .recv_timeout(wait_stall_timeout())
+            .expect("artifact event was not published within the no-progress budget")
     }
 
     #[test]

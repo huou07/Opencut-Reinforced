@@ -46,7 +46,17 @@ health_pid=$!
 picker_pid=
 lifecycle_pid=
 cleanup() {
-  kill "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
+  # Kill the full descendant tree of every background job, not only the
+  # subshells that launched them: an orphaned grandchild (for example a
+  # `sleep`, an `adb` probe or a helper process) can outlive its parent and keep
+  # appending to the caller's output directory after this runner exits, racing a
+  # test harness' temporary-directory cleanup. Killing the trees, then waiting
+  # on the direct children, leaves no writer behind.
+  local background_pid
+  for background_pid in "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"}; do
+    [[ -n "$background_pid" ]] || continue
+    stop_process_tree "$background_pid"
+  done
   wait "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
 }
 stop_process_tree() {

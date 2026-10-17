@@ -196,6 +196,13 @@ if ! python3 scripts/test_android_preview_runner.py; then
   fail "the Android preview runner control-flow checks failed"
 fi
 
+# The aggregate release gate is the only check meant to block a merge, so its
+# logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
+# logic rots, the gate silently becomes a rubber stamp.
+if ! python3 scripts/test_release_gate.py; then
+  fail "the aggregate release-gate logic checks failed"
+fi
+
 # Lint the repository's own shell gates. A gate that fails to parse is worse
 # than no gate: it looks like a passing check.
 if command -v shellcheck >/dev/null 2>&1; then
@@ -216,4 +223,4 @@ if (( failed != 0 )); then
   exit 1
 fi
 
-printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-source-identity, preflight-preparation and Android-report checks).\n' "$tracked_count"
+printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-source-identity, preflight-preparation, Android-report and release-gate-logic checks).\n' "$tracked_count"
