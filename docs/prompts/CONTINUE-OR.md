@@ -43,6 +43,58 @@ otherwise continue to the next roadmap journey — the broader offline-media and
 bulk-relink workflow is still unimplemented, and real-user feedback, Android
 transcription and physical-device responsiveness remain unverified.
 
+Dated inspection, 2026-10-17 (second session, owner-paused under
+`docs/prompts/NEXT-OR.md`). **This entry supersedes the "Next action" above**:
+that instruction to read `gh run view 39018753306` is obsolete, because the
+reorganization added commits and the NEXT-OR task replaced that queue. Branch
+feat/semantics-journey-guards, HEAD
+1ae03db2552af9cb9a63b0d9de5ed29927ec1840, `git status --short` empty, tree clean,
+11 commits ahead of `origin` and **not pushed** (the owner forbade pushing in
+both pauses). The NEXT-OR scope is complete except for one verification run; all
+seven of its items are committed:
+
+- 14175b4 reports truthful gate results: it repairs the broken link that had left
+  HEAD's verify gate red, and teaches `scripts/acceptance.sh` to classify "the
+  Flutter lane could not start" as UNVERIFIED with the exact reason instead of
+  FAIL, while still failing any suite that actually starts and fails.
+- 7517e6a hardens `scripts/check_claims.py`: `implementation_sha` must exist in
+  Git and be an ancestor of HEAD, `verification` must name workflow/jobs/run_id,
+  and a shallow or absent repository is reported as an unavailable check.
+  `scripts/test_check_claims.py` feeds it a fabricated SHA, a real commit outside
+  HEAD history, missing hosted identities, a short SHA and a non-repository, and
+  `repo-hygiene.yml` now checks out full history (`fetch-depth: 0`).
+- aa7dabf runs the two orphan Android suites (`test_android_preview_runner.py`,
+  `test_verify_android_saf_recovery.py` — the latter as `python3 -m`, which is
+  why it never ran) from `check-repo.sh`.
+- 2dbd8d2 extends required files and doc freshness, normalises `Date:` to
+  `Last reviewed:`, dates the documents that lacked it and indexes five missing
+  documents. Host note: the repository root carries the sticky bit and is owned
+  by `huou07`, so root-level files (README.md, DESIGN.md) can only be written in
+  place from this worker UID, never replaced by rename.
+- f2d364f makes the preflight interrupt-safe: clean-tree precondition,
+  startup recovery from `apps/or_app/build/ui-preflight/rust-toolchain.toml.original`,
+  a `--plan` dry run, and a separate 300 s `pub get` stage before the 600 s
+  native budget.
+- b3bddc3 closes the secret-scan gap: `acceptance.sh` runs `gitleaks detect` when
+  installed and reports the lane UNVERIFIED when not, and `repo-hygiene.yml`
+  downloads gitleaks 8.30.1 and verifies its SHA-256 before running it.
+- adc2e13 records in `docs/QUALITY.md` why OR has no performance budget and what
+  would be needed, and 1ae03db removes the release gates `AGENT-AUTHORITY.md`
+  claimed but `RELEASE.md` never defined.
+
+Last completed command: `bash scripts/acceptance.sh` ->
+`PROJECT_ACCEPTANCE=PASS with 1 UNVERIFIED lane (Flutter widget tests: shared
+Flutter SDK cache not writable by this user)`, with the repository, both Rust
+lanes and the new gitleaks lane PASS. Unfinished: the real
+`python3 scripts/run_linux_ui_preflight.py` run under the interrupt-safe code.
+It never started because the host stayed below the preflight's own 6 GiB
+MemAvailable guard (an unrelated `h07p-lab` qemu VM holds ~2.4 GB);
+`--plan` correctly reported `BLOCKED: insufficient RAM or disk headroom` and
+changed nothing. Its logic is covered by 16 unit tests, but the end-to-end run
+is UNVERIFIED. Next action: once MemAvailable is at least 6 GiB and the tree is
+still clean, run `python3 scripts/run_linux_ui_preflight.py --plan` and then the
+real preflight, then push the branch and let hosted CI decide.
+
 ## Implement the next useful outcome
 
 The active roadmap identifies ordinary-user feedback as the highest-value gap.
