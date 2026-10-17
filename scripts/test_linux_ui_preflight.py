@@ -90,6 +90,121 @@ class CargoCachePreparationTests(unittest.TestCase):
             self.assertEqual(environment["PUB_CACHE"], str(copied))
 
 
+class CacheWriteProbeTests(unittest.TestCase):
+    def test_probe_rejects_a_cache_the_sandbox_denies_despite_access(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            with patch.object(preflight.os, "access", return_value=True), patch.object(
+                preflight.tempfile,
+                "NamedTemporaryFile",
+                side_effect=PermissionError(13, "sandbox denied"),
+            ):
+                self.assertFalse(preflight.cache_is_writable(directory))
+
+    def test_probe_survives_a_directory_that_denies_access(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            with patch.object(preflight.os, "access", return_value=False):
+                self.assertFalse(preflight.cache_is_writable(directory))
+            self.assertFalse(any(directory.iterdir()))
+
+
+class FlutterOverlayTests(unittest.TestCase):
+    def _synthetic_sdk(self, root: Path) -> Path:
+        sdk = root / "flutter"
+        (sdk / "bin" / "internal").mkdir(parents=True)
+        (sdk / "bin" / "internal" / "shared.sh").write_text("# shared\n")
+        (sdk / "bin" / "flutter").write_text("#!/usr/bin/env bash\n")
+        (sdk / "bin" / "flutter").chmod(0o755)
+        (sdk / "bin" / "cache" / "artifacts" / "engine" / "linux-x64").mkdir(parents=True)
+        (sdk / "bin" / "cache" / "artifacts" / "engine" / "linux-x64" / "flutter_tester").write_text("engine")
+        (sdk / "bin" / "cache" / "engine.stamp").write_text("shared-stamp\n")
+        (sdk / "packages").mkdir()
+        (sdk / "version").write_text("3.47.7\n")
+        return sdk
+
+    def _read_only_access(self, sdk: Path):
+        real_access = os.access
+
+        def worker_access(path, mode):
+            if Path(path) == sdk / "bin" / "cache" and mode == os.W_OK:
+                return False
+            return real_access(path, mode)
+
+        return worker_access
+
+    def test_overlay_copies_small_files_and_links_read_only_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk = self._synthetic_sdk(root)
+            target = root / "overlay"
+            preflight.materialize_flutter_overlay(sdk, target)
+
+            self.assertTrue((target / "bin" / "flutter").is_file())
+            self.assertFalse((target / "bin" / "flutter").is_symlink())
+            self.assertTrue((target / "bin" / "cache" / "engine.stamp").is_file())
+            self.assertFalse((target / "bin" / "cache" / "engine.stamp").is_symlink())
+            self.assertTrue((target / "bin" / "cache" / "artifacts").is_symlink())
+            self.assertEqual(
+                (target / "bin" / "cache" / "artifacts").resolve(),
+                sdk / "bin" / "cache" / "artifacts",
+            )
+            self.assertTrue((target / "packages").is_symlink())
+            self.assertEqual((target / "version").read_text(), "3.47.7\n")
+
+    def test_read_only_shared_cache_is_mirrored_and_reused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk = self._synthetic_sdk(root)
+            app = root / "or-app"
+            app.mkdir()
+            environment = {"PATH": str(sdk / "bin")}
+
+            with patch.object(preflight, "APP", app), patch.object(
+                preflight.os, "access", side_effect=self._read_only_access(sdk)
+            ):
+                preflight.writable_flutter_root(environment)
+                overlay = app / ".dart_tool" / preflight.FLUTTER_OVERLAY_NAME
+                self.assertTrue((overlay / "bin" / "flutter").is_file())
+                self.assertTrue((overlay / "bin" / "cache" / "engine.stamp").is_file())
+                self.assertTrue(environment["PATH"].startswith(f"{overlay / 'bin'}{os.pathsep}"))
+                first = overlay.stat().st_ino
+                preflight.writable_flutter_root(environment)
+                self.assertEqual(overlay.stat().st_ino, first)
+
+            # The shared SDK is never written: its stamp still holds the original bytes.
+            self.assertEqual((sdk / "bin" / "cache" / "engine.stamp").read_text(), "shared-stamp\n")
+
+    def test_writable_shared_cache_is_used_directly(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk = self._synthetic_sdk(root)
+            app = root / "or-app"
+            app.mkdir()
+            environment = {"PATH": str(sdk / "bin")}
+
+            with patch.object(preflight, "APP", app):
+                preflight.writable_flutter_root(environment)
+
+            self.assertEqual(environment["PATH"], str(sdk / "bin"))
+            self.assertFalse((app / ".dart_tool").exists())
+
+    def test_overlay_owned_by_another_worker_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk = self._synthetic_sdk(root)
+            app = root / "or-app"
+            overlay = app / ".dart_tool" / preflight.FLUTTER_OVERLAY_NAME
+            overlay.mkdir(parents=True)
+            environment = {"PATH": str(sdk / "bin")}
+
+            with patch.object(preflight, "APP", app), patch.object(
+                preflight.os, "access", side_effect=self._read_only_access(sdk)
+            ), patch.object(preflight.os, "getuid", return_value=os.getuid() + 1):
+                with self.assertRaises(RuntimeError):
+                    preflight.writable_flutter_root(environment)
+
+
 class ToolchainScopeTests(unittest.TestCase):
     def test_linux_target_is_temporary_and_restores_exact_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:

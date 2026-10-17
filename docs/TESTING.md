@@ -42,6 +42,21 @@ reported cached content-hash mismatches but exited successfully; the tracked
 `pubspec.lock` was unchanged. This remains debug Linux developer evidence, not
 packaged acceptance, an OS-picker check, or a performance benchmark.
 
+The 2026-10-17 sandboxed worker rerun ran with the harness file policy restricted
+to the workspace, where the shared owner Flutter/Cargo/pub caches are readable
+but not writable. `os.access` reports those ACL grants as writable, so the
+preflight now probes an actual create before deciding a cache can be used in
+place, and mirrors the Flutter SDK into an ignored
+`apps/or_app/.dart_tool/flutter-overlay` when the shared `bin/cache` cannot be
+written. The overlay keeps a real `bin` tree (about 46 MB including the tool
+snapshot) and symlinks the large read-only `artifacts`/`dart-sdk` trees, so the
+shared SDK bytes are never modified: its `engine.stamp` held
+`deb287481e3ce9468f3434937ced4240a70539ca` before and after the run. The journey
+passed at source `791a27f4839955bb6c0b2a16a4255bf12b341c8d` plus the working
+diff in 20.03s on a warm build, with a minimum 7,169,503,232 bytes
+MemAvailable. Ten focused preflight tests cover cache staging, the write probe
+and the overlay.
+
 The independent [Linux UI run 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316)
 passed analyzer, six focused component/semantics tests and the actual Linux
 journey at exact source `66164227f3e39aa32567890eb88850d54ff9aa37`, using the

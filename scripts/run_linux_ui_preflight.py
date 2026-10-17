@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps/or_app"
 GIB = 1024 ** 3
 TOOLCHAIN_TARGETS = re.compile(r"(?ms)^(?P<indent>[ \t]*)targets[ \t]*=[ \t]*\[.*?^(?P=indent)\]")
+FLUTTER_OVERLAY_NAME = "flutter-overlay"
 
 
 def linux_rust_target() -> str:
@@ -69,10 +70,27 @@ def available_memory() -> int:
     raise RuntimeError("MemAvailable is unavailable")
 
 
+def cache_is_writable(path: Path) -> bool:
+    """Probe for a real write.
+
+    `os.access` reports the shared owner caches as writable because their ACLs
+    grant this worker `rw`, but a sandboxed run still denies the write. Only an
+    actual create proves the cache can be used in place.
+    """
+    if not os.access(path, os.W_OK):
+        return False
+    try:
+        with tempfile.NamedTemporaryFile(dir=path, prefix=".or-write-probe-"):
+            pass
+    except OSError:
+        return False
+    return True
+
+
 def writable_cargo_cache(environment: dict[str, str]) -> None:
     """Copy readable public registry/Git entries; never copy credentials or config."""
     seed = Path(environment.get("CARGO_HOME", ""))
-    if not seed.is_absolute() or not seed.is_dir() or os.access(seed, os.W_OK):
+    if not seed.is_absolute() or not seed.is_dir() or cache_is_writable(seed):
         return
     target = APP / ".dart_tool/aeh-cargo"
     if target.is_symlink():
@@ -116,7 +134,7 @@ def writable_pub_cache(environment: dict[str, str]) -> None:
     seed = Path(environment.get("PUB_CACHE", home / ".pub-cache"))
     public_cache = seed / "hosted" / "pub.dev"
     if not seed.is_dir() or (
-        not public_cache.is_dir() or os.access(public_cache, os.W_OK)
+        not public_cache.is_dir() or cache_is_writable(public_cache)
     ):
         return
     target = APP / ".dart_tool/aeh-pub-cache"
@@ -151,6 +169,85 @@ def writable_pub_cache(environment: dict[str, str]) -> None:
             prepared.rename(target)
     environment["PUB_CACHE"] = str(target)
 
+
+def flutter_root_from(environment: dict[str, str]) -> Path | None:
+    """Resolve the shared Flutter SDK root the way `bin/flutter` resolves itself."""
+    candidates = []
+    configured = environment.get("FLUTTER_ROOT")
+    if configured:
+        candidates.append(Path(configured) / "bin" / "flutter")
+    found = shutil.which("flutter", path=environment.get("PATH"))
+    if found:
+        candidates.append(Path(found))
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        root = resolved.parent.parent
+        if (root / "bin" / "internal" / "shared.sh").is_file():
+            return root
+    return None
+
+
+def materialize_flutter_overlay(real_root: Path, target: Path) -> None:
+    """Mirror a read-only Flutter SDK so its `bin/cache` becomes writable.
+
+    `bin/flutter` derives `FLUTTER_ROOT` from its own location and rewrites
+    `bin/cache/engine.stamp` on every invocation, so a worker that cannot write
+    the shared SDK needs a real `bin` tree. Everything else keeps a symlink to
+    the shared SDK: only the small tool snapshot and metadata are duplicated,
+    not the engine artifacts.
+    """
+    target.mkdir(parents=True)
+    for entry in sorted(real_root.iterdir()):
+        if entry.name == "bin":
+            continue
+        (target / entry.name).symlink_to(entry)
+    bin_source = real_root / "bin"
+    bin_target = target / "bin"
+    bin_target.mkdir()
+    for entry in sorted(bin_source.iterdir()):
+        if entry.name == "cache":
+            continue
+        if entry.is_dir():
+            shutil.copytree(entry, bin_target / entry.name, symlinks=True)
+        else:
+            shutil.copy2(entry, bin_target / entry.name)
+    cache_source = bin_source / "cache"
+    cache_target = bin_target / "cache"
+    cache_target.mkdir()
+    for entry in sorted(cache_source.iterdir()):
+        if entry.is_dir() and not entry.is_symlink():
+            (cache_target / entry.name).symlink_to(entry)
+        else:
+            shutil.copy2(entry, cache_target / entry.name, follow_symlinks=False)
+
+
+def writable_flutter_root(environment: dict[str, str]) -> None:
+    """Point PATH at a writable SDK mirror when the shared cache is read-only."""
+    root = flutter_root_from(environment)
+    if root is None:
+        raise RuntimeError("BLOCKED: the Flutter SDK root could not be located")
+    if cache_is_writable(root / "bin" / "cache"):
+        return
+    target = APP / ".dart_tool" / FLUTTER_OVERLAY_NAME
+    if target.is_symlink():
+        raise RuntimeError("BLOCKED: redirected project Flutter overlay")
+    if target.exists():
+        if target.stat().st_uid != os.getuid():
+            raise RuntimeError("BLOCKED: project Flutter overlay belongs to another worker")
+        if not (target / "bin" / "flutter").is_file():
+            raise RuntimeError("BLOCKED: project Flutter overlay is incomplete")
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="or-flutter-overlay-", dir=target.parent) as staging:
+            prepared = Path(staging) / "flutter"
+            materialize_flutter_overlay(root, prepared)
+            prepared.rename(target)
+    environment["PATH"] = f"{target / 'bin'}{os.pathsep}{environment.get('PATH', '')}"
+
+
 def main() -> int:
     if available_memory() < 6 * GIB or shutil.disk_usage(APP).free < 6 * GIB:
         raise RuntimeError("BLOCKED: require 6 GiB available RAM and disk before starting")
@@ -171,6 +268,7 @@ def main() -> int:
                    OR_UI_ARTIFACT_DIR=str(artifacts))
         writable_cargo_cache(env)
         writable_pub_cache(env)
+        writable_flutter_root(env)
         commands = [
             ["flutter", "--no-version-check", "pub", "get", "--offline", "--enforce-lockfile"],
             ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24",

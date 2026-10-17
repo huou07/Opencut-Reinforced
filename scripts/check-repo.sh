@@ -159,6 +159,15 @@ if ! python3 scripts/check_or_core_deps.py; then
   failed=1
 fi
 
+# The bounded Linux preflight depends on cache preparation that no compiler
+# exercises: staging project-local Cargo/pub caches, probing write access, and
+# mirroring a read-only Flutter SDK. A silent break there only shows up as a
+# confusing permission error minutes into a native run, so its hermetic unit
+# tests run with the other gates.
+if ! python3 scripts/test_linux_ui_preflight.py; then
+  fail "the bounded Linux preflight preparation checks failed"
+fi
+
 # Lint the repository's own shell gates. A gate that fails to parse is worse
 # than no gate: it looks like a passing check.
 if command -v shellcheck >/dev/null 2>&1; then
@@ -179,4 +188,4 @@ if (( failed != 0 )); then
   exit 1
 fi
 
-printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness and claim-evidence checks).\n' "$tracked_count"
+printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-evidence and preflight-preparation checks).\n' "$tracked_count"

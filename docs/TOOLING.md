@@ -72,7 +72,15 @@ settings and harness credential stores private.
 The Linux preflight gives Flutter temporary XDG config/cache/data directories and
 copies only readable public Cargo registry/Git and pub.dev caches into ignored
 `apps/or_app/.dart_tool/aeh-cargo` and `aeh-pub-cache` when the shared caches
-are not writable. It excludes Cargo config and credentials, resolves dependencies
+are not writable. Writability is decided by an actual create probe, not
+`os.access`: the shared owner caches carry `rw` ACLs for workers, which
+`os.access` reports as writable even where a sandboxed run denies the write.
+Flutter additionally rewrites `bin/cache/engine.stamp` beside its own script on
+every invocation, so when the shared SDK cache is not writable the preflight
+mirrors the SDK into ignored `apps/or_app/.dart_tool/flutter-overlay` and puts
+that `bin` first on `PATH`. The overlay keeps a real `bin` tree and symlinks the
+large read-only `artifacts`/`dart-sdk` trees; it never writes the shared SDK. The
+preflight excludes Cargo config and credentials, resolves dependencies
 offline with the checked-in lockfile, and runs the Linux UI test with
 `--no-pub`. The bounded runner uses one compiler worker, a shared lock, a
 600-second limit, and stops below 2 GiB available RAM. Do not copy another
@@ -80,7 +88,7 @@ machine's `target`, `build`, `.dart_tool` or Flutter ephemeral directories.
 Preserve source, locks and user data.
 
 The inspected Flutter SDK is 3.47.7; CI pins 3.47.5, so local Flutter output is
-not exact-version CI evidence. Four focused preflight tests pass. The Linux
+not exact-version CI evidence. Ten focused preflight tests pass. The Linux
 runner temporarily narrows the bridge's nested `rust-toolchain.toml` to the
 host target and restores its original bytes in `finally`; it avoids downloading
 unused cross-platform Rust targets. See the 2026-10-17 Debian run in
