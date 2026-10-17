@@ -9,8 +9,8 @@ which is the only reason they are in scope.
 
 A reorganization ran while your session was paused. Read these first:
 
-- [../docs/QUALITY.md](../docs/QUALITY.md) — OR's definition of good, its
-  attributes and its known gaps.
+- [../QUALITY.md](../QUALITY.md) — OR's definition of good, its attributes and
+  its known gaps.
 - `~/AEH/docs/quality-system.md` — the process this repository now follows:
   three gates, one evidence ledger, loadable skills, quality bar, deletion policy.
 
