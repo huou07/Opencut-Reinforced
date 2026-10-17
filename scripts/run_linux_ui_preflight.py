@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import argparse
 import fcntl
 import json
 import os
@@ -22,6 +23,10 @@ APP = ROOT / "apps/or_app"
 GIB = 1024 ** 3
 TOOLCHAIN_TARGETS = re.compile(r"(?ms)^(?P<indent>[ \t]*)targets[ \t]*=[ \t]*\[.*?^(?P=indent)\]")
 FLUTTER_OVERLAY_NAME = "flutter-overlay"
+MANIFEST_BACKUP_NAME = "rust-toolchain.toml.original"
+NATIVE_BUDGET_SECONDS = 600
+PUB_GET_BUDGET_SECONDS = 300
+REQUIRED_TOOLS = ("flutter", "xvfb-run", "clang", "clang++", "cmake", "ninja", "ffprobe")
 
 
 def linux_rust_target() -> str:
@@ -39,8 +44,45 @@ def linux_rust_target() -> str:
     return targets[machine]
 
 
+def artifact_directory() -> Path:
+    return APP / "build/ui-preflight"
+
+
+def git_output(*args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-c", f"safe.directory={ROOT}", *args], cwd=ROOT, text=True).strip()
+
+
+def working_tree_status() -> str:
+    """Porcelain status: empty means the preflight's rewrite stays attributable."""
+    return git_output("status", "--porcelain")
+
+
+def manifest_backup_path() -> Path:
+    return artifact_directory() / MANIFEST_BACKUP_NAME
+
+
+def recover_interrupted_manifest(manifest: Path, backup: Path) -> str | None:
+    """Restore a manifest that a killed run left scoped to this host.
+
+    SIGKILL cannot be caught, so `finally` never runs and the tracked manifest
+    stays edited. The next run repairs the tree from the backup before it does
+    anything else, so an interrupted run cannot leave an unattributed dirty file
+    that blocks every later run.
+    """
+    if not backup.is_file():
+        return None
+    original = backup.read_bytes()
+    if manifest.is_file() and manifest.read_bytes() == original:
+        backup.unlink()
+        return None
+    manifest.write_bytes(original)
+    backup.unlink()
+    return f"recovered {manifest} from the interrupted-run backup at {backup}"
+
+
 @contextmanager
-def linux_toolchain_target(path: Path, target: str):
+def linux_toolchain_target(path: Path, target: str, backup: Path | None = None):
     """Limit Rustup's temporary manifest to this host and restore exact bytes."""
     if path.is_symlink() or not path.is_file():
         raise RuntimeError("BLOCKED: Rust toolchain manifest is missing or redirected")
@@ -56,11 +98,16 @@ def linux_toolchain_target(path: Path, target: str):
     indent = match.group("indent")
     replacement = f'{indent}targets = [\n{indent}    "{target}",\n{indent}]'
     scoped = text[:match.start()] + replacement + text[match.end():]
+    if backup is not None:
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        backup.write_bytes(original)
     try:
         path.write_text(scoped, encoding="utf-8")
         yield
     finally:
         path.write_bytes(original)
+        if backup is not None and backup.is_file():
+            backup.unlink()
 
 
 def available_memory() -> int:
@@ -248,10 +295,155 @@ def writable_flutter_root(environment: dict[str, str]) -> None:
     environment["PATH"] = f"{target / 'bin'}{os.pathsep}{environment.get('PATH', '')}"
 
 
-def main() -> int:
+def plan_lines() -> tuple[list[str], list[str], list[list[str]]]:
+    """Describe what a real run would do, without changing anything.
+
+    Returns the report lines, the reasons the run would be blocked, and the
+    commands with their own budgets. Creating the project-local caches and the
+    Flutter mirror is a side effect, so the plan reports the decision instead of
+    performing it.
+    """
+    environment = dict(os.environ)
+    lines = [f"work tree: {ROOT}", f"HEAD: {git_output('rev-parse', 'HEAD')}"]
+    blocked: list[str] = []
+
+    status = working_tree_status()
+    lines.append(f"working tree: {'clean' if not status else 'DIRTY'}")
+    if status:
+        lines.append(status)
+        blocked.append("the working tree is not clean; commit or stash before a real run")
+
+    memory = available_memory()
+    free = shutil.disk_usage(APP).free
+    lines.append(f"MemAvailable: {memory} bytes (need {6 * GIB})")
+    lines.append(f"free disk: {free} bytes (need {6 * GIB})")
+    if memory < 6 * GIB or free < 6 * GIB:
+        blocked.append("insufficient RAM or disk headroom")
+
+    missing = [tool for tool in REQUIRED_TOOLS if not shutil.which(tool)]
+    lines.append(f"required tools: {'all present' if not missing else 'MISSING ' + ', '.join(missing)}")
+    if missing:
+        blocked.append("missing required tools")
+
+    backup = manifest_backup_path()
+    lines.append(f"toolchain manifest: {ROOT / 'crates/or_app_bridge/rust-toolchain.toml'}")
+    lines.append(f"manifest backup: {backup}{' (pending restore)' if backup.is_file() else ''}")
+    if backup.is_file():
+        lines.append("  a real run restores this backup before its clean-tree check")
+    lines.append(f"rust target: {linux_rust_target()}")
+
+    cargo = Path(environment.get("CARGO_HOME", ""))
+    if not cargo.is_absolute() or not cargo.is_dir() or cache_is_writable(cargo):
+        lines.append(f"CARGO_HOME: use {cargo or '<unset>'}")
+    else:
+        lines.append(f"CARGO_HOME: stage readable public entries into {APP / '.dart_tool/aeh-cargo'} and go offline")
+    home = Path(environment.get("HOME", str(Path.home())))
+    pub_seed = Path(environment.get("PUB_CACHE", home / ".pub-cache"))
+    public = pub_seed / "hosted" / "pub.dev"
+    if not pub_seed.is_dir() or not public.is_dir() or cache_is_writable(public):
+        lines.append(f"PUB_CACHE: use {pub_seed}")
+    else:
+        lines.append(f"PUB_CACHE: stage public pub.dev entries into {APP / '.dart_tool/aeh-pub-cache'}")
+    flutter_root = flutter_root_from(environment)
+    if flutter_root is None:
+        lines.append("FLUTTER_ROOT: NOT FOUND")
+        blocked.append("the Flutter SDK root could not be located")
+    elif cache_is_writable(flutter_root / "bin" / "cache"):
+        lines.append(f"Flutter SDK: use the shared tree at {flutter_root}")
+    else:
+        overlay = APP / ".dart_tool" / FLUTTER_OVERLAY_NAME
+        lines.append(
+            f"Flutter SDK: shared cache is not writable; mirror into {overlay}"
+            f"{' (exists)' if overlay.exists() else ' (would be created)'}")
+        lines.append(f"  PATH head becomes {overlay / 'bin'} for the run only")
+
+    commands = [
+        ["flutter", "--no-version-check", "pub", "get", "--offline", "--enforce-lockfile"],
+        ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24",
+         "flutter", "--no-version-check", "test", "--no-pub", "-d", "linux",
+         "integration_test/linux_editor_preflight_test.dart"],
+    ]
+    lines.append(f"lock: /tmp/aeh-native-ui-{os.getuid()}.lock (exclusive for the duration)")
+    lines.append(f"budgets: pub get {PUB_GET_BUDGET_SECONDS}s, native journey {NATIVE_BUDGET_SECONDS}s, "
+                 f"stop below {2 * GIB} bytes available RAM")
+    lines.append("artifacts: " + str(artifact_directory()))
+    lines.append("commands:")
+    for command in commands:
+        lines.append("  " + " ".join(command))
+    return lines, blocked, commands
+
+
+def supervise(command: list[str], budget: int,
+              environment: dict[str, str]) -> tuple[int, str | None, float, int]:
+    """Run one command with its own budget; return code, reason, elapsed, min RAM."""
+    started = time.monotonic()
+    minimum = available_memory()
+    reason = None
+    child = subprocess.Popen(command, cwd=APP, env=environment, start_new_session=True)
+    try:
+        while child.poll() is None:
+            minimum = min(minimum, available_memory())
+            if minimum < 2 * GIB:
+                reason = "BLOCKED: available RAM fell below 2 GiB"
+                break
+            if time.monotonic() - started > budget:
+                reason = f"TIMEOUT: {budget} second budget"
+                break
+            time.sleep(1)
+        code = child.poll() if reason is None else 124
+    finally:
+        # Stop the complete process group, including display/server descendants.
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return (code if code is not None else 1), reason, round(time.monotonic() - started, 2), minimum
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--plan", action="store_true",
+                        help="report what a run would do and exit without changing anything")
+    args = parser.parse_args(argv)
+
+    manifest = ROOT / "crates/or_app_bridge/rust-toolchain.toml"
+    backup = manifest_backup_path()
+
+    if args.plan:
+        lines, blocked, _ = plan_lines()
+        for line in lines:
+            print(line)
+        if blocked:
+            for entry in blocked:
+                print(f"BLOCKED: {entry}")
+            return 3
+        print("PLAN: ready (nothing was changed)")
+        return 0
+
+    # Repair a killed run before asking whether the tree is clean: a leftover
+    # scoped manifest is exactly the dirtiness this preflight would refuse.
+    recovered = recover_interrupted_manifest(manifest, backup)
+    if recovered:
+        print(recovered, flush=True)
+
     if available_memory() < 6 * GIB or shutil.disk_usage(APP).free < 6 * GIB:
         raise RuntimeError("BLOCKED: require 6 GiB available RAM and disk before starting")
-    for tool in ("flutter", "xvfb-run", "clang", "clang++", "cmake", "ninja", "ffprobe"):
+
+    status = working_tree_status()
+    if status:
+        raise RuntimeError(
+            "BLOCKED: the working tree must be clean so a toolchain rewrite stays "
+            f"attributable; git status --porcelain reports:\n{status}")
+
+    for tool in REQUIRED_TOOLS:
         if not shutil.which(tool):
             raise RuntimeError(f"BLOCKED: missing {tool}; do not change host privileges")
     lock_path = f"/tmp/aeh-native-ui-{os.getuid()}.lock"
@@ -260,7 +452,7 @@ def main() -> int:
         if os.fstat(lock.fileno()).st_uid != os.getuid():
             raise RuntimeError("BLOCKED: lock is not owned by this worker")
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        artifacts = APP / "build/ui-preflight"
+        artifacts = artifact_directory()
         artifacts.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, CARGO_BUILD_JOBS="1", CMAKE_BUILD_PARALLEL_LEVEL="1",
                    RUSTUP_TOOLCHAIN="stable", RUSTUP_AUTO_UPDATE="disable",
@@ -275,53 +467,43 @@ def main() -> int:
              "flutter", "--no-version-check", "test", "--no-pub", "-d", "linux",
              "integration_test/linux_editor_preflight_test.dart"],
         ]
+        budgets = [PUB_GET_BUDGET_SECONDS, NATIVE_BUDGET_SECONDS]
         started = time.monotonic()
         minimum = available_memory()
         result = None
         reason = None
+        timings: list[dict[str, object]] = []
         host_target = linux_rust_target()
-        toolchain_manifest = ROOT / "crates/or_app_bridge/rust-toolchain.toml"
         with tempfile.TemporaryDirectory(prefix="or-ui-config-") as config:
             for name in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"):
                 env[name] = str(Path(config) / name)
-            with linux_toolchain_target(toolchain_manifest, host_target):
-                for command in commands:
-                    child = subprocess.Popen(command, cwd=APP, env=env, start_new_session=True)
-                    try:
-                        while child.poll() is None:
-                            minimum = min(minimum, available_memory())
-                            if minimum < 2 * GIB:
-                                reason = "BLOCKED: available RAM fell below 2 GiB"
-                                break
-                            if time.monotonic() - started > 600:
-                                reason = "TIMEOUT: 600 second native budget"
-                                break
-                            time.sleep(1)
-                        result = child.poll() if reason is None else 124
-                    finally:
-                        # Stop the complete process group, including display/server descendants.
-                        try:
-                            os.killpg(child.pid, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                        try:
-                            child.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            pass
-                        try:
-                            os.killpg(child.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                    if reason or result != 0:
+            with linux_toolchain_target(manifest, host_target, backup=backup):
+                for command, budget in zip(commands, budgets):
+                    code, failed_reason, elapsed, window_minimum = supervise(
+                        command, budget, env)
+                    minimum = min(minimum, window_minimum)
+                    timings.append({
+                        "command": command[0] if command[0] != "xvfb-run" else command[3],
+                        "budget_seconds": budget,
+                        "elapsed_seconds": elapsed,
+                    })
+                    result = code
+                    reason = failed_reason
+                    if reason or code != 0:
                         break
         evidence = {
-            "source": subprocess.check_output(["git", "-c", f"safe.directory={ROOT}", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-            "dirty": subprocess.check_output(["git", "-c", f"safe.directory={ROOT}", "status", "--porcelain"], cwd=ROOT, text=True),
+            "source": git_output("rev-parse", "HEAD"),
+            "dirty": working_tree_status() + "\n",
             "rust_target": host_target,
             "commands": commands, "exit_code": result, "reason": reason,
             "elapsed_seconds": round(time.monotonic() - started, 2),
+            "stage_timings": timings,
             "minimum_available_ram_bytes": minimum,
-            "limits": "one shared native lock; one compiler worker; 600s; stop below 2 GiB available RAM",
+            "limits": (f"one shared native lock; one compiler worker; "
+                       f"{PUB_GET_BUDGET_SECONDS}s dependency resolution then "
+                       f"{NATIVE_BUDGET_SECONDS}s for the native journey; "
+                       f"stop below 2 GiB available RAM; refuse a dirty tree"),
+            "toolchain_backup": str(backup),
             "limitations": "Linux debug app; fixture picker; system media libraries; no installed package, OS picker or cross-platform acceptance",
         }
         (artifacts / "run.json").write_text(json.dumps(evidence, indent=2) + "\n")

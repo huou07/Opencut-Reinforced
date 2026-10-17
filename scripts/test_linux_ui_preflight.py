@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Regression checks for the bounded Linux preflight cache preparation."""
+import contextlib
 import importlib.util
+import io
 import os
 import tempfile
 import unittest
@@ -203,6 +205,96 @@ class FlutterOverlayTests(unittest.TestCase):
             ), patch.object(preflight.os, "getuid", return_value=os.getuid() + 1):
                 with self.assertRaises(RuntimeError):
                     preflight.writable_flutter_root(environment)
+
+
+class InterruptSafetyTests(unittest.TestCase):
+    def _manifest(self, temporary: str) -> tuple[Path, bytes]:
+        manifest = Path(temporary) / "rust-toolchain.toml"
+        original = (
+            b'[toolchain]\nchannel = "1.98.0"\n'
+            b'targets = [\n    "x86_64-unknown-linux-gnu",\n'
+            b'    "aarch64-apple-darwin",\n]\n'
+        )
+        manifest.write_bytes(original)
+        return manifest, original
+
+    def test_scoped_rewrite_keeps_a_backup_then_restores_exact_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest, original = self._manifest(temporary)
+            backup = Path(temporary) / "backup" / "rust-toolchain.toml.original"
+            with preflight.linux_toolchain_target(
+                manifest, "x86_64-unknown-linux-gnu", backup=backup
+            ):
+                self.assertTrue(backup.is_file())
+                self.assertEqual(backup.read_bytes(), original)
+                self.assertNotEqual(manifest.read_bytes(), original)
+            self.assertEqual(manifest.read_bytes(), original)
+            self.assertFalse(backup.exists())
+
+    def test_a_killed_run_is_repaired_from_the_backup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest, original = self._manifest(temporary)
+            # What a SIGKILLed run leaves behind: a scoped manifest and its backup.
+            manifest.write_bytes(b'[toolchain]\nchannel = "1.98.0"\ntargets = ["x86_64-unknown-linux-gnu"]\n')
+            backup = Path(temporary) / "rust-toolchain.toml.original"
+            backup.write_bytes(original)
+
+            message = preflight.recover_interrupted_manifest(manifest, backup)
+
+            self.assertIsNotNone(message)
+            self.assertEqual(manifest.read_bytes(), original)
+            self.assertFalse(backup.exists())
+
+    def test_recovery_without_a_backup_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest, original = self._manifest(temporary)
+            backup = Path(temporary) / "absent.original"
+            self.assertIsNone(preflight.recover_interrupted_manifest(manifest, backup))
+            self.assertEqual(manifest.read_bytes(), original)
+
+    def test_recovery_clears_a_stale_backup_for_an_already_restored_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest, original = self._manifest(temporary)
+            backup = Path(temporary) / "rust-toolchain.toml.original"
+            backup.write_bytes(original)
+            self.assertIsNone(preflight.recover_interrupted_manifest(manifest, backup))
+            self.assertFalse(backup.exists())
+            self.assertEqual(manifest.read_bytes(), original)
+
+    def _plan(self, temporary: str, status: str) -> tuple[int, str, Path]:
+        app = Path(temporary) / "or-app"
+        app.mkdir(exist_ok=True)
+        out = io.StringIO()
+        with patch.object(preflight, "APP", app), patch.object(
+            preflight, "ROOT", app
+        ), patch.object(preflight, "GIB", 1), patch.object(
+            preflight, "working_tree_status", return_value=status
+        ), patch.object(
+            preflight, "git_output", return_value="0" * 40
+        ), patch.object(
+            preflight, "available_memory", return_value=100
+        ), patch.object(
+            preflight, "linux_rust_target", return_value="x86_64-unknown-linux-gnu"
+        ), patch.object(
+            preflight, "cache_is_writable", return_value=True
+        ), contextlib.redirect_stdout(out):
+            code = preflight.main(["--plan"])
+        return code, out.getvalue(), app
+
+    def test_plan_refuses_a_dirty_tree_and_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            code, output, app = self._plan(temporary, " M scripts/example.py\n")
+            self.assertEqual(code, 3)
+            self.assertIn("BLOCKED", output)
+            self.assertIn("working tree: DIRTY", output)
+            self.assertFalse((app / "build").exists())
+
+    def test_plan_reports_ready_on_a_clean_tree(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            code, output, app = self._plan(temporary, "")
+            self.assertEqual(code, 0)
+            self.assertIn("PLAN: ready", output)
+            self.assertFalse((app / "build").exists())
 
 
 class ToolchainScopeTests(unittest.TestCase):

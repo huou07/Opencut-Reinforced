@@ -85,16 +85,35 @@ large read-only `artifacts`/`dart-sdk` trees; it never writes the shared SDK. Th
 preflight excludes Cargo config and credentials, resolves dependencies
 offline with the checked-in lockfile, and runs the Linux UI test with
 `--no-pub`. The bounded runner uses one compiler worker, a shared lock, a
-600-second limit, and stops below 2 GiB available RAM. Do not copy another
+300-second dependency stage and a 600-second native limit, and stops below 2 GiB
+available RAM. Do not copy another
 machine's `target`, `build`, `.dart_tool` or Flutter ephemeral directories.
 Preserve source, locks and user data.
 
 The inspected Flutter SDK is 3.47.7; CI pins 3.47.5, so local Flutter output is
-not exact-version CI evidence. Ten focused preflight tests pass. The Linux
+not exact-version CI evidence. Sixteen focused preflight tests pass. The Linux
 runner temporarily narrows the bridge's nested `rust-toolchain.toml` to the
 host target and restores its original bytes in `finally`; it avoids downloading
 unused cross-platform Rust targets. See the 2026-10-17 Debian run in
 [TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight).
+
+Interrupting that rewrite is what made it dangerous, so the runner is now safe
+to kill:
+
+- It refuses to start on a dirty tree (`git status --porcelain` must be empty),
+  because a toolchain rewrite is only attributable when nothing else is edited.
+- Before narrowing the manifest it writes the original bytes to ignored
+  `apps/or_app/build/ui-preflight/rust-toolchain.toml.original`, and the next run
+  restores from that backup before its clean-tree check. A `SIGKILL` never runs
+  `finally`, so startup recovery — not the handler — is what guarantees the tree
+  is repaired.
+- `python3 scripts/run_linux_ui_preflight.py --plan` reports the resolved source,
+  dirtiness, headroom, missing tools, cache and overlay decisions, budgets and
+  commands without changing anything, and exits 3 when a real run would be
+  blocked.
+- Dependency resolution no longer shares the native budget: `pub get` gets 300
+  seconds of its own, then the native journey keeps the 600-second limit. The
+  recorded `stage_timings` show each stage's cost.
 
 With the PATH above, the Debian inspection passed:
 
