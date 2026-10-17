@@ -82,6 +82,18 @@ else
   unverified+=("Flutter widget tests: flutter is not installed")
 fi
 
+if command -v gitleaks >/dev/null 2>&1; then
+  # The repository has GitHub's hosted secret scanning and push protection, but
+  # that is a hosting control: nothing local scanned for secrets before this.
+  run "Secret scan (gitleaks $(gitleaks version 2>/dev/null || echo unknown))" \
+    gitleaks detect --source . --redact --no-banner --exit-code 1
+else
+  printf '\n== Secret scan (gitleaks) ==\n'
+  printf 'RESULT: UNVERIFIED — gitleaks is not installed, so no secret scan backed this gate.\n'
+  printf '        Install gitleaks or rely on the pinned scan in repo-hygiene.yml.\n'
+  unverified+=("Secret scan: gitleaks is not installed")
+fi
+
 printf '\nNOTE: Android, macOS, Windows, packaging and codec lanes remain UNVERIFIED here.\n'
 if (( failed )); then
   printf '\nPROJECT_ACCEPTANCE=FAIL\n'
