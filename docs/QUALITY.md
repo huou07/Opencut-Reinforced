@@ -15,8 +15,13 @@ Last reviewed: 2026-10-18.
 | macOS / Windows | built and packaged by CI | VERIFIED_NATIVE only when the hosted job passes | `platform-verification.yml` |
 | Android | software preview with SAF media; no audio | hosted emulator lane | `platform-verification.yml` |
 
-Not claimed: pixel-identical parity across platforms, Android audio, a packaged
-`.deb`/installer built and installed locally.
+Not claimed: pixel-identical parity across platforms, Android audio, an
+`apt`-mediated install/upgrade/purge of a locally built `.deb`, or `.deb` and
+installer acceptance from this workstation. One local Linux `.deb` was built,
+extracted into a disposable root and driven through the packaged journey at
+`33b84eb`; that run is recorded in
+[the 2026-10-18 local record](evidence/2026-10-18-linux-deb-local-acceptance.md),
+and hosted `platform-verification` remains the packaging authority.
 
 ## Attributes
 

@@ -32,6 +32,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | [evidence/claims/README.md](evidence/claims/README.md) | Claim evidence: what was verified, by which run, and what it does not establish |
 | [evidence/PRODUCT_ROADMAP_HISTORY.md](evidence/PRODUCT_ROADMAP_HISTORY.md) | Archived exact-run product journey investigations; historical status snapshots only |
 | [evidence/local-transcription-poc.md](evidence/local-transcription-poc.md) | Pinned whisper.cpp and model feasibility proof for local caption proposals |
+| [evidence/2026-10-18-linux-deb-local-acceptance.md](evidence/2026-10-18-linux-deb-local-acceptance.md) | One local Linux `.deb` build, disposable-root install and packaged-journey run at `33b84eb`, with its limits |
 | [evidence/dont-giveup-soon-archived-skill.md](evidence/dont-giveup-soon-archived-skill.md) | Archived text of the retired project-local persistence skill; archival data, not an activatable instruction |
 | [PROJECT_FORMAT.md](PROJECT_FORMAT.md) | The `.orproj` on-disk contract, version history, and reader invariants |
 | [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md) | Evidence-backed reuse/build/upstream decisions and license boundaries |
