@@ -13,8 +13,12 @@ not override the evidence rules in `AGENTS.md`, `docs/TESTING.md` or
 - Opening and updating pull requests, and letting required CI decide.
 - Running the local lanes on this host: `bash scripts/check-repo.sh`,
   `cargo test`, and `python3 scripts/run_linux_ui_preflight.py`.
-- Publishing a stable release only after the exact-source CI, version, artifact,
-  health and rollback gates in `docs/RELEASE.md` pass.
+- Publishing a stable release only after the release requirements in
+  `docs/RELEASE.md` are met for the exact source commit: a successful exact-SHA
+  Platform Verification, a tag that resolves to that commit, and non-empty
+  checksummed assets. That document defines no separate version, health or
+  rollback gate, and none is claimed here; a green gate never grants
+  publication by itself.
 - Cleaning up leftovers from the 2026-10 migration: stale paths, orphaned
   untracked files and superseded tool references may be committed or removed
   when the current source supports it; record what changed and why.
