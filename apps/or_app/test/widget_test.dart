@@ -647,6 +647,60 @@ void main() {
     expect(find.text('clip-54.mp4'), findsOneWidget);
   });
 
+  testWidgets('loading a later media page keeps earlier library previews', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final png = await _tinyPngBytes();
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = List.generate(
+        55,
+        (index) => _mediaFixture('media-$index', '/tmp/clip-$index.mp4'),
+      );
+    for (var index = 0; index < 55; index++) {
+      gateway.artifactRequestResponses['media-$index:thumbnail'] =
+          ProjectMediaArtifactRequest(
+            mediaId: 'media-$index',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.ready,
+            cacheKey: 'thumbnail-$index',
+          );
+      gateway.artifactResponses['thumbnail-$index'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      );
+    }
+    final picker = _FakeProjectPicker()..savePath = '/tmp/large-library.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Large Library');
+
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+
+    final panelScroll = find.descendant(
+      of: find.byKey(const ValueKey('project-media-panel')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('media-load-more')),
+      160,
+      scrollable: panelScroll.first,
+    );
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListOffsets, [0, 50]);
+
+    await tester.drag(panelScroll.first, const Offset(0, 5000));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('probe backend unavailability is shown honestly', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway()..nextImportBackendUnavailable = true;

@@ -2760,12 +2760,16 @@ class _AppShellState extends State<AppShell> {
         await _refreshProjectState(session);
         return;
       }
+      final items = List<ProjectMediaItem>.unmodifiable([
+        ...page.items,
+        ...next.items,
+      ]);
       setState(() {
         _mediaPage = ProjectMediaPage(
           projectId: page.projectId,
           projectInstanceId: page.projectInstanceId,
           projectRevision: page.projectRevision,
-          items: List.unmodifiable([...page.items, ...next.items]),
+          items: items,
           totalCount: next.totalCount,
           offset: 0,
           limit: page.limit,
@@ -2773,7 +2777,11 @@ class _AppShellState extends State<AppShell> {
         );
         _mediaLoadError = null;
       });
-      _queueMediaPreviews(session, next.items);
+      // `_queueMediaPreviews` treats its list as the complete loaded set and
+      // drops previews outside it, so pass the accumulated page rather than only
+      // the newly fetched items; otherwise loading page two discards every
+      // preview already generated for page one.
+      _queueMediaPreviews(session, items);
     } on ProjectGatewayException catch (error) {
       if (mounted && identical(session, _activeSession)) {
         setState(() => _mediaLoadError = error.message);
