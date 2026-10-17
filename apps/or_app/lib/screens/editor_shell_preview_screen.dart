@@ -2009,10 +2009,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
   /// A short compact viewport can squeeze the surface below the height the
   /// icon-and-text column needs. Keep the icon and expose the message through
   /// semantics instead of letting the column overflow.
-  Widget _viewerPlaceholder({
-    required IconData icon,
-    required String message,
-  }) {
+  Widget _viewerPlaceholder({required IconData icon, required String message}) {
     return Center(
       child: LayoutBuilder(
         builder: (context, constraints) {

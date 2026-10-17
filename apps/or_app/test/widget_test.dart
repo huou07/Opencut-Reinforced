@@ -3272,7 +3272,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('short compact viewport editor does not overflow', (tester) async {
+  testWidgets('short compact viewport editor does not overflow', (
+    tester,
+  ) async {
     // 320x480 reproduced a 31px overflow of the viewer placeholder; 320x440
     // additionally reproduced the fixed-height timeline view controls
     // overflowing their remaining strip.
