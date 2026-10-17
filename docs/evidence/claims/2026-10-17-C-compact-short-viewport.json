@@ -1,0 +1,21 @@
+{
+  "requirement": "C-compact-short-viewport",
+  "claim": "The compact editor no longer overflows at a 320x480 or 320x440 viewport: the viewer placeholder keeps its icon and exposes its message through semantics on a short surface, and the timeline view controls are omitted when their strip is too short.",
+  "implementation_sha": "c90f026bc7e0c816e0c10ecb2eb09b38d12f2493",
+  "verification": {
+    "workflow": "Linux UI preflight",
+    "run_id": "39013698516",
+    "jobs": ["editor"],
+    "detail": "The editor job passed the analyzer, the focused component/semantics tests including the new 320x480 and 320x440 overflow regression, and the real Linux create/import/edit/undo/seek/save-reopen journey under a bounded Xvfb display."
+  },
+  "verified_at_utc": "2026-10-17T07:27:29Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "This is a Linux debug app with a substituted file picker, not a packaged app or an OS-picker check.",
+    "The compact overflow regression is headless widget coverage; it does not establish rendering on a physical mobile device.",
+    "Exact-SHA Platform Verification and the macOS, Windows and Android gates are separate and are not established by this record.",
+    "The committed tree that was verified is c90f026; the only later change before merge was a dart-format-only commit."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Compact short-viewport editor; docs/UX_ACCEPTANCE.md, Reproduced and fixed"
+}
