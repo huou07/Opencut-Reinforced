@@ -107,3 +107,8 @@ it times, a baseline measured on this named host and a stated margin, then let
   execute, the gates it actually covered, and the local runner class. The report
   is runtime state and is gitignored.
 - A skipped, missing or unavailable check is `UNVERIFIED`; it is never PASS.
+- Hosted evidence: after a successful hosted run for the current commit,
+  `bash scripts/record-hosted-evidence.sh <workflow>` records it in `.hub/hosted-evidence.json`. The Hub
+  merges it into a verification record only when it names that exact revision;
+  without it `release-check` is `BLOCKED` by "no hosted-runner evidence", which
+  is true, not a defect.
