@@ -1,0 +1,32 @@
+{
+  "requirement": "C-compact-short-viewport",
+  "claim": "The compact editor still does not overflow at a 320x480 or 320x440 viewport on the current HEAD: the viewer placeholder keeps its icon and exposes its message through semantics on a short surface, and the timeline view controls are omitted when their strip is too short, verified by the exact-HEAD hosted Platform verification run 39043596474.",
+  "implementation_sha": "c8b627be9e931f2b332ac1c8f2de459b4c30b22d",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39043596474",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "macos",
+      "linux",
+      "windows",
+      "android",
+      "granted-descriptor-capability",
+      "release-gate"
+    ],
+    "detail": "Run 39043596474 completed with conclusion success on c8b627be9e931f2b332ac1c8f2de459b4c30b22d, the exact HEAD this record binds. All seven required platform jobs (rust, flutter-static, macos, linux, windows, android, granted-descriptor-capability) and the aggregate release-gate job succeeded. The Flutter static and widget checks job runs the full flutter test suite, which contains the 'short compact viewport editor does not overflow' regression at 320x480 and 320x440.",
+    "url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/39043596474"
+  },
+  "verified_at_utc": "2026-10-17T15:41:46Z",
+  "evidence_class": "hosted",
+  "correction": "This record supersedes 2026-10-17-C-compact-short-viewport.json, whose limitation claimed the only later change after c90f026 was a dart-format-only commit. That was wrong: `git rev-list --count c90f026..c8b627b` is 21 and `git diff --name-only c90f026 c8b627b` includes crates/or_core/src/media_artifacts.rs and .github/workflows/platform-verification.yml, so the earlier Linux UI preflight run 39013698516 no longer described the tree at HEAD. The requirement is re-verified at c8b627b by run 39043596474. The superseded record is kept, not deleted, because it remains the receipt for the Linux UI preflight verification at its own SHA.",
+  "limitations": [
+    "This is hosted Platform verification evidence, not packaged-app evidence and not a physical-device rendering check.",
+    "Run 39043596474 covers implementation SHA c8b627b. Later documentation, quality-contract and benchmark commits are not covered by it.",
+    "Android evidence in that run is emulator-based and does not establish physical-device performance.",
+    "macOS coverage is the hosted macos-latest runner class, not a named physical Mac."
+  ],
+  "supersedes": "2026-10-17-C-compact-short-viewport.json",
+  "source": "docs/PRODUCT_ROADMAP.md, Compact short-viewport editor; docs/evidence/claims/README.md, Rules"
+}

@@ -17,5 +17,6 @@
     "The committed tree that was verified is c90f026; the only later change before merge was a dart-format-only commit."
   ],
   "supersedes": null,
+  "superseded_by": "2026-10-17-C-compact-short-viewport-c8b627b.json",
   "source": "docs/PRODUCT_ROADMAP.md, Compact short-viewport editor; docs/UX_ACCEPTANCE.md, Reproduced and fixed"
 }
