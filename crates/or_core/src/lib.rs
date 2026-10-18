@@ -31,7 +31,8 @@ pub use application::{
 };
 pub use audio_cleanup::{
     AudioCleanupError, AudioCleanupErrorCode, AudioCleanupRequest, AudioCleanupResult,
-    audio_cleanup_arguments, clean_audio, clean_audio_file,
+    audio_cleanup_arguments, clean_audio, clean_audio_file, measure_noise_floor,
+    measure_noise_floor_db, parse_window_rms_db, percentile,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,

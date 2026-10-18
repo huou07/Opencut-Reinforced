@@ -96,7 +96,11 @@ Noise filtering is measured, not asserted. `scripts/measure_denoise.py` builds a
 fixture whose two windows are known — one second of white noise, then two seconds of
 a 1 kHz tone buried in the same noise — runs the packaged helper's `afftdn` chain
 with the noise floor **derived from the fixture's own measurement**, and reports both
-windows. The same measurement drives the product path when given `--cli`: on 2026-10-20 the
+windows. The product also derives the floor itself when it is not given one: it measures
+per-window RMS levels, takes the quietest tenth and adds two dB. On the fixture that
+derivation produced -21 dBFS, and the resulting clean-up measured identically to the
+run with the figure passed in, so the derivation is not a separate code path with
+its own numbers. The same measurement drives the product path when given `--cli`: on 2026-10-20 the
 `or media clean-audio` command and a direct helper invocation produced identical
 numbers on the same fixture (11.50 dB floor drop, 4.90 dB signal change, 6.60 dB of
 discrimination), which is what shows the command uses the chain it claims to.

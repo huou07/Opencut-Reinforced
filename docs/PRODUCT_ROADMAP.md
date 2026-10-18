@@ -585,17 +585,28 @@ class each claim actually has:
     (900 s, killed on expiry, partial output removed), validates its parameters, and
     builds its arguments through a pure function so the chain is asserted without
     running a process. Five core tests plus a CLI-level measurement.
+  - **The floor is derived, not asked for (2026-10-20).** `clean-audio` without
+    `--noise-floor-db` now measures the material first: the helper runs once with
+    per-window RMS statistics (`astats` with `metadata=1`), the quietest tenth of
+    those windows is taken as the floor, and two dB is added because the estimate is
+    a lower bound — a filter set exactly at it leaves the noise's own peaks. On the
+    synthetic fixture the derivation produced **-21 dBFS**, the same figure hand
+    computation gave, and the clean-up that followed measured identically to the run
+    with the figure passed in. The parser and the percentile are pure functions with
+    their own tests, and one test pins the argument form because a stray `=`
+    separator made the whole measurement silently empty — the failure mode of a
+    statistics run that parses to nothing is a clean-up that does nothing.
   - **Measured through the product (2026-10-20).**
     `scripts/measure_denoise.py --bin <helper> --cli <or binary>` drives the command
     on the synthetic fixture and reports both windows; the command and a direct
     helper call give identical numbers (11.50 dB floor drop, 4.90 dB signal change,
     6.60 dB discrimination), which is what shows the command uses the chain it claims.
   - **Not done, and why the capability is still not finished:** there is no desktop
-    or compact surface, so a pointer or keyboard user cannot reach it; no import of
-    the result as a new media item in one step; no project-aware path that derives
-    the noise floor from the clip's own audio instead of asking the caller; and no
-    journey. Those are the remaining half of Phase 4, and this gap stays
-    `UNVERIFIED` at the interface bar until the GUI surface exists.
+    or compact surface, so a pointer or keyboard user cannot reach it, and the result
+    is not imported as a new media item in one step — a user must run the command and
+    then import the file by hand. There is also no journey. Those are the remaining
+    half of Phase 4, and this gap stays `UNVERIFIED` at the interface bar until the
+    GUI surface exists.
   - **Shape decided for the product half, so the next attempt does not relitigate
     it.** The clean-up is a **helper-spawned derived artifact**, not a clip property:
     `or_core` already spawns the packaged `ffmpeg` for probes, proxies and waveforms,

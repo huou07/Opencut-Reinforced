@@ -36,6 +36,20 @@ const MAX_NOISE_FLOOR_DB: i32 = -1;
 /// FFmpeg's own reduction range for `afftdn`.
 const MAX_REDUCTION_DB: u32 = 97;
 
+/// The statistics window the floor estimate averages over. Short enough that a
+/// pause in speech is several windows, long enough that one sample is not noise.
+const RMS_WINDOW_ARGUMENT: &str = "length=0.1";
+
+/// The key `ametadata` prints for each window's RMS level, without the separator its
+/// value follows.
+const RMS_LEVEL_KEY: &str = "lavfi.astats.Overall.RMS_level";
+
+/// How far above the quietest measured windows the filter's floor is set.
+const NOISE_FLOOR_MARGIN_DB: i32 = 2;
+
+/// The percentile of window levels used as the floor estimate: the quietest tenth.
+const NOISE_FLOOR_PERCENTILE: f64 = 0.1;
+
 /// A request to reduce noise in one media file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AudioCleanupRequest {
@@ -224,6 +238,136 @@ pub fn clean_audio(request: &AudioCleanupRequest) -> Result<AudioCleanupResult, 
     })
 }
 
+/// Every measured window's RMS level in dBFS, in the order the helper printed them.
+///
+/// Pure, so the shape of the helper's output is tested without running one. Lines
+/// that are not an RMS figure — the `frame:`/`pts:` headers `ametadata` also prints —
+/// are ignored, and a run with no figures at all is an empty vector rather than an
+/// error, because "the helper printed nothing measurable" is the caller's decision.
+pub fn parse_window_rms_db(output: &str) -> Vec<f64> {
+    output
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix(RMS_LEVEL_KEY))
+        .filter_map(|value| value.strip_prefix('='))
+        .filter_map(|value| value.trim().parse::<f64>().ok())
+        .filter(|value| value.is_finite())
+        .collect()
+}
+
+/// The value at `percentile` (0.0..=1.0) of a sample, using nearest-rank.
+///
+/// The floor estimate is a low percentile rather than the mean: a recording's mean
+/// level is dominated by whatever is being said, while its quietest windows are the
+/// noise. A low percentile of the window levels is therefore the closest thing to the
+/// floor that needs no model.
+pub fn percentile(samples: &[f64], percentile: f64) -> Option<f64> {
+    if samples.is_empty() || !(0.0..=1.0).contains(&percentile) {
+        return None;
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_by(|left, right| left.total_cmp(right));
+    let rank = ((percentile * sorted.len() as f64).ceil() as usize).clamp(1, sorted.len());
+    sorted.get(rank - 1).copied()
+}
+
+/// The helper arguments that print one RMS figure per statistics window.
+///
+/// Pure, so the exact chain is asserted without a process; see the test that pins the
+/// missing `=` separator, which is easy to get wrong and produces silence.
+fn statistics_arguments(source: &Path) -> Vec<OsString> {
+    [
+        "-hide_banner".to_owned(),
+        "-nostdin".to_owned(),
+        "-loglevel".to_owned(),
+        "error".to_owned(),
+        "-i".to_owned(),
+        source.display().to_string(),
+        "-vn".to_owned(),
+        "-af".to_owned(),
+        format!(
+            "astats=metadata=1:reset=1:{RMS_WINDOW_ARGUMENT},\
+             ametadata=print:key={RMS_LEVEL_KEY}:file=-"
+        ),
+        "-f".to_owned(),
+        "null".to_owned(),
+        "-".to_owned(),
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
+}
+
+/// Measures the material's own noise floor, in whole dBFS.
+///
+/// Runs the helper over the source once with per-window RMS statistics and takes a
+/// low percentile of them. This is the figure [`clean_audio`] must be told: a value
+/// below the real floor leaves the noise, and a value above it takes the audio.
+pub fn measure_noise_floor_db(
+    source: &Path,
+    percentile_rank: f64,
+) -> Result<i32, AudioCleanupError> {
+    if !source.is_file() {
+        return Err(AudioCleanupError::new(
+            AudioCleanupErrorCode::InvalidArguments,
+        ));
+    }
+    let executable = ffmpeg_executable();
+    let arguments = statistics_arguments(source);
+
+    let mut child = Command::new(&executable)
+        .args(&arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| AudioCleanupError::new(AudioCleanupErrorCode::BackendUnavailable))?;
+    let mut output = String::new();
+    if let Some(mut stdout) = child.stdout.take() {
+        use std::io::Read;
+        let _ = stdout.read_to_string(&mut output);
+    }
+    let deadline = Instant::now() + CLEANUP_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(AudioCleanupError::new(AudioCleanupErrorCode::TimedOut));
+                }
+                std::thread::sleep(POLL_INTERVAL);
+            }
+            Err(_) => {
+                let _ = child.kill();
+                return Err(AudioCleanupError::new(
+                    AudioCleanupErrorCode::GenerationFailed,
+                ));
+            }
+        }
+    };
+    if !status.success() {
+        return Err(AudioCleanupError::new(
+            AudioCleanupErrorCode::GenerationFailed,
+        ));
+    }
+
+    let windows = parse_window_rms_db(&output);
+    let floor = percentile(&windows, percentile_rank)
+        .ok_or_else(|| AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed))?;
+    // The floor is passed to the filter two dB above the quietest windows: the
+    // estimate is a lower bound on the noise, and a filter set exactly at it leaves
+    // the noise's own peak.
+    let floor = (floor.round() as i32 + NOISE_FLOOR_MARGIN_DB)
+        .clamp(MIN_NOISE_FLOOR_DB, MAX_NOISE_FLOOR_DB);
+    Ok(floor)
+}
+
+/// Measures a file's own noise floor at the default percentile.
+pub fn measure_noise_floor(source: &Path) -> Result<i32, AudioCleanupError> {
+    measure_noise_floor_db(source, NOISE_FLOOR_PERCENTILE)
+}
+
 /// Convenience for a caller that only has paths.
 pub fn clean_audio_file(
     source: &Path,
@@ -297,6 +441,49 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(error.code(), AudioCleanupErrorCode::InvalidArguments);
+    }
+
+    #[test]
+    fn the_statistics_arguments_name_the_key_once() {
+        // A trailing '=' in the key would make the filter argument
+        // "...RMS_level=:file=-", which parses to nothing.
+        let arguments = statistics_arguments(Path::new("/tmp/or-source.wav"))
+            .iter()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        let chain = arguments
+            .iter()
+            .find(|argument| argument.starts_with("astats="))
+            .expect("the statistics chain is present");
+        assert!(
+            chain.contains("key=lavfi.astats.Overall.RMS_level:file=-"),
+            "{chain}"
+        );
+    }
+
+    #[test]
+    fn the_statistics_parser_reads_only_rms_figures() {
+        let output = "frame:0    pts:0       pts_time:0\n\
+             lavfi.astats.Overall.RMS_level=-23.201059\n\
+             frame:1    pts:4096    pts_time:0.0853333\n\
+             lavfi.astats.Overall.RMS_level=-21.5\n\
+             lavfi.astats.Overall.Peak_level=-18.0\n\
+             lavfi.astats.Overall.RMS_level=nan\n";
+        assert_eq!(parse_window_rms_db(output), vec![-23.201059, -21.5]);
+        assert!(parse_window_rms_db("no figures here").is_empty());
+    }
+
+    #[test]
+    fn the_percentile_picks_the_quietest_windows() {
+        let windows = vec![
+            -30.0, -29.0, -28.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0,
+        ];
+        // The quietest tenth of ten windows is the first one.
+        assert_eq!(percentile(&windows, 0.1), Some(-30.0));
+        assert_eq!(percentile(&windows, 0.5), Some(-11.0));
+        assert_eq!(percentile(&windows, 1.0), Some(-6.0));
+        assert_eq!(percentile(&[], 0.1), None);
+        assert_eq!(percentile(&windows, 1.5), None);
     }
 
     #[test]

@@ -367,15 +367,23 @@ fn run_media_clean_audio(args: &[OsString], json: bool) -> Result<String, CliErr
     )?;
     let source = required_path(&options, "--source", json)?;
     let destination = required_path(&options, "--out", json)?;
+    // The floor is measured from the material unless the caller supplies one: the
+    // filter does nothing below the recording's real floor and eats the audio above
+    // it, so a constant would be wrong for most inputs in one direction or the other.
+    let measured_floor = if options.value("--noise-floor-db").is_none() {
+        Some(
+            or_core::measure_noise_floor(&source)
+                .map_err(|error| CliError::cleanup(error, json))?,
+        )
+    } else {
+        None
+    };
     let noise_floor_db = match options.value("--noise-floor-db") {
         Some(value) => value
             .to_str()
             .and_then(|text| text.parse::<i32>().ok())
             .ok_or_else(|| CliError::usage(json, "--noise-floor-db must be a whole dBFS value"))?,
-        // A common floor for quiet speech recordings; callers with a measurement
-        // should pass theirs, because the filter does nothing below the real floor
-        // and eats the audio above it.
-        None => -50,
+        None => measured_floor.unwrap_or(-50),
     };
     let reduction_db = match options.value("--reduction") {
         Some(value) => value
@@ -394,6 +402,7 @@ fn run_media_clean_audio(args: &[OsString], json: bool) -> Result<String, CliErr
                 "noise_floor_db": result.noise_floor_db,
                 "reduction_db": result.reduction_db,
                 "bytes_written": result.bytes_written,
+                "noise_floor_measured": measured_floor.is_some(),
                 "chain": format!(
                     "afftdn=nf={}:nr={}",
                     result.noise_floor_db, result.reduction_db

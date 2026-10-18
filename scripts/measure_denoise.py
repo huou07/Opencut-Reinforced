@@ -164,6 +164,11 @@ def main() -> int:
     parser.add_argument("--bin", type=Path, help="directory holding the FFmpeg helper")
     parser.add_argument("--cli", type=Path, help="the `or` binary, to measure through the product")
     parser.add_argument("--work", type=Path, help="scratch directory (a temporary one by default)")
+    parser.add_argument(
+        "--auto-floor",
+        action="store_true",
+        help="let the product derive the noise floor from the material instead of passing one",
+    )
     args = parser.parse_args()
     if args.bin is None and args.cli is None:
         print("pass --bin, --cli, or both", file=sys.stderr)
@@ -188,19 +193,25 @@ def main() -> int:
         # the noise floor the measurement found.
         noise_floor = round(mean_volume_db(generator, fixture, NOISE_WINDOW)) + 2
         cleaned = work / "cli-clean.wav"
+        command = [
+            str(args.cli), "media", "clean-audio",
+            "--source", str(fixture), "--out", str(cleaned),
+            "--reduction", "12", "--json",
+        ]
+        if not args.auto_floor:
+            command[6:6] = ["--noise-floor-db", str(noise_floor)]
         done = subprocess.run(
-            [
-                str(args.cli), "media", "clean-audio",
-                "--source", str(fixture), "--out", str(cleaned),
-                "--noise-floor-db", str(noise_floor), "--reduction", "12", "--json",
-            ],
+            command,
             capture_output=True, text=True,
             env={**os.environ, "OR_FFMPEG_PATH": str(ffmpeg or "ffmpeg")},
         )
         if done.returncode != 0:
             print(f"the CLI clean-up failed:\n{done.stdout[-600:]}{done.stderr[-600:]}", file=sys.stderr)
             return 1
-        print("via            : or media clean-audio")
+        print(
+            "via            : or media clean-audio"
+            + (" (floor derived by the product)" if args.auto_floor else " (floor measured here)")
+        )
         measured = measure_windows(generator, fixture, cleaned)
         report(f"afftdn=nf={noise_floor}:nr=12 (through the product CLI)", measured)
         failed = verdict(measured) != 0
