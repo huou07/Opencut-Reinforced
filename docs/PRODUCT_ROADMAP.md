@@ -422,6 +422,27 @@ class each claim actually has:
   - **Not done:** no CLI, bridge or UI surface sends a roll, no journey step and no
     latency row; **slide is not started**, and it is the last of the slip/slide/roll
     group.
+- **Phase 1.3 slide: command implemented (VERIFIED_SOURCE). The slip/slide/roll
+  group is complete at the command layer.** `timeline.clip.slide` moves a clip in
+  time and lets its neighbours absorb the move: the clip keeps its duration and its
+  source, the clip before it gives up or gains the same amount at its end, and the
+  clip after it does the same at its start with its source advancing — so a slide
+  never opens a gap or an overlap. It requires a neighbour that exactly touches it
+  on both sides (a track-edge clip or a gap is refused, because there is nothing to
+  borrow from) and both neighbours must keep a positive duration with their source
+  inside the media, which `validate_track_states` proves.
+  - History is the single change `ProjectChange::TimelineClipsSlid { track_id,
+    before, after }`, sharing the whole-track staged form with the overwrite, ripple
+    and roll variants. `ProjectChange` is Rust-only, so no bridge or wire work; the
+    frozen command catalog and its count went to 26.
+  - Six tests, and one of them corrected a wrong expectation of mine rather than the
+    code: sliding a clip *earlier* needs the next clip to have earlier source
+    material to give, so the same move is refused when that clip starts at the
+    beginning of its own source and succeeds — with the source moving back with the
+    start — when it does not. Both cases are now pinned.
+  - **Not done for all three of slip, slide and roll:** no CLI, bridge or UI surface
+    sends a slide (slip has all three), no journey step drives any of them, and no
+    latency row measures any of them.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
@@ -450,13 +471,13 @@ class each claim actually has:
 - **Clean desktop install, upgrade, and removal — exact-SHA verified:** commit `53de6d51c6d45c7ec7ae0a2989455972118406c1` passed Platform Verification [38570870756](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870756) and Repository Hygiene [38570870938](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870938). The Linux job installed, upgraded, launched, and purged the `.deb` in Ubuntu 24.04 and Debian 13 containers while preserving a user-data sentinel. The macOS and Windows jobs extracted, installed, launched, replaced, and removed their ZIP packages from per-user application directories while preserving user data. Limits and exact job evidence are recorded in the [Linux claim](evidence/claims/2026-10-14-9E-linux-debian-install-upgrade-uninstall.json), [macOS claim](evidence/claims/2026-10-14-9E-macos-zip-install-replacement-removal.json), and [Windows claim](evidence/claims/2026-10-14-9E-windows-zip-install-replacement-removal.json).
 - **Local Linux `.deb` packaged evidence:** at exact source `33b84ebe2df37280ca0a27759030c9efc6fb3dca` this workstation built the pinned libvpx 1.17.0 / libopus 1.6.1 / FFmpeg 8.1.3 runtime, built the Flutter Linux debug bundle against it, and packaged `opencut-reinforced-linux-x64-debug.deb` (31,599,552 bytes, SHA-256 `7253f9e13589da1051391595fe389fc2143d4133dbde4163feec8f5dab4b72d2`). The package was extracted into a disposable root, the installed `/opt/opencut-reinforced/or_app` ran for the full 20-second smoke window, and `scripts/run_packaged_desktop_journey.py` then used the installed package's `ffmpeg`, `ffprobe`, Rust bridge and media libraries: all four app processes passed and the export independently decoded to 720 VP9 video and 1,501 Opus audio frames at 30.008 s. This is local packaged evidence on this host (Flutter 3.47.7, not the pinned 3.47.5), not an `apt` install/upgrade/purge and not hosted acceptance; the commands, payload hashes and limits are in [the record](evidence/2026-10-18-linux-deb-local-acceptance.md).
 - **One local Linux lane — implemented, native step blocked by host memory:** `bash scripts/run_local_lane.sh linux` is now the single local entry point for the hygiene gate, the Flutter widget suite, the bounded preflight and the performance budget, and it leaves one machine-readable report (`apps/or_app/build/local-lanes/linux.json`). At exact source `b4a84956883422ed51ef1fb799d6cae5c9ff18b4` the lane reported `BLOCKED` (exit 3) with `hygiene`, `flutter` (124 tests) and `bench` PASS and the preflight BLOCKED at its own 6 GiB `MemAvailable` floor; a deliberately broken source check made the same command exit 1, and the packaged steps' blocked branches were exercised with a deliberately absent pinned prefix. `bash scripts/acceptance.sh` passed at that source with 8 named UNVERIFIED lanes. Evidence class: local developer evidence only, no claim record and no `ACCEPTED`; the native journey at this source is unverified and `--packaged` was not executed, and the commands, timings, hashes and limits are in [the record](evidence/2026-10-18-local-linux-lane.md).
-- **Basic editing — implemented baseline with enumerated gaps:** 25 commands and
+- **Basic editing — implemented baseline with enumerated gaps:** 26 commands and
   8 queries dispatch through the shared application path
-  (`crates/or_core/src/application.rs:64`), covered by 337 core unit tests and 103
+  (`crates/or_core/src/application.rs:64`), covered by 343 core unit tests and 103
   Flutter widget tests across tracks, insert (insert and overwrite modes), move,
-  trim (plain and ripple), slip, roll, split, ripple delete, clip properties,
-  markers, captions and undo/redo. Not implemented: slide; track reordering; clip
-  speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
+  trim (plain and ripple), slip, slide, roll, split, ripple delete, clip
+  properties, markers, captions and undo/redo. Not implemented: track reordering;
+  clip speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
   snap-guide rendering are presentation state, and snapping itself is the
   read-only `timeline.snap` query.
 - **Automatic subtitles — desktop implemented, Android unsupported by design:**
