@@ -581,6 +581,18 @@ class each claim actually has:
     produces, no desktop or compact surface, no CLI flag, and no journey. The build
     configuration and its measurement are the prerequisite, not the capability, and
     this gap stays `UNVERIFIED` end to end until the audio path exists.
+  - **Shape decided for the product half, so the next attempt does not relitigate
+    it.** The clean-up is a **helper-spawned derived artifact**, not a clip property:
+    `or_core` already spawns the packaged `ffmpeg` for probes, proxies and waveforms,
+    and the export encoder is a *library* path (`ffmpeg_the_third`), where denoising
+    would mean building and driving a libavfilter graph from Rust. A clip property
+    would also be a project-format change, which this gap does not need. So the
+    command spawns the helper with `-af afftdn=nf=<measured>:nr=<n>`, writes a cleaned
+    WAV into the project's artifact area, and the result is imported as ordinary
+    media — which means the user can compare, undo by deleting, and export normally.
+    Its acceptance is the measurement this round already built: the exported or
+    imported file's noise floor must drop while the signal survives, and the noise
+    floor must be derived per clip rather than hard-coded.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
