@@ -25,6 +25,8 @@ required_files=(
   docs/PRODUCT.md
   docs/PROJECT_FORMAT.md
   scripts/stage_codec_licences.sh
+  scripts/run_local_lane.sh
+  scripts/run_android_lane.sh
   docs/ARCHITECTURE.md
   docs/TECHNICAL_PLAN.md
   docs/DEVELOPMENT_WORKFLOW.md
@@ -193,6 +195,14 @@ fi
 
 if ! python3 scripts/test_android_preview_runner.py; then
   fail "the Android preview runner control-flow checks failed"
+fi
+
+# The local Android lane must keep reporting BLOCKED for a host precondition and
+# DIRTY for a dirty tree, and must never claim acceptance. Those rules are what
+# stop a local guest run from being mistaken for Android acceptance, so they are
+# checked without a device.
+if ! python3 scripts/test_android_lane.py; then
+  fail "the local Android lane control-flow checks failed"
 fi
 
 # The aggregate release gate is the only check meant to block a merge, so its

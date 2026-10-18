@@ -9,8 +9,10 @@ This tooling supports contributors and maintainers; it is not part of the Opencu
 The owner permits the bounded Debian Linux developer journey described in
 [TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight), using
 `scripts/run_linux_ui_preflight.py`, and — since 2026-10-18 — the local Android
-emulator lane on this host. Both are developer evidence: GitHub Actions remains
-the acceptance authority. Neither exception authorizes a long render,
+emulator lane on this host. Their entry points are
+`bash scripts/run_local_lane.sh linux` and
+`bash scripts/run_local_lane.sh android`; both are developer evidence: GitHub
+Actions remains the acceptance authority. Neither exception authorizes a long render,
 cross-platform packaging, or a second writer in this working tree.
 
 Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.

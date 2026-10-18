@@ -50,9 +50,10 @@ BUNDLE="${OR_LANE_BUNDLE:-apps/or_app/build/linux/x64/debug/bundle}"
 
 usage() {
   cat <<'USAGE'
-usage: bash scripts/run_local_lane.sh linux [--packaged] [--steps id,id] [--report PATH]
+usage: bash scripts/run_local_lane.sh <linux|android> [--packaged] [--steps id,id] [--report PATH]
 
-  linux        the only lane implemented today
+  linux        the Linux desktop lane (default steps below)
+  android      the Android emulator lane; delegated to run_android_lane.sh
   --packaged   also build and package the local .deb and run the packaged journey;
                that is local developer evidence, never packaged acceptance
   --steps      run only the named steps, in this order:
@@ -65,6 +66,7 @@ not be measured (UNVERIFIED), or the tree was dirty so no PASS is attributable.
 USAGE
 }
 
+all_args=("$@")
 lane=""
 steps=""
 report="$DEFAULT_REPORT"
@@ -73,6 +75,7 @@ packaged=0
 while (( $# )); do
   case "$1" in
     linux) lane="linux"; shift ;;
+    android) lane="android"; shift ;;
     --packaged) packaged=1; shift ;;
     --steps)
       if (( $# < 2 )) || [[ -z "${2:-}" ]]; then
@@ -95,8 +98,19 @@ while (( $# )); do
   esac
 done
 
+# The Android lane is a separate script: it boots a guest and has its own
+# preconditions and report, and keeping it out of this file keeps the Linux lane
+# readable. This stays the single entry point either way.
+if [[ "$lane" == "android" ]]; then
+  android_args=()
+  for arg in "${all_args[@]}"; do
+    [[ "$arg" == "android" ]] || android_args+=("$arg")
+  done
+  exec bash "$ROOT/scripts/run_android_lane.sh" ${android_args[@]+"${android_args[@]}"}
+fi
+
 if [[ "$lane" != "linux" ]]; then
-  printf 'run_local_lane: name the lane to run, for example: run_local_lane.sh linux\n' >&2
+  printf 'run_local_lane: name the lane to run: linux or android\n' >&2
   usage >&2
   exit 2
 fi

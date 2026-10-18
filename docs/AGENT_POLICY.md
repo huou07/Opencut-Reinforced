@@ -260,12 +260,11 @@ Two bounded local runtime lanes are an owner-granted exception, recorded in
 - the **Debian Linux developer preflight**, whose single entry point is
   `bash scripts/run_local_lane.sh linux`; a `--packaged` run adds the local
   `.deb` build and the packaged journey;
-- the **local Android emulator lane**. Its single entry point is being
-  consolidated into `bash scripts/run_local_lane.sh android` by Phase 0 of
-  [docs/prompts/OR-BUILD.md](prompts/OR-BUILD.md); until that
-  lands, `scripts/start-android-emulator.sh`,
-  `scripts/run-android-preview-check.sh` and
-  `scripts/stop-android-emulator.sh` are the current mechanism.
+- the **local Android emulator lane**, whose single entry point is
+  `bash scripts/run_local_lane.sh android`. It delegates to
+  `scripts/run_android_lane.sh`, which composes the guest-lifecycle and
+  SAF/preview scripts and refuses to start without its documented headroom,
+  FFmpeg-prefix and tool preconditions.
 
 Each lane uses one heavy job, a bounded compiler/daemon footprint, small
 synthetic fixtures, headroom checks, a timeout and process-tree cleanup, and the

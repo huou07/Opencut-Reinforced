@@ -181,7 +181,14 @@ Android FFmpeg cross-link probes target API 26, matching the packaged app's `min
 The owner now permits the bounded Linux developer preflight described above, and
 its single entry point is `bash scripts/run_local_lane.sh linux`; that lane also
 writes one machine-readable report of what ran, for how long, and what it could
-not establish. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+not establish. The same entry point selects the local Android emulator lane with
+`bash scripts/run_local_lane.sh android`, which delegates to
+`scripts/run_android_lane.sh`: it probes `MemAvailable` against a 7 GiB floor, the
+AVD, `/dev/kvm`, `adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX` before booting
+anything, always stops the guest it started, and writes
+`apps/or_app/build/local-lanes/android.json` in the same shape as the Linux
+report. `scripts/test_android_lane.py` checks its blocked, dirty-tree and
+acceptance rules without a device. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.

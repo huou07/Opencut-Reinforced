@@ -31,12 +31,12 @@ never becomes accepted product evidence.
    budget, and writes `apps/or_app/build/local-lanes/linux.json`.
    `--packaged` adds a local `.deb` build and the packaged journey; that is local
    developer evidence, never packaged acceptance.
-4. `bash scripts/run_local_lane.sh android` — the local Android emulator lane.
-   It is being consolidated by Phase 0 of
-   [docs/prompts/OR-BUILD.md](../../../docs/prompts/OR-BUILD.md); until it
-   lands, `scripts/start-android-emulator.sh`,
-   `scripts/run-android-preview-check.sh` and `scripts/stop-android-emulator.sh`
-   are the mechanism.
+4. `bash scripts/run_local_lane.sh android` — the local Android emulator lane,
+   delegated to `scripts/run_android_lane.sh`. It requires host headroom,
+   `OR_ANDROID_FFMPEG_PREFIX`, a dedicated AVD/serial and `/dev/kvm`, and
+   reports `BLOCKED` naming whichever one is missing. Phase 0 of
+   [docs/prompts/OR-BUILD.md](../../../docs/prompts/OR-BUILD.md) reconstructs the
+   pinned FFmpeg staging recipe that prefix needs.
 5. Push through normal Git and inspect the required GitHub Actions jobs for that
    exact commit. Hosted CI is canonical for native, packaged and cross-platform
    behavior.

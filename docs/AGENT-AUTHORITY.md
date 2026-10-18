@@ -17,7 +17,9 @@ named here, and it does not override the evidence rules in `AGENTS.md`,
   `python3 scripts/bench_quality.py`.
 - Running the **local Android emulator lane** on this host: creating/starting an
   AVD, building and installing the debug APK, driving the integration tests
-  against the guest, and stopping what you started. The owner's 2026-10-18
+  against the guest, and stopping what you started. Its single entry point is
+  `bash scripts/run_local_lane.sh android`, which delegates to
+  `scripts/run_android_lane.sh`. The owner's 2026-10-18
   instruction is the source of this grant. It produces **developer evidence
   only**: the hosted `platform-verification` Android job remains the acceptance
   authority, and a local guest result never becomes `ACCEPTED`.
