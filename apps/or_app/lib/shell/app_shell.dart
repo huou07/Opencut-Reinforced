@@ -2440,6 +2440,7 @@ class _AppShellState extends State<AppShell> {
     ProjectTimelineClip clip,
     ProjectTimelineTrimEdge edge,
     ProjectRationalTime timelineTime,
+    bool ripple,
   ) async {
     final session = _activeSession;
     final result = await _runProjectActionAtSnapshot(
@@ -2450,6 +2451,7 @@ class _AppShellState extends State<AppShell> {
         clipId: clip.clipId,
         edge: edge,
         timelineTime: timelineTime,
+        ripple: ripple,
       ),
     );
     if (result == null &&

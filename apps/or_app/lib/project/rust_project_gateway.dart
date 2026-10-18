@@ -937,6 +937,7 @@ class RustProjectGateway implements ProjectGateway {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) async => _action(
     await _host(session).trimTimelineClip(
       projectId: current.projectId,
@@ -949,6 +950,7 @@ class RustProjectGateway implements ProjectGateway {
       },
       timelineTimeNumerator: timelineTime.numerator.toInt(),
       timelineTimeDenominator: timelineTime.denominator,
+      ripple: ripple,
     ),
   );
 

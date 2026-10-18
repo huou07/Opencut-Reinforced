@@ -1046,12 +1046,15 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String clipId,
   );
+  /// Trims a clip edge. [ripple] pulls every later clip on the track with an end
+  /// trim; it is an explicit command input and never project state.
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   });
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,

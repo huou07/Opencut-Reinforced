@@ -178,6 +178,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineClip clip,
     ProjectTimelineTrimEdge edge,
     ProjectRationalTime timelineTime,
+    bool ripple,
   )?
   onTrimTimelineClip;
   final Future<void> Function(
@@ -3635,6 +3636,7 @@ class _TimelinePanel extends StatefulWidget {
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool ripple,
   )?
   onTrimClip;
   final Future<void> Function(
@@ -4546,6 +4548,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           gesture.clip,
           gesture.edge,
           resolvedTargetTime,
+          false,
         );
       }
     } on ProjectGatewayException catch (error) {
@@ -6467,6 +6470,7 @@ Future<void> _showTimelineClipActions({
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool ripple,
   )?
   onTrim,
   required Future<void> Function(
@@ -6954,11 +6958,16 @@ Future<void> _showTrimTimelineClipDialog({
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool,
   )?
   onTrim,
 }) async {
   if (project == null || onTrim == null) return;
   var selectedEdge = ProjectTimelineTrimEdge.start;
+  // Presentation-local: the ripple choice travels with the command and is never
+  // written into the project. It only means anything for an end edge, because a
+  // ripple-in has two defensible meanings and the command refuses it.
+  var ripple = false;
   var userEditedTimelineEdge = false;
   final timelineEdgeController = TextEditingController(
     text: clip.timelineStart.canonical,
@@ -7018,6 +7027,21 @@ Future<void> _showTrimTimelineClipDialog({
                   });
                 },
               ),
+              CheckboxListTile(
+                key: const ValueKey('timeline-trim-ripple'),
+                value: ripple && selectedEdge == ProjectTimelineTrimEdge.end,
+                onChanged: selectedEdge == ProjectTimelineTrimEdge.end
+                    ? (value) => setDialogState(() => ripple = value ?? false)
+                    : null,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Ripple later clips'),
+                subtitle: Text(
+                  selectedEdge == ProjectTimelineTrimEdge.end
+                      ? 'Move every later clip on this track by the same amount.'
+                      : 'Only an end trim can ripple.',
+                ),
+              ),
               _ExactRationalField(
                 fieldKey: const ValueKey('timeline-trim-time'),
                 label: 'Timeline edge',
@@ -7045,7 +7069,16 @@ Future<void> _showTrimTimelineClipDialog({
                         );
                         if (target == null || !edgeIsValid()) return;
                         Navigator.of(dialogContext).pop();
-                        unawaited(onTrim(project, clip, selectedEdge, target));
+                        unawaited(
+                          onTrim(
+                            project,
+                            clip,
+                            selectedEdge,
+                            target,
+                            ripple &&
+                                selectedEdge == ProjectTimelineTrimEdge.end,
+                          ),
+                        );
                       }
                     : null,
                 child: const Text('Trim'),

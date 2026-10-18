@@ -351,10 +351,27 @@ class each claim actually has:
     rows and the budget is PASS. Writing it also taught the boundary: 40 iterations
     of 1/512 s stay inside the first clip's 1/4 s span, because a ripple whose edge
     reaches the clip's own start is correctly refused.
-  - **Not done, and why the gap is not closed:** no presentation or CLI surface
-    sends the flag yet (trim is invoked from the timeline, so it needs a
-    presentation-local toolbar toggle rather than a dialog) and there is no journey
-    step driving it through the app.
+  - **Reachable from the app and the CLI (2026-10-19).**
+    `or timeline trim-clip` takes `--ripple`; the app bridge passes an optional
+    `ripple` through `trim_timeline_clip_with_ripple` (regenerated bindings, no
+    other generated code moved); the trim dialog carries a `Ripple later clips`
+    checkbox (`timeline-trim-ripple`) that is enabled only for an end edge and is
+    disabled with the reason shown for a start edge. It is presentation state and
+    never written into the project; a drag along the timeline performs a plain trim
+    because there is no dialog to ask in.
+  - **Journey evidence, and its limit (2026-10-19).**
+    `scripts/or_ui.py run scripts/ui_scenarios/ripple-trim.json` passes 51 steps: it
+    seeds two adjacent clips through the insert dialog, trims the first clip's end
+    with ripple off, then trims it again with the checkbox set. What that proves is
+    the **path** — the dialog choice reaches the command through the real app and
+    the app accepts the result. What it does *not* prove is the positional
+    difference, because the only timeline state a scenario can read is the track
+    summary (`Audio track A1, 2 clips`), which carries a count and not clip times.
+    The positional behaviour rests on the six domain tests; giving the scenario a
+    positional assertion needs either a clip-range label in the semantics tree or a
+    runner op that reads one, and that is the recorded next step for this guard.
+  - **Not done:** the CLI has no automated ripple test (its first attempt for
+    overwrite hit the recorded fixture problem), and no journey asserts positions.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

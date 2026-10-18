@@ -2070,6 +2070,7 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) => _gateway.trimTimelineClip(
     session,
     current,

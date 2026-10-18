@@ -5860,6 +5860,7 @@ class _FakeProjectGateway implements ProjectGateway {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) async {
     trimTimelineClipCalls++;
     lastTrimClipId = clipId;

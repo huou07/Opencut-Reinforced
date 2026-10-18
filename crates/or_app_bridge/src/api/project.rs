@@ -2128,6 +2128,8 @@ impl ProjectHostHandle {
         edge: TimelineTrimEdgeView,
         timeline_time_numerator: i64,
         timeline_time_denominator: u32,
+        // Opt-in end-edge ripple; absent keeps the plain trim meaning exactly.
+        ripple: Option<bool>,
     ) -> ProjectActionResult {
         let clip_id = match ClipId::from_str(&clip_id) {
             Ok(clip_id) => clip_id,
@@ -2143,7 +2145,7 @@ impl ProjectHostHandle {
             project_instance_id,
             expected_revision,
             |project_id, project_instance_id, revision| {
-                CommandEnvelope::trim_timeline_clip(
+                CommandEnvelope::trim_timeline_clip_with_ripple(
                     project_id,
                     project_instance_id,
                     revision,
@@ -2153,6 +2155,7 @@ impl ProjectHostHandle {
                         TimelineTrimEdgeView::End => TimelineTrimEdge::End,
                     },
                     timeline_time,
+                    ripple.unwrap_or(false),
                 )
             },
         )

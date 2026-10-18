@@ -954,7 +954,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         "trim-clip" => {
             let options = Options::parse(
                 action_args,
-                &["--project", "--attach", "--clip", "--edge", "--to"],
+                &["--project", "--attach", "--clip", "--edge", "--to", "--ripple"],
                 &[],
                 json,
             )?;
@@ -974,6 +974,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "clip_id": clip_id,
                     "edge": edge,
                     "timeline_time": rational_value(timeline_time),
+                    // Opt-in: absent means the plain trim meaning, unchanged.
+                    "ripple": options.value("--ripple").is_some(),
                 }),
                 json,
             )?;

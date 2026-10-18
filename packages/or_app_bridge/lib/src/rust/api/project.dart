@@ -378,6 +378,7 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required TimelineTrimEdgeView edge,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+    bool? ripple,
   });
 
   Future<ProjectActionResult> undo({

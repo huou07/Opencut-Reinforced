@@ -1,0 +1,291 @@
+{
+  "name": "ripple-trim",
+  "description": "Ripple trim through the real app on the desktop layout: import the fixture, add an audio track, insert two adjacent clips, then trim the first clip's end inward with the trim dialog's Ripple option set. The behavioural assertion is the track summary the app renders: with ripple off, shortening the first clip leaves the second where it was, so the timeline keeps a gap; with ripple on the second clip follows the new edge. The scenario asserts the track label after each step, which is the only place a scenario can read this without canonical access.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Ripple journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 0 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "0/1"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "3/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 1 clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "3/4"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 2 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "before-trim"
+    },
+    {
+      "op": "shot",
+      "name": "before-trim"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "wait",
+      "text": "Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-trim-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Trim Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-trim-edge"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "End"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-trim-time"
+      },
+      "value": "1/2"
+    },
+    {
+      "op": "expect_state",
+      "key": "timeline-confirm-trim",
+      "state": "enabled"
+    },
+    {
+      "op": "shot",
+      "name": "trim-dialog-ripple-off"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-trim"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 8000
+    },
+    {
+      "op": "tree",
+      "name": "after-plain-trim"
+    },
+    {
+      "op": "shot",
+      "name": "after-plain-trim"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "wait",
+      "text": "Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-trim-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Trim Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-trim-edge"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "End"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-trim-time"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-trim-ripple"
+      }
+    },
+    {
+      "op": "expect_state",
+      "key": "timeline-confirm-trim",
+      "state": "enabled"
+    },
+    {
+      "op": "shot",
+      "name": "trim-dialog-ripple-on"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-trim"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "after-ripple-trim"
+    },
+    {
+      "op": "shot",
+      "name": "after-ripple-trim"
+    }
+  ]
+}

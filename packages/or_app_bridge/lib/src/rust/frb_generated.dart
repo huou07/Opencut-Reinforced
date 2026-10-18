@@ -544,6 +544,7 @@ abstract class RustLibApi extends BaseApi {
     required TimelineTrimEdgeView edge,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+    bool? ripple,
   });
 
   Future<ProjectActionResult> crateApiProjectProjectHostHandleUndo({
@@ -3673,6 +3674,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required TimelineTrimEdgeView edge,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+    bool? ripple,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -3689,6 +3691,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_timeline_trim_edge_view(edge, serializer);
           sse_encode_i_64(timelineTimeNumerator, serializer);
           sse_encode_u_32(timelineTimeDenominator, serializer);
+          sse_encode_opt_box_autoadd_bool(ripple, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3710,6 +3713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           edge,
           timelineTimeNumerator,
           timelineTimeDenominator,
+          ripple,
         ],
         apiImpl: this,
       ),
@@ -3729,6 +3733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "edge",
           "timelineTimeNumerator",
           "timelineTimeDenominator",
+          "ripple",
         ],
       );
 
@@ -4331,6 +4336,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool dco_decode_box_autoadd_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
   MediaArtifactBytesView dco_decode_box_autoadd_media_artifact_bytes_view(
     dynamic raw,
   ) {
@@ -4604,6 +4615,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_bool(raw);
   }
 
   @protected
@@ -5430,6 +5447,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_bool(deserializer));
+  }
+
+  @protected
   MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
     SseDeserializer deserializer,
   ) {
@@ -5771,6 +5794,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_bool(deserializer));
     } else {
       return null;
     }
@@ -6841,6 +6875,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_media_artifact_bytes_view(
     MediaArtifactBytesView self,
     SseSerializer serializer,
@@ -7159,6 +7199,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_bool(self, serializer);
     }
   }
 
@@ -8558,6 +8608,7 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     required TimelineTrimEdgeView edge,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+    bool? ripple,
   }) => RustLib.instance.api.crateApiProjectProjectHostHandleTrimTimelineClip(
     that: this,
     projectId: projectId,
@@ -8567,6 +8618,7 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     edge: edge,
     timelineTimeNumerator: timelineTimeNumerator,
     timelineTimeDenominator: timelineTimeDenominator,
+    ripple: ripple,
   );
 
   Future<ProjectActionResult> undo({
