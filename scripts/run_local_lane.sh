@@ -490,18 +490,21 @@ for step in "${step_list[@]}"; do
         printf 'settle with: bash scripts/build_desktop_export_codecs.sh linux <codecs-prefix> <work> and the pinned FFmpeg 8 configure in .github/workflows/platform-verification.yml\n'
         record_step deb 3 BLOCKED 0 "$(step_command_text deb)" "$log" \
           "missing pinned local inputs: $missing"
-        result="BLOCKED"
-        break
+        # Same rule as every other step: a blocked step does not stop the lane,
+        # so a caller that also asked for lanes the block does not affect still
+        # gets their evidence. The shared post-step logic records the result.
+        LAST_CLASSIFICATION="BLOCKED"
+      else
+        export OR_LANE_ROOT="$ROOT" OR_LANE_FFMPEG_PREFIX="$FFMPEG_PREFIX" \
+          OR_LANE_CODEC_PREFIX="$CODEC_PREFIX" OR_LANE_BUNDLE="$BUNDLE" \
+          OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-debug.deb" \
+          OR_LANE_HEAD="$head" OR_LANE_FFMPEG_COPYING="$copying" OR_LANE_CODEC_NOTICES="$notices"
+        run_step deb "$log" "$(step_command_text deb)" \
+          python3 scripts/run_linux_ui_preflight.py --exec \
+            --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
+            --local-home "$LANE_DIR/deb-home" -- bash -c packaged_build_deb
+        record_artifact deb "$OR_LANE_DEB" "$LAST_STEP_START_EPOCH"
       fi
-      export OR_LANE_ROOT="$ROOT" OR_LANE_FFMPEG_PREFIX="$FFMPEG_PREFIX" \
-        OR_LANE_CODEC_PREFIX="$CODEC_PREFIX" OR_LANE_BUNDLE="$BUNDLE" \
-        OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-debug.deb" \
-        OR_LANE_HEAD="$head" OR_LANE_FFMPEG_COPYING="$copying" OR_LANE_CODEC_NOTICES="$notices"
-      run_step deb "$log" "$(step_command_text deb)" \
-        python3 scripts/run_linux_ui_preflight.py --exec \
-          --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
-          --local-home "$LANE_DIR/deb-home" -- bash -c packaged_build_deb
-      record_artifact deb "$OR_LANE_DEB" "$LAST_STEP_START_EPOCH"
       ;;
     journey)
       if [[ ! -f "${OR_LANE_DEB:-}" ]]; then
@@ -509,19 +512,19 @@ for step in "${step_list[@]}"; do
         printf 'BLOCKED: no packaged .deb from this run to install; run the deb step first\n'
         record_step journey 3 BLOCKED 0 "$(step_command_text journey)" "$log" \
           "no packaged .deb was produced by this run"
-        result="BLOCKED"
-        break
+        LAST_CLASSIFICATION="BLOCKED"
+      else
+        export OR_LANE_ROOT="$ROOT" OR_LANE_DEB \
+          OR_LANE_INSTALL_ROOT="$LANE_DIR/installed-root" \
+          OR_LANE_MEDIA_RUNTIME="$LANE_DIR/or-packaged-media-runtime" \
+          OR_LANE_RUNNER_TEMP="$LANE_DIR/runner-temp" \
+          OR_LANE_SMOKE_LOG="$LANE_DIR/packaged-smoke.log"
+        run_step journey "$log" "$(step_command_text journey)" \
+          python3 scripts/run_linux_ui_preflight.py --exec \
+            --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
+            --local-home "$LANE_DIR/deb-home" -- bash -c packaged_run_journey
+        record_artifact journey "$LANE_DIR/runner-temp/or-packaged-product-journey/existing-export.webm" "$LAST_STEP_START_EPOCH"
       fi
-      export OR_LANE_ROOT="$ROOT" OR_LANE_DEB \
-        OR_LANE_INSTALL_ROOT="$LANE_DIR/installed-root" \
-        OR_LANE_MEDIA_RUNTIME="$LANE_DIR/or-packaged-media-runtime" \
-        OR_LANE_RUNNER_TEMP="$LANE_DIR/runner-temp" \
-        OR_LANE_SMOKE_LOG="$LANE_DIR/packaged-smoke.log"
-      run_step journey "$log" "$(step_command_text journey)" \
-        python3 scripts/run_linux_ui_preflight.py --exec \
-          --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
-          --local-home "$LANE_DIR/deb-home" -- bash -c packaged_run_journey
-      record_artifact journey "$LANE_DIR/runner-temp/or-packaged-product-journey/existing-export.webm" "$LAST_STEP_START_EPOCH"
       ;;
   esac
   if [[ "$LAST_CLASSIFICATION" != "PASS" ]]; then
