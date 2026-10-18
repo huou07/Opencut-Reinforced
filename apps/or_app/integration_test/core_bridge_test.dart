@@ -2064,6 +2064,21 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.deleteTimelineClip(session, current, clipId);
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) => _gateway.cleanUpAudio(
+    session,
+    sourcePath: sourcePath,
+    destinationPath: destinationPath,
+    noiseFloorDb: noiseFloorDb,
+    reductionDb: reductionDb,
+  );
+
+  @override
   Future<ProjectActionResult> moveTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current, {

@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
@@ -39,12 +40,16 @@ class AppShell extends StatefulWidget {
     required this.projectGateway,
     required this.projectFilePicker,
     required this.recentProjectStore,
+    this.audioCleanupDirectory,
   });
 
   final CoreGateway gateway;
   final ProjectGateway projectGateway;
   final ProjectFilePicker projectFilePicker;
   final RecentProjectStore recentProjectStore;
+
+  /// Where cleaned audio is written. Injectable so a test does not need a plugin.
+  final Future<Directory> Function()? audioCleanupDirectory;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -436,6 +441,7 @@ class _AppShellState extends State<AppShell> {
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
+              onCleanUpAudio: _cleanUpMediaAudio,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onMoveTimelineTrack: _moveTimelineTrack,
@@ -2719,6 +2725,81 @@ class _AppShellState extends State<AppShell> {
         '${failures.length} could not be imported. $failureSummary',
       );
     }
+  }
+
+  /// Reduces noise in one media item's audio and imports the result as a new item.
+  ///
+  /// The clean-up itself is a file operation: nothing in the project changes until
+  /// the import below, which is an ordinary revision-checked `media.add`. Leaving the
+  /// original untouched is the point — the two sit side by side and the user compares
+  /// them, or removes one.
+  Future<void> _cleanUpMediaAudio(ProjectMediaItem item) async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    final sourcePath = _mediaSourcePath(item);
+    if (sourcePath == null) {
+      _showUnavailable('This item has no readable source path to clean up.');
+      return;
+    }
+    Directory directory;
+    try {
+      final resolved = await (widget.audioCleanupDirectory ??
+          getApplicationSupportDirectory)();
+      directory = Directory(
+        '${resolved.path}${Platform.pathSeparator}audio-cleanup',
+      );
+      // Synchronous on purpose: this is one mkdir, and awaiting real filesystem
+      // I/O here leaves the continuation parked in a widget test's fake async zone.
+      directory.createSync(recursive: true);
+    } catch (_) {
+      _showUnavailable('A folder for the cleaned audio is unavailable.');
+      return;
+    }
+    if (!mounted || !identical(session, _activeSession)) return;
+    final segments = sourcePath.replaceAll('\\', '/').split('/');
+    final name = segments.isEmpty ? 'audio' : segments.last;
+    final destination =
+        '${directory.path}${Platform.pathSeparator}'
+        '${DateTime.now().millisecondsSinceEpoch}-$name.cleaned.wav';
+
+    AudioCleanupOutcome outcome;
+    try {
+      outcome = await widget.projectGateway.cleanUpAudio(
+        session,
+        sourcePath: sourcePath,
+        destinationPath: destination,
+        reductionDb: 12,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable('Audio cleanup failed: ${error.message}');
+      return;
+    }
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (!outcome.succeeded) {
+      _showUnavailable(
+        'Audio cleanup failed: ${outcome.message.isEmpty ? outcome.errorCode : outcome.message}',
+      );
+      return;
+    }
+
+    final imported = await _runProjectAction((session, current) {
+      return widget.projectGateway.importMedia(session, current, outcome.destination);
+    });
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (imported == null) return;
+    _showUnavailable(
+      'Cleaned audio added to the project '
+      '(noise floor ${outcome.noiseFloorDb} dBFS, ${outcome.reductionDb} dB reduction).',
+    );
+  }
+
+  /// The filesystem path behind a media item, when the platform exposed one.
+  String? _mediaSourcePath(ProjectMediaItem item) {
+    final uri = Uri.tryParse(item.sourceUri);
+    if (uri == null) return null;
+    if (uri.scheme == 'file') return uri.toFilePath();
+    if (uri.scheme.isEmpty) return item.sourceUri;
+    return null;
   }
 
   Future<void> _removeMedia(ProjectMediaItem item) async {

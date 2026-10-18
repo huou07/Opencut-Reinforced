@@ -48,6 +48,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
+    this.onCleanUpAudio,
     this.onRemoveTimelineTrack,
     this.onSetTimelineTrackState,
     this.onMoveTimelineTrack,
@@ -112,6 +113,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTimelineTrack;
   final Future<void> Function(
@@ -492,6 +494,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onGenerateCaptions: widget.busy
                       ? null
                       : widget.onGenerateCaptions,
+                  onCleanUpAudio: widget.busy ? null : widget.onCleanUpAudio,
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -766,6 +769,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onGenerateCaptions: widget.busy
                     ? null
                     : widget.onGenerateCaptions,
+                onCleanUpAudio: widget.busy ? null : widget.onCleanUpAudio,
                 onAddMediaToTimeline: widget.busy
                     ? null
                     : widget.onAddMediaToTimeline,
@@ -1157,6 +1161,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onRemoveMedia,
     required this.onRelinkMedia,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1178,6 +1183,7 @@ class _EditorToolPanel extends StatelessWidget {
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
   final ValueChanged<ProjectMediaItem>? onRelinkMedia;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1209,6 +1215,7 @@ class _EditorToolPanel extends StatelessWidget {
         onRemove: onRemoveMedia,
         onRelink: onRelinkMedia,
         onGenerateCaptions: onGenerateCaptions,
+        onCleanUpAudio: onCleanUpAudio,
         onAddMediaToTimeline: onAddMediaToTimeline,
         onClose: onClose,
       );
@@ -1268,6 +1275,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onRemove,
     required this.onRelink,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1287,6 +1295,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   final ValueChanged<ProjectMediaItem>? onRemove;
   final ValueChanged<ProjectMediaItem>? onRelink;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1432,6 +1441,10 @@ class _MediaLibraryPanel extends StatelessWidget {
                                 item.audioDetails == null
                             ? null
                             : () => unawaited(onGenerateCaptions!(item)),
+                        onCleanUpAudio:
+                            onCleanUpAudio == null || item.audioDetails == null
+                            ? null
+                            : () => unawaited(onCleanUpAudio!(item)),
                       ),
                     ),
                   if (error != null) ...[
@@ -1479,6 +1492,7 @@ class _MediaLibraryItem extends StatelessWidget {
     required this.onRelink,
     required this.onRemove,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
   });
 
   final ProjectMediaItem item;
@@ -1487,6 +1501,7 @@ class _MediaLibraryItem extends StatelessWidget {
   final VoidCallback? onRelink;
   final VoidCallback? onRemove;
   final VoidCallback? onGenerateCaptions;
+  final VoidCallback? onCleanUpAudio;
 
   @override
   Widget build(BuildContext context) {
@@ -1597,12 +1612,14 @@ class _MediaLibraryItem extends StatelessWidget {
               onSelected:
                   onRelink == null &&
                       onRemove == null &&
-                      onGenerateCaptions == null
+                      onGenerateCaptions == null &&
+                      onCleanUpAudio == null
                   ? null
                   : (action) {
                       if (action == 'relink') onRelink?.call();
                       if (action == 'remove') onRemove?.call();
                       if (action == 'transcribe') onGenerateCaptions?.call();
+                      if (action == 'cleanup') onCleanUpAudio?.call();
                     },
               itemBuilder: (context) => [
                 if (onRelink != null)
@@ -1622,6 +1639,14 @@ class _MediaLibraryItem extends StatelessWidget {
                     key: ValueKey('media-generate-captions-${item.mediaId}'),
                     value: 'transcribe',
                     child: const Text('Generate Captions'),
+                  ),
+                // Only a file with audio can be cleaned, and the result is a new
+                // item rather than a change to this one.
+                if (onCleanUpAudio != null && item.audioDetails != null)
+                  PopupMenuItem(
+                    key: ValueKey('media-clean-audio-${item.mediaId}'),
+                    value: 'cleanup',
+                    child: const Text('Clean up Audio'),
                   ),
               ],
               child: const SizedBox(

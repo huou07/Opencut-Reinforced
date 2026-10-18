@@ -92,6 +92,13 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Noise filtering's app path is guarded but not yet measured: four widget tests cover
+the desktop and compact actions, the import of the result, the failure path and the
+no-audio case, and the clean-up itself is measured through the CLI and the helper.
+What is missing is a journey that runs the action end to end against a real helper
+and a performance row for the command — both recorded as owed in
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+
 Noise filtering is measured, not asserted. `scripts/measure_denoise.py` builds a
 fixture whose two windows are known — one second of white noise, then two seconds of
 a 1 kHz tone buried in the same noise — runs the packaged helper's `afftdn` chain

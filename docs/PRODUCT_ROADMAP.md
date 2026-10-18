@@ -610,12 +610,33 @@ class each claim actually has:
     switches on one vocabulary whichever layer refuses the request. Two bridge tests
     cover the missing-source and zero-reduction refusals. Dart still has no caller for
     it.
-  - **Not done, and why the capability is still not finished:** there is no desktop
-    or compact surface, so a pointer or keyboard user cannot reach it, and the result
-    is not imported as a new media item in one step — a user must run the command and
-    then import the file by hand. There is also no journey. Those are the remaining
-    half of Phase 4, and this gap stays `UNVERIFIED` at the interface bar until the
-    GUI surface exists.
+  - **Reachable and one-step from the app (2026-10-20).** Every media item that
+    carries audio now offers **Clean up Audio** in its actions menu
+    (`media-clean-audio-<media id>`), on the desktop tool panel and in the compact
+    media sheet alike, because both present the same item widget. Choosing it runs the
+    clean-up into the app's `audio-cleanup` folder, then imports the result as its own
+    media item through the ordinary revision-checked `media.add`; the original is left
+    untouched, so the two sit side by side and the user compares or removes one. The
+    noise floor is not asked for: the bridge measures it, and the confirmation reports
+    the floor and the reduction it used.
+  - **Guarded at both presentations.** Four widget tests: the desktop action cleans
+    with no floor passed, imports the destination it wrote, and reports the outcome;
+    a failed clean-up imports nothing and shows the failure; an item with no audio
+    offers no action; and the compact media sheet offers the same action and imports
+    the result at 320x440. The three journeys (editor, compact 320x440, track
+    reorder) still pass, so the media panel did not regress.
+  - **One product decision worth recording:** the directory is created
+    *synchronously*, because awaiting real filesystem I/O in the handler left the
+    continuation parked in a widget test's fake async zone — the observable symptom
+    was a handler that began, resolved its directory, and then never reached the
+    gateway. Creating one directory synchronously costs nothing and deletes the
+    problem rather than working around it in the test.
+  - **Not done, and why the capability is still not finished:** the clean-up writes
+    into app storage, so the item it imports points at a generated file with no
+    provenance shown in the library (the two entries look alike but for the name);
+    there is no journey that exercises the action end to end with a real helper; and
+    no performance row measures it. The gap is `VERIFIED_BEHAVIORAL` for the app path
+    and still `UNVERIFIED` for the visual, journey and performance dimensions.
   - **Shape decided for the product half, so the next attempt does not relitigate
     it.** The clean-up is a **helper-spawned derived artifact**, not a clip property:
     `or_core` already spawns the packaged `ffmpeg` for probes, proxies and waveforms,

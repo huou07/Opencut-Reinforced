@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
 
@@ -23,12 +25,16 @@ class OrApp extends StatelessWidget {
     this.projectGateway,
     this.projectFilePicker,
     this.recentProjectStore,
+    this.audioCleanupDirectory,
   });
 
   final CoreGateway gateway;
   final ProjectGateway? projectGateway;
   final ProjectFilePicker? projectFilePicker;
   final RecentProjectStore? recentProjectStore;
+
+  /// Where cleaned audio is written. Injectable so a test does not need a plugin.
+  final Future<Directory> Function()? audioCleanupDirectory;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +49,7 @@ class OrApp extends StatelessWidget {
             projectFilePicker ?? createDefaultProjectFilePicker(),
         recentProjectStore:
             recentProjectStore ?? PersistentRecentProjectStore(),
+        audioCleanupDirectory: audioCleanupDirectory,
       ),
     );
   }

@@ -931,6 +931,31 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) async {
+    final view = await _host(session).cleanUpAudio(
+      source: sourcePath,
+      destination: destinationPath,
+      noiseFloorDb: noiseFloorDb,
+      reductionDb: reductionDb,
+    );
+    return AudioCleanupOutcome(
+      succeeded: view.succeeded,
+      destination: view.destination,
+      noiseFloorDb: view.noiseFloorDb,
+      reductionDb: view.reductionDb,
+      bytesWritten: view.bytesWritten.toInt(),
+      errorCode: view.errorCode,
+      message: view.message,
+    );
+  }
+
+  @override
   Future<ProjectActionResult> moveTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current, {

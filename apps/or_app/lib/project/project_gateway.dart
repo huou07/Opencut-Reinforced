@@ -848,6 +848,32 @@ class ProjectGatewayException implements Exception {
   String toString() => '$code: $message';
 }
 
+/// The outcome of reducing noise in one media file.
+class AudioCleanupOutcome {
+  const AudioCleanupOutcome({
+    required this.succeeded,
+    required this.destination,
+    required this.noiseFloorDb,
+    required this.reductionDb,
+    required this.bytesWritten,
+    required this.errorCode,
+    required this.message,
+  });
+
+  final bool succeeded;
+
+  /// Where the cleaned audio was written. Empty when the call failed.
+  final String destination;
+
+  /// The floor the filter was given. The bridge measures it from the material when
+  /// no figure is passed, so this is what a surface should report.
+  final int noiseFloorDb;
+  final int reductionDb;
+  final int bytesWritten;
+  final String errorCode;
+  final String message;
+}
+
 abstract interface class ProjectGateway {
   Future<ProjectSessionHandle> createProject(String path, String name);
   Future<ProjectSessionHandle> openProject(String path);
@@ -1048,6 +1074,19 @@ abstract interface class ProjectGateway {
   );
   /// Trims a clip edge. [ripple] pulls every later clip on the track with an end
   /// trim; it is an explicit command input and never project state.
+  /// Reduces noise in one media file and writes the result to [destinationPath].
+  ///
+  /// This is a file-to-file media operation: no project state changes, and the
+  /// result is ordinary media the caller can import. Passing no [noiseFloorDb] lets
+  /// the bridge measure the material's own floor, which is what a surface should do.
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  });
+
   /// Moves a track to another position. Order is canonical: it decides which track
   /// a client reaches by index and which track is the first of its kind.
   Future<ProjectActionResult> moveTimelineTrack(

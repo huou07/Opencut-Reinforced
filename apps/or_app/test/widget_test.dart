@@ -358,6 +358,163 @@ void main() {
     },
   );
 
+  testWidgets('cleaning a media item imports the result as its own item', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_audioMediaFixture('media-audio', '/tmp/music.wav')];
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final picker = _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Cleanup');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-audio')));
+    await tester.pumpAndSettle();
+    // The handler makes a directory and calls the gateway, so real asynchronous
+    // work has to be allowed to finish; pumpAndSettle alone does not wait for it.
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-media-audio')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.lastCleanUpSource, '/tmp/music.wav');
+    // The floor is not passed: the bridge measures the material's own.
+    expect(gateway.lastCleanUpNoiseFloorDb, isNull);
+    expect(gateway.lastCleanUpDestination, endsWith('music.wav.cleaned.wav'));
+    expect(gateway.lastCleanUpDestination, contains('audio-cleanup'));
+    // The result is imported through the ordinary revision-checked media command.
+    expect(gateway.importMediaCalls, 1);
+    expect(gateway.lastImportedPath, gateway.lastCleanUpDestination);
+    expect(
+      find.textContaining('Cleaned audio added to the project'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed audio cleanup imports nothing and says so', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_audioMediaFixture('media-audio', '/tmp/music.wav')]
+      ..cleanUpAudioFailure = 'the helper is missing';
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj',
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Cleanup failure');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-audio')));
+    await tester.pumpAndSettle();
+    // The handler makes a directory and calls the gateway, so real asynchronous
+    // work has to be allowed to finish; pumpAndSettle alone does not wait for it.
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-media-audio')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.importMediaCalls, 0);
+    expect(find.textContaining('the helper is missing'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an item with no audio offers no cleanup', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-silent',
+          sourceUri: Uri.file('/tmp/silent.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '10 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: null,
+        ),
+      ];
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj',
+    );
+    await _createProject(tester, 'No audio');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-silent')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('media-clean-audio-media-silent')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the compact media sheet offers audio cleanup and imports it', (
+    tester,
+  ) async {
+    // Android and the compact layouts reach media through the tool dock sheet, so
+    // the action has to exist there too, not only in the desktop tool panel.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'compact-clean',
+          sourceUri: Uri.file('/tmp/compact-clean.wav').toString(),
+          formatNames: const ['wav'],
+          duration: '1 s',
+          videoDetails: null,
+          audioDetails: 'pcm',
+        ),
+      ];
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/compact-clean.orproj',
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Compact cleanup');
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-compact-clean')));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-compact-clean')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.lastImportedPath, gateway.lastCleanUpDestination);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
@@ -4618,6 +4775,7 @@ Future<void> _mount(
   _FakeProjectGateway? gateway,
   _FakeProjectPicker? picker,
   RecentProjectStore? recentProjectStore,
+  Future<Directory> Function()? audioCleanupDirectory,
 }) async {
   await tester.pumpWidget(
     OrApp(
@@ -4625,6 +4783,7 @@ Future<void> _mount(
       projectGateway: gateway ?? _FakeProjectGateway(),
       projectFilePicker: picker ?? _FakeProjectPicker(),
       recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
+      audioCleanupDirectory: audioCleanupDirectory,
     ),
   );
   await tester.pumpAndSettle();
@@ -4914,6 +5073,11 @@ class _FakeProjectGateway implements ProjectGateway {
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
   int moveTimelineTrackCalls = 0;
+  int cleanUpAudioCalls = 0;
+  String? lastCleanUpSource;
+  String? lastCleanUpDestination;
+  int? lastCleanUpNoiseFloorDb;
+  String? cleanUpAudioFailure;
   String? lastMovedTrackId;
   int? lastMovedToIndex;
   int slipTimelineClipCalls = 0;
@@ -4941,6 +5105,7 @@ class _FakeProjectGateway implements ProjectGateway {
   final List<int> timelineClipOffsets = [];
   final List<int> timelineMarkerOffsets = [];
   int importMediaCalls = 0;
+  String? lastImportedPath;
   int relinkMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportSource;
@@ -5862,6 +6027,40 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle handle, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) async {
+    cleanUpAudioCalls++;
+    lastCleanUpSource = sourcePath;
+    lastCleanUpDestination = destinationPath;
+    lastCleanUpNoiseFloorDb = noiseFloorDb;
+    if (cleanUpAudioFailure != null) {
+      return AudioCleanupOutcome(
+        succeeded: false,
+        destination: '',
+        noiseFloorDb: 0,
+        reductionDb: reductionDb,
+        bytesWritten: 0,
+        errorCode: 'CLEANUP_GENERATION_FAILED',
+        message: cleanUpAudioFailure!,
+      );
+    }
+    return AudioCleanupOutcome(
+      succeeded: true,
+      destination: destinationPath,
+      noiseFloorDb: -38,
+      reductionDb: reductionDb,
+      bytesWritten: 1024,
+      errorCode: '',
+      message: '',
+    );
+  }
+
+  @override
   Future<ProjectActionResult> moveTimelineTrack(
     ProjectSessionHandle handle,
     ProjectReadModel current, {
@@ -6293,6 +6492,7 @@ class _FakeProjectGateway implements ProjectGateway {
   ) async {
     importMediaCalls++;
     lastImportSource = source;
+    lastImportedPath = source;
     importMediaSources.add(source);
     if (nextImportBackendUnavailable ||
         failedImportCalls.contains(importMediaCalls)) {
