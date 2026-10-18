@@ -194,6 +194,21 @@ journey unless results establish a real engine migration dependency.
   content (`crates/or_core/src/timeline.rs:181`), and the shared wgpu layer render
   path (`crates/or_render/src/lib.rs:602`). ADR 0007 is architecture intent, not
   implementation.
+- **One local Android lane — entry point landed, guest drive unexecuted:**
+  `bash scripts/run_local_lane.sh android` selects it and delegates to
+  `scripts/run_android_lane.sh`, which probes `MemAvailable` against a 7 GiB
+  floor, the AVD, `/dev/kvm`, `adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX`
+  before booting anything, drives the repository's guest-lifecycle and
+  SAF/preview scripts, always stops the guest it started, and writes
+  `apps/or_app/build/local-lanes/android.json` in the Linux report's shape.
+  `scripts/test_android_lane.py` checks its usage, blocked-precondition,
+  dirty-tree and no-acceptance rules without a device, inside `check-repo.sh`.
+  On 2026-10-18 the lane reported `BLOCKED` with its own measurements:
+  `MemAvailable` 5.5 GiB, the ~2.25 GiB `GradleDaemon 8.14.3` that belongs to the
+  sibling project VCE, and the unset pinned FFmpeg prefix. The guest drive path
+  is therefore **unexecuted and unverified**, and reproducible staging of the
+  pinned x86_64 Android FFmpeg prefix is still missing. Both are phase 0 of
+  [the current prompt](prompts/OR-BUILD.md).
 - **Next product gap — complete the editing journey on desktop and Android:**
   close the enumerated basic-edit gaps in the order product value needs them,
   using the local Linux and Android lanes for fast iteration and hosted CI for
