@@ -1,0 +1,178 @@
+{
+  "name": "overwrite-insert",
+  "description": "Overwrite edit mode through the real app on the desktop layout: import the fixture, add an audio track, insert a 1 s clip at the origin through the insert dialog, then insert a 1 s clip at 1/2 s with the dialog's Edit Mode set to Overwrite. The behavioural assertion is the track summary the app itself renders: insert mode refuses to overlap, so reaching '2 clips' after the second insert is only possible because overwrite trimmed the first clip and added the new one. A scenario cannot read canonical state; this is the surface a user sees.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Overwrite journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 0 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "before-first-insert"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "0/1"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/1"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 1 clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-insert-mode"
+    },
+    {
+      "op": "shot",
+      "name": "after-insert-mode"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-insert-mode"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Overwrite"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "1/2"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/1"
+    },
+    {
+      "op": "shot",
+      "name": "overwrite-dialog"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 2 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-overwrite"
+    },
+    {
+      "op": "shot",
+      "name": "after-overwrite"
+    }
+  ]
+}

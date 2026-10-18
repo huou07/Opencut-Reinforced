@@ -286,6 +286,17 @@ class each claim actually has:
     (`json_success_with_probe` vs `json_success`, and whether `probe_stub` must be
     built before `create_project`), then write the guard. The test was removed
     rather than left red.
+  - **Journey evidence (2026-10-19).**
+    `python3 scripts/or_ui.py run scripts/ui_scenarios/overwrite-insert.json`
+    passes on the desktop layout: it creates a project, imports the fixture, adds an
+    audio track, inserts a 1 s clip through the dialog, then inserts again at 1/2 s
+    with the dialog's Edit Mode set to Overwrite and reaches
+    `Audio track A1, 2 clips`. Insert mode refuses that overlap, so reaching two
+    clips is only possible because overwrite trimmed the first clip and placed the
+    new one — a behavioural result read from the app's own track summary, which is
+    the strongest evidence this harness can produce without reading canonical state
+    directly. Transcript and screenshots are in
+    `apps/or_app/build/ui-harness/overwrite/`.
   - **Reachable by a user (2026-10-19, this revision).** The insert dialog carries
     an `Edit Mode` selector (`timeline-insert-mode`, Insert | Overwrite) whose value
     travels with the command through the dialog callback, `app_shell` and the

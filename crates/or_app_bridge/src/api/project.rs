@@ -1862,6 +1862,10 @@ impl ProjectHostHandle {
                 None => return action_error(timeline_arguments_error()),
             },
         };
+        // The bridge owns id generation for this command, exactly as it does for
+        // the inserted clip itself. A client may name the fragment; when it does
+        // not, one is generated here so an overwrite that lands inside an existing
+        // clip completes instead of refusing for want of an id no user could type.
         let split_clip_id = match overwrite_split_clip_id {
             None => None,
             Some(value) => match ClipId::from_str(&value) {
@@ -1910,7 +1914,11 @@ impl ProjectHostHandle {
                     timeline_start,
                     source_range,
                     edit_mode,
-                    split_clip_id,
+                    if edit_mode == or_core::TimelineEditMode::Overwrite {
+                        Some(split_clip_id.unwrap_or_else(ClipId::generate))
+                    } else {
+                        None
+                    },
                 )
             },
         )

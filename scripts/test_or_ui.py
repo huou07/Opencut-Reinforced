@@ -55,7 +55,8 @@ class ScenarioContractCase(unittest.TestCase):
     def test_the_shipped_scenarios_are_present_and_valid(self) -> None:
         names = {path.name for path in SCENARIOS.glob("*.json")}
         self.assertTrue({"editor-journey.json", "compact-editor-journey.json",
-                         "interaction-latency.json", "wrong-selector.json"}.issubset(names),
+                         "interaction-latency.json", "overwrite-insert.json",
+                         "wrong-selector.json"}.issubset(names),
                         names)
         for path, payload in self.shipped_scenarios():
             with self.subTest(scenario=path.name):
