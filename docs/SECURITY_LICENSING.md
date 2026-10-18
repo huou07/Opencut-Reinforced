@@ -160,8 +160,12 @@ spawns it with direct process arguments and no shell, exactly as before.
 
 Helper build additions beyond the 7C production prefix are the `ffmpeg`/`ffprobe`
 programs, the `pipe` protocol for piped artifact output, the `png` and `mpeg4` encoders, the `image2` and `image2pipe` muxers, and the `setpts`,
-`scale`, `format`, `aformat`, `aresample`, and `showwavespic` filters, plus the zlib
-compression library the PNG encoder requires. Windows helpers statically link
+`scale`, `format`, `aformat`, `aresample`, `showwavespic` and `afftdn` filters, plus
+the zlib compression library the PNG encoder requires. `afftdn` is FFmpeg's own
+FFT noise-reduction audio filter: it is a native component of libavfilter under the
+same LGPL-2.1-or-later posture, it links no additional external library, and it is
+enabled for Phase 4's audio clean-up. Its behaviour is verified by measurement
+(`scripts/measure_denoise.py`) rather than by a capability listing. Windows helpers statically link
 pinned zlib 1.3.2 source (SHA-256
 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) and ship its
 license notice; macOS and Linux use system zlib with no extra bundled file. No GPL, version3, nonfree,

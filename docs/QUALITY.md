@@ -92,6 +92,20 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Noise filtering is measured, not asserted. `scripts/measure_denoise.py` builds a
+fixture whose two windows are known — one second of white noise, then two seconds of
+a 1 kHz tone buried in the same noise — runs the packaged helper's `afftdn` chain
+with the noise floor **derived from the fixture's own measurement**, and reports both
+windows. Measured 2026-10-20 with FFmpeg 7.1.5 on this host:
+`afftdn=nf=-21:nr=12` moved the noise floor from -23.20 dB to -34.70 dB (**11.50 dB
+drop**) while the tone fell 4.90 dB, i.e. **6.60 dB of discrimination** — the filter
+removed more noise than signal, which is what denoising means. The check requires at
+least a 6 dB floor drop and at least 3 dB of discrimination; a filter that merely
+turned everything down would fail the second condition. The tone is the hardest case
+for an FFT denoiser (a stationary narrowband signal looks like noise to it), so the
+check deliberately bounds the *ratio* rather than the absolute signal loss, and the
+script says so where the thresholds are defined.
+
 Track reordering has a row: `command.track_move` on a two-track project is p50
 0.002 ms / p95 0.003 ms against a 2.0 ms p95 budget (2026-10-20). It costs the
 track count rather than the clip count — a removal and an insertion in a short

@@ -61,6 +61,7 @@ env:
     --enable-filter=aformat
     --enable-filter=aresample
     --enable-filter=showwavespic
+    --enable-filter=afftdn
   # Reused desktop/Android delivery profile; each target enables it only after
   # staging the exact libvpx/libopus source pins and notices.
   FFMPEG_EXPORT_CONFIGURE_ARGS: >-
@@ -313,6 +314,11 @@ jobs:
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
+          # Phase 4's noise filter is verified by measuring the floor it removes,
+          # not by finding its name in a listing.
+          python3 "$GITHUB_WORKSPACE/scripts/measure_denoise.py" \
+            --bin "$prefix/bin" \
+            --work "$RUNNER_TEMP/ffmpeg-denoise-measurement"
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           mkdir -p "$HOME/.cargo"
           # Cargo [env] reaches build.rs when Flutter's native-assets hook drops step env.
@@ -640,6 +646,11 @@ jobs:
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
+          # Phase 4's noise filter is verified by measuring the floor it removes,
+          # not by finding its name in a listing.
+          python3 "$GITHUB_WORKSPACE/scripts/measure_denoise.py" \
+            --bin "$prefix/bin" \
+            --work "$RUNNER_TEMP/ffmpeg-denoise-measurement"
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           mkdir -p "$HOME/.cargo"
           # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
@@ -1047,6 +1058,11 @@ jobs:
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
+          # Phase 4's noise filter is verified by measuring the floor it removes,
+          # not by finding its name in a listing.
+          python3 "$GITHUB_WORKSPACE/scripts/measure_denoise.py" \
+            --bin "$prefix/bin" \
+            --work "$RUNNER_TEMP/ffmpeg-denoise-measurement"
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           for library in avcodec avformat avutil swresample swscale; do
             test -f "$prefix/lib/pkgconfig/lib$library.pc"

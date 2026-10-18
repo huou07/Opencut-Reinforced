@@ -557,6 +557,30 @@ class each claim actually has:
     is a deliberate FFmpeg build-configuration change and touches no project format;
     it is self-contained and could complete in the time Phase 1.5's model work alone
     would take.
+- **Phase 4 noise filtering: the build configuration and its measurement are in
+  place; the audio path that uses it is not (2026-10-20).**
+  - The packaged desktop helper now enables FFmpeg's own `afftdn` FFT noise
+    reducer (`FFMPEG_HELPER_CONFIGURE_ARGS` in
+    `.github/workflows/platform-verification.yml`). It is a native libavfilter
+    component under the unchanged LGPL-2.1-or-later posture, links no external
+    library, and is recorded in [SECURITY_LICENSING.md](SECURITY_LICENSING.md)
+    beside the existing helper additions.
+  - `scripts/measure_denoise.py` proves the capability by measurement rather than by
+    a capability listing, and each of the three platform jobs now runs it after
+    building the helper. On this host (FFmpeg 7.1.5) `afftdn=nf=-21:nr=12` dropped
+    the noise floor 11.50 dB while the signal fell 4.90 dB: 6.60 dB of
+    discrimination. Numbers, thresholds and the reason the check bounds the ratio
+    rather than the absolute signal loss are in [QUALITY.md](QUALITY.md).
+  - The measurement also produced the design constraint the product half has to
+    honour: `afftdn`'s noise floor is a parameter, a value below the recording's real
+    floor does nothing and a value above it eats the audio. The script therefore
+    measures the fixture's own floor and passes it in; a real audio path must derive
+    the same figure per clip instead of hard-coding it.
+  - **Not done, and why the capability is not usable yet:** nothing in the product
+    calls the filter. There is no audio-cleanup command or job, no artifact it
+    produces, no desktop or compact surface, no CLI flag, and no journey. The build
+    configuration and its measurement are the prerequisite, not the capability, and
+    this gap stays `UNVERIFIED` end to end until the audio path exists.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
