@@ -194,44 +194,62 @@ def writable_cargo_cache(environment: dict[str, str]) -> None:
 
 
 def writable_pub_cache(environment: dict[str, str]) -> None:
-    """Seed a project-local cache from readable public pub.dev packages only."""
+    """Point PUB_CACHE at the project-local staged cache, staging it once.
+
+    The decision is deliberately not a writability probe. Measured 2026-10-18: a
+    `flutter pub get` run against the owner's shared cache could *create* inside
+    it and delete a fresh directory, yet failed to replace a populated package
+    (`Deletion failed, path = '.../hosted/pub.dev/path_provider-2.1.6' (OS Error:
+    Operation not permitted)`), leaving 20 package directories without their
+    `pubspec.yaml`. Every later offline resolution then failed with "no versions
+    of path_provider match 2.1.6", and the compile step saw undefined getters in
+    `vector_math` and `clock`. A probe cannot distinguish that state, so the lane
+    prefers the project-local cache whenever it exists and stages one (copying
+    only readable public pub.dev entries) when it does not. A stale local cache
+    fails loudly against `--enforce-lockfile`; delete it to re-stage.
+    """
     home = Path(environment.get("HOME", str(Path.home())))
     seed = Path(environment.get("PUB_CACHE", home / ".pub-cache"))
-    public_cache = seed / "hosted" / "pub.dev"
-    if not seed.is_dir() or (
-        not public_cache.is_dir() or cache_is_writable(public_cache)
-    ):
-        return
     target = APP / ".dart_tool/aeh-pub-cache"
     if target.is_symlink():
         raise RuntimeError("BLOCKED: redirected project pub cache")
-    if not target.exists():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="or-pub-seed-", dir=APP / ".dart_tool") as staging:
-            prepared = Path(staging) / "pub-cache"
-            prepared.mkdir()
+    if (target / "hosted" / "pub.dev").is_dir():
+        environment["PUB_CACHE"] = str(target)
+        return
+    public_cache = seed / "hosted" / "pub.dev"
+    if not seed.is_dir() or not public_cache.is_dir():
+        return
+    if target.exists():
+        if target.stat().st_uid != os.getuid():
+            raise RuntimeError("BLOCKED: project pub cache belongs to another worker")
+        if not (target / "hosted" / "pub.dev").is_dir():
+            raise RuntimeError("BLOCKED: project pub cache is incomplete")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="or-pub-seed-", dir=target.parent) as staging:
+        prepared = Path(staging) / "pub-cache"
+        prepared.mkdir()
 
-            def ignore_unreadable(directory: str, names: list[str]) -> set[str]:
-                ignored = set()
-                for name in names:
-                    entry = Path(directory) / name
-                    required = os.R_OK
-                    if entry.is_dir() and not entry.is_symlink():
-                        required |= os.X_OK
-                    if not os.access(entry, required):
-                        ignored.add(name)
-                return ignored
+        def ignore_unreadable(directory: str, names: list[str]) -> set[str]:
+            ignored = set()
+            for name in names:
+                entry = Path(directory) / name
+                required = os.R_OK
+                if entry.is_dir() and not entry.is_symlink():
+                    required |= os.X_OK
+                if not os.access(entry, required):
+                    ignored.add(name)
+            return ignored
 
-            for name in ("hosted", "hosted-hashes"):
-                public = seed / name / "pub.dev"
-                if public.is_dir():
-                    destination = prepared / name / "pub.dev"
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(
-                        public, destination, symlinks=True,
-                        ignore=ignore_unreadable,
-                    )
-            prepared.rename(target)
+        for name in ("hosted", "hosted-hashes"):
+            public = seed / name / "pub.dev"
+            if public.is_dir():
+                destination = prepared / name / "pub.dev"
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    public, destination, symlinks=True,
+                    ignore=ignore_unreadable,
+                )
+        prepared.rename(target)
     environment["PUB_CACHE"] = str(target)
 
 

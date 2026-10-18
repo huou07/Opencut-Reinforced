@@ -150,3 +150,24 @@ each link measured rather than guessed:
 Verified: the rebuilt `diagnostics.apk` bundles `libavcodec/avformat/avutil/
 swresample/swscale.so`, its bridge requires exactly those names, and the rebuilt
 link probe requires the same five.
+
+## The shared pub cache (measured 2026-10-18)
+
+A `flutter pub get` run against the owner's shared `~/.pub-cache` can create a
+directory inside it and delete a fresh one, yet fails to replace a **populated**
+package: `Deletion failed, path = '.../hosted/pub.dev/path_provider-2.1.6'
+(OS Error: Operation not permitted)`. That left 20 package directories with no
+`pubspec.yaml`, after which offline resolution failed with "no versions of
+path_provider match 2.1.6" and the Dart compile saw undefined getters in
+`vector_math` and `clock`. A writability probe cannot detect that state, because
+the probe itself succeeds.
+
+The 20 damaged packages were restored by copying their intact contents from the
+project-local staged cache, and `flutter pub get --offline --enforce-lockfile`
+against the shared cache then succeeded with `pubspec.lock` unchanged.
+
+Both lanes now avoid the shared cache for writes: `scripts/run_linux_ui_preflight.py`
+prefers `apps/or_app/.dart_tool/aeh-pub-cache` whenever it exists and stages one
+when it does not, and `scripts/run_android_lane.sh` prefers the same directory.
+A stale staged cache fails loudly against `--enforce-lockfile`; delete it to
+re-stage. Never run an unrestricted `flutter pub get` from this worker UID.

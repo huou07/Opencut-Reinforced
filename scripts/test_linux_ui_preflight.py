@@ -92,6 +92,43 @@ class CargoCachePreparationTests(unittest.TestCase):
             self.assertEqual(environment["PUB_CACHE"], str(copied))
 
 
+    def test_an_existing_project_cache_is_preferred_without_a_probe(self):
+        """The shared cache is never written to, even when it looks writable.
+
+        A probe cannot tell a cache that accepts a create from one that refuses
+        to replace a populated package, and that state left 20 packages without
+        their pubspec.yaml and broke every later offline resolution.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app = root / "or-app"
+            staged = app / ".dart_tool" / "aeh-pub-cache" / "hosted" / "pub.dev"
+            staged.mkdir(parents=True)
+            seed = root / "owner-pub-cache"
+            (seed / "hosted" / "pub.dev").mkdir(parents=True)
+            environment = {"HOME": str(root), "PUB_CACHE": str(seed)}
+            with patch.object(preflight, "APP", app), patch.object(
+                preflight, "cache_is_writable", side_effect=AssertionError("probed")
+            ):
+                preflight.writable_pub_cache(environment)
+            self.assertEqual(environment["PUB_CACHE"],
+                             str(app / ".dart_tool" / "aeh-pub-cache"))
+
+    def test_a_redirected_project_cache_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app = root / "or-app"
+            (app / ".dart_tool").mkdir(parents=True)
+            elsewhere = root / "elsewhere"
+            elsewhere.mkdir()
+            (app / ".dart_tool" / "aeh-pub-cache").symlink_to(elsewhere)
+            environment = {"HOME": str(root), "PUB_CACHE": str(root / "owner")}
+            with patch.object(preflight, "APP", app):
+                with self.assertRaises(RuntimeError) as raised:
+                    preflight.writable_pub_cache(environment)
+            self.assertIn("redirected project pub cache", str(raised.exception))
+
+
 class CacheWriteProbeTests(unittest.TestCase):
     def test_probe_rejects_a_cache_the_sandbox_denies_despite_access(self):
         with tempfile.TemporaryDirectory() as temporary:
