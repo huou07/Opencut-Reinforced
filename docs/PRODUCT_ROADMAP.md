@@ -522,6 +522,41 @@ class each claim actually has:
     against a 2.0 ms budget — it costs the track count, not the clip count, which is
     why it sits two orders of magnitude below the clip-level rows. The budget prints
     twenty-three rows and is PASS.
+- **Phase 1.5 clip speed/rate: the model forbids it today, and the change is sized
+  (2026-10-20). No code from this gap has landed; what follows is verified fact and
+  a decision request.**
+  - `validate_clip_content` refuses a media clip whose source duration differs from
+    its timeline duration (`source_duration != clip.timeline_duration` →
+    `TimelineValidationError`), so **speed is not expressible at all** in the current
+    canonical model. A test now pins that invariant
+    (`a_media_clip_cannot_yet_play_at_a_different_rate`): one second of source over
+    half a second of timeline is refused, and the project is left untouched. The
+    test exists so the rate change cannot silently relax the rule without replacing
+    it — a clip that referenced more source than it shows would be a real defect.
+  - The preview maps timeline time to source time 1:1
+    (`source_time = clip.source_start + (time - clip.timeline_start)`, in
+    `crates/or_app_bridge/src/preview.rs`), and the export path has its own mapping.
+    A rate that the model accepts but the mapping ignores would be a capability that
+    persists a field and changes nothing a viewer sees, which is why the mapping is
+    part of the change and not a follow-up.
+  - **Correction to my own earlier reasoning:** I assumed the `.orproj` format was a
+    protected specification needing owner authorisation to extend.
+    [PROJECT_FORMAT.md](PROJECT_FORMAT.md) says the opposite — OR is pre-MVP, the
+    format "changes with the product", and the guarantees are that every version ever
+    written stays readable through explicit migrations and that an unknown future
+    version is rejected. So a v8 with a `playback_rate` and a migration is an
+    ordinary product change, not a control-plane one, and no owner decision is needed
+    to start it.
+  - **Sized, so the owner can choose the shape:** the field lives on
+    `ClipContent::Media` (18 construction and match sites across five files), with
+    validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
+    files migrate by opening, a schema bump to 8 with the migration test, the preview
+    and export mappings, then the usual command, CLI, bridge, both presentations, a
+    journey and a latency row. That is two to three rounds at this session's rate.
+  - **The alternative on the same critical path is Phase 4 (noise filtering)**, which
+    is a deliberate FFmpeg build-configuration change and touches no project format;
+    it is self-contained and could complete in the time Phase 1.5's model work alone
+    would take.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

@@ -7810,6 +7810,67 @@ mod tests {
         assert_eq!(session.project_revision().value(), revision_before.value());
     }
 
+    /// Pins the invariant a speed change will have to move: today a media clip's
+    /// source window and its timeline duration must be exactly equal, so no clip can
+    /// play faster or slower than real time. The test is written now because the
+    /// Phase 1.5 rate change is precisely the edit that must fail it, and a format
+    /// change that silently relaxes this without a replacement rule would let a clip
+    /// reference more source material than it shows.
+    #[test]
+    fn a_media_clip_cannot_yet_play_at_a_different_rate() {
+        let mut session = session_with_state("rate-invariant", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        let before = clip_spans(&session, TRACK_A);
+        let revision_before = session.project_revision();
+
+        // One second of source shown over half a second of timeline is a 2x speed,
+        // which the model has no way to express.
+        let error = execute(
+            &mut session,
+            "timeline.clip.update",
+            json!({
+                "clip_id": CLIP_A,
+                "timeline_duration": rational_json(1, 2),
+                "content": {
+                    "type": "media",
+                    "media_id": MEDIA_A,
+                    "source_range": {
+                        "start": rational_json(0, 1),
+                        "duration": rational_json(1, 1),
+                    },
+                },
+                "settings": {
+                    "type": "visual",
+                    "transform": {
+                        "x_milli_canvas": 0,
+                        "y_milli_canvas": 0,
+                        "scale_x_milli": 1000,
+                        "scale_y_milli": 1000,
+                        "rotation_milli_degrees": 0,
+                        "anchor_x_basis_points": 5000,
+                        "anchor_y_basis_points": 5000,
+                    },
+                    "crop": {
+                        "left_basis_points": 0,
+                        "top_basis_points": 0,
+                        "right_basis_points": 0,
+                        "bottom_basis_points": 0,
+                    },
+                    "opacity": {"basis_points": 10000},
+                    "effects": [],
+                    "transition_in": null,
+                    "transition_out": null,
+                },
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+        assert_eq!(clip_spans(&session, TRACK_A), before);
+    }
+
     fn seed_video_track_and_clip(
         session: &mut ProjectSession,
         media_id: &str,
