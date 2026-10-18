@@ -91,16 +91,21 @@ remember a sequence or its preconditions:
 | `preflight` | `python3 scripts/run_linux_ui_preflight.py` |
 | `bench` | `python3 scripts/bench_quality.py` |
 
-It refuses a dirty tree (the preflight's rewrite and the report must stay
-attributable), runs the steps in order, stops at the first step that is not
-`PASS`, and writes one machine-readable report to the gitignored
+It records a dirty tree rather than refusing to start, because the deliberately
+broken source check that proves the lane exits non-zero is itself a dirty tree;
+a dirty run can only ever report `DIRTY`, never `PASS`, and the bounded journey
+keeps its own hard clean-tree refusal. It runs the steps in order, stops at the
+first `FAIL` (a real failure invalidates everything after it), keeps going after
+a `BLOCKED` or `UNVERIFIED` step (a host limitation does not), and writes one
+machine-readable report to the gitignored
 `apps/or_app/build/local-lanes/linux.json`. That report carries the source SHA,
 the host facts, every step's exact command, exit code, elapsed seconds and log
 path, the SHA-256 of each artifact it produced, the steps it did not run, and an
-explicit `limits` list. Exit code 0 means every selected step passed; 1 is a real
-failure, 2 a wrong invocation or a dirty tree, 3 `BLOCKED` by a host precondition
-(the preflight's own 6 GiB RAM/disk, tool, lock and clean-tree checks), and 4
-`UNVERIFIED` because a step could not be measured honestly here.
+explicit `limits` list. The lane's own result is the worst classification it saw.
+Exit code 0 means every selected step passed on a clean tree; 1 a step failed; 2 a
+wrong invocation; 3 a step was `BLOCKED` by a host precondition (the preflight's
+own 6 GiB RAM/disk, tool, lock and clean-tree checks); 4 a step could not be
+measured (`UNVERIFIED`) or the tree was dirty, so no `PASS` is attributable.
 
 `--packaged` adds a local `deb` step (build the Linux bundle, stage the pinned
 local media runtime, package through `scripts/package_linux_deb.sh`) and a

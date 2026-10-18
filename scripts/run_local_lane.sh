@@ -16,8 +16,10 @@
 #
 # It writes one machine-readable report (default
 # apps/or_app/build/local-lanes/linux.json, a gitignored path) and exits 0 only
-# when every selected step passed. A step this host cannot run is BLOCKED or
-# UNVERIFIED and the lane exits non-zero: a local lane never promotes itself to
+# when every selected step passed on a clean tree. It stops at the first real
+# FAIL but keeps going after a BLOCKED or UNVERIFIED step, because a host
+# limitation does not invalidate the lanes that can still run. A step this host
+# cannot run keeps the lane non-zero: a local lane never promotes itself to
 # acceptance. Hosted `platform-verification` remains the authority for native,
 # packaged and cross-platform claims, and --packaged says so in its own report.
 #
@@ -180,6 +182,27 @@ flutter_host_gap() {
   grep -qE 'Building native assets failed|component download failed' "$log" && return 0
   grep -qE 'update_engine_version\.sh.*Permission denied' "$log" && return 0
   return 1
+}
+
+# How bad a classification is, so the lane's own result can be the worst step it
+# saw without any step silently overwriting a worse one.
+result_severity() {
+  case "$1" in
+    PASS) printf '0' ;;
+    DIRTY) printf '1' ;;
+    UNVERIFIED) printf '2' ;;
+    BLOCKED) printf '3' ;;
+    *) printf '4' ;;
+  esac
+}
+
+# worse_result <current> <candidate>
+worse_result() {
+  if (( $(result_severity "$1") >= $(result_severity "$2") )); then
+    printf '%s' "$1"
+  else
+    printf '%s' "$2"
+  fi
 }
 
 # classify_step <id> <rc> <log>
@@ -474,10 +497,15 @@ for step in "${step_list[@]}"; do
       ;;
   esac
   if [[ "$LAST_CLASSIFICATION" != "PASS" ]]; then
-    # Stop at the first real problem: later steps would report on a tree the
-    # earlier failure already invalidated, and the report names them as not run.
-    result="$LAST_CLASSIFICATION"
-    break
+    result="$(worse_result "$result" "$LAST_CLASSIFICATION")"
+    if [[ "$LAST_CLASSIFICATION" == "FAIL" ]]; then
+      # A real failure invalidates everything after it, so stop there; the report
+      # names the remaining steps as not run.
+      break
+    fi
+    # A BLOCKED or UNVERIFIED step is a host limitation, not a product failure,
+    # so the lanes that can still run do: on a host shared with another build,
+    # stopping at the native step would hide the evidence that was available.
   fi
 done
 
