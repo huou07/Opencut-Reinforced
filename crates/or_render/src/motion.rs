@@ -361,8 +361,26 @@ fn draw_instruction(
             let box_width = (canvas.width as f64 - instruction.position.x)
                 .clamp(16.0, canvas.width as f64) as u32;
             let box_height = (size * 1.25).clamp(8.0, canvas.height as f64) as u32;
+            // Highlighted runs go through the same layout with more than one colour;
+            // a node without spans takes the single-colour path.
+            let spans = instruction
+                .spans
+                .iter()
+                .map(|span| {
+                    (
+                        span.start,
+                        span.end,
+                        TextColor {
+                            red: span.color.red,
+                            green: span.color.green,
+                            blue: span.color.blue,
+                            alpha: span.color.alpha,
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
             let layer = text
-                .rasterize(content, formatting, box_width, box_height)
+                .rasterize_spans(content, &spans, formatting, box_width, box_height)
                 .map_err(|_| MotionRasterError::InvalidTextSize)?;
             let center_x = instruction.position.x + box_width as f64 / 2.0;
             let center_y = instruction.position.y + box_height as f64 / 2.0;
@@ -740,6 +758,64 @@ mod tests {
         assert_eq!(
             encode_png(64, 64, &canvas.pixels()[..16]).unwrap_err(),
             MotionRasterError::InvalidCanvas
+        );
+    }
+
+    #[test]
+    fn a_highlighted_span_paints_a_different_colour_from_the_rest_of_the_line() {
+        // The tokeniser's whole point is that a keyword is visibly not the rest of the
+        // line, so the assertion is about two colours in one text node's ink.
+        let source = b"let value = 41;";
+        let scene = or_motion::scene_from_source(
+            source,
+            or_motion::CodeLanguage::Rust,
+            &or_motion::CodeSceneOptions {
+                canvas: or_motion::MotionCanvas {
+                    width: 256,
+                    height: 128,
+                },
+                font_size: 24.0,
+                ..or_motion::CodeSceneOptions::default()
+            },
+        )
+        .unwrap();
+        let frame =
+            or_motion::evaluate_scene(&scene, or_core::RationalTime::new(1, 1).unwrap()).unwrap();
+        let canvas = rasterize_motion_frame(&frame).unwrap();
+        let mut keyword_ink = 0;
+        let mut number_ink = 0;
+        let mut other_ink = 0;
+        let keyword = or_motion::CodeTheme::OR_DARK.keyword;
+        let number = or_motion::CodeTheme::OR_DARK.number;
+        for y in 0..canvas.height() {
+            for x in 0..canvas.width() {
+                let Some(pixel) = canvas.pixel(x, y) else {
+                    continue;
+                };
+                if pixel[3] == 0 {
+                    continue;
+                }
+                if pixel[0] == keyword.red && pixel[1] == keyword.green && pixel[2] == keyword.blue
+                {
+                    keyword_ink += 1;
+                } else if pixel[0] == number.red
+                    && pixel[1] == number.green
+                    && pixel[2] == number.blue
+                {
+                    number_ink += 1;
+                } else {
+                    other_ink += 1;
+                }
+            }
+        }
+        assert!(
+            keyword_ink > 0,
+            "expected keyword ink in the keyword colour"
+        );
+        assert!(number_ink > 0, "expected number ink in the number colour");
+        assert!(
+            other_ink > 0,
+            "expected the rest of the line in the foreground colour"
         );
     }
 

@@ -3,7 +3,7 @@ use cosmic_text::{
     fontdb::Source,
 };
 use or_core::{
-    FontIdentity, MAX_TEXT_SIZE_MILLI_POINTS, MIN_TEXT_SIZE_MILLI_POINTS, TextAlignment,
+    FontIdentity, MAX_TEXT_SIZE_MILLI_POINTS, MIN_TEXT_SIZE_MILLI_POINTS, TextAlignment, TextColor,
     TextFormatting, TextWeight,
 };
 use std::{error::Error, fmt, sync::Arc};
@@ -39,6 +39,23 @@ impl TextRasterizer {
     pub fn rasterize(
         &mut self,
         text: &str,
+        formatting: TextFormatting,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>, TextRasterError> {
+        self.rasterize_spans(text, &[], formatting, width, height)
+    }
+
+    /// Rasterizes one bounded text layer with per-span colours.
+    ///
+    /// `spans` are byte ranges into `text` with their own colour; anything they do
+    /// not cover takes `formatting.color`. Layout, shaping and glyph placement are
+    /// identical to [`Self::rasterize`] — this is the same engine with more than one
+    /// colour, not a second text path.
+    pub fn rasterize_spans(
+        &mut self,
+        text: &str,
+        spans: &[(usize, usize, TextColor)],
         formatting: TextFormatting,
         width: u32,
         height: u32,
@@ -94,7 +111,38 @@ impl TextRasterizer {
             TextAlignment::Center => Align::Center,
             TextAlignment::End => Align::End,
         };
-        buffer.set_text(text, &attrs, Shaping::Advanced, Some(alignment));
+        if spans.is_empty() {
+            buffer.set_text(text, &attrs, Shaping::Advanced, Some(alignment));
+        } else {
+            // Split the text into runs at every span boundary, so each run carries one
+            // colour and cosmic-text shapes the whole string in one pass.
+            let mut boundaries = vec![0, text.len()];
+            for (start, end, _) in spans {
+                if *start <= text.len() && *end <= text.len() && start < end {
+                    boundaries.push(*start);
+                    boundaries.push(*end);
+                }
+            }
+            boundaries.sort_unstable();
+            boundaries.dedup();
+            let mut runs: Vec<(&str, Attrs)> = Vec::new();
+            for pair in boundaries.windows(2) {
+                let [start, end] = pair else { continue };
+                if start == end || !text.is_char_boundary(*start) || !text.is_char_boundary(*end) {
+                    continue;
+                }
+                let color = spans
+                    .iter()
+                    .find(|(span_start, span_end, _)| span_start <= start && end <= span_end)
+                    .map(|(_, _, color)| *color)
+                    .unwrap_or(formatting.color);
+                let run_attrs = attrs
+                    .clone()
+                    .color(Color::rgb(color.red, color.green, color.blue));
+                runs.push((&text[*start..*end], run_attrs));
+            }
+            buffer.set_rich_text(runs, &attrs, Shaping::Advanced, Some(alignment));
+        }
         buffer.shape_until_scroll(&mut self.font_system, false);
 
         let mut layout_bounds: Option<(f32, f32)> = None;
@@ -121,10 +169,14 @@ impl TextRasterizer {
                 let origin_x = physical.x;
                 let origin_y = physical.y;
                 let pixels = &mut pixels;
+                // A glyph rendered from rich text carries its own colour; the layer's
+                // colour is the fallback for the single-colour path. The glyph image
+                // is a mask, so the base colour is the only thing that colours it.
+                let base_color = glyph.color_opt.unwrap_or(text_color);
                 self.swash_cache.with_pixels(
                     &mut self.font_system,
                     physical.cache_key,
-                    text_color,
+                    base_color,
                     |dx, dy, color| {
                         let x = origin_x + dx;
                         let y = origin_y + dy;

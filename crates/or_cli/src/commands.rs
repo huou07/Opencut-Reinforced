@@ -96,6 +96,17 @@ impl CliError {
         )
     }
 
+    /// A code artifact that could not become a scene.
+    fn code_scene(error: or_motion::CodeSceneError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "motion_scene",
+            error.code(),
+            error.code().to_owned(),
+        )
+    }
+
     /// A MotionScene that could not be rasterised, with the rasteriser's code.
     fn motion_raster(error: or_render::MotionRasterError, json: bool) -> Self {
         Self::new(
@@ -472,9 +483,10 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
         "inspect" => run_motion_inspect(&args[1..], json),
         "evaluate" => run_motion_evaluate(&args[1..], json),
         "render" => run_motion_render(&args[1..], json),
+        "from-code" => run_motion_from_code(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate, inspect, evaluate or render",
+            "unknown motion action; expected validate, inspect, evaluate, render or from-code",
         )),
     }
 }
@@ -529,6 +541,119 @@ fn run_motion_evaluate(args: &[OsString], json: bool) -> Result<String, CliError
         ));
     }
     Ok(lines.join("\n"))
+}
+
+/// Builds a MotionScene from a code artifact.
+///
+/// The sample is untrusted input: the tokeniser is a bounded lexical scan, nothing
+/// executes it, and the scene it produces is ordinary canonical data that validates,
+/// evaluates and renders through the same paths as a hand-authored one.
+fn run_motion_from_code(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--source",
+            "--output",
+            "--title",
+            "--font-size",
+            "--width",
+            "--height",
+        ],
+        &[],
+        json,
+    )?;
+    let source_path = required_path(&options, "--source", json)?;
+    let output = required_path(&options, "--output", json)?;
+    let bytes = std::fs::read(&source_path)
+        .map_err(|error| CliError::usage(json, format!("the source could not be read: {error}")))?;
+    let language = or_motion::CodeLanguage::from_path(&source_path.display().to_string());
+    let title = match options.value("--title") {
+        Some(value) => value.to_string_lossy().into_owned(),
+        None => source_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Code".to_owned()),
+    };
+    let mut scene_options = or_motion::CodeSceneOptions {
+        title,
+        ..or_motion::CodeSceneOptions::default()
+    };
+    if let Some(value) = options.value("--font-size") {
+        scene_options.font_size = value
+            .to_str()
+            .and_then(|text| text.parse::<f64>().ok())
+            .filter(|size| *size > 0.0)
+            .ok_or_else(|| CliError::usage(json, "--font-size must be a positive number"))?;
+    }
+    let width = parse_positive_u32(&options, "--width", json)?;
+    let height = parse_positive_u32(&options, "--height", json)?;
+    if let Some(width) = width {
+        scene_options.canvas.width = width;
+    }
+    if let Some(height) = height {
+        scene_options.canvas.height = height;
+    }
+
+    let scene = or_motion::scene_from_source(&bytes, language, &scene_options)
+        .map_err(|error| CliError::code_scene(error, json))?;
+    let validation = or_motion::validate_scene(&scene);
+    if !validation.ok {
+        // A scene this command builds failing its own validator is a defect, not a
+        // caller error, so it is reported as a generation failure with the codes.
+        return Err(CliError::new(
+            5,
+            json,
+            "motion_scene",
+            "CODE_SCENE_INVALID",
+            format!(
+                "the generated scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|error| error.code.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    let encoded = serde_json::to_vec_pretty(&scene).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be encoded: {error}"))
+    })?;
+    std::fs::write(&output, &encoded).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be written: {error}"))
+    })?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(serde_json::json!({
+            "scene_id": scene.scene_id,
+            "language": language.name(),
+            "output": output.display().to_string(),
+            "bytes_written": encoded.len(),
+            "node_count": inspection.node_count,
+            "duration_milliseconds": inspection.duration_milliseconds,
+            "validation_ok": inspection.validation.ok,
+        })));
+    }
+    Ok(format!(
+        "Wrote {} ({} nodes, {} ms) from {} as {}",
+        output.display(),
+        inspection.node_count,
+        inspection.duration_milliseconds,
+        source_path.display(),
+        language.name()
+    ))
+}
+
+fn parse_positive_u32(options: &Options, flag: &str, json: bool) -> Result<Option<u32>, CliError> {
+    match options.value(flag) {
+        None => Ok(None),
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<u32>().ok())
+            .filter(|parsed| *parsed > 0)
+            .map(Some)
+            .ok_or_else(|| CliError::usage(json, format!("{flag} must be a positive integer"))),
+    }
 }
 
 /// Renders one still frame of a scene to a PNG.

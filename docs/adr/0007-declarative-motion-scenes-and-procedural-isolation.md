@@ -87,6 +87,17 @@ dependency-free *still preview* encoder — materialised video still goes throug
 normal media and export boundary — and its output is deterministic (stored deflate
 blocks, no timestamps or metadata).
 
+**Highlighted spans and code ingestion, 2026-10-20.** A text node may carry typed
+`spans` — byte ranges with a colour — so one line can be drawn in more than one
+colour; spans are values, never markup, and validation requires them ordered,
+non-overlapping and inside the text. They render through the same shaping and layout
+as ordinary text, with each glyph's own colour passed to the rasteriser, because a
+glyph image is a mask and its colour comes only from that base. `or_motion::code`
+builds a scene from a source file with a bounded lexical tokeniser and a locked theme
+of named colour roles: a sample is untrusted input, so the scan has hard limits and
+never executes anything, and it deliberately has no grammar, no macro expansion and no
+type information. Only Rust is tokenised; anything else is plain text.
+
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate
 `ProjectDocument` during evaluation. Human, template, CLI/agent, and AI

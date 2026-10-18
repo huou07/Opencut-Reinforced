@@ -12,6 +12,14 @@
 //! everywhere, exact rational times from `or_core`'s time model, and diagnostics
 //! with stable codes and JSON paths.
 
+mod code;
+
+pub use code::{
+    CodeLanguage, CodeSceneError, CodeSceneOptions, CodeTheme, CodeToken, CodeTokenKind,
+    MAX_CODE_COLUMNS, MAX_CODE_LINE_BYTES, MAX_CODE_LINES, MAX_CODE_SOURCE_BYTES,
+    scene_from_source, tokenize_line,
+};
+
 use or_core::RationalTime;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -121,6 +129,18 @@ pub enum MotionNodeKind {
     Image,
 }
 
+/// One highlighted run of a text node's string, by byte offset. Spans are typed
+/// values, never markup: there is no inline syntax to parse and nothing to execute.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionTextSpan {
+    /// Inclusive byte offset into the node's text.
+    pub start: usize,
+    /// Exclusive byte offset into the node's text.
+    pub end: usize,
+    pub color: MotionColor,
+}
+
 /// One node. The shape is flat and strict: `deny_unknown_fields` refuses anything
 /// this version does not know, and validation states which fields each kind
 /// requires, so a scene cannot smuggle behaviour in through an unused field.
@@ -159,6 +179,10 @@ pub struct MotionNode {
     /// Degrees, counter-clockwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation_degrees: Option<f64>,
+    /// Highlighted runs of `text`, ordered and non-overlapping. Absent means the
+    /// node's `fill` colours the whole string.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spans: Option<Vec<MotionTextSpan>>,
 }
 
 /// The animatable properties V1 supports. A locked set: there is no expression
@@ -616,6 +640,38 @@ fn walk_nodes(
                     }
                     Some(_) => {}
                 }
+                if let Some(spans) = &node.spans {
+                    if node.text.is_none() {
+                        errors.push(MotionDiagnostic::new(
+                            "MOTION_SPANS_ON_NON_TEXT",
+                            format!("{node_path}/spans"),
+                            "only a text node can carry highlighted spans",
+                        ));
+                    }
+                    let text_len = node.text.as_ref().map(String::len).unwrap_or(0);
+                    let mut previous_end = 0;
+                    for (span_index, span) in spans.iter().enumerate() {
+                        let span_path = format!("{node_path}/spans/{span_index}");
+                        if span.start >= span.end || span.end > text_len {
+                            errors.push(MotionDiagnostic::new(
+                                "MOTION_INVALID_SPAN_RANGE",
+                                format!("{span_path}/end"),
+                                "a span must cover at least one byte and stay inside the text",
+                            ));
+                        }
+                        if span.start < previous_end {
+                            errors.push(MotionDiagnostic::new(
+                                "MOTION_SPANS_UNSORTED",
+                                format!("{span_path}/start"),
+                                "spans must be ordered and must not overlap",
+                            ));
+                        }
+                        previous_end = previous_end.max(span.end);
+                    }
+                } else if node.text.is_none() && node.kind == MotionNodeKind::Text {
+                    // No spans is fine; a text node without text is already refused
+                    // above.
+                }
                 if node.font_size.is_some_and(|size| size <= 0.0) {
                     errors.push(MotionDiagnostic::new(
                         "MOTION_INVALID_FONT_SIZE",
@@ -774,6 +830,7 @@ mod tests {
                     asset_id: None,
                     opacity: None,
                     rotation_degrees: None,
+                    spans: None,
                 },
                 MotionNode {
                     node_id: "callout".to_owned(),
@@ -798,6 +855,7 @@ mod tests {
                         asset_id: None,
                         opacity: Some(1.0),
                         rotation_degrees: None,
+                        spans: None,
                     }]),
                     text: None,
                     position: None,
@@ -810,6 +868,7 @@ mod tests {
                     asset_id: None,
                     opacity: None,
                     rotation_degrees: None,
+                    spans: None,
                 },
                 MotionNode {
                     node_id: "diagram".to_owned(),
@@ -829,6 +888,7 @@ mod tests {
                     asset_id: Some("diagram".to_owned()),
                     opacity: Some(0.9),
                     rotation_degrees: None,
+                    spans: None,
                 },
             ],
             animations: vec![MotionAnimation {
@@ -1285,6 +1345,10 @@ pub struct MotionInstruction {
     pub font_size: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset_id: Option<String>,
+    /// Highlighted runs of `text`, resolved from the node. Empty means the node's
+    /// `fill` colours the whole string.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spans: Vec<MotionTextSpan>,
 }
 
 /// Everything a renderer draws for one exact time.
@@ -1424,6 +1488,7 @@ fn resolve_node(
         text: node.text.clone(),
         font_size,
         asset_id: node.asset_id.clone(),
+        spans: node.spans.clone().unwrap_or_default(),
     }
 }
 

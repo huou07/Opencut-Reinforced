@@ -855,9 +855,33 @@ class each claim actually has:
     p95 75.2 ms reported beside it. It is pure CPU work with no GPU adapter involved,
     in a debug build, so it says nothing about the wgpu path the `render-frame-time`
     row covers. The budget prints twenty-six rows and is PASS.
-  - **Not done, and this is still most of the phase:** there is no code ingestion, no
-    tokenisation or syntax highlighting, no materialisation to video, no preview
-    inside the editor, and no template library. `crates/or_ai` still declares
+  - **Code ingestion and syntax highlighting (2026-10-20).** `or_motion::code` turns a
+    source file into a scene: a locked tokeniser (comments, strings, numbers,
+    keywords, call-shaped identifiers), a locked theme of named colour roles, one text
+    node per line, and the format's new typed `spans` so a line carries more than one
+    colour. The tokeniser is a **bounded lexical scan** — a sample is untrusted input,
+    nothing executes it, there is no grammar, no macro expansion and no type
+    information, and the limits are hard (1 MiB, 400 lines, 120 columns, 4 KiB per
+    line). Multi-line constructs are deliberately not tracked: a block comment is
+    highlighted on the line where it opens and closes and plain between, which is a
+    stated limitation rather than an oversight.
+  - **The highlighting is visible, and measured as pixels.** `or motion from-code
+    --source PATH --output PATH [--title T] [--json]` writes a scene, and rendering it
+    produces a frame whose decoded pixels fall in **every** theme colour: on this
+    host's render of `count_words.rs`, keyword 1646, string 2039, comment 1259, number
+    109, function 3463 and foreground 7699 pixels, counted from the raw RGBA after
+    `ffmpeg` decoded the PNG. Rendering spans needed one real fix: the glyph image is a
+    *mask*, so a glyph's colour comes only from the base colour passed to the swash
+    cache — the rich-text path had to pass each glyph's own colour rather than the
+    layer's. Layout, shaping and placement are unchanged, so this is the same text
+    engine with more than one colour, not a second one.
+  - **Not done, and this is still most of the phase:** there is no materialisation to
+    video, no preview inside the editor, and no template library. The font is the
+    bundled Inter rather than a monospace face, so code lines are not column-aligned
+    (a monospace face needs its own bundled asset and licence review). Only Rust is
+    tokenised; other languages are drawn as plain text, which is a supported outcome
+    rather than a failure. The rendered frame is a still image, so the phase still has
+    no *video* evidence, and no part of it is `ACCEPTED`. `crates/or_ai` still declares
     `AiTask::GenerateMotionScene` with no producer or consumer. The rendered frame is
     a still image, so the phase has no *video* evidence, and no part of it is
     `ACCEPTED`.
