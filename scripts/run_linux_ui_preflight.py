@@ -31,6 +31,10 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps/or_app"
 GIB = 1024 ** 3
 TOOLCHAIN_TARGETS = re.compile(r"(?ms)^(?P<indent>[ \t]*)targets[ \t]*=[ \t]*\[.*?^(?P=indent)\]")
+# One shared native UI lock so two lanes cannot compile at once. The path is
+# overridable so a hermetic check can exercise the lock without touching the
+# real one this host's other sessions share.
+NATIVE_LOCK_PATH = os.environ.get("OR_NATIVE_LOCK_PATH") or f"/tmp/aeh-native-ui-{os.getuid()}.lock"
 FLUTTER_OVERLAY_NAME = "flutter-overlay"
 MANIFEST_BACKUP_NAME = "rust-toolchain.toml.original"
 NATIVE_BUDGET_SECONDS = 600
@@ -309,6 +313,29 @@ def writable_flutter_root(environment: dict[str, str]) -> None:
     environment["PATH"] = f"{target / 'bin'}{os.pathsep}{environment.get('PATH', '')}"
 
 
+def open_native_lock(path: str | None = None) -> int:
+    """Open the shared native UI lock as a non-inheritable descriptor.
+
+    The contention this names was measured on 2026-10-18: while a sibling
+    project's build (`bash work/phaseA/build-e2e.sh` and `npm run tauri build`
+    under ~/Projects/VCE) was running, this preflight failed with
+    `[Errno 11] Resource temporarily unavailable` on its own lock, and both of
+    those processes held an open descriptor on
+    /tmp/aeh-native-ui-<uid>.lock. The lock is per UID and outside any one
+    project, so an unrelated build can take it; the mechanism by which it did was
+    not established, and is not claimed here.
+
+    Two consequences are handled rather than one guessed: the contention is
+    reported as a named BLOCKED reason with the settle command, and the
+    descriptor is created non-inheritable (PEP 446 does this by default; the flag
+    is explicit so a future rewrite that reaches for a raw fd cannot silently
+    remove it) so this process cannot itself be the path by which the lock is
+    handed to a child.
+    """
+    path = path or NATIVE_LOCK_PATH
+    return os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+
+
 @contextmanager
 def native_lock():
     """The one shared native UI lock, so two lanes cannot compile at once.
@@ -317,13 +344,22 @@ def native_lock():
     a lock owned by anyone else is a host misconfiguration, not something to take
     over. A second holder fails immediately instead of queueing behind it.
     """
-    path = f"/tmp/aeh-native-ui-{os.getuid()}.lock"
-    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as lock:
-        if os.fstat(lock.fileno()).st_uid != os.getuid():
+    fd = open_native_lock()
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
             raise RuntimeError("BLOCKED: lock is not owned by this worker")
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError(
+                "BLOCKED: another OR lane or process holds the shared native UI "
+                f"lock {NATIVE_LOCK_PATH}; serialise the lanes and retry"
+            ) from error
         yield
+    finally:
+        # Closed on every path, including the refusal: a descriptor left open
+        # here is exactly the state this lock must never leave behind.
+        os.close(fd)
 
 
 def redirect_home(environment: dict[str, str], home: Path) -> None:
@@ -602,8 +638,8 @@ def main(argv: list[str] | None = None) -> int:
     for tool in REQUIRED_TOOLS:
         if not shutil.which(tool):
             raise RuntimeError(f"BLOCKED: missing {tool}; do not change host privileges")
-    lock_path = f"/tmp/aeh-native-ui-{os.getuid()}.lock"
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    lock_path = NATIVE_LOCK_PATH
+    fd = open_native_lock(lock_path)
     with os.fdopen(fd, "w") as lock:
         if os.fstat(lock.fileno()).st_uid != os.getuid():
             raise RuntimeError("BLOCKED: lock is not owned by this worker")

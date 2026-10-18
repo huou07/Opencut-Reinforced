@@ -205,6 +205,13 @@ if ! python3 scripts/test_android_lane.py; then
   fail "the local Android lane control-flow checks failed"
 fi
 
+# The shared native UI lock is per UID and outside any one project, so a sibling
+# build can hold it; a lane that then died with a bare errno cost an afternoon.
+# These checks pin the exclusion, release and named-refusal behaviour hermetically.
+if ! python3 scripts/test_ui_native_lock.py; then
+  fail "the shared native UI lock checks failed"
+fi
+
 # The aggregate release gate is the only check meant to block a merge, so its
 # logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
 # logic rots, the gate silently becomes a rubber stamp.
