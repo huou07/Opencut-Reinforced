@@ -623,6 +623,27 @@ impl CommandEnvelope {
         }
     }
 
+    /// Moves a track to another position in the track list.
+    pub fn move_timeline_track(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+        to_index: usize,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_TRACK_MOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "track_id": track_id,
+                "to_index": to_index,
+            }),
+        }
+    }
+
     /// Moves a clip's source window by `delta` without moving the clip.
     pub fn slip_timeline_clip(
         project_id: ProjectId,

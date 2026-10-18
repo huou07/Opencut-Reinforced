@@ -472,7 +472,9 @@ class _Runner {
     Future<void> Function(Finder finder) action,
   ) async {
     final selector = _selector(step);
-    final finder = _anyFinder(step);
+    // The same narrowing the other steps use: an `index` picks the nth match
+    // instead of making the step ambiguous.
+    final finder = _requireFinder(step);
     if (finder.evaluate().isEmpty) {
       throw _StepFailure('not_found', 'no widget matched $selector');
     }

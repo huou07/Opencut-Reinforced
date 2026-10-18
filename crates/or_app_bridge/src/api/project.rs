@@ -2162,6 +2162,35 @@ impl ProjectHostHandle {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Moves a track to another position in the track list.
+    pub fn move_timeline_track(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        to_index: u32,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::move_timeline_track(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    to_index as usize,
+                )
+            },
+        )
+    }
+
     /// Moves a clip's source window by the given delta without moving the clip.
     pub fn slip_timeline_clip(
         &self,

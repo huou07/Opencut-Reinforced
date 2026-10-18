@@ -1048,6 +1048,14 @@ abstract interface class ProjectGateway {
   );
   /// Trims a clip edge. [ripple] pulls every later clip on the track with an end
   /// trim; it is an explicit command input and never project state.
+  /// Moves a track to another position. Order is canonical: it decides which track
+  /// a client reaches by index and which track is the first of its kind.
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  });
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

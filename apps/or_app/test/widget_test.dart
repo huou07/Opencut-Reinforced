@@ -4913,6 +4913,9 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastMoveTimelineStart;
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
+  int moveTimelineTrackCalls = 0;
+  String? lastMovedTrackId;
+  int? lastMovedToIndex;
   int slipTimelineClipCalls = 0;
   int rollTimelineClipCalls = 0;
   int slideTimelineClipCalls = 0;
@@ -5854,6 +5857,31 @@ class _FakeProjectGateway implements ProjectGateway {
         else
           track,
     ];
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) async {
+    moveTimelineTrackCalls++;
+    lastMovedTrackId = trackId;
+    lastMovedToIndex = toIndex;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.tracks.indexWhere((track) => track.trackId == trackId);
+    if (index < 0) return _timelineOperationFailure('TIMELINE_TRACK_NOT_FOUND');
+    if (toIndex >= session.tracks.length) {
+      return _timelineOperationFailure('INVALID_ARGUMENTS');
+    }
+    final moved = session.tracks.removeAt(index);
+    session.tracks.insert(toIndex, moved);
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }

@@ -313,6 +313,7 @@ or timeline set-track-state --project PATH --track TRACK_ID --locked BOOL --visi
 or timeline set-track-state --attach DESCRIPTOR --track TRACK_ID --locked BOOL --visible BOOL --muted BOOL --solo BOOL [--json]
 or timeline remove-track --project PATH --track TRACK_ID [--json]
 or timeline remove-track --attach DESCRIPTOR --track TRACK_ID [--json]
+or timeline move-track --project PATH --id TRACK_ID --to INDEX [--json]
 or timeline slip-clip --project PATH --clip CLIP_ID --delta NUM/DEN [--json]
 or timeline roll-clip --project PATH --clip CLIP_ID --delta NUM/DEN [--json]
 or timeline slide-clip --project PATH --clip CLIP_ID --delta NUM/DEN [--json]

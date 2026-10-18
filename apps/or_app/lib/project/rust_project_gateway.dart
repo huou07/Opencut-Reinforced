@@ -931,6 +931,22 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) async => _action(
+    await _host(session).moveTimelineTrack(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      toIndex: toIndex,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

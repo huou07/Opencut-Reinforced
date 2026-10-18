@@ -50,6 +50,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onGenerateCaptions,
     this.onRemoveTimelineTrack,
     this.onSetTimelineTrackState,
+    this.onMoveTimelineTrack,
     this.onLoadMoreTimelineClips,
     this.onLoadMoreTimelineMarkers,
     this.onRefreshTimeline,
@@ -119,6 +120,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineTrackState,
   )?
   onSetTimelineTrackState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMoveTimelineTrack;
   final ValueChanged<String>? onLoadMoreTimelineClips;
   final VoidCallback? onLoadMoreTimelineMarkers;
   final VoidCallback? onRefreshTimeline;
@@ -574,6 +577,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
+            onMoveTrack: widget.onMoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
@@ -663,6 +667,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
+            onMoveTrack: widget.onMoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
@@ -3584,6 +3589,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onAddCaptionTrack,
     required this.onRemoveTrack,
     required this.onSetTrackState,
+    required this.onMoveTrack,
     required this.onLoadMore,
     required this.onLoadMoreMarkers,
     required this.onRefresh,
@@ -3635,6 +3641,8 @@ class _TimelinePanel extends StatefulWidget {
     ProjectTimelineTrackState,
   )?
   onSetTrackState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMoveTrack;
   final ValueChanged<String>? onLoadMore;
   final VoidCallback? onLoadMoreMarkers;
   final VoidCallback? onRefresh;
@@ -3993,7 +4001,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             canvasWidth,
           );
           final trackRows = <Widget>[];
-          for (final track in snapshot.items) {
+          for (var walk = 0; walk < snapshot.items.length; walk += 1) {
+            final track = snapshot.items[walk];
             final page = widget.clipPages[track.trackId];
             final loadedCount = page?.items.length ?? 0;
             final countLabel = loadedCount < track.clipCount
@@ -4004,10 +4013,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 track: track,
                 label: labels[track.trackId]!,
                 countLabel: countLabel,
+                trackIndex: walk,
+                trackCount: snapshot.items.length,
                 busy: widget.busy,
                 project: widget.project,
                 onRemove: widget.onRemoveTrack,
                 onSetState: widget.onSetTrackState,
+                onMove: widget.onMoveTrack,
               ),
             );
             if (page?.nextOffset != null) {
@@ -4729,8 +4741,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 /// that wraps when it is squeezed, overflowing the lane. The wide layout gets
 /// enough room for a three-digit count on one line; compact keeps the legacy
 /// width so the gutter still fits a small screen.
+/// The track header must hold its name, its clip count and its four controls: the
+/// enabled, lock and solo toggles and the move menu. The desktop width grew by the
+/// move control's footprint, because squeezing the count is worse than giving the
+/// timeline 32 fewer pixels; the compact width fits the same controls at compact
+/// density and is guarded at 320x440 and 320x480.
 double _timelineTrackHeaderWidthFor(double availableWidth) =>
-    OrBreakpoints.isCompact(availableWidth) ? 272 : 336;
+    OrBreakpoints.isCompact(availableWidth) ? 272 : 368;
 const double _timelineRulerHeight = 38;
 const double _timelineLaneHeight = 58;
 
@@ -5201,15 +5218,20 @@ class _TimelineTrackHeader extends StatelessWidget {
     required this.track,
     required this.label,
     required this.countLabel,
+    required this.trackIndex,
+    required this.trackCount,
     required this.busy,
     required this.project,
     required this.onRemove,
     required this.onSetState,
+    required this.onMove,
   });
 
   final ProjectTimelineTrack track;
   final String label;
   final String countLabel;
+  final int trackIndex;
+  final int trackCount;
   final bool busy;
   final ProjectReadModel? project;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)? onRemove;
@@ -5219,6 +5241,8 @@ class _TimelineTrackHeader extends StatelessWidget {
     ProjectTimelineTrackState,
   )?
   onSetState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -5247,7 +5271,7 @@ class _TimelineTrackHeader extends StatelessWidget {
     return Semantics(
       container: true,
       label:
-          '$kind track $label, ${track.clipCount} clips, ${enabled ? 'enabled' : 'disabled'}, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}',
+          '$kind track $label, ${track.clipCount} clips, ${enabled ? 'enabled' : 'disabled'}, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}, position ${trackIndex + 1} of $trackCount',
       child: Container(
         height: _timelineLaneHeight,
         padding: const EdgeInsets.only(left: OrSpacing.x2),
@@ -5312,6 +5336,43 @@ class _TimelineTrackHeader extends StatelessWidget {
                           ? Icons.volume_off_outlined
                           : Icons.volume_up_outlined),
                 size: 15,
+              ),
+            ),
+            // One control carrying both moves: two more icon buttons overflowed
+            // the 272 px compact header, which the compact guards caught.
+            // A tooltip on a custom child does not reach the semantics tree, so the
+            // control announces which track it moves.
+            Semantics(
+              label: 'Move track $label',
+              button: true,
+              child: PopupMenuButton<int>(
+              key: ValueKey('timeline-track-move-${track.trackId}'),
+              // The tooltip names the track, so the control is unambiguous to a
+              // screen reader and to scripts/or_ui.py without a generated id.
+              tooltip: 'Move track $label',
+              enabled: !busy &&
+                  onMove != null &&
+                  project != null &&
+                  trackCount > 1,
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: trackIndex - 1,
+                  enabled: trackIndex > 0,
+                  child: const Text('Move up'),
+                ),
+                PopupMenuItem(
+                  value: trackIndex + 1,
+                  enabled: trackIndex + 1 < trackCount,
+                  child: const Text('Move down'),
+                ),
+              ],
+              onSelected: (target) => unawaited(
+                onMove!(project!, track, target),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Icon(Icons.swap_vert, size: 17),
+              ),
               ),
             ),
             IconButton(

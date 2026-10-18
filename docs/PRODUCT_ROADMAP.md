@@ -492,8 +492,31 @@ class each claim actually has:
     to its own index is a no-op, and an out-of-range destination or unknown track is
     refused with the order untouched. `cargo test -p or_core --lib` is 346 passing,
     with `cargo fmt --check` and `cargo clippy --all-targets` clean.
-  - **Not done:** no CLI, bridge or UI surface sends a move, no journey step drives
-    one, and no latency row measures it — the same three surfaces slip already has.
+  - **Reachable from the CLI and the app (2026-10-20).** `or timeline move-track
+    --id TRACK_ID --to INDEX`; the bridge exposes `move_timeline_track` with
+    regenerated bindings; and each track header carries a move menu
+    (`timeline-track-move-<track id>`) whose items are Move up and Move down,
+    disabled at the ends of the track list and while busy. The header's semantics
+    label also gained `position N of M`, so a track's place in the list is
+    announced and assertable.
+  - **Two things the surfaces cost, both caught by guards rather than review.** Two
+    icon buttons overflowed the 272 px compact header (the compact guards failed),
+    so the two moves became one menu control; and that control then squeezed the
+    desktop clip count into an ellipsis (the count-readability guard failed), so the
+    desktop header width grew by the control's footprint with the reason recorded
+    at the constant. `cargo`-style reasoning would not have found either.
+  - **Journey blocked, with the exact symptom (2026-10-20).** A scenario that moves
+    the clip-bearing track up and asserts the label it reports afterwards
+    (`Audio track A1, 1 clip`, since a track's displayed name follows its position)
+    was written and then removed rather than committed red: `scripts/or_ui.py`
+    cannot select the move control. The header merges its semantics into one
+    container node, so an explicit `Semantics(label: 'Move track A2')` around the
+    menu button does not surface as a selectable node, and the key regex matches
+    several widgets per track. The next attempt should either give each track
+    header an unmerged semantics node or add a runner op that acts on a descendant
+    of a named container. The widget suite covers the command path in the meantime,
+    and the harness gained the `index` narrowing its `act` path was missing.
+  - **Not done:** no journey step drives a move, and no latency row measures it.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

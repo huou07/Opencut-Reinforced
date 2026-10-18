@@ -438,6 +438,7 @@ class _AppShellState extends State<AppShell> {
               onGenerateCaptions: _generateCaptions,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
+              onMoveTimelineTrack: _moveTimelineTrack,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
@@ -2204,6 +2205,22 @@ class _AppShellState extends State<AppShell> {
         current,
         trackId: track.trackId,
         state: state,
+      ),
+    );
+  }
+
+  Future<void> _moveTimelineTrack(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    int toIndex,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineTrack(
+        session,
+        current,
+        trackId: track.trackId,
+        toIndex: toIndex,
       ),
     );
   }

@@ -208,6 +208,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required int timelineTimeDenominator,
   });
 
+  /// Moves a track to another position in the track list.
+  Future<ProjectActionResult> moveTimelineTrack({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required int toIndex,
+  });
+
   Future<void> previewAbortPrepared({required BigInt requestId});
 
   Future<ProjectPreviewStateView> previewCompletePrepared({

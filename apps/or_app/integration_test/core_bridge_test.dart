@@ -2064,6 +2064,19 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.deleteTimelineClip(session, current, clipId);
 
   @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) => _gateway.moveTimelineTrack(
+    session,
+    current,
+    trackId: trackId,
+    toIndex: toIndex,
+  );
+
+  @override
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

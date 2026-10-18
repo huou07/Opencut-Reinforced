@@ -981,6 +981,30 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
         }
+        "move-track" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--id", "--to"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--id", json)?, json)?;
+            let to_index = required_name(&options, "--to", json)?
+                .parse::<usize>()
+                .map_err(|_| CliError::usage(json, "--to must be a non-negative index"))?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.track.move",
+                json!({
+                    "track_id": track_id,
+                    "to_index": to_index,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "slip-clip" => {
             let options = Options::parse(
                 action_args,
