@@ -22,6 +22,20 @@ void main(List<String> args) async {
 
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../crates/or_app_bridge',
+      // The environment alone is not enough on a host whose shared Cargo config
+      // force-pins FFMPEG_DIR, PKG_CONFIG_PATH and a native search path to a
+      // *different* FFmpeg build: `force = true` beats the environment, and the
+      // hook keeps the host's HOME. Measured 2026-10-18 on the Debian
+      // workstation: the locally built libor_app_bridge.so asked for
+      // libavcodec.so.62 (the Linux soname) while the staged Android prefix
+      // provides an unversioned SONAME, so the APK could not load on any guest.
+      // Command-line `--config` outranks the config file, so the Android pin is
+      // stated there too; on CI, which has no such host config, these are the
+      // same values the environment already carries.
+      extraCargoBuildArgs: _androidCargoArguments(
+        targetTriple,
+        ffmpegInstallRoot?.toFilePath(),
+      ),
       extraCargoEnvironmentVariables: {
         ..._macOsCargoEnvironment(),
         ..._targetCargoEnvironment(
@@ -98,15 +112,65 @@ Map<String, String> androidCargoEnvironment({
   final targetSuffix = targetTriple.replaceAll('-', '_');
   final prefix = '$installRoot/${target.$1}';
   return {
+    // `RUSTFLAGS` is the only effective way to drop the host config's native
+    // search path for this target: cargo *concatenates* the `build.rustflags`
+    // arrays from every config source, so a laptop whose shared config points
+    // `-L native=` at another FFmpeg build keeps that path ahead of the staged
+    // Android one and the linker records the wrong soname. The environment
+    // replaces the config value instead. Measured 2026-10-18: with this set the
+    // bridge required the unversioned Android sonames and the build log had no
+    // reference to the desktop prefix; without it, every object file was linked
+    // with the desktop path first.
+    'RUSTFLAGS': '-L native=$prefix/lib',
     'CARGO_TARGET_${targetSuffix.toUpperCase()}_LINKER': cc,
     'CC_$targetSuffix': cc,
     'AR_$targetSuffix': '$toolchain/bin/llvm-ar',
+    // `-I` on the staged prefix's own headers is stated here as well as through
+    // FFMPEG_DIR: measured 2026-10-18, a host whose Cargo config forced a
+    // different FFmpeg made bindgen resolve the wrapper without an include path
+    // and fail with "'libavutil/adler32.h' file not found". bindgen takes this
+    // variable directly, so the header path does not depend on how the binding
+    // crate happens to pass its own includes.
     'BINDGEN_EXTRA_CLANG_ARGS_$targetSuffix':
-        '--target=$targetTriple --sysroot=$toolchain/sysroot',
+        '--target=$targetTriple --sysroot=$toolchain/sysroot -I$prefix/include',
     'FFMPEG_DIR': prefix,
     'PKG_CONFIG_PATH': '$prefix/lib/pkgconfig',
     'PKG_CONFIG_ALLOW_CROSS': '1',
   };
+}
+
+/// Cargo `--config` overrides that outrank a host's forced FFmpeg pin.
+///
+/// Returns an empty list for non-Android targets, so host and desktop builds are
+/// unchanged.
+List<String> _androidCargoArguments(String? targetTriple, String? installRoot) {
+  if (targetTriple == null || installRoot == null) return const <String>[];
+  final abi = switch (targetTriple) {
+    'aarch64-linux-android' => 'arm64-v8a',
+    'armv7-linux-androideabi' => 'armeabi-v7a',
+    'x86_64-linux-android' => 'x86_64',
+    _ => null,
+  };
+  if (abi == null) return const <String>[];
+  final prefix = '$installRoot/$abi';
+  // `cargo --config KEY=VALUE` cannot set an inline table, so `[env]` entries
+  // are stated as their two dotted keys. Measured 2026-10-18: the inline-table
+  // form is rejected with "sets a value to an inline table, which is not
+  // accepted".
+  return <String>[
+    '--config',
+    'env.FFMPEG_DIR.value="$prefix"',
+    '--config',
+    'env.FFMPEG_DIR.force=true',
+    '--config',
+    'env.PKG_CONFIG_PATH.value="$prefix/lib/pkgconfig"',
+    '--config',
+    'env.PKG_CONFIG_PATH.force=true',
+    '--config',
+    'env.PKG_CONFIG_ALLOW_CROSS.value="1"',
+    '--config',
+    'env.PKG_CONFIG_ALLOW_CROSS.force=true',
+  ];
 }
 
 Map<String, String> _macOsCargoEnvironment() {

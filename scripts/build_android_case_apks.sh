@@ -59,14 +59,79 @@ for tool in flutter adb; do
   }
 done
 
-# The bridge hook resolves this path relative to apps/or_app. Replace any stale
-# link so a prefix that moved is never silently reused.
+# The bridge hook resolves this path relative to apps/or_app and then builds the
+# per-ABI prefix as `<link>/<abi>`. The link must therefore be the FFmpeg
+# *install root* that holds one directory per ABI, not one ABI's prefix.
+# Measured 2026-10-18: linking it at `.../install/x86_64` made the hook look for
+# `.../install/x86_64/x86_64/include`, so bindgen failed with
+# "'libavutil/adler32.h' file not found" and the APK carried no FFmpeg at all.
+ffmpeg_install_root="$(dirname -- "$OR_ANDROID_FFMPEG_PREFIX")"
 staging="$APP/android/.ffmpeg-install"
-ln -sfn "$OR_ANDROID_FFMPEG_PREFIX" "$staging"
-if [[ ! -f "$staging/lib/pkgconfig/libavcodec.pc" ]]; then
-  printf 'build_android_case_apks: %s does not resolve to a staged FFmpeg install\n' "$staging" >&2
+ln -sfn "$ffmpeg_install_root" "$staging"
+if [[ ! -f "$staging/x86_64/lib/pkgconfig/libavcodec.pc" ]]; then
+  printf 'build_android_case_apks: %s does not resolve to an FFmpeg install root holding x86_64/lib/pkgconfig (OR_ANDROID_FFMPEG_PREFIX=%s)\n' \
+    "$staging" "$OR_ANDROID_FFMPEG_PREFIX" >&2
   exit 3
 fi
+
+# --- the Android build environment ------------------------------------------
+# This workstation's shared Cargo config ($HOME/.cargo/config.toml) force-pins
+# FFMPEG_DIR, PKG_CONFIG_PATH and a native search path to the *Linux desktop*
+# FFmpeg prefix. `force = true` beats the environment, and the bridge's
+# native-assets hook does not pass CARGO_HOME through, so a naive Android build
+# silently links host libraries: measured 2026-10-18, the first locally built
+# libor_app_bridge.so required libavcodec.so.62 (the Linux soname) while the
+# staged x86_64 Android prefix provides an unversioned SONAME, so the APK could
+# not load on any guest and the FFmpeg link probe correctly refused it.
+#
+# Two independent defences, because the failure mode was silent. (1) This script
+# gives the build its own HOME whose .cargo config pins the *Android* prefix and
+# reuses the staged project-local registry, so it stays offline. (2) The bridge
+# hook states the same pin on cargo's command line and carries the native search
+# path in RUSTFLAGS, which *replaces* the config's rustflags — cargo concatenates
+# `build.rustflags` arrays, so a config-supplied `-L` cannot be overridden by
+# another config file. CI runners have no host config, so neither changes
+# anything there.
+prefix="$OR_ANDROID_FFMPEG_PREFIX"
+android_build_home="${OR_ANDROID_BUILD_HOME:-$APP/.dart_tool/android-build-home}"
+android_cargo_home="$android_build_home/.cargo"
+real_home="${HOME:-/root}"
+real_pub_cache="${PUB_CACHE:-$real_home/.pub-cache}"
+mkdir -p "$android_cargo_home"
+cargo_seed="${OR_ANDROID_CARGO_SEED:-$APP/.dart_tool/aeh-cargo}"
+for entry in registry git; do
+  if [[ -d "$cargo_seed/$entry" && ! -e "$android_cargo_home/$entry" ]]; then
+    ln -sfn "$cargo_seed/$entry" "$android_cargo_home/$entry"
+  fi
+done
+cat > "$android_cargo_home/config.toml" <<EOF
+# Written by scripts/build_android_case_apks.sh for one Android build; it pins
+# the Android FFmpeg prefix so the host's forced Linux pin cannot win.
+[env]
+FFMPEG_DIR = { value = "$prefix", force = true }
+PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
+PKG_CONFIG_ALLOW_CROSS = { value = "1", force = true }
+EOF
+export HOME="$android_build_home"
+export CARGO_HOME="$android_cargo_home"
+export PUB_CACHE="$real_pub_cache"
+
+# The runtime libraries the bridge needs at load time must be inside the APK.
+# CI copies them into the module's jniLibs in its FFmpeg step; the local lane had
+# no equivalent, which is why a locally built APK could not load its own bridge.
+jni_root="$APP/android/app/src/main/jniLibs"
+mkdir -p "$jni_root/x86_64"
+for library in avcodec avformat avutil swresample swscale; do
+  shared="$prefix/lib/lib$library.so"
+  if [[ ! -f "$shared" ]]; then
+    printf 'build_android_case_apks: %s is missing from the staged prefix\n' "$shared" >&2
+    exit 3
+  fi
+  for runtime in "$prefix/lib/lib$library.so"*; do
+    [[ -e "$runtime" ]] || continue
+    cp -L "$runtime" "$jni_root/x86_64/$(basename "$runtime")"
+  done
+done
 
 bootstrap_json="${OR_CLI_BOOTSTRAP_JSON:-}"
 if [[ -z "$bootstrap_json" ]]; then
@@ -99,6 +164,45 @@ if [[ -z "$bootstrap_json" ]]; then
   exit 1
 fi
 
+# Reads the ELF dynamic section of the bridge inside a built APK and refuses an
+# APK whose bridge requires a library the APK does not carry. This is the check
+# that would have caught the Linux-soname mistake before a guest was booted.
+verify_apk_loads_its_bridge() { # apk
+  local apk="$1" inspect missing=() needed sofile
+  inspect="$(mktemp -d)"
+  unzip -jo -q "$apk" 'lib/x86_64/libor_app_bridge.so' -d "$inspect" 2>/dev/null || {
+    printf 'build_android_case_apks: %s carries no x86_64 bridge library\n' "$apk" >&2
+    rm -rf "$inspect"
+    return 1
+  }
+  local reader=""
+  for tool in llvm-readelf readelf; do
+    command -v "$tool" >/dev/null 2>&1 && { reader="$tool"; break; }
+  done
+  if [[ -z "$reader" ]]; then
+    printf 'build_android_case_apks: no readelf on PATH; cannot check %s bridge requirements\n' \
+      "$apk" >&2
+    rm -rf "$inspect"
+    return 3
+  fi
+  while IFS= read -r needed; do
+    [[ -n "$needed" ]] || continue
+    sofile="$(unzip -l "$apk" 2>/dev/null | awk -v lib="$needed" '$NF ~ ("lib/x86_64/" lib "$") {found=1} END{print found+0}')"
+    if [[ "$sofile" != "1" ]]; then
+      missing+=("$needed")
+    fi
+  done < <("$reader" -d "$inspect/lib/x86_64/libor_app_bridge.so" 2>/dev/null \
+    | sed -n 's/.*NEEDED.*\[\(libav[^]]*\|libsw[^]]*\)\].*/\1/p')
+  rm -rf "$inspect"
+  if (( ${#missing[@]} > 0 )); then
+    printf 'build_android_case_apks: %s requires libraries it does not bundle: %s\n' \
+      "$apk" "${missing[*]}" >&2
+    printf '  the build linked a foreign FFmpeg; re-run scripts/stage_android_ffmpeg.sh and rebuild\n' >&2
+    return 1
+  fi
+  return 0
+}
+
 build_case_apk() {
   local name="$1" entrypoint="$2"
   shift 2
@@ -107,6 +211,7 @@ build_case_apk() {
   test -s "$built"
   cp "$built" "$output_dir/$name.apk"
   test -s "$output_dir/$name.apk"
+  verify_apk_loads_its_bridge "$output_dir/$name.apk"
 }
 
 build_case_apk diagnostics integration_test/native_bridge_diagnostics_test.dart \

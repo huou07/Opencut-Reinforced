@@ -113,3 +113,32 @@ this tree, not packaged acceptance. The authoritative gate is the hosted CI run
 for the exact commit SHA. Every claim keeps its class — VERIFIED_SOURCE,
 VERIFIED_BEHAVIORAL, VERIFIED_SEMANTIC, VERIFIED_NATIVE — and no class promotes
 another automatically. A local pass never substitutes for a skipped hosted job.
+
+## The Android APK FFmpeg link (measured 2026-10-18)
+
+The local Android lane's first full run failed its `preview` step at the FFmpeg
+link probe, because the APK it built could not load its own bridge. The chain,
+each link measured rather than guessed:
+
+1. `apps/or_app/android/.ffmpeg-install` was linked at one ABI's prefix
+   (`.../install/x86_64`) although the bridge hook resolves the per-ABI prefix as
+   `<link>/<abi>`. Every staged-FFmpeg path became `.../install/x86_64/x86_64/...`,
+   so bindgen failed with `'libavutil/adler32.h' file not found`. The link now
+   targets the install root that holds one directory per ABI.
+2. `~/.cargo/config.toml` on this workstation force-pins `FFMPEG_DIR`,
+   `PKG_CONFIG_PATH` and `[build] rustflags = ["-L", "native=<desktop prefix>/lib"]`.
+   `force = true` beats the environment, and cargo *concatenates* `build.rustflags`
+   from every config source instead of replacing it, so the desktop search path
+   stayed ahead of the Android one and the linker recorded `libavcodec.so.62`
+   (the Linux soname) while the APK shipped `libavcodec.so` (the Android one).
+   `RUSTFLAGS` replaces the config value, and `cargo --config env.X.value=…` beats
+   the forced `[env]`; the hook now states both for Android targets.
+3. `scripts/build_android_case_apks.sh` had no equivalent of CI's copy of the
+   FFmpeg runtime libraries into the module's `jniLibs`, so the APK contained no
+   `libav*.so` at all. It now stages them and, after every build, reads the
+   bridge's ELF `NEEDED` entries and refuses an APK that requires a library it
+   does not bundle — the check that would have caught all three before a guest
+   was ever booted.
+
+Verified: the rebuilt `diagnostics.apk` bundles `libavcodec/avformat/avutil/
+swresample/swscale.so` and its bridge requires exactly those names.
