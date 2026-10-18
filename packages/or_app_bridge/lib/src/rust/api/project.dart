@@ -153,6 +153,8 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+    String? mode,
+    String? overwriteSplitClipId,
   });
 
   Future<ProjectActionResult> insertTimelineTextClip({

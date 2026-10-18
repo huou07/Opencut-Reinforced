@@ -1848,7 +1848,27 @@ impl ProjectHostHandle {
         source_start_denominator: u32,
         duration_numerator: i64,
         duration_denominator: u32,
+        // `insert` (the default) or `overwrite`: an explicit command input, never
+        // canonical project state.
+        mode: Option<String>,
+        // Only read by overwrite when the new span lands strictly inside one
+        // existing clip, mirroring `timeline.clip.split`'s `new_clip_id`.
+        overwrite_split_clip_id: Option<String>,
     ) -> ProjectActionResult {
+        let edit_mode = match mode.as_deref() {
+            None => or_core::TimelineEditMode::Insert,
+            Some(value) => match or_core::TimelineEditMode::parse_wire(value) {
+                Some(edit_mode) => edit_mode,
+                None => return action_error(timeline_arguments_error()),
+            },
+        };
+        let split_clip_id = match overwrite_split_clip_id {
+            None => None,
+            Some(value) => match ClipId::from_str(&value) {
+                Ok(clip_id) => Some(clip_id),
+                Err(_) => return action_error(timeline_arguments_error()),
+            },
+        };
         let track_id = match TrackId::from_str(&track_id) {
             Ok(track_id) => track_id,
             Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
@@ -1880,7 +1900,7 @@ impl ProjectHostHandle {
             project_instance_id,
             expected_revision,
             |project_id, project_instance_id, revision| {
-                CommandEnvelope::insert_timeline_clip(
+                CommandEnvelope::insert_timeline_clip_with_mode(
                     project_id,
                     project_instance_id,
                     revision,
@@ -1889,6 +1909,8 @@ impl ProjectHostHandle {
                     media_id,
                     timeline_start,
                     source_range,
+                    edit_mode,
+                    split_clip_id,
                 )
             },
         )

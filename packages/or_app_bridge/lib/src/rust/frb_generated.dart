@@ -239,6 +239,8 @@ abstract class RustLibApi extends BaseApi {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+    String? mode,
+    String? overwriteSplitClipId,
   });
 
   Future<ProjectActionResult>
@@ -1588,6 +1590,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+    String? mode,
+    String? overwriteSplitClipId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1608,6 +1612,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(sourceStartDenominator, serializer);
           sse_encode_i_64(durationNumerator, serializer);
           sse_encode_u_32(durationDenominator, serializer);
+          sse_encode_opt_String(mode, serializer);
+          sse_encode_opt_String(overwriteSplitClipId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1633,6 +1639,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sourceStartDenominator,
           durationNumerator,
           durationDenominator,
+          mode,
+          overwriteSplitClipId,
         ],
         apiImpl: this,
       ),
@@ -1656,6 +1664,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "sourceStartDenominator",
           "durationNumerator",
           "durationDenominator",
+          "mode",
+          "overwriteSplitClipId",
         ],
       );
 
@@ -8112,6 +8122,8 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+    String? mode,
+    String? overwriteSplitClipId,
   }) => RustLib.instance.api.crateApiProjectProjectHostHandleInsertTimelineClip(
     that: this,
     projectId: projectId,
@@ -8125,6 +8137,8 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     sourceStartDenominator: sourceStartDenominator,
     durationNumerator: durationNumerator,
     durationDenominator: durationDenominator,
+    mode: mode,
+    overwriteSplitClipId: overwriteSplitClipId,
   );
 
   Future<ProjectActionResult> insertTimelineTextClip({

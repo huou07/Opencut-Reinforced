@@ -1139,6 +1139,8 @@ fn wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
             let api_source_start_denominator = <u32>::sse_decode(&mut deserializer);
             let api_duration_numerator = <i64>::sse_decode(&mut deserializer);
             let api_duration_denominator = <u32>::sse_decode(&mut deserializer);
+            let api_mode = <Option<String>>::sse_decode(&mut deserializer);
+            let api_overwrite_split_clip_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -1170,6 +1172,8 @@ fn wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
                             api_source_start_denominator,
                             api_duration_numerator,
                             api_duration_denominator,
+                            api_mode,
+                            api_overwrite_split_clip_id,
                         ),
                     )?;
                     std::result::Result::Ok(output_ok)

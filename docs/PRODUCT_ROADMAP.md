@@ -252,8 +252,19 @@ class each claim actually has:
     `--overwrite-split-id CLIP_ID`; an unknown mode is a usage error, and the
     flags are documented in `docs/TECHNICAL_PLAN.md`. The CLI has no automated
     overwrite test yet — the domain tests cover the semantics.
-  - **UI wiring is blocked on the binding generator, with the failure recorded
-    (2026-10-19).** `flutter_rust_bridge_codegen` 2.13.0 was installed here and
+  - **The binding generator works here when it gets a writable `HOME`
+    (2026-10-19, second attempt).** `HOME=/tmp/frb-home flutter_rust_bridge_codegen
+    generate` from `packages/or_app_bridge` completed with no analysis-server
+    crash; the regeneration diff is exactly the two new optional parameters plus
+    import ordering, which `cargo fmt -p or_app_bridge` normalizes. The bridge's
+    `insert_timeline_clip` now takes `mode: Option<String>` and
+    `overwrite_split_clip_id: Option<String>` and builds the envelope through
+    `CommandEnvelope::insert_timeline_clip_with_mode`, so the generated Dart
+    signature carries `String? mode, String? overwriteSplitClipId` as *optional*
+    named parameters and every existing Dart caller still compiles
+    (`flutter analyze` clean, `cargo test -p or_app_bridge` 24 passing). The Dart
+    presentation is therefore the only remaining step.
+  - **First attempt, kept because the failure mode matters (2026-10-19).** `flutter_rust_bridge_codegen` 2.13.0 was installed here and
     `generate` run from `packages/or_app_bridge`; it printed `Done!` but also
     `Bad state: The analysis server crashed unexpectedly`, and it had rewritten
     `crates/or_app_bridge/src/frb_generated.rs`, `lib/src/rust/api/project.dart`
