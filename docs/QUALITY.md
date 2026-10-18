@@ -91,13 +91,23 @@ it times, a baseline measured on this named host and a stated margin, then let
 1. **No interactive performance budget** — the local CLI/export budget above is
    a coarse regression guard; frame time, seek latency and preview
    responsiveness remain unmeasured (see the section above).
-2. **Local Flutter widget lane, 2026-10-17:** this workstation cannot run it.
-   The `flutter` wrapper rewrites `bin/cache/engine.stamp` beside its own script
-   and the shared SDK cache is read-only for this user, so the runner exits
-   before any test starts. `scripts/acceptance.sh` reports that lane `UNVERIFIED`
-   with the exact reason rather than a false PASS, and hosted CI owns it.
+2. **Local Flutter widget lane:** it runs on this host again. Corrected
+   2026-10-18: `cd apps/or_app && flutter test --no-pub` passed 124 tests at
+   `4f079e2` clean, and the acceptance gate no longer classifies the lane as a
+   host gap. The earlier "read-only shared SDK cache / native-assets download"
+   entry described a host state that no longer holds; a lane that fails now is a
+   real `FAIL`, not a host gap.
 3. **Android, macOS, Windows, packaging and codec lanes** remain hosted-CI
-   authority and are never claimed from this workstation.
+   authority for acceptance. Since 2026-10-18 the Android emulator lane can also
+   run locally as developer evidence under
+   [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md); a local guest result never becomes
+   `ACCEPTED`.
+4. **No agent-facing UI harness and no screen inventory** — an agent can only
+   observe the two screenshots and one clip semantics dump the bounded preflight
+   happens to produce. It cannot list the app's screens and states, dump the
+   semantics tree on demand, or act by semantics label on a target of its
+   choosing. `docs/prompts/OR-LOCAL-FINISH.md` cluster C3 owns this gap; until
+   then, UI/UX claims rest on widget tests plus two fixed screenshots.
 
 ## Evidence rules
 

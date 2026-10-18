@@ -1,6 +1,6 @@
 # Opencut Reinforced — Agent Guide
 
-Last reviewed: 2026-10-15
+Last reviewed: 2026-10-18
 
 OR is an MIT-licensed cross-platform video editor for human and structured
 CLI/agent use. Architectural directions are not implemented capabilities.
@@ -54,13 +54,17 @@ ledgers retain history and never reactivate the paused execution framework.
 
 ## Verify and hand off
 
-`bash scripts/check-repo.sh` is the repository hygiene/document/claim gate.
-GitHub Actions remains canonical for native/package/cross-platform acceptance.
-The owner permits a bounded Debian Linux developer preflight via
-`python3 scripts/run_linux_ui_preflight.py`: one heavy job, one compiler worker,
-fresh headroom checks, timeout and process-tree cleanup. No AVD, emulator,
-cross-platform packaging or long media render. Missing tools do not authorize
-sudo, privilege changes or toolchain substitution.
+`bash scripts/check-repo.sh` is the repository hygiene/document/claim gate;
+`bash scripts/acceptance.sh` adds the documented Rust lanes, the Flutter suite
+and the local performance budget. GitHub Actions remains canonical for
+native/package/cross-platform acceptance. The owner permits two bounded local
+runtime lanes on this host: the Debian Linux developer preflight via
+`python3 scripts/run_linux_ui_preflight.py`, and, since 2026-10-18, the local
+Android emulator lane granted in `docs/AGENT-AUTHORITY.md`. Both are developer
+evidence with one heavy job, one compiler worker, fresh headroom checks, timeout
+and process-tree cleanup; neither authorizes cross-platform packaging, a long
+media render, a second writer in this tree, or sudo, privilege changes or
+toolchain substitution.
 
 Report IMPLEMENTED, verified evidence classes, ACCEPTED and BLOCKED/UNVERIFIED
 separately. A Linux debug app with a fixture picker is not an installed-package

@@ -1,10 +1,10 @@
 # Agent authority on this host
 
-Last reviewed: 2026-10-17. Source: the owner's direct instruction in the AEH session of
-that date. This file exists so a later agent does not have to ask again. It
-grants no host privilege, no credential beyond what is named here, and it does
-not override the evidence rules in `AGENTS.md`, `docs/TESTING.md` or
-`docs/UX_ACCEPTANCE.md`.
+Last reviewed: 2026-10-18. Source: the owner's direct instructions in the AEH
+sessions of 2026-10-17 and 2026-10-18. This file exists so a later agent does not
+have to ask again. It grants no host privilege, no credential beyond what is
+named here, and it does not override the evidence rules in `AGENTS.md`,
+`docs/TESTING.md` or `docs/UX_ACCEPTANCE.md`.
 
 ## Granted without further approval
 
@@ -12,7 +12,19 @@ not override the evidence rules in `AGENTS.md`, `docs/TESTING.md` or
   (`huou07/Opencut-Reinforced`). Prefer one reviewed commit per coherent change.
 - Opening and updating pull requests, and letting required CI decide.
 - Running the local lanes on this host: `bash scripts/check-repo.sh`,
-  `cargo test`, and `python3 scripts/run_linux_ui_preflight.py`.
+  `bash scripts/acceptance.sh`, `cargo test`, `flutter test` in
+  `apps/or_app/`, `python3 scripts/run_linux_ui_preflight.py`, and
+  `python3 scripts/bench_quality.py`.
+- Running the **local Android emulator lane** on this host: creating/starting an
+  AVD, building and installing the debug APK, driving the integration tests
+  against the guest, and stopping what you started. The owner's 2026-10-18
+  instruction is the source of this grant. It produces **developer evidence
+  only**: the hosted `platform-verification` Android job remains the acceptance
+  authority, and a local guest result never becomes `ACCEPTED`.
+- Measuring real GPU behaviour locally through `or_render`/wgpu on this host's
+  Intel GPU, and publishing those numbers as a named-host-class budget. Xvfb or
+  SwiftShader runs stay software-path evidence and are never reported as GPU
+  performance.
 - Publishing a stable release only after the release requirements in
   `docs/RELEASE.md` are met for the exact source commit: a successful exact-SHA
   Platform Verification, a tag that resolves to that commit, and non-empty
@@ -33,18 +45,24 @@ not override the evidence rules in `AGENTS.md`, `docs/TESTING.md` or
 - Reading or copying owner credentials. Only the exact GitHub CLI files the
   owner approved are readable, and only for publishing this repository.
 - Force-pushing `main`, rewriting tags, or discarding unrelated work.
-- Claiming Android, macOS or Windows evidence from this host.
+- Claiming Android, macOS or Windows **acceptance** evidence from this host.
+  Local Android results are developer evidence; the hosted Android job decides.
+- Running two writers in this working tree at once. The Android emulator, Gradle
+  daemons and the Flutter preflight are shared host resources: serialise them and
+  use a dedicated AVD/serial so another project's guest is not disturbed.
 
 ## Verified facts about this host (do not re-derive)
 
 | Fact | Value |
 |---|---|
-| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence |
+| Host | Dell OptiPlex Micro 7010, i5-13500T (20 hardware threads), 15 GiB RAM, `systemd-detect-virt` = none (bare metal) |
+| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence. `cd apps/or_app && flutter test --no-pub` **passes locally** (124 tests, 2026-10-18); the older claim that a raw `flutter test` fails on macOS-target resolution is no longer current |
 | Rust | `1.98.0` is installed and is what `crates/or_app_bridge/rust-toolchain.toml` declares; `stable` is also 1.98.0 |
 | `~/.cargo` | **not writable** by the worker. Builds use the preflight's project-local offline cache; adding a new dependency needs a writable `CARGO_HOME` |
-| Linux UI preflight | `python3 scripts/run_linux_ui_preflight.py` is the supported entry point. A raw `flutter test` fails because rustup then tries to install the macOS targets declared in the bridge manifest; the preflight narrows that list to the host target and restores it byte-for-byte |
+| GPU | Intel UHD 770 (ADL-S GT1), Vulkan 1.4.305 / Mesa ANV 25.0.7, `/dev/dri/renderD128` readable and writable; llvmpipe is also present, so a wgpu backend choice must be explicit in any performance claim |
+| Linux UI preflight | `python3 scripts/run_linux_ui_preflight.py` is the supported entry point. A raw `flutter test -d linux` fails because rustup then tries to install the macOS targets declared in the bridge manifest; the preflight narrows that list to the host target and restores it byte-for-byte |
 | Shared Flutter hook cache | `apps/or_app/.dart_tool/hooks_runner/shared/**` is shared between worker UIDs. Artifacts built by another worker are unreadable and cargo fails with `failed to link or copy … build-script-build`; delete that cache so it is rebuilt by the current UID |
-| Android | **unavailable**: no SDK, NDK, `adb`, AVD or emulator on this host, and this UID is not in the `kvm` group. Do not run or claim the Android lane here; use hosted CI |
+| Android | **available.** SDK at `~/Android/Sdk` (platform-tools, emulator, NDK 26.3/27.2/28.2, `system-images;android-36;google_apis;x86_64`); AVD `an3-api36`; `/dev/kvm` readable+writable and `emulator -accel-check` reports "KVM (version 12) is installed and usable". A local x86_64 debug APK with NDK r28c FFmpeg libraries was built and installed on 2026-10-18, but its commands and staging root were never recorded — reproduce them before trusting them |
 | GitHub | `gh` is authenticated as `huou07` through the owner-approved file exception; `git push` and release publication work |
 
 ## Evidence discipline
