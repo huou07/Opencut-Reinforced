@@ -78,6 +78,51 @@ crowded in the default 1280x720 debug window. This run does not accept preview
 video rendering, full visual polish, performance, audio playback or other OSes.
 Review platform-specific native screenshots rather than imposing pixel identity.
 
+### One local lane entry point
+
+`bash scripts/run_local_lane.sh linux` is the single supported local entry point
+for the four steps above plus the hygiene gate, so an agent does not have to
+remember a sequence or its preconditions:
+
+| Step | Command it runs |
+|---|---|
+| `hygiene` | `bash scripts/check-repo.sh` |
+| `flutter` | `cd apps/or_app && flutter --no-version-check test --no-pub` |
+| `preflight` | `python3 scripts/run_linux_ui_preflight.py` |
+| `bench` | `python3 scripts/bench_quality.py` |
+
+It refuses a dirty tree (the preflight's rewrite and the report must stay
+attributable), runs the steps in order, stops at the first step that is not
+`PASS`, and writes one machine-readable report to the gitignored
+`apps/or_app/build/local-lanes/linux.json`. That report carries the source SHA,
+the host facts, every step's exact command, exit code, elapsed seconds and log
+path, the SHA-256 of each artifact it produced, the steps it did not run, and an
+explicit `limits` list. Exit code 0 means every selected step passed; 1 is a real
+failure, 2 a wrong invocation or a dirty tree, 3 `BLOCKED` by a host precondition
+(the preflight's own 6 GiB RAM/disk, tool, lock and clean-tree checks), and 4
+`UNVERIFIED` because a step could not be measured honestly here.
+
+`--packaged` adds a local `deb` step (build the Linux bundle, stage the pinned
+local media runtime, package through `scripts/package_linux_deb.sh`) and a
+`journey` step (extract that `.deb` into a disposable root and run
+`scripts/run_packaged_desktop_journey.py` against the installed payload). Both go
+through `python3 scripts/run_linux_ui_preflight.py --exec`, which is the
+sanctioned way to run one command inside the prepared developer environment: the
+project-local Cargo/pub caches, the writable Flutter SDK mirror when the shared
+cache is read-only, the host-scoped Rust toolchain manifest, and — with
+`--ffmpeg-prefix` — a Cargo config that pins the local FFmpeg 8 prefix for the
+semi-hermetic native-assets hook and is removed again afterwards. The packaged
+lane needs a pinned local FFmpeg 8 prefix and codec prefix; when they are absent
+the step is `BLOCKED` and names the command that would produce them, rather than
+silently building against the system FFmpeg 7. `--packaged` never calls itself
+packaged acceptance: the report sets `"acceptance": false`, states that the local
+Flutter is not the CI pin, that the media runtime was built locally, and that the
+`.deb` was extracted rather than installed by `apt`.
+
+A lane report is developer evidence for one tree on one host. It does not
+establish hosted CI parity, an installed package, an OS picker, or a
+cross-platform claim, and it is never the input to an `ACCEPTED` claim record.
+
 ## Current Phase 3 checks
 
 - Rust unit tests cover core bootstrap values and bridge DTO mapping; CLI contract tests execute the real binary and verify human output, JSON, help, and invalid input.
@@ -122,7 +167,10 @@ GitHub-hosted Actions is canonical for platform correctness, linker-dependent bu
 
 Android FFmpeg cross-link probes target API 26, matching the packaged app's `minSdk` and the Opus/libvpx target. Keeping these API levels aligned preserves Opus production hardening while ensuring the probe uses the same Android C library exports available to supported installs.
 
-The owner now permits the bounded Linux developer preflight described above. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+The owner now permits the bounded Linux developer preflight described above, and
+its single entry point is `bash scripts/run_local_lane.sh linux`; that lane also
+writes one machine-readable report of what ran, for how long, and what it could
+not establish. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.

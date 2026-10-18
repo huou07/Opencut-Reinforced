@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""One bounded Linux developer journey; never packaged acceptance."""
+"""One bounded Linux developer journey; never packaged acceptance.
+
+The default mode runs the native editor journey under Xvfb. A second, narrow
+mode -- ``--exec`` -- runs one caller-supplied command inside the same prepared
+environment (project-local Cargo/pub caches, a writable Flutter SDK mirror, the
+host-scoped Rust toolchain manifest, and optionally a pinned local FFmpeg
+prefix). ``scripts/run_local_lane.sh --packaged`` uses it to build and package
+the Linux bundle; that mode never installs, never claims acceptance and never
+changes the working tree outside the ignored build caches.
+"""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -27,6 +36,11 @@ MANIFEST_BACKUP_NAME = "rust-toolchain.toml.original"
 NATIVE_BUDGET_SECONDS = 600
 PUB_GET_BUDGET_SECONDS = 300
 REQUIRED_TOOLS = ("flutter", "xvfb-run", "clang", "clang++", "cmake", "ninja", "ffprobe")
+EXEC_USAGE = (
+    "usage: run_linux_ui_preflight.py --exec [--local-home DIR] "
+    "[--ffmpeg-prefix DIR] [--codec-prefix DIR] -- <command> [args...]"
+)
+EXEC_VALUE_OPTIONS = ("--local-home", "--ffmpeg-prefix", "--codec-prefix")
 
 
 def linux_rust_target() -> str:
@@ -295,6 +309,143 @@ def writable_flutter_root(environment: dict[str, str]) -> None:
     environment["PATH"] = f"{target / 'bin'}{os.pathsep}{environment.get('PATH', '')}"
 
 
+@contextmanager
+def native_lock():
+    """The one shared native UI lock, so two lanes cannot compile at once.
+
+    The lock file is per UID, outside the tree, and must be owned by this worker;
+    a lock owned by anyone else is a host misconfiguration, not something to take
+    over. A second holder fails immediately instead of queueing behind it.
+    """
+    path = f"/tmp/aeh-native-ui-{os.getuid()}.lock"
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as lock:
+        if os.fstat(lock.fileno()).st_uid != os.getuid():
+            raise RuntimeError("BLOCKED: lock is not owned by this worker")
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def redirect_home(environment: dict[str, str], home: Path) -> None:
+    """Point HOME at a project-local home for the semi-hermetic build hook.
+
+    Flutter's native-assets hook runs cargo in a narrowed environment: it keeps
+    HOME but drops CARGO_HOME, FFMPEG_DIR, PKG_CONFIG_PATH and RUSTFLAGS. A
+    project-local HOME whose `.cargo` is the real Cargo home is therefore how the
+    hook can read the pinned-prefix config the caller asked for.
+    """
+    home = home.resolve()
+    home.mkdir(parents=True, exist_ok=True)
+    shared = Path(environment.get("HOME", str(Path.home())))
+    cargo_home = Path(environment.get("CARGO_HOME") or (shared / ".cargo")).resolve()
+    rustup_home = Path(environment.get("RUSTUP_HOME") or (shared / ".rustup")).resolve()
+    for name, target in ((".cargo", cargo_home), (".rustup", rustup_home)):
+        link = home / name
+        if link.is_symlink():
+            if link.resolve() != target:
+                raise RuntimeError(f"BLOCKED: {link} points at {link.resolve()}, not {target}")
+        elif link.exists():
+            raise RuntimeError(f"BLOCKED: {link} exists and is not a symlink")
+        elif target.is_dir():
+            link.symlink_to(target)
+    environment["HOME"] = str(home)
+
+
+@contextmanager
+def pinned_cargo_config(cargo_home: Path, ffmpeg_prefix: Path, codec_prefix: Path | None):
+    """Add a Cargo config that pins one FFmpeg prefix, for the duration of a build.
+
+    Two host facts make this necessary and temporary. The hook cannot be handed
+    FFMPEG_DIR, and Debian 13 also ships FFmpeg 7 development libraries, so the
+    pinned prefix has to come first in the native search path or the bridge links
+    `libavutil.so.59` instead of the packaged `libavutil.so.60`. The file is
+    removed afterwards so it cannot silently change later Cargo runs.
+    """
+    config = cargo_home / "config.toml"
+    previous = config.read_bytes() if config.is_file() else None
+    pkg_config_path = f"{ffmpeg_prefix}/lib/pkgconfig"
+    if codec_prefix is not None:
+        pkg_config_path += f":{codec_prefix}/lib/pkgconfig"
+    cargo_home.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        "[build]\n"
+        f'rustflags = ["-L", "native={ffmpeg_prefix}/lib", '
+        '"-C", "link-arg=-Wl,-rpath,$ORIGIN"]\n'
+        "\n[env]\n"
+        f'FFMPEG_DIR = {{ value = "{ffmpeg_prefix}", force = true }}\n'
+        f'PKG_CONFIG_PATH = {{ value = "{pkg_config_path}", force = true }}\n',
+        encoding="utf-8",
+    )
+    try:
+        yield config
+    finally:
+        if previous is None:
+            config.unlink(missing_ok=True)
+        else:
+            config.write_bytes(previous)
+
+
+def parse_exec_arguments(
+    argv: list[str],
+) -> tuple[list[str], Path | None, Path | None, Path | None]:
+    """Split `--exec [options] -- command...` without argparse ambiguity."""
+    options: dict[str, Path | None] = {"local-home": None, "ffmpeg-prefix": None,
+                                       "codec-prefix": None}
+    index = 0
+    while index < len(argv) and argv[index] != "--":
+        token = argv[index]
+        if token not in EXEC_VALUE_OPTIONS:
+            raise SystemExit(f"{EXEC_USAGE}\nunknown option: {token}")
+        if index + 1 >= len(argv):
+            raise SystemExit(f"{EXEC_USAGE}\n{token} needs a value")
+        options[token[2:]] = Path(argv[index + 1])
+        index += 2
+    if index < len(argv):
+        index += 1
+    command = argv[index:]
+    if not command:
+        raise SystemExit(f"{EXEC_USAGE}\nno command was given")
+    return command, options["local-home"], options["ffmpeg-prefix"], options["codec-prefix"]
+
+
+def exec_in_environment(argv: list[str]) -> int:
+    """Run one command in the prepared developer environment; return its status.
+
+    This deliberately has no packaging, install or acceptance step of its own: it
+    prepares the same caches, Flutter mirror and host-scoped manifest the bounded
+    journey uses, then hands control to the caller's command.
+    """
+    command, local_home, ffmpeg_prefix, codec_prefix = parse_exec_arguments(argv)
+    manifest = ROOT / "crates/or_app_bridge/rust-toolchain.toml"
+    backup = manifest_backup_path()
+    recovered = recover_interrupted_manifest(manifest, backup)
+    if recovered:
+        print(recovered, flush=True)
+    if available_memory() < 6 * GIB or shutil.disk_usage(APP).free < 6 * GIB:
+        raise RuntimeError("BLOCKED: require 6 GiB available RAM and disk before starting")
+    for tool in ("cargo", "flutter"):
+        if not shutil.which(tool):
+            raise RuntimeError(f"BLOCKED: missing {tool}; do not change host privileges")
+    env = dict(os.environ, RUSTUP_TOOLCHAIN="stable", RUSTUP_AUTO_UPDATE="disable")
+    writable_cargo_cache(env)
+    writable_pub_cache(env)
+    writable_flutter_root(env)
+    common = dict(cwd=APP, env=env, check=False)
+    with native_lock():
+        with linux_toolchain_target(manifest, linux_rust_target(), backup=backup):
+            if ffmpeg_prefix is None:
+                return subprocess.run(command, **common).returncode
+            cargo_home = Path(
+                env.get("CARGO_HOME")
+                or (Path(env.get("HOME", str(Path.home()))) / ".cargo")
+            )
+            if local_home is not None:
+                redirect_home(env, local_home)
+            with pinned_cargo_config(cargo_home, ffmpeg_prefix.resolve(),
+                                     codec_prefix.resolve() if codec_prefix else None):
+                return subprocess.run(command, **common).returncode
+
+
 def plan_lines() -> tuple[list[str], list[str], list[list[str]]]:
     """Describe what a real run would do, without changing anything.
 
@@ -409,6 +560,11 @@ def supervise(command: list[str], budget: int,
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--exec" in argv:
+        # Parsed by hand: the command after `--` must reach the child untouched.
+        return exec_in_environment(argv[argv.index("--exec") + 1:])
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", action="store_true",
                         help="report what a run would do and exit without changing anything")
