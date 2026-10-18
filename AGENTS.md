@@ -87,6 +87,22 @@ packaging and distribution follow [docs/RELEASE.md](docs/RELEASE.md) and are
 owner-gated. Mechanics are in [docs/TOOLING.md](docs/TOOLING.md) and
 [docs/TESTING.md](docs/TESTING.md); the working procedure is skill `or-dev-loop`.
 
+## UI/UX and performance acceptance
+
+A capability is not finished because it compiles or because a widget test passes.
+For every user-visible surface: the desktop platforms present one coherent
+product and Android an adapted one, sharing concepts, terminology and command
+semantics; controllable elements expose real semantics; the thresholds in
+[docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md) and
+[docs/QUALITY.md](docs/QUALITY.md) hold (4.5:1 text contrast, no type below
+11 px, 24 px desktop and 44 px compact hit areas, a keyboard alternative for
+every pointer action, and the 320x480 and 320x440 compact viewports clean); and
+the interaction is **measured, not asserted**. Semantic, behavioural, visual and
+native evidence each answer a different question and never promote one another —
+a screenshot is not a journey, and a widget test is not UX acceptance. Load skill
+`or-ui-ux` for UI work and close the interactive budget rows that
+[docs/QUALITY.md](docs/QUALITY.md) still records as unverified.
+
 ## Evidence and reporting
 
 Report `IMPLEMENTED`, each verified evidence class, `ACCEPTED`, and
@@ -110,7 +126,7 @@ an installed-package or native OS-picker claim.
 | Feature path from definition to merged pull request | [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) |
 | Quality bar, evidence classes, gates and known gaps | [docs/QUALITY.md](docs/QUALITY.md), [docs/TESTING.md](docs/TESTING.md) |
 | Local tooling, hosted verification, approved agent tools | [docs/TOOLING.md](docs/TOOLING.md) |
-| UI conventions and acceptance | [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md) |
+| UI conventions, acceptance and interaction performance | [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md), skill `or-ui-ux` |
 | Reuse, upstream, dependency and licence decisions | [docs/OPEN_SOURCE_CONVERGENCE.md](docs/OPEN_SOURCE_CONVERGENCE.md), [docs/SECURITY_LICENSING.md](docs/SECURITY_LICENSING.md) |
 | Release and installation | [docs/RELEASE.md](docs/RELEASE.md), [docs/DEVELOPER_PREVIEW_INSTALL.md](docs/DEVELOPER_PREVIEW_INSTALL.md) |
 | Current work selection | [docs/prompts/OR-BUILD.md](docs/prompts/OR-BUILD.md), [docs/prompts/README.md](docs/prompts/README.md) |
@@ -121,8 +137,8 @@ an installed-package or native OS-picker claim.
 
 Project-local skills live in [.agents/skills/](.agents/skills/) and are catalogued
 with their triggers and exclusions in [docs/skills.md](docs/skills.md):
-`or-edit-feature`, `or-dev-loop`, `or-media-ai`, `or-claim-evidence`,
-`or-release`. Load one only when its trigger matches; defer to the shared
+`or-edit-feature`, `or-ui-ux`, `or-dev-loop`, `or-media-ai`,
+`or-claim-evidence`, `or-release`. Load one only when its trigger matches; defer to the shared
 procedures the current session exposes rather than copying one into this
 repository.
 

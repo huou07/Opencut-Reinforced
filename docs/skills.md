@@ -17,6 +17,7 @@ repository; a file on disk does not by itself prove that a session discovered it
 | Skill | Trigger | Neighbour / exclusion |
 |---|---|---|
 | `or-edit-feature` | Add or extend timeline, clip, media, marker, text, caption, undo or project-lifecycle behavior; a command or query and its GUI/CLI surface | Generic planning (task-planning); a failing gate (verify-debug); AI/provider or codec work (`or-media-ai`) |
+| `or-ui-ux` | Design, change or judge a user-visible surface — layout, navigation, interaction, typography, colour, feedback, accessibility, desktop-versus-compact parity — and measure the interaction performance that makes it acceptable | Backend- or domain-only work (`or-edit-feature`); a failing build or gate (verify-debug); the generic evidence-class method, which stays in the shared ui-ux-review skill |
 | `or-dev-loop` | Local build, test, benchmark or preflight on this host; a lane reported `BLOCKED`; deciding whether a local result is admissible | Release publication (`or-release`); claim records (`or-claim-evidence`) |
 | `or-media-ai` | AI providers, model assets, transcription/captions, noise reduction or audio cleanup, code-to-illustration MotionScene | Plain editing with no AI component (`or-edit-feature`); credential, dependency or licence review (security-review) |
 | `or-claim-evidence` | Recording or auditing a completion claim; binding an exact SHA to a hosted run and job; deciding an evidence class | Running local lanes (`or-dev-loop`); publishing (`or-release`) |
@@ -41,7 +42,11 @@ guarantee that a given harness has installed them.
 
 For UI work, [DESIGN.md](../DESIGN.md) and [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md)
 remain authoritative; a generic skill never authorizes a new design system or a
-new local native runtime.
+new local native runtime. The shared `ui-ux-review` supplies the generic
+evidence-class method, journey checklist and review-versus-fix rule;
+`or-ui-ux` binds that method to OR's design language, thresholds, shell slots,
+evidence classes and local lanes. Load `or-ui-ux` for OR work and keep its
+content here rather than duplicating it into the shared procedure.
 
 ## Policy
 

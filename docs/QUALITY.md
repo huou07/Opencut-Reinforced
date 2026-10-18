@@ -121,6 +121,12 @@ it times, a baseline measured on this named host and a stated margin, then let
   declared by `.aeh/quality.json`: it names every lane the local run did not
   execute, the gates it actually covered, and the local runner class. The report
   is runtime state and is gitignored.
+- Acceptance has two dimensions a build or unit-test pass cannot establish, so
+  they are part of the bar rather than optional extras: the **user-visible
+  interface** (see [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) and skill `or-ui-ux`) and
+  **measured interaction performance** (see the budget section above). A
+  capability whose surface has no semantic, behavioural or visual evidence, or
+  whose interaction latency stays `UNVERIFIED`, is not accepted.
 - A skipped, missing or unavailable check is `UNVERIFIED`; it is never PASS.
 - Hosted evidence: after a successful hosted run for the current commit,
   `bash scripts/record-hosted-evidence.sh <workflow>` records it in `.hub/hosted-evidence.json`. The Hub
