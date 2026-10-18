@@ -58,7 +58,20 @@ keyframes each, 64 KiB per text node. Diagnostics carry stable codes and JSON pa
 shape below. Text is literal: a string that looks like a template or an expression is
 preserved byte for byte and never evaluated. Validation and inspection are pure reads
 — no project, no renderer, no provider — and the agent surface is
-`or motion validate|inspect --file PATH [--json]`.
+`or motion validate|inspect|evaluate --file PATH [--json]`.
+
+**Evaluator, 2026-10-20.** `evaluate_scene(scene, exact_time)` returns a `MotionFrame`
+of flat, typed `MotionInstruction`s in document order, with every animated property
+already resolved: a renderer never sees a keyframe, an easing curve or a property
+name, so the render path cannot depend on scene structure. Evaluation refuses an
+invalid scene rather than partially drawing it, and refuses a time outside the
+half-open `[0, duration)` rather than clamping it, because a silent clamp would hide
+a caller's arithmetic error behind a plausible picture. Animation sampling is total
+over the scene (the first value holds before the first keyframe, the last after the
+last), the time ratio is computed through the exact rationals rather than
+floating-point seconds, and the easing set is the locked four. Evaluation reads
+nothing: no asset, font, file, network or provider — a test evaluates a scene whose
+asset path exists nowhere.
 
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate

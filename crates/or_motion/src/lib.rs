@@ -1058,6 +1058,161 @@ mod tests {
     }
 
     #[test]
+    fn evaluation_is_deterministic_and_in_document_order() {
+        let scene = scene();
+        let time = RationalTime::new(1, 2).unwrap();
+        let first = evaluate_scene(&scene, time).unwrap();
+        let second = evaluate_scene(&scene, time).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(
+            first
+                .instructions
+                .iter()
+                .map(|instruction| instruction.node_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["code", "callout", "arrow", "diagram"]
+        );
+        assert_eq!(
+            first
+                .instructions
+                .iter()
+                .map(|instruction| instruction.depth)
+                .collect::<Vec<_>>(),
+            vec![0, 0, 1, 0]
+        );
+    }
+
+    #[test]
+    fn a_time_outside_the_half_open_interval_is_refused_rather_than_clamped() {
+        let scene = scene();
+        let duration = scene.duration;
+        assert_eq!(
+            evaluate_scene(&scene, duration).unwrap_err(),
+            MotionEvaluationError::TimeOutOfRange
+        );
+        assert_eq!(
+            evaluate_scene(&scene, RationalTime::new(-1, 1).unwrap()).unwrap_err(),
+            MotionEvaluationError::TimeOutOfRange
+        );
+        assert_eq!(
+            MotionEvaluationError::TimeOutOfRange.code(),
+            "MOTION_TIME_OUT_OF_RANGE"
+        );
+        // The last instant inside the interval evaluates.
+        assert!(evaluate_scene(&scene, RationalTime::new(3999, 1000).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn an_invalid_scene_is_refused_instead_of_partially_drawn() {
+        let mut broken = scene();
+        broken.duration = RationalTime::new(0, 1).unwrap();
+        let error = evaluate_scene(&broken, RationalTime::new(0, 1).unwrap()).unwrap_err();
+        match error {
+            MotionEvaluationError::InvalidScene(validation) => {
+                assert!(!validation.ok);
+                assert_eq!(validation.errors[0].code, "MOTION_INVALID_DURATION");
+            }
+            other => panic!("expected an invalid-scene refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn animation_resolves_by_property_and_holds_outside_its_keyframes() {
+        let scene = scene();
+        // The opacity track runs 0 -> 1 over one second with ease_out.
+        let start = evaluate_scene(&scene, RationalTime::new(0, 1).unwrap()).unwrap();
+        let code = |frame: &MotionFrame| {
+            frame
+                .instructions
+                .iter()
+                .find(|instruction| instruction.node_id == "code")
+                .unwrap()
+                .opacity
+        };
+        assert_eq!(code(&start), 0.0);
+        let middle = evaluate_scene(&scene, RationalTime::new(1, 2).unwrap()).unwrap();
+        // ease_out(0.5) = 0.75, and the value interpolates 0 -> 1.
+        assert!((code(&middle) - 0.75).abs() < 1e-9, "{}", code(&middle));
+        let after = evaluate_scene(&scene, RationalTime::new(3, 1).unwrap()).unwrap();
+        assert_eq!(code(&after), 1.0);
+    }
+
+    #[test]
+    fn translation_scale_and_geometry_animate_onto_the_instruction() {
+        let mut scene = scene();
+        scene.animations = vec![
+            MotionAnimation {
+                node_id: "diagram".to_owned(),
+                property: MotionProperty::TranslationX,
+                keyframes: vec![
+                    MotionKeyframe {
+                        at: RationalTime::new(0, 1).unwrap(),
+                        value: 0.0,
+                    },
+                    MotionKeyframe {
+                        at: RationalTime::new(2, 1).unwrap(),
+                        value: 100.0,
+                    },
+                ],
+                easing: MotionEasing::Linear,
+            },
+            MotionAnimation {
+                node_id: "diagram".to_owned(),
+                property: MotionProperty::Scale,
+                keyframes: vec![
+                    MotionKeyframe {
+                        at: RationalTime::new(0, 1).unwrap(),
+                        value: 1.0,
+                    },
+                    MotionKeyframe {
+                        at: RationalTime::new(2, 1).unwrap(),
+                        value: 2.0,
+                    },
+                ],
+                easing: MotionEasing::Linear,
+            },
+        ];
+        let frame = evaluate_scene(&scene, RationalTime::new(1, 1).unwrap()).unwrap();
+        let diagram = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.node_id == "diagram")
+            .unwrap();
+        assert_eq!(diagram.position.x, 950.0);
+        assert_eq!(diagram.scale, 1.5);
+        let size = diagram.size.unwrap();
+        assert_eq!(size.width, 960.0);
+        assert_eq!(size.height, 540.0);
+        // The image's own opacity is untouched by the geometry tracks.
+        assert!((diagram.opacity - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn evaluation_reads_no_asset_and_no_font() {
+        // An asset path that exists nowhere still evaluates: evaluation resolves
+        // identities and never opens a file, which is what lets a render path run
+        // with no filesystem, network or provider access at all.
+        let mut value = serde_json::to_value(scene()).unwrap();
+        value["assets"][0]["path"] = serde_json::json!("assets/does-not-exist.png");
+        value["nodes"][0]["font_size"] = serde_json::json!(28.0);
+        let parsed = parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let frame = evaluate_scene(&parsed, RationalTime::new(1, 1).unwrap()).unwrap();
+        assert_eq!(frame.instructions.len(), 4);
+        assert_eq!(frame.instructions[3].asset_id.as_deref(), Some("diagram"));
+    }
+
+    #[test]
+    fn the_easing_set_is_locked_and_bounded() {
+        assert_eq!(ease(MotionEasing::Linear, 0.25), 0.25);
+        assert_eq!(ease(MotionEasing::EaseIn, 0.5), 0.25);
+        assert_eq!(ease(MotionEasing::EaseOut, 0.5), 0.75);
+        assert_eq!(ease(MotionEasing::EaseInOut, 0.5), 0.5);
+        // Out-of-range progress is clamped rather than extrapolated.
+        assert_eq!(ease(MotionEasing::Linear, -1.0), 0.0);
+        assert_eq!(ease(MotionEasing::Linear, 2.0), 1.0);
+    }
+
+    #[test]
     fn a_keyframe_past_the_duration_is_out_of_range() {
         let mut value = serde_json::to_value(scene()).unwrap();
         value["animations"][0]["keyframes"][1]["at"] =
@@ -1073,5 +1228,236 @@ mod tests {
             "{:?}",
             validation.errors
         );
+    }
+}
+
+/// One resolved draw instruction: what a renderer needs for one node at one exact
+/// time, with every animated property already applied.
+///
+/// The shape is deliberately flat and typed. A renderer never sees a keyframe, an
+/// easing curve or a property name — evaluation has already resolved them — so the
+/// render path cannot accidentally depend on scene structure.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MotionInstruction {
+    pub node_id: String,
+    pub kind: MotionNodeKind,
+    /// Nesting depth, 0 for a top-level node. A renderer may use it for ordering.
+    pub depth: usize,
+    pub position: MotionPoint,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<MotionSize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<MotionPoint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<MotionColor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<MotionColor>,
+    pub stroke_width: f64,
+    pub opacity: f64,
+    pub rotation_degrees: f64,
+    pub scale: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_id: Option<String>,
+}
+
+/// Everything a renderer draws for one exact time.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MotionFrame {
+    pub time: RationalTime,
+    pub canvas: MotionCanvas,
+    /// Instructions in document order, depth first, so the same scene and time
+    /// always produce the same list in the same order.
+    pub instructions: Vec<MotionInstruction>,
+}
+
+/// Why a scene could not be evaluated.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MotionEvaluationError {
+    /// The scene does not validate; evaluation never runs on a scene a validator
+    /// refused.
+    InvalidScene(MotionValidation),
+    /// The time is outside the half-open interval `[0, duration)`.
+    TimeOutOfRange,
+}
+
+impl MotionEvaluationError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidScene(_) => "MOTION_INVALID_SCENE",
+            Self::TimeOutOfRange => "MOTION_TIME_OUT_OF_RANGE",
+        }
+    }
+}
+
+/// Evaluates a scene at one exact time.
+///
+/// Pure and total over valid scenes: the same scene and time always produce the same
+/// frame, in document order. Evaluation reads nothing — no asset, no font, no file,
+/// no network, no provider — because the ADR requires that rendering never depends
+/// on any of them. An invalid scene is refused rather than partially drawn, and a
+/// time outside `[0, duration)` is refused rather than clamped, because a silent
+/// clamp would hide a caller's arithmetic error behind a plausible picture.
+pub fn evaluate_scene(
+    scene: &MotionScene,
+    time: RationalTime,
+) -> Result<MotionFrame, MotionEvaluationError> {
+    let validation = validate_scene(scene);
+    if !validation.ok {
+        return Err(MotionEvaluationError::InvalidScene(validation));
+    }
+    if time.is_negative() || time >= scene.duration {
+        return Err(MotionEvaluationError::TimeOutOfRange);
+    }
+
+    let mut instructions = Vec::new();
+    let mut pending: Vec<(&MotionNode, usize)> =
+        scene.nodes.iter().rev().map(|node| (node, 0)).collect();
+    while let Some((node, depth)) = pending.pop() {
+        instructions.push(resolve_node(scene, node, depth, time));
+        if let Some(children) = &node.children {
+            pending.extend(children.iter().rev().map(|child| (child, depth + 1)));
+        }
+    }
+
+    Ok(MotionFrame {
+        time,
+        canvas: scene.canvas,
+        instructions,
+    })
+}
+
+fn resolve_node(
+    scene: &MotionScene,
+    node: &MotionNode,
+    depth: usize,
+    time: RationalTime,
+) -> MotionInstruction {
+    let mut position = node.position.unwrap_or(MotionPoint { x: 0.0, y: 0.0 });
+    let mut size = node.size;
+    let mut opacity = node.opacity.unwrap_or(1.0);
+    let mut rotation_degrees = node.rotation_degrees.unwrap_or(0.0);
+    let mut scale = 1.0;
+
+    for animation in scene
+        .animations
+        .iter()
+        .filter(|animation| animation.node_id == node.node_id)
+    {
+        let Some(value) = sample_animation(animation, time) else {
+            continue;
+        };
+        match animation.property {
+            MotionProperty::TranslationX => position.x += value,
+            MotionProperty::TranslationY => position.y += value,
+            MotionProperty::Scale => scale *= value,
+            MotionProperty::Rotation => rotation_degrees += value,
+            MotionProperty::Opacity => opacity = value,
+            MotionProperty::Width => {
+                let mut resolved = size.unwrap_or(MotionSize {
+                    width: value,
+                    height: 0.0,
+                });
+                resolved.width = value;
+                size = Some(resolved);
+            }
+            MotionProperty::Height => {
+                let mut resolved = size.unwrap_or(MotionSize {
+                    width: 0.0,
+                    height: value,
+                });
+                resolved.height = value;
+                size = Some(resolved);
+            }
+        }
+    }
+
+    if let Some(resolved) = size {
+        size = Some(MotionSize {
+            width: resolved.width * scale,
+            height: resolved.height * scale,
+        });
+    }
+
+    MotionInstruction {
+        node_id: node.node_id.clone(),
+        kind: node.kind,
+        depth,
+        position,
+        size,
+        end: node.end,
+        fill: node.fill,
+        stroke: node.stroke,
+        stroke_width: node.stroke_width.unwrap_or(0.0),
+        opacity: opacity.clamp(0.0, 1.0),
+        rotation_degrees,
+        scale,
+        text: node.text.clone(),
+        font_size: node.font_size,
+        asset_id: node.asset_id.clone(),
+    }
+}
+
+/// The animated value of one property at `time`.
+///
+/// Before the first keyframe the first value holds, and after the last the last
+/// value holds, so a track is total over the scene. Interpolation is exact rational
+/// arithmetic for the time ratio and the easing curve is a locked set, which is what
+/// makes the result reproducible rather than merely close.
+pub fn sample_animation(animation: &MotionAnimation, time: RationalTime) -> Option<f64> {
+    let first = animation.keyframes.first()?;
+    if time <= first.at {
+        return Some(first.value);
+    }
+    let last = animation.keyframes.last()?;
+    if time >= last.at {
+        return Some(last.value);
+    }
+    for pair in animation.keyframes.windows(2) {
+        let [start, end] = pair else {
+            continue;
+        };
+        if time >= start.at && time <= end.at {
+            let span = end.at.checked_sub(start.at).ok()?;
+            let offset = time.checked_sub(start.at).ok()?;
+            let progress = ratio(offset, span);
+            let eased = ease(animation.easing, progress);
+            return Some(start.value + (end.value - start.value) * eased);
+        }
+    }
+    Some(last.value)
+}
+
+/// `offset / span` as an `f64`, computed through the exact rationals rather than
+/// through floating-point seconds, so two hosts agree on the same frame.
+fn ratio(offset: RationalTime, span: RationalTime) -> f64 {
+    if span.is_zero() {
+        return 0.0;
+    }
+    let numerator = offset.numerator() as f64 * span.denominator() as f64;
+    let denominator = offset.denominator() as f64 * span.numerator() as f64;
+    if denominator == 0.0 {
+        return 0.0;
+    }
+    (numerator / denominator).clamp(0.0, 1.0)
+}
+
+/// The locked easing set, applied to a `0..=1` progress.
+pub fn ease(easing: MotionEasing, progress: f64) -> f64 {
+    let progress = progress.clamp(0.0, 1.0);
+    match easing {
+        MotionEasing::Linear => progress,
+        MotionEasing::EaseIn => progress * progress,
+        MotionEasing::EaseOut => 1.0 - (1.0 - progress) * (1.0 - progress),
+        MotionEasing::EaseInOut => {
+            if progress < 0.5 {
+                2.0 * progress * progress
+            } else {
+                1.0 - 2.0 * (1.0 - progress) * (1.0 - progress)
+            }
+        }
     }
 }

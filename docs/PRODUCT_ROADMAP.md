@@ -806,9 +806,25 @@ class each claim actually has:
     an explicit depth-first stack — not recursion, because a parsed scene can nest
     deeper than validation allows and inspection must not overflow while reporting
     that.
+  - **The evaluator exists (2026-10-20).** `evaluate_scene(scene, exact_time)` returns
+    a `MotionFrame` of flat, typed `MotionInstruction`s in document order, with every
+    animated property already resolved — a renderer never sees a keyframe, an easing
+    curve or a property name, so the render path cannot depend on scene structure.
+    An invalid scene is refused rather than partially drawn, and a time outside the
+    half-open `[0, duration)` is refused rather than clamped, because a silent clamp
+    would hide a caller's arithmetic error behind a plausible picture. Sampling is
+    total (the first value holds before the first keyframe, the last after the last),
+    the time ratio goes through the exact rationals rather than floating-point
+    seconds, and the easing set is the locked four. **Evaluation reads nothing** — no
+    asset, font, file, network or provider — and a test proves it by evaluating a scene
+    whose asset path exists nowhere. Seven evaluator tests cover determinism and
+    document order, the half-open interval at both ends, refusal of an invalid scene,
+    animation resolution by property, geometry and scale, the no-read property, and
+    the easing bounds. `or motion evaluate --file PATH --at NUM/DEN [--json]` exposes
+    it to agents, with a CLI test asserting `ease_out(0.5) = 0.75` at `1/2`.
   - **Not done, and this is most of the phase:** there is no code ingestion, no
-    tokenisation or syntax highlighting, no evaluator (`Evaluate(scene, exact_time)`),
-    no materialisation, and no preview or render integration. `crates/or_ai` still
+    tokenisation or syntax highlighting, no renderer integration (the frame is not yet
+    drawn by `or_render`), no materialisation, and no preview. `crates/or_ai` still
     declares `AiTask::GenerateMotionScene` with no producer or consumer. Nothing here
     has been rendered, so no visual or performance dimension exists yet, and no part
     of this phase is `ACCEPTED`.

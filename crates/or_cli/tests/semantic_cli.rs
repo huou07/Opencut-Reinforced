@@ -2513,3 +2513,54 @@ fn motion_validate_refuses_a_scene_that_carries_an_unknown_field() {
     assert_eq!(value["error"]["code"], "MOTION_INVALID_JSON");
     assert_eq!(value["error"]["category"], "motion_scene");
 }
+
+#[test]
+fn motion_evaluate_resolves_animated_properties_at_an_exact_time() {
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path("animated.ormotion.json", None);
+    // Give the text node an opacity track of its own so the resolved value is
+    // distinguishable from its authored one.
+    let mut value: Value = serde_json::from_slice(&fs::read(&scene).unwrap()).unwrap();
+    value["animations"] = serde_json::json!([
+        {
+            "node_id": "code",
+            "property": "opacity",
+            "keyframes": [
+                {"at": {"numerator": 0, "denominator": 1}, "value": 0.0},
+                {"at": {"numerator": 1, "denominator": 1}, "value": 1.0},
+            ],
+            "easing": "ease_out",
+        },
+    ]);
+    fs::write(&scene, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("evaluate"),
+        OsString::from("--file"),
+        scene.clone().into_os_string(),
+        OsString::from("--at"),
+        OsString::from("1/2"),
+        OsString::from("--json"),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let frame: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(frame["instructions"][0]["node_id"], "code");
+    // ease_out(0.5) is 0.75, and the track runs 0 -> 1.
+    let opacity = frame["instructions"][0]["opacity"].as_f64().unwrap();
+    assert!((opacity - 0.75).abs() < 1e-9, "{opacity}");
+
+    // The half-open interval is enforced: the duration itself is out of range.
+    let out_of_range = cli([
+        OsString::from("motion"),
+        OsString::from("evaluate"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--at"),
+        OsString::from("6/1"),
+        OsString::from("--json"),
+    ]);
+    assert_eq!(out_of_range.status.code(), Some(4), "{out_of_range:?}");
+    let error: Value = serde_json::from_slice(&out_of_range.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "MOTION_TIME_OUT_OF_RANGE");
+}

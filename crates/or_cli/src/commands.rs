@@ -96,6 +96,25 @@ impl CliError {
         )
     }
 
+    /// A MotionScene evaluation refusal, with the evaluator's own stable code.
+    fn motion_evaluation(error: or_motion::MotionEvaluationError, json: bool) -> Self {
+        let message = match &error {
+            or_motion::MotionEvaluationError::InvalidScene(validation) => format!(
+                "the scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|diagnostic| diagnostic.code.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            or_motion::MotionEvaluationError::TimeOutOfRange => {
+                "the time is outside the scene's [0, duration) interval".to_owned()
+            }
+        };
+        Self::new(4, json, "motion_scene", error.code(), message)
+    }
+
     /// A MotionScene that could not be read, with the format's own stable code.
     fn motion(error: or_motion::MotionSceneError, json: bool) -> Self {
         Self::new(4, json, "motion_scene", error.code(), error.to_string())
@@ -440,11 +459,64 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
     match action {
         "validate" => run_motion_validate(&args[1..], json),
         "inspect" => run_motion_inspect(&args[1..], json),
+        "evaluate" => run_motion_evaluate(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate or inspect",
+            "unknown motion action; expected validate, inspect or evaluate",
         )),
     }
+}
+
+/// Evaluates a scene at one exact time and prints the resolved instructions.
+///
+/// Nothing is rendered and no project is touched: this is the step a renderer
+/// consumes, exposed so an agent can see exactly what would be drawn at a time.
+fn run_motion_evaluate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file", "--at"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let at = required_name(&options, "--at", json)?;
+    let time = parse_cli_rational(&at, "--at", json)?;
+    let frame = or_motion::evaluate_scene(&scene, time)
+        .map_err(|error| CliError::motion_evaluation(error, json))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&frame).expect("a frame is serializable"),
+        ));
+    }
+    let mut lines = vec![format!(
+        "{} at {}/{}s: {} instructions on {}x{}",
+        scene.name,
+        time.numerator(),
+        time.denominator(),
+        frame.instructions.len(),
+        frame.canvas.width,
+        frame.canvas.height
+    )];
+    for instruction in &frame.instructions {
+        lines.push(format!(
+            "{:indent$}{} {} at ({:.1}, {:.1}) opacity {:.2}{}",
+            "",
+            instruction.node_id,
+            match instruction.kind {
+                or_motion::MotionNodeKind::Group => "group",
+                or_motion::MotionNodeKind::Text => "text",
+                or_motion::MotionNodeKind::Rectangle => "rectangle",
+                or_motion::MotionNodeKind::Ellipse => "ellipse",
+                or_motion::MotionNodeKind::Arrow => "arrow",
+                or_motion::MotionNodeKind::Image => "image",
+            },
+            instruction.position.x,
+            instruction.position.y,
+            instruction.opacity,
+            instruction
+                .text
+                .as_ref()
+                .map(|text| format!(" \"{text}\""))
+                .unwrap_or_default(),
+            indent = instruction.depth * 2
+        ));
+    }
+    Ok(lines.join("\n"))
 }
 
 fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {
