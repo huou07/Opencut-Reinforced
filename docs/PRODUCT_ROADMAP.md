@@ -245,8 +245,17 @@ class each claim actually has:
   - `or timeline insert-clip` takes `--mode insert|overwrite` and
     `--overwrite-split-id CLIP_ID`; an unknown mode is a usage error, and the
     flags are documented in `docs/TECHNICAL_PLAN.md`. The CLI has no automated
-    overwrite test yet — the domain tests cover the semantics and a CLI test that
-    drives the flag through the file session is the next guard there.
+    overwrite test yet — the domain tests cover the semantics.
+  - **Failed attempt to write that CLI guard (2026-10-19), recorded so it is not
+    repeated blind:** a test modelled on `headless_marker_cli_round_trips_...`
+    (same `TestDirectory`, `media_path`, `probe_stub`, `json_success_with_probe`
+    calls, in the same order, with the same media name) failed at `media add` with
+    `PROBE_FAILED / ffprobe exited unsuccessfully without a diagnostic`, while the
+    sibling test passes in the same environment. The fixture is therefore not the
+    difference; the next attempt should first diff the two tests' environment
+    (`json_success_with_probe` vs `json_success`, and whether `probe_stub` must be
+    built before `create_project`), then write the guard. The test was removed
+    rather than left red.
   - **Still not done, and the reason the capability is not finished:** the desktop
     insert-dialog selector, the compact sheet selector,
     the timeline-toolbar mode toggle, a measurement row in `QUALITY.md`, and the
