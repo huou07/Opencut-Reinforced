@@ -20,6 +20,7 @@ const MEDIA_GET_ID: &str = "media.get";
 const TIMELINE_TRACK_ADD_ID: &str = "timeline.track.add";
 const TIMELINE_TRACK_REMOVE_ID: &str = "timeline.track.remove";
 const TIMELINE_TRACK_SET_STATE_ID: &str = "timeline.track.set_state";
+const TIMELINE_TRACK_MOVE_ID: &str = "timeline.track.move";
 const TIMELINE_CLIP_INSERT_ID: &str = "timeline.clip.insert";
 const TIMELINE_CLIP_INSERT_CONTENT_ID: &str = "timeline.clip.insert_content";
 const TIMELINE_CAPTIONS_IMPORT_ID: &str = "timeline.captions.import";
@@ -64,7 +65,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 26] = [
+const COMMANDS: [CommandDescriptor; 27] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -109,6 +110,12 @@ const COMMANDS: [CommandDescriptor; 26] = [
     },
     CommandDescriptor {
         id: TIMELINE_TRACK_REMOVE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_TRACK_MOVE_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -1180,6 +1187,12 @@ pub enum ProjectChange {
         track_state: TrackState,
         index: usize,
     },
+    /// One track changed position in the track list.
+    TimelineTrackMoved {
+        track_id: TrackId,
+        from_index: usize,
+        to_index: usize,
+    },
     TimelineTrackRemoved {
         track_id: TrackId,
         track_kind: TrackKind,
@@ -1475,6 +1488,38 @@ impl ChangeSet {
                 reverse,
                 true,
             ),
+            ProjectChange::TimelineTrackMoved {
+                track_id,
+                from_index,
+                to_index,
+            } => {
+                // A move is its own inverse, so the effect applied depends only on
+                // the direction: undoing it moves the track back from where the
+                // change left it. The change pushed onto the opposite stack is the
+                // pair as recorded, because after either direction the track sits at
+                // the position that pair's next application starts from.
+                let index =
+                    find_timeline_track_index(project, *track_id).ok_or_else(history_conflict)?;
+                let (expected_start, staged_from, staged_to) = if reverse {
+                    (*to_index, *to_index, *from_index)
+                } else {
+                    (*from_index, *from_index, *to_index)
+                };
+                if index != expected_start {
+                    return Err(history_conflict());
+                }
+                Ok((
+                    StagedHistoryChange::MoveTimelineTrack {
+                        from_index: staged_from,
+                        to_index: staged_to,
+                    },
+                    Self::try_single(ProjectChange::TimelineTrackMoved {
+                        track_id: *track_id,
+                        from_index: *from_index,
+                        to_index: *to_index,
+                    })?,
+                ))
+            }
             ProjectChange::TimelineTrackRemoved {
                 track_id,
                 track_kind,
@@ -1730,6 +1775,11 @@ enum StagedHistoryChange {
     },
     RemoveTimelineTrack {
         index: usize,
+    },
+    /// Tracks keep their contents and their ids; only the order changes.
+    MoveTimelineTrack {
+        from_index: usize,
+        to_index: usize,
     },
     SetTimelineTrackState {
         track_index: usize,
@@ -2369,6 +2419,7 @@ impl ProjectSession {
             TIMELINE_TRACK_SET_STATE_ID => {
                 self.apply_timeline_track_set_state(envelope.arguments)?
             }
+            TIMELINE_TRACK_MOVE_ID => self.apply_timeline_track_move(envelope.arguments)?,
             TIMELINE_CLIP_INSERT_ID => self.apply_timeline_clip_insert(envelope.arguments)?,
             TIMELINE_CLIP_INSERT_CONTENT_ID => {
                 self.apply_timeline_clip_insert_content(envelope.arguments)?
@@ -3187,6 +3238,49 @@ impl ProjectSession {
     /// resulting content is validated by the same `validate_track_states` every
     /// other edit uses, which is what refuses a slip past the end of the media
     /// instead of letting the clip reference material that does not exist.
+    /// Moves a track to another position in the track list.
+    ///
+    /// Order is presentation-visible but canonical: it decides which track a clip
+    /// lands on when a client names one by index, and which track is "the first
+    /// video track" everywhere. A move therefore goes through the command path and
+    /// is undoable like any other edit. The track keeps its id, kind, state and
+    /// clips; only its position changes.
+    fn apply_timeline_track_move(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineTrackMoveArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let from_index = find_timeline_track_index(&self.project, arguments.track_id)
+            .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineTrackNotFound))?;
+        let track_count = self.project.timeline().tracks().len();
+        if arguments.to_index >= track_count {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        if from_index == arguments.to_index {
+            return Ok(ChangeSet::default());
+        }
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineTrackMoved {
+                track_id: arguments.track_id,
+                from_index,
+                to_index: arguments.to_index,
+            })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project.move_timeline_track_for_command(
+            from_index,
+            arguments.to_index,
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     fn apply_timeline_clip_slip(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
         let arguments: TimelineClipSlipArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -4475,6 +4569,13 @@ impl ProjectSession {
             StagedHistoryChange::InsertCaptionTrack { track, index } => self
                 .project
                 .insert_timeline_track_for_command(index, track, after_revision),
+            StagedHistoryChange::MoveTimelineTrack {
+                from_index,
+                to_index,
+            } => {
+                self.project
+                    .move_timeline_track_for_command(from_index, to_index, after_revision);
+            }
             StagedHistoryChange::RemoveTimelineTrack { index } => {
                 self.project
                     .remove_timeline_track_for_command(index, after_revision);
@@ -4808,6 +4909,15 @@ struct TimelineClipSlipArguments {
     /// later source material, negative takes earlier material; the clip's timeline
     /// span never changes.
     delta: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineTrackMoveArguments {
+    track_id: TrackId,
+    /// Where the track should end up. Tracks above it shift down and tracks below
+    /// shift up; the ids and contents never change.
+    to_index: usize,
 }
 
 #[derive(Deserialize)]
@@ -7578,6 +7688,107 @@ mod tests {
         assert_eq!(session.project_revision().value(), revision_before.value());
     }
 
+    fn move_track(
+        session: &mut ProjectSession,
+        track_id: &str,
+        to_index: i64,
+    ) -> Result<super::CommandResult, super::OperationError> {
+        execute(
+            session,
+            "timeline.track.move",
+            json!({
+                "track_id": track_id,
+                "to_index": to_index,
+            }),
+        )
+    }
+
+    /// The track kinds in order, which is the only thing a move changes.
+    fn track_order(session: &ProjectSession) -> Vec<String> {
+        session
+            .project()
+            .timeline()
+            .tracks()
+            .iter()
+            .map(|track| track.id().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn moving_a_track_reorders_it_without_touching_its_clips() {
+        let mut session = session_with_state("track-move", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        add_track(&mut session, TRACK_B, "audio").unwrap();
+        let third = "77777777-7777-4777-8777-777777777777";
+        add_track(&mut session, third, "video").unwrap();
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        let clips_before = clip_spans(&session, TRACK_A);
+        let revision_before = session.project_revision();
+
+        // Move the first track to the end.
+        move_track(&mut session, TRACK_A, 2).unwrap();
+
+        assert_eq!(
+            track_order(&session),
+            vec![TRACK_B.to_owned(), third.to_owned(), TRACK_A.to_owned()],
+            "the other tracks shift up by one"
+        );
+        assert_eq!(
+            clip_spans(&session, TRACK_A),
+            clips_before,
+            "the moved track keeps its clips"
+        );
+        assert_eq!(
+            session.project_revision().value(),
+            revision_before.value() + 1
+        );
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        assert_eq!(
+            track_order(&session),
+            vec![TRACK_A.to_owned(), TRACK_B.to_owned(), third.to_owned()],
+            "one undo puts the track back"
+        );
+        assert_eq!(clip_spans(&session, TRACK_A), clips_before);
+
+        // Redo must work too: a move is its own inverse, and the inverse change is
+        // what the history entry records.
+        execute(&mut session, "history.redo", json!({})).unwrap();
+        assert_eq!(
+            track_order(&session),
+            vec![TRACK_B.to_owned(), third.to_owned(), TRACK_A.to_owned()]
+        );
+    }
+
+    #[test]
+    fn moving_a_track_to_its_own_index_is_a_no_op() {
+        let mut session = session_with_state("track-move-noop", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        add_track(&mut session, TRACK_B, "audio").unwrap();
+        let revision_before = session.project_revision();
+
+        let result = move_track(&mut session, TRACK_A, 0).unwrap();
+        assert!(!result.changed);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+    }
+
+    #[test]
+    fn moving_a_track_past_the_end_or_an_unknown_track_is_refused() {
+        let mut session = session_with_state("track-move-refused", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        add_track(&mut session, TRACK_B, "audio").unwrap();
+        let order_before = track_order(&session);
+        let revision_before = session.project_revision();
+
+        let error = move_track(&mut session, TRACK_A, 2).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        let unknown = "99999999-9999-4999-8999-999999999999";
+        let error = move_track(&mut session, unknown, 0).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::TimelineTrackNotFound);
+        assert_eq!(track_order(&session), order_before);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+    }
+
     fn seed_video_track_and_clip(
         session: &mut ProjectSession,
         media_id: &str,
@@ -7724,6 +7935,12 @@ mod tests {
                 },
                 CommandDescriptor {
                     id: "timeline.track.remove",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
+                    id: "timeline.track.move",
                     schema_version: 1,
                     mutates_project: true,
                     allowed_in_transaction: false,
@@ -7876,7 +8093,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 26);
+        assert_eq!(COMMANDS.len(), 27);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -10507,6 +10724,7 @@ mod tests {
         for command_id in [
             "timeline.track.add",
             "timeline.track.remove",
+            "timeline.track.move",
             "timeline.clip.insert",
             "timeline.clip.move",
             "timeline.clip.delete",

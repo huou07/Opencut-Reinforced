@@ -1078,6 +1078,15 @@ impl ProjectTimeline {
         self.tracks.remove(index)
     }
 
+    /// Moves the track at `from_index` so it sits at `to_index`.
+    ///
+    /// The list is a vector of tracks, so a move is a removal and an insertion at
+    /// the destination; the caller has already bounds-checked both indices.
+    pub(crate) fn move_track_for_command(&mut self, from_index: usize, to_index: usize) {
+        let track = self.tracks.remove(from_index);
+        self.tracks.insert(to_index, track);
+    }
+
     pub(crate) fn insert_clip_for_command(
         &mut self,
         track_index: usize,
