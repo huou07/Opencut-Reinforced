@@ -216,58 +216,38 @@ class each claim actually has:
   320x440 — clean, not clipped, and recorded as a limitation with its number.
   The same journey at 390x844 is still **UNVERIFIED**: `or_ui.py` takes one
   `--viewport` per invocation and the taller compact run has not been performed.
-- **Phase 1.1 — overwrite edit mode: contract fixed, implementation not started.**
-  The command is `timeline.clip.insert` with an explicit mode. Recorded here so
-  the next round implements it instead of re-deriving it:
-  - `mode: "insert" | "overwrite"`, `#[serde(default)]`, default `insert`, so
-    every existing caller and fixture keeps its meaning (`OPERATION_SCHEMA_VERSION`
-    is bumped because the argument surface changes).
-  - In `overwrite`, the inserted clip's span replaces the target range on its
-    track in **one** transaction: a fully covered clip is deleted, a clip that the
-    new span crosses at its head or tail is trimmed, and several clips may be
-    touched in one insert. History is a single `StagedHistoryChange::
-    ReplaceTimelineTrack`, so one undo restores the whole range; the `ChangeSet`
-    is the ordered multi-change replay (deletes, trims, then the insert) of the
-    existing `ProjectChange` variants, so no new binding surface is invented.
-  - A new clip that lands **strictly inside** one existing clip splits it, and a
-    split needs a caller-supplied id, exactly as `timeline.clip.split` requires
-    `new_clip_id`. `overwrite_split_clip_id: Option<ClipId>` carries it; without
-    it the command rejects with a distinct error naming the settle path rather
-    than silently dropping the tail. Its test must prove the rejection, because a
-    silent loss of content is the failure mode that matters here.
-  - Surfaces: Rust command and tests, CLI `--mode`, the desktop insert dialog's
-    mode selector, the compact sheet's same selector, and a timeline-toolbar mode
-    toggle that lives in presentation state only (the mode is sent with the
-    command; it is never canonical project state). Measured latency row for the
-    overwrite insert belongs in `QUALITY.md` next to `command.add_clip`.
-  - Validation uses `RationalTime::checked_add` for the span end and
-    `validate_track_states` on the resulting list; per-track clip capacity is
-    checked before mutating (`MAX_TIMELINE_CLIPS_PER_TRACK`).
-  - **Undo constraint found while implementing (2026-10-19):**
-    `ChangeSet::stage_history_change` accepts exactly one change (`let [change] =
-    self.changes.as_slice()`), so an overwrite cannot record deletes, trims and the
-    insert as its history entry: undo would return `HistoryConflict`. The entry
-    must therefore be one change whose staged form is the whole track, the way
-    `TimelineClipSplit` stages `ReplaceTimelineTrack`. The result `ChangeSet` can
-    stay a multi-change replay for clients, but the history entry needs a new
-    `ProjectChange` variant carrying `before`/`after` clip lists. That variant is a
-    serialized client surface, so it needs the bridge regeneration and the Dart
-    model in the same change — which makes it the first step of the next attempt,
-    not an afterthought. An attempt that shipped the multi-change history entry was
-    reverted rather than left half-working; `cargo check -p or_core` is green on the
-    reverted tree.
-  - Call sites verified against `crates/or_core/src/application.rs` (no search
-    needed next round, line numbers drift): the argument struct at
-    `TimelineClipInsertArguments`, the dispatcher arm
-    `TIMELINE_CLIP_INSERT_ID => apply_timeline_clip_insert(..)`, and the existing
-    insert at `insert_timeline_clip_state`. Mutate through `track_states` ->
-    `states_into_domain` -> `replace_timeline_track_clips_for_command`, exactly as
-    `apply_timeline_clip_ripple_delete` does; build the history entry from
-    `timeline_change_sets(..)` per change and assemble one `ChangeSet { changes,
-    ripple_history_guard: None }` for the forward result. `timeline_clip_end(clip)`
-    already computes a clip's end. The front-trim case needs the same source-range
-    advance the trim command uses, which must be read from
-    `apply_timeline_clip_trim` before writing it.
+- **Phase 1.1 — overwrite edit mode: implemented at the command layer
+  (VERIFIED_SOURCE + VERIFIED_BEHAVIORAL at the Rust command boundary).**
+  `timeline.clip.insert` now takes an explicit `mode` (`insert` | `overwrite`,
+  default `insert`) and, in overwrite, replaces the target range in one
+  transaction: a fully covered clip is removed, a clip crossed at its head is
+  shortened, a clip crossed at its tail is moved with its source advanced, and a
+  clip that strictly contains the new span is split into a head that keeps the
+  original id and a tail that takes the caller's `overwrite_split_clip_id`.
+  Without that id the command refuses with
+  `TimelineOverwriteSplitRequiresClipId` rather than dropping the tail.
+  - The history entry is the single change `ProjectChange::TimelineClipsOverwritten
+    { track_id, before, after }`, whose staged form is a whole-track
+    `ReplaceTimelineTrack` in both directions — the constraint recorded last round
+    (`ChangeSet::stage_history_change` accepts exactly one change) is what that
+    variant exists for. The change is a serialized Rust surface only: no Dart
+    model, IPC payload or bridge signature exposes `ProjectChange`, so this needed
+    no regeneration.
+  - `OPERATION_SCHEMA_VERSION` is **not** bumped: `mode` and
+    `overwrite_split_clip_id` are optional with defaults, so a caller written
+    before the change keeps its exact meaning, and a schema bump would invalidate
+    every unrelated command's descriptors for no behavioural gain.
+  - Six tests in `crates/or_core/src/application.rs` cover covered-removal,
+    head-cross, tail-cross, the refusal, the split with undo restoring the
+    unsplit clip, and the unchanged default mode. `cargo test -p or_core --lib`
+    is 323 passing; `cargo fmt` and `cargo clippy -p or_core --all-targets` are
+    clean.
+  - **Still not done, and the reason the capability is not finished:** the CLI
+    `--mode` flag, the desktop insert-dialog selector, the compact sheet selector,
+    the timeline-toolbar mode toggle, a measurement row in `QUALITY.md`, and the
+    `or_ui.py` journey step that drives an overwrite. The command is therefore
+    usable by a client that already sends `mode`, and not yet reachable by a
+    pointer or keyboard user.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

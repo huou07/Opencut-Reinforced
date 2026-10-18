@@ -1098,6 +1098,18 @@ pub enum ProjectChange {
         shifted_count: usize,
         shift_duration: RationalTime,
     },
+    /// One overwrite insert replaced a whole range on one track.
+    ///
+    /// This is the only change an overwrite records, because a history entry must
+    /// be exactly one change (`ChangeSet::stage_history_change`) and undo has to
+    /// put back removed, trimmed and split clips in a single step. `before` and
+    /// `after` are the complete clip lists of the affected track, so the staged
+    /// history change is a whole-track replacement in both directions.
+    TimelineClipsOverwritten {
+        track_id: TrackId,
+        before: Vec<TimelineClipState>,
+        after: Vec<TimelineClipState>,
+    },
     TimelineMarkerAdded {
         marker: TimelineMarkerState,
         index: usize,
@@ -1382,6 +1394,38 @@ impl ChangeSet {
                 right_after,
                 reverse,
             ),
+            ProjectChange::TimelineClipsOverwritten {
+                track_id,
+                before,
+                after,
+            } => {
+                let track_index =
+                    find_timeline_track_index(project, *track_id).ok_or_else(history_conflict)?;
+                let (expected, target) = if reverse {
+                    (after, before)
+                } else {
+                    (before, after)
+                };
+                let current = track_states(project, track_index)?;
+                if current != *expected {
+                    return Err(history_conflict());
+                }
+                let clips = states_into_domain(target.clone())?;
+                validate_track_states(
+                    project,
+                    project.timeline().tracks()[track_index].kind(),
+                    target,
+                )
+                .map_err(|_| history_conflict())?;
+                Ok((
+                    StagedHistoryChange::ReplaceTimelineTrack { track_index, clips },
+                    Self::try_single(ProjectChange::TimelineClipsOverwritten {
+                        track_id: *track_id,
+                        before: target.clone(),
+                        after: expected.clone(),
+                    })?,
+                ))
+            }
             ProjectChange::TimelineClipRippleDeleted {
                 track_id,
                 index,
@@ -1764,6 +1808,9 @@ pub enum OperationErrorCode {
     TimelineClipNotFound,
     TimelineMediaIncompatible,
     TimelineOverlap,
+    /// An overwrite would have to split a clip that contains the new span, which
+    /// needs the caller's fragment id exactly as `timeline.clip.split` does.
+    TimelineOverwriteSplitRequiresClipId,
     TimelineLimitExceeded,
     TimelineMarkerIdAlreadyExists,
     TimelineMarkerNotFound,
@@ -1846,6 +1893,9 @@ impl fmt::Display for OperationError {
             }
             OperationErrorCode::TimelineOverlap => {
                 "timeline clip overlaps another clip on the same track"
+            }
+            OperationErrorCode::TimelineOverwriteSplitRequiresClipId => {
+                "an overwrite inside an existing clip needs overwrite_split_clip_id"
             }
             OperationErrorCode::TimelineLimitExceeded => {
                 "timeline operation exceeds a configured limit"
@@ -2659,8 +2709,14 @@ impl ProjectSession {
         if track.state().locked() {
             return Err(OperationError::new(OperationErrorCode::TimelineTrackLocked));
         }
+        let mode = arguments.mode;
+        let split_clip_id = arguments.overwrite_split_clip_id;
         let clip = arguments.into_clip_state(track.kind())?;
-        self.insert_timeline_clip_state(track_id, track_index, clip)
+        if mode.is_insert() {
+            self.insert_timeline_clip_state(track_id, track_index, clip)
+        } else {
+            self.overwrite_timeline_clip_state(track_id, track_index, clip, split_clip_id)
+        }
     }
 
     fn apply_timeline_clip_insert_content(
@@ -2680,6 +2736,156 @@ impl ProjectSession {
         }
         let clip = arguments.into_clip_state()?;
         self.insert_timeline_clip_state(track_id, track_index, clip)
+    }
+
+    /// Inserts a clip and clears the range it occupies, in one transaction.
+    ///
+    /// A clip the new span fully covers is removed; a clip the span crosses at its
+    /// head is shortened; a clip the span crosses at its tail is moved and its
+    /// source advanced; a clip the span lands strictly inside is split into a head
+    /// fragment (which keeps the original id) and a tail fragment that takes the
+    /// caller's id. The whole range is one history entry, so undo restores exactly
+    /// what the insert replaced.
+    fn overwrite_timeline_clip_state(
+        &mut self,
+        track_id: TrackId,
+        track_index: usize,
+        clip: TimelineClipState,
+        split_clip_id: Option<ClipId>,
+    ) -> Result<ChangeSet, OperationError> {
+        if find_timeline_clip(&self.project, clip.clip_id).is_some() {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipIdAlreadyExists,
+            ));
+        }
+        if split_clip_id
+            .is_some_and(|id| id == clip.clip_id || find_timeline_clip(&self.project, id).is_some())
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipIdAlreadyExists,
+            ));
+        }
+        let track_kind = self.project.timeline().tracks()[track_index].kind();
+        // A containment split adds one clip on top of the insert itself.
+        ensure_timeline_clip_capacity(
+            &self.project,
+            track_index,
+            2,
+            2,
+            crate::MAX_TIMELINE_CLIPS,
+            crate::MAX_TIMELINE_CLIPS_PER_TRACK,
+        )?;
+        let new_start = clip.timeline_start;
+        let new_end = timeline_clip_end(&clip)?;
+        let before = track_states(&self.project, track_index)?;
+        let mut after: Vec<TimelineClipState> = Vec::new();
+        after
+            .try_reserve(before.len() + 2)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        for existing in &before {
+            let existing_end = timeline_clip_end(existing)?;
+            if existing.timeline_start >= new_end || new_start >= existing_end {
+                after.push(existing.clone());
+                continue;
+            }
+            let covers_head = new_start <= existing.timeline_start;
+            let covers_tail = new_end >= existing_end;
+            if covers_head && covers_tail {
+                continue;
+            }
+            if covers_tail {
+                let duration = new_start
+                    .checked_sub(existing.timeline_start)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                if !duration.is_positive() {
+                    return Err(OperationError::new(OperationErrorCode::TimelineOverlap));
+                }
+                after.push(TimelineClipState {
+                    timeline_start: existing.timeline_start,
+                    timeline_duration: duration,
+                    content: trim_content_end(&existing.content, duration)?,
+                    ..existing.clone()
+                });
+                continue;
+            }
+            if covers_head {
+                let delta = new_end
+                    .checked_sub(existing.timeline_start)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                let duration = existing_end
+                    .checked_sub(new_end)
+                    .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+                if !duration.is_positive() {
+                    return Err(OperationError::new(OperationErrorCode::TimelineOverlap));
+                }
+                after.push(TimelineClipState {
+                    timeline_start: new_end,
+                    timeline_duration: duration,
+                    content: trim_content_start(&existing.content, delta, duration)?,
+                    ..existing.clone()
+                });
+                continue;
+            }
+            let Some(fragment_id) = split_clip_id else {
+                return Err(OperationError::new(
+                    OperationErrorCode::TimelineOverwriteSplitRequiresClipId,
+                ));
+            };
+            let head_duration = new_start
+                .checked_sub(existing.timeline_start)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            let tail_delta = new_end
+                .checked_sub(existing.timeline_start)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            let tail_duration = existing_end
+                .checked_sub(new_end)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            if !head_duration.is_positive() || !tail_duration.is_positive() {
+                return Err(OperationError::new(OperationErrorCode::TimelineOverlap));
+            }
+            after.push(TimelineClipState {
+                timeline_duration: head_duration,
+                content: trim_content_end(&existing.content, head_duration)?,
+                ..existing.clone()
+            });
+            after.push(TimelineClipState {
+                clip_id: fragment_id,
+                timeline_start: new_end,
+                timeline_duration: tail_duration,
+                content: trim_content_start(&existing.content, tail_delta, tail_duration)?,
+                ..existing.clone()
+            });
+        }
+        let index = after
+            .iter()
+            .take_while(|state| state.timeline_start < new_start)
+            .count();
+        after.insert(index, clip);
+        validate_track_states(&self.project, track_kind, &after)?;
+        let clips = states_into_domain(after.clone())?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (_, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+            track_id,
+            before: before.clone(),
+            after: after.clone(),
+        })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        let (change_set, _) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+            track_id,
+            before,
+            after,
+        })?;
+        Ok(change_set)
     }
 
     fn insert_timeline_clip_state(
@@ -3942,6 +4148,28 @@ struct TimelineSourceRangeArguments {
     duration: RationalTimeArguments,
 }
 
+/// How an insert treats the range it lands on.
+///
+/// The mode is an explicit command input, never canonical project state: the same
+/// project can be edited in either mode, and the mode a client is using is that
+/// client's presentation choice.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum TimelineEditMode {
+    /// Refuse to overlap: the target range must be free.
+    #[default]
+    Insert,
+    /// Replace the target range: covered clips are removed, crossed clips are
+    /// trimmed, and a clip strictly containing the new span is split.
+    Overwrite,
+}
+
+impl TimelineEditMode {
+    fn is_insert(&self) -> bool {
+        matches!(self, Self::Insert)
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TimelineClipInsertArguments {
@@ -3951,6 +4179,13 @@ struct TimelineClipInsertArguments {
     media_id: MediaId,
     timeline_start: RationalTimeArguments,
     source_range: TimelineSourceRangeArguments,
+    #[serde(default)]
+    mode: TimelineEditMode,
+    /// Only read by `mode: overwrite` when the new span lands strictly inside one
+    /// existing clip. The head keeps the original id and the tail takes this one,
+    /// mirroring `timeline.clip.split`'s caller-supplied `new_clip_id`.
+    #[serde(default)]
+    overwrite_split_clip_id: Option<ClipId>,
 }
 
 impl TimelineClipInsertArguments {
@@ -5836,6 +6071,306 @@ mod tests {
                 }
             }),
         )
+    }
+
+    fn insert_clip_mode(
+        session: &mut ProjectSession,
+        clip_id: &str,
+        track_id: &str,
+        media_id: &str,
+        timeline_start: (i64, u32),
+        duration: (i64, u32),
+        mode: &str,
+        split_clip_id: Option<&str>,
+    ) -> Result<super::CommandResult, super::OperationError> {
+        let mut arguments = json!({
+            "clip_id": clip_id,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": rational_json(timeline_start.0, timeline_start.1),
+            "source_range": {
+                "start": rational_json(0, 1),
+                "duration": rational_json(duration.0, duration.1),
+            },
+            "mode": mode,
+        });
+        if let Some(split_clip_id) = split_clip_id {
+            arguments["overwrite_split_clip_id"] = json!(split_clip_id);
+        }
+        execute(session, "timeline.clip.insert", arguments)
+    }
+
+    /// The track's clips as `(id, start, duration)` in timeline order.
+    fn clip_spans(
+        session: &ProjectSession,
+        track_id: &str,
+    ) -> Vec<(String, RationalTime, RationalTime)> {
+        let tracks = session.project().timeline().tracks();
+        let index = tracks
+            .iter()
+            .position(|track| track.id().to_string() == track_id)
+            .expect("track exists");
+        tracks[index]
+            .clips()
+            .iter()
+            .map(|clip| {
+                (
+                    clip.id().to_string(),
+                    clip.timeline_start(),
+                    clip.timeline_duration(),
+                )
+            })
+            .collect()
+    }
+
+    fn seed_media_and_track(session: &mut ProjectSession, media_id: &str, track_id: &str) {
+        session
+            .execute_command(media_add(
+                media_item(media_id, "file:///missing/offline.mov"),
+                session.project_revision().value(),
+            ))
+            .unwrap();
+        add_track(session, track_id, "video").unwrap();
+    }
+
+    #[test]
+    fn overwrite_insert_removes_a_clip_it_fully_covers() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (4, 1),
+        )
+        .unwrap();
+        let revision_before = session.project_revision();
+
+        insert_clip_mode(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (4, 1),
+            "overwrite",
+            None,
+        )
+        .unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 1, "the covered clip must be gone");
+        assert_eq!(spans[0].0, CLIP_B);
+        assert_eq!(spans[0].1, RationalTime::new(0, 1).unwrap());
+        assert_eq!(spans[0].2, RationalTime::new(4, 1).unwrap());
+        assert_eq!(
+            session.project_revision().value(),
+            revision_before.value() + 1,
+            "an overwrite is one revision"
+        );
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        let restored = clip_spans(&session, TRACK_A);
+        assert_eq!(restored.len(), 1, "one undo restores the replaced range");
+        assert_eq!(restored[0].0, CLIP_A);
+        assert_eq!(restored[0].1, RationalTime::new(0, 1).unwrap());
+        assert_eq!(restored[0].2, RationalTime::new(4, 1).unwrap());
+    }
+
+    #[test]
+    fn overwrite_insert_trims_a_clip_it_crosses_at_its_head() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (0, 1),
+            (4, 1),
+        )
+        .unwrap();
+
+        insert_clip_mode(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (4, 1),
+            "overwrite",
+            None,
+        )
+        .unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].0, CLIP_B);
+        assert_eq!(spans[1].0, CLIP_A);
+        assert_eq!(
+            spans[1].1,
+            RationalTime::new(4, 1).unwrap(),
+            "the crossed clip keeps only its tail"
+        );
+        assert_eq!(spans[1].2, RationalTime::new(2, 1).unwrap());
+    }
+
+    #[test]
+    fn overwrite_insert_trims_a_clip_it_crosses_at_its_tail() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (4, 1),
+        )
+        .unwrap();
+
+        insert_clip_mode(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (4, 1),
+            "overwrite",
+            None,
+        )
+        .unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].0, CLIP_A);
+        assert_eq!(spans[0].1, RationalTime::new(0, 1).unwrap());
+        assert_eq!(
+            spans[0].2,
+            RationalTime::new(2, 1).unwrap(),
+            "the crossed clip keeps only its head"
+        );
+        assert_eq!(spans[1].0, CLIP_B);
+    }
+
+    #[test]
+    fn overwrite_inside_a_clip_needs_a_fragment_id_and_names_it() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (8, 1),
+        )
+        .unwrap();
+
+        let error = insert_clip_mode(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (2, 1),
+            "overwrite",
+            None,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.code,
+            super::OperationErrorCode::TimelineOverwriteSplitRequiresClipId,
+            "silently dropping the tail would be worse than refusing"
+        );
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 1, "a refused overwrite changes nothing");
+        assert_eq!(spans[0].0, CLIP_A);
+    }
+
+    #[test]
+    fn overwrite_inside_a_clip_splits_it_with_the_callers_id() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (8, 1),
+        )
+        .unwrap();
+
+        insert_clip_mode(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (2, 1),
+            "overwrite",
+            Some(CLIP_C),
+        )
+        .unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 3);
+        assert_eq!(spans[0].0, CLIP_A);
+        assert_eq!(spans[0].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(spans[1].0, CLIP_B);
+        assert_eq!(spans[1].1, RationalTime::new(2, 1).unwrap());
+        assert_eq!(spans[1].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(spans[2].0, CLIP_C);
+        assert_eq!(spans[2].1, RationalTime::new(4, 1).unwrap());
+        assert_eq!(spans[2].2, RationalTime::new(4, 1).unwrap());
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        let restored = clip_spans(&session, TRACK_A);
+        assert_eq!(restored.len(), 1, "undo restores the unsplit clip");
+        assert_eq!(restored[0].0, CLIP_A);
+        assert_eq!(restored[0].2, RationalTime::new(8, 1).unwrap());
+    }
+
+    #[test]
+    fn insert_mode_still_rejects_an_overlap() {
+        let mut session = session_with_state("overwrite-test", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (4, 1),
+        )
+        .unwrap();
+
+        let error = insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (0, 1),
+            (2, 1),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.code,
+            super::OperationErrorCode::TimelineOverlap,
+            "the default mode keeps its old meaning"
+        );
     }
 
     fn seed_video_track_and_clip(

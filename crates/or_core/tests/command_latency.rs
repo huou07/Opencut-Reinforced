@@ -12,7 +12,7 @@
 //! guard for OR's own code, not a claim about a release build's speed.
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MediaId, ProjectFileSession,
-    QueryEnvelope, RationalTime, TimelineTrimEdge, TrackId, TrackKind, TimeRange,
+    QueryEnvelope, RationalTime, TimeRange, TimelineTrimEdge, TrackId, TrackKind,
 };
 use std::{
     env, fs,
@@ -219,8 +219,7 @@ fn command_latency_on_a_two_hundred_clip_project() {
                 clip,
                 ClipId::generate(),
                 // Strictly inside the trimmed span ((4i+2)/16, (4i+4)/16).
-                RationalTime::new((4 * clip_index + 3) as i64, 16)
-                    .expect("valid rational time"),
+                RationalTime::new((4 * clip_index + 3) as i64, 16).expect("valid rational time"),
             ),
         ));
         if !succeeded(&done) {
@@ -240,13 +239,12 @@ fn command_latency_on_a_two_hundred_clip_project() {
     let mut undo_samples = Vec::with_capacity(ITERATIONS);
     for _ in 0..ITERATIONS {
         let started = Instant::now();
-        let done = session.handle_application_request(ApplicationRequest::Command(
-            CommandEnvelope::undo(
+        let done =
+            session.handle_application_request(ApplicationRequest::Command(CommandEnvelope::undo(
                 session.session().project_id(),
                 session.session().project_instance_id(),
                 session.session().project_revision(),
-            ),
-        ));
+            )));
         if !succeeded(&done) {
             unverified("history undo failed on a project with history");
             return;
@@ -352,7 +350,9 @@ fn command_latency_on_a_two_hundred_clip_project() {
         ),
         clips = clip_count,
         iterations = ITERATIONS,
-        bytes = fs::metadata(&project_path).map(|meta| meta.len()).unwrap_or(0),
+        bytes = fs::metadata(&project_path)
+            .map(|meta| meta.len())
+            .unwrap_or(0),
         includes = json_string(
             "canonical command path and project file I/O, in-process, debug build on this host"
         ),
@@ -368,8 +368,8 @@ fn fixture_media() -> Option<PathBuf> {
             return Some(path);
         }
     }
-    let candidate = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../or_media/tests/fixtures/tiny.mkv");
+    let candidate =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../or_media/tests/fixtures/tiny.mkv");
     candidate.is_file().then_some(candidate)
 }
 
