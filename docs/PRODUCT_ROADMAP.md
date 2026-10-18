@@ -20,9 +20,27 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-Current product focus: validate the first-project journey with ordinary users
-and remove the biggest install, media, recovery, responsiveness, and output
-friction they encounter. Candidate `3bf2e6e8980c093072b217ba33c6c91a67e1aa82`
+## Current product focus (owner restatement, 2026-10-18)
+
+The owner restated the product direction on 2026-10-18. These four capability
+groups are the active focus, in dependency order. Dogfood validation of the
+first-project journey continues in parallel rather than as the single trumping
+focus.
+
+1. **Complete basic editing** — the editing journey must be complete, fast and
+   understandable, with the same concepts, terminology and command semantics on
+   macOS, Linux and Windows, and an adapted but equivalent Android presentation.
+2. **Code-to-illustration video** — turn a code artifact into a declarative
+   MotionScene and render it deterministically. Track A is primary; Track B, an
+   external generative-video provider, is a later optional addition.
+3. **Automatic subtitles** — implemented for desktop debug packages; Android
+   support, word timings and translation remain open.
+4. **Noise filtering and audio cleanup** — belongs in the audio layer.
+
+Build and test run fast locally on the Debian workstation for Linux desktop and
+the Android emulator; every release still passes hosted CI before publication.
+
+Recent focused work: Candidate `3bf2e6e8980c093072b217ba33c6c91a67e1aa82`
 removes the visual-only editor shell from Home and makes Add to Timeline
 default to the current content end, so consecutive clips can be assembled
 without manually calculating a start time. Exact-SHA Platform Verification
@@ -95,6 +113,7 @@ roadmap supplies the human mapping.
 | **F. Add focused AI assistance** | Transcript/caption proposals, translation, scene/silence analysis, selected generative assets, voice workflows, provenance, and review-before-apply. Legacy: 10A–10H, 12A–12F, 14A–14G. | Implement only after corresponding human edit/import/export paths work. Provider-independent tasks; credentials stay outside project/CLI; explicit consent, costs, network/data flow and model licenses. Outputs remain editable proposals/assets applied through normal commands. Use existing providers/services where useful; do not bundle models by default. |
 | **G. Make the product extensible and contributable** | Stable documented command/API contracts, useful import/export interoperability (prioritize SRT/WebVTT captions against the `subtitler` integration proof), declarative templates/motion/assets, accessible developer docs, reproducible builds, community contribution path, and only then a justified plugin or asset distribution model. Legacy: 11A–11F, 15A–15D, 16A–16G and 4F. | Favor formats and upstream contributions over a marketplace/backend. Preserve no-code-execution defaults and explicit permissions. Do not build executable plugins, OpenFX, WebMotion, accounts, or hosted registries without a demonstrated user need and security/license acceptance. The parser's SRT/VTT tests and exact-time boundary proof pass; upstream PR [#8](https://github.com/subtitle-rs/subtitler/pull/8) proposes removing 22 active package nodes from that library-only feature set while preserving default CLI behavior. OR still needs to validate cue/style loss, undo behavior, and shipped-package size before depending on it. |
 | **H. Cross-platform release quality** | Consistent design/terminology and material feature parity on macOS, Windows, Linux, Android; accessibility; signed/notarized production distribution; install/upgrade/uninstall; performance and reliability. Legacy: 7H–9E and release requirements. | Platform-specific file pickers, permissions, packaging, window integration and hardware APIs may differ. Editing semantics and recovery must not. Maintain an explicit platform matrix and report unverified cells honestly. iOS is future until supported. |
+| **I. Code-to-illustration video** | Turn a code artifact into an illustrated explainer: code ingestion and region selection, tokenisation and syntax highlighting, a versioned declarative `.ormotion.json` MotionScene, deterministic materialisation to persistent media, callouts and arrows, captions and narration, and reusable templates. Track B — an external generative-video provider — is a later, costed, licence-reviewed extension. | Depends on the [ADR 0007](adr/0007-declarative-motion-scenes-and-procedural-isolation.md) contract, the `or_render` text and layer path, export, and captions. Reuse the deterministic bundled-font rasteriser and the existing Text/Caption clip content; do not add a second text engine. Materialisation registers output through normal media/timeline commands, and validation, preview, render and materialisation make zero provider calls. Code and its highlight theme are untrusted input, so bound the parser and never execute the sample. |
 
 The current Android app floor is API 26 (Android 8.0), matching CPAL's AAudio
 backend. This intentionally excludes older Android releases; the Android
@@ -135,7 +154,52 @@ journey unless results establish a real engine migration dependency.
 - **Clean desktop install, upgrade, and removal — exact-SHA verified:** commit `53de6d51c6d45c7ec7ae0a2989455972118406c1` passed Platform Verification [38570870756](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870756) and Repository Hygiene [38570870938](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870938). The Linux job installed, upgraded, launched, and purged the `.deb` in Ubuntu 24.04 and Debian 13 containers while preserving a user-data sentinel. The macOS and Windows jobs extracted, installed, launched, replaced, and removed their ZIP packages from per-user application directories while preserving user data. Limits and exact job evidence are recorded in the [Linux claim](evidence/claims/2026-10-14-9E-linux-debian-install-upgrade-uninstall.json), [macOS claim](evidence/claims/2026-10-14-9E-macos-zip-install-replacement-removal.json), and [Windows claim](evidence/claims/2026-10-14-9E-windows-zip-install-replacement-removal.json).
 - **Local Linux `.deb` packaged evidence:** at exact source `33b84ebe2df37280ca0a27759030c9efc6fb3dca` this workstation built the pinned libvpx 1.17.0 / libopus 1.6.1 / FFmpeg 8.1.3 runtime, built the Flutter Linux debug bundle against it, and packaged `opencut-reinforced-linux-x64-debug.deb` (31,599,552 bytes, SHA-256 `7253f9e13589da1051391595fe389fc2143d4133dbde4163feec8f5dab4b72d2`). The package was extracted into a disposable root, the installed `/opt/opencut-reinforced/or_app` ran for the full 20-second smoke window, and `scripts/run_packaged_desktop_journey.py` then used the installed package's `ffmpeg`, `ffprobe`, Rust bridge and media libraries: all four app processes passed and the export independently decoded to 720 VP9 video and 1,501 Opus audio frames at 30.008 s. This is local packaged evidence on this host (Flutter 3.47.7, not the pinned 3.47.5), not an `apt` install/upgrade/purge and not hosted acceptance; the commands, payload hashes and limits are in [the record](evidence/2026-10-18-linux-deb-local-acceptance.md).
 - **One local Linux lane — implemented, native step blocked by host memory:** `bash scripts/run_local_lane.sh linux` is now the single local entry point for the hygiene gate, the Flutter widget suite, the bounded preflight and the performance budget, and it leaves one machine-readable report (`apps/or_app/build/local-lanes/linux.json`). At exact source `b4a84956883422ed51ef1fb799d6cae5c9ff18b4` the lane reported `BLOCKED` (exit 3) with `hygiene`, `flutter` (124 tests) and `bench` PASS and the preflight BLOCKED at its own 6 GiB `MemAvailable` floor; a deliberately broken source check made the same command exit 1, and the packaged steps' blocked branches were exercised with a deliberately absent pinned prefix. `bash scripts/acceptance.sh` passed at that source with 8 named UNVERIFIED lanes. Evidence class: local developer evidence only, no claim record and no `ACCEPTED`; the native journey at this source is unverified and `--packaged` was not executed, and the commands, timings, hashes and limits are in [the record](evidence/2026-10-18-local-linux-lane.md).
-- **Next product gap — real-user feedback:** use the packages for ordinary project tasks and gather installation, first-project, permissions, unsupported-media, recovery, responsiveness, and output feedback. Then make the smallest evidence-backed improvement those users identify. Android transcription and physical-device responsiveness remain unverified; emulator evidence does not justify further performance tuning without a measured failure or physical-device data.
+- **Basic editing — implemented baseline with enumerated gaps:** 23 commands and
+  8 queries dispatch through the shared application path
+  (`crates/or_core/src/application.rs:64`), covered by 109 core unit tests and 92
+  Flutter widget tests across tracks, insert, move, trim, split, ripple delete,
+  clip properties, markers, captions and undo/redo. Not implemented: overwrite
+  edit mode; ripple trim; slip, slide and roll; track reordering; clip
+  speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
+  snap-guide rendering are presentation state, and snapping itself is the
+  read-only `timeline.snap` query.
+- **Automatic subtitles — desktop implemented, Android unsupported by design:**
+  whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
+  (`crates/or_ai/src/model.rs:38`), the provider runs as a sidecar
+  (`crates/or_whisper_provider`), transcription yields a provenance-bound
+  proposal that a user reviews, edits and applies through a revision-checked
+  command, and SRT/WebVTT round-trips through `crates/or_core/src/subtitle_io.rs`.
+  Packaged desktop journeys pass on macOS, Windows and Linux.
+  `crates/or_app_bridge/src/transcription.rs:798-826` has no Android model-store
+  arm, so `TranscriptionService::new()` returns `None` and every call reports
+  `ProviderUnavailable`; Android transcription stays unsupported until that path
+  and its acceptance exist.
+- **Noise filtering and audio cleanup — absent, and not reachable through the
+  shipped FFmpeg:** the only audio processing is clip gain, pan and linear fades
+  applied in both preview and export (`crates/or_audio/src/lib.rs:428-436`,
+  reached from `crates/or_app_bridge/src/preview.rs:2612`). No denoise, EQ,
+  compressor, limiter or filter graph exists in code, export profiles or the
+  command catalog. The pinned FFmpeg build is configured `--disable-avfilter`
+  and enables only `scale,setpts,format,aformat,aresample,showwavespic`
+  (`.github/workflows/platform-verification.yml:33,58-63`), so denoise cannot be
+  delegated to it without a deliberate codec-build and licensing change. The
+  capability must be bounded DSP in `or_audio`/`or_media`, or the codec
+  configuration must change and be re-verified.
+- **Code-to-illustration video — absent; only enabling primitives exist:** there
+  is no code ingestion, tokenisation, syntax highlighting, MotionScene schema or
+  parser, scene evaluator or materialisation path. `crates/or_ai/src/protocol.rs:26`
+  declares an `AiTask::GenerateMotionScene` variant with no producer or consumer.
+  What exists to build on: deterministic bundled-font text rasterisation
+  (`crates/or_render/src/text.rs:18-39`), first-class text and caption clip
+  content (`crates/or_core/src/timeline.rs:181`), and the shared wgpu layer render
+  path (`crates/or_render/src/lib.rs:602`). ADR 0007 is architecture intent, not
+  implementation.
+- **Next product gap — complete the editing journey on desktop and Android:**
+  close the enumerated basic-edit gaps in the order product value needs them,
+  using the local Linux and Android lanes for fast iteration and hosted CI for
+  acceptance. Code-to-illustration video follows once the text, materialisation
+  and export paths it depends on are complete. Real-user dogfood feedback
+  continues in parallel and still decides which fix matters first.
 
 Detailed historical investigations remain in the archive for provenance. Keep new active-roadmap updates to user-visible outcomes, current limitations, exact acceptance evidence, and the next product gap.
 
