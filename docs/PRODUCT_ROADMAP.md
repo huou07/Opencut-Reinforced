@@ -243,6 +243,18 @@ class each claim actually has:
   - Validation uses `RationalTime::checked_add` for the span end and
     `validate_track_states` on the resulting list; per-track clip capacity is
     checked before mutating (`MAX_TIMELINE_CLIPS_PER_TRACK`).
+  - Call sites verified against `crates/or_core/src/application.rs` (no search
+    needed next round, line numbers drift): the argument struct at
+    `TimelineClipInsertArguments`, the dispatcher arm
+    `TIMELINE_CLIP_INSERT_ID => apply_timeline_clip_insert(..)`, and the existing
+    insert at `insert_timeline_clip_state`. Mutate through `track_states` ->
+    `states_into_domain` -> `replace_timeline_track_clips_for_command`, exactly as
+    `apply_timeline_clip_ripple_delete` does; build the history entry from
+    `timeline_change_sets(..)` per change and assemble one `ChangeSet { changes,
+    ripple_history_guard: None }` for the forward result. `timeline_clip_end(clip)`
+    already computes a clip's end. The front-trim case needs the same source-range
+    advance the trim command uses, which must be read from
+    `apply_timeline_clip_trim` before writing it.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
