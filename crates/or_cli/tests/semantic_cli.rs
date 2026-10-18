@@ -2645,3 +2645,65 @@ fn motion_from_code_refuses_a_sample_larger_than_it_draws() {
     // Nothing was written: a refusal does not leave a partial scene behind.
     assert!(!directory.0.join("huge.ormotion.json").exists());
 }
+
+#[test]
+fn motion_render_materialises_a_scene_into_a_video_through_the_export_boundary() {
+    let directory = TestDirectory::new();
+    let source = directory.0.join("tiny.rs");
+    fs::write(&source, "fn main() { let x = 1; }\n").unwrap();
+    let scene = directory.0.join("tiny.ormotion.json");
+    let built = cli([
+        OsString::from("motion"),
+        OsString::from("from-code"),
+        OsString::from("--source"),
+        source.into_os_string(),
+        OsString::from("--output"),
+        scene.clone().into_os_string(),
+        OsString::from("--title"),
+        OsString::from("tiny.rs"),
+        OsString::from("--width"),
+        OsString::from("128"),
+        OsString::from("--height"),
+        OsString::from("96"),
+        OsString::from("--font-size"),
+        OsString::from("10"),
+        OsString::from("--json"),
+    ]);
+    assert!(built.status.success(), "{built:?}");
+    // Shorten the scene so the test materialises a handful of frames, not hundreds.
+    let mut value: Value = serde_json::from_slice(&fs::read(&scene).unwrap()).unwrap();
+    value["duration"] = serde_json::json!({"numerator": 2, "denominator": 1});
+    fs::write(&scene, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+    let video = directory.0.join("tiny.mkv");
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("render"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--output"),
+        video.clone().into_os_string(),
+        OsString::from("--frame-rate"),
+        OsString::from("3/1"),
+        OsString::from("--json"),
+    ]);
+    if !output.status.success() {
+        // The encode needs the pinned FFmpeg libraries at runtime; a host without them
+        // cannot materialise, and that is a host fact rather than a test failure.
+        let rendered = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            rendered.contains("MOTION_MATERIALIZATION_FAILED")
+                || stderr.contains("MOTION_MATERIALIZATION_FAILED"),
+            "expected a materialisation failure, got {output:?}"
+        );
+        return;
+    }
+    let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(summary["kind"], "video");
+    assert_eq!(summary["frames"], 6, "two seconds at three frames a second");
+    assert_eq!(summary["profile"], "matroska_ffv1_pcm_s16le");
+    assert!(summary["bytes_written"].as_u64().unwrap() > 0);
+    let written = fs::metadata(&video).unwrap();
+    assert_eq!(written.len(), summary["bytes_written"].as_u64().unwrap());
+}

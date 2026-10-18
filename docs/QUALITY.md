@@ -92,6 +92,13 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Motion materialisation is measured but **not yet a budget row**: 252 frames at 640x360
+took 20.1 s in a debug build on this host — about 12.5 frames per second, or 80 ms per
+frame including the FFV1 encode — for a 9.2 MB file (2026-10-20). No release claim
+follows from a debug number, and the row is owed; settle it with
+`time or motion render --file <scene> --output /tmp/x.mkv --frame-rate 30/1`. The
+rasterisation row below covers the CPU half of that cost separately.
+
 Motion rasterisation has a budget row: `motion-rasterize-frame` evaluates and
 rasterises a forty-node 1920x1080 MotionScene frame and encodes it as a PNG — p50
 59.5 / p95 62.9 ms against a 250 ms p95 budget, encode p50 72.2 / p95 75.2 ms beside

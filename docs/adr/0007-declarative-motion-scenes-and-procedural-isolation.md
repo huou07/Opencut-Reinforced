@@ -98,6 +98,20 @@ of named colour roles: a sample is untrusted input, so the scan has hard limits 
 never executes anything, and it deliberately has no grammar, no macro expansion and no
 type information. Only Rust is tokenised; anything else is plain text.
 
+**Materialisation, 2026-10-20.** A scene materialises through the *normal* export
+boundary: `or_render::for_each_motion_frame` produces the frames over the half-open
+`[0, duration)` at exact rational times derived from the frame index — not by
+accumulating a floating-point step — and the existing
+`FfmpegSoftwareExportWriter` encodes them in the mandated Matroska + FFV1 + PCM S16LE
+software profile. There is no second encoder, and the frame count is
+`ceil(duration * rate)`, so a partial final frame is drawn rather than dropped. The
+sequence is bounded at 200,000 frames and the bound is checked before any frame is
+produced, so a mistyped duration is refused rather than attempted. Frames are handed
+to a visitor instead of being collected, so materialisation does not require the whole
+scene to fit in memory. The profile always carries an audio stream, so a materialised
+scene has a silent PCM track; it can be placed on an ordinary timeline like any other
+media.
+
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate
 `ProjectDocument` during evaluation. Human, template, CLI/agent, and AI

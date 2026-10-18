@@ -15,7 +15,9 @@
 //! right and y down, matching the RGBA buffer's own layout.
 
 use or_core::{TextAlignment, TextColor, TextFormatting, TextWeight};
-use or_motion::{MotionColor, MotionFrame, MotionInstruction, MotionNodeKind};
+use or_motion::{
+    MotionColor, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene, evaluate_scene,
+};
 
 /// The largest canvas this rasterises, in pixels. The text layer bound is the same
 /// order of magnitude; a scene is authored content, not media.
@@ -432,6 +434,131 @@ fn draw_instruction(
     Ok(())
 }
 
+/// The most frames one materialisation may produce. A scene is authored content, and
+/// a bound keeps a mistyped duration or frame rate from asking for hours of work.
+pub const MAX_MOTION_FRAMES: u64 = 200_000;
+
+/// Why a frame sequence could not be produced.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MotionSequenceError {
+    /// The frame rate is zero, or the scene would need more than
+    /// [`MAX_MOTION_FRAMES`] frames.
+    InvalidFrameRate,
+    /// A frame failed to evaluate or rasterise.
+    Frame(MotionRasterError),
+}
+
+impl MotionSequenceError {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::InvalidFrameRate => "MOTION_INVALID_FRAME_RATE",
+            Self::Frame(error) => error.code(),
+        }
+    }
+}
+
+/// Produces every frame of a scene at a frame rate, in order, and hands each to
+/// `visitor` with its index.
+///
+/// The frames are the half-open interval `[0, duration)` at exact rational times, so
+/// the sequence is deterministic and seekable: frame `n` is at `n * denominator /
+/// numerator` seconds, computed through the rationals rather than by accumulating a
+/// floating-point step. A visitor is used rather than a collected vector so a long
+/// scene does not have to fit in memory: materialisation writes each frame as it is
+/// produced.
+pub fn for_each_motion_frame<F>(
+    scene: &MotionScene,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    mut visitor: F,
+) -> Result<u64, MotionSequenceError>
+where
+    F: FnMut(u64, &RasterizedMotionFrame) -> Result<(), MotionRasterError>,
+{
+    if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
+        return Err(MotionSequenceError::InvalidFrameRate);
+    }
+    // The number of frames in [0, duration) is the floor of duration * rate, plus one
+    // when the product is not exact, so a partial final frame is still drawn.
+    let duration_numerator = scene.duration.numerator() as i128;
+    let duration_denominator = scene.duration.denominator() as i128;
+    let scaled = duration_numerator
+        .checked_mul(frame_rate_numerator as i128)
+        .ok_or(MotionSequenceError::InvalidFrameRate)?;
+    let divisor = duration_denominator
+        .checked_mul(frame_rate_denominator as i128)
+        .ok_or(MotionSequenceError::InvalidFrameRate)?;
+    if divisor == 0 || scaled < 0 {
+        return Err(MotionSequenceError::InvalidFrameRate);
+    }
+    let frames = (scaled + divisor - 1) / divisor;
+    let frames = u64::try_from(frames).map_err(|_| MotionSequenceError::InvalidFrameRate)?;
+    if frames > MAX_MOTION_FRAMES {
+        return Err(MotionSequenceError::InvalidFrameRate);
+    }
+
+    for index in 0..frames {
+        let time = frame_time(
+            index,
+            frame_rate_numerator,
+            frame_rate_denominator,
+            scene.duration,
+        )?;
+        let frame = evaluate_scene(scene, time)
+            .map_err(|_| MotionSequenceError::Frame(MotionRasterError::InvalidCanvas))?;
+        let canvas = rasterize_motion_frame(&frame).map_err(MotionSequenceError::Frame)?;
+        visitor(index, &canvas).map_err(MotionSequenceError::Frame)?;
+    }
+    Ok(frames)
+}
+
+/// The exact time of one frame index: `index * denominator / numerator` seconds.
+fn frame_time(
+    index: u64,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    duration: or_core::RationalTime,
+) -> Result<or_core::RationalTime, MotionSequenceError> {
+    let numerator = (index as i128)
+        .checked_mul(frame_rate_denominator as i128)
+        .ok_or(MotionSequenceError::InvalidFrameRate)?;
+    let denominator = frame_rate_numerator as i128;
+    // `index * denominator / numerator` as an exact rational, reduced by the time
+    // model itself.
+    let reduced = reduce(numerator, denominator).ok_or(MotionSequenceError::InvalidFrameRate)?;
+    let time = or_core::RationalTime::new(reduced.0, reduced.1)
+        .map_err(|_| MotionSequenceError::InvalidFrameRate)?;
+    if time >= duration {
+        // The final partial frame still gets a time inside the interval.
+        return duration
+            .checked_sub(
+                or_core::RationalTime::new(1, 1_000_000)
+                    .map_err(|_| MotionSequenceError::InvalidFrameRate)?,
+            )
+            .map_err(|_| MotionSequenceError::InvalidFrameRate);
+    }
+    Ok(time)
+}
+
+fn reduce(numerator: i128, denominator: i128) -> Option<(i64, u32)> {
+    if denominator == 0 {
+        return None;
+    }
+    let mut a = numerator.abs();
+    let mut b = denominator.abs();
+    while b != 0 {
+        let remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    let divisor = a.max(1);
+    let numerator = numerator / divisor;
+    let denominator = denominator / divisor;
+    let numerator = i64::try_from(numerator).ok()?;
+    let denominator = u32::try_from(denominator).ok()?;
+    Some((numerator, denominator))
+}
+
 /// Encodes a rasterised frame as a PNG.
 ///
 /// A **still preview** encoder, not a media authority: materialised video goes
@@ -734,6 +861,86 @@ mod tests {
             MotionRasterError::InvalidCanvas.code(),
             "MOTION_INVALID_CANVAS"
         );
+    }
+
+    #[test]
+    fn a_sequence_covers_the_half_open_interval_at_exact_frame_times() {
+        // Four seconds at 2 fps is eight frames: 0, 0.5, ... 3.5, and never 4.0.
+        let mut seen = Vec::new();
+        let frames = for_each_motion_frame(&scene(), 2, 1, |index, canvas| {
+            seen.push((index, canvas.width()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(frames, 8);
+        assert_eq!(
+            seen.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
+            (0..8).collect::<Vec<_>>()
+        );
+
+        // An exact rational rate, and a duration that does not divide evenly: a
+        // partial final frame is still produced.
+        let mut times = Vec::new();
+        let scene = {
+            let mut value = serde_json::to_value(scene()).unwrap();
+            value["duration"] = serde_json::json!({"numerator": 1, "denominator": 1});
+            parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap()
+        };
+        let frames = for_each_motion_frame(&scene, 3, 1, |index, _| {
+            times.push(index);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(frames, 3);
+        assert_eq!(times, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn an_absurd_frame_rate_or_length_is_refused_rather_than_attempted() {
+        assert_eq!(
+            for_each_motion_frame(&scene(), 0, 1, |_, _| Ok(())).unwrap_err(),
+            MotionSequenceError::InvalidFrameRate
+        );
+        assert_eq!(
+            for_each_motion_frame(&scene(), 1, 0, |_, _| Ok(())).unwrap_err(),
+            MotionSequenceError::InvalidFrameRate
+        );
+        // Four hundred thousand frames is past the bound, and the bound is checked
+        // before any frame is produced: a refused request must not do the work it is
+        // refusing.
+        let mut visited = 0;
+        assert_eq!(
+            for_each_motion_frame(&scene(), 100_000, 1, |_, _| {
+                visited += 1;
+                Ok(())
+            })
+            .unwrap_err(),
+            MotionSequenceError::InvalidFrameRate
+        );
+        assert_eq!(visited, 0);
+        assert_eq!(
+            MotionSequenceError::InvalidFrameRate.code(),
+            "MOTION_INVALID_FRAME_RATE"
+        );
+    }
+
+    #[test]
+    fn a_visitor_error_stops_the_sequence() {
+        // A cancelled materialisation must not keep rendering frames it will discard.
+        let mut visited = 0;
+        let error = for_each_motion_frame(&scene(), 2, 1, |_, _| {
+            visited += 1;
+            if visited == 3 {
+                return Err(MotionRasterError::InvalidCanvas);
+            }
+            Ok(())
+        })
+        .unwrap_err();
+        assert_eq!(
+            error,
+            MotionSequenceError::Frame(MotionRasterError::InvalidCanvas)
+        );
+        assert_eq!(visited, 3);
     }
 
     #[test]
