@@ -372,17 +372,22 @@ class _Runner {
         return;
       case 'tap':
         await _act(step, (finder) async {
-          await _scrollIntoView(finder);
+          await _scrollIntoView(finder, settle: step['settle'] != false);
           await tester.tap(finder);
         });
-        await _settle();
+        // `settle: false` keeps a measured interaction honest: a fixed settle
+        // budget inside the timed block measures the harness, not the app. The
+        // following wait_* step observes the state instead, so the measured time
+        // is the latency to the visible result (plus at most one 16 ms poll
+        // interval).
+        if (step['settle'] != false) await _settle();
         return;
       case 'long_press':
         await _act(step, (finder) async {
-          await _scrollIntoView(finder);
+          await _scrollIntoView(finder, settle: step['settle'] != false);
           await tester.longPress(finder);
         });
-        await _settle();
+        if (step['settle'] != false) await _settle();
         return;
       case 'enter_text':
         final finder = _requireFinder(step);
@@ -738,9 +743,9 @@ class _Runner {
   /// 2026-10-18 on the compact editor at 320x440, the timeline's Add Audio button
   /// reported a successful tap and no track was added, because the button had
   /// just been scrolled into view inside a horizontal viewport.
-  Future<void> _scrollIntoView(Finder finder) async {
+  Future<void> _scrollIntoView(Finder finder, {bool settle = true}) async {
     await tester.ensureVisible(finder);
-    await _settle();
+    if (settle) await _settle();
   }
 
   // -- observation -------------------------------------------------------

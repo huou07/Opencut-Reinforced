@@ -80,6 +80,29 @@ offscreen readback**, so it is a deliberately heavier upper bound than
 presentation, and it is a debug build: it guards OR's own code, it is not a claim
 about a release build's speed.
 
+### Measured interaction latency (software path)
+
+The budget above measures the canonical command path and the offscreen render
+path. The Flutter presentation layer is measured separately by
+`python3 scripts/or_ui.py run scripts/ui_scenarios/interaction-latency.json`,
+which times acting steps with their fixed settle disabled and lets the following
+wait step observe the visible result, so the number is latency to the visible
+state rather than the harness's settling budget (at most one 16 ms poll interval
+of uncertainty).
+
+Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
+
+| Interaction | p50 | p95 |
+|---|---|---|
+| Switch Projects <-> Home | 100.0 ms | 149.8 ms |
+| Step the preview one frame forward and back | 4.7 ms | 16.8 ms |
+| Open and cancel the export dialog | 181.6 ms | 229.2 ms |
+
+These are **software-path developer numbers on this host**, not a device, GPU or
+release-build claim, and no ceiling is asserted for them yet: they are recorded so
+a later regression has a baseline, and so "the surface is responsive" is a number
+instead of an assertion. A presented-frame budget remains the open gap below.
+
 ### The budget must be able to fail
 
 Two documented seams make the enforcement path itself testable, and both are used
@@ -140,9 +163,10 @@ it times, a baseline measured on this named host and a stated margin, then let
 ## Known gaps
 
 1. **No presented-frame performance budget** — command, project-file, offscreen
-   render and queue-contention rows are now measured and gated, but a *presented*
-   viewer frame (vsync, compositor, swapchain) is still unmeasured; the command
-   path that would measure it does not exist yet.
+   render, queue-contention and Flutter-layer interaction rows are now measured,
+   but a *presented* viewer frame (vsync, compositor, swapchain) is still
+   unmeasured and the interaction numbers above carry no ceiling; the command path
+   that would measure a presented frame does not exist yet.
 2. **Local Flutter widget lane:** it runs on this host again. Corrected
    2026-10-18: `cd apps/or_app && flutter test --no-pub` passed 124 tests at
    `4f079e2` clean, and the acceptance gate no longer classifies the lane as a

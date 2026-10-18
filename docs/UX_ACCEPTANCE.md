@@ -307,8 +307,12 @@ authoritative hosted gate for the exact source.
   read from the semantics tree rather than from a widget field.
 - **Measured interaction** — a scenario can wrap sub-steps in
   `{"op": "measure"}` and the transcript records p50/p95/min/max with the
-  statement that it is wall clock on this host through the software path. Those
-  numbers are developer evidence and never a device or GPU claim.
+  statement that it is wall clock on this host through the software path. A timed
+  step can set `"settle": false` so the following wait observes the visible
+  result; without that the measurement includes the harness's own settling budget
+  and measures the instrument rather than the app. The current numbers are in
+  [QUALITY.md](QUALITY.md#measured-interaction-latency-software-path), and they are
+  developer evidence, never a device or GPU claim.
 
 ## PRODUCTION REQUIRED FUTURE
 
