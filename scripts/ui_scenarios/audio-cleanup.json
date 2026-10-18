@@ -1,0 +1,101 @@
+{
+  "name": "audio-cleanup",
+  "description": "Noise reduction through the real app and the real bridge. A WAV fixture is imported, then the item's media menu runs Clean up Audio, which measures the material's own noise floor, filters it through the packaged ffmpeg helper, and imports the result as its own media item. The assertion is the confirmation the app shows with the derived floor, which only appears after both the helper run and the revision-checked import succeeded. The helper is resolved from PATH here, so this journey is developer evidence that the path works end to end, not a packaged-runtime claim.",
+  "fixtures": [
+    "noisy"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Cleanup journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "imported"
+    },
+    {
+      "op": "shot",
+      "name": "imported"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-actions-.*$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label": "Clean up Audio",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "menu-open"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Clean up Audio"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "^Cleaned audio added to the project",
+      "budget_ms": 60000
+    },
+    {
+      "op": "tree",
+      "name": "after-cleanup"
+    },
+    {
+      "op": "shot",
+      "name": "after-cleanup"
+    }
+  ]
+}

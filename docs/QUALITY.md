@@ -92,6 +92,22 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Noise filtering has a budget row: `command.audio_cleanup` measures the product's own
+path — derive the floor from the material, then run the filter — over a three-second
+fixture, so it includes two helper process starts. Measured 2026-10-20 on this host:
+p50 135.5 ms / p95 142.0 ms against a 1000 ms p95 budget. The threshold is a
+regression guard with roughly seven times headroom rather than a target: the cost is
+dominated by starting `ffmpeg`, not by OR's code, and a filter chain that decoded at
+real time would blow past it. The lane reports the row `UNVERIFIED` on a host with no
+ffmpeg helper rather than inventing a number.
+
+Noise filtering's app path is now exercised end to end: the `audio-cleanup` journey
+drives the media action through the real bridge on a noisy fixture and asserts the
+confirmation, and the transcript shows the library gaining the cleaned item. It also
+found the defect that the harness's silent fixtures had hidden: a silent source
+measured `-inf` in every window and reported a generation failure. Silent material is
+now `CLEANUP_SILENT_SOURCE` with its own message.
+
 Noise filtering's app path is guarded but not yet measured: four widget tests cover
 the desktop and compact actions, the import of the result, the failure path and the
 no-audio case, and the clean-up itself is measured through the CLI and the helper.

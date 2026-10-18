@@ -84,6 +84,13 @@ pub enum AudioCleanupErrorCode {
     GenerationFailed,
     /// The helper exceeded its bound and was killed.
     TimedOut,
+    /// The source has no measurable audio, so no floor can be derived from it.
+    ///
+    /// Distinct from [`Self::GenerationFailed`] because it is a fact about the
+    /// material rather than a failure of the run: a silent file has no noise to
+    /// remove, and the caller can act on that (say so, or pass an explicit floor)
+    /// instead of retrying.
+    SilentSource,
 }
 
 impl AudioCleanupErrorCode {
@@ -94,6 +101,7 @@ impl AudioCleanupErrorCode {
             Self::BackendUnavailable => "CLEANUP_BACKEND_UNAVAILABLE",
             Self::GenerationFailed => "CLEANUP_GENERATION_FAILED",
             Self::TimedOut => "CLEANUP_TIMED_OUT",
+            Self::SilentSource => "CLEANUP_SILENT_SOURCE",
         }
     }
 }
@@ -471,6 +479,22 @@ mod tests {
              lavfi.astats.Overall.RMS_level=nan\n";
         assert_eq!(parse_window_rms_db(output), vec![-23.201059, -21.5]);
         assert!(parse_window_rms_db("no figures here").is_empty());
+    }
+
+    #[test]
+    fn a_silent_source_is_reported_as_such_rather_than_as_a_failure() {
+        // `astats` reports -inf for digital silence, and the parser drops non-finite
+        // figures, so the set is empty and the caller learns the material has no
+        // measurable audio instead of being told the run failed.
+        let output = "frame:0    pts:0       pts_time:0\n\
+             lavfi.astats.Overall.RMS_level=-inf\n\
+             frame:1    pts:512     pts_time:0.064\n\
+             lavfi.astats.Overall.RMS_level=-inf\n";
+        assert!(parse_window_rms_db(output).is_empty());
+        assert_eq!(
+            AudioCleanupErrorCode::SilentSource.as_str(),
+            "CLEANUP_SILENT_SOURCE"
+        );
     }
 
     #[test]

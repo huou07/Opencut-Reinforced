@@ -20,6 +20,7 @@
 // them off a guest.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -977,7 +978,11 @@ class _StepFailure implements Exception {
 /// real import of a real file through the real Rust command path.
 class _FixturePicker extends FileSelectorProjectPicker {
   _FixturePicker(this.directory, List<String> fixtures) {
-    media = _wav('fixture.wav');
+    // A `noisy` fixture carries signal: the silent one cannot exercise anything
+    // that measures or filters audio, because digital silence has no noise floor.
+    media = fixtures.contains('noisy')
+        ? _noisyWav('fixture.wav')
+        : _wav('fixture.wav');
     if (fixtures.contains('invalid')) {
       badMedia = '${directory.path}/invalid.wav';
       File(badMedia).writeAsStringSync('synthetic invalid media');
@@ -1015,6 +1020,47 @@ class _FixturePicker extends FileSelectorProjectPicker {
     ascii(36, 'data');
     wav.setUint32(40, 16000, Endian.little);
     File(path).writeAsBytesSync(wav.buffer.asUint8List());
+    return path;
+  }
+
+  /// One second of white noise with a tone over the second half, written as
+  /// 8 kHz mono PCM. The generator is a small linear congruential sequence so the
+  /// fixture is identical on every run and on every host.
+  String _noisyWav(String name) {
+    const rate = 8000;
+    const samples = rate;
+    final bytes = ByteData(44 + samples * 2);
+    void ascii(int offset, String value) {
+      for (var i = 0; i < value.length; i++) {
+        bytes.setUint8(offset + i, value.codeUnitAt(i));
+      }
+    }
+
+    ascii(0, 'RIFF');
+    bytes.setUint32(4, 36 + samples * 2, Endian.little);
+    ascii(8, 'WAVEfmt ');
+    bytes.setUint32(16, 16, Endian.little);
+    bytes.setUint16(20, 1, Endian.little);
+    bytes.setUint16(22, 1, Endian.little);
+    bytes.setUint32(24, rate, Endian.little);
+    bytes.setUint32(28, rate * 2, Endian.little);
+    bytes.setUint16(32, 2, Endian.little);
+    bytes.setUint16(34, 16, Endian.little);
+    ascii(36, 'data');
+    bytes.setUint32(40, samples * 2, Endian.little);
+
+    var seed = 20261020;
+    for (var index = 0; index < samples; index += 1) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      final noise = (seed / 0x3fffffff) - 1.0;
+      final tone = index >= samples ~/ 2
+          ? 0.5 * math.sin(2 * math.pi * 440 * index / rate)
+          : 0.0;
+      final value = ((noise * 0.12 + tone) * 32767).clamp(-32768, 32767).round();
+      bytes.setInt16(44 + index * 2, value, Endian.little);
+    }
+    final path = '${directory.path}/$name';
+    File(path).writeAsBytesSync(bytes.buffer.asUint8List());
     return path;
   }
 

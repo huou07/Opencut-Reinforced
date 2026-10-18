@@ -423,6 +423,22 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("project_save".to_owned(), save_samples));
 
+    // --- audio clean-up ---------------------------------------------------
+    // The only row that measures a helper process: its cost is dominated by
+    // starting ffmpeg and running the filter, not by OR's own code, so it is
+    // reported as its own figure rather than compared with the command rows. The
+    // fixture is generated here because it must be audio only and short.
+    match measure_audio_cleanup(&workspace) {
+        Ok(samples) => measurements.push(("audio_cleanup".to_owned(), samples)),
+        Err(reason) => {
+            // Like the media fixture, this row's prerequisite is the host: without a
+            // helper there is nothing to measure, so the lane says so instead of
+            // reporting a number it did not take.
+            unverified(&reason);
+            return;
+        }
+    }
+
     let mut open_samples = Vec::with_capacity(ITERATIONS);
     for _ in 0..ITERATIONS {
         let started = Instant::now();
@@ -591,6 +607,72 @@ fn command_latency_on_a_two_hundred_clip_project() {
         rows = rows,
     ));
     let _ = fs::remove_dir_all(&workspace);
+}
+
+/// Generates a short noisy audio fixture and times the clean-up over it.
+///
+/// Three seconds of white noise with a tone through it, written by the same helper
+/// the clean-up uses, so the row needs no committed media: an audio-only fixture
+/// short enough to keep the lane's wall clock bounded.
+fn measure_audio_cleanup(workspace: &Path) -> Result<Vec<f64>, String> {
+    // The resolver's fallback is the *name* `ffmpeg`, which `is_file` cannot see, so
+    // each candidate is asked for its version instead of being stat-ed.
+    let resolved = or_core::ffmpeg_executable();
+    let candidates: Vec<PathBuf> = if resolved.is_file() {
+        vec![resolved]
+    } else {
+        vec![resolved, PathBuf::from("ffmpeg")]
+    };
+    let helper = candidates
+        .into_iter()
+        .find(|candidate| {
+            std::process::Command::new(candidate)
+                .arg("-version")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            "no ffmpeg helper on this host: the clean-up row needs one for its fixture".to_owned()
+        })?;
+    let source = workspace.join("cleanup-source.wav");
+    let generated_ok = std::process::Command::new(&helper)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anoisesrc=d=3:c=white:a=0.12:r=48000",
+            "-ac",
+            "1",
+        ])
+        .arg(&source)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !generated_ok {
+        return Err("the helper could not generate the clean-up fixture".to_owned());
+    }
+
+    let mut samples = Vec::with_capacity(ITERATIONS.min(8));
+    for index in 0..ITERATIONS.min(8) {
+        let destination = workspace.join(format!("cleanup-out-{index}.wav"));
+        let started = Instant::now();
+        // The floor is derived, which is what the product does, so the row covers
+        // the measurement pass as well as the filter run.
+        let floor = or_core::measure_noise_floor(&source)
+            .map_err(|error| format!("the floor measurement failed: {}", error.code().as_str()))?;
+        or_core::clean_audio_file(&source, &destination, floor, 12)
+            .map_err(|error| format!("the clean-up failed: {}", error.code().as_str()))?;
+        samples.push(elapsed_ms(started));
+        let _ = fs::remove_file(&destination);
+    }
+    Ok(samples)
 }
 
 fn fixture_media() -> Option<PathBuf> {

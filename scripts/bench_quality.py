@@ -169,6 +169,14 @@ ROWS = {
         "threshold_p95_ms": 2.0,
         "baseline": {"date": "2026-10-18", "p50_ms": 0.006, "p95_ms": 0.007},
     },
+    "command.audio_cleanup": {
+        "description": (
+            "derived-floor noise reduction over a three-second fixture, including "
+            "the helper process start and the statistics pass that derives the floor"
+        ),
+        "threshold_p95_ms": 1000.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 136.1, "p95_ms": 141.0},
+    },
     "project-open": {
         "description": "ProjectFileSession::open of the 200-clip project file",
         "threshold_p95_ms": 60.0,

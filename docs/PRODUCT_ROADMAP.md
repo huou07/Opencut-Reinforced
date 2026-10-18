@@ -631,12 +631,40 @@ class each claim actually has:
     was a handler that began, resolved its directory, and then never reached the
     gateway. Creating one directory synchronously costs nothing and deletes the
     problem rather than working around it in the test.
+  - **Measured (2026-10-20).** `command.audio_cleanup` covers the product's own path
+    — derive the floor, then filter — over a three-second fixture, including two
+    helper process starts: p50 135.5 / p95 142.0 ms against a 1000 ms p95 budget. The
+    budget prints twenty-four rows and is PASS. The lane reports the row `UNVERIFIED`
+    when the host has no helper rather than inventing a number.
+  - **Journey, visual and performance evidence (2026-10-20).**
+    `scripts/or_ui.py run scripts/ui_scenarios/audio-cleanup.json` passes: it imports
+    a **noisy** fixture, runs the action through the real app and the real bridge, and
+    asserts the confirmation the app shows. The transcript's own tree is the proof —
+    the library goes from one item to two (`fixture.wav` and
+    `1792362729787-fixture.wav.cleaned.wav`, revision 2) with *"Cleaned audio added to
+    the project (noise floor -21 dBFS, 12 dB reduction)."* The floor the app derived
+    is the same figure the CLI derived on a different fixture, so the derivation
+    agrees across surfaces rather than being a coincidence of one path. Screenshots at
+    1440x900 for the imported state, the open menu and the result are in the run's
+    artifacts, which is `VERIFIED_VISUAL` for the action's states.
+  - **A defect the journey found, and the fix.** The runner's fixtures were
+    **digitally silent**, so the floor derivation measured `-inf` in every window and
+    reported `CLEANUP_GENERATION_FAILED` — indistinguishable from a broken helper.
+    Two changes: the runner gained a `noisy` fixture kind (a deterministic one-second
+    noise-plus-tone WAV) so an audio journey exercises real signal, and a silent source
+    is now its own code, `CLEANUP_SILENT_SOURCE`, with an actionable message ("the
+    source has no measurable audio, so a noise floor cannot be derived from it; pass
+    one explicitly") because it is a fact about the material rather than a failed run.
+    This is the class of bug that only a journey through the real path finds: every
+    unit test and every widget test passed while the app could not clean up the only
+    fixture the harness could give it.
   - **Not done, and why the capability is still not finished:** the clean-up writes
     into app storage, so the item it imports points at a generated file with no
-    provenance shown in the library (the two entries look alike but for the name);
-    there is no journey that exercises the action end to end with a real helper; and
-    no performance row measures it. The gap is `VERIFIED_BEHAVIORAL` for the app path
-    and still `UNVERIFIED` for the visual, journey and performance dimensions.
+    provenance shown in the library (the two entries look alike but for the name), and
+    the confirmation is a transient message rather than something the library keeps.
+    Nothing here is `ACCEPTED`: no hosted run covers it, and the app resolves the
+    helper from `PATH` in this journey, so it is developer evidence for the app path
+    rather than a packaged-runtime claim.
   - **Shape decided for the product half, so the next attempt does not relitigate
     it.** The clean-up is a **helper-spawned derived artifact**, not a clip property:
     `or_core` already spawns the packaged `ffmpeg` for probes, proxies and waveforms,
