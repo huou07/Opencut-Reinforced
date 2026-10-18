@@ -157,6 +157,22 @@ class each claim actually has:
   artifact at ~0.4 MB/s with no Gradle HTTP timeout; it completed in 217 s and
   produced a 112,532,328-byte APK. Gradle HTTP timeouts are now bounded. Facts and
   measurements are in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md).
+- **Android lane — first guest result (VERIFIED_BEHAVIORAL, local developer
+  evidence, not acceptance).** At source `7b473f7`, `bash
+  scripts/run_local_lane.sh android` with `OR_ANDROID_GUEST_RAM_MB=3072` reported:
+  `preflight` PASS (derived floor 5120 MiB = guest 3072 + emulator 1024 + host
+  margin 1024), `deps` PASS, `apk` PASS 67.3 s (six APKs, hashes in the report),
+  `emulator` PASS 20.1 s on `an3-api36` / `emulator-5580` / SwiftShader, and
+  `preview` PASS 30.7 s — the packaged FFmpeg libraries loaded on the guest
+  (`not_run` is empty, so the link probe ran) and the bridge-diagnostics and
+  preview-surface cases passed. `saf` is BLOCKED: it exceeded its 2700 s bound
+  (exit 124) after the export stage, which is a local bound, not an accepted
+  result — hosted `platform-verification` remains the SAF authority. The run is
+  DIRTY (two uncommitted files were present), so the lane reports no attributable
+  PASS. Each fix that made this run possible is committed with its own hermetic
+  guard: the emulator port, the install-root FFmpeg link, the RUSTFLAGS link,
+  jniLibs staging, the absolute `RUNNER_TEMP`, and one offline lockfile-enforced
+  dependency resolution.
 - **`scripts/or_ui.py` — implemented and passing on Linux (VERIFIED_SEMANTIC +
   VERIFIED_BEHAVIORAL + VERIFIED_VISUAL, local developer evidence).** The full
   editor journey (50 steps) passes end to end on the running app with semantic

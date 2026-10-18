@@ -1,0 +1,36 @@
+{
+  "name": "interaction-latency",
+  "harness": "or_ui",
+  "description": "Measured interaction latency for the surfaces a user waits on: switching screens, zooming the timeline, and opening and cancelling the export dialog. Each block runs repeat times through real taps and records p50/p95/min/max in the transcript. Wall clock on this host through the Flutter test binding; Linux runs under Xvfb with software GL, so this is software-path evidence and never a GPU or device performance claim.",
+  "viewport": {"width": 1280, "height": 800},
+  "fixtures": ["wav"],
+  "steps": [
+    {"op": "expect", "key": "home-new-project", "role": "button"},
+    {"op": "measure", "name": "screen-switch-projects-and-home", "repeat": 10, "steps": [
+      {"op": "tap", "selector": {"key": "nav-projects"}},
+      {"op": "expect", "key": "projects-new-project", "role": "button"},
+      {"op": "tap", "selector": {"key": "nav-home"}},
+      {"op": "expect", "key": "home-new-project", "role": "button"}
+    ]},
+
+    {"op": "tap", "selector": {"key": "nav-projects"}},
+    {"op": "tap", "selector": {"key": "projects-new-project"}},
+    {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Latency probe"},
+    {"op": "tap", "selector": {"key": "confirm-new-project"}},
+    {"op": "wait", "text": "No timeline tracks", "budget_ms": 20000},
+
+    {"op": "measure", "name": "timeline-zoom-in-out", "repeat": 10, "steps": [
+      {"op": "tap", "selector": {"key": "timeline-zoom-in"}},
+      {"op": "tap", "selector": {"key": "timeline-zoom-out"}}
+    ]},
+
+    {"op": "measure", "name": "export-dialog-open-and-cancel", "repeat": 10, "steps": [
+      {"op": "tap", "selector": {"key": "export-project"}},
+      {"op": "expect_text", "text": "Export video"},
+      {"op": "tap", "selector": {"label": "Cancel", "within": {"type": "AlertDialog"}}},
+      {"op": "expect_absent", "text": "Export video"}
+    ]},
+    {"op": "shot", "name": "after-latency", "description": "final state"},
+    {"op": "tree", "name": "after-latency"}
+  ]
+}

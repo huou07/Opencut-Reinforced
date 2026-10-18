@@ -71,6 +71,9 @@ AVD_HOME_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 # an operator who lowers it for a contended host also lowers what the lane
 # demands, visibly and in one place.
 GUEST_RAM_MB="${OR_ANDROID_GUEST_RAM_MB:-6144}"
+# Recorded with the guest identity: a SwiftShader guest is software-path
+# evidence and can never become a device performance claim.
+GUEST_GPU_MODE="${OR_ANDROID_GPU_MODE:-swiftshader_indirect}"
 # Emulator/qemu process, adb, the Flutter driver and SwiftShader's own buffers.
 EMULATOR_OVERHEAD_MB="${OR_ANDROID_EMULATOR_OVERHEAD_MB:-1024}"
 # Shells, the Dart driver, page cache and scheduling slack on the host.
@@ -435,6 +438,7 @@ if [[ "$result" == "PASS" ]]; then
   export OR_AVD_NAME="$AVD_NAME"
   export OR_ANDROID_DEVICE_ID="$DEVICE_ID"
   export OR_ANDROID_GUEST_RAM_MB="$GUEST_RAM_MB"
+  export OR_ANDROID_GPU_MODE="$GUEST_GPU_MODE"
   export OR_ANDROID_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance"
   export OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance-recovery"
   export PKG_CONFIG_ALLOW_CROSS=1
@@ -544,14 +548,14 @@ REPORT_TMP="$report.tmp"
 
 python3 - "$STEPS_FILE" "$WARNINGS_FILE" "$REPORT_TMP" "$started_iso" "$finished_iso" \
   "$(( finished_ms - started_ms ))" "$head_sha" "$dirty_at_start" "$result" "$AVD_NAME" "$DEVICE_ID" \
-  "$CASE_APK_DIR" "$FFMPEG_PROBE" "$GUEST_RAM_MB" "$floor_mib" "$floor_source" \
+  "$CASE_APK_DIR" "$FFMPEG_PROBE" "$GUEST_RAM_MB" "$floor_mib" "$floor_source" "$GUEST_GPU_MODE" \
   "$REAPED_DAEMONS_FILE" "$memory_bytes" <<'PY'
 import hashlib, json, os, platform, shutil, sys
 from pathlib import Path
 
 (steps_file, warnings_file, report, started_at, finished_at, elapsed_ms, head,
  dirty, result, avd, device, case_apk_dir, probe, guest_ram_mb, floor_mib,
- floor_source, reaped_file, memory_bytes) = sys.argv[1:19]
+ floor_source, guest_gpu, reaped_file, memory_bytes) = sys.argv[1:20]
 
 def memory_total():
     for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
@@ -581,7 +585,12 @@ payload = {
     "acceptance": False,
     "source": head,
     "dirty_at_start": dirty == "1",
-    "guest": {"avd": avd, "serial": device, "configured_ram_mb": int(guest_ram_mb)},
+    "guest": {
+        "avd": avd,
+        "serial": device,
+        "configured_ram_mb": int(guest_ram_mb),
+        "gpu_mode": guest_gpu,
+    },
     "memory_floor": {
         "bytes": int(floor_mib) * 1024 * 1024,
         "mib": int(floor_mib),

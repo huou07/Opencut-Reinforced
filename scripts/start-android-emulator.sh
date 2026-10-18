@@ -39,6 +39,9 @@ emulator_bin="${OR_ANDROID_EMULATOR_BIN:-$android_home/emulator/emulator}"
 kvm_device="${OR_ANDROID_KVM_DEVICE:-/dev/kvm}"
 guest_ram_mb="${OR_ANDROID_GUEST_RAM_MB:-6144}"
 guest_cores="${OR_ANDROID_GUEST_CORES:-4}"
+# The guest's GPU mode is part of the evidence: a SwiftShader guest is
+# software-path evidence and can never become a device performance claim.
+guest_gpu="${OR_ANDROID_GPU_MODE:-swiftshader_indirect}"
 # Honour an AVD home the caller already chose (the lane exports one); the
 # documented default is the interactive user's.
 export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
@@ -91,7 +94,7 @@ port_args=()
 if [[ -n "$emulator_port" ]]; then port_args=(-port "$emulator_port"); fi
 "$emulator_bin" -avd "$avd_name" "${wipe_args[@]}" ${port_args[@]+"${port_args[@]}"} \
   -no-window -no-audio -no-boot-anim -no-snapshot \
-  -gpu swiftshader_indirect >> "$RUNNER_TEMP/android-emulator.log" 2>&1 &
+  -gpu "$guest_gpu" >> "$RUNNER_TEMP/android-emulator.log" 2>&1 &
 emulator_pid=$!
 printf '%s\n' "$emulator_pid" > "$RUNNER_TEMP/android-emulator.pid"
 
@@ -123,4 +126,4 @@ if ! kill -0 "$emulator_pid" 2>/dev/null; then
   cat "$RUNNER_TEMP/android-emulator.log" >&2 || true
   exit 1
 fi
-echo "Android emulator $android_device_id is responsive (pid $emulator_pid, console port ${emulator_port:-default})."
+echo "Android emulator $android_device_id is responsive (pid $emulator_pid, console port ${emulator_port:-default}, gpu $guest_gpu)."
