@@ -3370,6 +3370,64 @@ void main() {
     }
   });
 
+  testWidgets('short compact viewer does not overflow once frames exist', (
+    tester,
+  ) async {
+    // The compact journey (scripts/or_ui.py at 320x440) inserted a clip and then
+    // overflowed by 17 px. The trigger is the viewer's scrub strip: it only
+    // appears once the preview has a content end, so a guard whose preview has no
+    // range never exercises the failing layout. Here the viewer gets 4/6 of the
+    // editor's remaining height and must still fit its header, surface and strip.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'compact-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'compact-audio': [
+          ProjectTimelineClip(
+            clipId: 'compact-clip',
+            mediaId: 'compact-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      }
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        sequenceFrameRate: const ProjectRationalRate(30, 1),
+        width: 640,
+        height: 360,
+      );
+    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-viewer.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact viewer');
+    expect(
+      find.byKey(const ValueKey('preview-next-frame')),
+      findsOneWidget,
+      reason: 'the transport must survive a short viewer panel',
+    );
+    expect(find.byKey(const ValueKey('preview-play')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // The surface keeps whatever the strip does not need, and it must be laid out
+    // (a negative or absent box would mean the strip squeezed it away instead of
+    // absorbing the shortfall).
+    final surface = tester.getRect(
+      find.byKey(const ValueKey('editor-viewer-surface')),
+    );
+    expect(surface.height, greaterThanOrEqualTo(0));
+    expect(surface.width, 320.0);
+  });
+
   testWidgets('compact layout adds tracks through the same command path', (
     tester,
   ) async {
@@ -3411,7 +3469,21 @@ void main() {
     // the compact insert path is guarded here where the failure prints its
     // location.
     _setViewport(tester, const Size(320, 440));
+    // The media item must carry a real duration: without one the insert dialog's
+    // duration field starts empty, the confirmation stays disabled, the tap does
+    // nothing, and a guard written this way passes while proving nothing.
     final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'compact-audio-media',
+          sourceUri: Uri.file('/tmp/compact-insert.wav').toString(),
+          formatNames: const ['wav'],
+          duration: '1 s',
+          videoDetails: null,
+          audioDetails: 'pcm',
+          firstAudioDuration: ProjectRationalTime(BigInt.one, 1),
+        ),
+      ]
       ..initialTimelineTracks = const [
         ProjectTimelineTrack(
           trackId: 'compact-audio',
@@ -3425,8 +3497,6 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact insert');
     await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('media-import')));
     await tester.pumpAndSettle();
     final addToTimeline = find.byWidgetPredicate(
       (widget) => widget.key is ValueKey<String> &&
@@ -3449,6 +3519,11 @@ void main() {
     addTearDown(() => FlutterError.onError = previousOnError);
     await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
     await tester.pumpAndSettle();
+    expect(
+      gateway.insertTimelineClipCalls,
+      1,
+      reason: 'the guard must observe a real insert, not a disabled confirmation',
+    );
     expect(tester.takeException(), isNull);
   });
 

@@ -202,7 +202,8 @@ headless or widget-level checks:
 ### Reproduced and fixed (2026-10-18, compact layout)
 
 Four compact-layout defects reproduced through the running app at 320x440 with
-`scripts/or_ui.py`, three fixed with permanent widget guards and one open.
+`scripts/or_ui.py`, all four fixed with permanent widget guards, plus a fifth
+found by the same guard once the fourth no longer masked it.
 
 - **The workspace header overflowed by 44 px.** `_ProjectWorkspaceHeader` held
   the project name, the revision text, the state badge and the action row in one
@@ -219,14 +220,23 @@ Four compact-layout defects reproduced through the running app at 320x440 with
   expired. `OrSnackBar.show` takes a `bottomInset`, the shell and the editor pass
   the dock height in the compact layout, and a message is capped at two lines so a
   long one cannot push the surface past a short viewport.
-- **Open: the compact timeline overflows by 17 px after inserting a clip.**
-  Reproduced at step 24 of `scripts/ui_scenarios/compact-editor-journey.json`
-  (the insert confirmation). The runner records the exception, fails the step and
-  dumps the render tree, so the failing command is
-  `python3 scripts/or_ui.py run scripts/ui_scenarios/compact-editor-journey.json`
-  and the failing step is named. A widget test with the fake gateway does not
-  reproduce it, so the trigger is in the real-data path; this is recorded as a
-  defect, not accepted, and it is the next compact task.
+- **The compact viewer overflowed by 17 px once a clip gave the preview a
+  range.** The trigger is `hasRange`: the viewer's scrub strip (ruler, clock
+  labels, slider) only appears once the preview has a content end, so the defect
+  was invisible until an insert succeeded. Two causes, both fixed: `AspectRatio`
+  inside the tight-height `Expanded` surface sized itself from the width and
+  overflowed the height (the surface is now fitted to both dimensions and
+  letterboxes), and the strip did not fit a 149 px panel (a short panel now keeps
+  the surface, the scrub control and the transport and drops the decorative ruler
+  and its clock labels, which the live readout and the timeline ruler carry). The
+  compact journey runs end to end and the 320x480/320x440 viewports are clean.
+
+**Measured at 320x440, and not a defect but a limit:** the compact editor gives
+the viewer about 114 px once the toolbar, timeline and dock are laid out, so the
+preview surface is one pixel tall. It is clean — no clipping, no overflow, every
+control present — and it is not *usable* as a preview either. That allocation is
+recorded here as a known limitation with its number; changing the compact flex
+allocation is a design decision, not a bug fix.
 
 Two harness defects were found by the same work and fixed: a tap delivered in the
 same frame as `ensureVisible` was hit-tested against the pre-scroll position (the

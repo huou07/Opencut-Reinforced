@@ -251,6 +251,8 @@ class _Runner {
     _previousOnError = FlutterError.onError;
     FlutterError.onError = (details) {
       final text = details.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+      // ignore: avoid_print
+      print('OR_FRAMEWORK_ERROR $text');
       frameworkErrors.add(text.length > 400 ? '${text.substring(0, 400)}…' : text);
       _previousOnError?.call(details);
     };

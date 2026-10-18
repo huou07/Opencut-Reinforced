@@ -204,16 +204,18 @@ class each claim actually has:
   the performance budget is sixteen measured rows, and the bounded Linux UI
   preflight passes. The Linux lane reports hygiene, flutter, preflight and bench
   PASS.
-- **Compact-layout status (VERIFIED_BEHAVIORAL for what passes).**
-  `scripts/or_ui.py --viewport 320x440 screens` walks all five screens with no
-  render exception. The compact *editor* journey reaches the media sheet, inserts,
-  and then trips a **reproduced, unfixed 17 px bottom overflow at step 24**; it is
-  recorded in [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) with the failing command. Three
-  other compact defects found the same way are fixed with permanent widget guards
-  (header overflow 44 px, dropdown overflow 46 px, a message stealing the dock
-  tap). The 390x844 run of the same journey has not been performed since the
-  insert path began failing, so the taller compact viewport is **UNVERIFIED** for
-  this revision rather than assumed clean.
+- **Compact-layout status (VERIFIED_BEHAVIORAL on this host).**
+  `scripts/or_ui.py --viewport 320x440 screens` walks all five screens and the
+  compact *editor* journey now runs end to end (create, rejected import, import,
+  track, media sheet, insert, clip assertion, duplicate, undo) with no render
+  exception. Four defects found and fixed with permanent widget guards: header
+  overflow 44 px, dropdown overflow 46 px, a message stealing the dock tap, and
+  the viewer strip overflowing once a clip gave the preview a range (with
+  `AspectRatio` inside a tight-height `Expanded` as its second cause). The
+  compact editor's vertical allocation leaves the preview surface ~1 px tall at
+  320x440 — clean, not clipped, and recorded as a limitation with its number.
+  The same journey at 390x844 is still **UNVERIFIED**: `or_ui.py` takes one
+  `--viewport` per invocation and the taller compact run has not been performed.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

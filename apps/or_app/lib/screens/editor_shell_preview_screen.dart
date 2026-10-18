@@ -2069,21 +2069,39 @@ class _ViewerPanelState extends State<_ViewerPanel>
       key: const ValueKey('editor-viewer-surface'),
       alignment: Alignment.center,
       color: OrColors.background,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: widget.compact ? 520 : 660,
-          maxHeight: widget.compact ? 360 : 420,
-        ),
-        child: AspectRatio(
-          aspectRatio: aspectRatio,
-          child: Container(
-            decoration: BoxDecoration(
-              color: OrColors.backgroundRecessed,
-              border: Border.all(color: OrColors.borderStrong),
-              borderRadius: BorderRadius.circular(OrRadii.small),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Fit the preview box to *both* available dimensions. `AspectRatio`
+          // inside an `Expanded` receives a tight height and sizes itself from
+          // the width, so at a narrow short viewport it overflows: measured
+          // 2026-10-18, the 320x440 compact editor overflowed the viewer by 25 px
+          // as soon as the scrub strip appeared, and the same shape overflows at
+          // any short viewport. Fitting explicitly letterboxes the preview
+          // instead, which is what a viewer should do.
+          final limitWidth = widget.compact ? 520.0 : 660.0;
+          final limitHeight = widget.compact ? 360.0 : 420.0;
+          final availableWidth =
+              constraints.maxWidth.isFinite ? constraints.maxWidth : limitWidth;
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : limitHeight;
+          var fittedWidth = math.min(availableWidth, limitWidth);
+          var fittedHeight = fittedWidth / aspectRatio;
+          if (fittedHeight > math.min(availableHeight, limitHeight)) {
+            fittedHeight = math.min(availableHeight, limitHeight);
+            fittedWidth = fittedHeight * aspectRatio;
+          }
+          return SizedBox(
+            width: fittedWidth,
+            height: fittedHeight,
+            child: Container(
+              decoration: BoxDecoration(
+                color: OrColors.backgroundRecessed,
+                border: Border.all(color: OrColors.borderStrong),
+                borderRadius: BorderRadius.circular(OrRadii.small),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
               fit: StackFit.expand,
               children: [
                 if (preview?.contentEnd == null)
@@ -2133,10 +2151,11 @@ class _ViewerPanelState extends State<_ViewerPanel>
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -2160,11 +2179,25 @@ class _ViewerPanelState extends State<_ViewerPanel>
 
     return ColoredBox(
       color: OrColors.background,
-      child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A short panel cannot hold the header, the surface, the ruler, the
+          // ruler's clock labels, the scrub row and the transport row. Measured
+          // 2026-10-18 at 320x440: the viewer received 149 px, the surface
+          // collapsed to zero height and the column still overflowed by 25 px.
+          // A short panel keeps what the user acts with — the surface, the scrub
+          // control and the transport — and drops the ruler and its clock labels,
+          // which the live position readout and the timeline's own ruler still
+          // convey. It never clips and never squeezes away a control.
+          final shortPanel = constraints.maxHeight < 200;
+          return Column(
         children: [
           _PanelHeader(
             title: 'Viewer',
-            height: widget.compact ? 34 : 38,
+            // The short panel keeps two pixels for the surface's remainder: with
+            // the strip at its minimum the sum came to one pixel more than the
+            // panel, and a one-pixel overflow is still a clipped control.
+            height: shortPanel ? 32 : (widget.compact ? 34 : 38),
             trailing: OrBadge(
               preview == null || preview.width == 0
                   ? 'Preview'
@@ -2187,7 +2220,8 @@ class _ViewerPanelState extends State<_ViewerPanel>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (hasRange) ...[
-                  SizedBox(
+                  if (!shortPanel)
+                    SizedBox(
                     height: 8,
                     child: CustomPaint(
                       painter: _PreviewRulerPainter(),
@@ -2230,6 +2264,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                       ),
                     ),
                   ),
+                  if (!shortPanel)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -2377,6 +2412,8 @@ class _ViewerPanelState extends State<_ViewerPanel>
             ),
           ),
         ],
+          );
+        },
       ),
     );
   }
