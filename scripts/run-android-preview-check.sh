@@ -143,7 +143,7 @@ if [[ "$case_name" == saf ]]; then
   drive_args+=(--keep-app-running)
 fi
 (
-  flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
+  flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds --no-pub \
     "${drive_args[@]}" "$@" 2>&1 | tee "$log"
 ) &
 drive_pid=$!

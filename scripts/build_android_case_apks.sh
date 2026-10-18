@@ -206,7 +206,10 @@ verify_apk_loads_its_bridge() { # apk
 build_case_apk() {
   local name="$1" entrypoint="$2"
   shift 2
-  (cd "$APP" && flutter build apk --debug --target-platform android-x64 --target "$entrypoint" "$@")
+  # `--no-pub`: the lane resolves the package graph once, offline and
+  # lockfile-enforced, before any build; a second unconstrained resolution here
+  # is how a mixed-cache build produced undefined getters in Flutter's own SDK.
+  (cd "$APP" && flutter build apk --debug --no-pub --target-platform android-x64 --target "$entrypoint" "$@")
   local built="$APP/build/app/outputs/flutter-apk/app-debug.apk"
   test -s "$built"
   cp "$built" "$output_dir/$name.apk"

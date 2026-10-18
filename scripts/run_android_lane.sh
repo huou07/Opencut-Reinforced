@@ -5,6 +5,7 @@
 #        [--report PATH] [--keep-guest]
 #
 # Steps, in order:
+#   deps       resolve the Dart package graph once, offline and lockfile-enforced
 #   apk        stage the FFmpeg link and build every case APK
 #              (scripts/build_android_case_apks.sh)
 #   emulator   boot a dedicated AVD with KVM (scripts/start-android-emulator.sh)
@@ -56,7 +57,7 @@ cd "$ROOT" || exit 1
 
 LANE_DIR="apps/or_app/build/local-lanes"
 DEFAULT_REPORT="$LANE_DIR/android.json"
-DEFAULT_STEPS="apk,emulator,preview,saf"
+DEFAULT_STEPS="deps,apk,emulator,preview,saf"
 
 MIN_MEM_GIB_OVERRIDE="${OR_ANDROID_LANE_MIN_MEM_GIB:-}"
 AVD_NAME="${OR_AVD_NAME:-an3-api36}"
@@ -158,7 +159,7 @@ seen=","
 IFS=',' read -r -a step_list <<<"$steps"
 for step in "${step_list[@]}"; do
   case "$step" in
-    apk|emulator|preview|saf) ;;
+    deps|apk|emulator|preview|saf) ;;
     *) printf 'run_android_lane: unknown step: %s\n' "$step" >&2; usage >&2; exit 2 ;;
   esac
   if [[ "$seen" == *",$step,"* ]]; then
@@ -437,28 +438,29 @@ if [[ "$result" == "PASS" ]]; then
   export OR_ANDROID_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance"
   export OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance-recovery"
   export PKG_CONFIG_ALLOW_CROSS=1
-  # `flutter drive` runs `pub get`, which cannot mutate the owner's shared pub
-  # cache from this worker UID: measured 2026-10-18, the diagnostics case died
-  # with `Deletion failed, path = '/home/huou07/.pub-cache/hosted/pub.dev/
-  # path_provider-2.1.6' (OS Error: Operation not permitted)`. The bounded Linux
-  # preflight already stages a writable project-local cache for exactly this
-  # reason, so reuse it when the shared one is unusable. A host that cannot
-  # provide either is a named precondition, not a confusing driver failure.
-  pub_seed="${PUB_CACHE:-${HOME:-/root}/.pub-cache}"
-  pub_probe_dir="$pub_seed/hosted/pub.dev"
-  pub_writable=0
-  if [[ -d "$pub_probe_dir" ]]; then
-    probe="$(mktemp -d "$pub_probe_dir/.or-write-probe-XXXXXX" 2>/dev/null)" && {
-      rmdir "$probe" 2>/dev/null && pub_writable=1
-    }
+  # `flutter drive` and `flutter build apk` both run `pub get`. Against the
+  # owner's shared cache this worker UID can create a package directory but not
+  # replace one: measured 2026-10-18 the diagnostics case died with
+  # `Deletion failed, path = '.../hosted/pub.dev/path_provider-2.1.6' (OS Error:
+  # Operation not permitted)`, and a later build resolved a mixed package graph
+  # from two caches and failed to compile Flutter's own SDK. A writability probe
+  # is not enough to tell those apart, so the lane prefers the project-local
+  # staged cache the bounded Linux preflight already maintains, and stages one
+  # from the shared cache when it is absent.
+  shared_pub="${PUB_CACHE:-${HOME:-/root}/.pub-cache}"
+  local_pub="$ROOT/apps/or_app/.dart_tool/aeh-pub-cache"
+  if [[ ! -d "$local_pub/hosted/pub.dev" && -d "$shared_pub/hosted/pub.dev" ]]; then
+    mkdir -p "$local_pub/hosted" "$local_pub/hosted-hashes"
+    for entry in hosted/pub.dev hosted-hashes/pub.dev; do
+      if [[ -d "$shared_pub/$entry" && ! -d "$local_pub/$entry" ]]; then
+        cp -R "$shared_pub/$entry" "$local_pub/$entry" 2>/dev/null || true
+      fi
+    done
   fi
-  if (( pub_writable == 0 )); then
-    local_cache="$ROOT/apps/or_app/.dart_tool/aeh-pub-cache"
-    if [[ -d "$local_cache/hosted/pub.dev" ]]; then
-      export PUB_CACHE="$local_cache"
-    else
-      warn "the shared pub cache at $pub_seed is not writable and $local_cache has not been staged; run bash scripts/run_local_lane.sh linux once (its preflight stages it) before the Android lane"
-    fi
+  if [[ -d "$local_pub/hosted/pub.dev" ]]; then
+    export PUB_CACHE="$local_pub"
+  else
+    warn "no writable pub cache: neither $local_pub nor $shared_pub can be used; the driven cases will fail inside pub get"
   fi
   if [[ -n "$FFMPEG_PREFIX" ]]; then
     export PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig"
@@ -471,6 +473,11 @@ if [[ "$result" == "PASS" ]]; then
 
   for step in "${step_list[@]}"; do
     case "$step" in
+      deps)
+        # One resolution, enforced against the lockfile and offline, so no later
+        # Flutter invocation can silently upgrade a package mid-drive.
+        run_step deps "cd '$ROOT/apps/or_app' && flutter --no-version-check pub get --offline --enforce-lockfile" 600 || result="FAIL"
+        ;;
       apk)
         daemons_before="$(java_daemon_pids)"
         run_step apk "bash '$CASE_APK_SCRIPT' '$CASE_APK_DIR'" 3600 || result="FAIL"

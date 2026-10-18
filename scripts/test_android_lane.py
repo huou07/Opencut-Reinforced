@@ -274,6 +274,23 @@ class AndroidLaneCase(unittest.TestCase):
         after = set(DEFAULT_LANE_DIR.rglob("*")) if DEFAULT_LANE_DIR.exists() else set()
         self.assertEqual(before, after, "a redirected run wrote into the real lane directory")
 
+    def test_the_lane_resolves_the_package_graph_once_and_offline(self) -> None:
+        # Two independent resolutions produced a mixed-cache build that failed to
+        # compile Flutter's own SDK, so the lane resolves once and every later
+        # Flutter invocation is told not to resolve again.
+        self.run_lane("--steps", "deps,apk")
+        payload = self.payload()
+        dependency_steps = [step for step in payload["steps"] if step["id"] == "deps"]
+        self.assertEqual(len(dependency_steps), 1, payload["steps"])
+        command = dependency_steps[0]["command"]
+        self.assertIn("pub get", command)
+        self.assertIn("--offline", command)
+        self.assertIn("--enforce-lockfile", command)
+        builder = (ROOT / "scripts" / "build_android_case_apks.sh").read_text(encoding="utf-8")
+        self.assertIn("flutter build apk --debug --no-pub", builder)
+        runner = (ROOT / "scripts" / "run-android-preview-check.sh").read_text(encoding="utf-8")
+        self.assertIn("--no-pub", runner)
+
     def test_the_lane_hands_the_driven_scripts_an_absolute_runner_temp(self) -> None:
         # `run-android-preview-check.sh` changes directory to apps/or_app, so a
         # relative RUNNER_TEMP stopped resolving and the case reported a driver
@@ -334,7 +351,7 @@ class AndroidLaneCase(unittest.TestCase):
 
     # --- the run ----------------------------------------------------------
     def test_all_steps_pass_and_a_dirty_tree_is_never_pass(self) -> None:
-        result = self.run_lane()
+        result = self.run_lane("--steps", "apk,emulator,preview,saf")
         payload = self.payload()
         classifications = {step["id"]: step["classification"] for step in payload["steps"]}
         for step in ("apk", "emulator", "preview", "saf"):
