@@ -8,8 +8,8 @@ This outcome-based roadmap supersedes the old checkpoint sequence for active
 work as of the convergence pivot recorded in
 [OPEN_SOURCE_CONVERGENCE.md](OPEN_SOURCE_CONVERGENCE.md). It groups real user
 capabilities and technical dependencies; its rows are not separate operator
-prompts or mandatory commits. `PLAN.json`, `STATE.json`, and
-`execution/phases/` remain immutable historical traceability for the work
+prompts or mandatory commits. `docs/archive/execution/PLAN.json`, `STATE.json`
+and `phases/` remain immutable historical traceability for the work
 already performed. Their future `NEXT` cursor does not authorize a return to
 the old implementation sequence.
 
@@ -179,12 +179,17 @@ journey unless results establish a real engine migration dependency.
   applied in both preview and export (`crates/or_audio/src/lib.rs:428-436`,
   reached from `crates/or_app_bridge/src/preview.rs:2612`). No denoise, EQ,
   compressor, limiter or filter graph exists in code, export profiles or the
-  command catalog. The pinned FFmpeg build is configured `--disable-avfilter`
-  and enables only `scale,setpts,format,aformat,aresample,showwavespic`
-  (`.github/workflows/platform-verification.yml:33,58-63`), so denoise cannot be
-  delegated to it without a deliberate codec-build and licensing change. The
-  capability must be bounded DSP in `or_audio`/`or_media`, or the codec
-  configuration must change and be re-verified.
+  command catalog. The pinned shared library build disables avfilter
+  (`FFMPEG_COMMON_CONFIGURE_ARGS`, `.github/workflows/platform-verification.yml:33`);
+  only the desktop helper executables re-enable it with six filters
+  (`:51,58-63`), so the library the editor links cannot denoise as shipped.
+  **Owner decision, 2026-10-18:** the route is a deliberate FFmpeg
+  build-configuration change that enables the filters this capability needs,
+  with the licence, packaging and per-platform consequences re-verified before
+  it is enabled anywhere. Bounded Rust DSP in `or_audio`/`or_media` is not the
+  chosen route. The change is phase 4 of
+  [prompts/OR-BUILD.md](prompts/OR-BUILD.md) and no part of it is implemented
+  yet.
 - **Code-to-illustration video — absent; only enabling primitives exist:** there
   is no code ingestion, tokenisation, syntax highlighting, MotionScene schema or
   parser, scene evaluator or materialisation path. `crates/or_ai/src/protocol.rs:26`
@@ -203,11 +208,17 @@ journey unless results establish a real engine migration dependency.
   `apps/or_app/build/local-lanes/android.json` in the Linux report's shape.
   `scripts/test_android_lane.py` checks its usage, blocked-precondition,
   dirty-tree and no-acceptance rules without a device, inside `check-repo.sh`.
-  On 2026-10-18 the lane reported `BLOCKED` with its own measurements:
-  `MemAvailable` 5.5 GiB, the ~2.25 GiB `GradleDaemon 8.14.3` that belongs to the
-  sibling project VCE, and the unset pinned FFmpeg prefix. The guest drive path
-  is therefore **unexecuted and unverified**, and reproducible staging of the
-  pinned x86_64 Android FFmpeg prefix is still missing. Both are phase 0 of
+  On 2026-10-18 an earlier revision of the lane reported `BLOCKED` with its own
+  measurements: `MemAvailable` 5.5 GiB, the ~2.25 GiB `GradleDaemon 8.14.3` that
+  belongs to the sibling project VCE, and the unset pinned FFmpeg prefix. That
+  revision could not have run even with a prefix: it never created the
+  `android/.ffmpeg-install` link the bridge build hook requires, and it invoked
+  the preview script with no arguments against a script that takes four. Both
+  are repaired, its guest RAM default now matches the emulator script's measured
+  size, and reproducible staging is `scripts/stage_android_ffmpeg.sh` (which also
+  builds the guest FFmpeg link probe) with `scripts/build_android_case_apks.sh`.
+  The staged prefix and probe are now built on this host; whether the guest
+  drive itself passes is **unverified until a run records a real result**. Both are phase 0 of
   [the current prompt](prompts/OR-BUILD.md).
 - **Next product gap — complete the editing journey on desktop and Android:**
   close the enumerated basic-edit gaps in the order product value needs them,

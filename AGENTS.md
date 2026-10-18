@@ -73,12 +73,14 @@ owner-granted ([docs/AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md)):
 ```sh
 bash scripts/run_local_lane.sh linux      # hygiene, Flutter suite, preflight, bench
 bash scripts/run_local_lane.sh linux --packaged   # adds the local .deb and journey
-bash scripts/run_local_lane.sh android    # local emulator lane; consolidated by C2
+bash scripts/run_local_lane.sh android    # local emulator lane: apk, emulator, preview, saf
 ```
 
 `bash scripts/check-repo.sh` is the source gate and `bash scripts/acceptance.sh`
 adds the Rust and Flutter lanes, `gitleaks` and the local performance budget.
-Both agree to write `.hub/gate-report.json`. **GitHub Actions is the only
+`scripts/acceptance.sh` writes the machine-readable report
+`.hub/gate-report.json`; `scripts/check-repo.sh` is read-only and writes no
+report. **GitHub Actions is the only
 authority for native, packaged and cross-platform acceptance**; a local preflight
 or emulator result is developer evidence and never becomes `ACCEPTED`. Release,
 packaging and distribution follow [docs/RELEASE.md](docs/RELEASE.md) and are

@@ -44,6 +44,7 @@ in_scope=(
   docs/UX_ACCEPTANCE.md
   docs/evidence/claims/README.md
   docs/prompts/README.md
+  docs/prompts/OR-BUILD.md
 )
 
 today_epoch="$(date -u +%s)"

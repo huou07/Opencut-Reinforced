@@ -17,6 +17,26 @@ cross-platform packaging, or a second writer in this working tree.
 
 Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
 
+The local Android lane's three helpers are repository scripts, not tribal
+knowledge: `scripts/stage_android_ffmpeg.sh` builds the pinned x86_64 Android
+FFmpeg prefix and the guest link probe (NDK 28.2.13676358, API-26 clang wrappers,
+FFmpeg 8.1.3 with a SHA-512 check, the workflow's configure profile);
+`scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install` link
+the bridge build hook requires and builds one APK per acceptance case plus the
+SAF fixture; `scripts/run_android_ffmpeg_probe.sh` loads the packaged FFmpeg
+libraries from the built APK on the guest. They exist because the recipe used to
+live only inside the hosted `android` job, and a lane whose input cannot be
+reproduced reports BLOCKED rather than a guess.
+
+A known host hazard: this workstation's shared `$CARGO_HOME/config.toml` pins
+`FFMPEG_DIR` and `PKG_CONFIG_PATH` with `force = true` to the Linux desktop
+prefix `apps/or_app/build/local-deb/ffmpeg-install`. `force` makes that file win
+over the environment, so any other FFmpeg linkage — the Android probe included —
+silently compiles against host libraries unless it overrides the value on the
+command line. `scripts/stage_android_ffmpeg.sh` passes scoped `--config`
+overrides for exactly this reason; the shared file itself is not modified, since
+the Linux package lane depends on it.
+
 By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. Two exceptions are explicit: the bounded Linux preflight above, and the local Android emulator lane granted in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md). Outside them, if local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.
 
 Report each check as one of:
@@ -94,7 +114,7 @@ machine's `target`, `build`, `.dart_tool` or Flutter ephemeral directories.
 Preserve source, locks and user data.
 
 The inspected Flutter SDK is 3.47.7; CI pins 3.47.5, so local Flutter output is
-not exact-version CI evidence. Sixteen focused preflight tests pass. The Linux
+not exact-version CI evidence. Seventeen focused preflight tests pass. The Linux
 runner temporarily narrows the bridge's nested `rust-toolchain.toml` to the
 host target and restores its original bytes in `finally`; it avoids downloading
 unused cross-platform Rust targets. See the 2026-10-17 Debian run in
@@ -373,5 +393,5 @@ emulator and no captured fatal/ANR cannot classify that disconnect. The final
 collector preserves failed samples, consumes complete process listings and
 captures all logcat buffers. Diagnostic collection success is not product
 acceptance. Hosted verification for the final implementation SHA remains the
-supervisor's gate; local native execution is disallowed, and optional hardware
-media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.
+supervisor's gate; local native execution outside the two owner-granted lanes is
+disallowed, and optional hardware media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.

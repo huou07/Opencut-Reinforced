@@ -20,10 +20,15 @@ documentation defect to repair:
    [PROJECT_FORMAT.md](PROJECT_FORMAT.md) and the [ADRs](adr/README.md) —
    architecture and subsystem contracts.
 5. [PRODUCT.md](PRODUCT.md) — required product capabilities and maturity labels.
-6. [DESIGN.md](../DESIGN.md) and [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) —
-   presentation and UX truth.
-7. [docs/archive/](archive/execution/README.md) — historical traceability only.
+6. [docs/archive/](archive/execution/README.md) — historical traceability only.
    It answers "what was planned or verified, and when", never "what to do now".
+7. [DESIGN.md](../DESIGN.md) and [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) —
+   presentation and UX truth.
+
+This order mirrors entry 1 of that list, `docs/AGENT_POLICY.md`; a rank numbered
+differently here is a routing defect, not an alternative reading. Entry 4 is
+extended here with `PROJECT_FORMAT.md` and the ADRs, which the policy places in
+the same architecture-and-contracts tier rather than in a separate rank.
 
 Host and session security boundaries in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md)
 and the agent harness remain higher authority than anything in this repository.

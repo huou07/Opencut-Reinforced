@@ -15,7 +15,7 @@ preview media, assemble and revise timeline clips, add titles and manual
 captions, and export Matroska or desktop WebM. Android projects use SAF
 documents and an app-private working copy with explicit synchronization; the
 Android WebM profile is claimed only after its exact-SHA all-ABI packaged
-journey passes. Dirty work
+journey passes; run 38172368290 records that check passing at `33f7f355`. Dirty work
 periodically updates a recovery checkpoint without overwriting the canonical
 project file; Save remains explicit.
 
@@ -55,7 +55,9 @@ The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFil
 
 Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
 
-The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, exact clip edits, markers, snapping, history, preview, and desktop Matroska/WebM export. Android WebM remains conditional on exact-SHA all-ABI and SAF output verification. Proxies remain a cache foundation rather than an exposed workflow. Advanced editing, some codec/container choices, AI assistance, and production packaging remain incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
+The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, exact clip edits, markers, snapping, history, preview, and desktop Matroska/WebM export. Android WebM's exact-SHA all-ABI build and real SAF output check passed at
+`33f7f355` (run 38172368290, recorded in [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md));
+physical-device performance remains unverified. Proxies remain a cache foundation rather than an exposed workflow. Advanced editing, some codec/container choices, AI assistance, and production packaging remain incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
 
 ## Product direction
 

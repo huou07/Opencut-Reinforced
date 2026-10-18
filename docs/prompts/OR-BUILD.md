@@ -1,5 +1,7 @@
 # OR-BUILD — build Opencut Reinforced to the owner's product
 
+Last reviewed: 2026-10-18
+
 This is the single execution prompt for OR. It selects and bounds the whole
 program: complete basic editing, code-to-illustration video, automatic
 subtitles, noise filtering, and the local-plus-hosted toolchain that carries
@@ -36,7 +38,8 @@ rechecks it.
 | Repository | `/home/huou07/Projects/OR`, branch `feat/semantics-journey-guards` |
 | Gates | `bash scripts/check-repo.sh` PASS; `bash scripts/acceptance.sh` adds the Rust and Flutter lanes, `gitleaks` and the performance budget |
 | Local lanes | `bash scripts/run_local_lane.sh linux` exists with `--packaged`, `--steps`, `--report`. Exit codes: 0 pass, 1 fail, 2 bad invocation, 3 host-BLOCKED, 4 UNVERIFIED or dirty tree |
-| Android lane | **Not implemented.** `run_local_lane.sh` prints "linux — the only lane implemented today". `scripts/start-android-emulator.sh`, `run-android-preview-check.sh`, `stop-android-emulator.sh` exist and are CI-proven |
+| Android lane | **Implemented; guest drive still unexecuted.** `run_local_lane.sh android` delegates to `scripts/run_android_lane.sh` with steps `apk,emulator,preview,saf`. Its inputs are `scripts/stage_android_ffmpeg.sh` (pinned x86_64 prefix plus the guest link probe) and `scripts/build_android_case_apks.sh` (the `android/.ffmpeg-install` link the hook requires, one APK per case, the SAF fixture). `scripts/test_android_lane.py` covers its rules hermetically |
+| Android lane status | `MemAvailable` is time-varying: measure it at lane start. On 2026-10-18 the prefix and probe were staged on this host; no guest drive has recorded a real result yet |
 | UI harness | **Not implemented.** No `scripts/or_ui.py`, no `scripts/ui_scenarios/` |
 | Performance budget | `scripts/bench_quality.py` has two rows only: `cli-cold-start` and `ffmpeg-export`. Interactive frame time and seek latency are UNVERIFIED |
 | Android SDK | `~/Android/Sdk` with platform-tools, emulator, NDK 26.3/27.2/28.2, `system-images;android-36;google_apis;x86_64`; AVD `an3-api36`; `/dev/kvm` usable |
@@ -45,8 +48,8 @@ rechecks it.
 | Host headroom | **Contended.** `MemAvailable` measured 5.4 GiB. The Gradle 8.14.3 daemon holding ~2.25 GiB belongs to the sibling project VCE (`~/Projects/VCE/native-offline/src-tauri/gen/android`), not to OR. The Linux preflight refuses below 6 GiB and the Android lane needs ~7.7 GiB |
 | Desktop packages | Built and published by `.github/workflows/developer-preview.yml`; acceptance authority is `.github/workflows/platform-verification.yml` |
 
-Measured capability state, read from source at `e9b21a8` plus the two
-organization commits:
+Measured capability state, read from source at `7ebdaca` — the `e9b21a8`
+organization series plus the five commits that followed it:
 
 - **Basic editing is implemented**: 23 commands and 8 queries dispatch through
   the shared application path (`crates/or_core/src/application.rs:64`), with 109
@@ -68,11 +71,15 @@ organization commits:
   `TranscriptionService::new()` returns `None`. There is no transcription CLI
   subcommand.
 - **Noise filtering is absent.** Audio processing is only gain, pan and linear
-  fades (`crates/or_audio/src/lib.rs:428-436`). The pinned FFmpeg build is
-  `--disable-avfilter` with only `scale,setpts,format,aformat,aresample,
-  showwavespic` enabled
-  (`.github/workflows/platform-verification.yml:33,58-63`), so denoise cannot be
-  delegated to it without a deliberate codec-build and licensing change.
+  fades (`crates/or_audio/src/lib.rs:428-436`). The pinned shared library build
+  disables avfilter (`.github/workflows/platform-verification.yml:33`,
+  `FFMPEG_COMMON_CONFIGURE_ARGS`); only the desktop helper executables re-enable
+  it with six filters (`:51,58-63`), so the library the editor links cannot
+  denoise as shipped. **Owner decision, 2026-10-18: the route is a deliberate
+  FFmpeg build-configuration change that enables the filters this needs, with the
+  licence, packaging and per-platform consequences re-verified before it is
+  enabled anywhere.** Bounded Rust DSP in `or_audio`/`or_media` is not the chosen
+  route.
 
 ## What to build
 
@@ -91,6 +98,14 @@ The program below cannot be iterated quickly without these. Land them first.
    recipe from the `android` job in `.github/workflows/platform-verification.yml`
    (NDK `28.2.13676358`, API 26, x86_64 locally) and add
    `android/app/src/main/jniLibs/` to `.gitignore` with the reason.
+   **Landed 2026-10-18:** `scripts/stage_android_ffmpeg.sh` reproduces the
+   pinned prefix and the guest link probe, `scripts/build_android_case_apks.sh`
+   stages the `android/.ffmpeg-install` link the build hook requires and builds
+   every case APK, `scripts/run_android_ffmpeg_probe.sh` runs the probe against
+   the packaged libraries, the lane's four steps pass their step arguments
+   correctly, the gitignore covers both staging paths, and
+   `scripts/test_android_lane.py` pins each of those. What remains is the guest
+   drive itself: no run has recorded a real result yet.
 2. `scripts/or_ui.py`: one harness that lets an agent observe and drive the real
    app — `screens`, `tree`, `shot`, `act`, `run <scenario.json>` — on Linux
    (Xvfb plus the real Rust host) and on the Android emulator, emitting a
@@ -160,10 +175,12 @@ load-bearing: see the ADR triggers in
 
 ### Phase 4 — noise filtering and audio cleanup
 
-1. Decide and record the route once: bounded Rust DSP in `or_audio`/`or_media`,
-   or a deliberate FFmpeg configuration change enabling the needed filters, with
-   the licence and packaging consequences re-verified. Do not assume the shipped
-   build can do it.
+1. Route decided by the owner on 2026-10-18: a deliberate FFmpeg
+   build-configuration change enabling the filters this capability needs, with
+   the licence, packaging and per-platform consequences re-verified before it is
+   enabled anywhere. Bounded Rust DSP in `or_audio`/`or_media` is not the route.
+   Do not assume the shipped build can do it: the pinned shared library disables
+   avfilter today.
 2. Implement denoise as a typed, bounded, per-clip audio setting that runs in
    both preview and export through the same code path, never on the realtime
    callback with unbounded work.

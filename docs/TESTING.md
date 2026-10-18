@@ -54,8 +54,8 @@ shared SDK bytes are never modified: its `engine.stamp` held
 `deb287481e3ce9468f3434937ced4240a70539ca` before and after the run. The journey
 passed at source `791a27f4839955bb6c0b2a16a4255bf12b341c8d` plus the working
 diff in 20.03s on a warm build, with a minimum 7,169,503,232 bytes
-MemAvailable. Ten focused preflight tests cover cache staging, the write probe
-and the overlay.
+MemAvailable. The preflight's focused tests cover cache staging, the write probe
+and the overlay (17 at this revision).
 
 The independent [Linux UI run 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316)
 passed analyzer, six focused component/semantics tests and the actual Linux
@@ -81,7 +81,7 @@ Review platform-specific native screenshots rather than imposing pixel identity.
 ### One local lane entry point
 
 `bash scripts/run_local_lane.sh linux` is the single supported local entry point
-for the four steps above plus the hygiene gate, so an agent does not have to
+for its four steps — the hygiene gate included — so an agent does not have to
 remember a sequence or its preconditions:
 
 | Step | Command it runs |
@@ -183,12 +183,20 @@ its single entry point is `bash scripts/run_local_lane.sh linux`; that lane also
 writes one machine-readable report of what ran, for how long, and what it could
 not establish. The same entry point selects the local Android emulator lane with
 `bash scripts/run_local_lane.sh android`, which delegates to
-`scripts/run_android_lane.sh`: it probes `MemAvailable` against a 7 GiB floor, the
-AVD, `/dev/kvm`, `adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX` before booting
-anything, always stops the guest it started, and writes
-`apps/or_app/build/local-lanes/android.json` in the same shape as the Linux
-report. `scripts/test_android_lane.py` checks its blocked, dirty-tree and
-acceptance rules without a device. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+`scripts/run_android_lane.sh`, whose steps are `apk`, `emulator`, `preview` and
+`saf`: it probes `MemAvailable` against a 7 GiB floor, the AVD, `/dev/kvm`,
+`adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX` before booting anything, builds
+every case APK before the guest boots, drives the bridge-diagnostics,
+preview-surface and DocumentsUI SAF journeys, always stops the guest it started,
+and writes `apps/or_app/build/local-lanes/android.json` in the same shape as the
+Linux report, including the SHA-256 of each APK it drove and an explicit
+`not_run` entry when no FFmpeg link probe was staged. Its inputs are repository
+scripts: `scripts/stage_android_ffmpeg.sh` produces the pinned prefix and probe,
+and `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install`
+link the bridge hook requires (that link is why the lane previously could not
+build an APK at all). `scripts/test_android_lane.py` checks its blocked,
+dirty-tree, no-acceptance, argument-passing, guest-lifecycle and
+artifact-isolation rules without a device, inside `check-repo.sh`. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.
