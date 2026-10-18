@@ -22,11 +22,54 @@ knowledge: `scripts/stage_android_ffmpeg.sh` builds the pinned x86_64 Android
 FFmpeg prefix and the guest link probe (NDK 28.2.13676358, API-26 clang wrappers,
 FFmpeg 8.1.3 with a SHA-512 check, the workflow's configure profile);
 `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install` link
-the bridge build hook requires and builds one APK per acceptance case plus the
-SAF fixture; `scripts/run_android_ffmpeg_probe.sh` loads the packaged FFmpeg
-libraries from the built APK on the guest. They exist because the recipe used to
-live only inside the hosted `android` job, and a lane whose input cannot be
-reproduced reports BLOCKED rather than a guess.
+the bridge build hook requires and builds one APK per acceptance case, the SAF
+fixture, and `ui.apk` for the agent-facing UI harness; and
+`scripts/run_android_ffmpeg_probe.sh` loads the packaged FFmpeg libraries from the
+built APK on the guest. They exist because the recipe used to live only inside the
+hosted `android` job, and a lane whose input cannot be reproduced reports BLOCKED
+rather than a guess.
+
+The lane derives its memory floor from the steps it was asked to run: a guest step
+requires `OR_ANDROID_GUEST_RAM_MB` (6144) + `OR_ANDROID_EMULATOR_OVERHEAD_MB`
+(1024) + `OR_ANDROID_HOST_MARGIN_MB` (1024), an apk-only run requires
+`OR_ANDROID_BUILD_FLOOR_MB` (5120) MiB, and `OR_ANDROID_LANE_MIN_MEM_GIB` is an
+explicit override that the report names. After its apk step it stops the Gradle and
+Kotlin daemons that appeared during that step and that belong to the wrapper's own
+Gradle version; a daemon that was already resident, or one on another version, is
+attributed in `android-logs/daemons.log` and left alone.
+
+## The agent-facing UI harness
+
+`python3 scripts/or_ui.py` is the instrument behind OR's interface claims. It
+drives the real application by widget key, semantics label (exact or regex),
+visible text, role or dialog-scoped control — never by screen coordinate — and
+writes a step-by-step transcript with the action, selector, result, elapsed
+milliseconds, screenshot path and semantics-snapshot path.
+
+```sh
+python3 scripts/or_ui.py screens                       # inventory the running app's screens
+python3 scripts/or_ui.py tree --name editor           # semantics tree as JSON plus the dump
+python3 scripts/or_ui.py shot --name editor           # screenshot at the scenario viewport
+python3 scripts/or_ui.py act --label "Import Media" --role button
+python3 scripts/or_ui.py run scripts/ui_scenarios/editor-journey.json
+python3 scripts/or_ui.py --viewport 390x844 run scripts/ui_scenarios/compact-editor-journey.json
+python3 scripts/or_ui.py --target android run scripts/ui_scenarios/editor-journey.json
+```
+
+On Linux it runs through `scripts/run_linux_ui_preflight.py --exec`, so it reuses
+the same project-local caches, writable Flutter SDK mirror, host-scoped Rust
+toolchain manifest and shared native lock as the bounded preflight. On Android it
+needs an already-booted guest: it installs `ui.apk` from
+`apps/or_app/build/local-lanes/android-case-apks/`, pushes the scenario into the
+app-private files directory, drives it with `flutter drive`, and pulls the
+artifacts back with `run-as`. It exits 2 for a bad invocation or scenario, 3 for
+`BLOCKED` (no guest, no Xvfb, another lane holding the lock) with the command that
+would settle it, and 1 when a step fails.
+
+Artifacts land in `apps/or_app/build/ui-harness/<scenario>/`: `scenario.json`,
+`run.log`, `report.json`, and `artifacts/` with the transcript, screenshots,
+semantics JSON and the framework's semantics dump. Those paths are gitignored
+runtime state, not evidence records.
 
 A known host hazard: this workstation's shared `$CARGO_HOME/config.toml` pins
 `FFMPEG_DIR` and `PKG_CONFIG_PATH` with `force = true` to the Linux desktop

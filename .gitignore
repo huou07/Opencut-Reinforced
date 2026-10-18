@@ -38,3 +38,6 @@ __pycache__/
 # stages both into a runner temp directory for the same reason.
 apps/or_app/android/.ffmpeg-install
 apps/or_app/android/app/src/main/jniLibs/
+# The Android Gradle plugin's NDK/CMake working directory, created by every
+# `assembleDebug` in the module that owns a native library.
+packages/or_viewer_texture/android/.cxx/

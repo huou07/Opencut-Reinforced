@@ -184,7 +184,9 @@ writes one machine-readable report of what ran, for how long, and what it could
 not establish. The same entry point selects the local Android emulator lane with
 `bash scripts/run_local_lane.sh android`, which delegates to
 `scripts/run_android_lane.sh`, whose steps are `apk`, `emulator`, `preview` and
-`saf`: it probes `MemAvailable` against a 7 GiB floor, the AVD, `/dev/kvm`,
+`saf`: it derives its `MemAvailable` floor from the selected steps (guest RAM plus
+emulator overhead plus a host margin for any guest step; a build floor for an
+apk-only run), records which derivation applied, probes the AVD, `/dev/kvm`,
 `adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX` before booting anything, builds
 every case APK before the guest boots, drives the bridge-diagnostics,
 preview-surface and DocumentsUI SAF journeys, always stops the guest it started,
@@ -194,10 +196,15 @@ Linux report, including the SHA-256 of each APK it drove and an explicit
 scripts: `scripts/stage_android_ffmpeg.sh` produces the pinned prefix and probe,
 and `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install`
 link the bridge hook requires (that link is why the lane previously could not
-build an APK at all). `scripts/test_android_lane.py` checks its blocked,
+build an APK at all). After the apk step it stops the
+Gradle/Kotlin daemons that appeared during that step and belong to the wrapper's
+Gradle version, attributing each one by UID, cwd, version and RSS first, so the
+guest never competes with the build JVMs for the same RAM; a resident or
+foreign-version daemon is reported and left alone.
+`scripts/test_android_lane.py` checks its blocked,
 dirty-tree, no-acceptance, argument-passing, guest-lifecycle, Flutter-SDK
-writability, KVM-device and artifact-isolation rules without a device (15
-checks), inside `check-repo.sh`. The memory and KVM paths are explicit seams
+writability, KVM-device, artifact-isolation, derived-floor and
+daemon-attribution rules without a device (20 checks), inside `check-repo.sh`. The memory and KVM paths are explicit seams
 (`OR_LANE_MEMINFO`, `OR_LANE_KVM_DEVICE`) because a hosted runner has no
 `/dev/kvm`; the first version of these checks used the real device and the
 hosted `Repository hygiene` job failed on it before the seam existed. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
@@ -206,6 +213,14 @@ hosted `Repository hygiene` job failed on it before the seam existed. Other loca
 - `FAIL`: the check ran and found a defect that must be addressed.
 - `LOCAL ENVIRONMENT BLOCKED`: local execution was prevented by unavailable or intentionally unconfigured platform tooling. This is neither pass nor fail.
 - `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`: local native/runtime verification was intentionally skipped under the default execution policy. This is distinct from an environment limitation and is not a pass.
+
+The agent-facing UI harness (`scripts/or_ui.py`, documented in
+[TOOLING.md](TOOLING.md#the-agent-facing-ui-harness)) is a third explicit local
+exception: it launches the real app on Linux under Xvfb through the bounded
+preflight's environment, or drives an already-booted Android guest. Its scenario
+contract and its negative control are checked hermetically by
+`scripts/test_or_ui.py` inside `check-repo.sh`; its journeys are developer
+evidence and never `ACCEPTED`.
 
 For example, a blocked local macOS native check plus a passing GitHub macOS native job is verified. A blocked local check with its remote job not run is not verified. Never weaken or omit a test because a local platform tool is unavailable.
 

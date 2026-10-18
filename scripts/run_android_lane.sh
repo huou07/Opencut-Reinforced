@@ -28,12 +28,27 @@
 # (exit 3), never a PASS: this lane produces developer evidence, and hosted
 # `platform-verification` remains the authority for Android acceptance.
 #
-# Why the floor is 7 GiB and not the preflight's 6: the guest takes about
-# 3.3 GiB and the Gradle/Kotlin JVMs about 4.4 GiB on this 15 GiB host, so a run
-# that starts below the floor fails halfway and wastes the host. The lane
-# measures MemAvailable before it boots anything and names the consumers it
-# found. It never stops a java daemon it did not start: the Gradle daemon on
-# this host belongs to a sibling project.
+# Memory policy: the floor is *derived from the work the selected steps do*, not
+# a flat number. A guest step needs the guest's own RAM plus the emulator, adb
+# and the driver; an apk-only run needs the build JVMs instead. The previous flat
+# 7 GiB floor contradicted this host's measured reality on two counts: the
+# default 6144 MB guest cannot fit under 7 GiB at all (see
+# docs/AGENT-AUTHORITY.md), and an apk-only run does not need the guest's RAM.
+#
+#   floor(guest steps) = GUEST_RAM_MB + OR_ANDROID_EMULATOR_OVERHEAD_MB
+#                                        + OR_ANDROID_HOST_MARGIN_MB
+#   floor(apk only)    = OR_ANDROID_BUILD_FLOOR_MB
+#
+# OR_ANDROID_LANE_MIN_MEM_GIB remains an explicit operator override that wins
+# over the derivation, and the report records which one applied so a lowered
+# floor is always visible rather than silent.
+#
+# The lane measures MemAvailable before it boots anything and names the
+# consumers it found. After the apk step it stops the Gradle/Kotlin daemons that
+# *appeared during its own run* — matching the Gradle version its wrapper pins —
+# because a resident -Xmx8G build daemon otherwise competes with the guest for
+# the same RAM. A daemon that was already running, or that belongs to another
+# project, is attributed and left alone.
 set -uo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,7 +58,7 @@ LANE_DIR="apps/or_app/build/local-lanes"
 DEFAULT_REPORT="$LANE_DIR/android.json"
 DEFAULT_STEPS="apk,emulator,preview,saf"
 
-MIN_MEM_GIB="${OR_ANDROID_LANE_MIN_MEM_GIB:-7}"
+MIN_MEM_GIB_OVERRIDE="${OR_ANDROID_LANE_MIN_MEM_GIB:-}"
 AVD_NAME="${OR_AVD_NAME:-an3-api36}"
 DEVICE_ID="${OR_ANDROID_DEVICE_ID:-emulator-5580}"
 ANDROID_HOME_DIR="${ANDROID_HOME:-$HOME/Android/Sdk}"
@@ -51,8 +66,23 @@ AVD_HOME_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 # 6144 MB is `scripts/start-android-emulator.sh`'s own measured default. The
 # lane used to force 2048 MB, which is below the documented 2560 MB image
 # default that the emulator script records as too small, so the guest was
-# under-sized before it ever booted.
+# under-sized before it ever booted. The derived floor follows this number, so
+# an operator who lowers it for a contended host also lowers what the lane
+# demands, visibly and in one place.
 GUEST_RAM_MB="${OR_ANDROID_GUEST_RAM_MB:-6144}"
+# Emulator/qemu process, adb, the Flutter driver and SwiftShader's own buffers.
+EMULATOR_OVERHEAD_MB="${OR_ANDROID_EMULATOR_OVERHEAD_MB:-1024}"
+# Shells, the Dart driver, page cache and scheduling slack on the host.
+HOST_MARGIN_MB="${OR_ANDROID_HOST_MARGIN_MB:-1024}"
+# An apk-only run holds the Gradle daemon (-Xmx8G reserved, far less committed),
+# the Kotlin daemon and the Dart/Flutter frontend. Measured 2026-10-18: the full
+# four-case build completed with 5.83 GiB MemAvailable at its lowest sample.
+BUILD_FLOOR_MB="${OR_ANDROID_BUILD_FLOOR_MB:-5120}"
+# The wrapper version this lane's Gradle daemons belong to. Used to attribute a
+# java daemon before it is stopped: a sibling project's daemon runs another
+# version and must never be touched.
+GRADLE_VERSION="$(sed -n 's/.*gradle-\([0-9][0-9.]*\)-all\.zip.*/\1/p' \
+  "$ROOT/apps/or_app/android/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | head -1)"
 MEMINFO="${OR_LANE_MEMINFO:-/proc/meminfo}"
 # Acceleration is probed at this path. The seam exists because the hermetic
 # checks must not depend on the machine they run on: a hosted runner has no
@@ -72,6 +102,9 @@ START_SCRIPT="${OR_ANDROID_START_SCRIPT:-$ROOT/scripts/start-android-emulator.sh
 PREVIEW_SCRIPT="${OR_ANDROID_PREVIEW_SCRIPT:-$ROOT/scripts/run-android-preview-check.sh}"
 STOP_SCRIPT="${OR_ANDROID_STOP_SCRIPT:-$ROOT/scripts/stop-android-emulator.sh}"
 CASE_APK_SCRIPT="${OR_ANDROID_CASE_APK_SCRIPT:-$ROOT/scripts/build_android_case_apks.sh}"
+# The Gradle wrapper of the app module; `--stop` is scoped to the version this
+# wrapper pins, so pointing it anywhere else would attribute daemons wrongly.
+GRADLEW_DIR="${OR_ANDROID_GRADLEW_DIR:-$ROOT/apps/or_app/android}"
 
 usage() {
   cat <<'USAGE'
@@ -88,6 +121,14 @@ install prefix (it must contain lib/pkgconfig) when the apk step is selected;
 `bash scripts/stage_android_ffmpeg.sh` produces one and prints the export lines.
 OR_ANDROID_FFMPEG_PROBE is optional and names the guest link probe that the same
 script builds; without it the lane records that the probe did not run.
+
+Memory: the lane derives its floor from the work you selected rather than
+applying one flat number. A guest step requires
+OR_ANDROID_GUEST_RAM_MB (6144) + OR_ANDROID_EMULATOR_OVERHEAD_MB (1024) +
+OR_ANDROID_HOST_MARGIN_MB (1024); an apk-only run requires
+OR_ANDROID_BUILD_FLOOR_MB (5120). OR_ANDROID_LANE_MIN_MEM_GIB still overrides the
+derivation explicitly, and the report says which one applied. On a contended
+host, lower OR_ANDROID_GUEST_RAM_MB: the floor follows it.
 
 Exit codes: 0 every selected step passed on a clean tree; 1 a step failed;
 2 the invocation is wrong; 3 a host precondition was not met; 4 a step could
@@ -170,11 +211,28 @@ available_memory() {
 }
 
 memory_bytes="$(available_memory)"
-floor_bytes=$(( MIN_MEM_GIB * 1024 * 1024 * 1024 ))
 failures=()
 
+# Which floor applies: the derivation is a property of the selected steps, the
+# explicit override is a property of the operator.
+guest_step_selected=0
+for step in "${step_list[@]}"; do
+  case "$step" in emulator|preview|saf) guest_step_selected=1 ;; esac
+done
+if [[ -n "$MIN_MEM_GIB_OVERRIDE" ]]; then
+  floor_mib=$(( MIN_MEM_GIB_OVERRIDE * 1024 ))
+  floor_source="explicit OR_ANDROID_LANE_MIN_MEM_GIB=${MIN_MEM_GIB_OVERRIDE} override"
+elif (( guest_step_selected == 1 )); then
+  floor_mib=$(( GUEST_RAM_MB + EMULATOR_OVERHEAD_MB + HOST_MARGIN_MB ))
+  floor_source="guest ${GUEST_RAM_MB} MB + emulator ${EMULATOR_OVERHEAD_MB} MB + host margin ${HOST_MARGIN_MB} MB"
+else
+  floor_mib="$BUILD_FLOOR_MB"
+  floor_source="apk-only build floor ${BUILD_FLOOR_MB} MB"
+fi
+floor_bytes=$(( floor_mib * 1024 * 1024 ))
+
 if (( memory_bytes < floor_bytes )); then
-  failures+=("MemAvailable is $(( memory_bytes / 1024 / 1024 )) MiB, below the ${MIN_MEM_GIB} GiB floor")
+  failures+=("MemAvailable is $(( memory_bytes / 1024 / 1024 )) MiB, below the ${floor_mib} MiB floor derived for the selected steps (${floor_source}); lower OR_ANDROID_GUEST_RAM_MB for a contended host instead of lowering the floor")
   while IFS= read -r daemon; do
     [[ -n "$daemon" ]] || continue
     failures+=("running java daemon: $(printf '%s' "$daemon" | cut -c1-140)")
@@ -230,8 +288,8 @@ if (( ${#failures[@]} > 0 )); then
   record "preflight" 3 BLOCKED 0 "host precondition probes" "$LOG_DIR/preflight.log" "$reason"
   result="BLOCKED"
 else
-  printf 'MemAvailable %s MiB >= %s MiB; adb, flutter, emulator, AVD %s and %s present\n' \
-    "$(( memory_bytes / 1024 / 1024 ))" "$(( floor_bytes / 1024 / 1024 ))" "$AVD_NAME" "$KVM_DEVICE" > "$LOG_DIR/preflight.log"
+  printf 'MemAvailable %s MiB >= %s MiB floor (%s); adb, flutter, emulator, AVD %s and %s present\n' \
+    "$(( memory_bytes / 1024 / 1024 ))" "$floor_mib" "$floor_source" "$AVD_NAME" "$KVM_DEVICE" > "$LOG_DIR/preflight.log"
   record "preflight" 0 PASS 0 "host precondition probes" "$LOG_DIR/preflight.log" ""
   result="PASS"
 fi
@@ -273,6 +331,95 @@ run_step() { # id command budget_seconds
   [[ "$classification" == "PASS" ]]
 }
 
+java_daemon_pids() { pgrep -f 'GradleDaemon|KotlinCompileDaemon' 2>/dev/null | sort -n | tr '\n' ' '; }
+
+# Attribute one java daemon: worker UID, cwd, Gradle version and RSS. Nothing is
+# stopped on the strength of a process name alone.
+describe_daemon() { # pid
+  local pid="$1" line=""
+  line="uid=$(stat -c%u "/proc/$pid" 2>/dev/null || printf '?')"
+  line="$line cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || printf '?')"
+  line="$line rss_kib=$(awk '/VmRSS/{print $2}' "/proc/$pid/status" 2>/dev/null || printf '?')"
+  line="$line version=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -o "gradle-${GRADLE_VERSION}[^ ]*" | head -1)"
+  line="$line args=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-160)"
+  printf '%s\n' "$line"
+}
+
+# Stop the Gradle/Kotlin daemons this lane's own apk step started, and only
+# those: a daemon that was already resident, or one belonging to another project
+# (a different Gradle version or a different cwd), is reported and left running.
+REAPED_DAEMONS_FILE="$report_dir/.android-reaped-daemons.txt"
+: > "$REAPED_DAEMONS_FILE"
+parent_pid() { # pid -> the owning process, or empty
+  sed -n 's/^[^)]*) \([A-Z] \)*\([0-9][0-9]*\) .*/\2/p' "/proc/$1/stat" 2>/dev/null
+}
+
+reap_lane_daemons() { # before_pids
+  local before="$1" after pid described other stop=() remaining=0
+  after="$(java_daemon_pids)"
+  # First pass: a Gradle daemon is attributable because its command line names
+  # the wrapper's own distribution (`gradle-<version>-all`). A daemon that was
+  # already resident, or one on another version, is never ours to stop.
+  for pid in $after; do
+    case " $before " in *" $pid "*) continue ;; esac
+    described="$(describe_daemon "$pid")"
+    printf 'observed-start %s\n' "$described" >> "$LOG_DIR/daemons.log"
+    case "$described" in
+      *"gradle-${GRADLE_VERSION}-all"*) stop+=("$pid"); continue ;;
+    esac
+    case "$described" in
+      *GradleDaemon*)
+        other="$(printf '%s' "$described" | sed -n 's/.*gradle-\([0-9][0-9.]*\)-all.*/\1/p' | head -1)"
+        warn "left a Gradle ${other:-unknown-version} daemon alone because it does not belong to this lane: $described"
+        ;;
+    esac
+  done
+  # Second pass: a Kotlin compile daemon carries no project identity of its own,
+  # so it is attributable only as the child of a Gradle daemon this lane started.
+  # Anything else stays alive and is reported with its RSS.
+  for pid in $after; do
+    case " $before " in *" $pid "*) continue ;; esac
+    described="$(describe_daemon "$pid")"
+    case "$described" in
+      *"KotlinCompileDaemon"*)
+        for owner in ${stop[@]+"${stop[@]}"}; do
+          if [[ "$(parent_pid "$pid")" == "$owner" ]]; then
+            stop+=("$pid")
+            break
+          fi
+        done
+        ;;
+    esac
+  done
+  if (( ${#stop[@]} == 0 )); then
+    printf 'no java daemon attributable to this lane appeared during the apk step\n' \
+      >> "$LOG_DIR/daemons.log"
+    return 0
+  fi
+  for pid in "${stop[@]}"; do
+    printf 'stopping %s\n' "$(describe_daemon "$pid")" >> "$REAPED_DAEMONS_FILE"
+  done
+  # `--stop` only reaches daemons registered for the wrapper's own Gradle
+  # version, which is why a sibling project on another version is safe.
+  ( cd "$GRADLEW_DIR" && timeout 120 ./gradlew --stop ) >> "$LOG_DIR/daemons.log" 2>&1 || true
+  for pid in "${stop[@]}"; do
+    kill -0 "$pid" 2>/dev/null || continue
+    kill "$pid" 2>/dev/null || true
+  done
+  sleep 2
+  for pid in "${stop[@]}"; do
+    kill -0 "$pid" 2>/dev/null || continue
+    kill -9 "$pid" 2>/dev/null || true
+  done
+  for pid in $(java_daemon_pids); do
+    case " $before " in *" $pid "*) continue ;; esac
+    remaining=$((remaining + 1))
+    warn "a java daemon this lane could not attribute is still running ($(describe_daemon "$pid")); check its cwd before touching it, and never stop a sibling project's build"
+  done
+  printf 'reaped %s daemon(s); %s unattributed still running; MemAvailable now %s MiB\n' \
+    "${#stop[@]}" "$remaining" "$(( $(available_memory) / 1024 / 1024 ))" >> "$LOG_DIR/daemons.log"
+}
+
 if [[ "$result" == "PASS" ]]; then
   export RUNNER_TEMP="$report_dir"
   export GITHUB_WORKSPACE="$ROOT"
@@ -296,7 +443,12 @@ if [[ "$result" == "PASS" ]]; then
   for step in "${step_list[@]}"; do
     case "$step" in
       apk)
+        daemons_before="$(java_daemon_pids)"
         run_step apk "bash '$CASE_APK_SCRIPT' '$CASE_APK_DIR'" 3600 || result="FAIL"
+        # The guest and the build JVMs must never hold the host at the same
+        # time: ~4 GiB of Gradle/Kotlin was competing with the SwiftShader
+        # emulator for the same RAM and vCPUs.
+        reap_lane_daemons "$daemons_before"
         ;;
       emulator)
         run_step emulator "bash '$START_SCRIPT'" 900 || result="FAIL"
@@ -352,12 +504,14 @@ REPORT_TMP="$report.tmp"
 
 python3 - "$STEPS_FILE" "$WARNINGS_FILE" "$REPORT_TMP" "$started_iso" "$finished_iso" \
   "$(( finished_ms - started_ms ))" "$head_sha" "$dirty_at_start" "$result" "$AVD_NAME" "$DEVICE_ID" \
-  "$CASE_APK_DIR" "$FFMPEG_PROBE" "$GUEST_RAM_MB" <<'PY'
+  "$CASE_APK_DIR" "$FFMPEG_PROBE" "$GUEST_RAM_MB" "$floor_mib" "$floor_source" \
+  "$REAPED_DAEMONS_FILE" "$memory_bytes" <<'PY'
 import hashlib, json, os, platform, shutil, sys
 from pathlib import Path
 
 (steps_file, warnings_file, report, started_at, finished_at, elapsed_ms, head,
- dirty, result, avd, device, case_apk_dir, probe, guest_ram_mb) = sys.argv[1:15]
+ dirty, result, avd, device, case_apk_dir, probe, guest_ram_mb, floor_mib,
+ floor_source, reaped_file, memory_bytes) = sys.argv[1:19]
 
 def memory_total():
     for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
@@ -388,6 +542,15 @@ payload = {
     "source": head,
     "dirty_at_start": dirty == "1",
     "guest": {"avd": avd, "serial": device, "configured_ram_mb": int(guest_ram_mb)},
+    "memory_floor": {
+        "bytes": int(floor_mib) * 1024 * 1024,
+        "mib": int(floor_mib),
+        "derivation": floor_source,
+        "mem_available_bytes_at_preflight": int(memory_bytes),
+    },
+    "daemons_stopped": [
+        line for line in Path(reaped_file).read_text(encoding="utf-8").splitlines() if line.strip()
+    ],
     "host": {
         "os": platform.system(), "arch": platform.machine(), "kernel": platform.release(),
         "memory_total_bytes": memory_total(),
@@ -417,11 +580,12 @@ PY
 
 mkdir -p "$(dirname -- "$report")"
 mv "$REPORT_TMP" "$report"
-rm -f "$STEPS_FILE" "$WARNINGS_FILE"
+rm -f "$STEPS_FILE" "$WARNINGS_FILE" "$REAPED_DAEMONS_FILE"
 
 printf '\n== local android lane ==\n'
 printf 'source        : %s\n' "$head_sha"
-printf 'guest         : %s on %s\n' "$AVD_NAME" "$DEVICE_ID"
+printf 'guest         : %s on %s (%s MB)\n' "$AVD_NAME" "$DEVICE_ID" "$GUEST_RAM_MB"
+printf 'memory floor  : %s MiB (%s)\n' "$floor_mib" "$floor_source"
 printf 'report        : %s\n' "$report"
 python3 - "$report" <<'PY'
 import json, sys

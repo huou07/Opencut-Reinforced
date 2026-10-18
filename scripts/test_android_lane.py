@@ -86,6 +86,20 @@ class AndroidLaneCase(unittest.TestCase):
             + "done\n",
         )
 
+        # The lane runs `./gradlew --stop` after its apk step; point that at a
+        # stub so a control-flow check never starts a real JVM or a network
+        # dependency.
+        self.gradlew_dir = self.tmp / "gradle"
+        self.gradlew_dir.mkdir()
+        write_executable(
+            self.gradlew_dir / "gradlew",
+            recorder := (
+                "#!/usr/bin/env bash\n"
+                'printf \'%s\\n\' "$(basename "$0") $*" >> "$OR_ANDROID_TEST_CAPTURE"\n'
+                "exit 0\n"
+            ),
+        )
+
         self.meminfo = self.tmp / "meminfo"
         self.set_memory_gib(9)
         # A readable and writable stand-in for /dev/kvm. The real device exists
@@ -117,6 +131,7 @@ class AndroidLaneCase(unittest.TestCase):
             "OR_ANDROID_PREVIEW_SCRIPT": str(self.stubs / "preview.sh"),
             "OR_ANDROID_STOP_SCRIPT": str(self.stubs / "stop.sh"),
             "OR_ANDROID_CASE_APK_SCRIPT": str(self.stubs / "case_apks.sh"),
+            "OR_ANDROID_GRADLEW_DIR": str(self.gradlew_dir),
             "OR_ANDROID_TEST_CAPTURE": str(self.capture / "argv.txt"),
         })
         env.update(overrides)
@@ -285,6 +300,119 @@ class AndroidLaneCase(unittest.TestCase):
         payload = self.payload()
         self.assertEqual(payload["guest"]["serial"], "emulator-5580")
         self.assertRegex(payload["source"], r"^[0-9a-f]{40}$")
+
+    # --- the memory floor is derived, not flat ---------------------------
+    def test_a_guest_run_derives_its_floor_from_the_guest_it_boots(self) -> None:
+        # 3072 MB guest + 1024 MB emulator + 1024 MB host margin = 5120 MiB.
+        # What matters is not the constant but that the floor follows the guest
+        # the operator asked for instead of a flat 7 GiB no default guest fits
+        # under on this host.
+        self.set_memory_gib(9)
+        result = self.run_lane("--steps", "apk,emulator", OR_ANDROID_GUEST_RAM_MB="3072")
+        self.assertIn(result.returncode, (0, 4), result.stderr)  # 4 == dirty tree
+        floor = self.payload()["memory_floor"]
+        self.assertEqual(floor["mib"], 3072 + 1024 + 1024)
+        self.assertIn("guest 3072 MB", floor["derivation"])
+
+    def test_an_apk_only_run_does_not_demand_guest_memory(self) -> None:
+        # 6 GiB builds the APK but is below the old flat 7 GiB floor and far below
+        # what a 6 GiB guest needs: an apk-only lane that demanded the guest's RAM
+        # would report BLOCKED for work it can actually do.
+        self.set_memory_gib(6)
+        result = self.run_lane("--steps", "apk")
+        self.assertIn(result.returncode, (0, 4), result.stderr)
+        floor = self.payload()["memory_floor"]
+        self.assertEqual(floor["mib"], 5120)
+        self.assertIn("apk-only", floor["derivation"])
+        self.assertLess(floor["mib"], 7 * 1024)
+
+    def test_the_same_headroom_blocks_the_guest_run_that_the_apk_run_allowed(self) -> None:
+        self.set_memory_gib(6)
+        result = self.run_lane("--steps", "apk,emulator")
+        self.assertEqual(result.returncode, 3)
+        reason = self.payload()["steps"][0]["reason"] or ""
+        self.assertIn("below the", reason)
+        self.assertIn("lower OR_ANDROID_GUEST_RAM_MB", reason)
+
+    def test_the_explicit_override_wins_and_is_named_in_the_report(self) -> None:
+        self.set_memory_gib(3)
+        result = self.run_lane("--steps", "apk", OR_ANDROID_LANE_MIN_MEM_GIB="2")
+        self.assertIn(result.returncode, (0, 4), result.stderr)
+        floor = self.payload()["memory_floor"]
+        self.assertEqual(floor["mib"], 2048)
+        self.assertIn("override", floor["derivation"])
+
+    # --- the lane reaps the daemons it started, and only those -----------
+    def fake_daemon_command(self, marker: str, version: str) -> str:
+        """Return a shell line that leaves a Gradle-daemon-shaped process alive.
+
+        `bash -c 'sleep 120; :'` keeps its argv: with a single simple command
+        bash execs it and the extra arguments disappear, which would make the
+        stand-in invisible to `pgrep -f` and to the lane's attribution.
+        """
+        return (
+            f'bash -c "sleep 120; :" GradleDaemon "gradle-{version}-all" {marker} '
+            f'>/dev/null 2>&1 & echo $! >> "$OR_ANDROID_TEST_DAEMON_PIDS"\n'
+        )
+
+    def test_the_lane_stops_its_own_daemon_and_leaves_a_foreign_one_alone(self) -> None:
+        version = self.wrapper_version()
+        pids_file = self.tmp / "daemon-pids"
+        # The stub builder starts what the real build starts: one daemon on the
+        # wrapper's Gradle version, which is the lane's, and one on another
+        # version, standing in for a sibling project's build.
+        write_executable(
+            self.stubs / "case_apks.sh",
+            "#!/usr/bin/env bash\n"
+            'printf \'%s\\n\' "$(basename "$0") $*" >> "$OR_ANDROID_TEST_CAPTURE"\n'
+            'mkdir -p "$1"\n'
+            'for apk in diagnostics surface saf saf-recovery saf_fixture; do\n'
+            '  printf \'apk\' > "$1/$apk.apk"\n'
+            "done\n"
+            + self.fake_daemon_command("OURS", version)
+            + self.fake_daemon_command("FOREIGN", "8.14.3")
+            + "sleep 0.5\nexit 0\n",
+        )
+        result = self.run_lane("--steps", "apk",
+                               OR_ANDROID_TEST_DAEMON_PIDS=str(pids_file))
+        self.assertIn(result.returncode, (0, 4), result.stderr)
+        ours, foreign = (int(line) for line in pids_file.read_text().split())
+        try:
+            self.assertFalse(self.pid_alive(ours),
+                             "the lane left the Gradle daemon its own apk step started running")
+            self.assertTrue(self.pid_alive(foreign),
+                            "the lane stopped a daemon it did not start")
+            payload = self.payload()
+            self.assertTrue(payload["daemons_stopped"], payload["warnings"])
+            self.assertIn(f"gradle-{version}", payload["daemons_stopped"][0])
+            self.assertTrue(
+                any("does not belong to this lane" in entry for entry in payload["warnings"]),
+                payload["warnings"])
+        finally:
+            for pid in (ours, foreign):
+                try:
+                    os.kill(pid, 9)
+                except OSError:
+                    pass
+
+    def wrapper_version(self) -> str:
+        text = (ROOT / "apps/or_app/android/gradle/wrapper/gradle-wrapper.properties").read_text()
+        match = __import__("re").search(r"gradle-([0-9][0-9.]*)-all\.zip", text)
+        self.assertIsNotNone(match, "the wrapper properties name no Gradle version")
+        return match.group(1)
+
+    @staticmethod
+    def pid_alive(pid: int) -> bool:
+        """A zombie is dead: the stub's orphan is reparented and reaped by init."""
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].split()[0]
+        except (OSError, IndexError):
+            return False
+        return state != "Z"
 
 
 if __name__ == "__main__":

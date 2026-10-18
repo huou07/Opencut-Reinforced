@@ -26,7 +26,7 @@
 #                             the CLI exactly as CI does, because the
 #                             bridge-diagnostics case asserts it is non-empty.
 # Output (in <output-directory>):
-#   diagnostics.apk surface.apk saf.apk saf-recovery.apk saf_fixture.apk
+#   diagnostics.apk surface.apk saf.apk saf-recovery.apk saf_fixture.apk ui.apk
 #
 # Exit codes: 0 every APK was produced; 1 a build failed; 2 the invocation or an
 # input is wrong; 3 a host precondition is missing.
@@ -114,6 +114,10 @@ build_case_apk diagnostics integration_test/native_bridge_diagnostics_test.dart 
 build_case_apk surface integration_test/android_preview_surface_test.dart
 build_case_apk saf integration_test/android_saf_preview_test.dart
 build_case_apk saf-recovery integration_test/android_saf_recovery_test.dart
+# The agent-facing UI harness drives the same app through a JSON scenario; it is
+# its own Dart entrypoint, so it is its own APK. `scripts/or_ui.py` installs it,
+# pushes a scenario into the app's files directory and pulls the transcript back.
+build_case_apk ui integration_test/or_ui_scenario_test.dart
 
 # A separate permission-enforced provider app for the SAF journey. The CI pin is
 # `./gradlew -PorSafFixture=true :saf_fixture:assembleDebug`.
