@@ -29,6 +29,7 @@ const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
 const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
 const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
 const TIMELINE_CLIP_SLIP_ID: &str = "timeline.clip.slip";
+const TIMELINE_CLIP_ROLL_ID: &str = "timeline.clip.roll";
 const TIMELINE_CLIP_RIPPLE_DELETE_ID: &str = "timeline.clip.ripple_delete";
 const TIMELINE_MARKER_ADD_ID: &str = "timeline.marker.add";
 const TIMELINE_MARKER_MOVE_ID: &str = "timeline.marker.move";
@@ -62,7 +63,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 24] = [
+const COMMANDS: [CommandDescriptor; 25] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -161,6 +162,12 @@ const COMMANDS: [CommandDescriptor; 24] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_SLIP_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_ROLL_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -1189,6 +1196,12 @@ pub enum ProjectChange {
         shifted_count: usize,
         shift_duration: RationalTime,
     },
+    /// One roll moved the boundary between two adjacent clips on one track.
+    TimelineClipsRolled {
+        track_id: TrackId,
+        before: Vec<TimelineClipState>,
+        after: Vec<TimelineClipState>,
+    },
     /// One ripple trim changed one clip and shifted every later clip on its track.
     ///
     /// Like `TimelineClipsOverwritten` this carries the whole track because a
@@ -1494,7 +1507,12 @@ impl ChangeSet {
                 right_after,
                 reverse,
             ),
-            ProjectChange::TimelineClipsRippleTrimmed {
+            ProjectChange::TimelineClipsRolled {
+                track_id,
+                before,
+                after,
+            }
+            | ProjectChange::TimelineClipsRippleTrimmed {
                 track_id,
                 before,
                 after,
@@ -2304,6 +2322,7 @@ impl ProjectSession {
             TIMELINE_CLIP_TRIM_ID => self.apply_timeline_clip_trim(envelope.arguments)?,
             TIMELINE_CLIP_SPLIT_ID => self.apply_timeline_clip_split(envelope.arguments)?,
             TIMELINE_CLIP_SLIP_ID => self.apply_timeline_clip_slip(envelope.arguments)?,
+            TIMELINE_CLIP_ROLL_ID => self.apply_timeline_clip_roll(envelope.arguments)?,
             TIMELINE_CLIP_RIPPLE_DELETE_ID => {
                 self.apply_timeline_clip_ripple_delete(envelope.arguments)?
             }
@@ -3029,9 +3048,10 @@ impl ProjectSession {
             .project_revision()
             .checked_next()
             .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let before_states = states_before_ripple(&states, index, &before)?;
         let (_, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsRippleTrimmed {
             track_id,
-            before: states_before_ripple(&states, index, &before),
+            before: before_states.clone(),
             after: states.clone(),
         })?;
         self.history
@@ -3044,7 +3064,7 @@ impl ProjectSession {
         self.history.redo.clear();
         let (change_set, _) = timeline_change_sets(ProjectChange::TimelineClipsRippleTrimmed {
             track_id,
-            before: states_before_ripple(&states, index, &before),
+            before: before_states,
             after: states,
         })?;
         Ok(change_set)
@@ -3158,6 +3178,103 @@ impl ProjectSession {
         );
         self.history.undo.push(history_entry);
         self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    /// Moves the boundary between two adjacent clips without moving either clip as
+    /// a whole: the left clip's end and the right clip's start move by the same
+    /// delta, and the right clip's source advances with its start.
+    ///
+    /// The two clips must be exactly adjacent — a gap means there is no shared
+    /// boundary to roll — and both must keep a positive duration with their source
+    /// inside the media, which `validate_track_states` proves rather than trusting
+    /// the arithmetic above it.
+    fn apply_timeline_clip_roll(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipRollArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        let track = &self.project.timeline().tracks()[track_index];
+        if track.state().locked() {
+            return Err(OperationError::new(OperationErrorCode::TimelineTrackLocked));
+        }
+        let track_id = track.id();
+        let track_kind = track.kind();
+        let before = track_states(&self.project, track_index)?;
+        let Some(left) = before.get(index).cloned() else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        let Some(right) = before.get(index + 1).cloned() else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        let left_end = timeline_clip_end(&left)?;
+        if right.timeline_start != left_end {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let delta = arguments.delta.into_time()?;
+        if !delta.is_positive() && !delta.is_negative() {
+            return Ok(ChangeSet::default());
+        }
+        let new_boundary = left_end
+            .checked_add(delta)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        // Both sides must keep a positive duration; anything else is not a roll.
+        let left_duration = new_boundary
+            .checked_sub(left.timeline_start)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let right_end = timeline_clip_end(&right)?;
+        let right_duration = right_end
+            .checked_sub(new_boundary)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if !left_duration.is_positive() || !right_duration.is_positive() {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let after_left = TimelineClipState {
+            timeline_duration: left_duration,
+            content: trim_content_end(&left.content, left_duration)?,
+            ..left.clone()
+        };
+        let after_right = TimelineClipState {
+            timeline_start: new_boundary,
+            timeline_duration: right_duration,
+            content: trim_content_start(&right.content, delta, right_duration)?,
+            ..right.clone()
+        };
+        let mut after = before.clone();
+        after[index] = after_left;
+        after[index + 1] = after_right;
+        validate_track_states(&self.project, track_kind, &after)?;
+        let clips = states_into_domain(after.clone())?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (_, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsRolled {
+            track_id,
+            before: before.clone(),
+            after: after.clone(),
+        })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        let (change_set, _) = timeline_change_sets(ProjectChange::TimelineClipsRolled {
+            track_id,
+            before,
+            after,
+        })?;
         Ok(change_set)
     }
 
@@ -4534,6 +4651,17 @@ struct TimelineClipSlipArguments {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct TimelineClipRollArguments {
+    /// The left-hand clip of the boundary. The clip that follows it on the same
+    /// track must be exactly adjacent, or there is no boundary to roll.
+    clip_id: ClipId,
+    /// How far the boundary moves: positive shortens the left clip and lengthens
+    /// the right one, negative does the opposite.
+    delta: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineClipSplitArguments {
     clip_id: ClipId,
     new_clip_id: ClipId,
@@ -4910,29 +5038,31 @@ fn timeline_change_sets(change: ProjectChange) -> Result<(ChangeSet, ChangeSet),
 }
 
 /// Reconstructs the clip list before a ripple trim from the list after it.
+///
+/// It returns a `Result` rather than skipping a failed subtraction: a silent skip
+/// would put a wrong pre-state into the history entry, and undo would then restore
+/// something the project never contained.
 fn states_before_ripple(
     after: &[TimelineClipState],
     index: usize,
     before: &TimelineClipState,
-) -> Vec<TimelineClipState> {
+) -> Result<Vec<TimelineClipState>, OperationError> {
     let mut states = after.to_vec();
-    if index < states.len() {
-        // The trimmed clip's own duration change is the delta the others moved by.
-        if let (Some(new_end), Some(old_end)) = (
-            timeline_clip_end(&states[index]).ok(),
-            timeline_clip_end(before).ok(),
-        ) {
-            if let Ok(delta) = new_end.checked_sub(old_end) {
-                for state in states.iter_mut().skip(index + 1) {
-                    if let Ok(restored) = state.timeline_start.checked_sub(delta) {
-                        state.timeline_start = restored;
-                    }
-                }
-            }
-        }
-        states[index] = before.clone();
+    let Some(current) = states.get(index) else {
+        return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+    };
+    // The trimmed clip's own duration change is the delta the others moved by.
+    let delta = timeline_clip_end(current)?
+        .checked_sub(timeline_clip_end(before)?)
+        .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+    for state in states.iter_mut().skip(index + 1) {
+        state.timeline_start = state
+            .timeline_start
+            .checked_sub(delta)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
     }
-    states
+    states[index] = before.clone();
+    Ok(states)
 }
 
 fn history_conflict() -> OperationError {
@@ -6370,6 +6500,7 @@ mod tests {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn insert_clip_mode(
         session: &mut ProjectSession,
         clip_id: &str,
@@ -6981,6 +7112,116 @@ mod tests {
         assert_eq!(session.project_revision().value(), revision_before.value());
     }
 
+    fn roll_boundary(
+        session: &mut ProjectSession,
+        clip_id: &str,
+        delta: (i64, u32),
+    ) -> Result<super::CommandResult, super::OperationError> {
+        execute(
+            session,
+            "timeline.clip.roll",
+            json!({
+                "clip_id": clip_id,
+                "delta": rational_json(delta.0, delta.1),
+            }),
+        )
+    }
+
+    #[test]
+    fn roll_moves_the_boundary_and_both_source_windows() {
+        let mut session = session_with_state("roll", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (1, 1), (1, 1));
+        let revision_before = session.project_revision();
+
+        roll_boundary(&mut session, CLIP_A, (1, 4)).unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(
+            spans[0].2,
+            RationalTime::new(5, 4).unwrap(),
+            "the left clip gives up a quarter second"
+        );
+        assert_eq!(
+            spans[1].1,
+            RationalTime::new(5, 4).unwrap(),
+            "the right clip starts where the boundary moved to"
+        );
+        assert_eq!(spans[1].2, RationalTime::new(3, 4).unwrap());
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(0, 1).unwrap(),
+            "the left clip's source does not move"
+        );
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_B),
+            RationalTime::new(1, 4).unwrap(),
+            "the right clip's source advances with its start"
+        );
+        assert_eq!(
+            session.project_revision().value(),
+            revision_before.value() + 1,
+            "a roll is one revision"
+        );
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        let restored = clip_spans(&session, TRACK_A);
+        assert_eq!(restored[0].2, RationalTime::new(1, 1).unwrap());
+        assert_eq!(restored[1].1, RationalTime::new(1, 1).unwrap());
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_B),
+            RationalTime::new(0, 1).unwrap(),
+            "one undo restores both sides"
+        );
+    }
+
+    #[test]
+    fn roll_needs_two_clips_that_actually_touch() {
+        let mut session = session_with_state("roll-gap", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        // A one-second gap: there is no shared boundary to roll.
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (1, 1));
+
+        let error = roll_boundary(&mut session, CLIP_A, (1, 4)).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(1, 1).unwrap());
+        assert_eq!(spans[1].1, RationalTime::new(2, 1).unwrap());
+    }
+
+    #[test]
+    fn roll_past_either_clip_is_refused() {
+        let mut session = session_with_state("roll-bounds", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (1, 1), (1, 1));
+
+        // Consuming the whole right clip leaves it no duration.
+        let error = roll_boundary(&mut session, CLIP_A, (1, 1)).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        // And the same on the other side.
+        let error = roll_boundary(&mut session, CLIP_A, (-1, 1)).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(1, 1).unwrap());
+        assert_eq!(spans[1].2, RationalTime::new(1, 1).unwrap());
+    }
+
+    #[test]
+    fn a_roll_of_zero_is_a_no_op() {
+        let mut session = session_with_state("roll-zero", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (1, 1), (1, 1));
+        let revision_before = session.project_revision();
+
+        let result = roll_boundary(&mut session, CLIP_A, (0, 1)).unwrap();
+        assert!(!result.changed);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+    }
+
     fn seed_video_track_and_clip(
         session: &mut ProjectSession,
         media_id: &str,
@@ -7186,6 +7427,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "timeline.clip.roll",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.clip.split",
                     schema_version: 1,
                     mutates_project: true,
@@ -7267,7 +7514,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 24);
+        assert_eq!(COMMANDS.len(), 25);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -9903,6 +10150,7 @@ mod tests {
             "timeline.clip.delete",
             "timeline.clip.trim",
             "timeline.clip.slip",
+            "timeline.clip.roll",
             "timeline.clip.split",
             "timeline.clip.ripple_delete",
         ] {

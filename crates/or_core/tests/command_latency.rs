@@ -210,10 +210,8 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     // The overwrite replaced the first clip, so its id is the one the later trim
     // step must target; the geometry is unchanged because the span is identical.
-    if let Some(clip_id) = overwritten_id {
-        if let Some(first) = clip_ids.first_mut() {
-            *first = clip_id;
-        }
+    if let (Some(clip_id), Some(first)) = (overwritten_id, clip_ids.first_mut()) {
+        *first = clip_id;
     }
     measurements.push(("overwrite_insert".to_owned(), overwrite_samples));
 
