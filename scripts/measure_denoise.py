@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import math
 import re
+import struct
 import subprocess
 import sys
 import tempfile
@@ -106,35 +108,38 @@ def mean_volume_db(ffmpeg: Path, path: Path, window: tuple[float, float]) -> flo
     return float(match.group(1))
 
 
-def build_fixture(ffmpeg: Path, work: Path) -> Path:
-    environment = helper_environment(ffmpeg)
-    noise = work / "noise.wav"
-    run([
-        str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i",
-        f"anoisesrc=d={NOISE_SECONDS}:c=white:a={NOISE_AMPLITUDE}:r=48000",
-        "-ac", "1", str(noise),
-    ], "noise generation", environment)
-    tone = work / "tone.wav"
-    run([
-        str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", f"sine=f=1000:d={TONE_SECONDS}:r=48000",
-        "-af", f"volume={TONE_VOLUME}", "-ac", "1", str(tone),
-    ], "tone generation", environment)
-    speech = work / "speech.wav"
-    run([
-        str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(tone),
-        "-f", "lavfi", "-i",
-        f"anoisesrc=d={TONE_SECONDS}:c=white:a={NOISE_AMPLITUDE}:r=48000",
-        "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first:normalize=0",
-        "-ac", "1", str(speech),
-    ], "speech generation", environment)
+def build_fixture(work: Path) -> Path:
+    """Writes the noisy fixture with Python, not with the helper.
+
+    The packaged helper is built `--disable-everything` and deliberately has no `lavfi`
+    input: the product never needs to synthesise media, so enabling a device purely to
+    feed a test fixture would widen the shipped surface for the wrong reason. Writing
+    PCM here keeps the helper's required surface to the two things the product uses —
+    the `afftdn` filter and `volumedetect` — and it is deterministic, which a
+    generated fixture should be anyway.
+    """
+    rate = 48_000
+    noise_samples = int(rate * NOISE_SECONDS)
+    tone_samples = int(rate * TONE_SECONDS)
+    total = noise_samples + tone_samples
+    samples = bytearray()
+    seed = 20_261_020
+    for index in range(total):
+        seed = (seed * 1_103_515_245 + 12_345) & 0x7FFF_FFFF
+        noise = (seed / 0x3FFF_FFFF) - 1.0
+        tone = 0.0
+        if index >= noise_samples:
+            position = index - noise_samples
+            tone = TONE_VOLUME * math.sin(2.0 * math.pi * 440.0 * position / rate)
+        value = max(-1.0, min(1.0, noise * NOISE_AMPLITUDE + tone))
+        samples += struct.pack("<h", int(round(value * 32_767)))
+
+    data = bytes(samples)
+    header = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt "
+    header += struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16)
+    header += b"data" + struct.pack("<I", len(data))
     fixture = work / "fixture.wav"
-    run([
-        str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
-        "-i", str(noise), "-i", str(speech),
-        "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1", "-ac", "1", str(fixture),
-    ], "fixture assembly", environment)
+    fixture.write_bytes(header + data)
     return fixture
 
 
@@ -212,7 +217,7 @@ def main() -> int:
     # The fixture needs *an* ffmpeg; the packaged helper is the natural one, and the
     # system one stands in when this is measuring the product's CLI instead.
     generator = ffmpeg or Path("ffmpeg")
-    fixture = build_fixture(generator, work)
+    fixture = build_fixture(work)
     failed = False
 
     if args.cli is not None:

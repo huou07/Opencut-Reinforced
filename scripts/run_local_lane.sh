@@ -33,7 +33,7 @@ set -uo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
-LANE_DIR="apps/or_app/build/local-lanes"
+LANE_DIR="$ROOT/apps/or_app/build/local-lanes"
 PREFLIGHT_REPORT="apps/or_app/build/ui-preflight/run.json"
 DEFAULT_REPORT="$LANE_DIR/linux.json"
 DEFAULT_STEPS="hygiene,flutter,preflight,bench"
@@ -44,9 +44,12 @@ BENCH_JSON="$LANE_DIR/bench.json"
 # the bundle. Both are gitignored build state produced by the documented local
 # recipe; nothing here downloads or builds codecs, and a missing prefix is a
 # BLOCKED step naming the command that would produce it.
-FFMPEG_PREFIX="${OR_LANE_FFMPEG_PREFIX:-apps/or_app/build/local-deb/ffmpeg-install}"
-CODEC_PREFIX="${OR_LANE_CODEC_PREFIX:-apps/or_app/build/local-deb/codecs-install}"
-BUNDLE="${OR_LANE_BUNDLE:-apps/or_app/build/linux/x64/debug/bundle}"
+# Absolute, because the packaged steps are handed to the preflight wrapper, which
+# runs them from apps/or_app: a path relative to the repository root resolves to the
+# wrong place there.
+FFMPEG_PREFIX="${OR_LANE_FFMPEG_PREFIX:-$ROOT/apps/or_app/build/local-deb/ffmpeg-install}"
+CODEC_PREFIX="${OR_LANE_CODEC_PREFIX:-$ROOT/apps/or_app/build/local-deb/codecs-install}"
+BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/debug/bundle}"
 
 usage() {
   cat <<'USAGE'
@@ -343,14 +346,14 @@ packaged_build_deb() {
   local root="$OR_LANE_ROOT" ff="$OR_LANE_FFMPEG_PREFIX"
   local bundle="$OR_LANE_BUNDLE" deb="$OR_LANE_DEB" copying="$OR_LANE_FFMPEG_COPYING"
   local notices="$OR_LANE_CODEC_NOTICES"
-  # Stay where the preflight wrapper put us: apps/or_app. Moving to the repository
-  # root made `flutter pub get` fail with "Expected to find project root in current
-  # working directory", because Flutter needs a project root and the repository root
-  # is not one. Every path below is absolute through OR_LANE_*.
-  cd "$root/apps/or_app" || exit 1
+  # The repository root, because the staging and packaging scripts below are relative
+  # to it. Flutter is the exception: it needs a project root, and the repository root
+  # is not one, so those two commands run in the app directory. Doing it the other way
+  # round — moving the whole step into the app — broke the script paths instead.
+  cd "$root" || exit 1
   reset_bridge_hook_cache
-  flutter --no-version-check pub get --offline --enforce-lockfile || exit 1
-  flutter --no-version-check build linux --debug --no-pub || exit 1
+  (cd apps/or_app && flutter --no-version-check pub get --offline --enforce-lockfile) || exit 1
+  (cd apps/or_app && flutter --no-version-check build linux --debug --no-pub) || exit 1
 
   local bridge
   bridge="$(find "$bundle" -name libor_app_bridge.so -print -quit)"
@@ -415,10 +418,8 @@ packaged_run_journey() {
   set -uo pipefail
   local root="$OR_LANE_ROOT" deb="$OR_LANE_DEB" install_root="$OR_LANE_INSTALL_ROOT"
   local runtime="$OR_LANE_MEDIA_RUNTIME"
-  # The journey step runs the installed package, not a Flutter build, but it is
-  # handed to the same wrapper, so it starts in apps/or_app; the paths it uses are
-  # absolute.
-  cd "$root/apps/or_app" || exit 1
+  # The repository root: the journey runner is a repository-relative script.
+  cd "$root" || exit 1
   rm -rf "$install_root"
   mkdir -p "$install_root"
   dpkg-deb --extract "$deb" "$install_root" || exit 1
