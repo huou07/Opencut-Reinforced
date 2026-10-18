@@ -674,7 +674,18 @@ class _Runner {
     throw _StepFailure('bad_scenario', 'the selector names nothing this runner can resolve');
   }
 
-  Finder _requireFinder(Map<String, Object?> step) => _anyFinder(step);
+  /// The finder a step names, optionally narrowed to the nth match.
+  ///
+  /// `index` exists because a scenario legitimately needs "the second clip on this
+  /// track" when every clip carries a generated id, and the alternatives are either
+  /// a coordinate (forbidden) or a guess. It is still a semantic selector: the
+  /// match order is the tree's order, not a pixel position.
+  Finder _requireFinder(Map<String, Object?> step) {
+    final finder = _anyFinder(step);
+    final index = step['index'];
+    if (index is int && index > 0) return finder.at(index);
+    return finder;
+  }
 
   SemanticsNode? _semanticsNodeForRole(String role, {int index = 0}) {
     final matched = <SemanticsNode>[];

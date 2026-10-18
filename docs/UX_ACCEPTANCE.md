@@ -315,6 +315,14 @@ authoritative hosted gate for the exact source.
 - **Semantic state assertions** — a scenario can assert `expect_state` on a named
   control (`enabled`, `disabled`, `selected`, `checked`, `focused`, `toggled`),
   read from the semantics tree rather than from a widget field.
+- **Positional assertions** — a scenario proves where an edit *left* a clip, not
+  only that the app accepted the command: the timeline clip's semantics label
+  carries the exact span (`starts 1/4, duration 1/4, spans 1/4 to 1/2`) and, for a
+  media clip, its source window (`source 1/8`), so a screen reader announces the
+  edit precisely and `scripts/or_ui.py` can assert it. Fixing a defect or adding a
+  move without a positional assertion is incomplete: the four editing journeys
+  (`ripple-trim.json`, `slip-roll-slide.json`, `editor-journey.json`,
+  `compact-editor-journey.json`) all assert spans rather than acceptance.
 - **Measured interaction** — a scenario can wrap sub-steps in
   `{"op": "measure"}` and the transcript records p50/p95/min/max with the
   statement that it is wall clock on this host through the software path. A timed

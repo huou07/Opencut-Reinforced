@@ -1,6 +1,6 @@
 {
   "name": "ripple-trim",
-  "description": "Ripple trim through the real app on the desktop layout: import the fixture, add an audio track, insert two adjacent clips, then trim the first clip's end inward with the trim dialog's Ripple option set. The behavioural assertion is the track summary the app renders: with ripple off, shortening the first clip leaves the second where it was, so the timeline keeps a gap; with ripple on the second clip follows the new edge. The scenario asserts the track label after each step, which is the only place a scenario can read this without canonical access.",
+  "description": "Ripple trim through the real app on the desktop layout: import the fixture, add an audio track, insert two adjacent clips, then trim the first clip's end inward with the trim dialog's Ripple option set. The behavioural assertion is the track summary the app renders: with ripple off, shortening the first clip leaves the second where it was, so the timeline keeps a gap; with ripple on the second clip follows the new edge. It asserts clip positions from the clip's own semantics label (the exact span), which is the difference between proving the app accepted a command and proving it put the clip where the operation says it should go.",
   "fixtures": [
     "wav"
   ],
@@ -209,6 +209,11 @@
       "budget_ms": 8000
     },
     {
+      "op": "wait_label",
+      "label_regex": "spans 0/1 to 1/2",
+      "budget_ms": 20000
+    },
+    {
       "op": "tree",
       "name": "after-plain-trim"
     },
@@ -278,6 +283,11 @@
       "selector": {
         "key": "timeline-confirm-trim"
       }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "spans 1/2 to 3/4",
+      "budget_ms": 20000
     },
     {
       "op": "tree",

@@ -460,8 +460,18 @@ class each claim actually has:
     delta. All three are enabled only for a media clip on an unlocked track, and
     both presentations reach them because the compact layout opens the same clip
     dialog.
-  - **Not done:** no journey step drives any of the three through the app, so
-    their behavioural evidence is the domain tests and the latency rows only.
+  - **Journey evidence with positional assertions (2026-10-20).**
+    `scripts/or_ui.py run scripts/ui_scenarios/slip-roll-slide.json` passes 56
+    steps: it seeds three adjacent quarter-second clips, slips the middle one and
+    asserts `spans 1/4 to 1/2, source 1/8` (the span did not move; only the source
+    window did, which is the defining property of a slip), rolls its right edge and
+    asserts `spans 1/4 to 5/8`, then slides it a sixteenth and asserts
+    `spans 5/16 to 11/16`. The runner gained the ability to assert a span because
+    the clip's semantics label now carries it — a real accessibility improvement,
+    since a screen reader announces the edit instead of only the clip's name.
+    Writing it also corrected two of my expectations rather than the code: a roll
+    leaves the *other* clip's span alone, and a slide by an eighth was correctly
+    refused because it left the next clip no duration.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

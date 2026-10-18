@@ -5733,8 +5733,13 @@ class _TimelineTrackLane extends StatelessWidget {
           button: true,
           selected: clip.clipId == selectedClipId,
           onTap: () => onOpenClip(clip),
+          // The exact span, not only a human duration: a screen-reader user needs
+          // to know where an edit left the clip, and scripts/or_ui.py can then
+          // assert a position instead of only that the app accepted a command.
           label:
-              '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
+              '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel, '
+              'spans ${clip.timelineStart.canonical} to ${clip.timelineEnd.canonical}'
+              '${clip.sourceStart == null ? '' : ', source ${clip.sourceStart!.canonical}'}',
           hint: 'Drag to move. Activate for clip actions.',
           child: Tooltip(
             key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
