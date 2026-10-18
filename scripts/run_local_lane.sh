@@ -481,6 +481,22 @@ for step in "${step_list[@]}"; do
       record_artifact preflight "$PREFLIGHT_REPORT" "$LAST_STEP_START_EPOCH"
       ;;
     bench)
+      # The budget deliberately never compiles: a benchmark must not surprise a
+      # host with a codec or test build. Its four test-binary rows therefore need
+      # prebuilt lanes, and a fresh checkout has none, so build them here once.
+      # Without this every in-process row reported UNVERIFIED on a clean tree.
+      bench_build_log="$LANE_DIR/linux-bench-build.log"
+      : >"$bench_build_log"
+      for bench_lane in \
+        "-p or_media --test software_export" \
+        "-p or_core --test command_latency" \
+        "-p or_render --test render_frame_time" \
+        "-p or_render --test queue_priority"; do
+        # shellcheck disable=SC2086
+        if ! cargo test $bench_lane --no-run --locked >>"$bench_build_log" 2>&1; then
+          lane_warn "could not build the bench lane '$bench_lane'; its rows will report UNVERIFIED"
+        fi
+      done
       run_step bench "$log" "$(step_command_text bench)" \
         python3 scripts/bench_quality.py --json
       if grep -qF 'BENCH_JSON=' "$log"; then

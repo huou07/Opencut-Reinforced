@@ -372,10 +372,10 @@ def row_ffmpeg_export() -> tuple[RowResult, float]:
     baseline = row["baseline"]
     detail = (f"best {best:.1f} ms / median {median:.1f} ms (budget {limit:.1f} ms; "
               f"baseline {baseline['min_ms']:.1f} ms on {baseline['date']}, "
-              f"margin x{budget / baseline['min_ms']:.0f})")
+              f"margin x{limit / baseline['min_ms']:.0f})")
     return RowResult("ffmpeg-export", verdict, detail,
                      {"best_ms": round(best, 1), "median_ms": round(median, 1),
-                      "threshold_ms": budget}), best
+                      "threshold_ms": limit}), best
 
 
 def row_export_throughput(best_ms: float | None) -> RowResult:
