@@ -3686,7 +3686,16 @@ class _AppShellState extends State<AppShell> {
 
   void _showUnavailable(String message) {
     if (!mounted) return;
-    OrSnackBar.show(context, message);
+    // The compact editor's tool dock occupies the bottom 58 px; a message that
+    // covers it steals dock taps. Every transient message funnels through here,
+    // so one inset fixes every caller.
+    final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
+    final editor = _destination == AppDestination.editorPreview;
+    OrSnackBar.show(
+      context,
+      message,
+      bottomInset: compact && editor ? OrSpacing.topBarHeight : 0,
+    );
   }
 }
 

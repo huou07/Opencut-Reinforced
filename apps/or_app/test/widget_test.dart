@@ -3370,6 +3370,123 @@ void main() {
     }
   });
 
+  testWidgets('compact layout adds tracks through the same command path', (
+    tester,
+  ) async {
+    // Compact parity guard: the compact timeline toolbar must dispatch the same
+    // commands as the desktop one, so a track exists for the media sheet to
+    // insert into. scripts/or_ui.py's compact journey caught the sheet reporting
+    // "Add a compatible Video or Audio track first." after this tap.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-tracks.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact tracks');
+    Future<void> tapTimelineControl(String key) async {
+      final finder = find.byKey(ValueKey(key));
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+
+    await tapTimelineControl('timeline-add-video-track');
+    await tapTimelineControl('timeline-add-audio-track');
+    expect(
+      gateway.lastSession!.tracks.map((track) => track.kind).toList(),
+      [
+        ProjectTimelineTrackKind.video,
+        ProjectTimelineTrackKind.audio,
+      ],
+      reason: 'the compact timeline toolbar did not add the requested tracks',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact media sheet inserts into an existing track', (
+    tester,
+  ) async {
+    // The compact journey (scripts/or_ui.py at 320x440) reached the insert
+    // dialog through the media sheet and then reported a RenderFlex overflow, so
+    // the compact insert path is guarded here where the failure prints its
+    // location.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'compact-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 0,
+        ),
+      ];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-insert.orproj'
+      ..mediaPath = '/tmp/compact-insert.wav';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact insert');
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+    final addToTimeline = find.byWidgetPredicate(
+      (widget) => widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith('media-add-timeline-'),
+    );
+    expect(addToTimeline, findsOneWidget);
+    await tester.tap(addToTimeline);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-confirm-insert')),
+      findsOneWidget,
+      reason: 'the compact insert did not offer its confirmation',
+    );
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      // ignore: avoid_print
+      print('OR-OVERFLOW-DETAIL ${details.toString()}');
+      previousOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previousOnError);
+    await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a message does not steal the compact dock tap', (tester) async {
+    // Reproduced 2026-10-18 with scripts/or_ui.py at 320x440: after an import the
+    // transient message covered the 58 px mobile tool dock, so the dock tap that
+    // opens the compact media library never arrived and the whole compact
+    // workflow stalled until the message expired. The guard taps the dock while a
+    // message is showing, which is the user-visible property: the dock stays
+    // reachable.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-snackbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact snackbar');
+    OrSnackBar.show(
+      tester.element(find.byKey(const ValueKey('mobile-editor-tool-dock'))),
+      'Imported 1 of 1 selected files. 2 were rejected because their codecs are '
+      'not supported by this build, which is a long message on purpose.',
+      bottomInset: OrSpacing.topBarHeight,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SnackBar), findsOneWidget);
+    final dockCenter = tester.getCenter(
+      find.byKey(const ValueKey('mobile-editor-tool-media')),
+    );
+    await tester.tapAt(dockCenter);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('mobile-tool-sheet-close')),
+      findsOneWidget,
+      reason: 'the message covered the dock, so the dock tap never reached it',
+    );
+    // A long message must not overflow the short viewport either.
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('candidate recovery offers recover discard and cancel', (
     tester,
   ) async {

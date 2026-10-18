@@ -221,6 +221,8 @@ class _Runner {
   bool ok = true;
   String? firstFailure;
   SemanticsHandle? _semantics;
+  final List<String> frameworkErrors = [];
+  void Function(FlutterErrorDetails)? _previousOnError;
 
   String get platform => Platform.operatingSystem;
 
@@ -242,6 +244,16 @@ class _Runner {
         ),
       ),
     );
+    // Record every framework error with the widget that caused it. The
+    // binding's own record is a bare summary ("A RenderFlex overflowed by 17
+    // pixels on the bottom."), which does not say where; the details do, and
+    // losing them costs another run to find the surface.
+    _previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final text = details.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+      frameworkErrors.add(text.length > 400 ? '${text.substring(0, 400)}…' : text);
+      _previousOnError?.call(details);
+    };
     await _settle();
     _semantics = tester.ensureSemantics();
     if (spec.raw['screens'] == true) {
@@ -254,6 +266,10 @@ class _Runner {
   }
 
   Future<void> dispose() async {
+    if (_previousOnError != null) {
+      FlutterError.onError = _previousOnError;
+      _previousOnError = null;
+    }
     _semantics?.dispose();
     final transcript = {
       'scenario': spec.name,
@@ -304,7 +320,16 @@ class _Runner {
       final exception = tester.takeException();
       if (exception != null && result.status == 'ok') {
         result.status = 'exception';
-        result.detail = '$exception'.split('\n').first;
+        // Keep more than the first line: the framework's overflow message names
+        // the error-causing widget after the summary, and a transcript that drops
+        // it costs another run to find.
+        // A FlutterError carries its location in `diagnostics`; `toString()`
+        // is only the summary.
+        final raw = exception is FlutterError
+            ? exception.diagnostics.map((node) => node.toString()).join(' | ')
+            : '$exception';
+        final text = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+        result.detail = text.length > 400 ? '${text.substring(0, 400)}…' : text;
         ok = false;
         firstFailure ??= 'step ${result.index} ($op) raised: ${result.detail}';
       }
@@ -327,6 +352,14 @@ class _Runner {
         await _waitForText('${step['text']}', _milliseconds(step['budget_ms'] ?? 8000),
             absent: true);
         return;
+      case 'wait_label':
+        await _waitForLabel('${step['label_regex'] ?? step['label']}',
+            _milliseconds(step['budget_ms'] ?? 8000));
+        return;
+      case 'wait_label_absent':
+        await _waitForLabel('${step['label_regex'] ?? step['label']}',
+            _milliseconds(step['budget_ms'] ?? 8000), absent: true);
+        return;
       case 'shot':
         result.screenshot = await _shot('${step['name'] ?? 'shot'}-${result.index}');
         return;
@@ -339,21 +372,21 @@ class _Runner {
         return;
       case 'tap':
         await _act(step, (finder) async {
-          await tester.ensureVisible(finder);
+          await _scrollIntoView(finder);
           await tester.tap(finder);
         });
         await _settle();
         return;
       case 'long_press':
         await _act(step, (finder) async {
-          await tester.ensureVisible(finder);
+          await _scrollIntoView(finder);
           await tester.longPress(finder);
         });
         await _settle();
         return;
       case 'enter_text':
         final finder = _requireFinder(step);
-        await tester.ensureVisible(finder);
+        await _scrollIntoView(finder);
         await tester.enterText(finder, '${step['value'] ?? ''}');
         await _settle();
         return;
@@ -391,23 +424,24 @@ class _Runner {
       case 'expect_state':
         // Assert a semantics state on a named control, e.g. a toggle's checked
         // or an enabled flag. The tree is the authority, not a widget field.
-        final node = tester.getSemantics(_requireFinder(step).first);
+        final data = tester
+            .getSemantics(_requireFinder(step).first)
+            .getSemanticsData();
         final expected = '${step['state']}';
-        final data = node.getSemanticsData();
-        final actual = switch (expected) {
-          'enabled' => data.flagsCollection.isEnabled != ui.Tristate.isFalse,
-          'disabled' => data.flagsCollection.isEnabled == ui.Tristate.isFalse,
-          'selected' => data.flagsCollection.isSelected == ui.Tristate.isTrue,
-          'checked' => data.flagsCollection.isChecked == ui.CheckedState.isTrue,
-          'focused' => data.flagsCollection.isFocused == ui.Tristate.isTrue,
-          'toggled' => data.flagsCollection.isToggled == ui.Tristate.isTrue,
-          _ => throw _StepFailure('bad_scenario', 'unknown semantic state "$expected"'),
-        };
-        if (actual != true) {
+        if (!_matchesState(data, expected)) {
           throw _StepFailure(
               'wrong_state', 'expected state $expected; observed ${_describe(data)}');
         }
         result.detail = _describe(data);
+        return;
+      case 'wait_state':
+        // Readiness by semantics rather than by sleeping: a control that is
+        // disabled while the previous command settles must not be tapped, and a
+        // fixed delay is how a scenario becomes flaky. Measured 2026-10-18: the
+        // compact journey tapped the timeline's Add Audio while the import was
+        // still settling, the disabled control swallowed the tap, and the later
+        // insert reported "Add a compatible Video or Audio track first."
+        await _waitForState(step);
         return;
       case 'picker':
         picker.next = '${step['next']}';
@@ -697,6 +731,18 @@ class _Runner {
     ].join(' ');
   }
 
+  /// Scroll a control into view and let the scroll settle before acting.
+  ///
+  /// `ensureVisible` on its own is not enough: a tap delivered in the same frame
+  /// as the scroll is hit-tested against the pre-scroll position. Measured
+  /// 2026-10-18 on the compact editor at 320x440, the timeline's Add Audio button
+  /// reported a successful tap and no track was added, because the button had
+  /// just been scrolled into view inside a horizontal viewport.
+  Future<void> _scrollIntoView(Finder finder) async {
+    await tester.ensureVisible(finder);
+    await _settle();
+  }
+
   // -- observation -------------------------------------------------------
   Future<void> _settle() async {
     await tester.pump();
@@ -727,6 +773,53 @@ class _Runner {
       absent
           ? 'text "$text" was still visible after ${budgetMs}ms'
           : 'text "$text" never appeared within ${budgetMs}ms',
+    );
+  }
+
+  static bool _matchesState(SemanticsData data, String expected) => switch (expected) {
+    'enabled' => data.flagsCollection.isEnabled != ui.Tristate.isFalse,
+    'disabled' => data.flagsCollection.isEnabled == ui.Tristate.isFalse,
+    'selected' => data.flagsCollection.isSelected == ui.Tristate.isTrue,
+    'checked' => data.flagsCollection.isChecked == ui.CheckedState.isTrue,
+    'focused' => data.flagsCollection.isFocused == ui.Tristate.isTrue,
+    'toggled' => data.flagsCollection.isToggled == ui.Tristate.isTrue,
+    _ => throw _StepFailure('bad_scenario', 'unknown semantic state "$expected"'),
+  };
+
+  Future<void> _waitForState(Map<String, Object?> step) async {
+    final budget = _milliseconds(step['budget_ms'] ?? 8000);
+    final finder = _requireFinder(step);
+    final expected = '${step['state']}';
+    final deadline = DateTime.now().add(Duration(milliseconds: budget));
+    while (DateTime.now().isBefore(deadline)) {
+      if (finder.evaluate().isNotEmpty &&
+          _matchesState(tester.getSemantics(finder.first).getSemanticsData(), expected)) {
+        return;
+      }
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+    }
+    throw _StepFailure(
+        'timeout', 'the control never entered state "$expected" within ${budget}ms');
+  }
+
+  /// Wait for a semantics label, which is the portable selector: the same
+  /// control presents its name as its own Text widget on desktop and as one
+  /// multi-line semantics label in the compact sheet.
+  Future<void> _waitForLabel(String pattern, int budgetMs, {bool absent = false}) async {
+    final regex = RegExp(pattern);
+    final deadline = DateTime.now().add(Duration(milliseconds: budgetMs));
+    while (DateTime.now().isBefore(deadline)) {
+      final present = find.bySemanticsLabel(regex).evaluate().isNotEmpty;
+      if (present != absent) return;
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+    }
+    throw _StepFailure(
+      'timeout',
+      absent
+          ? 'a control labelled /$pattern/ was still present after ${budgetMs}ms'
+          : 'no control labelled /$pattern/ appeared within ${budgetMs}ms',
     );
   }
 

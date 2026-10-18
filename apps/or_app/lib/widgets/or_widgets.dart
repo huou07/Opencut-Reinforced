@@ -15,13 +15,36 @@ class OrSnackBar {
   /// How long a message stays up without interaction.
   static const displayDuration = Duration(seconds: 4);
 
-  static void show(BuildContext context, String message) {
+  /// Shows one message above whatever occupies the bottom of the screen.
+  ///
+  /// [bottomInset] is the height of a bottom-anchored control the message must
+  /// not cover. The compact editor's mobile tool dock spans the bottom edge, and
+  /// a floating SnackBar without this inset sits on top of it, so a tap meant for
+  /// the dock lands on the message instead. Reproduced 2026-10-18 with
+  /// `scripts/or_ui.py`: the compact journey's Media-library tap never reached the
+  /// dock until the message had expired, and the same frame showed the message's
+  /// semantics covering the dock's.
+  static void show(BuildContext context, String message, {double bottomInset = 0}) {
+    final margin = bottomInset <= 0
+        ? null
+        : EdgeInsets.fromLTRB(
+            OrSpacing.x2,
+            0,
+            OrSpacing.x2,
+            bottomInset + OrSpacing.x2,
+          );
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          // At most two lines: a long message on a 320x440 compact viewport with
+          // the dock clearance applied overflowed the window by 17 px
+          // (measured 2026-10-18 through scripts/or_ui.py's compact journey), and
+          // a message that cannot be read because it is clipped is worse than
+          // one that ellipsizes.
+          content: Text(message, maxLines: 2, overflow: TextOverflow.ellipsis),
           behavior: SnackBarBehavior.floating,
+          margin: margin,
           backgroundColor: OrColors.surface,
           showCloseIcon: true,
           duration: displayDuration,

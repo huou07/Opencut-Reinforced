@@ -745,7 +745,12 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void _showTimelineEditError(String message) {
     if (!mounted) return;
-    OrSnackBar.show(context, message);
+    final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
+    OrSnackBar.show(
+      context,
+      message,
+      bottomInset: compact ? OrSpacing.topBarHeight : 0,
+    );
   }
 
   Future<void> _showAddTimelineMarker() async {
@@ -832,7 +837,17 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
         color: OrColors.backgroundRaised,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
-      child: Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A 320 px compact header cannot hold the project name, the revision
+          // text, the state badge and the action row: measured 2026-10-18 with
+          // scripts/or_ui.py at 320x440, the fixed metadata overflowed it by
+          // 44 px and the clipped action row swallowed taps. The narrow
+          // presentation keeps the name and the actions and drops the duplicated
+          // metadata rather than clipping it; Save and the shell's own indicator
+          // still carry the dirty state.
+          final roomForMetadata = constraints.maxWidth >= 560;
+          return Row(
         children: [
           const Icon(
             Icons.folder_open_outlined,
@@ -852,7 +867,7 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (current != null) ...[
+          if (current != null && roomForMetadata) ...[
             Text(
               'Revision ${current.revision}',
               key: const ValueKey('workspace-project-revision'),
@@ -895,6 +910,8 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
             ),
           ),
         ],
+          );
+        },
       ),
     );
   }
@@ -2838,9 +2855,9 @@ class _InspectorPanelState extends State<_InspectorPanel> {
 
   Widget _transitionField(String key, String label) =>
       DropdownButtonFormField<int>(
+        isExpanded: true,
         key: ValueKey('inspector-visual-$key'),
         initialValue: int.tryParse(_fields[key]!.text) ?? 0,
-        isExpanded: true,
         items: const [
           DropdownMenuItem(value: 0, child: Text('None')),
           DropdownMenuItem(value: 1, child: Text('Cross dissolve')),
@@ -5863,6 +5880,7 @@ Future<void> _showInsertTimelineDialog({
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     key: const ValueKey('timeline-insert-track'),
                     initialValue: selectedTrack.trackId,
                     decoration: const InputDecoration(
@@ -5874,6 +5892,8 @@ Future<void> _showInsertTimelineDialog({
                           value: track.trackId,
                           child: Text(
                             '${labels[track.trackId]} · ${track.kind.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                     ],
@@ -6702,6 +6722,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextWeight>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-weight'),
                   initialValue: weight,
                   decoration: const InputDecoration(
@@ -6734,6 +6755,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextAlignment>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-alignment'),
                   initialValue: alignment,
                   decoration: const InputDecoration(
@@ -6762,6 +6784,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<int>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-color'),
                   initialValue: colorIndex,
                   decoration: const InputDecoration(
@@ -6899,6 +6922,7 @@ Future<void> _showTrimTimelineClipDialog({
               ),
               const SizedBox(height: OrSpacing.x2),
               DropdownButtonFormField<ProjectTimelineTrimEdge>(
+                isExpanded: true,
                 key: const ValueKey('timeline-trim-edge'),
                 initialValue: selectedEdge,
                 decoration: const InputDecoration(labelText: 'Edge'),
@@ -7095,6 +7119,7 @@ Future<void> _showMoveTimelineClipDialog({
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-move-track'),
                   initialValue: selectedTrackId,
                   decoration: const InputDecoration(labelText: 'Target Track'),

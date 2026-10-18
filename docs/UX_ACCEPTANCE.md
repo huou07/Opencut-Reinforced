@@ -199,6 +199,41 @@ headless or widget-level checks:
     and selection in both is carried by a fill and a border rather than by
     colour alone.
 
+### Reproduced and fixed (2026-10-18, compact layout)
+
+Four compact-layout defects reproduced through the running app at 320x440 with
+`scripts/or_ui.py`, three fixed with permanent widget guards and one open.
+
+- **The workspace header overflowed by 44 px.** `_ProjectWorkspaceHeader` held
+  the project name, the revision text, the state badge and the action row in one
+  fixed Row. Short of 560 px the narrow presentation now keeps the name and the
+  actions and drops the duplicated revision/badge metadata instead of clipping
+  it; Save and the shell's own dirty indicator still carry that state.
+- **The insert dialog's track dropdown overflowed by 46 px.**
+  `DropdownButtonFormField` laid out its selected item at its natural width
+  inside a 320 px dialog. Every dropdown in the editor now sets `isExpanded:
+  true` and ellipsizes its labels.
+- **A transient message covered the mobile tool dock and stole its taps.** The
+  floating message sat over the 58 px dock, so the tap that opens the compact
+  media library never arrived and the workflow stalled until the message
+  expired. `OrSnackBar.show` takes a `bottomInset`, the shell and the editor pass
+  the dock height in the compact layout, and a message is capped at two lines so a
+  long one cannot push the surface past a short viewport.
+- **Open: the compact timeline overflows by 17 px after inserting a clip.**
+  Reproduced at step 24 of `scripts/ui_scenarios/compact-editor-journey.json`
+  (the insert confirmation). The runner records the exception, fails the step and
+  dumps the render tree, so the failing command is
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/compact-editor-journey.json`
+  and the failing step is named. A widget test with the fake gateway does not
+  reproduce it, so the trigger is in the real-data path; this is recorded as a
+  defect, not accepted, and it is the next compact task.
+
+Two harness defects were found by the same work and fixed: a tap delivered in the
+same frame as `ensureVisible` was hit-tested against the pre-scroll position (the
+Add Audio tap reported success and added nothing), and readiness was being
+inferred from an enabled flag that a disabled button can also present. Scenarios
+now wait for a user-visible state (the transient message clearing) before acting.
+
 ### Reproduced and fixed
 
 - The compact editor overflowed its column by 31 px at a 320x480 viewport.
