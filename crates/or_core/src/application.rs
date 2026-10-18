@@ -1136,6 +1136,15 @@ pub enum ProjectChange {
         shifted_count: usize,
         shift_duration: RationalTime,
     },
+    /// One ripple trim changed one clip and shifted every later clip on its track.
+    ///
+    /// Like `TimelineClipsOverwritten` this carries the whole track because a
+    /// history entry is exactly one change and the ripple moves more than one clip.
+    TimelineClipsRippleTrimmed {
+        track_id: TrackId,
+        before: Vec<TimelineClipState>,
+        after: Vec<TimelineClipState>,
+    },
     /// One overwrite insert replaced a whole range on one track.
     ///
     /// This is the only change an overwrite records, because a history entry must
@@ -1432,7 +1441,12 @@ impl ChangeSet {
                 right_after,
                 reverse,
             ),
-            ProjectChange::TimelineClipsOverwritten {
+            ProjectChange::TimelineClipsRippleTrimmed {
+                track_id,
+                before,
+                after,
+            }
+            | ProjectChange::TimelineClipsOverwritten {
                 track_id,
                 before,
                 after,
@@ -2926,6 +2940,62 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    /// Trims a clip's end and moves every later clip on the track by the same
+    /// delta, so shortening closes the gap and lengthening opens one.
+    ///
+    /// `delta = new_end - old_end` is negative when the clip shortens. Clips before
+    /// the trimmed one never move, and `validate_track_states` proves the shifted
+    /// list is still ordered and positive, so a shift that would cross a boundary is
+    /// rejected rather than written.
+    fn ripple_trim_timeline_clip_end(
+        &mut self,
+        track_id: TrackId,
+        track_index: usize,
+        index: usize,
+        before: TimelineClipState,
+        after: TimelineClipState,
+        old_end: RationalTime,
+    ) -> Result<ChangeSet, OperationError> {
+        let track_kind = self.project.timeline().tracks()[track_index].kind();
+        let new_end = timeline_clip_end(&after)?;
+        let delta = new_end
+            .checked_sub(old_end)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let mut states = track_states(&self.project, track_index)?;
+        states[index] = after.clone();
+        for state in states.iter_mut().skip(index + 1) {
+            state.timeline_start = state
+                .timeline_start
+                .checked_add(delta)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        }
+        validate_track_states(&self.project, track_kind, &states)?;
+        let clips = states_into_domain(states.clone())?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (_, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsRippleTrimmed {
+            track_id,
+            before: states_before_ripple(&states, index, &before),
+            after: states.clone(),
+        })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        let (change_set, _) = timeline_change_sets(ProjectChange::TimelineClipsRippleTrimmed {
+            track_id,
+            before: states_before_ripple(&states, index, &before),
+            after: states,
+        })?;
+        Ok(change_set)
+    }
+
     fn insert_timeline_clip_state(
         &mut self,
         track_id: TrackId,
@@ -3134,6 +3204,20 @@ impl ProjectSession {
                 }
             }
         };
+
+        if arguments.ripple {
+            if arguments.edge != TimelineTrimEdge::End {
+                return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+            }
+            return self.ripple_trim_timeline_clip_end(
+                track_id,
+                track_index,
+                index,
+                before,
+                after,
+                timeline_end,
+            );
+        }
 
         let mut states = track_states(&self.project, track_index)?;
         states[index] = after.clone();
@@ -4314,6 +4398,12 @@ struct TimelineClipTrimArguments {
     clip_id: ClipId,
     edge: TimelineTrimEdge,
     timeline_time: RationalTimeArguments,
+    /// Trim the clip's end and pull every later clip on the track with it, so
+    /// shortening closes the gap instead of leaving one. Absent or false keeps the
+    /// plain trim meaning. Start-edge ripple is refused: it has two defensible
+    /// meanings and choosing one silently would be a product decision.
+    #[serde(default)]
+    ripple: bool,
 }
 
 #[derive(Deserialize)]
@@ -4691,6 +4781,32 @@ fn timeline_change_sets(change: ProjectChange) -> Result<(ChangeSet, ChangeSet),
             ripple_history_guard: None,
         },
     ))
+}
+
+/// Reconstructs the clip list before a ripple trim from the list after it.
+fn states_before_ripple(
+    after: &[TimelineClipState],
+    index: usize,
+    before: &TimelineClipState,
+) -> Vec<TimelineClipState> {
+    let mut states = after.to_vec();
+    if index < states.len() {
+        // The trimmed clip's own duration change is the delta the others moved by.
+        if let (Some(new_end), Some(old_end)) = (
+            timeline_clip_end(&states[index]).ok(),
+            timeline_clip_end(before).ok(),
+        ) {
+            if let Ok(delta) = new_end.checked_sub(old_end) {
+                for state in states.iter_mut().skip(index + 1) {
+                    if let Ok(restored) = state.timeline_start.checked_sub(delta) {
+                        state.timeline_start = restored;
+                    }
+                }
+            }
+        }
+        states[index] = before.clone();
+    }
+    states
 }
 
 fn history_conflict() -> OperationError {
@@ -6426,6 +6542,198 @@ mod tests {
             super::OperationErrorCode::TimelineOverlap,
             "the default mode keeps its old meaning"
         );
+    }
+
+    fn insert_clip_at(
+        session: &mut ProjectSession,
+        clip_id: &str,
+        track_id: &str,
+        media_id: &str,
+        timeline_start: (i64, u32),
+        duration: (i64, u32),
+    ) {
+        insert_clip(
+            session,
+            clip_id,
+            track_id,
+            media_id,
+            timeline_start,
+            (0, 1),
+            duration,
+        )
+        .unwrap();
+    }
+
+    fn ripple_trim_end(
+        session: &mut ProjectSession,
+        clip_id: &str,
+        target: (i64, u32),
+        ripple: bool,
+    ) -> Result<super::CommandResult, super::OperationError> {
+        execute(
+            session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": clip_id,
+                "edge": "end",
+                "timeline_time": rational_json(target.0, target.1),
+                "ripple": ripple,
+            }),
+        )
+    }
+
+    #[test]
+    fn ripple_trim_pulls_every_later_clip_left() {
+        let mut session = session_with_state("ripple-trim", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (4, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (4, 1), (2, 1));
+        insert_clip_at(&mut session, CLIP_C, TRACK_A, MEDIA_A, (6, 1), (2, 1));
+        let revision_before = session.project_revision();
+
+        ripple_trim_end(&mut session, CLIP_A, (2, 1), true).unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans.len(), 3);
+        assert_eq!(spans[0].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(
+            spans[1].1,
+            RationalTime::new(2, 1).unwrap(),
+            "the next clip closes the gap"
+        );
+        assert_eq!(
+            spans[2].1,
+            RationalTime::new(4, 1).unwrap(),
+            "and the one after it moves by the same delta"
+        );
+        assert_eq!(spans[1].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(
+            session.project_revision().value(),
+            revision_before.value() + 1,
+            "a ripple trim is one revision"
+        );
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        let restored = clip_spans(&session, TRACK_A);
+        assert_eq!(restored[0].2, RationalTime::new(4, 1).unwrap());
+        assert_eq!(
+            restored[1].1,
+            RationalTime::new(4, 1).unwrap(),
+            "one undo restores every shifted clip"
+        );
+        assert_eq!(restored[2].1, RationalTime::new(6, 1).unwrap());
+    }
+
+    #[test]
+    fn ripple_trim_opens_a_gap_when_the_clip_lengthens() {
+        let mut session = session_with_state("ripple-lengthen", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (2, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (2, 1));
+
+        ripple_trim_end(&mut session, CLIP_A, (3, 1), true).unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(3, 1).unwrap());
+        assert_eq!(
+            spans[1].1,
+            RationalTime::new(3, 1).unwrap(),
+            "the later clip moves right with the extended edge"
+        );
+    }
+
+    #[test]
+    fn plain_trim_leaves_later_clips_where_they_are() {
+        let mut session = session_with_state("plain-trim", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (4, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (4, 1), (2, 1));
+
+        // No ripple argument at all: the default must keep the old meaning, which
+        // is the regression that would silently move every user's later clips.
+        execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "end",
+                "timeline_time": rational_json(2, 1),
+            }),
+        )
+        .unwrap();
+
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(
+            spans[1].1,
+            RationalTime::new(4, 1).unwrap(),
+            "a plain trim leaves the gap"
+        );
+    }
+
+    #[test]
+    fn a_ripple_trim_to_the_current_edge_is_a_no_op() {
+        let mut session = session_with_state("ripple-noop", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (4, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (4, 1), (2, 1));
+        let revision_before = session.project_revision();
+
+        // A ripple is still a trim: an edge that does not move changes nothing and,
+        // in particular, must not shift the later clips.
+        let result = ripple_trim_end(&mut session, CLIP_A, (4, 1), true).unwrap();
+        assert!(!result.changed);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(4, 1).unwrap());
+        assert_eq!(spans[1].1, RationalTime::new(4, 1).unwrap());
+    }
+
+    #[test]
+    fn a_ripple_trim_outside_the_clip_is_refused_and_changes_nothing() {
+        let mut session = session_with_state("ripple-refused", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (2, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (2, 1));
+        let revision_before = session.project_revision();
+
+        // An end trim to or before the clip's own start is invalid for any end
+        // trim, ripple or not, and the track must be untouched afterwards. (An end
+        // beyond the current end is a lengthening and is legal.)
+        let error = ripple_trim_end(&mut session, CLIP_A, (0, 1), true).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].2, RationalTime::new(2, 1).unwrap());
+        assert_eq!(spans[1].1, RationalTime::new(2, 1).unwrap());
+    }
+
+    #[test]
+    fn ripple_on_a_start_edge_is_refused_with_the_plain_trim_meaning() {
+        let mut session = session_with_state("ripple-start", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (4, 1));
+
+        let error = execute(
+            &mut session,
+            "timeline.clip.trim",
+            json!({
+                "clip_id": CLIP_A,
+                "edge": "start",
+                "timeline_time": rational_json(1, 1),
+                "ripple": true,
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.code,
+            super::OperationErrorCode::InvalidArguments,
+            "ripple-in has two meanings; refusing is the honest default"
+        );
+        let spans = clip_spans(&session, TRACK_A);
+        assert_eq!(spans[0].1, RationalTime::new(0, 1).unwrap());
+        assert_eq!(spans[0].2, RationalTime::new(4, 1).unwrap());
     }
 
     fn seed_video_track_and_clip(

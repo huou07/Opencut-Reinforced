@@ -320,37 +320,34 @@ class each claim actually has:
     `or_ui.py` journey step that drives an overwrite. The command is therefore
     usable by a client that already sends `mode`, and not yet reachable by a
     pointer or keyboard user.
-- **Phase 1.2 — ripple trim: contract fixed, implementation not started.**
-  - `timeline.clip.trim` gains `#[serde(default)] ripple: bool`; absent or false
-    keeps today's meaning exactly, so every caller and fixture is unaffected.
-  - With `ripple: true`, trimming the clip's **end** also shifts every later clip
-    on that track by the same delta, so shortening a clip closes the gap instead
-    of leaving one. `delta = target - timeline_end` is negative when shortening
-    and positive when lengthening, and each later `timeline_start` moves by it;
-    `validate_track_states` then proves the result is still ordered, positive and
-    within limits, so no new validation is invented.
-  - **Start-edge ripple is deliberately refused** with `InvalidArguments` in this
-    increment. A ripple-in has two defensible meanings (leave the end and close
-    the gap before the clip, or keep the clip and move everything after it) and
-    picking one silently would be a product decision, not a bug fix. Tests must
-    assert the refusal, and the error text must name the end-edge form.
-  - The change needs a new `ProjectChange` variant carrying whole-track
-    `before`/`after` lists, exactly like `TimelineClipsOverwritten`: a history
-    entry is one change (`ChangeSet::stage_history_change`), and a ripple trim
-    touches the trimmed clip and every later one. Copy that variant's stage arm
-    verbatim, changing only the name. No bridge work is needed: `ProjectChange` is
-    Rust-only, and no new `OperationErrorCode` is introduced by refusing with
-    `InvalidArguments`.
-  - Verified call sites: `TimelineClipTrimArguments` (~line 4313), the handler
-    `apply_timeline_clip_trim` (its `after` is already computed per edge, and
-    `timeline_end`, `trim_content_start`, `trim_content_end` are in scope), the
-    staging helper it calls for the single-clip case, and
-    `replace_timeline_track_clips_for_command` for the whole-track mutation.
-  - Surfaces after the command: the UI has no trim dialog to extend — trim is
-    invoked from the timeline (`onTrimTimelineClip`) — so ripple needs a
-    presentation-local modifier (a toolbar toggle next to the existing track
-    buttons, sent as the `ripple` argument) rather than a new dialog, plus a
-    journey step and a measured row beside `command.trim`.
+- **Phase 1.2 — ripple trim: implemented at the command layer (VERIFIED_SOURCE).**
+  `timeline.clip.trim` takes an opt-in `ripple` flag; absent or false keeps the
+  plain trim meaning exactly, and a test pins that because silently moving every
+  later clip would be the worst failure mode here. With `ripple: true` an **end**
+  trim also shifts every later clip on that track by the delta, so shortening
+  closes the gap and lengthening opens one; clips before the trimmed one never
+  move, and `validate_track_states` proves the shifted list is still ordered.
+  **Start-edge ripple is refused with `InvalidArguments`**, because ripple-in has
+  two defensible meanings and choosing one silently is a product decision rather
+  than a bug fix; a test asserts the refusal and that the clip is untouched.
+  - The history entry is the single change
+    `ProjectChange::TimelineClipsRippleTrimmed { track_id, before, after }`, which
+    shares the whole-track staged form with the overwrite variant — the same
+    one-change constraint that shaped Phase 1.1. `ProjectChange` is Rust-only and
+    no new error code was introduced, so the bridge and wire surface are unchanged.
+  - Six tests: later clips shift by the same delta with one revision and one undo
+    restoring every shifted clip, lengthening opens the gap, the default leaves
+    later clips alone, a ripple to the current edge is a no-op that moves nothing,
+    an invalid target is refused with the track untouched, and start-edge ripple is
+    refused. `cargo test -p or_core --lib` is 329 passing; `cargo fmt` and
+    `cargo clippy -p or_core --all-targets` clean.
+  - One thing learned while testing: an end trim *past* the current end is a
+    lengthening and is legal (the existing trim allows it), so the refusal case is
+    a target at or before the clip's own start, not one beyond its end.
+  - **Not done, and why the gap is not closed:** no presentation or CLI surface
+    sends the flag yet (trim is invoked from the timeline, so it needs a
+    presentation-local toolbar toggle rather than a dialog), there is no journey
+    step driving it, and no `QUALITY.md` row measures it.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
