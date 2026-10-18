@@ -972,6 +972,40 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async => _action(
+    await _host(session).rollTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      deltaNumerator: delta.numerator.toInt(),
+      deltaDenominator: delta.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async => _action(
+    await _host(session).slideTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      deltaNumerator: delta.numerator.toInt(),
+      deltaDenominator: delta.denominator,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

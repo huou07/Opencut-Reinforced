@@ -4914,6 +4914,8 @@ class _FakeProjectGateway implements ProjectGateway {
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
   int slipTimelineClipCalls = 0;
+  int rollTimelineClipCalls = 0;
+  int slideTimelineClipCalls = 0;
   String? lastSlipClipId;
   ProjectRationalTime? lastSlipDelta;
   String? lastTrimClipId;
@@ -5916,6 +5918,19 @@ class _FakeProjectGateway implements ProjectGateway {
     slipTimelineClipCalls++;
     lastSlipClipId = clipId;
     lastSlipDelta = delta;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
+  }
+
+  /// The shared shape a slip, roll and slide all have for the fake: the clip's
+  /// source window moves by the delta while its timeline span is left alone. That
+  /// is enough for a widget test to observe which command was dispatched with which
+  /// arguments; the real arithmetic is the domain tests' business.
+  Future<ProjectActionResult> _shiftClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
     final session = _session(handle);
     final failure = _timelineFailure();
     if (failure != null) return failure;
@@ -5944,6 +5959,28 @@ class _FakeProjectGateway implements ProjectGateway {
       return ProjectActionResult(succeeded: true, view: session.view);
     }
     return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    rollTimelineClipCalls++;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
+  }
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    slideTimelineClipCalls++;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
   }
 
   @override

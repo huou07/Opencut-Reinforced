@@ -63,6 +63,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onTrimTimelineClip,
     this.onSplitTimelineClip,
     this.onSlipTimelineClip,
+    this.onRollTimelineClip,
+    this.onSlideTimelineClip,
     this.onRippleDeleteTimelineClip,
     this.onAddTimelineMarker,
     this.onMoveTimelineMarker,
@@ -194,6 +196,18 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime,
   )?
   onSlipTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onRollTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlideTimelineClip;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectTimelineClip clip,
@@ -570,6 +584,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onSlipClip: widget.onSlipTimelineClip,
+            onRollClip: widget.onRollTimelineClip,
+            onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -657,6 +673,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
             onSlipClip: widget.onSlipTimelineClip,
+            onRollClip: widget.onRollTimelineClip,
+            onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -3576,6 +3594,8 @@ class _TimelinePanel extends StatefulWidget {
     required this.onTrimClip,
     required this.onSplitClip,
     required this.onSlipClip,
+    required this.onRollClip,
+    required this.onSlideClip,
     required this.onRippleDeleteClip,
     required this.onUpdateTextClip,
     required this.onAddMarker,
@@ -3661,6 +3681,18 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onSlipClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onRollClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlideClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
   final Future<void> Function(
@@ -4110,6 +4142,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               onTrim: widget.onTrimClip,
                                               onSplit: widget.onSplitClip,
                                               onSlip: widget.onSlipClip,
+                                              onRoll: widget.onRollClip,
+                                              onSlide: widget.onSlideClip,
                                               onRippleDelete:
                                                   widget.onRippleDeleteClip,
                                               onEditTextClip:
@@ -6501,6 +6535,18 @@ Future<void> _showTimelineClipActions({
     ProjectTimelineClip,
     ProjectRationalTime,
   )?
+  onRoll,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlide,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
   onSplit,
   required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDelete,
@@ -6634,6 +6680,52 @@ Future<void> _showTimelineClipActions({
                   );
                 },
           child: const Text('Slip'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-roll-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onRoll == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showBoundaryMoveDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      title: 'Roll Clip',
+                      helper:
+                          'Move the boundary between this clip and the next one. '
+                          'Both clips stay where they are; their shared edge moves.',
+                      confirmKey: const ValueKey('timeline-confirm-roll'),
+                      fieldKey: const ValueKey('timeline-roll-delta'),
+                      onConfirm: onRoll,
+                    ),
+                  );
+                },
+          child: const Text('Roll'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-slide-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onSlide == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showBoundaryMoveDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      title: 'Slide Clip',
+                      helper:
+                          'Move this clip in time; the clips either side give up or '
+                          'gain the same amount, so the track stays gapless.',
+                      confirmKey: const ValueKey('timeline-confirm-slide'),
+                      fieldKey: const ValueKey('timeline-slide-delta'),
+                      onConfirm: onSlide,
+                    ),
+                  );
+                },
+          child: const Text('Slide'),
         ),
         TextButton(
           key: ValueKey('timeline-split-${clip.clipId}'),
@@ -7133,6 +7225,85 @@ Future<void> _showTrimTimelineClipDialog({
     timelineEdgeController.removeListener(updateTrimValidity);
     timelineEdgeController.dispose();
     canTrim.dispose();
+  }
+}
+
+/// A signed delta in timeline units, which is all a roll and a slide ask for.
+Future<void> _showBoundaryMoveDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required String title,
+  required String helper,
+  required Key confirmKey,
+  required Key fieldKey,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onConfirm,
+}) async {
+  if (project == null || onConfirm == null) return;
+  final deltaController = TextEditingController(text: '1/4');
+  bool deltaIsValid() {
+    final delta = ProjectRationalTime.tryParse(deltaController.text);
+    return delta != null && delta.numerator != BigInt.zero;
+  }
+
+  final canConfirm = ValueNotifier(deltaIsValid());
+  void updateValidity() => canConfirm.value = deltaIsValid();
+  deltaController.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(helper),
+              _ExactRationalField(
+                fieldKey: fieldKey,
+                label: 'Delta',
+                controller: deltaController,
+                onChanged: () => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canConfirm,
+              builder: (context, valid, child) => FilledButton(
+                key: confirmKey,
+                onPressed: valid
+                    ? () {
+                        final delta = ProjectRationalTime.tryParse(
+                          deltaController.text,
+                        );
+                        if (delta == null) return;
+                        Navigator.of(dialogContext).pop();
+                        unawaited(onConfirm(project, clip, delta));
+                      }
+                    : null,
+                child: const Text('Apply'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    deltaController.removeListener(updateValidity);
+    deltaController.dispose();
+    canConfirm.dispose();
   }
 }
 

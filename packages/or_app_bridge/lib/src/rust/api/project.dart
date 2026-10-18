@@ -314,6 +314,16 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String clipId,
   });
 
+  /// Moves the boundary between two adjacent clips by the given delta.
+  Future<ProjectActionResult> rollTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
   Future<ProjectActionResult> save();
 
   Future<ProjectActionResult> setTimelineSequenceFrameRate({
@@ -329,6 +339,16 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required BigInt expectedRevision,
     required String trackId,
     required ProjectTimelineTrackStateView state,
+  });
+
+  /// Moves a clip in time by the given delta, letting its neighbours absorb it.
+  Future<ProjectActionResult> slideTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
   });
 
   /// Moves a clip's source window by the given delta without moving the clip.

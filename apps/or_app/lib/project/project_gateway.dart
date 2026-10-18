@@ -1065,6 +1065,20 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalTime delta,
   });
+  /// Moves the boundary between this clip and the one after it by [delta].
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  });
+  /// Moves a clip in time by [delta] and lets its neighbours absorb the move.
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  });
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

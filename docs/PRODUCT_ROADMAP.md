@@ -449,9 +449,19 @@ class each claim actually has:
     the trim row trims the first forty clips' starts and never undoes them, so the
     tiling only still holds past that range and the three rows measure a clip well
     beyond it.
-  - **Not done for all three of slip, slide and roll:** roll and slide have no CLI,
-    bridge or UI surface (slip has all three), and no journey step drives any of
-    them.
+  - **All three are reachable (2026-10-20).** `or timeline slip-clip`,
+    `roll-clip` and `slide-clip` each take `--clip` and `--delta`; the bridge
+    exposes `slip_timeline_clip`, `roll_timeline_clip` and `slide_timeline_clip`
+    with regenerated bindings; and the clip dialog carries Slip, Roll and Slide
+    actions (`timeline-slip-<id>`, `timeline-roll-<id>`, `timeline-slide-<id>`),
+    each opening a delta dialog whose confirm key names the operation
+    (`timeline-confirm-slip`, `timeline-confirm-roll`, `timeline-confirm-slide`).
+    Roll and Slide share one dialog because their input is identical: a signed
+    delta. All three are enabled only for a media clip on an unlocked track, and
+    both presentations reach them because the compact layout opens the same clip
+    dialog.
+  - **Not done:** no journey step drives any of the three through the app, so
+    their behavioural evidence is the domain tests and the latency rows only.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

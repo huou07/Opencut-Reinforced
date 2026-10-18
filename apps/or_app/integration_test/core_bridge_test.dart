@@ -2093,6 +2093,32 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) => _gateway.rollTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    delta: delta,
+  );
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) => _gateway.slideTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    delta: delta,
+  );
+
+  @override
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
