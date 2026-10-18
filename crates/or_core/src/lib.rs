@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 mod application;
+mod audio_cleanup;
 mod cache;
 mod jobs;
 mod media;
@@ -27,6 +28,10 @@ pub use application::{
     TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
     TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrackSummaryV2,
     TimelineTrimEdge, TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
+};
+pub use audio_cleanup::{
+    AudioCleanupError, AudioCleanupErrorCode, AudioCleanupRequest, AudioCleanupResult,
+    audio_cleanup_arguments, clean_audio, clean_audio_file,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,

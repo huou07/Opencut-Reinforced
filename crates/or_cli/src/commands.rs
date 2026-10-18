@@ -96,6 +96,18 @@ impl CliError {
         )
     }
 
+    /// A noise-reduction failure, reported with the same shape as the other media
+    /// categories so a caller can switch on the code.
+    fn cleanup(error: or_core::AudioCleanupError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "audio_cleanup",
+            error.code().as_str(),
+            format!("noise reduction failed: {}", error.code().as_str()),
+        )
+    }
+
     fn media(error: or_core::MediaProbeError, json: bool) -> Self {
         let diagnostic = error.diagnostic().map(str::to_owned);
         let message = match (&diagnostic, json) {
@@ -334,10 +346,68 @@ fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
         "add" => run_media_add(&args[1..], json),
         "relink" => run_media_relink(&args[1..], json),
         "remove" => run_media_remove(&args[1..], json),
+        "clean-audio" => run_media_clean_audio(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown media action; expected probe, list, add, relink, or remove",
+            "unknown media action; expected probe, list, add, relink, remove, or clean-audio",
         )),
+    }
+}
+
+/// Phase 4's noise reduction, through the packaged FFmpeg helper.
+///
+/// It reads one file and writes another: no project is opened, nothing in a project
+/// changes, and the result is an ordinary audio file a user can import and compare.
+fn run_media_clean_audio(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--source", "--out", "--noise-floor-db", "--reduction"],
+        &[],
+        json,
+    )?;
+    let source = required_path(&options, "--source", json)?;
+    let destination = required_path(&options, "--out", json)?;
+    let noise_floor_db = match options.value("--noise-floor-db") {
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<i32>().ok())
+            .ok_or_else(|| CliError::usage(json, "--noise-floor-db must be a whole dBFS value"))?,
+        // A common floor for quiet speech recordings; callers with a measurement
+        // should pass theirs, because the filter does nothing below the real floor
+        // and eats the audio above it.
+        None => -50,
+    };
+    let reduction_db = match options.value("--reduction") {
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<u32>().ok())
+            .ok_or_else(|| CliError::usage(json, "--reduction must be a whole number of dB"))?,
+        None => 12,
+    };
+    let result = or_core::clean_audio_file(&source, &destination, noise_floor_db, reduction_db)
+        .map_err(|error| CliError::cleanup(error, json))?;
+    if json {
+        Ok(json_string(serde_json::json!({
+            "cleanup": {
+                "source": source.display().to_string(),
+                "destination": result.destination.display().to_string(),
+                "noise_floor_db": result.noise_floor_db,
+                "reduction_db": result.reduction_db,
+                "bytes_written": result.bytes_written,
+                "chain": format!(
+                    "afftdn=nf={}:nr={}",
+                    result.noise_floor_db, result.reduction_db
+                ),
+            }
+        })))
+    } else {
+        Ok(format!(
+            "Wrote {} ({} bytes) using afftdn=nf={}:nr={}",
+            result.destination.display(),
+            result.bytes_written,
+            result.noise_floor_db,
+            result.reduction_db
+        ))
     }
 }
 
@@ -825,9 +895,9 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             };
             let overwrite_split_clip_id = match options.value("--overwrite-split-id") {
                 Some(value) => Some(parse_clip_id(
-                    value
-                        .to_str()
-                        .ok_or_else(|| CliError::usage(json, "--overwrite-split-id must be valid UTF-8"))?,
+                    value.to_str().ok_or_else(|| {
+                        CliError::usage(json, "--overwrite-split-id must be valid UTF-8")
+                    })?,
                     json,
                 )?),
                 None => None,
@@ -846,13 +916,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             if let Some(split_clip_id) = overwrite_split_clip_id {
                 arguments["overwrite_split_clip_id"] = json!(split_clip_id);
             }
-            let result = timeline_mutation(
-                &path,
-                attached,
-                "timeline.clip.insert",
-                arguments,
-                json,
-            )?;
+            let result =
+                timeline_mutation(&path, attached, "timeline.clip.insert", arguments, json)?;
             Ok(render_timeline_command(
                 &result,
                 attached,
@@ -954,7 +1019,14 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         "trim-clip" => {
             let options = Options::parse(
                 action_args,
-                &["--project", "--attach", "--clip", "--edge", "--to", "--ripple"],
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--edge",
+                    "--to",
+                    "--ripple",
+                ],
                 &[],
                 json,
             )?;
@@ -1014,11 +1086,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             let (path, attached) = media_project_path(&options, json)?;
             let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
-            let delta = parse_cli_rational(
-                &required_name(&options, "--delta", json)?,
-                "--delta",
-                json,
-            )?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
             let result = timeline_mutation(
                 &path,
                 attached,
@@ -1040,11 +1109,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             let (path, attached) = media_project_path(&options, json)?;
             let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
-            let delta = parse_cli_rational(
-                &required_name(&options, "--delta", json)?,
-                "--delta",
-                json,
-            )?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
             let result = timeline_mutation(
                 &path,
                 attached,
@@ -1066,11 +1132,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             let (path, attached) = media_project_path(&options, json)?;
             let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
-            let delta = parse_cli_rational(
-                &required_name(&options, "--delta", json)?,
-                "--delta",
-                json,
-            )?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
             let result = timeline_mutation(
                 &path,
                 attached,

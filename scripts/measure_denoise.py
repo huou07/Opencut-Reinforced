@@ -21,6 +21,7 @@ the helper is wrong.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -110,67 +111,124 @@ def build_fixture(ffmpeg: Path, work: Path) -> Path:
     return fixture
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--bin", required=True, type=Path, help="directory holding the FFmpeg helper")
-    parser.add_argument("--work", type=Path, help="scratch directory (a temporary one by default)")
-    args = parser.parse_args()
+def measure_windows(ffmpeg: Path, before: Path, after: Path) -> dict[str, float]:
+    noise_before = mean_volume_db(ffmpeg, before, NOISE_WINDOW)
+    signal_before = mean_volume_db(ffmpeg, before, TONE_WINDOW)
+    noise_after = mean_volume_db(ffmpeg, after, NOISE_WINDOW)
+    signal_after = mean_volume_db(ffmpeg, after, TONE_WINDOW)
+    return {
+        "noise_before": noise_before,
+        "noise_after": noise_after,
+        "signal_before": signal_before,
+        "signal_after": signal_after,
+        "noise_drop": noise_before - noise_after,
+        "signal_drop": signal_before - signal_after,
+        "discrimination": (noise_before - noise_after) - (signal_before - signal_after),
+    }
 
-    suffix = ".exe" if sys.platform.startswith("win") else ""
-    ffmpeg = args.bin / f"ffmpeg{suffix}"
-    if not ffmpeg.is_file():
-        print(f"the FFmpeg helper is missing from {args.bin}", file=sys.stderr)
-        return 2
 
-    filters = filter_listing(ffmpeg)
-    if re.search(r"\bafftdn\b", filters) is None:
-        print("the packaged helper was built without the afftdn noise filter", file=sys.stderr)
-        return 1
+def report(chain: str, measured: dict[str, float]) -> None:
+    print(f"chain          : {chain}")
+    print(
+        f"noise window   : {measured['noise_before']:.2f} dB -> "
+        f"{measured['noise_after']:.2f} dB (drop {measured['noise_drop']:.2f} dB)"
+    )
+    print(
+        f"signal window  : {measured['signal_before']:.2f} dB -> "
+        f"{measured['signal_after']:.2f} dB (drop {measured['signal_drop']:.2f} dB)"
+    )
+    print(f"discrimination : {measured['discrimination']:.2f} dB more noise than signal")
 
-    work = args.work or Path(tempfile.mkdtemp(prefix="or-denoise-"))
-    work.mkdir(parents=True, exist_ok=True)
-    fixture = build_fixture(ffmpeg, work)
 
-    noise_before = mean_volume_db(ffmpeg, fixture, NOISE_WINDOW)
-    signal_before = mean_volume_db(ffmpeg, fixture, TONE_WINDOW)
-    # The floor the filter is told about comes from the material itself, which is
-    # the part a product cannot hard-code: a floor below the real one does nothing
-    # and a floor above it eats the signal.
-    noise_floor = round(noise_before) + 2
-    chain = f"afftdn=nf={noise_floor}:nr=12"
-
-    denoised = work / "denoised.wav"
-    run([
-        str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(fixture),
-        "-af", chain, "-ac", "1", str(denoised),
-    ], "denoise")
-
-    noise_after = mean_volume_db(ffmpeg, denoised, NOISE_WINDOW)
-    signal_after = mean_volume_db(ffmpeg, denoised, TONE_WINDOW)
-    noise_drop = noise_before - noise_after
-    signal_drop = signal_before - signal_after
-
-    print(f"fixture        : {fixture}")
-    print(f"chain          : {chain} (noise floor measured at {noise_before:.1f} dB)")
-    print(f"noise window   : {noise_before:.2f} dB -> {noise_after:.2f} dB (drop {noise_drop:.2f} dB)")
-    print(f"signal window  : {signal_before:.2f} dB -> {signal_after:.2f} dB (drop {signal_drop:.2f} dB)")
-    print(f"discrimination : {noise_drop - signal_drop:.2f} dB more noise than signal")
-
-    if noise_drop < REQUIRED_NOISE_DROP_DB:
+def verdict(measured: dict[str, float]) -> int:
+    if measured["noise_drop"] < REQUIRED_NOISE_DROP_DB:
         print(
-            f"the noise floor only fell {noise_drop:.2f} dB, below the "
+            f"the noise floor only fell {measured['noise_drop']:.2f} dB, below the "
             f"{REQUIRED_NOISE_DROP_DB:.1f} dB this check requires",
             file=sys.stderr,
         )
         return 1
-    discrimination = noise_drop - signal_drop
-    if discrimination < REQUIRED_DISCRIMINATION_DB:
+    if measured["discrimination"] < REQUIRED_DISCRIMINATION_DB:
         print(
-            f"the noise fell only {discrimination:.2f} dB more than the signal, below "
-            f"the {REQUIRED_DISCRIMINATION_DB:.1f} dB of discrimination this check "
+            f"the noise fell only {measured['discrimination']:.2f} dB more than the signal, "
+            f"below the {REQUIRED_DISCRIMINATION_DB:.1f} dB of discrimination this check "
             "requires -- the filter is attenuating everything, not denoising",
             file=sys.stderr,
         )
+        return 1
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--bin", type=Path, help="directory holding the FFmpeg helper")
+    parser.add_argument("--cli", type=Path, help="the `or` binary, to measure through the product")
+    parser.add_argument("--work", type=Path, help="scratch directory (a temporary one by default)")
+    args = parser.parse_args()
+    if args.bin is None and args.cli is None:
+        print("pass --bin, --cli, or both", file=sys.stderr)
+        return 2
+
+    suffix = ".exe" if sys.platform.startswith("win") else ""
+    ffmpeg = args.bin / f"ffmpeg{suffix}" if args.bin else None
+    if ffmpeg is not None and not ffmpeg.is_file():
+        print(f"the FFmpeg helper is missing from {args.bin}", file=sys.stderr)
+        return 2
+
+    work = args.work or Path(tempfile.mkdtemp(prefix="or-denoise-"))
+    work.mkdir(parents=True, exist_ok=True)
+    # The fixture needs *an* ffmpeg; the packaged helper is the natural one, and the
+    # system one stands in when this is measuring the product's CLI instead.
+    generator = ffmpeg or Path("ffmpeg")
+    fixture = build_fixture(generator, work)
+    failed = False
+
+    if args.cli is not None:
+        # Through the product's own interface: the same command a user runs, with
+        # the noise floor the measurement found.
+        noise_floor = round(mean_volume_db(generator, fixture, NOISE_WINDOW)) + 2
+        cleaned = work / "cli-clean.wav"
+        done = subprocess.run(
+            [
+                str(args.cli), "media", "clean-audio",
+                "--source", str(fixture), "--out", str(cleaned),
+                "--noise-floor-db", str(noise_floor), "--reduction", "12", "--json",
+            ],
+            capture_output=True, text=True,
+            env={**os.environ, "OR_FFMPEG_PATH": str(ffmpeg or "ffmpeg")},
+        )
+        if done.returncode != 0:
+            print(f"the CLI clean-up failed:\n{done.stdout[-600:]}{done.stderr[-600:]}", file=sys.stderr)
+            return 1
+        print("via            : or media clean-audio")
+        measured = measure_windows(generator, fixture, cleaned)
+        report(f"afftdn=nf={noise_floor}:nr=12 (through the product CLI)", measured)
+        failed = verdict(measured) != 0
+
+    if ffmpeg is not None:
+        filters = filter_listing(ffmpeg)
+        if re.search(r"\bafftdn\b", filters) is None:
+            print("the packaged helper was built without the afftdn noise filter", file=sys.stderr)
+            return 1
+
+        # The floor the filter is told about comes from the material itself, which
+        # is the part a product cannot hard-code: a floor below the real one does
+        # nothing and a floor above it eats the signal.
+        noise_floor = round(mean_volume_db(ffmpeg, fixture, NOISE_WINDOW)) + 2
+        chain = f"afftdn=nf={noise_floor}:nr=12"
+        denoised = work / "denoised.wav"
+        run([
+            str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(fixture),
+            "-af", chain, "-ac", "1", str(denoised),
+        ], "denoise")
+        print("via            : the packaged ffmpeg helper directly")
+        measured = measure_windows(ffmpeg, fixture, denoised)
+        report(chain, measured)
+        if verdict(measured) != 0:
+            failed = True
+
+    print(f"fixture        : {fixture}")
+    if failed:
         return 1
     print("RESULT: DENOISE_MEASURED=PASS")
     return 0

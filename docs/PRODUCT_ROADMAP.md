@@ -576,11 +576,26 @@ class each claim actually has:
     floor does nothing and a value above it eats the audio. The script therefore
     measures the fixture's own floor and passes it in; a real audio path must derive
     the same figure per clip instead of hard-coding it.
-  - **Not done, and why the capability is not usable yet:** nothing in the product
-    calls the filter. There is no audio-cleanup command or job, no artifact it
-    produces, no desktop or compact surface, no CLI flag, and no journey. The build
-    configuration and its measurement are the prerequisite, not the capability, and
-    this gap stays `UNVERIFIED` end to end until the audio path exists.
+  - **The first interface exists (2026-10-20).** `or media clean-audio --source
+    PATH --out PATH [--noise-floor-db N] [--reduction N]` reads one media file and
+    writes a cleaned audio file through the packaged helper: no project is opened and
+    none changes, so the result is ordinary media a user can import, compare, and
+    discard, and noise reduction stays out of the project format. The core function
+    (`or_core::clean_audio`) resolves the helper the same way probes do, is bounded
+    (900 s, killed on expiry, partial output removed), validates its parameters, and
+    builds its arguments through a pure function so the chain is asserted without
+    running a process. Five core tests plus a CLI-level measurement.
+  - **Measured through the product (2026-10-20).**
+    `scripts/measure_denoise.py --bin <helper> --cli <or binary>` drives the command
+    on the synthetic fixture and reports both windows; the command and a direct
+    helper call give identical numbers (11.50 dB floor drop, 4.90 dB signal change,
+    6.60 dB discrimination), which is what shows the command uses the chain it claims.
+  - **Not done, and why the capability is still not finished:** there is no desktop
+    or compact surface, so a pointer or keyboard user cannot reach it; no import of
+    the result as a new media item in one step; no project-aware path that derives
+    the noise floor from the clip's own audio instead of asking the caller; and no
+    journey. Those are the remaining half of Phase 4, and this gap stays
+    `UNVERIFIED` at the interface bar until the GUI surface exists.
   - **Shape decided for the product half, so the next attempt does not relitigate
     it.** The clean-up is a **helper-spawned derived artifact**, not a clip property:
     `or_core` already spawns the packaged `ffmpeg` for probes, proxies and waveforms,

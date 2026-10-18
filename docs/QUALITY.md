@@ -96,7 +96,11 @@ Noise filtering is measured, not asserted. `scripts/measure_denoise.py` builds a
 fixture whose two windows are known — one second of white noise, then two seconds of
 a 1 kHz tone buried in the same noise — runs the packaged helper's `afftdn` chain
 with the noise floor **derived from the fixture's own measurement**, and reports both
-windows. Measured 2026-10-20 with FFmpeg 7.1.5 on this host:
+windows. The same measurement drives the product path when given `--cli`: on 2026-10-20 the
+`or media clean-audio` command and a direct helper invocation produced identical
+numbers on the same fixture (11.50 dB floor drop, 4.90 dB signal change, 6.60 dB of
+discrimination), which is what shows the command uses the chain it claims to.
+Measured 2026-10-20 with FFmpeg 7.1.5 on this host:
 `afftdn=nf=-21:nr=12` moved the noise floor from -23.20 dB to -34.70 dB (**11.50 dB
 drop**) while the tone fell 4.90 dB, i.e. **6.60 dB of discrimination** — the filter
 removed more noise than signal, which is what denoising means. The check requires at
