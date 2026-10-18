@@ -28,6 +28,7 @@ const TIMELINE_CLIP_UPDATE_ID: &str = "timeline.clip.update";
 const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
 const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
 const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
+const TIMELINE_CLIP_SLIP_ID: &str = "timeline.clip.slip";
 const TIMELINE_CLIP_RIPPLE_DELETE_ID: &str = "timeline.clip.ripple_delete";
 const TIMELINE_MARKER_ADD_ID: &str = "timeline.marker.add";
 const TIMELINE_MARKER_MOVE_ID: &str = "timeline.marker.move";
@@ -61,7 +62,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 23] = [
+const COMMANDS: [CommandDescriptor; 24] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -154,6 +155,12 @@ const COMMANDS: [CommandDescriptor; 23] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_TRIM_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_SLIP_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -2275,6 +2282,7 @@ impl ProjectSession {
             TIMELINE_CLIP_DELETE_ID => self.apply_timeline_clip_delete(envelope.arguments)?,
             TIMELINE_CLIP_TRIM_ID => self.apply_timeline_clip_trim(envelope.arguments)?,
             TIMELINE_CLIP_SPLIT_ID => self.apply_timeline_clip_split(envelope.arguments)?,
+            TIMELINE_CLIP_SLIP_ID => self.apply_timeline_clip_slip(envelope.arguments)?,
             TIMELINE_CLIP_RIPPLE_DELETE_ID => {
                 self.apply_timeline_clip_ripple_delete(envelope.arguments)?
             }
@@ -3063,6 +3071,68 @@ impl ProjectSession {
             track_index,
             index,
             clip.into_domain(),
+            after_revision,
+        );
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
+    /// Moves a clip's source window without moving the clip.
+    ///
+    /// A slip changes which part of the media the clip shows while its timeline
+    /// start and duration stay exactly where they were, so a cut never moves. The
+    /// resulting content is validated by the same `validate_track_states` every
+    /// other edit uses, which is what refuses a slip past the end of the media
+    /// instead of letting the clip reference material that does not exist.
+    fn apply_timeline_clip_slip(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipSlipArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(
+                OperationErrorCode::TimelineClipNotFound,
+            ));
+        };
+        let track = &self.project.timeline().tracks()[track_index];
+        if track.state().locked() {
+            return Err(OperationError::new(OperationErrorCode::TimelineTrackLocked));
+        }
+        let track_id = track.id();
+        let before = TimelineClipState::from(&track.clips()[index]);
+        let delta = arguments.delta.into_time()?;
+        if !delta.is_positive() && !delta.is_negative() {
+            return Ok(ChangeSet::default());
+        }
+        let after = TimelineClipState {
+            content: trim_content_start(&before.content, delta, before.timeline_duration)?,
+            ..before.clone()
+        };
+        if before == after {
+            return Ok(ChangeSet::default());
+        }
+        let mut states = track_states(&self.project, track_index)?;
+        states[index] = after.clone();
+        validate_track_states(&self.project, track.kind(), &states)?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineClipUpdated {
+                track_id,
+                index,
+                before,
+                after: after.clone(),
+            })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project.replace_timeline_clip_for_command(
+            track_index,
+            index,
+            after.into_domain(),
             after_revision,
         );
         self.history.undo.push(history_entry);
@@ -4429,6 +4499,16 @@ struct TimelineClipTrimArguments {
     /// meanings and choosing one silently would be a product decision.
     #[serde(default)]
     ripple: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineClipSlipArguments {
+    clip_id: ClipId,
+    /// How far to move the clip's source window, in timeline units. Positive takes
+    /// later source material, negative takes earlier material; the clip's timeline
+    /// span never changes.
+    delta: RationalTimeArguments,
 }
 
 #[derive(Deserialize)]
@@ -6761,6 +6841,125 @@ mod tests {
         assert_eq!(spans[0].2, RationalTime::new(4, 1).unwrap());
     }
 
+    fn slip_clip(
+        session: &mut ProjectSession,
+        clip_id: &str,
+        delta: (i64, u32),
+    ) -> Result<super::CommandResult, super::OperationError> {
+        execute(
+            session,
+            "timeline.clip.slip",
+            json!({
+                "clip_id": clip_id,
+                "delta": rational_json(delta.0, delta.1),
+            }),
+        )
+    }
+
+    /// The clip's source window start, which is what a slip moves.
+    fn source_start(session: &ProjectSession, track_id: &str, clip_id: &str) -> RationalTime {
+        let tracks = session.project().timeline().tracks();
+        let index = tracks
+            .iter()
+            .position(|track| track.id().to_string() == track_id)
+            .expect("track exists");
+        let clip = tracks[index]
+            .clips()
+            .iter()
+            .find(|clip| clip.id().to_string() == clip_id)
+            .expect("clip exists");
+        match clip.content() {
+            ClipContent::Media { source_range, .. } => source_range.start(),
+            other => panic!("expected media content, found {other:?}"),
+        }
+    }
+
+    #[test]
+    fn slip_moves_the_source_window_and_leaves_the_cut_where_it_was() {
+        let mut session = session_with_state("slip", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (1, 1), (1, 1));
+        insert_clip_at(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (1, 1));
+        let revision_before = session.project_revision();
+        let spans_before = clip_spans(&session, TRACK_A);
+
+        slip_clip(&mut session, CLIP_A, (1, 4)).unwrap();
+
+        let spans_after = clip_spans(&session, TRACK_A);
+        assert_eq!(
+            spans_before, spans_after,
+            "a slip never moves a clip or its neighbours"
+        );
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(1, 4).unwrap(),
+            "the source window moved by the delta"
+        );
+        assert_eq!(
+            session.project_revision().value(),
+            revision_before.value() + 1,
+            "a slip is one revision"
+        );
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(0, 1).unwrap(),
+            "undo restores the original source window"
+        );
+        assert_eq!(spans_before, clip_spans(&session, TRACK_A));
+    }
+
+    #[test]
+    fn slip_backwards_takes_earlier_source_material() {
+        let mut session = session_with_state("slip-back", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        // Start an eighth of a second into the source so there is room to go back.
+        slip_clip(&mut session, CLIP_A, (1, 8)).unwrap();
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(1, 8).unwrap()
+        );
+
+        slip_clip(&mut session, CLIP_A, (-1, 8)).unwrap();
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(0, 1).unwrap(),
+            "a negative delta takes earlier material"
+        );
+    }
+
+    #[test]
+    fn a_slip_past_the_start_of_the_source_is_refused() {
+        let mut session = session_with_state("slip-refused", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        let revision_before = session.project_revision();
+
+        // Nothing exists before the start of the media, so the clip must not be
+        // left pointing at it.
+        let error = slip_clip(&mut session, CLIP_A, (-1, 1)).unwrap_err();
+        assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+        assert_eq!(
+            source_start(&session, TRACK_A, CLIP_A),
+            RationalTime::new(0, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_slip_of_zero_is_a_no_op() {
+        let mut session = session_with_state("slip-zero", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        let revision_before = session.project_revision();
+
+        let result = slip_clip(&mut session, CLIP_A, (0, 1)).unwrap();
+        assert!(!result.changed);
+        assert_eq!(session.project_revision().value(), revision_before.value());
+    }
+
     fn seed_video_track_and_clip(
         session: &mut ProjectSession,
         media_id: &str,
@@ -6960,6 +7159,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "timeline.clip.slip",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.clip.split",
                     schema_version: 1,
                     mutates_project: true,
@@ -7041,7 +7246,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 23);
+        assert_eq!(COMMANDS.len(), 24);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -9676,6 +9881,7 @@ mod tests {
             "timeline.clip.move",
             "timeline.clip.delete",
             "timeline.clip.trim",
+            "timeline.clip.slip",
             "timeline.clip.split",
             "timeline.clip.ripple_delete",
         ] {
