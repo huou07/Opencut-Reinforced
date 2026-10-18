@@ -173,6 +173,12 @@ done
 # build directory, and a real run must keep them beside its own report.
 report_dir="$(dirname -- "$report")"
 mkdir -p "$report_dir"
+# Absolute from here on. `scripts/run-android-preview-check.sh` changes directory
+# to apps/or_app, so a relative RUNNER_TEMP stopped resolving there: measured
+# 2026-10-18, the diagnostics case died with
+# `apps/or_app/build/local-lanes/android-state-diagnostics.txt: No such file or
+# directory` while reporting a driver failure, which hid the real cause.
+report_dir="$(cd -- "$report_dir" && pwd)"
 LOG_DIR="$report_dir/android-logs"
 CASE_APK_DIR="$report_dir/android-case-apks"
 STEPS_FILE="$report_dir/.android-steps.tsv"
@@ -431,6 +437,29 @@ if [[ "$result" == "PASS" ]]; then
   export OR_ANDROID_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance"
   export OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance-recovery"
   export PKG_CONFIG_ALLOW_CROSS=1
+  # `flutter drive` runs `pub get`, which cannot mutate the owner's shared pub
+  # cache from this worker UID: measured 2026-10-18, the diagnostics case died
+  # with `Deletion failed, path = '/home/huou07/.pub-cache/hosted/pub.dev/
+  # path_provider-2.1.6' (OS Error: Operation not permitted)`. The bounded Linux
+  # preflight already stages a writable project-local cache for exactly this
+  # reason, so reuse it when the shared one is unusable. A host that cannot
+  # provide either is a named precondition, not a confusing driver failure.
+  pub_seed="${PUB_CACHE:-${HOME:-/root}/.pub-cache}"
+  pub_probe_dir="$pub_seed/hosted/pub.dev"
+  pub_writable=0
+  if [[ -d "$pub_probe_dir" ]]; then
+    probe="$(mktemp -d "$pub_probe_dir/.or-write-probe-XXXXXX" 2>/dev/null)" && {
+      rmdir "$probe" 2>/dev/null && pub_writable=1
+    }
+  fi
+  if (( pub_writable == 0 )); then
+    local_cache="$ROOT/apps/or_app/.dart_tool/aeh-pub-cache"
+    if [[ -d "$local_cache/hosted/pub.dev" ]]; then
+      export PUB_CACHE="$local_cache"
+    else
+      warn "the shared pub cache at $pub_seed is not writable and $local_cache has not been staged; run bash scripts/run_local_lane.sh linux once (its preflight stages it) before the Android lane"
+    fi
+  fi
   if [[ -n "$FFMPEG_PREFIX" ]]; then
     export PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig"
   fi

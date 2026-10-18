@@ -74,6 +74,9 @@ class AndroidLaneCase(unittest.TestCase):
         recorder = (
             "#!/usr/bin/env bash\n"
             'printf \'%s\\n\' "$(basename "$0") $*" >> "$OR_ANDROID_TEST_CAPTURE"\n'
+            'printf \'%s\\n\' "$(basename "$0")" >> "$OR_ANDROID_TEST_ENV"\n'
+            'printf \'RUNNER_TEMP=%s\\n\' "${RUNNER_TEMP:-unset}" >> "$OR_ANDROID_TEST_ENV"\n'
+            'printf \'PUB_CACHE=%s\\n\' "${PUB_CACHE:-unset}" >> "$OR_ANDROID_TEST_ENV"\n'
         )
         for name in ("start", "preview", "stop"):
             write_executable(self.stubs / f"{name}.sh", recorder + "exit 0\n")
@@ -133,6 +136,7 @@ class AndroidLaneCase(unittest.TestCase):
             "OR_ANDROID_CASE_APK_SCRIPT": str(self.stubs / "case_apks.sh"),
             "OR_ANDROID_GRADLEW_DIR": str(self.gradlew_dir),
             "OR_ANDROID_TEST_CAPTURE": str(self.capture / "argv.txt"),
+            "OR_ANDROID_TEST_ENV": str(self.capture / "env.txt"),
         })
         env.update(overrides)
         return env
@@ -151,6 +155,22 @@ class AndroidLaneCase(unittest.TestCase):
         if not path.exists():
             return []
         return [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+    def captured_env(self) -> dict[str, str]:
+        """The environment the lane handed each driven script, per script."""
+        path = self.capture / "env.txt"
+        if not path.exists():
+            return {}
+        observed: dict[str, str] = {}
+        pending: str | None = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if "=" not in line:
+                pending = line
+                continue
+            key, _, value = line.partition("=")
+            if pending:
+                observed[f"{pending}.{key}"] = value
+        return observed
 
     # --- invocation -------------------------------------------------------
     def test_unknown_step_is_a_usage_error(self) -> None:
@@ -253,6 +273,45 @@ class AndroidLaneCase(unittest.TestCase):
         self.assertTrue(logs, "the lane wrote no logs beside its report")
         after = set(DEFAULT_LANE_DIR.rglob("*")) if DEFAULT_LANE_DIR.exists() else set()
         self.assertEqual(before, after, "a redirected run wrote into the real lane directory")
+
+    def test_the_lane_hands_the_driven_scripts_an_absolute_runner_temp(self) -> None:
+        # `run-android-preview-check.sh` changes directory to apps/or_app, so a
+        # relative RUNNER_TEMP stopped resolving and the case reported a driver
+        # failure instead of its real cause.
+        self.run_lane("--steps", "apk,emulator,preview")
+        observed = self.captured_env()
+        self.assertTrue(observed, self.captured_env())
+        runner_temps = {value for key, value in observed.items() if key.endswith(".RUNNER_TEMP")}
+        self.assertTrue(runner_temps, observed)
+        for runner_temp in runner_temps:
+            self.assertTrue(runner_temp.startswith("/"), runner_temp)
+            self.assertTrue(Path(runner_temp).is_dir(), runner_temp)
+            self.assertTrue(runner_temp.startswith(str(self.report.parent)), runner_temp)
+
+    def test_the_lane_exports_a_writable_pub_cache_for_the_driven_cases(self) -> None:
+        # `flutter drive` runs `pub get`; against a shared cache this UID cannot
+        # mutate, the case died with `Deletion failed ... Operation not permitted`.
+        shared = self.tmp / "shared-pub-cache"
+        (shared / "hosted" / "pub.dev").mkdir(parents=True)
+        (shared / "hosted" / "pub.dev").chmod(0o555)
+        local_cache = ROOT / "apps" / "or_app" / ".dart_tool" / "aeh-pub-cache"
+        staged = (local_cache / "hosted" / "pub.dev").is_dir()
+        try:
+            self.run_lane("--steps", "apk,emulator,preview", PUB_CACHE=str(shared))
+            observed = self.captured_env()
+            pub_caches = {value for key, value in observed.items() if key.endswith(".PUB_CACHE")}
+            self.assertTrue(pub_caches, observed)
+            pub_cache = sorted(pub_caches)[0]
+            if staged:
+                self.assertNotEqual(pub_cache, str(shared), pub_cache)
+                self.assertIn("aeh-pub-cache", pub_cache, pub_cache)
+            else:
+                # Without a staged local cache the lane must say so instead of
+                # letting the case fail inside `pub get`.
+                warnings = self.payload()["warnings"]
+                self.assertTrue(any("pub cache" in entry for entry in warnings), warnings)
+        finally:
+            (shared / "hosted" / "pub.dev").chmod(0o755)
 
     def test_report_hashes_the_driven_apks_and_names_the_missing_probe(self) -> None:
         self.run_lane("--steps", "apk")
