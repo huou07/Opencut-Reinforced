@@ -89,7 +89,7 @@ remember a sequence or its preconditions:
 | `hygiene` | `bash scripts/check-repo.sh` |
 | `flutter` | `cd apps/or_app && flutter --no-version-check test --no-pub` |
 | `preflight` | `python3 scripts/run_linux_ui_preflight.py` |
-| `bench` | `python3 scripts/bench_quality.py` |
+| `bench` | `python3 scripts/bench_quality.py --json` |
 
 It records a dirty tree rather than refusing to start, because the deliberately
 broken source check that proves the lane exits non-zero is itself a dirty tree;
@@ -100,8 +100,14 @@ a `BLOCKED` or `UNVERIFIED` step (a host limitation does not), and writes one
 machine-readable report to the gitignored
 `apps/or_app/build/local-lanes/linux.json`. That report carries the source SHA,
 the host facts, every step's exact command, exit code, elapsed seconds and log
-path, the SHA-256 of each artifact it produced, the steps it did not run, and an
-explicit `limits` list. The lane's own result is the worst classification it saw.
+path, the SHA-256 of each artifact it produced, the steps it did not run, the
+warnings it raised, and an explicit `limits` list. Only a non-empty file
+modified during its own step is recorded as that step's artifact: the first
+version of this lane attributed the bounded preflight's `run.json` to a
+`BLOCKED` preflight step that never reached it, and recorded an empty
+`bench.json` because the budget prints its machine-readable rows only under
+`--json`. Both are the kind of artifact that looks like evidence and is not. The
+lane's own result is the worst classification it saw.
 Exit code 0 means every selected step passed on a clean tree; 1 a step failed; 2 a
 wrong invocation; 3 a step was `BLOCKED` by a host precondition (the preflight's
 own 6 GiB RAM/disk, tool, lock and clean-tree checks); 4 a step could not be

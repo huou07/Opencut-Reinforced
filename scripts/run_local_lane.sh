@@ -141,7 +141,7 @@ step_command_text() {
     hygiene) printf 'bash scripts/check-repo.sh' ;;
     flutter) printf 'cd apps/or_app && flutter --no-version-check test --no-pub' ;;
     preflight) printf 'python3 scripts/run_linux_ui_preflight.py' ;;
-    bench) printf 'python3 scripts/bench_quality.py' ;;
+    bench) printf 'python3 scripts/bench_quality.py --json' ;;
     deb) printf 'python3 scripts/run_linux_ui_preflight.py --exec ... -- bash -c packaged_build_deb' ;;
     journey) printf 'python3 scripts/run_linux_ui_preflight.py --exec ... -- bash -c packaged_run_journey' ;;
     *) printf '%s' "$1" ;;
@@ -152,22 +152,43 @@ now_ms() { date +%s%3N; }
 
 JOURNAL="$(mktemp)"
 ARTIFACTS="$(mktemp)"
+WARNINGS="$(mktemp)"
 REPORT_TMP="$(mktemp)"
-trap 'rm -f "$JOURNAL" "$ARTIFACTS" "$REPORT_TMP"' EXIT
+trap 'rm -f "$JOURNAL" "$ARTIFACTS" "$WARNINGS" "$REPORT_TMP"' EXIT
+
+# A warning is part of the run's record, not just console noise: "the bench step
+# printed no machine-readable row" is exactly what a reader of the report needs
+# to know before trusting the artifact list.
+lane_warn() {
+  printf 'run_local_lane: warning: %s\n' "$1" >&2
+  printf '%s\n' "$1" >>"$WARNINGS"
+}
 
 sha256_of() {
   [[ -f "$1" ]] || return 1
   sha256sum "$1" | cut -d' ' -f1
 }
 
-# record_artifact <step> <path>
+# record_artifact <step> <path> [not-before-epoch]
+#
+# An artifact is a file this run produced, so two things disqualify one: being
+# empty, and having existed before the step started. The bounded preflight had
+# its run.json attributed to a BLOCKED step that never reached it, which is
+# exactly the stale-file mistake this guards against.
 record_artifact() {
-  local path="$2"
-  [[ -f "$path" ]] || return 0
+  local step="$1" path="$2" not_before="${3:-0}"
+  if [[ ! -s "$path" ]]; then
+    lane_warn "$path is missing or empty, so no $step artifact was recorded"
+    return 0
+  fi
+  if (( not_before > 0 )) && (( $(stat -c '%Y' "$path") < not_before )); then
+    lane_warn "$path predates the $step step, so it was not recorded as this run's artifact"
+    return 0
+  fi
   local digest size
   digest="$(sha256_of "$path")" || return 0
   size="$(stat -c '%s' "$path")"
-  printf '%s\t%s\t%s\t%s\n' "$1" "$path" "$digest" "$size" >>"$ARTIFACTS"
+  printf '%s\t%s\t%s\t%s\n' "$step" "$path" "$digest" "$size" >>"$ARTIFACTS"
 }
 
 # The two host reasons `scripts/acceptance.sh` already classifies as a capability
@@ -258,6 +279,7 @@ run_step() {
   mkdir -p "$(dirname "$log")"
   printf '\n== %s — %s ==\n' "$id" "$display"
   start="$(now_ms)"
+  LAST_STEP_START_EPOCH="$(date +%s)"
   timeout --signal=TERM --kill-after=30 "${budget}s" "$@" >"$log" 2>&1 || rc=$?
   end="$(now_ms)"
   classification="$(classify_step "$id" "$rc" "$log")"
@@ -286,6 +308,7 @@ run_step() {
 }
 
 LAST_CLASSIFICATION=""
+LAST_STEP_START_EPOCH=0
 
 # --- packaged steps ---------------------------------------------------------
 # Both run through `run_linux_ui_preflight.py --exec`, which prepares the same
@@ -422,7 +445,7 @@ if [[ -n "$dirty" ]]; then
   # itself a dirty tree. The bounded journey keeps its own hard clean-tree
   # refusal, and a dirty run can therefore only ever report DIRTY, never PASS.
   dirty_at_start=1
-  printf 'run_local_lane: warning: the working tree is not clean; this run can only report DIRTY:\n%s\n' "$dirty" >&2
+  lane_warn "the working tree is not clean, so this run can only report DIRTY: $(printf '%s' "$dirty" | tr '\n' ';')"
 fi
 
 mkdir -p "$LANE_DIR" "$(dirname "$report")"
@@ -441,12 +464,17 @@ for step in "${step_list[@]}"; do
     preflight)
       run_step preflight "$log" "$(step_command_text preflight)" \
         python3 scripts/run_linux_ui_preflight.py
-      record_artifact preflight "$PREFLIGHT_REPORT"
+      record_artifact preflight "$PREFLIGHT_REPORT" "$LAST_STEP_START_EPOCH"
       ;;
     bench)
-      run_step bench "$log" "$(step_command_text bench)" python3 scripts/bench_quality.py
-      grep -F 'BENCH_JSON=' "$log" | tail -n1 | cut -d= -f2- >"$BENCH_JSON" || true
-      record_artifact bench "$BENCH_JSON"
+      run_step bench "$log" "$(step_command_text bench)" \
+        python3 scripts/bench_quality.py --json
+      if grep -qF 'BENCH_JSON=' "$log"; then
+        grep -F 'BENCH_JSON=' "$log" | tail -n1 | cut -d= -f2- >"$BENCH_JSON"
+        record_artifact bench "$BENCH_JSON" "$LAST_STEP_START_EPOCH"
+      else
+        lane_warn "$(step_command_text bench) printed no BENCH_JSON line"
+      fi
       ;;
     deb)
       missing=""
@@ -473,7 +501,7 @@ for step in "${step_list[@]}"; do
         python3 scripts/run_linux_ui_preflight.py --exec \
           --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
           --local-home "$LANE_DIR/deb-home" -- bash -c packaged_build_deb
-      record_artifact deb "$OR_LANE_DEB"
+      record_artifact deb "$OR_LANE_DEB" "$LAST_STEP_START_EPOCH"
       ;;
     journey)
       if [[ ! -f "${OR_LANE_DEB:-}" ]]; then
@@ -493,7 +521,7 @@ for step in "${step_list[@]}"; do
         python3 scripts/run_linux_ui_preflight.py --exec \
           --ffmpeg-prefix "$FFMPEG_PREFIX" --codec-prefix "$CODEC_PREFIX" \
           --local-home "$LANE_DIR/deb-home" -- bash -c packaged_run_journey
-      record_artifact journey "$LANE_DIR/runner-temp/or-packaged-product-journey/existing-export.webm"
+      record_artifact journey "$LANE_DIR/runner-temp/or-packaged-product-journey/existing-export.webm" "$LAST_STEP_START_EPOCH"
       ;;
   esac
   if [[ "$LAST_CLASSIFICATION" != "PASS" ]]; then
@@ -518,7 +546,7 @@ fi
 finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 finished_ms="$(now_ms)"
 
-python3 - "$JOURNAL" "$ARTIFACTS" "$REPORT_TMP" "$report" \
+python3 - "$JOURNAL" "$ARTIFACTS" "$WARNINGS" "$REPORT_TMP" "$report" \
   "$head" "$started_at" "$finished_at" "$(( finished_ms - started_ms ))" \
   "$result" "$packaged" "$dirty_at_start" "${step_list[@]}" <<'PY'
 import json
@@ -528,8 +556,9 @@ import shutil
 import sys
 from pathlib import Path
 
-(journal, artifacts_path, report_tmp, report_path, head, started_at, finished_at,
- elapsed_ms, result, packaged, dirty_at_start, *requested) = sys.argv[1:]
+(journal, artifacts_path, warnings_path, report_tmp, report_path, head,
+ started_at, finished_at, elapsed_ms, result, packaged, dirty_at_start,
+ *requested) = sys.argv[1:]
 
 steps = []
 with open(journal, encoding="utf-8") as handle:
@@ -590,6 +619,8 @@ payload = {
     "steps": steps,
     "not_run": not_run,
     "artifacts": artifacts,
+    "warnings": [line for line in Path(warnings_path).read_text(
+        encoding="utf-8").splitlines() if line],
     "limits": limits,
     "report": str(Path(report_path).resolve()),
 }
