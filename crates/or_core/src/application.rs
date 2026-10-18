@@ -602,6 +602,27 @@ impl CommandEnvelope {
         }
     }
 
+    /// Moves a clip's source window by `delta` without moving the clip.
+    pub fn slip_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        delta: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_SLIP_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "clip_id": clip_id,
+                "delta": delta,
+            }),
+        }
+    }
+
     pub fn split_timeline_clip(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,

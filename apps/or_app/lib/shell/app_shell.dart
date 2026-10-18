@@ -454,6 +454,7 @@ class _AppShellState extends State<AppShell> {
               onDeleteTimelineClip: _deleteTimelineClip,
               onTrimTimelineClip: _trimTimelineClip,
               onSplitTimelineClip: _splitTimelineClip,
+              onSlipTimelineClip: _slipTimelineClip,
               onRippleDeleteTimelineClip: _rippleDeleteTimelineClip,
               onAddTimelineMarker: _addTimelineMarker,
               onMoveTimelineMarker: _moveTimelineMarker,
@@ -2474,6 +2475,22 @@ class _AppShellState extends State<AppShell> {
         current,
         clipId: clip.clipId,
         timelineTime: timelineTime,
+      ),
+    );
+  }
+
+  Future<void> _slipTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectRationalTime delta,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.slipTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        delta: delta,
       ),
     );
   }

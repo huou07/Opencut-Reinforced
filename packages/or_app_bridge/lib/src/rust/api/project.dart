@@ -331,6 +331,16 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required ProjectTimelineTrackStateView state,
   });
 
+  /// Moves a clip's source window by the given delta without moving the clip.
+  Future<ProjectActionResult> slipTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
   Future<ProjectActionResult> splitTimelineClip({
     required String projectId,
     required String projectInstanceId,

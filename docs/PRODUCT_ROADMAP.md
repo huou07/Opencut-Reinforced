@@ -386,8 +386,16 @@ class each claim actually has:
   material, a slip past the start of the source is refused with the clip untouched,
   and a zero delta is a no-op. `cargo test -p or_core --lib` is 333 passing and the
   frozen command catalog was updated with its count.
-  **Not done:** the CLI, the app bridge and the UI have no slip surface, there is
-  no journey step, and no latency row; slide and roll are not started.
+  **Reachable from the CLI and the app (2026-10-19).**
+  `or timeline slip-clip --clip CLIP_ID --delta NUM/DEN`; the app bridge exposes
+  `slip_timeline_clip` (regenerated bindings, nothing else moved); and the clip
+  dialog has a `Slip` action (`timeline-slip-<clip id>`) that opens a small dialog
+  with a `Source delta` field (`timeline-slip-delta`) and a confirm
+  (`timeline-confirm-slip`), enabled only for a media clip on an unlocked track,
+  because a slip is meaningless for text or caption content. Both presentations
+  reach it, since the compact layout opens the same clip dialog.
+  **Not done:** no journey step drives a slip through the app, no latency row
+  measures it, and slide and roll are not started.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

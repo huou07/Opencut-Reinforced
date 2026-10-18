@@ -981,6 +981,32 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
         }
+        "slip-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--delta"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let delta = parse_cli_rational(
+                &required_name(&options, "--delta", json)?,
+                "--delta",
+                json,
+            )?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.slip",
+                json!({
+                    "clip_id": clip_id,
+                    "delta": rational_value(delta),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "split-clip" => {
             let options = Options::parse(
                 action_args,

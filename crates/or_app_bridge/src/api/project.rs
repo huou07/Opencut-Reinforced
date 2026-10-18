@@ -2162,6 +2162,40 @@ impl ProjectHostHandle {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Moves a clip's source window by the given delta without moving the clip.
+    pub fn slip_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        delta_numerator: i64,
+        delta_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::slip_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    delta,
+                )
+            },
+        )
+    }
+
     pub fn split_timeline_clip(
         &self,
         project_id: String,

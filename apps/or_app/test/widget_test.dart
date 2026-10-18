@@ -4913,6 +4913,9 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastMoveTimelineStart;
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
+  int slipTimelineClipCalls = 0;
+  String? lastSlipClipId;
+  ProjectRationalTime? lastSlipDelta;
   String? lastTrimClipId;
   ProjectTimelineTrimEdge? lastTrimEdge;
   ProjectRationalTime? lastTrimTimelineTime;
@@ -5896,6 +5899,46 @@ class _FakeProjectGateway implements ProjectGateway {
             : clip.timelineStart,
         sourceStart: sourceStart,
         timelineDuration: duration,
+      );
+      _timelineChanged(session);
+      return ProjectActionResult(succeeded: true, view: session.view);
+    }
+    return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    slipTimelineClipCalls++;
+    lastSlipClipId = clipId;
+    lastSlipDelta = delta;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index < 0) continue;
+      final clip = entry.value[index];
+      final sourceStart = clip.sourceStart ?? ProjectRationalTime(BigInt.zero, 1);
+      final shifted = ProjectRationalTime(
+        sourceStart.numerator * BigInt.from(delta.denominator) +
+            delta.numerator * BigInt.from(sourceStart.denominator),
+        sourceStart.denominator * delta.denominator,
+      );
+      if (shifted.numerator < BigInt.zero) {
+        return _timelineOperationFailure('INVALID_ARGUMENTS');
+      }
+      entry.value[index] = ProjectTimelineClip(
+        clipId: clip.clipId,
+        mediaId: clip.mediaId,
+        timelineStart: clip.timelineStart,
+        sourceStart: shifted,
+        timelineDuration: clip.timelineDuration,
       );
       _timelineChanged(session);
       return ProjectActionResult(succeeded: true, view: session.view);

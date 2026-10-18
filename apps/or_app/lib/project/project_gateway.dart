@@ -1056,6 +1056,15 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineTime,
     bool? ripple,
   });
+  /// Moves a clip's source window by [delta] without moving the clip: a slip never
+  /// changes the cut or a neighbour. Positive takes later material, negative
+  /// earlier.
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  });
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {

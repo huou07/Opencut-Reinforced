@@ -62,6 +62,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onDeleteTimelineClip,
     this.onTrimTimelineClip,
     this.onSplitTimelineClip,
+    this.onSlipTimelineClip,
     this.onRippleDeleteTimelineClip,
     this.onAddTimelineMarker,
     this.onMoveTimelineMarker,
@@ -187,6 +188,12 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineTime,
   )?
   onSplitTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlipTimelineClip;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectTimelineClip clip,
@@ -562,6 +569,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
+            onSlipClip: widget.onSlipTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -648,6 +656,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
+            onSlipClip: widget.onSlipTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -3566,6 +3575,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onDeleteClip,
     required this.onTrimClip,
     required this.onSplitClip,
+    required this.onSlipClip,
     required this.onRippleDeleteClip,
     required this.onUpdateTextClip,
     required this.onAddMarker,
@@ -3645,6 +3655,12 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onSplitClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlipClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
   final Future<void> Function(
@@ -4093,6 +4109,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               onDelete: widget.onDeleteClip,
                                               onTrim: widget.onTrimClip,
                                               onSplit: widget.onSplitClip,
+                                              onSlip: widget.onSlipClip,
                                               onRippleDelete:
                                                   widget.onRippleDeleteClip,
                                               onEditTextClip:
@@ -6478,6 +6495,12 @@ Future<void> _showTimelineClipActions({
     ProjectTimelineClip,
     ProjectRationalTime,
   )?
+  onSlip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
   onSplit,
   required Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDelete,
@@ -6594,6 +6617,23 @@ Future<void> _showTimelineClipActions({
                   );
                 },
           child: const Text('Trim'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-slip-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onSlip == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showSlipTimelineClipDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onSlip: onSlip,
+                    ),
+                  );
+                },
+          child: const Text('Slip'),
         ),
         TextButton(
           key: ValueKey('timeline-split-${clip.clipId}'),
@@ -7093,6 +7133,83 @@ Future<void> _showTrimTimelineClipDialog({
     timelineEdgeController.removeListener(updateTrimValidity);
     timelineEdgeController.dispose();
     canTrim.dispose();
+  }
+}
+
+Future<void> _showSlipTimelineClipDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlip,
+}) async {
+  if (project == null || onSlip == null) return;
+  final deltaController = TextEditingController(text: '1/4');
+  bool deltaIsValid() {
+    final delta = ProjectRationalTime.tryParse(deltaController.text);
+    return delta != null && delta.numerator != BigInt.zero;
+  }
+
+  final canSlip = ValueNotifier(deltaIsValid());
+  void updateValidity() => canSlip.value = deltaIsValid();
+  deltaController.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Slip Clip'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Move which part of the source this clip shows. The clip stays '
+                'where it is, so no cut moves.',
+              ),
+              _ExactRationalField(
+                fieldKey: const ValueKey('timeline-slip-delta'),
+                label: 'Source delta',
+                controller: deltaController,
+                onChanged: () => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canSlip,
+              builder: (context, valid, child) => FilledButton(
+                key: const ValueKey('timeline-confirm-slip'),
+                onPressed: valid
+                    ? () {
+                        final delta = ProjectRationalTime.tryParse(
+                          deltaController.text,
+                        );
+                        if (delta == null) return;
+                        Navigator.of(dialogContext).pop();
+                        unawaited(onSlip(project, clip, delta));
+                      }
+                    : null,
+                child: const Text('Slip'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    deltaController.removeListener(updateValidity);
+    deltaController.dispose();
+    canSlip.dispose();
   }
 }
 
