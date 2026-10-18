@@ -385,19 +385,57 @@ impl CommandEnvelope {
         timeline_start: RationalTime,
         source_range: TimeRange,
     ) -> Self {
+        Self::insert_timeline_clip_with_mode(
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            clip_id,
+            track_id,
+            media_id,
+            timeline_start,
+            source_range,
+            TimelineEditMode::Insert,
+            None,
+        )
+    }
+
+    /// Inserts a clip with an explicit edit mode.
+    ///
+    /// The mode is an input, not project state: the same project can be edited in
+    /// either mode, and a client's mode choice is its own presentation state.
+    /// `overwrite_split_clip_id` is only read by overwrite when the new span lands
+    /// strictly inside one existing clip; without it the command refuses.
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_timeline_clip_with_mode(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        track_id: TrackId,
+        media_id: MediaId,
+        timeline_start: RationalTime,
+        source_range: TimeRange,
+        mode: TimelineEditMode,
+        overwrite_split_clip_id: Option<ClipId>,
+    ) -> Self {
+        let mut arguments = serde_json::json!({
+            "clip_id": clip_id,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": timeline_start,
+            "source_range": source_range,
+            "mode": mode.as_wire(),
+        });
+        if let Some(split_clip_id) = overwrite_split_clip_id {
+            arguments["overwrite_split_clip_id"] = serde_json::json!(split_clip_id);
+        }
         Self {
             command_id: TIMELINE_CLIP_INSERT_ID.to_owned(),
             schema_version: OPERATION_SCHEMA_VERSION,
             project_id,
             project_instance_id,
             expected_project_revision,
-            arguments: serde_json::json!({
-                "clip_id": clip_id,
-                "track_id": track_id,
-                "media_id": media_id,
-                "timeline_start": timeline_start,
-                "source_range": source_range,
-            }),
+            arguments,
         }
     }
 
@@ -4155,7 +4193,7 @@ struct TimelineSourceRangeArguments {
 /// client's presentation choice.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
-enum TimelineEditMode {
+pub enum TimelineEditMode {
     /// Refuse to overlap: the target range must be free.
     #[default]
     Insert,
@@ -4167,6 +4205,23 @@ enum TimelineEditMode {
 impl TimelineEditMode {
     fn is_insert(&self) -> bool {
         matches!(self, Self::Insert)
+    }
+
+    /// The wire spelling used by the command arguments.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Self::Insert => "insert",
+            Self::Overwrite => "overwrite",
+        }
+    }
+
+    /// Parses the wire spelling a client sends; anything else is not a mode.
+    pub fn parse_wire(value: &str) -> Option<Self> {
+        match value {
+            "insert" => Some(Self::Insert),
+            "overwrite" => Some(Self::Overwrite),
+            _ => None,
+        }
     }
 }
 

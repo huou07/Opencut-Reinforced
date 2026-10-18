@@ -252,6 +252,19 @@ class each claim actually has:
     `--overwrite-split-id CLIP_ID`; an unknown mode is a usage error, and the
     flags are documented in `docs/TECHNICAL_PLAN.md`. The CLI has no automated
     overwrite test yet — the domain tests cover the semantics.
+  - **UI wiring is blocked on the binding generator, with the failure recorded
+    (2026-10-19).** `flutter_rust_bridge_codegen` 2.13.0 was installed here and
+    `generate` run from `packages/or_app_bridge`; it printed `Done!` but also
+    `Bad state: The analysis server crashed unexpectedly`, and it had rewritten
+    `crates/or_app_bridge/src/frb_generated.rs`, `lib/src/rust/api/project.dart`
+    and `lib/src/rust/frb_generated.dart`. A generated surface that half-succeeded
+    cannot be trusted, so the bridge signature change and all generated files were
+    reverted; only the or_core side landed: a public `TimelineEditMode` (with
+    `as_wire`/`parse_wire`) and `CommandEnvelope::insert_timeline_clip_with_mode`,
+    which is what the bridge will call once regeneration is trustworthy. Next
+    attempt: run `generate` with a writable `HOME` and a warm Dart analysis
+    server, verify `git diff` touches only the expected files plus the new
+    parameters, then build the app before committing anything.
   - **Failed attempt to write that CLI guard (2026-10-19), recorded so it is not
     repeated blind:** a test modelled on `headless_marker_cli_round_trips_...`
     (same `TestDirectory`, `media_path`, `probe_stub`, `json_success_with_probe`
