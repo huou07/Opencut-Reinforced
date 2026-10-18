@@ -124,6 +124,21 @@ ROWS = {
         "threshold_p95_ms": 6.0,
         "baseline": {"date": "2026-10-19", "p50_ms": 0.295, "p95_ms": 0.312},
     },
+    "command.slip": {
+        "description": "timeline.clip.slip, moving one clip's source window",
+        "threshold_p95_ms": 4.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 0.131, "p95_ms": 0.136},
+    },
+    "command.roll": {
+        "description": "timeline.clip.roll, moving a boundary between two clips",
+        "threshold_p95_ms": 4.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 0.229, "p95_ms": 0.238},
+    },
+    "command.slide": {
+        "description": "timeline.clip.slide, moving a clip between two neighbours",
+        "threshold_p95_ms": 5.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 0.271, "p95_ms": 0.291},
+    },
     "command.trim": {
         "description": "timeline.clip.trim on a 200-clip project",
         "threshold_p95_ms": 5.0,
@@ -542,8 +557,9 @@ def main(argv: list[str] | None = None) -> int:
             results.append(row_export_throughput(export_best))
     if any(selected(row_id) for row_id in
            ("command.create", "command.import", "command.add_track", "command.add_clip",
-            "command.overwrite_insert", "command.ripple_trim", "command.trim",
-            "command.split", "command.undo",
+            "command.overwrite_insert", "command.ripple_trim", "command.slip",
+            "command.roll", "command.slide", "command.trim", "command.split",
+            "command.undo",
             "command.seek_summary",
             "command.seek_clip_page", "project-open", "project-save")):
         try:

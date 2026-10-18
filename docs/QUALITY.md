@@ -92,6 +92,14 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+The three clip-level moves that leave a clip where it sits all have rows, measured
+on the tiled 200-clip project (2026-10-20): `command.slip` (move one clip's source
+window) p50 0.131 / p95 0.136 ms, `command.roll` (move the boundary between two
+adjacent clips) p50 0.229 / p95 0.238 ms, and `command.slide` (move a clip and let
+both neighbours absorb it) p50 0.271 / p95 0.291 ms. Slide is the most expensive of
+the three because it rewrites three clips and both neighbours' source ranges, and
+all three are far inside their budgets.
+
 Ripple trim has its own row too: `command.ripple_trim` shortens the first clip of
 the 200-clip project and pulls the other 199 with it, measured p50 0.295 ms /
 p95 0.312 ms against a 6.0 ms p95 budget (2026-10-19). Shifting almost two hundred

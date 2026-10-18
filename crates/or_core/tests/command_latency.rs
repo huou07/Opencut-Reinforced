@@ -439,6 +439,82 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("project_open".to_owned(), open_samples));
 
+    // --- slip, roll and slide --------------------------------------------
+    // The three clip-level moves that do not change where a clip sits as a whole.
+    // They run last, on the tiled 200-clip project, so their offsets cannot disturb
+    // the geometry the earlier rows depend on. Each moves by 1/512 s, which is small
+    // enough that forty iterations never reach a boundary: the clips are a quarter
+    // second long and the project's clips are adjacent by construction, which is
+    // exactly what roll and slide require.
+    let slip_step = match RationalTime::new(1, 512) {
+        Ok(value) => value,
+        Err(error) => {
+            unverified(&format!("invalid slip step: {error}"));
+            return;
+        }
+    };
+    // The trim row trimmed the first ITERATIONS clips' starts and never undid them,
+    // so the tiling only still holds past that range; the middle clip of a triple
+    // that was never trimmed is the one these rows use.
+    let pivot = ITERATIONS * 2;
+    if clip_ids.len() > pivot + 2 {
+        let mut slip_samples = Vec::with_capacity(ITERATIONS);
+        let mut roll_samples = Vec::with_capacity(ITERATIONS);
+        let mut slide_samples = Vec::with_capacity(ITERATIONS);
+        for _ in 0..ITERATIONS {
+            let started = Instant::now();
+            let done = session.handle_application_request(ApplicationRequest::Command(
+                CommandEnvelope::slip_timeline_clip(
+                    session.session().project_id(),
+                    session.session().project_instance_id(),
+                    session.session().project_revision(),
+                    clip_ids[pivot],
+                    slip_step,
+                ),
+            ));
+            if !succeeded(&done) {
+                unverified("slip failed on a project with tiled clips");
+                return;
+            }
+            slip_samples.push(elapsed_ms(started));
+
+            let started = Instant::now();
+            let done = session.handle_application_request(ApplicationRequest::Command(
+                CommandEnvelope::roll_timeline_clip(
+                    session.session().project_id(),
+                    session.session().project_instance_id(),
+                    session.session().project_revision(),
+                    clip_ids[pivot],
+                    slip_step,
+                ),
+            ));
+            if !succeeded(&done) {
+                unverified("roll failed on a project with adjacent clips");
+                return;
+            }
+            roll_samples.push(elapsed_ms(started));
+
+            let started = Instant::now();
+            let done = session.handle_application_request(ApplicationRequest::Command(
+                CommandEnvelope::slide_timeline_clip(
+                    session.session().project_id(),
+                    session.session().project_instance_id(),
+                    session.session().project_revision(),
+                    clip_ids[pivot],
+                    slip_step,
+                ),
+            ));
+            if !succeeded(&done) {
+                unverified("slide failed on a project with adjacent clips");
+                return;
+            }
+            slide_samples.push(elapsed_ms(started));
+        }
+        measurements.push(("slip".to_owned(), slip_samples));
+        measurements.push(("roll".to_owned(), roll_samples));
+        measurements.push(("slide".to_owned(), slide_samples));
+    }
+
     let clip_count = clip_ids.len();
     let rows = measurements
         .iter()

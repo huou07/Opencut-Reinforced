@@ -440,9 +440,18 @@ class each claim actually has:
     material to give, so the same move is refused when that clip starts at the
     beginning of its own source and succeeds — with the source moving back with the
     start — when it does not. Both cases are now pinned.
-  - **Not done for all three of slip, slide and roll:** no CLI, bridge or UI surface
-    sends a slide (slip has all three), no journey step drives any of them, and no
-    latency row measures any of them.
+  - **Measured (2026-10-20).** Each has a `QUALITY.md` row and a budget threshold
+    on the tiled 200-clip project: `command.slip` p50 0.131 / p95 0.136 ms (budget
+    4.0), `command.roll` p50 0.229 / p95 0.238 ms (budget 4.0), `command.slide`
+    p50 0.271 / p95 0.291 ms (budget 5.0). Slide costs the most of the three because
+    it rewrites the moving clip and both neighbours' source ranges. The lane prints
+    twenty-two rows and the budget is PASS. Writing them needed one correction:
+    the trim row trims the first forty clips' starts and never undoes them, so the
+    tiling only still holds past that range and the three rows measure a clip well
+    beyond it.
+  - **Not done for all three of slip, slide and roll:** roll and slide have no CLI,
+    bridge or UI surface (slip has all three), and no journey step drives any of
+    them.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
