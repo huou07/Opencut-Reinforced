@@ -212,6 +212,14 @@ if ! python3 scripts/test_ui_native_lock.py; then
   fail "the shared native UI lock checks failed"
 fi
 
+# The performance budget is only meaningful if a breach fails and every row
+# declares where its threshold came from. Those properties are checked without a
+# compiler or a GPU; the injected-regression command that proves a real slowdown
+# trips the CLI row is documented in docs/QUALITY.md and run at phase boundaries.
+if ! python3 scripts/test_bench_quality.py; then
+  fail "the performance budget checks failed"
+fi
+
 # The aggregate release gate is the only check meant to block a merge, so its
 # logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
 # logic rots, the gate silently becomes a rubber stamp.

@@ -29,7 +29,7 @@ and hosted `platform-verification` remains the packaging authority.
 |---|---|---|---|---|
 | Correctness | acceptance gate passes | `bash scripts/acceptance.sh` | acceptance | see recorded result |
 | Correctness (source) | hygiene, docs, claims, core dependency boundary | `bash scripts/check-repo.sh` | verify | see recorded result |
-| Performance | one bounded local budget: CLI cold start <= 200 ms and the FFmpeg export lane <= 1500 ms, best of N, on the named Debian OptiPlex-class host | `python3 scripts/bench_quality.py`, run by `bash scripts/acceptance.sh` | acceptance | enforced locally; interactive frame-time/latency still UNVERIFIED |
+| Performance | one bounded local budget of sixteen measured rows: process, command, project-file, render-frame and queue-priority (see the table below), on the named Debian OptiPlex-class host | `python3 scripts/bench_quality.py`, run by `bash scripts/acceptance.sh` | acceptance | enforced locally on this host class; a release-build, physical-device or hosted-runner number is **not** claimed |
 | Reliability | project save/reopen, undo/redo, autosave and recovery in the named journeys | widget + preflight journeys | acceptance / hosted | partially verified |
 | Accessibility / UX | 4.5:1 contrast, >= 11 px type, 24/44 px hit areas, keyboard alternatives | headless guards in `docs/UX_ACCEPTANCE.md` | widget tests | verified for the covered screens |
 | Security | no secrets in tracked files or history; dependency boundary enforced | `gitleaks detect` (acceptance, and pinned in `repo-hygiene.yml`), `check_or_core_deps.py` | acceptance / verify / hosted | local scan runs when gitleaks is installed; `check-repo.sh` alone still does not scan |
@@ -39,41 +39,92 @@ and hosted `platform-verification` remains the packaging authority.
 
 ## Performance: one bounded budget, and its limits
 
-OR enforces one small performance budget, measured only on the named host class
-below. It exists so an accidental catastrophic regression fails locally instead
-of waiting for a user to notice.
+OR enforces one local performance budget, measured only on the named host class
+below. It exists so a catastrophic regression fails locally instead of waiting
+for a user to notice, and so "fast" is a number with a provenance rather than an
+assertion. Every row below was measured on 2026-10-18 on an idle host; the
+margin column says what the threshold was set from.
 
-| Row | What it times | Baseline (2026-10-18, idle) | Budget (best of N) |
+| Row | What it times | Baseline (2026-10-18, idle) | Budget |
 |---|---|---|---|
-| CLI cold start | `or version --json`, fresh process, N=15 | 1.1 ms best / 2.0 ms median | <= 200 ms |
-| FFmpeg export lane | the ignored `software_export` WebM fixture (64x48, 10 frames, VP9/Opus), N=5 | 35.1 ms best / 42.1 ms median | <= 1500 ms |
+| `cli-cold-start` | `or version --json`, fresh process, N=15 | 1.1 ms best / 2.0 ms median | best <= 200 ms |
+| `ffmpeg-export` | the ignored `software_export` WebM fixture (64x48, 10 frames, VP9/Opus), N=5 | 35.1 ms best / 42.1 ms median | best <= 1500 ms |
+| `export-throughput` | frames per second through that same lane | 285 frames/s | >= 60 frames/s |
+| `command.create` | project create on a fresh path, 40 iterations | 0.052 ms p50 / 0.089 ms p95 | p95 <= 5 ms |
+| `command.import` | `media.add` after a real `ffprobe` of a 1 s clip | 14.3 ms p50 / 20.3 ms p95 | p95 <= 60 ms |
+| `command.add_track` | `timeline.track.add` on a 200-clip project | 0.013 / 0.016 ms | p95 <= 2 ms |
+| `command.add_clip` | `timeline.clip.insert`, 200 of them | 0.027 / 0.038 ms | p95 <= 2 ms |
+| `command.trim` | `timeline.clip.trim` | 0.139 / 0.195 ms | p95 <= 5 ms |
+| `command.split` | `timeline.clip.split` | 0.175 / 0.203 ms | p95 <= 5 ms |
+| `command.undo` | `history.undo` | 0.150 / 0.165 ms | p95 <= 5 ms |
+| `command.seek_summary` | `project.summary`, the read a seek performs | 0.000 / 0.000 ms | p95 <= 1 ms |
+| `command.seek_clip_page` | `timeline.clips` page of 100 on a 200-clip track | 0.006 / 0.007 ms | p95 <= 2 ms |
+| `project-open` | loading the 200-clip project file | 8.8 / 9.0 ms | p95 <= 60 ms |
+| `project-save` | atomic publish of that project file | 15.0 / 15.2 ms | p95 <= 80 ms |
+| `render-frame-time` | a 640x360 offscreen `or_render` frame **plus readback**, on the host's real GPU | 1.96 ms p50 / 2.18 ms p95 over 60 frames | p95 <= 16.7 ms |
+| `queue-priority` | that same frame while 40 CPU-bound opportunistic jobs run on 20 workers | idle p95 2.77 ms -> loaded p95 6.30 ms, ratio 2.27 | loaded p95 <= 33.3 ms and ratio <= 6.0 |
 
-`python3 scripts/bench_quality.py` measures both rows and
+`python3 scripts/bench_quality.py` measures all of them and
 `bash scripts/acceptance.sh` runs it, so a breach fails the admission gate. The
-budget is enforced on the **best of N** runs, not the mean, so a host busy with
-sibling builds does not fail spuriously; a systematic regression still trips. A
-host that cannot produce an honest number is reported `UNVERIFIED` with the
-exact command that would settle it, never a fabricated threshold.
+process rows are enforced on the **best of N** so a host busy with sibling builds
+does not fail spuriously; the in-process rows are enforced on the **p95**, which
+is what a user feels. `OR_BENCH_ONLY=<rows>` selects rows. A host that cannot
+produce an honest number is reported `UNVERIFIED` with the exact command that
+would settle it, never a fabricated threshold.
+
+The render rows print the adapter, driver, backend and adapter class. A software
+rasteriser (llvmpipe, SwiftShader, Lavapipe) is reported `UNVERIFIED` as
+software-path evidence and can never become a GPU claim; the number above is the
+Intel UHD 770 through Vulkan on this workstation. The render time **includes the
+offscreen readback**, so it is a deliberately heavier upper bound than
+presentation, and it is a debug build: it guards OR's own code, it is not a claim
+about a release build's speed.
+
+### The budget must be able to fail
+
+Two documented seams make the enforcement path itself testable, and both are used
+by `scripts/test_bench_quality.py`:
+
+- a real injected slowdown:
+  `OR_BENCH_INJECT_SLEEP_MS=500 OR_BENCH_ONLY=cli-cold-start python3 scripts/bench_quality.py`
+  must print `row cli-cold-start : FAIL — best 506.1 ms …` and exit 1 (observed
+  2026-10-18);
+- `OR_BENCH_THRESHOLD_SCALE=0.001` tightens every ceiling and raises every floor,
+  so one run trips the enforcement path of every row kind without shipping a
+  regression. A scale above 1.0 is ignored: the seam can only make a budget
+  stricter.
+
+`scripts/test_bench_quality.py` runs inside `bash scripts/check-repo.sh` and
+checks that every row declares a dated baseline and a threshold kind, that a
+breach fails while an in-budget number passes, that an unmeasurable row is
+`UNVERIFIED` and never `PASS`, and that an empty row selection is refused.
 
 Named machine class: **Debian 13 (trixie) x86_64, OptiPlex-class workstation,
-13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD** — the host the baseline was
-measured on. The budget is a property of this class. GitHub-hosted runners have
-their own variance and keep their own thresholds; no number measured here is
-claimed as a hosted-runner budget.
+13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD, Intel UHD 770/Vulkan** — the
+host every baseline above was measured on. The budget is a property of this
+class. GitHub-hosted runners have their own variance and keep their own
+thresholds; no number measured here is claimed as a hosted-runner budget.
 
 What is **not** covered, and stays a recorded gap:
 
-- No frame-time or latency budget. The Linux preflight renders through software
-  (`LIBGL_ALWAYS_SOFTWARE`) under Xvfb, and the Android lane runs a SwiftShader
-  emulator; a frame time measured there describes the absence of a GPU, not the
-  product. `TESTING.md` disclaims the preflight as a performance benchmark, and
-  the roadmap's "responsive preview" promise still has no measurement.
+- **Presentation frame time is still unmeasured.** `render-frame-time` measures a
+  headless offscreen render plus readback, not a presented viewer frame on a
+  real window: there is no vsync, no compositor and no swapchain in that path.
+  The Linux preflight renders through software (`LIBGL_ALWAYS_SOFTWARE`) under
+  Xvfb and the Android lane runs a SwiftShader emulator, so neither can supply a
+  presented-frame number. The command that would settle it is a real
+  presentation on this host's Intel GPU with the viewer texture path active, and
+  it does not exist yet.
+- **Release-build speed.** Every in-process row is a debug build.
 - The only packaged export wall times are hosted values recorded in the roadmap
   history (Linux 47.299 s, macOS 57.394 s, Windows 182.114 s and 169.702 s for
   the same 30-second VP9/Opus journey) from GitHub-hosted runners of unstated
   hardware class. The Windows spread is runner variance; turning those numbers
   into a product requirement would encode CI noise as a budget.
 - Physical-device Android responsiveness remains unmeasured.
+- A breached row measured beside a contended host is a measurement to repeat, not
+  automatically a product regression. `bench_quality.py` prints `MemAvailable`
+  and every foreign Gradle/Kotlin daemon it finds for exactly that reason.
 
 Resource ceilings also stay enforced and fail on regression: the disposable
 artifact cache's 8 MiB per-entry and 256 MiB total budgets with LRU eviction
@@ -88,9 +139,10 @@ it times, a baseline measured on this named host and a stated margin, then let
 
 ## Known gaps
 
-1. **No interactive performance budget** — the local CLI/export budget above is
-   a coarse regression guard; frame time, seek latency and preview
-   responsiveness remain unmeasured (see the section above).
+1. **No presented-frame performance budget** — command, project-file, offscreen
+   render and queue-contention rows are now measured and gated, but a *presented*
+   viewer frame (vsync, compositor, swapchain) is still unmeasured; the command
+   path that would measure it does not exist yet.
 2. **Local Flutter widget lane:** it runs on this host again. Corrected
    2026-10-18: `cd apps/or_app && flutter test --no-pub` passed 124 tests at
    `4f079e2` clean, and the acceptance gate no longer classifies the lane as a
@@ -102,12 +154,15 @@ it times, a baseline measured on this named host and a stated margin, then let
    run locally as developer evidence under
    [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md); a local guest result never becomes
    `ACCEPTED`.
-4. **No agent-facing UI harness and no screen inventory** — an agent can only
-   observe the two screenshots and one clip semantics dump the bounded preflight
-   happens to produce. It cannot list the app's screens and states, dump the
-   semantics tree on demand, or act by semantics label on a target of its
-   choosing. `docs/prompts/OR-BUILD.md` Phase 0 owns this gap; until
-   then, UI/UX claims rest on widget tests plus two fixed screenshots.
+4. **The agent-facing UI harness exists; its Android target has not yet produced
+   a guest transcript.** `scripts/or_ui.py` lists the running app's screens,
+   dumps the semantics tree, takes a screenshot at a named viewport, performs one
+   semantic action, or runs a scenario end to end, on Linux under Xvfb and on an
+   Android guest. On 2026-10-18 the Linux target passed the full editor journey
+   (50 steps), the screen inventory at 1280x800 and 320x440, and the negative
+   control. The Android target needs a booted guest and a built `ui.apk`; whether
+   it has produced a guest transcript is recorded in
+   [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md), not assumed here.
 
 ## Evidence rules
 
