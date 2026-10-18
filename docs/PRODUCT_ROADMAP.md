@@ -601,6 +601,15 @@ class each claim actually has:
     on the synthetic fixture and reports both windows; the command and a direct
     helper call give identical numbers (11.50 dB floor drop, 4.90 dB signal change,
     6.60 dB discrimination), which is what shows the command uses the chain it claims.
+  - **The client contract exists (2026-10-20).** The app bridge exposes
+    `clean_up_audio(source, destination, noise_floor_db?, reduction_db)`, returning a
+    view with the destination, the floor the filter was given, the reduction and the
+    bytes written; the noise floor is measured inside the call when the client does
+    not supply one, so the derivation is one implementation rather than one per
+    client. Bindings are regenerated. A failure carries the *core's* code, so a client
+    switches on one vocabulary whichever layer refuses the request. Two bridge tests
+    cover the missing-source and zero-reduction refusals. Dart still has no caller for
+    it.
   - **Not done, and why the capability is still not finished:** there is no desktop
     or compact surface, so a pointer or keyboard user cannot reach it, and the result
     is not imported as a new media item in one step — a user must run the command and

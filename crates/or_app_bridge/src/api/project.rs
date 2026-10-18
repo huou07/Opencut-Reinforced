@@ -589,6 +589,36 @@ pub struct RecoveryActionResult {
     pub message: String,
 }
 
+/// The outcome of reducing noise in a media file.
+///
+/// A failure carries the caller-facing code and message; a success carries what was
+/// written and the floor the filter was given, so a client can show both and a test
+/// can assert the derivation.
+#[derive(Clone, Debug)]
+pub struct MediaCleanupResultView {
+    pub succeeded: bool,
+    pub error_code: String,
+    pub message: String,
+    pub destination: String,
+    pub noise_floor_db: i32,
+    pub reduction_db: u32,
+    pub bytes_written: u64,
+}
+
+impl MediaCleanupResultView {
+    fn failure(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            succeeded: false,
+            error_code: code.to_owned(),
+            message: message.into(),
+            destination: String::new(),
+            noise_floor_db: 0,
+            reduction_db: 0,
+            bytes_written: 0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ProjectBridgeError {
     pub code: String,
@@ -2642,6 +2672,65 @@ impl ProjectHostHandle {
         ))
     }
 
+    /// Reduces noise in one media file and writes the result to `destination`.
+    ///
+    /// This is a file-to-file media operation, not a project mutation: no project is
+    /// opened, nothing in one changes, and the result is ordinary media the caller
+    /// can import and compare. The noise floor is derived from the material when
+    /// `noise_floor_db` is `None`, because a constant would leave the noise in one
+    /// recording and eat the audio in another.
+    pub fn clean_up_audio(
+        &self,
+        source: String,
+        destination: String,
+        noise_floor_db: Option<i32>,
+        reduction_db: u32,
+    ) -> MediaCleanupResultView {
+        if reduction_db == 0 {
+            return MediaCleanupResultView::failure(
+                "INVALID_ARGUMENTS",
+                "reduction cannot be zero",
+            );
+        }
+        let source_path = std::path::PathBuf::from(&source);
+        let destination_path = std::path::PathBuf::from(&destination);
+        let noise_floor_db = match noise_floor_db {
+            Some(value) => value,
+            None => match or_core::measure_noise_floor(&source_path) {
+                Ok(value) => value,
+                Err(error) => {
+                    return MediaCleanupResultView::failure(
+                        error.code().as_str(),
+                        format!(
+                            "could not measure the noise floor: {}",
+                            error.code().as_str()
+                        ),
+                    );
+                }
+            },
+        };
+        match or_core::clean_audio_file(
+            &source_path,
+            &destination_path,
+            noise_floor_db,
+            reduction_db,
+        ) {
+            Ok(result) => MediaCleanupResultView {
+                succeeded: true,
+                error_code: String::new(),
+                message: String::new(),
+                destination: result.destination.display().to_string(),
+                noise_floor_db: result.noise_floor_db,
+                reduction_db: result.reduction_db,
+                bytes_written: result.bytes_written,
+            },
+            Err(error) => MediaCleanupResultView::failure(
+                error.code().as_str(),
+                format!("noise reduction failed: {}", error.code().as_str()),
+            ),
+        }
+    }
+
     /// Re-probes a replacement source without changing the target media identity.
     pub fn relink_media(
         &self,
@@ -4656,6 +4745,44 @@ mod tests {
             )
             .expect_err("a missing cache must be reported, not ignored");
         assert_eq!(error.code, "CACHE_UNAVAILABLE");
+    }
+
+    #[test]
+    fn audio_cleanup_reports_a_missing_source_with_the_core_code() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+        let missing = directory.0.join("no-such-source-9f2.wav");
+        let destination = directory.0.join("cleaned.wav");
+
+        let result = handle.clean_up_audio(
+            missing.display().to_string(),
+            destination.display().to_string(),
+            None,
+            12,
+        );
+
+        assert!(!result.succeeded);
+        // The code is the core's, so a client switches on one vocabulary whichever
+        // layer refuses the request.
+        assert_eq!(result.error_code, "INVALID_ARGUMENTS");
+        assert!(!destination.exists());
+    }
+
+    #[test]
+    fn audio_cleanup_refuses_a_zero_reduction_before_measuring_anything() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+
+        let result = handle.clean_up_audio(
+            directory.0.join("anything.wav").display().to_string(),
+            directory.0.join("cleaned.wav").display().to_string(),
+            Some(-30),
+            0,
+        );
+
+        assert!(!result.succeeded);
+        assert_eq!(result.error_code, "INVALID_ARGUMENTS");
+        assert!(result.message.contains("reduction"));
     }
 
     #[test]
