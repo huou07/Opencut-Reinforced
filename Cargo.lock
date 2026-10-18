@@ -1823,6 +1823,7 @@ version = "0.1.0"
 dependencies = [
  "or_core",
  "or_ipc",
+ "or_motion",
  "serde_json",
 ]
 
@@ -1858,6 +1859,15 @@ dependencies = [
  "ffmpeg-the-third",
  "or_core",
  "or_runtime",
+ "serde_json",
+]
+
+[[package]]
+name = "or_motion"
+version = "0.1.0"
+dependencies = [
+ "or_core",
+ "serde",
  "serde_json",
 ]
 

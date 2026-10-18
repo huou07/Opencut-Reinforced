@@ -771,15 +771,47 @@ class each claim actually has:
   chosen route. The change is phase 4 of
   [prompts/OR-BUILD.md](prompts/OR-BUILD.md) and no part of it is implemented
   yet.
-- **Code-to-illustration video — absent; only enabling primitives exist:** there
-  is no code ingestion, tokenisation, syntax highlighting, MotionScene schema or
-  parser, scene evaluator or materialisation path. `crates/or_ai/src/protocol.rs:26`
-  declares an `AiTask::GenerateMotionScene` variant with no producer or consumer.
-  What exists to build on: deterministic bundled-font text rasterisation
-  (`crates/or_render/src/text.rs:18-39`), first-class text and caption clip
-  content (`crates/or_core/src/timeline.rs:181`), and the shared wgpu layer render
-  path (`crates/or_render/src/lib.rs:602`). ADR 0007 is architecture intent, not
-  implementation.
+- **Code-to-illustration video — the scene format, validator and inspection
+  exist; ingestion, highlighting, evaluation and materialisation do not
+  (2026-10-20).**
+  - **The `.ormotion.json` format is implemented** in a new `crates/or_motion`: the
+    ADR 0007 envelope as written, every struct denying unknown fields, a flat node
+    shape with a `kind` discriminant (serde cannot combine `deny_unknown_fields`
+    with an internally tagged enum, and a flat shape lets the validator name the
+    field a kind requires), a locked animation-property set and easing set with no
+    expression language, exact `or_core::RationalTime`, typed colours, and asset
+    references that are identities with an optional SHA-256 rather than URLs —
+    **a remote reference is refused, because rendering never fetches**. Bounds: 4 MiB
+    per file, 4096 nodes, nesting 16 deep, 4096 animations, 4096 keyframes each,
+    64 KiB per text node.
+  - **Validation is machine-actionable and complete**: it returns *every* problem with
+    a stable code and a JSON path (`MOTION_INVALID_DURATION` at `/duration`,
+    `MOTION_KEYFRAMES_UNSORTED` at `/animations/0/keyframes/1/at`,
+    `MOTION_DUPLICATE_NODE_ID` across nested groups, `MOTION_DEPTH_EXCEEDED`,
+    `MOTION_REMOTE_ASSET_REFUSED`, …) in the `{ok, errors}` shape the ADR documents.
+    Twelve unit tests cover the round trip, unknown-field refusal, a future schema
+    version, an oversized document, remote assets, duplicate ids, nesting depth,
+    unsorted and out-of-range keyframes, opacity bounds, animation targets, and the
+    inspection summary. One of them is the non-executability property: a text node
+    holding `$(rm -rf /) {{ 1 + 1 }} ${HOME}` is preserved byte for byte and nothing
+    evaluates it.
+  - **The agent surface exists**: `or motion validate --file PATH [--json]` and
+    `or motion inspect --file PATH [--json]` read a scene with no project open, no
+    renderer and no provider; two CLI tests cover the valid path and the
+    unknown-field refusal with its exit code and error code. ADR 0007 now records the
+    concrete decisions this implementation made, replacing its "deferred to Phase
+    11E" paragraph.
+  - **One defect the tests caught:** inspection reported node kinds in stack order
+    rather than document order, contradicting its own documented contract. The fix is
+    an explicit depth-first stack — not recursion, because a parsed scene can nest
+    deeper than validation allows and inspection must not overflow while reporting
+    that.
+  - **Not done, and this is most of the phase:** there is no code ingestion, no
+    tokenisation or syntax highlighting, no evaluator (`Evaluate(scene, exact_time)`),
+    no materialisation, and no preview or render integration. `crates/or_ai` still
+    declares `AiTask::GenerateMotionScene` with no producer or consumer. Nothing here
+    has been rendered, so no visual or performance dimension exists yet, and no part
+    of this phase is `ACCEPTED`.
 - **One local Android lane — entry point landed, guest drive unexecuted:**
   `bash scripts/run_local_lane.sh android` selects it and delegates to
   `scripts/run_android_lane.sh`, which probes `MemAvailable` against a 7 GiB

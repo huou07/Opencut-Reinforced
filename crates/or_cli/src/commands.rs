@@ -96,6 +96,11 @@ impl CliError {
         )
     }
 
+    /// A MotionScene that could not be read, with the format's own stable code.
+    fn motion(error: or_motion::MotionSceneError, json: bool) -> Self {
+        Self::new(4, json, "motion_scene", error.code(), error.to_string())
+    }
+
     /// A noise-reduction failure, reported with the same shape as the other media
     /// categories so a caller can switch on the code.
     fn cleanup(error: or_core::AudioCleanupError, json: bool) -> Self {
@@ -281,6 +286,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "history" => run_history(&args[1..], json)?,
         "recovery" => run_recovery(&args[1..], json)?,
         "media" => run_media(&args[1..], json)?,
+        "motion" => run_motion(&args[1..], json)?,
         "timeline" => run_timeline(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
@@ -418,6 +424,83 @@ fn run_media_clean_audio(args: &[OsString], json: bool) -> Result<String, CliErr
             result.reduction_db
         ))
     }
+}
+
+/// `or motion` — the declarative MotionScene surface ADR 0007 names.
+///
+/// Validation and inspection are pure reads of a scene file: no project is opened,
+/// nothing is rendered, and no provider is contacted.
+fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(
+            json,
+            "expected motion validate or motion inspect",
+        ));
+    };
+    match action {
+        "validate" => run_motion_validate(&args[1..], json),
+        "inspect" => run_motion_inspect(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown motion action; expected validate or inspect",
+        )),
+    }
+}
+
+fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {
+    let path = required_path(options, "--file", json)?;
+    let bytes = std::fs::read(&path)
+        .map_err(|error| CliError::usage(json, format!("the scene could not be read: {error}")))?;
+    or_motion::parse_motion_scene(&bytes).map_err(|error| CliError::motion(error, json))
+}
+
+fn run_motion_validate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let validation = or_motion::validate_scene(&scene);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&validation).expect("validation is serializable"),
+        ));
+    }
+    if validation.ok {
+        Ok(format!("{} is a valid MotionScene", scene.name))
+    } else {
+        Ok(validation
+            .errors
+            .iter()
+            .map(|error| format!("{} {} {}", error.code, error.path, error.message))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+}
+
+fn run_motion_inspect(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&inspection).expect("inspection is serializable"),
+        ));
+    }
+    Ok(format!(
+        "{} ({}): {} nodes, {} assets, {} animations, {} keyframes, {} ms at {}x{}, {}",
+        inspection.name,
+        inspection.scene_id,
+        inspection.node_count,
+        inspection.asset_count,
+        inspection.animation_count,
+        inspection.keyframe_count,
+        inspection.duration_milliseconds,
+        inspection.canvas_width,
+        inspection.canvas_height,
+        if inspection.validation.ok {
+            "valid".to_owned()
+        } else {
+            format!("{} problems", inspection.validation.errors.len())
+        }
+    ))
 }
 
 fn run_media_probe(args: &[OsString], json: bool) -> Result<String, CliError> {

@@ -45,6 +45,36 @@ impl TestDirectory {
         path
     }
 
+    /// A MotionScene file, with `extra` merged into its first node so a test can
+    /// introduce exactly one defect.
+    fn motion_scene_path(&self, name: &str, extra: Option<(&str, Value)>) -> PathBuf {
+        let mut scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Explain the parser",
+            "duration": {"numerator": 6, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "code",
+                    "kind": "text",
+                    "text": "fn main() {}",
+                    "position": {"x": 60, "y": 80},
+                    "font_size": 30,
+                },
+            ],
+            "animations": [],
+        });
+        if let Some((key, value)) = extra {
+            scene["nodes"][0][key] = value;
+        }
+        let path = self.0.join(name);
+        fs::write(&path, serde_json::to_vec_pretty(&scene).unwrap()).unwrap();
+        path
+    }
+
     fn probe_stub(&self) -> PathBuf {
         let executable = self.0.join(if cfg!(windows) {
             "probe-stub.exe"
@@ -2427,4 +2457,59 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
         initial.project_instance_id
     );
     host.shutdown(false).unwrap();
+}
+
+#[test]
+fn motion_validate_and_inspect_read_a_scene_without_a_project() {
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path("explain.ormotion.json", None);
+
+    let validated = cli([
+        OsString::from("motion"),
+        OsString::from("validate"),
+        OsString::from("--file"),
+        scene.clone().into_os_string(),
+    ]);
+    assert!(validated.status.success(), "{validated:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&validated.stdout).trim(),
+        "Explain the parser is a valid MotionScene"
+    );
+
+    let inspected = cli([
+        OsString::from("motion"),
+        OsString::from("inspect"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert!(inspected.status.success(), "{inspected:?}");
+    let value: Value = serde_json::from_slice(&inspected.stdout).unwrap();
+    assert_eq!(value["node_count"], 1);
+    assert_eq!(value["duration_milliseconds"], 6000);
+    assert_eq!(value["canvas_width"], 1920);
+    assert_eq!(value["validation"]["ok"], true);
+}
+
+#[test]
+fn motion_validate_refuses_a_scene_that_carries_an_unknown_field() {
+    // The format is data, not a program: a field this version does not implement is
+    // refused rather than ignored, so a scene cannot smuggle behaviour in.
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path(
+        "scripted.ormotion.json",
+        Some(("script", Value::String("while (true) {}".to_owned()))),
+    );
+
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("validate"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["error"]["code"], "MOTION_INVALID_JSON");
+    assert_eq!(value["error"]["category"], "motion_scene");
 }

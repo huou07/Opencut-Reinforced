@@ -40,6 +40,26 @@ The exact serialized field names, bounds, and codec are deferred to Phase 11E,
 after the Phase 7/8 renderer capabilities exist. No codec structs or
 `ProjectDocument` fields are introduced by this ADR.
 
+**Implemented 2026-10-20 (`crates/or_motion`) — the decisions this made.** The
+envelope above is realized as written, with these concrete choices:
+`deny_unknown_fields` on every struct, so a field this version does not implement is
+refused rather than ignored; one **flat** node struct carrying every kind's optional
+fields plus a `kind` discriminant, because serde does not support
+`deny_unknown_fields` with an internally tagged enum and a flat shape also lets the
+validator say exactly which field a kind requires; `Polyline` deliberately absent
+rather than accepted and ignored; a locked `MotionProperty` set and a locked
+`MotionEasing` set with no expression language; exact `or_core::RationalTime` for
+durations and keyframe times; typed `MotionColor` rather than a CSS string; asset
+references are identities with an optional SHA-256 and a scene-local or
+project-relative path, and a remote URL is refused because rendering never fetches.
+Bounds: 4 MiB per file, 4096 nodes, group nesting 16 deep, 4096 animations, 4096
+keyframes each, 64 KiB per text node. Diagnostics carry stable codes and JSON paths
+(`MOTION_INVALID_DURATION`, `MOTION_REMOTE_ASSET_REFUSED`, …) in the `{ok, errors}`
+shape below. Text is literal: a string that looks like a template or an expression is
+preserved byte for byte and never evaluated. Validation and inspection are pure reads
+— no project, no renderer, no provider — and the agent surface is
+`or motion validate|inspect --file PATH [--json]`.
+
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate
 `ProjectDocument` during evaluation. Human, template, CLI/agent, and AI
