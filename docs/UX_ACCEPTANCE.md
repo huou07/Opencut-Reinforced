@@ -226,6 +226,55 @@ headless or widget-level checks:
   mounts the empty workspace at 320x640 and passes with no overflow. This
   corrects a vacuous guard rather than reporting a reproduced defect.
 
+### Permanent harness guards (added 2026-10-18)
+
+Widget tests answer a narrow question about a screen they mount. These guards
+answer the journey question on the running app, on this host, through the real
+command path. They are developer evidence: `ACCEPTED` still requires the
+authoritative hosted gate for the exact source.
+
+- **Editor journey** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/editor-journey.json`
+  drives Home -> Projects -> create -> a rejected import (the failure state) ->
+  import a synthetic fixture -> add a track -> insert a clip -> open and close the
+  clip dialog -> keyboard duplicate (`Ctrl+D`) -> keyboard undo (`Ctrl+Z`) ->
+  keyboard frame step (`.`) -> keyboard save (`Ctrl+S`) -> leave the editor ->
+  reopen the saved project -> open the export dialog -> cancel it. Every action
+  names a widget key, a semantics label (exact or regex), visible text, a role, or
+  a dialog-scoped control; **no step names a screen coordinate**, and the harness
+  has no option that injects canonical project state. A control reached only by
+  pointer in an earlier revision now has to have a semantic identity to be
+  driven at all.
+- **Render-exception guard** — the runner fails a step if the framework recorded
+  an exception while it ran, so a `RenderFlex overflowed` or a failed assertion
+  cannot pass as green. This is what makes the journey a layout guard and not
+  only a behaviour guard.
+- **Compact viewports** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/compact-editor-journey.json`
+  runs the same commands at 320x440 through the compact presentation (the media
+  library is a bottom sheet opened from the mobile tool dock there), and the same
+  file with `--viewport 390x844` proves the taller compact viewport has not
+  regressed. The compact journey asserts the same semantics and the same absence
+  of render exceptions.
+- **Loud failure** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/wrong-selector.json` names a
+  control the app does not have and must report `FAIL` with status `not_found`
+  and exit 1. `scripts/test_or_ui.py` (run by `bash scripts/check-repo.sh`)
+  asserts that behaviour, the semantic-selector-only rule for every shipped
+  scenario, and that a malformed scenario is a usage error rather than a pass.
+- **Observation on demand** — `python3 scripts/or_ui.py screens` lists the screens
+  the running app exposes and dumps each one's semantics and screenshot;
+  `tree`, `shot` and `act` answer the same questions for one point in time. On
+  2026-10-18 `screens` found five destinations (Home, Projects, Templates, Asset
+  Library, Settings) at both 1280x800 and 320x440.
+- **Semantic state assertions** — a scenario can assert `expect_state` on a named
+  control (`enabled`, `disabled`, `selected`, `checked`, `focused`, `toggled`),
+  read from the semantics tree rather than from a widget field.
+- **Measured interaction** — a scenario can wrap sub-steps in
+  `{"op": "measure"}` and the transcript records p50/p95/min/max with the
+  statement that it is wall clock on this host through the software path. Those
+  numbers are developer evidence and never a device or GPU claim.
+
 ## PRODUCTION REQUIRED FUTURE
 
 These items are required by the execution plan but are not production claims

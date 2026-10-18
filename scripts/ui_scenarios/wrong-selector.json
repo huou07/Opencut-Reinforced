@@ -1,0 +1,11 @@
+{
+  "name": "wrong-selector",
+  "harness": "or_ui",
+  "description": "Negative control. The harness must fail loudly when a scenario names a control the app does not have, instead of passing on a stale or empty tree. `scripts/test_or_ui.py` asserts that this file reports FAIL with the `not_found` status, so a harness that silently passes an unresolvable selector cannot land. Run it with: python3 scripts/or_ui.py run scripts/ui_scenarios/wrong-selector.json",
+  "viewport": {"width": 1280, "height": 800},
+  "steps": [
+    {"op": "expect", "key": "home-new-project", "role": "button"},
+    {"op": "tap", "selector": {"label": "Export the final cut to a paid service"}},
+    {"op": "tap", "selector": {"key": "home-view-projects"}}
+  ]
+}

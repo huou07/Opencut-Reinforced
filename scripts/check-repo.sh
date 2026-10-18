@@ -220,6 +220,13 @@ if ! python3 scripts/test_bench_quality.py; then
   fail "the performance budget checks failed"
 fi
 
+# The UI harness is the instrument behind every interface claim. Its scenario
+# contract (semantic selectors only, validated before anything runs, the negative
+# control that must fail loudly) is checked without Xvfb or a device.
+if ! python3 scripts/test_or_ui.py; then
+  fail "the UI harness contract checks failed"
+fi
+
 # The aggregate release gate is the only check meant to block a merge, so its
 # logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
 # logic rots, the gate silently becomes a rubber stamp.

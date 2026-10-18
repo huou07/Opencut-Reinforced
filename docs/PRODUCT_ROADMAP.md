@@ -139,6 +139,54 @@ journey unless results establish a real engine migration dependency.
 
 ## Current product status and highest-value gaps
 
+## OR-BUILD Phase 0 status (work in progress, 2026-10-18)
+
+Phase 0 exists so the later phases can be measured. Its state, with the evidence
+class each claim actually has:
+
+- **Android lane floor and daemon reaping — implemented (VERIFIED_SOURCE, hermetic
+  tests).** `scripts/run_android_lane.sh` derives its `MemAvailable` floor from the
+  selected steps instead of a flat 7 GiB (guest 6144 + emulator 1024 + host margin
+  1024 for a guest run; 5120 for an apk-only run), records the derivation in
+  `android.json`, and stops the Gradle/Kotlin daemons its own apk step started
+  before the emulator step — attributable by the wrapper's Gradle version, with a
+  foreign daemon reported and left alone. `scripts/test_android_lane.py` covers
+  both rules hermetically (20 checks).
+- **The APK "hang" — diagnosed, not a product defect (VERIFIED_BEHAVIORAL, local
+  developer evidence).** The build was fetching a 119,914,309-byte Flutter engine
+  artifact at ~0.4 MB/s with no Gradle HTTP timeout; it completed in 217 s and
+  produced a 112,532,328-byte APK. Gradle HTTP timeouts are now bounded. Facts and
+  measurements are in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md).
+- **`scripts/or_ui.py` — implemented and passing on Linux (VERIFIED_SEMANTIC +
+  VERIFIED_BEHAVIORAL + VERIFIED_VISUAL, local developer evidence).** The full
+  editor journey (50 steps) passes end to end on the running app with semantic
+  selectors only, including the rejected-import state, a keyboard duplicate, undo,
+  frame step and save, a save/reopen round trip and the export dialog's cancel
+  path. The screen inventory finds five destinations at 1280x800 and 320x440; the
+  negative control fails loudly with `not_found`. The Android target is
+  implemented but has not yet produced a guest transcript: it needs a booted guest
+  and `ui.apk`, which the case-APK builder now produces.
+- **Performance budget — 16 measured rows (VERIFIED_BEHAVIORAL, local developer
+  evidence).** `scripts/bench_quality.py` now measures and enforces CLI cold start,
+  the FFmpeg export lane and its throughput, ten canonical-command and project-file
+  rows on a 200-clip project, a 640x360 offscreen render frame plus readback on the
+  host's Intel UHD 770 through Vulkan, and the render-frame p95 while 40 CPU-bound
+  opportunistic jobs saturate the job pool. All passed on 2026-10-18; a genuine
+  injected 500 ms regression trips the CLI row (exit 1). **Still unmeasured:** a
+  *presented* viewer frame (vsync/compositor/swapchain), and release-build speed.
+- **Shared native UI lock — hardened after a measured blockage
+  (VERIFIED_SOURCE, hermetic tests).** While a sibling project's build ran, the
+  per-UID lock was held by that build's processes and every OR UI lane failed with
+  `[Errno 11] Resource temporarily unavailable`. The preflight now names the
+  contention as `BLOCKED` with the settle command, opens the descriptor
+  non-inheritable and always closes it.
+- **Next action for Phase 0:** drive the Android guest through
+  `bash scripts/run_local_lane.sh android` (or `python3 scripts/or_ui.py --target
+  android run scripts/ui_scenarios/editor-journey.json` against a booted guest)
+  and either record a guest result naming the AVD, serial, GPU mode, probes, APK
+  hash, every test result and the guest/host health samples, or record `BLOCKED`
+  with the measured reason.
+
 - **Verified baseline:** exact-SHA run [38087624707](https://github.com/huou07/Opencut-Reinforced/actions/runs/38087624707) passed the required Rust, Flutter, descriptor, and packaged platform checks on `1dade2093a739322a894764f453700be0f9009fb`. Prior packaged desktop journeys exercised representative 1080p H.264/AAC import, preview, save/reopen, relink, and export; exact run reports and limitations are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Packaged edit/export:** exact-SHA run [38162539040](https://github.com/huou07/Opencut-Reinforced/actions/runs/38162539040) on `c3bcd95030d7fbcd7905a5a28d947e375f46497c` passed Linux, macOS, and Windows real-media journeys. Exact repeat on [38165543230](https://github.com/huou07/Opencut-Reinforced/actions/runs/38165543230) on `81491556f6035a309cee129f25b7e762bd1dd11c` passed Windows again. Both runs imported 1080p H.264/AAC, saved/reopened/relinked, exported 30 seconds of VP9/Opus, and independently decoded 720 video plus 1,501 audio frames. Hosted export times were Linux 47.299 s, macOS 57.394 s, and Windows 182.114 s then 169.702 s; monitor the Windows result through dogfood before changing quality/speed settings. Run 38165543230 also had a macOS lifecycle-suite timeout with no assertion failure (the identical suite passed on 38162539040) and a transient Linux TLS failure downloading Opus from `downloads.xiph.org`. Its Android loop exposed a repository-relative script path that fails after FFmpeg changes directories; the absolute-path repair was validated by the Android job in exact-SHA run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290). Details are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
 - **Exact-SHA platform run:** run [38172368290](https://github.com/huou07/Opencut-Reinforced/actions/runs/38172368290) on `33f7f355a5bb1c848551babe9c4c5c11c2a65316` passed Rust, Flutter, repository hygiene, descriptor-boundary, Linux, macOS, Windows, and Android gates. The desktop packaged journeys imported, edited, saved/reopened/relinked and independently decoded 30-second VP9/Opus exports: Linux 46.883 s, macOS 54.526 s, Windows 151.311 s, each with 720 video and 1,501 audio frames. Android built all three ABIs and its real DocumentsUI SAF journey wrote valid WebM with independently decoded video/audio; its small half-second fixture proves correctness only, not representative mobile performance. Full measurements and limits are in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
