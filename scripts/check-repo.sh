@@ -205,6 +205,14 @@ if ! python3 scripts/test_android_lane.py; then
   fail "the local Android lane control-flow checks failed"
 fi
 
+# The emulator start script must bind the serial the lane reserved. When it did
+# not, the lane waited 120 s for a serial nothing listened on and left a guest
+# running; these checks pin the port, the named port conflict and the guest size
+# without a device, an emulator or /dev/kvm.
+if ! python3 scripts/test_android_emulator_start.py; then
+  fail "the Android emulator start checks failed"
+fi
+
 # The shared native UI lock is per UID and outside any one project, so a sibling
 # build can hold it; a lane that then died with a bare errno cost an afternoon.
 # These checks pin the exclusion, release and named-refusal behaviour hermetically.

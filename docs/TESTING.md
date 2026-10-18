@@ -196,7 +196,11 @@ Linux report, including the SHA-256 of each APK it drove and an explicit
 scripts: `scripts/stage_android_ffmpeg.sh` produces the pinned prefix and probe,
 and `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install`
 link the bridge hook requires (that link is why the lane previously could not
-build an APK at all). After the apk step it stops the
+build an APK at all). The emulator step passes `-port` derived from the reserved serial, so
+`emulator-5580` is a guest on 5580 rather than a 120-second wait for a guest that
+came up on the default port; `scripts/test_android_emulator_start.py` pins that,
+the named port conflict, the usage error for a non-emulator serial and the guest
+sizing, hermetically. After the apk step it stops the
 Gradle/Kotlin daemons that appeared during that step and belong to the wrapper's
 Gradle version, attributing each one by UID, cwd, version and RSS first, so the
 guest never competes with the build JVMs for the same RAM; a resident or

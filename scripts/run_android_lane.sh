@@ -451,10 +451,14 @@ if [[ "$result" == "PASS" ]]; then
         reap_lane_daemons "$daemons_before"
         ;;
       emulator)
+        # Mark the guest as ours *before* the attempt. A start that fails after
+        # launching the emulator leaves a guest running: measured 2026-10-18, the
+        # step timed out while the guest was up on the emulator's default port,
+        # and because only a PASS set this flag the trap never stopped it, so a
+        # 4.5 GiB guest survived the lane. The stop script acts on the recorded
+        # PID, so it is safe to run when nothing was started.
+        guest_started=1
         run_step emulator "bash '$START_SCRIPT'" 900 || result="FAIL"
-        if [[ "$(awk -F'\t' '$1=="emulator" && $3=="PASS"{print "yes"}' "$STEPS_FILE")" == "yes" ]]; then
-          guest_started=1
-        fi
         ;;
       preview)
         # One step, several bounded drives: the diagnostics case asserts the CLI
