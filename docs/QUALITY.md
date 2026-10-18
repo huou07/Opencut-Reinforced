@@ -92,6 +92,12 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Caption import has a budget row: `command.caption_import` parses a two-hundred-cue
+SubRip file and applies it in one revision-checked command — the path a reviewed
+transcription proposal applies through — at p50 5.9 / p95 6.0 ms against a 60 ms p95
+budget (2026-10-20). The row undoes each import outside the timed region so every
+iteration starts from the same project.
+
 Noise filtering has a budget row: `command.audio_cleanup` measures the product's own
 path — derive the floor from the material, then run the filter — over a three-second
 fixture, so it includes two helper process starts. Measured 2026-10-20 on this host:

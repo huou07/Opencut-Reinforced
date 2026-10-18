@@ -714,7 +714,8 @@ class each claim actually has:
   implemented: clip speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
   snap-guide rendering are presentation state, and snapping itself is the
   read-only `timeline.snap` query.
-- **Automatic subtitles — desktop implemented, Android unsupported by design:**
+- **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
+  native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
   (`crates/or_ai/src/model.rs:38`), the provider runs as a sidecar
   (`crates/or_whisper_provider`), transcription yields a provenance-bound
@@ -723,8 +724,37 @@ class each claim actually has:
   Packaged desktop journeys pass on macOS, Windows and Linux.
   `crates/or_app_bridge/src/transcription.rs:798-826` has no Android model-store
   arm, so `TranscriptionService::new()` returns `None` and every call reports
-  `ProviderUnavailable`; Android transcription stays unsupported until that path
-  and its acceptance exist.
+  `ProviderUnavailable`.
+  - **Verified on this host (2026-10-20):** `cargo test -p or_ai --lib` is 23
+    passing, covering the provider protocol, the pinned model manifest and the
+    transcript proposal's validation (exact-millisecond times, confidence,
+    ordering, size estimate); `cargo check -p or_whisper_provider` builds; the
+    reviewed-proposal apply path is revision-checked, with a bridge test that a
+    stale revision is rejected and the project left unchanged
+    (`crates/or_app_bridge/src/api/project.rs:4826`). The provider runtime itself is
+    built only in the hosted Developer Preview job
+    (`.github/workflows/developer-preview.yml:146-163`, whisper.cpp v1.9.4 pinned by
+    commit `927cfce34f31707e17f2bff35c349632fb9e2c3a` plus
+    `cargo build -p or_whisper_provider`), so nothing on this host can run a real
+    transcription and no local result is packaged-runtime evidence.
+  - **Phase 2's performance dimension (2026-10-20):** `command.caption_import`
+    measures the path a reviewed proposal applies through — parse a two-hundred-cue
+    SubRip file and apply it in one command — at p50 5.9 / p95 6.0 ms against a 60 ms
+    p95 budget, then undo so the next iteration starts from the same project. The
+    budget prints twenty-five rows and is PASS.
+  - **Android is BLOCKED, with the exact missing pieces rather than a workaround.**
+    Three things, in dependency order: (1) `model_store_root()` needs an Android arm
+    that takes a writable app-private directory, because the Android app has no
+    `HOME`/`XDG_DATA_HOME` to read; (2) `whisper-cli` and `or-whisper-provider` must
+    be cross-compiled for the Android ABIs and packaged where Android permits
+    execution (the native library directory — the precedent is the FFmpeg probe,
+    which this repository already stages and executes on the emulator), and the
+    model download must write into that app-private directory; (3) the emulator lane
+    and the hosted Android job must verify it, because no local result can be
+    packaged-runtime evidence. Writing (1) alone would make the app attempt
+    transcription on Android and fail at the provider, which is worse than the
+    current explicit `ProviderUnavailable`, so it is not written until (2) exists.
+    Android transcription therefore stays `BLOCKED`, not "unsupported by design".
 - **Noise filtering and audio cleanup — absent, and not reachable through the
   shipped FFmpeg:** the only audio processing is clip gain, pan and linear fades
   applied in both preview and export (`crates/or_audio/src/lib.rs:428-436`,

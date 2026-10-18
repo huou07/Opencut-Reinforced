@@ -11,8 +11,9 @@
 //! in a debug build on this host, which the report states; they are a regression
 //! guard for OR's own code, not a claim about a release build's speed.
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MediaId, ProjectFileSession,
-    QueryEnvelope, RationalTime, TimeRange, TimelineTrimEdge, TrackId, TrackKind,
+    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
+    MediaId, ProjectFileSession, QueryEnvelope, RationalTime, TextFormatting, TimeRange,
+    TimelineClipState, TimelineTrimEdge, TrackId, TrackKind, VisualSettings,
 };
 use std::{
     env, fs,
@@ -423,6 +424,18 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("project_save".to_owned(), save_samples));
 
+    // --- caption import ---------------------------------------------------
+    // Phase 2's apply path: a reviewed proposal becomes one revision-checked
+    // command. The row parses a two-hundred-cue SubRip file and applies it, then
+    // undoes it so the next iteration starts from the same project.
+    match measure_caption_import(&mut session) {
+        Ok(samples) => measurements.push(("caption_import".to_owned(), samples)),
+        Err(reason) => {
+            unverified(&reason);
+            return;
+        }
+    }
+
     // --- audio clean-up ---------------------------------------------------
     // The only row that measures a helper process: its cost is dominated by
     // starting ffmpeg and running the filter, not by OR's own code, so it is
@@ -607,6 +620,87 @@ fn command_latency_on_a_two_hundred_clip_project() {
         rows = rows,
     ));
     let _ = fs::remove_dir_all(&workspace);
+}
+
+/// Times a two-hundred-cue caption import, including parsing the SubRip file.
+///
+/// The undo that restores the project is outside the timed region: it is the
+/// harness's reset, not part of the path being measured.
+fn measure_caption_import(session: &mut ProjectFileSession) -> Result<Vec<f64>, String> {
+    // The import command creates the caption track itself, so each iteration needs
+    // a fresh track id; passing one that exists is refused by design.
+    // A two-hundred-cue file, one cue per half second, so the parse and the apply
+    // both see the scale the budget uses elsewhere.
+    let mut source = String::new();
+    for index in 0..CLIPS {
+        let start = index as f64 * 0.5;
+        let end = start + 0.4;
+        source.push_str(&format!(
+            "{}\n{} --> {}\nCaption {}\n\n",
+            index + 1,
+            srt_timestamp(start),
+            srt_timestamp(end),
+            index + 1
+        ));
+    }
+
+    let mut samples = Vec::with_capacity(ITERATIONS);
+    for _ in 0..ITERATIONS {
+        let track_id = TrackId::generate();
+        let started = Instant::now();
+        let plan = or_core::parse_caption_file(source.as_bytes())
+            .map_err(|error| format!("the caption file did not parse: {error:?}"))?;
+        let clips = plan
+            .captions
+            .iter()
+            .map(|caption| TimelineClipState {
+                clip_id: ClipId::generate(),
+                timeline_start: caption.start,
+                timeline_duration: caption.duration,
+                content: ClipContent::Caption {
+                    text: caption.text.clone(),
+                    formatting: TextFormatting::DEFAULT,
+                },
+                settings: ClipSettings::Visual(VisualSettings::default()),
+            })
+            .collect::<Vec<_>>();
+        let response = session.handle_application_request(ApplicationRequest::Command(
+            CommandEnvelope::import_timeline_captions(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+                track_id,
+                clips,
+            ),
+        ));
+        if !succeeded(&response) {
+            return Err("caption import failed on a fresh caption track".to_owned());
+        }
+        samples.push(elapsed_ms(started));
+        let undone =
+            session.handle_application_request(ApplicationRequest::Command(CommandEnvelope::undo(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+            )));
+        if !succeeded(&undone) {
+            return Err("the caption import could not be undone".to_owned());
+        }
+    }
+    Ok(samples)
+}
+
+fn srt_timestamp(seconds: f64) -> String {
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let millis = total_ms % 1000;
+    let total_seconds = total_ms / 1000;
+    format!(
+        "{:02}:{:02}:{:02},{:03}",
+        total_seconds / 3600,
+        (total_seconds % 3600) / 60,
+        total_seconds % 60,
+        millis
+    )
 }
 
 /// Generates a short noisy audio fixture and times the clean-up over it.

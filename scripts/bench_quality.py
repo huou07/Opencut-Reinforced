@@ -169,6 +169,14 @@ ROWS = {
         "threshold_p95_ms": 2.0,
         "baseline": {"date": "2026-10-18", "p50_ms": 0.006, "p95_ms": 0.007},
     },
+    "command.caption_import": {
+        "description": (
+            "parse a two-hundred-cue SubRip file and apply it in one command, which is "
+            "what a reviewed transcription proposal applies through"
+        ),
+        "threshold_p95_ms": 60.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 6.0, "p95_ms": 7.8},
+    },
     "command.audio_cleanup": {
         "description": (
             "derived-floor noise reduction over a three-second fixture, including "
