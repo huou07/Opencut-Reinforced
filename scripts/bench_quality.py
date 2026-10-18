@@ -124,6 +124,11 @@ ROWS = {
         "threshold_p95_ms": 6.0,
         "baseline": {"date": "2026-10-19", "p50_ms": 0.295, "p95_ms": 0.312},
     },
+    "command.track_move": {
+        "description": "timeline.track.move on a project with two tracks",
+        "threshold_p95_ms": 2.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 0.002, "p95_ms": 0.003},
+    },
     "command.slip": {
         "description": "timeline.clip.slip, moving one clip's source window",
         "threshold_p95_ms": 4.0,
@@ -557,7 +562,8 @@ def main(argv: list[str] | None = None) -> int:
             results.append(row_export_throughput(export_best))
     if any(selected(row_id) for row_id in
            ("command.create", "command.import", "command.add_track", "command.add_clip",
-            "command.overwrite_insert", "command.ripple_trim", "command.slip",
+            "command.overwrite_insert", "command.ripple_trim", "command.track_move",
+            "command.slip",
             "command.roll", "command.slide", "command.trim", "command.split",
             "command.undo",
             "command.seek_summary",

@@ -439,6 +439,56 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("project_open".to_owned(), open_samples));
 
+    // --- track reorder ----------------------------------------------------
+    // Moving a track is a vector removal and insertion, so its cost is the track
+    // count rather than the clip count. It runs here, before the move rows above,
+    // and swaps the same two tracks back and forth so the geometry the other rows
+    // use is unchanged.
+    let mut track_move_samples = Vec::with_capacity(ITERATIONS);
+    let second_track = TrackId::generate();
+    let added = session.handle_application_request(ApplicationRequest::Command(
+        CommandEnvelope::add_timeline_track(
+            session.session().project_id(),
+            session.session().project_instance_id(),
+            session.session().project_revision(),
+            second_track,
+            or_core::TrackKind::Audio,
+        ),
+    ));
+    if !succeeded(&added) {
+        unverified("could not add the second track the reorder row needs");
+        return;
+    }
+    for index in 0..ITERATIONS {
+        let to = index % 2;
+        let started = Instant::now();
+        let done = session.handle_application_request(ApplicationRequest::Command(
+            CommandEnvelope::move_timeline_track(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+                track_id,
+                to,
+            ),
+        ));
+        if !succeeded(&done) {
+            unverified("track move failed on a project with two tracks");
+            return;
+        }
+        track_move_samples.push(elapsed_ms(started));
+    }
+    // Leave the track where the other rows expect it.
+    let _ = session.handle_application_request(ApplicationRequest::Command(
+        CommandEnvelope::move_timeline_track(
+            session.session().project_id(),
+            session.session().project_instance_id(),
+            session.session().project_revision(),
+            track_id,
+            0,
+        ),
+    ));
+    measurements.push(("track_move".to_owned(), track_move_samples));
+
     // --- slip, roll and slide --------------------------------------------
     // The three clip-level moves that do not change where a clip sits as a whole.
     // They run last, on the tiled 200-clip project, so their offsets cannot disturb

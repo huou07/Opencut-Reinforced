@@ -505,18 +505,23 @@ class each claim actually has:
     desktop clip count into an ellipsis (the count-readability guard failed), so the
     desktop header width grew by the control's footprint with the reason recorded
     at the constant. `cargo`-style reasoning would not have found either.
-  - **Journey blocked, with the exact symptom (2026-10-20).** A scenario that moves
-    the clip-bearing track up and asserts the label it reports afterwards
-    (`Audio track A1, 1 clip`, since a track's displayed name follows its position)
-    was written and then removed rather than committed red: `scripts/or_ui.py`
-    cannot select the move control. The header merges its semantics into one
-    container node, so an explicit `Semantics(label: 'Move track A2')` around the
-    menu button does not surface as a selectable node, and the key regex matches
-    several widgets per track. The next attempt should either give each track
-    header an unmerged semantics node or add a runner op that acts on a descendant
-    of a named container. The widget suite covers the command path in the meantime,
-    and the harness gained the `index` narrowing its `act` path was missing.
-  - **Not done:** no journey step drives a move, and no latency row measures it.
+  - **Journey evidence, and the fix that unblocked it (2026-10-20).**
+    `scripts/or_ui.py run scripts/ui_scenarios/track-reorder.json` passes: it creates
+    two audio tracks, gives the second one a clip so the two are distinguishable by
+    clip count, then moves that track up through its header menu and asserts that
+    the app now renders it as `Audio track A1, 1 clip` — a track's displayed name
+    follows its position, so the assertion is the order change rather than an
+    accepted command.
+  - The control needed `container: true` on its semantics wrapper. The track header
+    is a semantics container, so without that the menu's label merged into the
+    track's and no selector could reach it — which is also what a screen reader saw:
+    one long undifferentiated track node. The earlier attempt was removed red rather
+    than committed, and the harness also gained the `index` narrowing its `act` path
+    was missing.
+  - **Measured (2026-10-20).** `command.track_move` is p50 0.002 / p95 0.003 ms
+    against a 2.0 ms budget — it costs the track count, not the clip count, which is
+    why it sits two orders of magnitude below the clip-level rows. The budget prints
+    twenty-three rows and is PASS.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

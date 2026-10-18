@@ -5343,6 +5343,10 @@ class _TimelineTrackHeader extends StatelessWidget {
             // A tooltip on a custom child does not reach the semantics tree, so the
             // control announces which track it moves.
             Semantics(
+              // Its own node: the header is a semantics container, so without this
+              // the control's label merges into the track's and nothing can address
+              // the menu (a screen reader reads one long track node).
+              container: true,
               label: 'Move track $label',
               button: true,
               child: PopupMenuButton<int>(

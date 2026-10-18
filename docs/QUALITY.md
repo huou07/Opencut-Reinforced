@@ -92,6 +92,11 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Track reordering has a row: `command.track_move` on a two-track project is p50
+0.002 ms / p95 0.003 ms against a 2.0 ms p95 budget (2026-10-20). It costs the
+track count rather than the clip count — a removal and an insertion in a short
+vector — which is why it is two orders of magnitude below the clip-level rows.
+
 The three clip-level moves that leave a clip where it sits all have rows, measured
 on the tiled 200-clip project (2026-10-20): `command.slip` (move one clip's source
 window) p50 0.131 / p95 0.136 ms, `command.roll` (move the boundary between two

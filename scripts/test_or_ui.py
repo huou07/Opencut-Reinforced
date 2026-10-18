@@ -57,6 +57,7 @@ class ScenarioContractCase(unittest.TestCase):
         self.assertTrue({"editor-journey.json", "compact-editor-journey.json",
                          "interaction-latency.json", "overwrite-insert.json",
                          "ripple-trim.json", "slip-roll-slide.json",
+                         "track-reorder.json",
                          "wrong-selector.json"}.issubset(names),
                         names)
         for path, payload in self.shipped_scenarios():

@@ -1,0 +1,157 @@
+{
+  "name": "track-reorder",
+  "description": "Track reordering through the real app with a positional assertion. Two audio tracks are created and one is given a clip, so the two are distinguishable by their clip count; the track carrying the clip is then moved up through its header's move menu. The assertion is the label the app itself renders: a track's displayed name follows its position (A1, A2, ... within its kind), so the clip-bearing track reporting A1 after the move is the order change, not merely an accepted command. The track label also reports 'position N of M'.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Reorder journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 0 clips, enabled",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-insert-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "^A2 \u00b7 audio$"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "0/1"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A2, 1 clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "before-move"
+    },
+    {
+      "op": "shot",
+      "name": "before-move"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "^Move track A2$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Move up"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 1 clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-move"
+    },
+    {
+      "op": "shot",
+      "name": "after-move"
+    }
+  ]
+}
