@@ -88,6 +88,12 @@ class AndroidLaneCase(unittest.TestCase):
 
         self.meminfo = self.tmp / "meminfo"
         self.set_memory_gib(9)
+        # A readable and writable stand-in for /dev/kvm. The real device exists
+        # on the developer workstation and does not exist on a hosted runner, so
+        # the checks must not depend on it.
+        self.kvm = self.tmp / "kvm"
+        self.kvm.write_text("", encoding="utf-8")
+        self.kvm.chmod(0o600)
         self.report = self.tmp / "report" / "android.json"
 
     def tearDown(self) -> None:
@@ -105,6 +111,7 @@ class AndroidLaneCase(unittest.TestCase):
             "ANDROID_HOME": str(self.sdk),
             "ANDROID_AVD_HOME": str(self.avd_home),
             "OR_LANE_MEMINFO": str(self.meminfo),
+            "OR_LANE_KVM_DEVICE": str(self.kvm),
             "OR_ANDROID_FFMPEG_PREFIX": str(self.prefix),
             "OR_ANDROID_START_SCRIPT": str(self.stubs / "start.sh"),
             "OR_ANDROID_PREVIEW_SCRIPT": str(self.stubs / "preview.sh"),
@@ -152,6 +159,12 @@ class AndroidLaneCase(unittest.TestCase):
         self.assertIn("MemAvailable", payload["steps"][0]["reason"] or "")
         self.assertFalse(payload["acceptance"])
         self.assertEqual(payload["evidence_class"], "local-developer")
+
+    def test_a_kvm_device_that_is_absent_or_unwritable_is_blocked(self) -> None:
+        missing = self.tmp / "no-such-kvm"
+        result = self.run_lane(OR_LANE_KVM_DEVICE=str(missing))
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("not readable and writable", self.payload()["steps"][0]["reason"] or "")
 
     def test_missing_emulator_binary_is_blocked(self) -> None:
         empty_sdk = self.tmp / "empty-sdk"

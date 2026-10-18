@@ -54,6 +54,11 @@ AVD_HOME_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 # under-sized before it ever booted.
 GUEST_RAM_MB="${OR_ANDROID_GUEST_RAM_MB:-6144}"
 MEMINFO="${OR_LANE_MEMINFO:-/proc/meminfo}"
+# Acceleration is probed at this path. The seam exists because the hermetic
+# checks must not depend on the machine they run on: a hosted runner has no
+# /dev/kvm at all, so the real path would make every control-flow check report
+# BLOCKED before it exercised a step.
+KVM_DEVICE="${OR_LANE_KVM_DEVICE:-/dev/kvm}"
 # The pinned Android FFmpeg staging prefix is deliberately required, not
 # defaulted: a lane that guessed it would fail confusingly instead of naming the
 # missing input. `scripts/stage_android_ffmpeg.sh` now produces it locally.
@@ -181,10 +186,10 @@ for tool in adb flutter; do
 done
 [[ -x "$ANDROID_HOME_DIR/emulator/emulator" ]] || failures+=("missing emulator binary: $ANDROID_HOME_DIR/emulator/emulator")
 [[ -f "$AVD_HOME_DIR/$AVD_NAME.ini" ]] || failures+=("missing AVD '$AVD_NAME' under $AVD_HOME_DIR")
-if [[ -r /dev/kvm && -w /dev/kvm ]]; then
+if [[ -r "$KVM_DEVICE" && -w "$KVM_DEVICE" ]]; then
   :
 else
-  failures+=("/dev/kvm is not readable and writable; the guest would run without acceleration")
+  failures+=("$KVM_DEVICE is not readable and writable; the guest would run without acceleration")
 fi
 for script in "$START_SCRIPT" "$PREVIEW_SCRIPT" "$STOP_SCRIPT" "$CASE_APK_SCRIPT"; do
   [[ -f "$script" ]] || failures+=("missing lane script: $script")
@@ -225,8 +230,8 @@ if (( ${#failures[@]} > 0 )); then
   record "preflight" 3 BLOCKED 0 "host precondition probes" "$LOG_DIR/preflight.log" "$reason"
   result="BLOCKED"
 else
-  printf 'MemAvailable %s MiB >= %s MiB; adb, flutter, emulator, AVD %s and /dev/kvm present\n' \
-    "$(( memory_bytes / 1024 / 1024 ))" "$(( floor_bytes / 1024 / 1024 ))" "$AVD_NAME" > "$LOG_DIR/preflight.log"
+  printf 'MemAvailable %s MiB >= %s MiB; adb, flutter, emulator, AVD %s and %s present\n' \
+    "$(( memory_bytes / 1024 / 1024 ))" "$(( floor_bytes / 1024 / 1024 ))" "$AVD_NAME" "$KVM_DEVICE" > "$LOG_DIR/preflight.log"
   record "preflight" 0 PASS 0 "host precondition probes" "$LOG_DIR/preflight.log" ""
   result="PASS"
 fi

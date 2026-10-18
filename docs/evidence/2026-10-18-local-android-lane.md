@@ -101,3 +101,16 @@ pinning the rule hermetically.
 - The lane's step arguments, blocked rules and artifact isolation are verified
   by `scripts/test_android_lane.py` (14 hermetic checks, no device), not by a
   real drive.
+
+## What the hosted gates caught
+
+The first push of the repaired lane passed `scripts/check-repo.sh` locally and
+failed the hosted `Repository hygiene` job (run 39120503854). The hermetic
+control-flow checks asserted that the lane drove its steps, but the lane's
+preflight refuses to start without `/dev/kvm`, and a hosted runner has no
+`/dev/kvm` at all, so every step check saw an empty capture. Locally the device
+exists, which is why the defect was invisible here. The lane now probes
+`OR_LANE_KVM_DEVICE` (defaulting to `/dev/kvm`) and the checks point it at a
+temporary readable, writable file, so they exercise control flow on a machine
+with no accelerator. This is the honest reason the local suite was not evidence
+of a green gate: only the hosted job proved it.
