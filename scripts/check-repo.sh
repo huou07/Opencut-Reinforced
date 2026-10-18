@@ -39,7 +39,7 @@ required_files=(
   docs/PAUSE_MIGRATION_HANDOFF.md
   docs/evidence/PRODUCT_ROADMAP_HISTORY.md
   docs/prompts/README.md
-  docs/prompts/OR-LOCAL-FINISH.md
+  docs/prompts/OR-BUILD.md
   docs/skills.md
   docs/evidence/claims/README.md
   docs/adr/README.md

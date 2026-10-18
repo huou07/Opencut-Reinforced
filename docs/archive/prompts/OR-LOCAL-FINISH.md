@@ -1,5 +1,11 @@
 # Finish OR on the local Linux host and the local Android emulator
 
+> **Archived (2026-10-18).** Superseded by the single current execution
+> prompt [OR-BUILD.md](../../prompts/OR-BUILD.md). The owner intent, host
+> facts and cluster method below stay as the record of what was asked then;
+> read it for method, not for current facts.
+
+
 Owner instruction, recorded 2026-10-18 in the AEH control session. Authority for
 what an agent may do without asking is [AGENT-AUTHORITY.md](../AGENT-AUTHORITY.md);
 this file selects work and defines completion. It is a prompt artifact, not a

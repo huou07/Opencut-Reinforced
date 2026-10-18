@@ -54,9 +54,9 @@ work the roadmap already names.
 
 | Document | Purpose |
 |---|---|
-| [prompts/OR-LOCAL-FINISH.md](prompts/OR-LOCAL-FINISH.md) | **Current.** Owner intent 2026-10-18, verified local host/emulator/GPU state, and clusters C0–C5 with write scope, acceptance and stop conditions |
+| [prompts/OR-BUILD.md](prompts/OR-BUILD.md) | **Current.** The single execution prompt for the whole program: owner intent, verified starting state, phases 0–5, boundaries, completion criteria and recovery |
 | [prompts/README.md](prompts/README.md) | Prompt-artifact convention: what a prompt must contain, and how it is retired |
-| [archive/prompts/](archive/prompts/CONTINUE-OR.md) | Archived prompts (CONTINUE-OR, FINISH-OR, NEXT-OR). Read for method, never for current facts |
+| [archive/prompts/](archive/prompts/OR-LOCAL-FINISH.md) | Archived prompts (OR-LOCAL-FINISH, CONTINUE-OR, FINISH-OR, NEXT-OR). Read for method, never for current facts |
 
 ## Documents by area
 

@@ -261,8 +261,8 @@ Two bounded local runtime lanes are an owner-granted exception, recorded in
   `bash scripts/run_local_lane.sh linux`; a `--packaged` run adds the local
   `.deb` build and the packaged journey;
 - the **local Android emulator lane**. Its single entry point is being
-  consolidated into `bash scripts/run_local_lane.sh android` by cluster C2 of
-  [docs/prompts/OR-LOCAL-FINISH.md](prompts/OR-LOCAL-FINISH.md); until that
+  consolidated into `bash scripts/run_local_lane.sh android` by Phase 0 of
+  [docs/prompts/OR-BUILD.md](prompts/OR-BUILD.md); until that
   lands, `scripts/start-android-emulator.sh`,
   `scripts/run-android-preview-check.sh` and
   `scripts/stop-android-emulator.sh` are the current mechanism.

@@ -13,7 +13,8 @@ Last reviewed: 2026-10-18.
 
 Exactly one prompt file is the current work selection. It is listed in
 [docs/INDEX.md](../INDEX.md) under "Current work selection". Today that is
-[OR-LOCAL-FINISH.md](OR-LOCAL-FINISH.md).
+[OR-BUILD.md](OR-BUILD.md) — one prompt for the whole program, with phases
+inside it rather than one prompt per phase.
 
 A prompt is not a second roadmap. It selects and bounds work that
 `PRODUCT_ROADMAP.md` already names, and it must not contradict the roadmap, the

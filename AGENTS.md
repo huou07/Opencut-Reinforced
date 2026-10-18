@@ -111,7 +111,7 @@ an installed-package or native OS-picker claim.
 | UI conventions and acceptance | [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md) |
 | Reuse, upstream, dependency and licence decisions | [docs/OPEN_SOURCE_CONVERGENCE.md](docs/OPEN_SOURCE_CONVERGENCE.md), [docs/SECURITY_LICENSING.md](docs/SECURITY_LICENSING.md) |
 | Release and installation | [docs/RELEASE.md](docs/RELEASE.md), [docs/DEVELOPER_PREVIEW_INSTALL.md](docs/DEVELOPER_PREVIEW_INSTALL.md) |
-| Current work selection | [docs/prompts/OR-LOCAL-FINISH.md](docs/prompts/OR-LOCAL-FINISH.md), [docs/prompts/README.md](docs/prompts/README.md) |
+| Current work selection | [docs/prompts/OR-BUILD.md](docs/prompts/OR-BUILD.md), [docs/prompts/README.md](docs/prompts/README.md) |
 | History and archived receipts | [docs/ROADMAP.md](docs/ROADMAP.md), [docs/PAUSE_MIGRATION_HANDOFF.md](docs/PAUSE_MIGRATION_HANDOFF.md), [docs/archive/execution/README.md](docs/archive/execution/README.md) |
 | Contributing and vulnerability reporting | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [README.md](README.md) |
 

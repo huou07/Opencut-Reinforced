@@ -106,7 +106,7 @@ it times, a baseline measured on this named host and a stated margin, then let
    observe the two screenshots and one clip semantics dump the bounded preflight
    happens to produce. It cannot list the app's screens and states, dump the
    semantics tree on demand, or act by semantics label on a target of its
-   choosing. `docs/prompts/OR-LOCAL-FINISH.md` cluster C3 owns this gap; until
+   choosing. `docs/prompts/OR-BUILD.md` Phase 0 owns this gap; until
    then, UI/UX claims rest on widget tests plus two fixed screenshots.
 
 ## Evidence rules

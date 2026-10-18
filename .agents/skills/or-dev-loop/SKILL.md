@@ -32,8 +32,8 @@ never becomes accepted product evidence.
    `--packaged` adds a local `.deb` build and the packaged journey; that is local
    developer evidence, never packaged acceptance.
 4. `bash scripts/run_local_lane.sh android` — the local Android emulator lane.
-   It is being consolidated by cluster C2 of
-   [docs/prompts/OR-LOCAL-FINISH.md](../../../docs/prompts/OR-LOCAL-FINISH.md); until it
+   It is being consolidated by Phase 0 of
+   [docs/prompts/OR-BUILD.md](../../../docs/prompts/OR-BUILD.md); until it
    lands, `scripts/start-android-emulator.sh`,
    `scripts/run-android-preview-check.sh` and `scripts/stop-android-emulator.sh`
    are the mechanism.
