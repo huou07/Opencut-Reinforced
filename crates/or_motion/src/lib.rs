@@ -1157,6 +1157,21 @@ mod tests {
                 easing: MotionEasing::Linear,
             },
             MotionAnimation {
+                node_id: "code".to_owned(),
+                property: MotionProperty::Scale,
+                keyframes: vec![
+                    MotionKeyframe {
+                        at: RationalTime::new(0, 1).unwrap(),
+                        value: 1.0,
+                    },
+                    MotionKeyframe {
+                        at: RationalTime::new(2, 1).unwrap(),
+                        value: 2.0,
+                    },
+                ],
+                easing: MotionEasing::Linear,
+            },
+            MotionAnimation {
                 node_id: "diagram".to_owned(),
                 property: MotionProperty::Scale,
                 keyframes: vec![
@@ -1183,6 +1198,14 @@ mod tests {
         let size = diagram.size.unwrap();
         assert_eq!(size.width, 960.0);
         assert_eq!(size.height, 540.0);
+        // Scale reaches a text node's type size too, so it is not a property that
+        // does nothing on text.
+        let text = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.node_id == "code")
+            .unwrap();
+        assert_eq!(text.font_size, Some(42.0));
         // The image's own opacity is untouched by the geometry tracks.
         assert!((diagram.opacity - 0.9).abs() < 1e-9);
     }
@@ -1381,6 +1404,9 @@ fn resolve_node(
             height: resolved.height * scale,
         });
     }
+    // Scale applies to whatever the node draws: a text node's type size as well as a
+    // shape's geometry, so the property does not silently do nothing on text.
+    let font_size = node.font_size.map(|size| size * scale);
 
     MotionInstruction {
         node_id: node.node_id.clone(),
@@ -1396,7 +1422,7 @@ fn resolve_node(
         rotation_degrees,
         scale,
         text: node.text.clone(),
-        font_size: node.font_size,
+        font_size,
         asset_id: node.asset_id.clone(),
     }
 }

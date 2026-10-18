@@ -92,6 +92,12 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+Motion rasterisation has a budget row: `motion-rasterize-frame` evaluates and
+rasterises a forty-node 1920x1080 MotionScene frame and encodes it as a PNG — p50
+59.5 / p95 62.9 ms against a 250 ms p95 budget, encode p50 72.2 / p95 75.2 ms beside
+it (2026-10-20). It is pure CPU work in a debug build with no GPU adapter involved,
+so it is not comparable with the `render-frame-time` row, which covers the wgpu path.
+
 Caption import has a budget row: `command.caption_import` parses a two-hundred-cue
 SubRip file and applies it in one revision-checked command — the path a reviewed
 transcription proposal applies through — at p50 5.9 / p95 6.0 ms against a 60 ms p95

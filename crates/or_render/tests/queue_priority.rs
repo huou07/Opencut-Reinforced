@@ -17,18 +17,18 @@
 //! cannot remove, which is why the idle and loaded samples are taken in the same
 //! process seconds apart.
 use or_core::{JobKind, JobManager, JobManagerConfig};
+use or_core::{ProjectDocument, RationalTime, TimeRange};
 use or_render::{
     PreviewSurface, RenderDevice, RenderFormat, RenderGraphInput, RenderSize, SyntheticColor,
     SyntheticScene,
 };
-use or_core::{ProjectDocument, RationalTime, TimeRange};
 use or_runtime::RenderSnapshot;
 use std::{
     future::Future,
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll, Wake, Waker},
     thread,
@@ -134,7 +134,11 @@ fn playback_critical_frame_time_survives_a_saturated_job_pool() {
 
     let idle_p95 = percentile(&idle, 0.95);
     let loaded_p95 = percentile(&loaded, 0.95);
-    let ratio = if idle_p95 > 0.0 { loaded_p95 / idle_p95 } else { f64::INFINITY };
+    let ratio = if idle_p95 > 0.0 {
+        loaded_p95 / idle_p95
+    } else {
+        f64::INFINITY
+    };
     report(&format!(
         concat!(
             "{{\"result\":\"{result}\",",
@@ -205,9 +209,15 @@ fn percentile(samples: &[Duration], fraction: f64) -> f64 {
 
 fn looks_like_software(name: &str, driver: &str) -> bool {
     let haystack = format!("{name} {driver}").to_ascii_lowercase();
-    ["llvmpipe", "swiftshader", "lavapipe", "softpipe", "software"]
-        .iter()
-        .any(|needle| haystack.contains(needle))
+    [
+        "llvmpipe",
+        "swiftshader",
+        "lavapipe",
+        "softpipe",
+        "software",
+    ]
+    .iter()
+    .any(|needle| haystack.contains(needle))
 }
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {

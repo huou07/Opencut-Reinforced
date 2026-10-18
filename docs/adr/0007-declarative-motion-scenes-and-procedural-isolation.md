@@ -73,6 +73,20 @@ floating-point seconds, and the easing set is the locked four. Evaluation reads
 nothing: no asset, font, file, network or provider — a test evaluates a scene whose
 asset path exists nowhere.
 
+**Rasteriser, 2026-10-20.** `or_render::rasterize_motion_frame` turns an evaluated
+frame into one RGBA layer that the existing compositor consumes like any decoded
+frame: a layer *producer*, not a second compositor, so blending, effects and encoding
+stay in one place. It draws rectangles, ellipses, arrows, image placeholders and text
+through the existing bundled-font rasteriser — not a second text engine. Coordinates
+are canvas pixels with the origin top left, x right and y down, matching the RGBA
+buffer; rotation is clockwise in that space; document order is paint order. An image
+node draws a visible placeholder rather than decoding an asset, because evaluation
+resolves identities and the asset pipeline is a later step: drawing nothing would look
+like a working scene with a missing picture. `or_render::encode_png` is a
+dependency-free *still preview* encoder — materialised video still goes through the
+normal media and export boundary — and its output is deterministic (stored deflate
+blocks, no timestamps or metadata).
+
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate
 `ProjectDocument` during evaluation. Human, template, CLI/agent, and AI

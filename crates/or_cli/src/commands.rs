@@ -96,6 +96,17 @@ impl CliError {
         )
     }
 
+    /// A MotionScene that could not be rasterised, with the rasteriser's code.
+    fn motion_raster(error: or_render::MotionRasterError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "motion_scene",
+            error.code(),
+            error.code().to_owned(),
+        )
+    }
+
     /// A MotionScene evaluation refusal, with the evaluator's own stable code.
     fn motion_evaluation(error: or_motion::MotionEvaluationError, json: bool) -> Self {
         let message = match &error {
@@ -460,9 +471,10 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
         "validate" => run_motion_validate(&args[1..], json),
         "inspect" => run_motion_inspect(&args[1..], json),
         "evaluate" => run_motion_evaluate(&args[1..], json),
+        "render" => run_motion_render(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate, inspect or evaluate",
+            "unknown motion action; expected validate, inspect, evaluate or render",
         )),
     }
 }
@@ -517,6 +529,49 @@ fn run_motion_evaluate(args: &[OsString], json: bool) -> Result<String, CliError
         ));
     }
     Ok(lines.join("\n"))
+}
+
+/// Renders one still frame of a scene to a PNG.
+///
+/// A **still preview**, not materialisation: video materialisation goes through the
+/// normal media and export boundary (ADR 0007). This exists so a scene can be
+/// looked at, and it reads nothing but the scene itself.
+fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file", "--at", "--output"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let at = required_name(&options, "--at", json)?;
+    let time = parse_cli_rational(&at, "--at", json)?;
+    let output = required_path(&options, "--output", json)?;
+    let frame = or_motion::evaluate_scene(&scene, time)
+        .map_err(|error| CliError::motion_evaluation(error, json))?;
+    let canvas = or_render::rasterize_motion_frame(&frame)
+        .map_err(|error| CliError::motion_raster(error, json))?;
+    let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
+        .map_err(|error| CliError::motion_raster(error, json))?;
+    std::fs::write(&output, &png).map_err(|error| {
+        CliError::usage(json, format!("the frame could not be written: {error}"))
+    })?;
+    if json {
+        return Ok(json_string(serde_json::json!({
+            "scene_id": scene.scene_id,
+            "at": {"numerator": time.numerator(), "denominator": time.denominator()},
+            "output": output.display().to_string(),
+            "width": canvas.width(),
+            "height": canvas.height(),
+            "bytes_written": png.len(),
+            "instructions": frame.instructions.len(),
+        })));
+    }
+    Ok(format!(
+        "Wrote {} ({}x{}, {} bytes) for {} at {}/{}s",
+        output.display(),
+        canvas.width(),
+        canvas.height(),
+        png.len(),
+        scene.name,
+        time.numerator(),
+        time.denominator()
+    ))
 }
 
 fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {

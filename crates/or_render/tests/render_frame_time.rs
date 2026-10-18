@@ -58,7 +58,9 @@ fn offscreen_frame_time_is_measurable_on_this_host() {
 
     let info = renderer.adapter_info();
     let name = info.name().to_owned();
-    let driver = format!("{} {}", info.driver(), info.driver_info()).trim().to_owned();
+    let driver = format!("{} {}", info.driver(), info.driver_info())
+        .trim()
+        .to_owned();
     let backend = format!("{:?}", info.backend());
     let software = looks_like_software(&name, &driver);
 
@@ -174,9 +176,15 @@ fn json_string(value: &str) -> String {
 
 fn looks_like_software(name: &str, driver: &str) -> bool {
     let haystack = format!("{name} {driver}").to_ascii_lowercase();
-    ["llvmpipe", "swiftshader", "lavapipe", "softpipe", "software"]
-        .iter()
-        .any(|needle| haystack.contains(needle))
+    [
+        "llvmpipe",
+        "swiftshader",
+        "lavapipe",
+        "softpipe",
+        "software",
+    ]
+    .iter()
+    .any(|needle| haystack.contains(needle))
 }
 
 fn time(numerator: i64, denominator: u32) -> RationalTime {

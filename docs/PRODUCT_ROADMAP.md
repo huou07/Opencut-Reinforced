@@ -822,12 +822,45 @@ class each claim actually has:
     animation resolution by property, geometry and scale, the no-read property, and
     the easing bounds. `or motion evaluate --file PATH --at NUM/DEN [--json]` exposes
     it to agents, with a CLI test asserting `ease_out(0.5) = 0.75` at `1/2`.
-  - **Not done, and this is most of the phase:** there is no code ingestion, no
-    tokenisation or syntax highlighting, no renderer integration (the frame is not yet
-    drawn by `or_render`), no materialisation, and no preview. `crates/or_ai` still
-    declares `AiTask::GenerateMotionScene` with no producer or consumer. Nothing here
-    has been rendered, so no visual or performance dimension exists yet, and no part
-    of this phase is `ACCEPTED`.
+  - **The frame draws (2026-10-20).** `or_render` gained a vector-to-pixel step:
+    `rasterize_motion_frame` turns an evaluated frame into one RGBA layer, which the
+    existing compositor then treats like any decoded frame — a layer producer, not a
+    second compositor, so blending, effects and encoding stay in one place. It draws
+    rectangles, ellipses, arrows, image placeholders and text (through the existing
+    bundled-font rasteriser, not a second text engine), with opacity, rotation and
+    document-order painting. Ten pixel-level tests assert where ink lands: a
+    rectangle's fill inside it and transparency outside, half-opaque paint blending
+    over an earlier node, an ellipse's bounding-box corner staying empty, an arrow's
+    shaft, a placeholder's border with empty space between its diagonals, glyph ink
+    inside a text node's box, and a rotated bar painting where the rotation puts it.
+  - **Two defects the pixel tests caught.** Rotated shapes were scanned over their
+    *unrotated* bounding box, so a 90-degree bar was silently clipped; the scan now
+    covers the shape's circumscribed circle. And a text node was laid out in a
+    four-line box, which pushed its text a line and a half below the position the
+    scene names; the box is now one line tall, so a node's position is where its text
+    starts. V1 renders one line per text node and clips it to the canvas; wrapping is
+    a later step.
+  - **Visual evidence, and how it was checked.** `or motion render --file PATH --at
+    NUM/DEN --output PATH.png` writes a still frame. The encoder is a small
+    dependency-free PNG writer in `or_render` — a *still preview* encoder, not a media
+    authority, since materialised video goes through the normal export boundary. It is
+    verified outside itself: `ffprobe` reads the output as `png, rgba, 960x540`, and
+    decoding it back to raw pixels through `ffmpeg` gives exactly the authored values
+    (panel fill `30,32,38,255`; outside every node `0,0,0,0`; ellipse centre
+    `40,60,90,255`; placeholder border `200,200,200,255`). That is `VERIFIED_VISUAL`
+    for the rasteriser at a named canvas, on this host.
+  - **Performance (2026-10-20).** A new budget row, `motion-rasterize-frame`,
+    evaluates and rasterises a forty-node 1920x1080 frame and encodes the PNG: **p50
+    59.5 / p95 62.9 ms** against a 250 ms p95 budget, with the encode at p50 72.2 /
+    p95 75.2 ms reported beside it. It is pure CPU work with no GPU adapter involved,
+    in a debug build, so it says nothing about the wgpu path the `render-frame-time`
+    row covers. The budget prints twenty-six rows and is PASS.
+  - **Not done, and this is still most of the phase:** there is no code ingestion, no
+    tokenisation or syntax highlighting, no materialisation to video, no preview
+    inside the editor, and no template library. `crates/or_ai` still declares
+    `AiTask::GenerateMotionScene` with no producer or consumer. The rendered frame is
+    a still image, so the phase has no *video* evidence, and no part of it is
+    `ACCEPTED`.
 - **One local Android lane — entry point landed, guest drive unexecuted:**
   `bash scripts/run_local_lane.sh android` selects it and delegates to
   `scripts/run_android_lane.sh`, which probes `MemAvailable` against a 7 GiB

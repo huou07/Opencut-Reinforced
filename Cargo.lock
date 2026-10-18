@@ -1824,6 +1824,7 @@ dependencies = [
  "or_core",
  "or_ipc",
  "or_motion",
+ "or_render",
  "serde_json",
 ]
 
@@ -1877,7 +1878,9 @@ version = "0.1.0"
 dependencies = [
  "cosmic-text",
  "or_core",
+ "or_motion",
  "or_runtime",
+ "serde_json",
  "wgpu",
 ]
 

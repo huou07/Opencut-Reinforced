@@ -195,6 +195,14 @@ ROWS = {
         "threshold_p95_ms": 80.0,
         "baseline": {"date": "2026-10-18", "p50_ms": 15.018, "p95_ms": 15.239},
     },
+    "motion-rasterize-frame": {
+        "description": (
+            "evaluate and rasterise a forty-node 1920x1080 MotionScene frame, then "
+            "encode it as a PNG; pure CPU, no GPU adapter"
+        ),
+        "threshold_p95_ms": 250.0,
+        "baseline": {"date": "2026-10-20", "p50_ms": 59.4, "p95_ms": 60.1},
+    },
     "render-frame-time": {
         "description": "640x360 offscreen or_render frame plus readback (Vulkan, UHD 770)",
         "threshold_p95_ms": 16.7,
@@ -217,6 +225,7 @@ ROWS = {
 EXPORT_TEST = "writer_publishes_webm_with_vp9_and_opus_streams"
 EXPORT_FRAMES = 10
 COMMAND_LATENCY_TEST = "command_latency_on_a_two_hundred_clip_project"
+MOTION_RASTER_TEST = "motion_raster_time"
 RENDER_TEST = "offscreen_frame_time_is_measurable_on_this_host"
 PRIORITY_TEST = "playback_critical_frame_time_survives_a_saturated_job_pool"
 
@@ -495,6 +504,28 @@ def render_frame_time_row() -> RowResult:
     })
 
 
+def motion_rasterize_row() -> RowResult:
+    settle = ("cargo test -p or_render --test motion_raster_time --no-run --locked && "
+              "python3 scripts/bench_quality.py")
+    binary = find_test_binary("motion_raster_time", "motion-rasterize-frame", settle)
+    payload = bench_json(binary, MOTION_RASTER_TEST, "motion-rasterize-frame", settle)
+    row = ROWS["motion-rasterize-frame"]
+    limit = budget(float(row["threshold_p95_ms"]))
+    verdict = "PASS" if payload["raster_p95_ms"] <= limit else "FAIL"
+    detail = (f"p50 {payload['raster_p50_ms']:.3f} ms / p95 {payload['raster_p95_ms']:.3f} ms "
+              f"over {payload['frames']} frames of {payload['nodes']} nodes at "
+              f"{payload['width']}x{payload['height']} (budget p95 {limit:.1f} ms; baseline p95 "
+              f"{row['baseline']['p95_ms']:.3f} ms on {row['baseline']['date']}); PNG encode p50 "
+              f"{payload['encode_p50_ms']:.3f} / p95 {payload['encode_p95_ms']:.3f} ms; "
+              f"{payload['build']} build, {payload['includes']}")
+    return RowResult("motion-rasterize-frame", verdict, detail, {
+        "raster_p50_ms": payload["raster_p50_ms"], "raster_p95_ms": payload["raster_p95_ms"],
+        "encode_p50_ms": payload["encode_p50_ms"], "encode_p95_ms": payload["encode_p95_ms"],
+        "frames": payload["frames"], "nodes": payload["nodes"],
+        "threshold_p95_ms": limit,
+    })
+
+
 def queue_priority_row() -> RowResult:
     settle = ("cargo test -p or_render --test queue_priority --no-run --locked && "
               "python3 scripts/bench_quality.py")
@@ -591,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    settle with: {error.settle}")
             results.append(RowResult(error.row_id, "UNVERIFIED", error.reason,
                                      reason=error.reason))
+    if selected("motion-rasterize-frame"):
+        results.append(run_row("motion-rasterize-frame", motion_rasterize_row))
     if selected("render-frame-time"):
         results.append(run_row("render-frame-time", render_frame_time_row))
     if selected("queue-priority"):
