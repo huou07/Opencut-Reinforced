@@ -226,6 +226,12 @@ class each claim actually has:
   original id and a tail that takes the caller's `overwrite_split_clip_id`.
   Without that id the command refuses with
   `TimelineOverwriteSplitRequiresClipId` rather than dropping the tail.
+  - The overwrite error code crosses the app bridge as a wire code
+    (`TIMELINE_OVERWRITE_SPLIT_REQUIRES_CLIP_ID`) in
+    `crates/or_app_bridge/src/api/project.rs`. Missing that arm broke the app
+    bridge's exhaustive `match` and made the Linux lane's flutter step fail with
+    `E0004`; the earlier note that the new error code had no client surface was
+    wrong and is corrected here. `cargo test -p or_app_bridge` is 24 passing.
   - The history entry is the single change `ProjectChange::TimelineClipsOverwritten
     { track_id, before, after }`, whose staged form is a whole-track
     `ReplaceTimelineTrack` in both directions — the constraint recorded last round

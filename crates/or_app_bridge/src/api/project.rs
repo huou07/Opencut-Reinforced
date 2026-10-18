@@ -3990,6 +3990,9 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
         OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
+        OperationErrorCode::TimelineOverwriteSplitRequiresClipId => {
+            "TIMELINE_OVERWRITE_SPLIT_REQUIRES_CLIP_ID"
+        }
         OperationErrorCode::TimelineLimitExceeded => "TIMELINE_LIMIT_EXCEEDED",
         OperationErrorCode::TimelineMarkerIdAlreadyExists => "TIMELINE_MARKER_ID_ALREADY_EXISTS",
         OperationErrorCode::TimelineMarkerNotFound => "TIMELINE_MARKER_NOT_FOUND",
