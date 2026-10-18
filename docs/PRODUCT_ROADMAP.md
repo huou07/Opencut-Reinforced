@@ -243,6 +243,19 @@ class each claim actually has:
   - Validation uses `RationalTime::checked_add` for the span end and
     `validate_track_states` on the resulting list; per-track clip capacity is
     checked before mutating (`MAX_TIMELINE_CLIPS_PER_TRACK`).
+  - **Undo constraint found while implementing (2026-10-19):**
+    `ChangeSet::stage_history_change` accepts exactly one change (`let [change] =
+    self.changes.as_slice()`), so an overwrite cannot record deletes, trims and the
+    insert as its history entry: undo would return `HistoryConflict`. The entry
+    must therefore be one change whose staged form is the whole track, the way
+    `TimelineClipSplit` stages `ReplaceTimelineTrack`. The result `ChangeSet` can
+    stay a multi-change replay for clients, but the history entry needs a new
+    `ProjectChange` variant carrying `before`/`after` clip lists. That variant is a
+    serialized client surface, so it needs the bridge regeneration and the Dart
+    model in the same change — which makes it the first step of the next attempt,
+    not an afterthought. An attempt that shipped the multi-change history entry was
+    reverted rather than left half-working; `cargo check -p or_core` is green on the
+    reverted tree.
   - Call sites verified against `crates/or_core/src/application.rs` (no search
     needed next round, line numbers drift): the argument struct at
     `TimelineClipInsertArguments`, the dispatcher arm
