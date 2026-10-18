@@ -39,6 +39,23 @@ named here, and it does not override the evidence rules in `AGENTS.md`,
 - Installing project-local build tooling and using the owner's recovered shared
   toolchains (`~/.local/share/flutter`, `~/.rustup`, `~/.cargo/bin`,
   `~/.local/share/playwright-cli`).
+- **Two host ACL grants on the shared Flutter SDK**, authorized by the owner on
+  2026-10-18 as the resolution of the Android lane's blocker (offer "A" of the
+  2026-10-18 authority question). Exactly these two paths are granted write
+  access to the worker UID, and nothing else in the SDK was touched:
+
+  ```sh
+  sudo setfacl -m   u:dsh-worker:rwx /home/huou07/.local/share/flutter/packages/flutter_tools/gradle
+  sudo setfacl -R -m u:dsh-worker:rwX /home/huou07/.local/share/flutter/packages/integration_test/android
+  ```
+
+  Flutter's Gradle build configures both as included projects and must create a
+  project cache inside them. Reverse either with
+  `sudo setfacl -m u:dsh-worker:r-x <path>` (add `-R` for the second). This is a
+  narrow, dated exception to the "Not granted" rule below, not a general
+  permission: do not widen it to the rest of the SDK, and when the build asks for
+  a further path, record the path with the evidence that it asked before granting
+  it.
 
 ## Not granted
 
@@ -58,13 +75,16 @@ named here, and it does not override the evidence rules in `AGENTS.md`,
 | Fact | Value |
 |---|---|
 | Host | Dell OptiPlex Micro 7010, i5-13500T (20 hardware threads), 15 GiB RAM, `systemd-detect-virt` = none (bare metal) |
-| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence. **The SDK is not
-writable by worker UIDs** (`r-x` under `/home/huou07/.local/share/flutter`,
-owned by the host user). Gradle 9.3.1 must create a project cache inside the
-included build `packages/flutter_tools/gradle`, so any Gradle-based Android build
-fails with the misleading `The settings are not yet available for build.` until
-that directory is writable; `scripts/run_local_lane.sh android` probes it and
-reports BLOCKED with the path instead. Measured on 2026-10-18: the same directory
+| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence. **The SDK is read-only for worker UIDs** (`r-x` under
+`/home/huou07/.local/share/flutter`, owned by the host user), except the two
+paths granted write access on 2026-10-18 under "Granted without further
+approval" above. Gradle 9.3.1 must create a project cache inside its included
+builds, so before that grant any Gradle-based Android build failed with the
+misleading `The settings are not yet available for build.`; `scripts/run_local_lane.sh
+android` probes the writability and reports BLOCKED with the path instead. With
+both grants applied on 2026-10-18 the lane's `preflight` step PASSes and the APK
+build reaches Gradle `assembleDebug`. Measured on 2026-10-18: the same directory
+copied to a writable location builds, the shared one did not. Measured on 2026-10-18: the same directory
 copied to a writable location builds, the shared one does not. `cd apps/or_app && flutter test --no-pub` **passes locally** (124 tests, 2026-10-18); the older claim that a raw `flutter test` fails on macOS-target resolution is no longer current |
 | Rust | `1.98.0` is installed and is what `crates/or_app_bridge/rust-toolchain.toml` declares; `stable` is also 1.98.0 |
 | `~/.cargo` | **not writable** by the worker. Builds use the preflight's project-local offline cache; adding a new dependency needs a writable `CARGO_HOME` |
@@ -75,6 +95,8 @@ copied to a writable location builds, the shared one does not. `cd apps/or_app &
 | GitHub | `gh` is authenticated as `huou07` through the owner-approved file exception; `git push` and release publication work |
 | FFmpeg 8 local prefix | `~/.local/ffmpeg8/{ffmpeg,ffprobe}` is present, so the three media lanes in `scripts/acceptance.sh` run instead of reporting `UNVERIFIED` |
 | Host headroom is contended | Measured 2026-10-18: `MemAvailable` 5.4 GiB against the Linux preflight's 6 GiB floor and the Android lane's ~7.7 GiB need. The `GradleDaemon 8.14.3` holding ~2.25 GiB belongs to the sibling project **VCE** (`~/Projects/VCE/native-offline/src-tauri/gen/android`), not to OR. Attribute any java daemon before touching it (`pgrep -af GradleDaemon`, `readlink /proc/<pid>/cwd`, sample `/proc/<pid>/stat` over a few seconds) and never stop another project's active build. When headroom is short, the honest lane result is `BLOCKED` with the probe output; do the phase that needs no runtime lane and return when the host is free |
+| Android guest RAM against the lane floor | The lane's 7 GiB `MemAvailable` floor and `OR_ANDROID_GUEST_RAM_MB` default of 6144 cannot both hold on a 15 GiB host with no daemon resident: measured `MemAvailable` 6.19–7.27 GiB on 2026-10-18, and the first run of the repaired lane was BLOCKED at the floor with no daemons left to reclaim. A run on 2026-10-18 therefore used `OR_ANDROID_GUEST_RAM_MB=3072 OR_ANDROID_LANE_MIN_MEM_GIB=5`, which is an operator override, not a new default. Deriving the floor from the guest size plus a margin, and stopping the lane's own Gradle/Kotlin daemons before the `emulator` step, are open lane defects |
+| Android APK build hangs after the SDK grant | Measured 2026-10-18 21:08–21:45 UTC+07: with both SDK paths writable, `scripts/build_android_case_apks.sh` reached Gradle 9.3.1 `assembleDebug` for the first case (`integration_test/native_bridge_diagnostics_test.dart`) and then hung. Evidence: no file written under `apps/or_app/build` or `apps/or_app/android` for over five minutes, 297 of 302 daemon threads in `futex_do_wait`, 98% idle CPU, zero swap in/out, and sockets to Google/Cloudflare stuck in `CLOSE-WAIT`. It was stopped by hand and its daemon reaped with `./gradlew --stop`. An interrupted or stalled dependency fetch is the leading hypothesis and is **not confirmed**; no APK was produced, so this is not a product defect and no guest result exists |
 
 ## Evidence discipline
 
