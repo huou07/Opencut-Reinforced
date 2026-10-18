@@ -196,13 +196,21 @@ probe_env_linker="CARGO_TARGET_${target_upper}_LINKER"
 # with `force = true` to a Linux desktop prefix; `force` makes the file win over
 # the environment, which silently links the probe against host libraries. The
 # override is scoped to this invocation and changes no shared state.
+#
+# `RUSTFLAGS` is equally necessary and less obvious: cargo *concatenates*
+# `build.rustflags` from every config source, so the host's
+# `["-L", "native=<desktop prefix>/lib"]` stays ahead of the Android search path
+# and the probe ends up requiring `libavutil.so.60`. Measured 2026-10-18 on the
+# guest: `CANNOT LINK EXECUTABLE "/data/local/tmp/ffmpeg-link-probe": library
+# "libavutil.so.60" not found`. The environment replaces that value.
 if env "$probe_env_cc=$clang" "$probe_env_ar=$toolchain/bin/llvm-ar" \
-  "$probe_env_bindgen=--target=$rust_target --sysroot=$toolchain/sysroot" \
+  "$probe_env_bindgen=--target=$rust_target --sysroot=$toolchain/sysroot -I$install_prefix/include" \
   "$probe_env_linker=$clang" \
   CARGO_TARGET_DIR="$root/probe-target" \
   FFMPEG_DIR="$install_prefix" \
   PKG_CONFIG_PATH="$install_prefix/lib/pkgconfig" \
   PKG_CONFIG_ALLOW_CROSS=1 \
+  RUSTFLAGS="-L native=$install_prefix/lib" \
   cargo build --locked --release --target "$rust_target" \
     --config "env.FFMPEG_DIR.value=\"$install_prefix\"" \
     --config "env.FFMPEG_DIR.force=true" \
@@ -212,7 +220,21 @@ if env "$probe_env_cc=$clang" "$probe_env_ar=$toolchain/bin/llvm-ar" \
   built_probe="$root/probe-target/$rust_target/release/ffmpeg-link-probe"
   if [[ -f "$built_probe" ]]; then
     install -m 755 "$built_probe" "$probe_dir/ffmpeg-link-probe"
-    probe_status="built"
+    # Refuse a probe that requires a library the staged prefix does not provide
+    # under that exact name: that is the signature of a link against another
+    # FFmpeg build, and it can only fail later on the guest.
+    if command -v readelf >/dev/null 2>&1; then
+      while IFS= read -r needed; do
+        [[ -n "$needed" ]] || continue
+        if [[ ! -f "$install_prefix/lib/$needed" ]]; then
+          printf 'stage_android_ffmpeg: the built probe requires %s, which %s does not provide; it linked another FFmpeg build\n' \
+            "$needed" "$install_prefix" >&2
+          probe_status="FAILED; requires $needed which the staged prefix does not provide"
+        fi
+      done < <(readelf -d "$probe_dir/ffmpeg-link-probe" 2>/dev/null \
+        | sed -n 's/.*NEEDED.*\[\(libav[^]]*\|libsw[^]]*\)\].*/\1/p')
+    fi
+    [[ "$probe_status" == "FAILED"* ]] || probe_status="built"
   fi
 else
   probe_status="FAILED; see $info_dir/probe-build-$abi.log"

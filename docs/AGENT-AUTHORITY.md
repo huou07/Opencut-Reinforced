@@ -140,5 +140,13 @@ each link measured rather than guessed:
    does not bundle — the check that would have caught all three before a guest
    was ever booted.
 
+4. The same concatenation rule bit the guest **link probe**: `tools/ffmpeg-link-probe`
+   was built with the host's `-L` first, so the guest answered
+   `CANNOT LINK EXECUTABLE "/data/local/tmp/ffmpeg-link-probe": library
+   "libavutil.so.60" not found`. `scripts/stage_android_ffmpeg.sh` now carries the
+   staged prefix in `RUSTFLAGS` and refuses to install a probe that requires a
+   library the prefix does not provide under that exact name.
+
 Verified: the rebuilt `diagnostics.apk` bundles `libavcodec/avformat/avutil/
-swresample/swscale.so` and its bridge requires exactly those names.
+swresample/swscale.so`, its bridge requires exactly those names, and the rebuilt
+link probe requires the same five.
