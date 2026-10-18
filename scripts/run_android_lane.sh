@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
 # One honest local Android emulator developer lane for OR.
 #
-#   bash scripts/run_android_lane.sh [--steps apk,emulator,preview] \
+#   bash scripts/run_android_lane.sh [--steps apk,emulator,preview,saf] \
 #        [--report PATH] [--keep-guest]
 #
 # Steps, in order:
-#   apk        build the x86_64 debug APK the guest can install
+#   apk        stage the FFmpeg link and build every case APK
+#              (scripts/build_android_case_apks.sh)
 #   emulator   boot a dedicated AVD with KVM (scripts/start-android-emulator.sh)
-#   preview    drive the bridge-diagnostics, preview-surface and SAF journeys
-#              (scripts/run-android-preview-check.sh)
+#   preview    drive the bridge-diagnostics and preview-surface journeys, after
+#              the FFmpeg guest link probe when one is staged
+#   saf        reboot a wiped guest and drive the DocumentsUI SAF journey
 # The guest is always stopped afterwards unless --keep-guest is given.
+#
+# Each Android case has its own Dart entrypoint, so each needs its own APK: the
+# lane drives prebuilt per-case binaries exactly as the hosted `android` job
+# does, so Gradle and the Kotlin daemons never compete with the software
+# renderer. The APK step also creates the `android/.ffmpeg-install` link the
+# bridge build hook requires; without it `flutter build apk` fails before it
+# starts, which is why the lane previously could not run even with a staged
+# prefix.
 #
 # It writes one machine-readable report (default
 # apps/or_app/build/local-lanes/android.json, a gitignored path) with the same
@@ -30,41 +40,49 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
 LANE_DIR="apps/or_app/build/local-lanes"
-LOG_DIR="$LANE_DIR/android-logs"
 DEFAULT_REPORT="$LANE_DIR/android.json"
-DEFAULT_STEPS="apk,emulator,preview"
-STEPS_FILE="$LANE_DIR/.android-steps.tsv"
-WARNINGS_FILE="$LANE_DIR/.android-warnings.txt"
+DEFAULT_STEPS="apk,emulator,preview,saf"
 
 MIN_MEM_GIB="${OR_ANDROID_LANE_MIN_MEM_GIB:-7}"
 AVD_NAME="${OR_AVD_NAME:-an3-api36}"
 DEVICE_ID="${OR_ANDROID_DEVICE_ID:-emulator-5580}"
 ANDROID_HOME_DIR="${ANDROID_HOME:-$HOME/Android/Sdk}"
 AVD_HOME_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
-GUEST_RAM_MB="${OR_ANDROID_GUEST_RAM_MB:-2048}"
+# 6144 MB is `scripts/start-android-emulator.sh`'s own measured default. The
+# lane used to force 2048 MB, which is below the documented 2560 MB image
+# default that the emulator script records as too small, so the guest was
+# under-sized before it ever booted.
+GUEST_RAM_MB="${OR_ANDROID_GUEST_RAM_MB:-6144}"
 MEMINFO="${OR_LANE_MEMINFO:-/proc/meminfo}"
 # The pinned Android FFmpeg staging prefix is deliberately required, not
-# defaulted: the repository does not record the local recipe yet, and a lane that
-# guesses it would fail confusingly instead of naming the missing input.
+# defaulted: a lane that guessed it would fail confusingly instead of naming the
+# missing input. `scripts/stage_android_ffmpeg.sh` now produces it locally.
 FFMPEG_PREFIX="${OR_ANDROID_FFMPEG_PREFIX:-}"
+# Optional: the guest FFmpeg link probe. When it is absent the lane records that
+# the probe did not run instead of implying it passed.
+FFMPEG_PROBE="${OR_ANDROID_FFMPEG_PROBE:-}"
 # Test seams: the lane drives the repository's own scripts, and the hermetic test
 # points these at stubs instead of a real device.
 START_SCRIPT="${OR_ANDROID_START_SCRIPT:-$ROOT/scripts/start-android-emulator.sh}"
 PREVIEW_SCRIPT="${OR_ANDROID_PREVIEW_SCRIPT:-$ROOT/scripts/run-android-preview-check.sh}"
 STOP_SCRIPT="${OR_ANDROID_STOP_SCRIPT:-$ROOT/scripts/stop-android-emulator.sh}"
+CASE_APK_SCRIPT="${OR_ANDROID_CASE_APK_SCRIPT:-$ROOT/scripts/build_android_case_apks.sh}"
 
 usage() {
   cat <<'USAGE'
-usage: bash scripts/run_android_lane.sh [--steps apk,emulator,preview]
+usage: bash scripts/run_android_lane.sh [--steps apk,emulator,preview,saf]
                                         [--report PATH] [--keep-guest]
 
   --steps      run only the named steps, in this order
-  --report     write the machine-readable report somewhere else
+  --report     write the machine-readable report somewhere else; the logs, the
+               step ledger and the case APKs follow it
   --keep-guest leave the emulator running (for debugging; you must stop it)
 
 Inputs: OR_ANDROID_FFMPEG_PREFIX must name the staged x86_64 Android FFmpeg
-install prefix (it must contain lib/pkgconfig) when the apk step is selected.
-See docs/prompts/OR-BUILD.md phase 0 for the recipe source.
+install prefix (it must contain lib/pkgconfig) when the apk step is selected;
+`bash scripts/stage_android_ffmpeg.sh` produces one and prints the export lines.
+OR_ANDROID_FFMPEG_PROBE is optional and names the guest link probe that the same
+script builds; without it the lane records that the probe did not run.
 
 Exit codes: 0 every selected step passed on a clean tree; 1 a step failed;
 2 the invocation is wrong; 3 a host precondition was not met; 4 a step could
@@ -94,7 +112,7 @@ seen=","
 IFS=',' read -r -a step_list <<<"$steps"
 for step in "${step_list[@]}"; do
   case "$step" in
-    apk|emulator|preview) ;;
+    apk|emulator|preview|saf) ;;
     *) printf 'run_android_lane: unknown step: %s\n' "$step" >&2; usage >&2; exit 2 ;;
   esac
   if [[ "$seen" == *",$step,"* ]]; then
@@ -104,7 +122,16 @@ for step in "${step_list[@]}"; do
   seen="$seen$step,"
 done
 
-mkdir -p "$LANE_DIR" "$LOG_DIR"
+# Every artifact follows the report path. A hermetic test that redirects
+# --report to a temporary directory must not write logs or APKs into the real
+# build directory, and a real run must keep them beside its own report.
+report_dir="$(dirname -- "$report")"
+mkdir -p "$report_dir"
+LOG_DIR="$report_dir/android-logs"
+CASE_APK_DIR="$report_dir/android-case-apks"
+STEPS_FILE="$report_dir/.android-steps.tsv"
+WARNINGS_FILE="$report_dir/.android-warnings.txt"
+mkdir -p "$LOG_DIR" "$CASE_APK_DIR"
 : > "$STEPS_FILE"
 : > "$WARNINGS_FILE"
 
@@ -159,7 +186,7 @@ if [[ -r /dev/kvm && -w /dev/kvm ]]; then
 else
   failures+=("/dev/kvm is not readable and writable; the guest would run without acceleration")
 fi
-for script in "$START_SCRIPT" "$PREVIEW_SCRIPT" "$STOP_SCRIPT"; do
+for script in "$START_SCRIPT" "$PREVIEW_SCRIPT" "$STOP_SCRIPT" "$CASE_APK_SCRIPT"; do
   [[ -f "$script" ]] || failures+=("missing lane script: $script")
 done
 if command -v adb >/dev/null 2>&1 && adb devices 2>/dev/null | grep -q "^${DEVICE_ID}[[:space:]]"; then
@@ -167,7 +194,7 @@ if command -v adb >/dev/null 2>&1 && adb devices 2>/dev/null | grep -q "^${DEVIC
 fi
 if step_selected apk; then
   if [[ -z "$FFMPEG_PREFIX" ]]; then
-    failures+=("OR_ANDROID_FFMPEG_PREFIX is unset; the pinned x86_64 Android FFmpeg prefix is required to build the APK (see docs/prompts/OR-BUILD.md phase 0)")
+    failures+=("OR_ANDROID_FFMPEG_PREFIX is unset; the staged x86_64 Android FFmpeg prefix is required to build the APK (run scripts/stage_android_ffmpeg.sh and export what it prints)")
   elif [[ ! -d "$FFMPEG_PREFIX/lib/pkgconfig" ]]; then
     failures+=("OR_ANDROID_FFMPEG_PREFIX=$FFMPEG_PREFIX has no lib/pkgconfig")
   fi
@@ -195,7 +222,7 @@ stop_guest() {
     printf 'run_android_lane: guest left running on %s (--keep-guest)\n' "$DEVICE_ID" >&2
     return 0
   fi
-  RUNNER_TEMP="$LANE_DIR" OR_ANDROID_DEVICE_ID="$DEVICE_ID" \
+  RUNNER_TEMP="$report_dir" OR_ANDROID_DEVICE_ID="$DEVICE_ID" \
     bash "$STOP_SCRIPT" > "$LOG_DIR/stop.log" 2>&1 || warn "the stop step exited non-zero; the guest may still be running"
 }
 trap stop_guest EXIT
@@ -224,24 +251,29 @@ run_step() { # id command budget_seconds
 }
 
 if [[ "$result" == "PASS" ]]; then
-  export RUNNER_TEMP="$LANE_DIR"
+  export RUNNER_TEMP="$report_dir"
   export GITHUB_WORKSPACE="$ROOT"
   export ANDROID_HOME="$ANDROID_HOME_DIR"
   export ANDROID_AVD_HOME="$AVD_HOME_DIR"
   export OR_AVD_NAME="$AVD_NAME"
   export OR_ANDROID_DEVICE_ID="$DEVICE_ID"
   export OR_ANDROID_GUEST_RAM_MB="$GUEST_RAM_MB"
-  export OR_ANDROID_ACCEPTANCE_OUTPUT="$LANE_DIR/android-acceptance"
-  export OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT="$LANE_DIR/android-acceptance-recovery"
+  export OR_ANDROID_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance"
+  export OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT="$report_dir/android-acceptance-recovery"
   export PKG_CONFIG_ALLOW_CROSS=1
   if [[ -n "$FFMPEG_PREFIX" ]]; then
     export PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig"
+  fi
+  if [[ -z "$FFMPEG_PROBE" ]]; then
+    warn "OR_ANDROID_FFMPEG_PROBE is unset, so the guest FFmpeg link probe did not run; scripts/stage_android_ffmpeg.sh builds one"
+  elif [[ ! -x "$FFMPEG_PROBE" ]]; then
+    warn "OR_ANDROID_FFMPEG_PROBE=$FFMPEG_PROBE is not executable, so the guest probe did not run"
   fi
 
   for step in "${step_list[@]}"; do
     case "$step" in
       apk)
-        run_step apk "cd '$ROOT/apps/or_app' && flutter build apk --debug --target-platform android-x64" 3600 || result="FAIL"
+        run_step apk "bash '$CASE_APK_SCRIPT' '$CASE_APK_DIR'" 3600 || result="FAIL"
         ;;
       emulator)
         run_step emulator "bash '$START_SCRIPT'" 900 || result="FAIL"
@@ -250,7 +282,32 @@ if [[ "$result" == "PASS" ]]; then
         fi
         ;;
       preview)
-        run_step preview "bash '$PREVIEW_SCRIPT'" 1800 || result="FAIL"
+        # One step, several bounded drives: the diagnostics case asserts the CLI
+        # snapshot, and the surface case reads its fixture from the app's private
+        # files directory, so it must be staged after the app is installed.
+        preview_command="set -e; "
+        if [[ -x "$FFMPEG_PROBE" ]]; then
+          preview_command+="bash '$ROOT/scripts/run_android_ffmpeg_probe.sh' '$FFMPEG_PROBE' '$CASE_APK_DIR/diagnostics.apk' '$DEVICE_ID'; "
+        fi
+        preview_command+="bash '$PREVIEW_SCRIPT' diagnostics integration_test/native_bridge_diagnostics_test.dart test_driver/integration_test.dart '$CASE_APK_DIR/diagnostics.apk' --keep-app-running; "
+        preview_command+="adb -s '$DEVICE_ID' push '$ROOT/crates/or_media/tests/fixtures/tiny.mkv' /data/local/tmp/or-android-preview-tiny.mkv; "
+        preview_command+="adb -s '$DEVICE_ID' shell run-as io.github.huou07.or_app mkdir -p files; "
+        preview_command+="adb -s '$DEVICE_ID' shell run-as io.github.huou07.or_app cp /data/local/tmp/or-android-preview-tiny.mkv files/or-android-preview-tiny.mkv; "
+        preview_command+="bash '$PREVIEW_SCRIPT' surface integration_test/android_preview_surface_test.dart test_driver/integration_test.dart '$CASE_APK_DIR/surface.apk'"
+        run_step preview "$preview_command" 2700 || result="FAIL"
+        ;;
+      saf)
+        # The SAF journey is the real product proof, so it gets its own wiped
+        # guest rather than inheriting one that has already driven other cases.
+        saf_command="set -e; "
+        saf_command+="bash '$STOP_SCRIPT' >'$LOG_DIR/saf-stop.log' 2>&1 || true; "
+        saf_command+="bash '$START_SCRIPT' wipe-data >'$LOG_DIR/saf-start.log' 2>&1; "
+        saf_command+="adb -s '$DEVICE_ID' install -r '$CASE_APK_DIR/saf_fixture.apk' >'$LOG_DIR/saf-fixture-install.log' 2>&1; "
+        saf_command+="mkdir -p '$OR_ANDROID_ACCEPTANCE_OUTPUT' '$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT'; "
+        saf_command+="bash '$PREVIEW_SCRIPT' saf integration_test/android_saf_preview_test.dart test_driver/android_saf_preview.dart '$CASE_APK_DIR/saf.apk' '$CASE_APK_DIR/saf-recovery.apk'"
+        run_step saf "$saf_command" 2700 || result="FAIL"
+        # The saf step boots its own guest; the trap must still stop it.
+        guest_started=1
         ;;
     esac
     [[ "$result" != "FAIL" ]] || break
@@ -271,11 +328,13 @@ finished_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 REPORT_TMP="$report.tmp"
 
 python3 - "$STEPS_FILE" "$WARNINGS_FILE" "$REPORT_TMP" "$started_iso" "$finished_iso" \
-  "$(( finished_ms - started_ms ))" "$head_sha" "$dirty_at_start" "$result" "$AVD_NAME" "$DEVICE_ID" <<'PY'
-import json, os, platform, shutil, sys
+  "$(( finished_ms - started_ms ))" "$head_sha" "$dirty_at_start" "$result" "$AVD_NAME" "$DEVICE_ID" \
+  "$CASE_APK_DIR" "$FFMPEG_PROBE" "$GUEST_RAM_MB" <<'PY'
+import hashlib, json, os, platform, shutil, sys
 from pathlib import Path
 
-steps_file, warnings_file, report, started_at, finished_at, elapsed_ms, head, dirty, result, avd, device = sys.argv[1:13]
+(steps_file, warnings_file, report, started_at, finished_at, elapsed_ms, head,
+ dirty, result, avd, device, case_apk_dir, probe, guest_ram_mb) = sys.argv[1:15]
 
 def memory_total():
     for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
@@ -289,13 +348,23 @@ steps = [{
     "reason": r[6] or None,
 } for r in (line.rstrip("\n").split("\t") for line in open(steps_file, encoding="utf-8") if line.strip())]
 
+# The exact binaries this run drove, so the result is bound to an artifact and
+# not only to a source SHA.
+artifacts = []
+for apk in sorted(Path(case_apk_dir).glob("*.apk")):
+    artifacts.append({
+        "path": str(apk),
+        "size_bytes": apk.stat().st_size,
+        "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
+    })
+
 payload = {
     "lane": "android",
     "evidence_class": "local-developer",
     "acceptance": False,
     "source": head,
     "dirty_at_start": dirty == "1",
-    "guest": {"avd": avd, "serial": device},
+    "guest": {"avd": avd, "serial": device, "configured_ram_mb": int(guest_ram_mb)},
     "host": {
         "os": platform.system(), "arch": platform.machine(), "kernel": platform.release(),
         "memory_total_bytes": memory_total(),
@@ -306,13 +375,15 @@ payload = {
     "elapsed_seconds": round(int(elapsed_ms) / 1000.0, 2),
     "result": result,
     "steps": steps,
-    "not_run": [],
-    "artifacts": [],
+    "not_run": ([] if probe and os.access(probe, os.X_OK) else [
+        "FFmpeg guest link probe: OR_ANDROID_FFMPEG_PROBE was not supplied, so the run does not establish that the packaged FFmpeg libraries load on the guest",
+    ]),
+    "artifacts": artifacts,
     "warnings": [line for line in Path(warnings_file).read_text(encoding="utf-8").splitlines() if line],
     "limits": [
         "Local developer evidence on this named host only; the guest is a SwiftShader x86_64 emulator, not a physical device.",
         "Hosted platform-verification remains the authority for Android acceptance; a local guest result never becomes ACCEPTED.",
-        "The APK is a debug build signed with the standard debug key; it is not a release artifact.",
+        "The case APKs are debug builds signed with the standard debug key; they are not release artifacts.",
         "Performance measured here describes the emulator and the software GPU path, never physical-device responsiveness.",
         "A guest that never settles inside the bounded probes is BLOCKED with the measured reason, never retried into a pass.",
     ],

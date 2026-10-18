@@ -28,3 +28,13 @@ __pycache__/
 
 # AEH gate report and verification ledger: runtime state, never commit.
 .hub/
+
+# Android native build inputs, never source.
+# `packages/or_app_bridge/hook/build.dart` refuses an Android build unless the
+# staged FFmpeg install exists, and `apps/or_app/pubspec.yaml` pins that path as
+# the user define `android_ffmpeg_install_root: android/.ffmpeg-install`.
+# `scripts/build_android_case_apks.sh` creates the link and
+# `scripts/stage_android_ffmpeg.sh` produces the prefix it points at. Hosted CI
+# stages both into a runner temp directory for the same reason.
+apps/or_app/android/.ffmpeg-install
+apps/or_app/android/app/src/main/jniLibs/

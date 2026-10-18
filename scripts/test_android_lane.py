@@ -6,6 +6,12 @@ the lane's documented seams at stubs and assert what the lane reports and which
 exit code it returns, because the lane's honesty rules (a host precondition is
 BLOCKED, a dirty tree is never PASS) are the part that must not rot while no
 device is available.
+
+They also pin the wiring that made the lane unusable even with a staged FFmpeg
+prefix: the apk step must call the case-APK builder, the preview and saf steps
+must pass the four positional arguments and the dedicated serial the real
+preview script requires, the saf step must boot its own wiped guest, and no
+artifact may land outside the directory the report was written to.
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LANE = ROOT / "scripts" / "run_android_lane.sh"
+DEFAULT_LANE_DIR = ROOT / "apps" / "or_app" / "build" / "local-lanes"
 
 
 def write_executable(path: Path, body: str) -> None:
@@ -49,14 +56,31 @@ class AndroidLaneCase(unittest.TestCase):
         self.prefix = self.tmp / "ffmpeg"
         (self.prefix / "lib" / "pkgconfig").mkdir(parents=True)
 
+        # Every stub records its argv, so the test can assert what the lane
+        # actually asked the repository's own scripts to do.
+        self.capture = self.tmp / "capture"
+        self.capture.mkdir()
+
         self.stubs = self.tmp / "stubs"
         self.stubs.mkdir()
+        recorder = (
+            "#!/usr/bin/env bash\n"
+            'printf \'%s\\n\' "$(basename "$0") $*" >> "$OR_ANDROID_TEST_CAPTURE"\n'
+        )
         for name in ("start", "preview", "stop"):
-            write_executable(self.stubs / f"{name}.sh", "#!/usr/bin/env bash\nexit 0\n")
+            write_executable(self.stubs / f"{name}.sh", recorder + "exit 0\n")
+        write_executable(
+            self.stubs / "case_apks.sh",
+            recorder
+            + 'mkdir -p "$1"\n'
+            + 'for apk in diagnostics surface saf saf-recovery saf_fixture; do\n'
+            + '  printf \'apk\' > "$1/$apk.apk"\n'
+            + "done\n",
+        )
 
         self.meminfo = self.tmp / "meminfo"
         self.set_memory_gib(9)
-        self.report = self.tmp / "android.json"
+        self.report = self.tmp / "report" / "android.json"
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -77,6 +101,8 @@ class AndroidLaneCase(unittest.TestCase):
             "OR_ANDROID_START_SCRIPT": str(self.stubs / "start.sh"),
             "OR_ANDROID_PREVIEW_SCRIPT": str(self.stubs / "preview.sh"),
             "OR_ANDROID_STOP_SCRIPT": str(self.stubs / "stop.sh"),
+            "OR_ANDROID_CASE_APK_SCRIPT": str(self.stubs / "case_apks.sh"),
+            "OR_ANDROID_TEST_CAPTURE": str(self.capture / "argv.txt"),
         })
         env.update(overrides)
         return env
@@ -89,6 +115,12 @@ class AndroidLaneCase(unittest.TestCase):
 
     def payload(self) -> dict:
         return json.loads(self.report.read_text(encoding="utf-8"))
+
+    def captured(self) -> list[str]:
+        path = self.capture / "argv.txt"
+        if not path.exists():
+            return []
+        return [line for line in path.read_text(encoding="utf-8").splitlines() if line]
 
     # --- invocation -------------------------------------------------------
     def test_unknown_step_is_a_usage_error(self) -> None:
@@ -120,19 +152,82 @@ class AndroidLaneCase(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertIn("emulator binary", self.payload()["steps"][0]["reason"] or "")
 
-    def test_unset_ffmpeg_prefix_is_blocked_with_the_recipe_pointer(self) -> None:
+    def test_unset_ffmpeg_prefix_is_blocked_with_the_staging_recipe(self) -> None:
         result = self.run_lane("--steps", "apk", OR_ANDROID_FFMPEG_PREFIX="")
         self.assertEqual(result.returncode, 3)
         reason = self.payload()["steps"][0]["reason"] or ""
         self.assertIn("OR_ANDROID_FFMPEG_PREFIX", reason)
-        self.assertIn("OR-BUILD.md", reason)
+        self.assertIn("stage_android_ffmpeg.sh", reason)
+
+    # --- wiring the previous lane never had -------------------------------
+    def test_apk_step_calls_the_case_apk_builder(self) -> None:
+        self.run_lane("--steps", "apk")
+        lines = self.captured()
+        self.assertTrue(any(line.startswith("case_apks.sh ") for line in lines), lines)
+        target = Path(self.captured()[0].split(" ", 1)[1])
+        self.assertTrue(str(target).startswith(str(self.report.parent)), target)
+        self.assertTrue(target.name == "android-case-apks", target)
+
+    def test_preview_step_passes_the_case_arguments_and_the_dedicated_serial(self) -> None:
+        self.run_lane("--steps", "apk,emulator,preview")
+        preview_calls = [line for line in self.captured() if line.startswith("preview.sh ")]
+        self.assertEqual(len(preview_calls), 2, preview_calls)
+        diagnostics, surface = preview_calls
+        self.assertIn("diagnostics integration_test/native_bridge_diagnostics_test.dart "
+                      "test_driver/integration_test.dart", diagnostics)
+        self.assertIn("diagnostics.apk", diagnostics)
+        self.assertIn("--keep-app-running", diagnostics)
+        self.assertIn("surface integration_test/android_preview_surface_test.dart "
+                      "test_driver/integration_test.dart", surface)
+        self.assertIn("surface.apk", surface)
+        # The real preview script now reads the serial from OR_ANDROID_DEVICE_ID;
+        # the lane must export the same dedicated serial it reserves.
+        payload = self.payload()
+        self.assertEqual(payload["guest"]["serial"], "emulator-5580")
+
+    def test_saf_step_boots_its_own_wiped_guest_and_installs_the_fixture(self) -> None:
+        self.run_lane("--steps", "apk,emulator,saf")
+        start_calls = [line for line in self.captured() if line.startswith("start.sh")]
+        self.assertIn("start.sh wipe-data", start_calls, start_calls)
+        saf_calls = [line for line in self.captured() if line.startswith("preview.sh saf ")]
+        self.assertEqual(len(saf_calls), 1, saf_calls)
+        self.assertIn("android_saf_preview_test.dart test_driver/android_saf_preview.dart", saf_calls[0])
+        self.assertIn("saf.apk", saf_calls[0])
+        self.assertIn("saf-recovery.apk", saf_calls[0])
+
+    def test_artifacts_follow_the_report_path(self) -> None:
+        before = set(DEFAULT_LANE_DIR.rglob("*")) if DEFAULT_LANE_DIR.exists() else set()
+        self.run_lane("--steps", "apk")
+        logs = list(self.report.parent.glob("android-logs/*.log"))
+        self.assertTrue(logs, "the lane wrote no logs beside its report")
+        after = set(DEFAULT_LANE_DIR.rglob("*")) if DEFAULT_LANE_DIR.exists() else set()
+        self.assertEqual(before, after, "a redirected run wrote into the real lane directory")
+
+    def test_report_hashes_the_driven_apks_and_names_the_missing_probe(self) -> None:
+        self.run_lane("--steps", "apk")
+        payload = self.payload()
+        names = {Path(artifact["path"]).name for artifact in payload["artifacts"]}
+        self.assertIn("diagnostics.apk", names)
+        for artifact in payload["artifacts"]:
+            self.assertRegex(artifact["sha256"], r"^[0-9a-f]{64}$")
+        self.assertTrue(any("link probe" in entry for entry in payload["not_run"]), payload["not_run"])
+        self.assertTrue(any("link probe" in warning for warning in payload["warnings"]), payload["warnings"])
+
+    def test_a_staged_probe_runs_before_the_diagnostics_case(self) -> None:
+        probe = self.tmp / "ffmpeg-link-probe"
+        write_executable(probe, "#!/usr/bin/env bash\nexit 0\n")
+        self.run_lane("--steps", "apk,emulator,preview", OR_ANDROID_FFMPEG_PROBE=str(probe))
+        payload = self.payload()
+        preview = next(step for step in payload["steps"] if step["id"] == "preview")
+        self.assertIn("run_android_ffmpeg_probe.sh", preview["command"])
+        self.assertEqual(payload["not_run"], [])
 
     # --- the run ----------------------------------------------------------
     def test_all_steps_pass_and_a_dirty_tree_is_never_pass(self) -> None:
         result = self.run_lane()
         payload = self.payload()
         classifications = {step["id"]: step["classification"] for step in payload["steps"]}
-        for step in ("apk", "emulator", "preview"):
+        for step in ("apk", "emulator", "preview", "saf"):
             self.assertEqual(classifications.get(step), "PASS", payload["steps"])
         dirty = bool(
             subprocess.run(["git", "status", "--porcelain"], cwd=str(ROOT),

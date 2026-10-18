@@ -12,7 +12,10 @@ if [[ "$case_name" == saf ]]; then
 else
   shift 4
 fi
-android_device_id=emulator-5554
+# The dedicated serial is an input, not a constant: the local Android lane
+# drives emulator-5580 while hosted CI drives emulator-5554, and a hardcoded
+# value silently drove the wrong guest from the lane.
+android_device_id="${OR_ANDROID_DEVICE_ID:-emulator-5554}"
 output_directory="${OR_ANDROID_ACCEPTANCE_OUTPUT:-$RUNNER_TEMP/android-$case_name}"
 mkdir -p "$output_directory"
 log="$output_directory/android-driver-$case_name.log"
