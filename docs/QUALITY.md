@@ -92,6 +92,12 @@ of uncertainty).
 
 Measured 2026-10-18 on this host, 1280x800, software GL under Xvfb, ten runs each:
 
+The overwrite edit mode has its own row: `command.overwrite_insert` replaces a
+covered clip in one transaction, measured p50 0.260 ms / p95 0.286 ms against a
+6.0 ms p95 budget on the 200-clip project (2026-10-19). It pays for the delete and
+the insert together, so it is the cost a user sees when an edit replaces a range
+instead of being refused.
+
 | Interaction | p50 | p95 |
 |---|---|---|
 | Switch Projects <-> Home | 100.0 ms | 149.8 ms |

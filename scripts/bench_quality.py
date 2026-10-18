@@ -114,6 +114,11 @@ ROWS = {
         "threshold_p95_ms": 2.0,
         "baseline": {"date": "2026-10-18", "p50_ms": 0.027, "p95_ms": 0.038},
     },
+    "command.overwrite_insert": {
+        "description": "timeline.clip.insert in overwrite mode, replacing one clip",
+        "threshold_p95_ms": 6.0,
+        "baseline": {"date": "2026-10-19", "p50_ms": 0.260, "p95_ms": 0.286},
+    },
     "command.trim": {
         "description": "timeline.clip.trim on a 200-clip project",
         "threshold_p95_ms": 5.0,
@@ -532,7 +537,8 @@ def main(argv: list[str] | None = None) -> int:
             results.append(row_export_throughput(export_best))
     if any(selected(row_id) for row_id in
            ("command.create", "command.import", "command.add_track", "command.add_clip",
-            "command.trim", "command.split", "command.undo", "command.seek_summary",
+            "command.overwrite_insert", "command.trim", "command.split", "command.undo",
+            "command.seek_summary",
             "command.seek_clip_page", "project-open", "project-save")):
         try:
             results.extend(command_latency_rows())

@@ -306,6 +306,11 @@ class each claim actually has:
     dialog to ask in. Guarded by `flutter analyze` clean, the widget suite (103
     passing), and both editing journeys passing through `scripts/or_ui.py` at
     1280x800 and 320x440 after the change.
+  - **Measured (2026-10-19).** `QUALITY.md` carries a
+    `command.overwrite_insert` row: replacing a covered clip in one transaction is
+    p50 0.260 ms / p95 0.286 ms against a 6.0 ms p95 budget on the 200-clip project,
+    so the mode pays the delete and the insert together and is far inside the
+    interactive bar. The lane prints seventeen rows and the budget is PASS.
   - **Still not done, and the reason the capability is not finished:** the
     strict-containment case has no UI field for `overwrite_split_clip_id`, so a
     user who lands a clip strictly inside another gets the command's refusal

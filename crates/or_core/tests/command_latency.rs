@@ -177,6 +177,46 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("add_clip".to_owned(), insert_samples));
 
+    // --- overwrite insert ------------------------------------------------
+    // The overwrite path deletes the covered clip and inserts the replacement in
+    // one transaction, so this row is the cost a user pays when an edit replaces
+    // a range instead of refusing to overlap. The span covers the first clip
+    // exactly, which keeps the project at 200 clips and the geometry stable.
+    let mut overwrite_samples = Vec::with_capacity(ITERATIONS);
+    let mut overwritten_id = None;
+    for _ in 0..ITERATIONS {
+        let clip_id = ClipId::generate();
+        let started = Instant::now();
+        let done = session.handle_application_request(ApplicationRequest::Command(
+            CommandEnvelope::insert_timeline_clip_with_mode(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+                clip_id,
+                track_id,
+                media_id,
+                time(0, 1),
+                source,
+                or_core::TimelineEditMode::Overwrite,
+                None,
+            ),
+        ));
+        if !succeeded(&done) {
+            unverified("overwrite insert failed on a project with a covered clip");
+            return;
+        }
+        overwrite_samples.push(elapsed_ms(started));
+        overwritten_id = Some(clip_id);
+    }
+    // The overwrite replaced the first clip, so its id is the one the later trim
+    // step must target; the geometry is unchanged because the span is identical.
+    if let Some(clip_id) = overwritten_id {
+        if let Some(first) = clip_ids.first_mut() {
+            *first = clip_id;
+        }
+    }
+    measurements.push(("overwrite_insert".to_owned(), overwrite_samples));
+
     // --- trim ------------------------------------------------------------
     let mut trim_samples = Vec::with_capacity(ITERATIONS);
     for index in 0..ITERATIONS {
