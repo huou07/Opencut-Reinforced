@@ -196,6 +196,30 @@ class each claim actually has:
   `[Errno 11] Resource temporarily unavailable`. The preflight now names the
   contention as `BLOCKED` with the settle command, opens the descriptor
   non-inheritable and always closes it.
+- **Local gate state at `0d18014` (developer evidence).** `bash
+  scripts/check-repo.sh` PASS; `bash scripts/acceptance.sh`
+  `PROJECT_ACCEPTANCE=PASS` with seven correctly named `UNVERIFIED` lanes (all
+  hosted-CI authority: platform-verification, release-gate, packaging, or_render,
+  or_audio, or_ai, or_whisper_provider). The Flutter widget suite is 102 tests,
+  the performance budget is sixteen measured rows, and the bounded Linux UI
+  preflight passes. The Linux lane reports hygiene, flutter, preflight and bench
+  PASS.
+- **Compact-layout status (VERIFIED_BEHAVIORAL for what passes).**
+  `scripts/or_ui.py --viewport 320x440 screens` walks all five screens with no
+  render exception. The compact *editor* journey reaches the media sheet, inserts,
+  and then trips a **reproduced, unfixed 17 px bottom overflow at step 24**; it is
+  recorded in [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) with the failing command. Three
+  other compact defects found the same way are fixed with permanent widget guards
+  (header overflow 44 px, dropdown overflow 46 px, a message stealing the dock
+  tap). The 390x844 run of the same journey has not been performed since the
+  insert path began failing, so the taller compact viewport is **UNVERIFIED** for
+  this revision rather than assumed clean.
+- **Phase 1 (complete basic editing) is not started in this revision.** The
+  enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
+  ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
+  and grouping, keyframes. The compact insert defect above is the first Phase 1
+  task because it blocks the compact editing journey that every later gap has to
+  clear.
 - **Next action for Phase 0:** drive the Android guest through
   `bash scripts/run_local_lane.sh android` (or `python3 scripts/or_ui.py --target
   android run scripts/ui_scenarios/editor-journey.json` against a booted guest)
