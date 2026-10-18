@@ -26,6 +26,7 @@ This map points to the current source of truth. Read the documents relevant to y
 | [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Detailed subsystem boundaries, data contracts, and open choices |
 | [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) | Required path for defining and implementing a feature |
 | [Continuation prompt](prompts/CONTINUE-OR.md) | Independent agent handoff; first-project journey and current host/CI boundaries |
+| [Local Linux and Android completion prompt](prompts/OR-LOCAL-FINISH.md) | Owner intent 2026-10-18, verified local host/emulator/GPU state, and clusters C1–C5 with acceptance and stop conditions |
 | [PAUSE_MIGRATION_HANDOFF.md](PAUSE_MIGRATION_HANDOFF.md) | Append-only pause and Debian-migration log; superseded facts are marked, not edited |
 | [skills.md](skills.md) | Project skill routing and which procedures are loadable |
 | [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) | **Active** outcome-based product roadmap and legacy requirement mapping |
