@@ -343,7 +343,11 @@ packaged_build_deb() {
   local root="$OR_LANE_ROOT" ff="$OR_LANE_FFMPEG_PREFIX"
   local bundle="$OR_LANE_BUNDLE" deb="$OR_LANE_DEB" copying="$OR_LANE_FFMPEG_COPYING"
   local notices="$OR_LANE_CODEC_NOTICES"
-  cd "$root" || exit 1
+  # Stay where the preflight wrapper put us: apps/or_app. Moving to the repository
+  # root made `flutter pub get` fail with "Expected to find project root in current
+  # working directory", because Flutter needs a project root and the repository root
+  # is not one. Every path below is absolute through OR_LANE_*.
+  cd "$root/apps/or_app" || exit 1
   reset_bridge_hook_cache
   flutter --no-version-check pub get --offline --enforce-lockfile || exit 1
   flutter --no-version-check build linux --debug --no-pub || exit 1
@@ -411,7 +415,10 @@ packaged_run_journey() {
   set -uo pipefail
   local root="$OR_LANE_ROOT" deb="$OR_LANE_DEB" install_root="$OR_LANE_INSTALL_ROOT"
   local runtime="$OR_LANE_MEDIA_RUNTIME"
-  cd "$root" || exit 1
+  # The journey step runs the installed package, not a Flutter build, but it is
+  # handed to the same wrapper, so it starts in apps/or_app; the paths it uses are
+  # absolute.
+  cd "$root/apps/or_app" || exit 1
   rm -rf "$install_root"
   mkdir -p "$install_root"
   dpkg-deb --extract "$deb" "$install_root" || exit 1

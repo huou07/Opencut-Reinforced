@@ -109,7 +109,9 @@ class _Spec {
     }
     final decoded = jsonDecode(file.readAsStringSync());
     if (decoded is! Map<String, Object?>) {
-      throw StateError('a scenario must be a JSON object, not ${decoded.runtimeType}');
+      throw StateError(
+        'a scenario must be a JSON object, not ${decoded.runtimeType}',
+      );
     }
     final viewport = decoded['viewport'];
     ({double width, double height})? size;
@@ -154,15 +156,20 @@ class _Artifacts {
   String relative(String name) => name;
 
   void writeJson(String name, Object? payload) {
-    File('${directory.path}/$name').writeAsStringSync(
-      const JsonEncoder.withIndent('  ').convert(payload),
-    );
-    index.add({'name': name, 'bytes': File('${directory.path}/$name').lengthSync()});
+    File('${directory.path}/$name')
+        .writeAsStringSync(const JsonEncoder.withIndent('  ').convert(payload));
+    index.add({
+      'name': name,
+      'bytes': File('${directory.path}/$name').lengthSync(),
+    });
   }
 
   void writeText(String name, String text) {
     File('${directory.path}/$name').writeAsStringSync(text);
-    index.add({'name': name, 'bytes': File('${directory.path}/$name').lengthSync()});
+    index.add({
+      'name': name,
+      'bytes': File('${directory.path}/$name').lengthSync(),
+    });
   }
 
   void writeBytes(String name, List<int> bytes) {
@@ -233,7 +240,10 @@ class _Runner {
     tester.view.physicalSize = Size(viewport.width, viewport.height);
     addTearDown(tester.view.reset);
 
-    picker = _FixturePicker(Directory(artifacts.replacements.path), spec.pickList);
+    picker = _FixturePicker(
+      Directory(artifacts.replacements.path),
+      spec.pickList,
+    );
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
@@ -254,7 +264,9 @@ class _Runner {
       final text = details.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
       // ignore: avoid_print
       print('OR_FRAMEWORK_ERROR $text');
-      frameworkErrors.add(text.length > 400 ? '${text.substring(0, 400)}…' : text);
+      frameworkErrors.add(
+        text.length > 400 ? '${text.substring(0, 400)}…' : text,
+      );
       _previousOnError?.call(details);
     };
     await _settle();
@@ -349,25 +361,40 @@ class _Runner {
         await _pumpFor(_milliseconds(step['ms'] ?? 100));
         return;
       case 'wait':
-        await _waitForText('${step['text']}', _milliseconds(step['budget_ms'] ?? 8000));
+        await _waitForText(
+          '${step['text']}',
+          _milliseconds(step['budget_ms'] ?? 8000),
+        );
         return;
       case 'wait_absent':
-        await _waitForText('${step['text']}', _milliseconds(step['budget_ms'] ?? 8000),
-            absent: true);
+        await _waitForText(
+          '${step['text']}',
+          _milliseconds(step['budget_ms'] ?? 8000),
+          absent: true,
+        );
         return;
       case 'wait_label':
-        await _waitForLabel('${step['label_regex'] ?? step['label']}',
-            _milliseconds(step['budget_ms'] ?? 8000));
+        await _waitForLabel(
+          '${step['label_regex'] ?? step['label']}',
+          _milliseconds(step['budget_ms'] ?? 8000),
+        );
         return;
       case 'wait_label_absent':
-        await _waitForLabel('${step['label_regex'] ?? step['label']}',
-            _milliseconds(step['budget_ms'] ?? 8000), absent: true);
+        await _waitForLabel(
+          '${step['label_regex'] ?? step['label']}',
+          _milliseconds(step['budget_ms'] ?? 8000),
+          absent: true,
+        );
         return;
       case 'shot':
-        result.screenshot = await _shot('${step['name'] ?? 'shot'}-${result.index}');
+        result.screenshot = await _shot(
+          '${step['name'] ?? 'shot'}-${result.index}',
+        );
         return;
       case 'tree':
-        result.semantics = await _tree('${step['name'] ?? 'tree'}-${result.index}');
+        result.semantics = await _tree(
+          '${step['name'] ?? 'tree'}-${result.index}',
+        );
         return;
       case 'screens':
         await _captureScreenInventory();
@@ -406,7 +433,9 @@ class _Runner {
         final finder = _requireFinder(step);
         if (finder.evaluate().isEmpty) {
           throw _StepFailure(
-              'not_found', 'no widget matched ${_selector(step)}');
+            'not_found',
+            'no widget matched ${_selector(step)}',
+          );
         }
         final role = step['role'];
         if (role != null) {
@@ -414,7 +443,9 @@ class _Runner {
           final actual = _roleOf(node);
           if (actual != '$role') {
             throw _StepFailure(
-                'wrong_role', 'expected role $role but the node reports $actual');
+              'wrong_role',
+              'expected role $role but the node reports $actual',
+            );
           }
           result.detail = 'role=$actual label=${node.label}';
         }
@@ -426,7 +457,10 @@ class _Runner {
         return;
       case 'expect_absent':
         if (_anyFinder(step).evaluate().isNotEmpty) {
-          throw _StepFailure('still_present', 'a matching widget is still on screen');
+          throw _StepFailure(
+            'still_present',
+            'a matching widget is still on screen',
+          );
         }
         return;
       case 'expect_state':
@@ -438,7 +472,9 @@ class _Runner {
         final expected = '${step['state']}';
         if (!_matchesState(data, expected)) {
           throw _StepFailure(
-              'wrong_state', 'expected state $expected; observed ${_describe(data)}');
+            'wrong_state',
+            'expected state $expected; observed ${_describe(data)}',
+          );
         }
         result.detail = _describe(data);
         return;
@@ -457,7 +493,10 @@ class _Runner {
         return;
       case 'scroll':
         final finder = _requireFinder(step);
-        await tester.drag(finder, Offset(0, (step['dy'] as num?)?.toDouble() ?? -200));
+        await tester.drag(
+          finder,
+          Offset(0, (step['dy'] as num?)?.toDouble() ?? -200),
+        );
         await _settle();
         return;
       case 'measure':
@@ -485,13 +524,17 @@ class _Runner {
       final actual = _roleOf(node);
       if (actual != '$role') {
         throw _StepFailure(
-            'wrong_role', 'expected role $role but the node reports $actual');
+          'wrong_role',
+          'expected role $role but the node reports $actual',
+        );
       }
     }
     final count = finder.evaluate().length;
     if (count > 1 && step['allow_multiple'] != true) {
       throw _StepFailure(
-          'ambiguous', '$count widgets matched $selector; make the selector narrower');
+        'ambiguous',
+        '$count widgets matched $selector; make the selector narrower',
+      );
     }
     await action(finder.first);
   }
@@ -543,11 +586,15 @@ class _Runner {
     if (direct != null) return direct;
     final letter = RegExp(r'^[a-z]$').firstMatch(name);
     if (letter != null) {
-      return LogicalKeyboardKey(LogicalKeyboardKey.keyA.keyId + (name.codeUnitAt(0) - 97));
+      return LogicalKeyboardKey(
+        LogicalKeyboardKey.keyA.keyId + (name.codeUnitAt(0) - 97),
+      );
     }
     final digit = RegExp(r'^[0-9]$').firstMatch(name);
     if (digit != null) {
-      return LogicalKeyboardKey(LogicalKeyboardKey.digit0.keyId + int.parse(name));
+      return LogicalKeyboardKey(
+        LogicalKeyboardKey.digit0.keyId + int.parse(name),
+      );
     }
     throw _StepFailure('bad_scenario', 'unknown key "$name"');
   }
@@ -562,7 +609,11 @@ class _Runner {
       final started = DateTime.now();
       for (final sub in (step['steps'] as List? ?? const [])) {
         if (sub is Map<String, Object?>) {
-          await _dispatch('${sub['op']}', sub, _StepResult(-1, '${sub['op']}', null));
+          await _dispatch(
+            '${sub['op']}',
+            sub,
+            _StepResult(-1, '${sub['op']}', null),
+          );
         }
       }
       samples.add(DateTime.now().difference(started).inMicroseconds / 1000.0);
@@ -613,7 +664,10 @@ class _Runner {
   Finder _anyFinder(Map<String, Object?> step) {
     final selector = _selector(step);
     if (selector == null) {
-      throw _StepFailure('bad_scenario', 'this step needs key, label, text or role');
+      throw _StepFailure(
+        'bad_scenario',
+        'this step needs key, label, text or role',
+      );
     }
     final scoped = _scopeFor(selector);
     final base = _baseFinder(selector);
@@ -674,7 +728,10 @@ class _Runner {
       // A role with no label can only be acted on through its own geometry.
       return _finderForNode(node);
     }
-    throw _StepFailure('bad_scenario', 'the selector names nothing this runner can resolve');
+    throw _StepFailure(
+      'bad_scenario',
+      'the selector names nothing this runner can resolve',
+    );
   }
 
   /// The finder a step names, optionally narrowed to the nth match.
@@ -769,7 +826,9 @@ class _Runner {
     await tester.pump();
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
     }
   }
 
@@ -777,17 +836,25 @@ class _Runner {
     final deadline = DateTime.now().add(Duration(milliseconds: milliseconds));
     while (DateTime.now().isBefore(deadline)) {
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
     }
   }
 
-  Future<void> _waitForText(String text, int budgetMs, {bool absent = false}) async {
+  Future<void> _waitForText(
+    String text,
+    int budgetMs, {
+    bool absent = false,
+  }) async {
     final deadline = DateTime.now().add(Duration(milliseconds: budgetMs));
     while (DateTime.now().isBefore(deadline)) {
       final present = find.text(text).evaluate().isNotEmpty;
       if (present != absent) return;
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
     }
     throw _StepFailure(
       'timeout',
@@ -797,15 +864,19 @@ class _Runner {
     );
   }
 
-  static bool _matchesState(SemanticsData data, String expected) => switch (expected) {
-    'enabled' => data.flagsCollection.isEnabled != ui.Tristate.isFalse,
-    'disabled' => data.flagsCollection.isEnabled == ui.Tristate.isFalse,
-    'selected' => data.flagsCollection.isSelected == ui.Tristate.isTrue,
-    'checked' => data.flagsCollection.isChecked == ui.CheckedState.isTrue,
-    'focused' => data.flagsCollection.isFocused == ui.Tristate.isTrue,
-    'toggled' => data.flagsCollection.isToggled == ui.Tristate.isTrue,
-    _ => throw _StepFailure('bad_scenario', 'unknown semantic state "$expected"'),
-  };
+  static bool _matchesState(SemanticsData data, String expected) =>
+      switch (expected) {
+        'enabled' => data.flagsCollection.isEnabled != ui.Tristate.isFalse,
+        'disabled' => data.flagsCollection.isEnabled == ui.Tristate.isFalse,
+        'selected' => data.flagsCollection.isSelected == ui.Tristate.isTrue,
+        'checked' => data.flagsCollection.isChecked == ui.CheckedState.isTrue,
+        'focused' => data.flagsCollection.isFocused == ui.Tristate.isTrue,
+        'toggled' => data.flagsCollection.isToggled == ui.Tristate.isTrue,
+        _ => throw _StepFailure(
+          'bad_scenario',
+          'unknown semantic state "$expected"',
+        ),
+      };
 
   Future<void> _waitForState(Map<String, Object?> step) async {
     final budget = _milliseconds(step['budget_ms'] ?? 8000);
@@ -814,27 +885,40 @@ class _Runner {
     final deadline = DateTime.now().add(Duration(milliseconds: budget));
     while (DateTime.now().isBefore(deadline)) {
       if (finder.evaluate().isNotEmpty &&
-          _matchesState(tester.getSemantics(finder.first).getSemanticsData(), expected)) {
+          _matchesState(
+            tester.getSemantics(finder.first).getSemanticsData(),
+            expected,
+          )) {
         return;
       }
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
     }
     throw _StepFailure(
-        'timeout', 'the control never entered state "$expected" within ${budget}ms');
+      'timeout',
+      'the control never entered state "$expected" within ${budget}ms',
+    );
   }
 
   /// Wait for a semantics label, which is the portable selector: the same
   /// control presents its name as its own Text widget on desktop and as one
   /// multi-line semantics label in the compact sheet.
-  Future<void> _waitForLabel(String pattern, int budgetMs, {bool absent = false}) async {
+  Future<void> _waitForLabel(
+    String pattern,
+    int budgetMs, {
+    bool absent = false,
+  }) async {
     final regex = RegExp(pattern);
     final deadline = DateTime.now().add(Duration(milliseconds: budgetMs));
     while (DateTime.now().isBefore(deadline)) {
       final present = find.bySemanticsLabel(regex).evaluate().isNotEmpty;
       if (present != absent) return;
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 8)));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
     }
     throw _StepFailure(
       'timeout',
@@ -1056,7 +1140,9 @@ class _FixturePicker extends FileSelectorProjectPicker {
       final tone = index >= samples ~/ 2
           ? 0.5 * math.sin(2 * math.pi * 440 * index / rate)
           : 0.0;
-      final value = ((noise * 0.12 + tone) * 32767).clamp(-32768, 32767).round();
+      final value = ((noise * 0.12 + tone) * 32767)
+          .clamp(-32768, 32767)
+          .round();
       bytes.setInt16(44 + index * 2, value, Endian.little);
     }
     final path = '${directory.path}/$name';
@@ -1070,7 +1156,8 @@ class _FixturePicker extends FileSelectorProjectPicker {
   };
 
   @override
-  Future<String?> saveProjectPath({required String suggestedName}) async => project;
+  Future<String?> saveProjectPath({required String suggestedName}) async =>
+      project;
 
   @override
   Future<String?> openProjectPath() async => project;

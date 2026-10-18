@@ -2113,12 +2113,8 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current, {
     required String clipId,
     required ProjectRationalTime delta,
-  }) async => _gateway.slipTimelineClip(
-    session,
-    current,
-    clipId: clipId,
-    delta: delta,
-  );
+  }) async =>
+      _gateway.slipTimelineClip(session, current, clipId: clipId, delta: delta);
 
   @override
   Future<ProjectActionResult> rollTimelineClip(
@@ -2126,12 +2122,8 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current, {
     required String clipId,
     required ProjectRationalTime delta,
-  }) => _gateway.rollTimelineClip(
-    session,
-    current,
-    clipId: clipId,
-    delta: delta,
-  );
+  }) =>
+      _gateway.rollTimelineClip(session, current, clipId: clipId, delta: delta);
 
   @override
   Future<ProjectActionResult> slideTimelineClip(

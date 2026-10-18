@@ -48,8 +48,33 @@ REQUIRED_NOISE_DROP_DB = 6.0
 REQUIRED_DISCRIMINATION_DB = 3.0
 
 
-def run(command: list[str], label: str) -> str:
-    done = subprocess.run(command, capture_output=True, text=True)
+def helper_environment(ffmpeg: Path) -> dict[str, str]:
+    """The environment a freshly built helper needs to load its own libraries.
+
+    A helper built beside a prefix carries shared libraries in `<prefix>/lib`, and the
+    packaged layout relies on that. Without this the helper fails with
+    "error while loading shared libraries: libavfilter.so.11", which is exactly what
+    the hosted Linux job reported the first time this script ran there: the local host
+    resolves the libraries from its own prefix, so the omission is invisible locally.
+    """
+    environment = dict(os.environ)
+    library_directory = ffmpeg.resolve().parent.parent / "lib"
+    if not library_directory.is_dir():
+        return environment
+    existing = environment.get("LD_LIBRARY_PATH", "")
+    environment["LD_LIBRARY_PATH"] = (
+        f"{library_directory}{os.pathsep}{existing}" if existing else str(library_directory)
+    )
+    # macOS uses its own variable, and a Windows build has no separate library path.
+    existing_dyld = environment.get("DYLD_LIBRARY_PATH", "")
+    environment["DYLD_LIBRARY_PATH"] = (
+        f"{library_directory}{os.pathsep}{existing_dyld}" if existing_dyld else str(library_directory)
+    )
+    return environment
+
+
+def run(command: list[str], label: str, env: dict[str, str] | None = None) -> str:
+    done = subprocess.run(command, capture_output=True, text=True, env=env)
     if done.returncode != 0:
         raise SystemExit(f"{label} failed:\n{done.stderr[-1200:]}")
     return done.stderr
@@ -73,6 +98,7 @@ def mean_volume_db(ffmpeg: Path, path: Path, window: tuple[float, float]) -> flo
             "-i", str(path), "-map", "0:a", "-af", "volumedetect", "-f", "null", "-",
         ],
         "volumedetect",
+        helper_environment(ffmpeg),
     )
     match = re.search(r"mean_volume: (-?[0-9.]+) dB", stderr)
     if match is None:
@@ -81,19 +107,20 @@ def mean_volume_db(ffmpeg: Path, path: Path, window: tuple[float, float]) -> flo
 
 
 def build_fixture(ffmpeg: Path, work: Path) -> Path:
+    environment = helper_environment(ffmpeg)
     noise = work / "noise.wav"
     run([
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
         "-f", "lavfi", "-i",
         f"anoisesrc=d={NOISE_SECONDS}:c=white:a={NOISE_AMPLITUDE}:r=48000",
         "-ac", "1", str(noise),
-    ], "noise generation")
+    ], "noise generation", environment)
     tone = work / "tone.wav"
     run([
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
         "-f", "lavfi", "-i", f"sine=f=1000:d={TONE_SECONDS}:r=48000",
         "-af", f"volume={TONE_VOLUME}", "-ac", "1", str(tone),
-    ], "tone generation")
+    ], "tone generation", environment)
     speech = work / "speech.wav"
     run([
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(tone),
@@ -101,13 +128,13 @@ def build_fixture(ffmpeg: Path, work: Path) -> Path:
         f"anoisesrc=d={TONE_SECONDS}:c=white:a={NOISE_AMPLITUDE}:r=48000",
         "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first:normalize=0",
         "-ac", "1", str(speech),
-    ], "speech generation")
+    ], "speech generation", environment)
     fixture = work / "fixture.wav"
     run([
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(noise), "-i", str(speech),
         "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1", "-ac", "1", str(fixture),
-    ], "fixture assembly")
+    ], "fixture assembly", environment)
     return fixture
 
 
@@ -231,7 +258,7 @@ def main() -> int:
         run([
             str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(fixture),
             "-af", chain, "-ac", "1", str(denoised),
-        ], "denoise")
+        ], "denoise", helper_environment(ffmpeg))
         print("via            : the packaged ffmpeg helper directly")
         measured = measure_windows(ffmpeg, fixture, denoised)
         report(chain, measured)

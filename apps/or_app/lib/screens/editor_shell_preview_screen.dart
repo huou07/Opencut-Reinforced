@@ -134,6 +134,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+
     /// `insert` or `overwrite`; chosen in the insert dialog, sent with the
     /// command, and never stored in the project.
     String mode,
@@ -888,68 +889,78 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
           // still carry the dirty state.
           final roomForMetadata = constraints.maxWidth >= 560;
           return Row(
-        children: [
-          const Icon(
-            Icons.folder_open_outlined,
-            size: 17,
-            color: OrColors.textSecondary,
-          ),
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: Text(
-              current?.name ?? 'Opening project…',
-              key: const ValueKey('workspace-project-name'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: OrType.metadataCompactSize,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (current != null && roomForMetadata) ...[
-            Text(
-              'Revision ${current.revision}',
-              key: const ValueKey('workspace-project-revision'),
-              style: const TextStyle(
-                fontSize: OrType.tinySize,
+            children: [
+              const Icon(
+                Icons.folder_open_outlined,
+                size: 17,
                 color: OrColors.textSecondary,
               ),
-            ),
-            const SizedBox(width: OrSpacing.x2),
-            OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
-          ],
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _WorkspaceAction(
-                    'Rename',
-                    Icons.edit_outlined,
-                    onRename,
-                    busy,
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: Text(
+                  current?.name ?? 'Opening project…',
+                  key: const ValueKey('workspace-project-name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: OrType.metadataCompactSize,
+                    fontWeight: FontWeight.w600,
                   ),
-                  _WorkspaceAction(
-                    'Save',
-                    Icons.save_outlined,
-                    onSave,
-                    busy || current?.dirty != true,
-                  ),
-                  _WorkspaceAction('Undo', Icons.undo_outlined, onUndo, busy),
-                  _WorkspaceAction('Redo', Icons.redo_outlined, onRedo, busy),
-                  _WorkspaceAction(
-                    'Close',
-                    Icons.close_outlined,
-                    onClose,
-                    busy,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+              if (current != null && roomForMetadata) ...[
+                Text(
+                  'Revision ${current.revision}',
+                  key: const ValueKey('workspace-project-revision'),
+                  style: const TextStyle(
+                    fontSize: OrType.tinySize,
+                    color: OrColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: OrSpacing.x2),
+                OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
+              ],
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _WorkspaceAction(
+                        'Rename',
+                        Icons.edit_outlined,
+                        onRename,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Save',
+                        Icons.save_outlined,
+                        onSave,
+                        busy || current?.dirty != true,
+                      ),
+                      _WorkspaceAction(
+                        'Undo',
+                        Icons.undo_outlined,
+                        onUndo,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Redo',
+                        Icons.redo_outlined,
+                        onRedo,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Close',
+                        Icons.close_outlined,
+                        onClose,
+                        busy,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -2143,8 +2154,9 @@ class _ViewerPanelState extends State<_ViewerPanel>
           // instead, which is what a viewer should do.
           final limitWidth = widget.compact ? 520.0 : 660.0;
           final limitHeight = widget.compact ? 360.0 : 420.0;
-          final availableWidth =
-              constraints.maxWidth.isFinite ? constraints.maxWidth : limitWidth;
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : limitWidth;
           final availableHeight = constraints.maxHeight.isFinite
               ? constraints.maxHeight
               : limitHeight;
@@ -2165,55 +2177,55 @@ class _ViewerPanelState extends State<_ViewerPanel>
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (preview?.contentEnd == null)
-                  _viewerPlaceholder(
-                    icon: Icons.movie_outlined,
-                    message: 'No media loaded',
-                  )
-                else if (textureId != null)
-                  Texture(
-                    key: ValueKey('or-viewer-texture-$textureId'),
-                    textureId: textureId,
-                    filterQuality: FilterQuality.medium,
-                  )
-                else
-                  _viewerPlaceholder(
-                    icon: hasSession
-                        ? Icons.error_outline
-                        : Icons.movie_outlined,
-                    message: hasSession
-                        ? 'Viewer texture unavailable'
-                        : 'Open a project to preview',
-                  ),
-                if (_busy)
-                  const Center(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: OrColors.backgroundRaised,
-                        border: Border.fromBorderSide(
-                          BorderSide(color: OrColors.border),
+                fit: StackFit.expand,
+                children: [
+                  if (preview?.contentEnd == null)
+                    _viewerPlaceholder(
+                      icon: Icons.movie_outlined,
+                      message: 'No media loaded',
+                    )
+                  else if (textureId != null)
+                    Texture(
+                      key: ValueKey('or-viewer-texture-$textureId'),
+                      textureId: textureId,
+                      filterQuality: FilterQuality.medium,
+                    )
+                  else
+                    _viewerPlaceholder(
+                      icon: hasSession
+                          ? Icons.error_outline
+                          : Icons.movie_outlined,
+                      message: hasSession
+                          ? 'Viewer texture unavailable'
+                          : 'Open a project to preview',
+                    ),
+                  if (_busy)
+                    const Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: OrColors.backgroundRaised,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: OrColors.border),
+                          ),
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(OrRadii.small),
+                          ),
                         ),
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(OrRadii.small),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: OrSpacing.x2,
-                          vertical: OrSpacing.x1,
-                        ),
-                        child: Text(
-                          'Updating preview',
-                          style: TextStyle(
-                            color: OrColors.textSecondary,
-                            fontSize: OrType.tinySize,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: OrSpacing.x2,
+                            vertical: OrSpacing.x1,
+                          ),
+                          child: Text(
+                            'Updating preview',
+                            style: TextStyle(
+                              color: OrColors.textSecondary,
+                              fontSize: OrType.tinySize,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -2254,227 +2266,232 @@ class _ViewerPanelState extends State<_ViewerPanel>
           // convey. It never clips and never squeezes away a control.
           final shortPanel = constraints.maxHeight < 200;
           return Column(
-        children: [
-          _PanelHeader(
-            title: 'Viewer',
-            // The short panel keeps two pixels for the surface's remainder: with
-            // the strip at its minimum the sum came to one pixel more than the
-            // panel, and a one-pixel overflow is still a clipped control.
-            height: shortPanel ? 32 : (widget.compact ? 34 : 38),
-            trailing: OrBadge(
-              preview == null || preview.width == 0
-                  ? 'Preview'
-                  : '${preview.width} × ${preview.height}',
-            ),
-          ),
-          Expanded(child: _buildViewerSurface()),
-          Container(
-            decoration: const BoxDecoration(
-              color: OrColors.backgroundRaised,
-              border: Border(top: BorderSide(color: OrColors.border)),
-            ),
-            padding: const EdgeInsets.fromLTRB(
-              OrSpacing.x3,
-              OrSpacing.x1,
-              OrSpacing.x3,
-              OrSpacing.x1,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasRange) ...[
-                  if (!shortPanel)
-                    SizedBox(
-                    height: 8,
-                    child: CustomPaint(
-                      painter: _PreviewRulerPainter(),
-                      size: Size.infinite,
-                    ),
-                  ),
-                  SizedBox(
-                    height: 32,
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 2,
-                        activeTrackColor: OrColors.selection,
-                        inactiveTrackColor: OrColors.borderStrong,
-                        thumbColor: OrColors.text,
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 10,
+            children: [
+              _PanelHeader(
+                title: 'Viewer',
+                // The short panel keeps two pixels for the surface's remainder: with
+                // the strip at its minimum the sum came to one pixel more than the
+                // panel, and a one-pixel overflow is still a clipped control.
+                height: shortPanel ? 32 : (widget.compact ? 34 : 38),
+                trailing: OrBadge(
+                  preview == null || preview.width == 0
+                      ? 'Preview'
+                      : '${preview.width} × ${preview.height}',
+                ),
+              ),
+              Expanded(child: _buildViewerSurface()),
+              Container(
+                decoration: const BoxDecoration(
+                  color: OrColors.backgroundRaised,
+                  border: Border(top: BorderSide(color: OrColors.border)),
+                ),
+                padding: const EdgeInsets.fromLTRB(
+                  OrSpacing.x3,
+                  OrSpacing.x1,
+                  OrSpacing.x3,
+                  OrSpacing.x1,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasRange) ...[
+                      if (!shortPanel)
+                        SizedBox(
+                          height: 8,
+                          child: CustomPaint(
+                            painter: _PreviewRulerPainter(),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      SizedBox(
+                        height: 32,
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 2,
+                            activeTrackColor: OrColors.selection,
+                            inactiveTrackColor: OrColors.borderStrong,
+                            thumbColor: OrColors.text,
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 10,
+                            ),
+                          ),
+                          child: Slider(
+                            key: const ValueKey('preview-scrub-ruler'),
+                            min: 0,
+                            max: rulerMaximum,
+                            value: sliderValue,
+                            onChanged: _busy || !_connected
+                                ? null
+                                : _onScrubChanged,
+                            onChangeEnd: _busy || !_connected
+                                ? null
+                                : (seconds) {
+                                    setState(() => _scrubPosition = null);
+                                    unawaited(
+                                      _run(
+                                        (gateway, session) =>
+                                            gateway.previewSeek(
+                                              session,
+                                              _timeFromSeconds(seconds),
+                                            ),
+                                      ),
+                                    );
+                                  },
+                          ),
                         ),
                       ),
-                      child: Slider(
-                        key: const ValueKey('preview-scrub-ruler'),
-                        min: 0,
-                        max: rulerMaximum,
-                        value: sliderValue,
-                        onChanged: _busy || !_connected
-                            ? null
-                            : _onScrubChanged,
-                        onChangeEnd: _busy || !_connected
-                            ? null
-                            : (seconds) {
-                                setState(() => _scrubPosition = null);
-                                unawaited(
+                      if (!shortPanel)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _clockLabel(0),
+                              style: const TextStyle(
+                                color: OrColors.textMuted,
+                                fontFamily: 'monospace',
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                            Text(
+                              _clockLabel(endSeconds),
+                              style: const TextStyle(
+                                color: OrColors.textMuted,
+                                fontFamily: 'monospace',
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                    Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('preview-previous-frame'),
+                          tooltip: 'Previous frame',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: canStep
+                              ? () => unawaited(
                                   _run(
-                                    (gateway, session) => gateway.previewSeek(
+                                    (gateway, session) => gateway.previewStep(
                                       session,
-                                      _timeFromSeconds(seconds),
+                                      ProjectPreviewFrameStep.previous,
                                     ),
                                   ),
-                                );
-                              },
-                      ),
-                    ),
-                  ),
-                  if (!shortPanel)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _clockLabel(0),
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                      Text(
-                        _clockLabel(endSeconds),
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                Row(
-                  children: [
-                    IconButton(
-                      key: const ValueKey('preview-previous-frame'),
-                      tooltip: 'Previous frame',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: canStep
-                          ? () => unawaited(
-                              _run(
-                                (gateway, session) => gateway.previewStep(
-                                  session,
-                                  ProjectPreviewFrameStep.previous,
-                                ),
-                              ),
-                            )
-                          : null,
-                      icon: const Icon(Icons.skip_previous_outlined, size: 18),
-                    ),
-                    IconButton(
-                      key: const ValueKey('preview-play'),
-                      tooltip: preview?.playing == true ? 'Pause' : 'Play',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: preview?.playing == true
-                          ? () => unawaited(
-                              _run((gateway, session) {
-                                return gateway.previewPause(session);
-                              }),
-                            )
-                          : canPlay
-                          ? () => unawaited(
-                              _run((gateway, session) {
-                                return gateway.previewPlay(session);
-                              }),
-                            )
-                          : null,
-                      icon: Icon(
-                        preview?.playing == true
-                            ? Icons.pause_outlined
-                            : Icons.play_arrow_outlined,
-                        size: 20,
-                      ),
-                    ),
-                    IconButton(
-                      key: const ValueKey('preview-next-frame'),
-                      tooltip: 'Next frame',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: canStep
-                          ? () => unawaited(
-                              _run(
-                                (gateway, session) => gateway.previewStep(
-                                  session,
-                                  ProjectPreviewFrameStep.next,
-                                ),
-                              ),
-                            )
-                          : null,
-                      icon: const Icon(Icons.skip_next_outlined, size: 18),
-                    ),
-                    Expanded(
-                      child: Text(
-                        shownPosition == null
-                            ? '0/1'
-                            : _timeFeedback(
-                                shownPosition,
-                                preview?.presentedTime,
-                              ),
-                        key: const ValueKey('preview-time-readout'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: OrColors.textSecondary,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                    ),
-                    PopupMenuButton<_FrameRateChoice>(
-                      key: const ValueKey('preview-frame-rate'),
-                      tooltip: 'Set sequence frame rate',
-                      enabled: _connected && widget.project != null && !_busy,
-                      onSelected: (choice) =>
-                          unawaited(_setFrameRate(choice.rate)),
-                      itemBuilder: (context) => [
-                        for (final choice in _rateChoices)
-                          PopupMenuItem(
-                            value: choice,
-                            child: Text(choice.label),
+                                )
+                              : null,
+                          icon: const Icon(
+                            Icons.skip_previous_outlined,
+                            size: 18,
                           ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('preview-play'),
+                          tooltip: preview?.playing == true ? 'Pause' : 'Play',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: preview?.playing == true
+                              ? () => unawaited(
+                                  _run((gateway, session) {
+                                    return gateway.previewPause(session);
+                                  }),
+                                )
+                              : canPlay
+                              ? () => unawaited(
+                                  _run((gateway, session) {
+                                    return gateway.previewPlay(session);
+                                  }),
+                                )
+                              : null,
+                          icon: Icon(
+                            preview?.playing == true
+                                ? Icons.pause_outlined
+                                : Icons.play_arrow_outlined,
+                            size: 20,
+                          ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('preview-next-frame'),
+                          tooltip: 'Next frame',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: canStep
+                              ? () => unawaited(
+                                  _run(
+                                    (gateway, session) => gateway.previewStep(
+                                      session,
+                                      ProjectPreviewFrameStep.next,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          icon: const Icon(Icons.skip_next_outlined, size: 18),
+                        ),
+                        Expanded(
+                          child: Text(
+                            shownPosition == null
+                                ? '0/1'
+                                : _timeFeedback(
+                                    shownPosition,
+                                    preview?.presentedTime,
+                                  ),
+                            key: const ValueKey('preview-time-readout'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: OrColors.textSecondary,
+                              fontFamily: 'monospace',
+                              fontSize: OrType.tinySize,
+                            ),
+                          ),
+                        ),
+                        PopupMenuButton<_FrameRateChoice>(
+                          key: const ValueKey('preview-frame-rate'),
+                          tooltip: 'Set sequence frame rate',
+                          enabled:
+                              _connected && widget.project != null && !_busy,
+                          onSelected: (choice) =>
+                              unawaited(_setFrameRate(choice.rate)),
+                          itemBuilder: (context) => [
+                            for (final choice in _rateChoices)
+                              PopupMenuItem(
+                                value: choice,
+                                child: Text(choice.label),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(
+                              frameRate == null
+                                  ? 'Set rate'
+                                  : '${frameRate.canonical} fps',
+                              key: const ValueKey('preview-rate-label'),
+                              style: const TextStyle(
+                                color: OrColors.textSecondary,
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: OrSpacing.x1),
                         child: Text(
-                          frameRate == null
-                              ? 'Set rate'
-                              : '${frameRate.canonical} fps',
-                          key: const ValueKey('preview-rate-label'),
+                          _error!,
+                          key: const ValueKey('preview-error'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: OrColors.textSecondary,
+                            color: OrColors.danger,
                             fontSize: OrType.tinySize,
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: OrSpacing.x1),
-                    child: Text(
-                      _error!,
-                      key: const ValueKey('preview-error'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: OrColors.danger,
-                        fontSize: OrType.tinySize,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
           );
         },
       ),
@@ -5375,33 +5392,33 @@ class _TimelineTrackHeader extends StatelessWidget {
               label: 'Move track $label',
               button: true,
               child: PopupMenuButton<int>(
-              key: ValueKey('timeline-track-move-${track.trackId}'),
-              // The tooltip names the track, so the control is unambiguous to a
-              // screen reader and to scripts/or_ui.py without a generated id.
-              tooltip: 'Move track $label',
-              enabled: !busy &&
-                  onMove != null &&
-                  project != null &&
-                  trackCount > 1,
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: trackIndex - 1,
-                  enabled: trackIndex > 0,
-                  child: const Text('Move up'),
+                key: ValueKey('timeline-track-move-${track.trackId}'),
+                // The tooltip names the track, so the control is unambiguous to a
+                // screen reader and to scripts/or_ui.py without a generated id.
+                tooltip: 'Move track $label',
+                enabled:
+                    !busy &&
+                    onMove != null &&
+                    project != null &&
+                    trackCount > 1,
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: trackIndex - 1,
+                    enabled: trackIndex > 0,
+                    child: const Text('Move up'),
+                  ),
+                  PopupMenuItem(
+                    value: trackIndex + 1,
+                    enabled: trackIndex + 1 < trackCount,
+                    child: const Text('Move down'),
+                  ),
+                ],
+                onSelected: (target) =>
+                    unawaited(onMove!(project!, track, target)),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  child: Icon(Icons.swap_vert, size: 17),
                 ),
-                PopupMenuItem(
-                  value: trackIndex + 1,
-                  enabled: trackIndex + 1 < trackCount,
-                  child: const Text('Move down'),
-                ),
-              ],
-              onSelected: (target) => unawaited(
-                onMove!(project!, track, target),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                child: Icon(Icons.swap_vert, size: 17),
-              ),
               ),
             ),
             IconButton(
@@ -6115,8 +6132,7 @@ Future<void> _showInsertTimelineDialog({
                     initialValue: editMode,
                     decoration: const InputDecoration(
                       labelText: 'Edit Mode',
-                      helperText:
-                          'Overwrite replaces the range it lands on; insert refuses to overlap.',
+                      helperText: 'Overwrite replaces the range it lands on; insert refuses to overlap.',
                     ),
                     items: const [
                       DropdownMenuItem(value: 'insert', child: Text('Insert')),
@@ -6125,9 +6141,8 @@ Future<void> _showInsertTimelineDialog({
                         child: Text('Overwrite'),
                       ),
                     ],
-                    onChanged: (value) => setDialogState(
-                      () => editMode = value ?? 'insert',
-                    ),
+                    onChanged: (value) =>
+                        setDialogState(() => editMode = value ?? 'insert'),
                   ),
                   _ExactRationalField(
                     fieldKey: const ValueKey('timeline-insert-start'),

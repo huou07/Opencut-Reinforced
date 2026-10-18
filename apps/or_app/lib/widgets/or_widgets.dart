@@ -24,7 +24,11 @@ class OrSnackBar {
   /// `scripts/or_ui.py`: the compact journey's Media-library tap never reached the
   /// dock until the message had expired, and the same frame showed the message's
   /// semantics covering the dock's.
-  static void show(BuildContext context, String message, {double bottomInset = 0}) {
+  static void show(
+    BuildContext context,
+    String message, {
+    double bottomInset = 0,
+  }) {
     final margin = bottomInset <= 0
         ? null
         : EdgeInsets.fromLTRB(

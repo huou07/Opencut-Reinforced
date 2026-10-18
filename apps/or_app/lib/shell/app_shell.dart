@@ -2743,8 +2743,9 @@ class _AppShellState extends State<AppShell> {
     }
     Directory directory;
     try {
-      final resolved = await (widget.audioCleanupDirectory ??
-          getApplicationSupportDirectory)();
+      final resolved =
+          await (widget.audioCleanupDirectory ??
+              getApplicationSupportDirectory)();
       directory = Directory(
         '${resolved.path}${Platform.pathSeparator}audio-cleanup',
       );
@@ -2783,7 +2784,11 @@ class _AppShellState extends State<AppShell> {
     }
 
     final imported = await _runProjectAction((session, current) {
-      return widget.projectGateway.importMedia(session, current, outcome.destination);
+      return widget.projectGateway.importMedia(
+        session,
+        current,
+        outcome.destination,
+      );
     });
     if (!mounted || !identical(session, _activeSession)) return;
     if (imported == null) return;

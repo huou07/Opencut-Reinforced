@@ -1029,6 +1029,7 @@ abstract interface class ProjectGateway {
     required String trackId,
     required ProjectTimelineTrackState state,
   });
+
   /// Inserts a clip. [mode] is `insert` (default) or `overwrite`; in overwrite
   /// the inserted span replaces its range, and [overwriteSplitClipId] supplies the
   /// fragment id when the span lands strictly inside one existing clip. The mode
@@ -1072,6 +1073,7 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String clipId,
   );
+
   /// Trims a clip edge. [ripple] pulls every later clip on the track with an end
   /// trim; it is an explicit command input and never project state.
   /// Reduces noise in one media file and writes the result to [destinationPath].
@@ -1103,6 +1105,7 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineTime,
     bool? ripple,
   });
+
   /// Moves a clip's source window by [delta] without moving the clip: a slip never
   /// changes the cut or a neighbour. Positive takes later material, negative
   /// earlier.
@@ -1112,6 +1115,7 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalTime delta,
   });
+
   /// Moves the boundary between this clip and the one after it by [delta].
   Future<ProjectActionResult> rollTimelineClip(
     ProjectSessionHandle session,
@@ -1119,6 +1123,7 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalTime delta,
   });
+
   /// Moves a clip in time by [delta] and lets its neighbours absorb the move.
   Future<ProjectActionResult> slideTimelineClip(
     ProjectSessionHandle session,

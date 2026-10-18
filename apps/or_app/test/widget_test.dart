@@ -3565,7 +3565,8 @@ void main() {
         width: 640,
         height: 360,
       );
-    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-viewer.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-viewer.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact viewer');
     expect(
@@ -3594,7 +3595,8 @@ void main() {
     // "Add a compatible Video or Audio track first." after this tap.
     _setViewport(tester, const Size(320, 440));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-tracks.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-tracks.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact tracks');
     Future<void> tapTimelineControl(String key) async {
@@ -3607,14 +3609,10 @@ void main() {
 
     await tapTimelineControl('timeline-add-video-track');
     await tapTimelineControl('timeline-add-audio-track');
-    expect(
-      gateway.lastSession!.tracks.map((track) => track.kind).toList(),
-      [
-        ProjectTimelineTrackKind.video,
-        ProjectTimelineTrackKind.audio,
-      ],
-      reason: 'the compact timeline toolbar did not add the requested tracks',
-    );
+    expect(gateway.lastSession!.tracks.map((track) => track.kind).toList(), [
+      ProjectTimelineTrackKind.video,
+      ProjectTimelineTrackKind.audio,
+    ], reason: 'the compact timeline toolbar did not add the requested tracks');
     expect(tester.takeException(), isNull);
   });
 
@@ -3656,8 +3654,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
     await tester.pumpAndSettle();
     final addToTimeline = find.byWidgetPredicate(
-      (widget) => widget.key is ValueKey<String> &&
-          (widget.key! as ValueKey<String>).value.startsWith('media-add-timeline-'),
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'media-add-timeline-',
+          ),
     );
     expect(addToTimeline, findsOneWidget);
     await tester.tap(addToTimeline);
@@ -3679,7 +3680,8 @@ void main() {
     expect(
       gateway.insertTimelineClipCalls,
       1,
-      reason: 'the guard must observe a real insert, not a disabled confirmation',
+      reason:
+          'the guard must observe a real insert, not a disabled confirmation',
     );
     expect(tester.takeException(), isNull);
   });
@@ -3693,7 +3695,8 @@ void main() {
     // reachable.
     _setViewport(tester, const Size(320, 440));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()..savePath = '/tmp/compact-snackbar.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-snackbar.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact snackbar');
     OrSnackBar.show(
@@ -6074,7 +6077,9 @@ class _FakeProjectGateway implements ProjectGateway {
     final failure = _timelineFailure();
     if (failure != null) return failure;
     if (current.revision != session.view.revision) return _revisionConflict();
-    final index = session.tracks.indexWhere((track) => track.trackId == trackId);
+    final index = session.tracks.indexWhere(
+      (track) => track.trackId == trackId,
+    );
     if (index < 0) return _timelineOperationFailure('TIMELINE_TRACK_NOT_FOUND');
     if (toIndex >= session.tracks.length) {
       return _timelineOperationFailure('INVALID_ARGUMENTS');
@@ -6166,7 +6171,8 @@ class _FakeProjectGateway implements ProjectGateway {
       final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
       if (index < 0) continue;
       final clip = entry.value[index];
-      final sourceStart = clip.sourceStart ?? ProjectRationalTime(BigInt.zero, 1);
+      final sourceStart =
+          clip.sourceStart ?? ProjectRationalTime(BigInt.zero, 1);
       final shifted = ProjectRationalTime(
         sourceStart.numerator * BigInt.from(delta.denominator) +
             delta.numerator * BigInt.from(sourceStart.denominator),
