@@ -216,6 +216,33 @@ class each claim actually has:
   320x440 — clean, not clipped, and recorded as a limitation with its number.
   The same journey at 390x844 is still **UNVERIFIED**: `or_ui.py` takes one
   `--viewport` per invocation and the taller compact run has not been performed.
+- **Phase 1.1 — overwrite edit mode: contract fixed, implementation not started.**
+  The command is `timeline.clip.insert` with an explicit mode. Recorded here so
+  the next round implements it instead of re-deriving it:
+  - `mode: "insert" | "overwrite"`, `#[serde(default)]`, default `insert`, so
+    every existing caller and fixture keeps its meaning (`OPERATION_SCHEMA_VERSION`
+    is bumped because the argument surface changes).
+  - In `overwrite`, the inserted clip's span replaces the target range on its
+    track in **one** transaction: a fully covered clip is deleted, a clip that the
+    new span crosses at its head or tail is trimmed, and several clips may be
+    touched in one insert. History is a single `StagedHistoryChange::
+    ReplaceTimelineTrack`, so one undo restores the whole range; the `ChangeSet`
+    is the ordered multi-change replay (deletes, trims, then the insert) of the
+    existing `ProjectChange` variants, so no new binding surface is invented.
+  - A new clip that lands **strictly inside** one existing clip splits it, and a
+    split needs a caller-supplied id, exactly as `timeline.clip.split` requires
+    `new_clip_id`. `overwrite_split_clip_id: Option<ClipId>` carries it; without
+    it the command rejects with a distinct error naming the settle path rather
+    than silently dropping the tail. Its test must prove the rejection, because a
+    silent loss of content is the failure mode that matters here.
+  - Surfaces: Rust command and tests, CLI `--mode`, the desktop insert dialog's
+    mode selector, the compact sheet's same selector, and a timeline-toolbar mode
+    toggle that lives in presentation state only (the mode is sent with the
+    command; it is never canonical project state). Measured latency row for the
+    overwrite insert belongs in `QUALITY.md` next to `command.add_clip`.
+  - Validation uses `RationalTime::checked_add` for the span end and
+    `validate_track_states` on the resulting list; per-track clip capacity is
+    checked before mutating (`MAX_TIMELINE_CLIPS_PER_TRACK`).
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
