@@ -58,7 +58,14 @@ named here, and it does not override the evidence rules in `AGENTS.md`,
 | Fact | Value |
 |---|---|
 | Host | Dell OptiPlex Micro 7010, i5-13500T (20 hardware threads), 15 GiB RAM, `systemd-detect-virt` = none (bare metal) |
-| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence. `cd apps/or_app && flutter test --no-pub` **passes locally** (124 tests, 2026-10-18); the older claim that a raw `flutter test` fails on macOS-target resolution is no longer current |
+| Flutter | 3.47.7 at `~/.local/share/flutter`; CI pins 3.47.5, so a local pass is developer evidence, not exact-CI evidence. **The SDK is not
+writable by worker UIDs** (`r-x` under `/home/huou07/.local/share/flutter`,
+owned by the host user). Gradle 9.3.1 must create a project cache inside the
+included build `packages/flutter_tools/gradle`, so any Gradle-based Android build
+fails with the misleading `The settings are not yet available for build.` until
+that directory is writable; `scripts/run_local_lane.sh android` probes it and
+reports BLOCKED with the path instead. Measured on 2026-10-18: the same directory
+copied to a writable location builds, the shared one does not. `cd apps/or_app && flutter test --no-pub` **passes locally** (124 tests, 2026-10-18); the older claim that a raw `flutter test` fails on macOS-target resolution is no longer current |
 | Rust | `1.98.0` is installed and is what `crates/or_app_bridge/rust-toolchain.toml` declares; `stable` is also 1.98.0 |
 | `~/.cargo` | **not writable** by the worker. Builds use the preflight's project-local offline cache; adding a new dependency needs a writable `CARGO_HOME` |
 | GPU | Intel UHD 770 (ADL-S GT1), Vulkan 1.4.305 / Mesa ANV 25.0.7, `/dev/dri/renderD128` readable and writable; llvmpipe is also present, so a wgpu backend choice must be explicit in any performance claim |

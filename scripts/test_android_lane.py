@@ -43,7 +43,15 @@ class AndroidLaneCase(unittest.TestCase):
         self.fake_bin = self.tmp / "bin"
         self.fake_bin.mkdir()
         write_executable(self.fake_bin / "adb", "#!/usr/bin/env bash\nprintf 'List of devices attached\\n'\n")
-        write_executable(self.fake_bin / "flutter", "#!/usr/bin/env bash\nexit 0\n")
+
+        # A Flutter SDK shaped like the real one: the lane derives the SDK root
+        # from the `flutter` executable on PATH and checks that the Gradle plugin
+        # directory it includes is writable.
+        self.flutter_sdk = self.tmp / "flutter-sdk"
+        (self.flutter_sdk / "bin").mkdir(parents=True)
+        write_executable(self.flutter_sdk / "bin" / "flutter", "#!/usr/bin/env bash\nexit 0\n")
+        self.flutter_gradle_plugin = self.flutter_sdk / "packages" / "flutter_tools" / "gradle"
+        self.flutter_gradle_plugin.mkdir(parents=True)
 
         self.sdk = self.tmp / "sdk"
         (self.sdk / "emulator").mkdir(parents=True)
@@ -93,7 +101,7 @@ class AndroidLaneCase(unittest.TestCase):
     def env(self, **overrides: str) -> dict[str, str]:
         env = dict(os.environ)
         env.update({
-            "PATH": f"{self.fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+            "PATH": f"{self.fake_bin}{os.pathsep}{self.flutter_sdk / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
             "ANDROID_HOME": str(self.sdk),
             "ANDROID_AVD_HOME": str(self.avd_home),
             "OR_LANE_MEMINFO": str(self.meminfo),
@@ -158,6 +166,21 @@ class AndroidLaneCase(unittest.TestCase):
         reason = self.payload()["steps"][0]["reason"] or ""
         self.assertIn("OR_ANDROID_FFMPEG_PREFIX", reason)
         self.assertIn("stage_android_ffmpeg.sh", reason)
+
+    def test_a_read_only_flutter_gradle_plugin_is_blocked_by_name(self) -> None:
+        # Gradle 9 must create a project cache inside the included Flutter Gradle
+        # plugin build. When it cannot, the APK step dies with "The settings are
+        # not yet available for build."; the lane must name the real cause.
+        os.chmod(self.flutter_gradle_plugin, 0o555)
+        try:
+            result = self.run_lane("--steps", "apk")
+        finally:
+            os.chmod(self.flutter_gradle_plugin, 0o755)
+        self.assertEqual(result.returncode, 3)
+        reason = self.payload()["steps"][0]["reason"] or ""
+        self.assertIn("flutter_tools/gradle", reason)
+        self.assertIn("not writable", reason)
+        self.assertIn("The settings are not yet available for build", reason)
 
     # --- wiring the previous lane never had -------------------------------
     def test_apk_step_calls_the_case_apk_builder(self) -> None:

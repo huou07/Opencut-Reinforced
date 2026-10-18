@@ -217,8 +217,16 @@ journey unless results establish a real engine migration dependency.
   are repaired, its guest RAM default now matches the emulator script's measured
   size, and reproducible staging is `scripts/stage_android_ffmpeg.sh` (which also
   builds the guest FFmpeg link probe) with `scripts/build_android_case_apks.sh`.
-  The staged prefix and probe are now built on this host; whether the guest
-  drive itself passes is **unverified until a run records a real result**. Both are phase 0 of
+  The staged prefix and probe are now built on this host. The guest drive is
+  **BLOCKED by a host precondition, not by the product**: the shared Flutter SDK
+  is not writable by the worker UID, so Gradle cannot create the project cache it
+  needs inside `packages/flutter_tools/gradle` and fails with `The settings are
+  not yet available for build.` The lane now names that path and the remedy in
+  its BLOCKED reason, and
+  [evidence/2026-10-18-local-android-lane.md](evidence/2026-10-18-local-android-lane.md)
+  records both the discriminator that proves the cause and everything the run did
+  not establish. Until write access is granted, no Android case can be driven
+  locally; the hosted `android` job is unaffected. Both are phase 0 of
   [the current prompt](prompts/OR-BUILD.md).
 - **Next product gap — complete the editing journey on desktop and Android:**
   close the enumerated basic-edit gaps in the order product value needs them,

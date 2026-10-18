@@ -119,7 +119,8 @@ work the roadmap already names.
 | Document | Purpose |
 |---|---|
 | [evidence/claims/README.md](evidence/claims/README.md) | Claim records: what was verified, by which run, and what it does not establish |
-| [evidence/2026-10-18-local-linux-lane.md](evidence/2026-10-18-local-linux-lane.md) | One local Linux lane run: commands, timings, hashes and limits |
+| [evidence/2026-10-18-local-linux-lane.md](evidence/2026-10-18-local-linux-lane.md) | Local Linux lane runs, including the first full four-step PASS: commands, timings, hashes and limits |
+| [evidence/2026-10-18-local-android-lane.md](evidence/2026-10-18-local-android-lane.md) | Local Android lane: the wiring repair, the staged cross-build, and the measured host BLOCKED that stops the guest drive |
 | [evidence/2026-10-18-linux-deb-local-acceptance.md](evidence/2026-10-18-linux-deb-local-acceptance.md) | One local Linux `.deb` build, disposable-root install and packaged-journey run |
 | [evidence/local-transcription-poc.md](evidence/local-transcription-poc.md) | Pinned whisper.cpp and model feasibility proof for local caption proposals |
 

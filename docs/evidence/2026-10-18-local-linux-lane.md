@@ -193,3 +193,29 @@ reproducible entry point — which is what this cluster replaces.
 - Local gate report: `.hub/gate-report.json` (gitignored).
 - Step contract and limits: [TESTING.md](../TESTING.md#one-local-lane-entry-point).
 - Host grants: [AGENT-AUTHORITY.md](../AGENT-AUTHORITY.md).
+
+## Later run — all four steps PASS, 2026-10-18
+
+The run above was `BLOCKED` only by host memory pressure. Once the sibling
+project's Gradle daemon exited, the same lane on the same host passed every step
+at source `1c731776130d0fe4a248a54137e8253cefa5f1c9`:
+
+| Step | Result | Exit | Elapsed |
+|---|---|---|---|
+| `hygiene` | PASS | 0 | 36.24 s |
+| `flutter` | PASS | 0 | 21.01 s |
+| `preflight` | PASS | 0 | 20.09 s |
+| `bench` | PASS | 0 | 0.17 s |
+
+| Item | Value |
+|---|---|
+| Lane result | `PASS` (exit 0), `dirty_at_start: false`, 77.69 s |
+| Report | `apps/or_app/build/local-lanes/linux.json`, SHA-256 `3acbe80fe26deeea...` |
+| Host headroom at start | 7.54 GiB `MemAvailable`, no Gradle or Kotlin daemon resident |
+| Preflight | `flutter test -d linux integration_test/linux_editor_preflight_test.dart` under Xvfb against the real Rust host; built `build/linux/x64/debug/bundle/or_app` and reported `All tests passed!` in 20 s |
+| Flutter step | 124 tests, `All tests passed!` |
+| Benchmark | `cli-cold-start` best 1.1 ms, `ffmpeg-export` best 14.8 ms, both inside budget |
+
+This is the first run of this lane in which the native step was not `BLOCKED`.
+It is still local developer evidence: Flutter 3.47.7 here against 3.47.5 in CI,
+software GL under Xvfb, and no packaged or cross-platform claim.

@@ -195,8 +195,9 @@ scripts: `scripts/stage_android_ffmpeg.sh` produces the pinned prefix and probe,
 and `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install`
 link the bridge hook requires (that link is why the lane previously could not
 build an APK at all). `scripts/test_android_lane.py` checks its blocked,
-dirty-tree, no-acceptance, argument-passing, guest-lifecycle and
-artifact-isolation rules without a device, inside `check-repo.sh`. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+dirty-tree, no-acceptance, argument-passing, guest-lifecycle, Flutter-SDK
+writability and artifact-isolation rules without a device (14 checks), inside
+`check-repo.sh`. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.

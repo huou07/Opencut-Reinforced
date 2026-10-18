@@ -198,6 +198,24 @@ if step_selected apk; then
   elif [[ ! -d "$FFMPEG_PREFIX/lib/pkgconfig" ]]; then
     failures+=("OR_ANDROID_FFMPEG_PREFIX=$FFMPEG_PREFIX has no lib/pkgconfig")
   fi
+  # Gradle creates a project cache inside every included build, and the Flutter
+  # Gradle plugin is one (`includeBuild("$flutterSdkPath/packages/flutter_tools/
+  # gradle")` in apps/or_app/android/settings.gradle.kts). When that directory is
+  # not writable, Gradle 9.3.1 dies with the misleading "The settings are not yet
+  # available for build." Measured on this host on 2026-10-18: the same directory
+  # copied to a writable location builds, the shared one does not. Name it here
+  # instead of letting the APK step fail with an error that reads like a
+  # repository defect.
+  flutter_bin="$(command -v flutter 2>/dev/null || true)"
+  if [[ -n "$flutter_bin" ]]; then
+    flutter_sdk="$(cd -- "$(dirname -- "$(readlink -f "$flutter_bin")")/.." && pwd)"
+    flutter_gradle_plugin="$flutter_sdk/packages/flutter_tools/gradle"
+    if [[ ! -d "$flutter_gradle_plugin" ]]; then
+      failures+=("the Flutter SDK at $flutter_sdk has no packages/flutter_tools/gradle, so apps/or_app/android/settings.gradle.kts cannot include the Flutter Gradle plugin")
+    elif [[ ! -w "$flutter_gradle_plugin" ]]; then
+      failures+=("the Flutter SDK's Gradle plugin directory $flutter_gradle_plugin is not writable by $(id -un); Gradle must create a project cache there and otherwise fails with 'The settings are not yet available for build.' Grant write access to it (for example setfacl -R -m u:$(id -un):rwX on that directory) before running the apk step")
+    fi
+  fi
 fi
 
 if (( ${#failures[@]} > 0 )); then
