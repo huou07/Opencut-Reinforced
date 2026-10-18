@@ -38,9 +38,8 @@ required_files=(
   docs/AGENT-AUTHORITY.md
   docs/PAUSE_MIGRATION_HANDOFF.md
   docs/evidence/PRODUCT_ROADMAP_HISTORY.md
-  docs/prompts/CONTINUE-OR.md
-  docs/prompts/FINISH-OR.md
-  docs/prompts/NEXT-OR.md
+  docs/prompts/README.md
+  docs/prompts/OR-LOCAL-FINISH.md
   docs/skills.md
   docs/evidence/claims/README.md
   docs/adr/README.md

@@ -1,6 +1,6 @@
 # Opencut Reinforced Architecture
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
 ## Status
 
@@ -232,16 +232,27 @@ Arbitrary HTML/CSS/JS/Canvas/WebGL/WebGPU motion belongs only to the future
 explicit, isolated, bounded WebMotion sidecar gate; it is not canonical project
 data or the default renderer.
 
-## Architecture execution lock
+## Architecture execution lock (archived)
 
-The machine-readable authority is [docs/archive/execution/README.md](archive/execution/README.md),
-with permanent invariants in [ARCHITECTURE_INVARIANTS.md](archive/execution/ARCHITECTURE_INVARIANTS.md),
-the immutable checkpoint graph in [PLAN.json](archive/execution/PLAN.json), and mutable
-progress in [STATE.json](archive/execution/STATE.json). The lock separates a semantic
-control plane from a realtime runtime plane and does not claim that future
-runtime crates or platform bindings already exist. The 7A `or_runtime`
-contract is implemented without platform bindings; later runtime crates remain
-checkpoint-gated.
+**Archival.** The execution lock — its checkpoint graph, its machine-readable
+ledger and its supervisor — was paused on 2026-10-14 and is preserved for
+traceability only. Nothing in it selects current work: active priorities are
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md). The preserved text is
+[README.md](archive/execution/README.md), the immutable checkpoint graph is
+[PLAN.json](archive/execution/PLAN.json), and the frozen progress snapshot is
+[STATE.json](archive/execution/STATE.json).
+
+The permanent product, packaging, capability, parity, performance, UX,
+acceptance and verification invariants written in
+[ARCHITECTURE_INVARIANTS.md](archive/execution/ARCHITECTURE_INVARIANTS.md) still
+apply to every change; only the machinery that enforced them is retired. Where a
+preserved file asserts its own current authority, this section and
+[docs/INDEX.md](INDEX.md) govern.
+
+The lock separates a semantic control plane from a realtime runtime plane and
+does not claim that future runtime crates or platform bindings already exist. The
+7A `or_runtime` contract is implemented without platform bindings; later runtime
+crates follow the active roadmap rather than the paused checkpoint sequence.
 
 The control plane is:
 

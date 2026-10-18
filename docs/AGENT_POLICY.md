@@ -4,7 +4,7 @@
 Purpose: retain permanent execution, acceptance, security and delivery rules.
 Authority: detailed project policy referenced by the root AGENTS.md; host and
 session security boundaries remain higher authority. Read task-relevant sections.
-Last reviewed: 2026-10-13.
+Last reviewed: 2026-10-18.
 
 ## Project
 
@@ -248,16 +248,43 @@ If a test cannot run because of a real environment limitation:
 
 For documentation-only or local-tooling-only changes where an automated product test is not meaningful, do not invent a fake test merely to satisfy this rule. Report `tests: N/A` with the reason.
 
-## CI-first platform verification
+## Local runtime and platform verification
 
-The owner-authorized exception is the bounded Debian Linux developer preflight
-in [TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight).
-It uses one native job/compiler worker, small synthetic fixtures, a shared lock,
-headroom checks and a timeout. No emulator, cross-platform package matrix or
-long media render. Local Linux debug evidence does not replace hosted package
-acceptance. Existing authorization does not require another permission request.
+Local machines are for editing and headless source work; GitHub Actions is the
+canonical verification environment for platform, linker, native builds,
+packaged acceptance and cross-platform coverage.
 
-Use local machines for editing and headless source checks; GitHub Actions is canonical for native/runtime verification. Agents MUST NOT launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification unless the user explicitly requests local runtime testing. This also forbids native Flutter integration tests that launch OR. Do not automatically open a built or downloaded Developer Preview. Missing local Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker when an equivalent required Actions job exists. Report an unavailable local check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an intentional `NOT RUN`. Do not install, repair, select, or accept platform toolchains or licenses, or use `sudo` for platform setup, unless the user explicitly requests local platform development. See [TOOLING.md](TOOLING.md).
+Two bounded local runtime lanes are an owner-granted exception, recorded in
+[AGENT-AUTHORITY.md](AGENT-AUTHORITY.md):
+
+- the **Debian Linux developer preflight**, whose single entry point is
+  `bash scripts/run_local_lane.sh linux`; a `--packaged` run adds the local
+  `.deb` build and the packaged journey;
+- the **local Android emulator lane**. Its single entry point is being
+  consolidated into `bash scripts/run_local_lane.sh android` by cluster C2 of
+  [docs/prompts/OR-LOCAL-FINISH.md](prompts/OR-LOCAL-FINISH.md); until that
+  lands, `scripts/start-android-emulator.sh`,
+  `scripts/run-android-preview-check.sh` and
+  `scripts/stop-android-emulator.sh` are the current mechanism.
+
+Each lane uses one heavy job, a bounded compiler/daemon footprint, small
+synthetic fixtures, headroom checks, a timeout and process-tree cleanup, and the
+two are serialised against each other on this host. Both produce **developer
+evidence only**: hosted `platform-verification` remains the authority for
+native, packaged and cross-platform acceptance, and a local preflight or guest
+result never becomes `ACCEPTED`.
+
+Outside those two lanes, agents MUST NOT launch the native OR application, a
+platform emulator or simulator, or an attached physical device locally for
+verification unless the user explicitly requests local runtime testing. This
+also forbids native Flutter integration tests that launch OR outside the lanes.
+Do not automatically open a built or downloaded Developer Preview. Missing local
+Xcode, Android SDK/JDK, CocoaPods, Windows, or Linux tooling is not a blocker
+when an equivalent required Actions job exists. Report an unavailable local
+check as `LOCAL ENVIRONMENT BLOCKED`, distinct from `PASS`, `FAIL`, and an
+intentional `NOT RUN`. Do not install, repair, select, or accept platform
+toolchains or licenses, or use `sudo` for platform setup, unless the user
+explicitly requests local platform development. See [TOOLING.md](TOOLING.md).
 
 ## Regression preservation rule
 

@@ -46,12 +46,17 @@ Re-verify before relying on it; every row is a claim with a command.
 - `docs/AGENT-AUTHORITY.md` previously said Android was **unavailable** on this
   host (no SDK/NDK/adb/AVD, UID outside `kvm`). It is false today; corrected in
   the commit that added this file.
-- `docs/QUALITY.md` "known gap 2" said the local Flutter widget lane cannot run.
-  The suite passes locally today.
+- `docs/QUALITY.md` "known gap 2" no longer claims the local Flutter widget lane
+  cannot run; it was corrected on 2026-10-18 and records the 124-test pass.
 - `AGENT-AUTHORITY.md` also said a raw `flutter test` fails on macOS-target
   resolution. It does not today.
-- `docs/prompts/CONTINUE-OR.md` and `FINISH-OR.md` keep dated inspections that
-  predate this state; read them for method, not for current facts.
+- `docs/AGENT_POLICY.md` and `docs/DEVELOPMENT_WORKFLOW.md` previously stated a
+  flat ban on launching a local emulator. Both were reconciled on 2026-10-18 with
+  the two owner-granted local lanes; if you find a surviving flat ban, it is a
+  defect — the grant in `AGENT-AUTHORITY.md` wins.
+- The dated handoffs `CONTINUE-OR.md` and `FINISH-OR.md` keep inspections that
+  predate this state. They now live in `docs/archive/prompts/`; read them for
+  method, not for current facts.
 
 A stale capability claim is a real defect: it makes agents refuse work that is
 possible and trust a boundary that does not exist. When you find one, correct it

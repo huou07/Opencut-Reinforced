@@ -100,7 +100,7 @@ inputs/outputs, cancellation, and crash containment. It never runs in
 
 For Flutter project lifecycle changes, run the fake-gateway widget tests and include the native Rust-bridge lifecycle test in hosted CI. Verify attached CLI parity in a process-level test against the same `LiveProjectHost`; a sandboxed macOS UI integration process cannot launch an external CLI binary itself. Confirm that IPC protocol v1 remains unchanged and that the Flutter read model refreshes from Rust summaries after ordered events.
 
-The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated synthetic fixtures. They verify the real `ffprobe` and `ffmpeg` paths; do not install FFmpeg locally or run these integration tests locally. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. Keep the permanent local policy: do not launch OR or run native Flutter integration tests locally.
+The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated synthetic fixtures. They verify the real `ffprobe` and `ffmpeg` paths; do not install FFmpeg locally or run these integration tests locally. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. The local-runtime rule is the one stated under the verification ladder below: headless by default, with the two bounded local lanes as the dated owner-granted exception.
 
 ### CI-first verification ladder
 

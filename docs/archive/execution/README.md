@@ -1,10 +1,19 @@
 # OR Execution Lock
 
+> **Archival (2026-10-14).** The execution lock described below was paused on
+> 2026-10-14 and its supervisor no longer runs. This file is preserved
+> historical traceability: it records what was planned and verified then, and it
+> never selects current work. Current priorities are
+> [PRODUCT_ROADMAP.md](../../PRODUCT_ROADMAP.md); permanent rules are
+> [AGENT_POLICY.md](../../AGENT_POLICY.md), and
+> [docs/INDEX.md](../../INDEX.md) governs routing. Statements below that assert
+> their own current authority are superseded by this banner.
+
 > **Mode change:** operator authorization on 2026-10-09 paused the legacy
 > checkpoint-by-checkpoint sequence and authorized the full product outcome
 > through the active roadmap. See
-> [MISSION.json](MISSION.json), [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md),
-> and [OPEN_SOURCE_CONVERGENCE.md](../OPEN_SOURCE_CONVERGENCE.md). The
+> [MISSION.json](MISSION.json), [PRODUCT_ROADMAP.md](../../PRODUCT_ROADMAP.md),
+> and [OPEN_SOURCE_CONVERGENCE.md](../../OPEN_SOURCE_CONVERGENCE.md). The
 > supervisor permits explicitly selected, dependency-closed batches from the
 > authorized full-product goal; legacy sequencing remains paused. PLAN/STATE/evidence remain
 > historical traceability and are not rewritten by this mode change.

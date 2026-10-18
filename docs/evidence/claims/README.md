@@ -6,7 +6,7 @@ verified, replacing the paused checkpoint ledger.
 Authority: this directory is evidence, not a work selector. It records what was
 verified and when. What to do next lives in [../../PRODUCT_ROADMAP.md](../../PRODUCT_ROADMAP.md).
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
 ## Why this exists
 
