@@ -242,8 +242,13 @@ class each claim actually has:
     unsplit clip, and the unchanged default mode. `cargo test -p or_core --lib`
     is 323 passing; `cargo fmt` and `cargo clippy -p or_core --all-targets` are
     clean.
-  - **Still not done, and the reason the capability is not finished:** the CLI
-    `--mode` flag, the desktop insert-dialog selector, the compact sheet selector,
+  - `or timeline insert-clip` takes `--mode insert|overwrite` and
+    `--overwrite-split-id CLIP_ID`; an unknown mode is a usage error, and the
+    flags are documented in `docs/TECHNICAL_PLAN.md`. The CLI has no automated
+    overwrite test yet — the domain tests cover the semantics and a CLI test that
+    drives the flag through the file session is the next guard there.
+  - **Still not done, and the reason the capability is not finished:** the desktop
+    insert-dialog selector, the compact sheet selector,
     the timeline-toolbar mode toggle, a measurement row in `QUALITY.md`, and the
     `or_ui.py` journey step that drives an overwrite. The command is therefore
     usable by a client that already sends `mode`, and not yet reachable by a

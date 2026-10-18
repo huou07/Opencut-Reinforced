@@ -771,6 +771,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "--source-start",
                     "--duration",
                     "--id",
+                    "--mode",
+                    "--overwrite-split-id",
                 ],
                 &[],
                 json,
@@ -806,20 +808,49 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 )?,
                 None => ClipId::generate(),
             };
+            // The edit mode is an explicit input; `insert` stays the default so
+            // every existing script keeps its meaning.
+            let mode = match options.value("--mode") {
+                None => "insert",
+                Some(value) => match value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--mode must be valid UTF-8"))?
+                {
+                    "insert" => "insert",
+                    "overwrite" => "overwrite",
+                    _ => {
+                        return Err(CliError::usage(json, "--mode must be insert or overwrite"));
+                    }
+                },
+            };
+            let overwrite_split_clip_id = match options.value("--overwrite-split-id") {
+                Some(value) => Some(parse_clip_id(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--overwrite-split-id must be valid UTF-8"))?,
+                    json,
+                )?),
+                None => None,
+            };
+            let mut arguments = json!({
+                "clip_id": clip_id,
+                "track_id": track_id,
+                "media_id": media_id,
+                "timeline_start": rational_value(timeline_start),
+                "source_range": {
+                    "start": rational_value(source_start),
+                    "duration": rational_value(duration),
+                },
+                "mode": mode,
+            });
+            if let Some(split_clip_id) = overwrite_split_clip_id {
+                arguments["overwrite_split_clip_id"] = json!(split_clip_id);
+            }
             let result = timeline_mutation(
                 &path,
                 attached,
                 "timeline.clip.insert",
-                json!({
-                    "clip_id": clip_id,
-                    "track_id": track_id,
-                    "media_id": media_id,
-                    "timeline_start": rational_value(timeline_start),
-                    "source_range": {
-                        "start": rational_value(source_start),
-                        "duration": rational_value(duration),
-                    },
-                }),
+                arguments,
                 json,
             )?;
             Ok(render_timeline_command(
