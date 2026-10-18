@@ -1003,6 +1003,10 @@ abstract interface class ProjectGateway {
     required String trackId,
     required ProjectTimelineTrackState state,
   });
+  /// Inserts a clip. [mode] is `insert` (default) or `overwrite`; in overwrite
+  /// the inserted span replaces its range, and [overwriteSplitClipId] supplies the
+  /// fragment id when the span lands strictly inside one existing clip. The mode
+  /// is a command input, never project state.
   Future<ProjectActionResult> insertTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -1011,6 +1015,8 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   });
   Future<ProjectActionResult> insertTimelineTextClip(
     ProjectSessionHandle session,

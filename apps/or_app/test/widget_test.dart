@@ -5635,6 +5635,8 @@ class _FakeProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) async {
     insertTimelineClipCalls++;
     lastInsertTrackId = trackId;

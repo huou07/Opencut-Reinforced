@@ -1995,6 +1995,8 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) => _gateway.insertTimelineClip(
     session,
     current,

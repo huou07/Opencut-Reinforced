@@ -2212,6 +2212,7 @@ class _AppShellState extends State<AppShell> {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   ) async {
     await _runProjectActionAtSnapshot(
       expected,
@@ -2223,6 +2224,7 @@ class _AppShellState extends State<AppShell> {
         timelineStart: timelineStart,
         sourceStart: sourceStart,
         duration: duration,
+        mode: mode,
       ),
     );
   }

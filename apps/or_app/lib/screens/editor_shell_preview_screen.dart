@@ -126,6 +126,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    /// `insert` or `overwrite`; chosen in the insert dialog, sent with the
+    /// command, and never stored in the project.
+    String mode,
   )?
   onAddMediaToTimeline;
   final Future<void> Function(
@@ -1149,6 +1152,7 @@ class _EditorToolPanel extends StatelessWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   )?
   onAddMediaToTimeline;
   final VoidCallback? onClose;
@@ -1257,6 +1261,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   )?
   onAddMediaToTimeline;
   final VoidCallback? onClose;
@@ -3670,6 +3675,7 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
     ProjectRationalTime,
     ProjectRationalTime,
+    String,
   )?
   onAddMediaToTimeline;
   final void Function(
@@ -4639,6 +4645,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         timelineStart,
         ProjectRationalTime(BigInt.zero, 1),
         duration,
+        'insert',
       ),
     );
   }
@@ -5837,6 +5844,7 @@ Future<void> _showInsertTimelineDialog({
     ProjectRationalTime,
     ProjectRationalTime,
     ProjectRationalTime,
+    String,
   )
   onInsert,
 }) async {
@@ -5900,6 +5908,9 @@ Future<void> _showInsertTimelineDialog({
 
   final canInsert = ValueNotifier(fieldsAreValid());
   void updateInsertValidity() => canInsert.value = fieldsAreValid();
+  // The mode is presentation state: it travels with the command and is never
+  // written into the project.
+  var editMode = 'insert';
 
   timelineStartController.addListener(updateInsertValidity);
   sourceStartController.addListener(updateInsertValidity);
@@ -5948,6 +5959,26 @@ Future<void> _showInsertTimelineDialog({
                             '';
                       });
                     },
+                  ),
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('timeline-insert-mode'),
+                    isExpanded: true,
+                    initialValue: editMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Edit Mode',
+                      helperText:
+                          'Overwrite replaces the range it lands on; insert refuses to overlap.',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'insert', child: Text('Insert')),
+                      DropdownMenuItem(
+                        value: 'overwrite',
+                        child: Text('Overwrite'),
+                      ),
+                    ],
+                    onChanged: (value) => setDialogState(
+                      () => editMode = value ?? 'insert',
+                    ),
                   ),
                   _ExactRationalField(
                     fieldKey: const ValueKey('timeline-insert-start'),
@@ -6010,6 +6041,7 @@ Future<void> _showInsertTimelineDialog({
                                 submittedStart,
                                 submittedSource,
                                 submittedDuration,
+                                editMode,
                               ),
                             );
                           }

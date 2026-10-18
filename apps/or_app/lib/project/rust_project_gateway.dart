@@ -830,6 +830,8 @@ class RustProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) async => _action(
     await _host(session).insertTimelineClip(
       projectId: current.projectId,
@@ -843,6 +845,8 @@ class RustProjectGateway implements ProjectGateway {
       sourceStartDenominator: sourceStart.denominator,
       durationNumerator: duration.numerator.toInt(),
       durationDenominator: duration.denominator,
+      mode: mode,
+      overwriteSplitClipId: overwriteSplitClipId,
     ),
   );
 

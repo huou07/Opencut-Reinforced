@@ -286,8 +286,20 @@ class each claim actually has:
     (`json_success_with_probe` vs `json_success`, and whether `probe_stub` must be
     built before `create_project`), then write the guard. The test was removed
     rather than left red.
-  - **Still not done, and the reason the capability is not finished:** the desktop
-    insert-dialog selector, the compact sheet selector,
+  - **Reachable by a user (2026-10-19, this revision).** The insert dialog carries
+    an `Edit Mode` selector (`timeline-insert-mode`, Insert | Overwrite) whose value
+    travels with the command through the dialog callback, `app_shell` and the
+    gateway into the bridge; it is presentation state and is never written into the
+    project. Both presentations reach it: the compact sheet opens the same dialog.
+    The drag-and-drop quick insert uses `insert` explicitly, because it has no
+    dialog to ask in. Guarded by `flutter analyze` clean, the widget suite (103
+    passing), and both editing journeys passing through `scripts/or_ui.py` at
+    1280x800 and 320x440 after the change.
+  - **Still not done, and the reason the capability is not finished:** the
+    strict-containment case has no UI field for `overwrite_split_clip_id`, so a
+    user who lands a clip strictly inside another gets the command's refusal
+    message instead of a way to finish the edit; and there is no `or_ui.py`
+    journey step that drives an overwrite end to end,
     the timeline-toolbar mode toggle, a measurement row in `QUALITY.md`, and the
     `or_ui.py` journey step that drives an overwrite. The command is therefore
     usable by a client that already sends `mode`, and not yet reachable by a
