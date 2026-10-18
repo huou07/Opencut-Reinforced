@@ -119,6 +119,11 @@ ROWS = {
         "threshold_p95_ms": 6.0,
         "baseline": {"date": "2026-10-19", "p50_ms": 0.260, "p95_ms": 0.286},
     },
+    "command.ripple_trim": {
+        "description": "timeline.clip.trim with ripple, shifting every later clip",
+        "threshold_p95_ms": 6.0,
+        "baseline": {"date": "2026-10-19", "p50_ms": 0.295, "p95_ms": 0.312},
+    },
     "command.trim": {
         "description": "timeline.clip.trim on a 200-clip project",
         "threshold_p95_ms": 5.0,
@@ -537,7 +542,8 @@ def main(argv: list[str] | None = None) -> int:
             results.append(row_export_throughput(export_best))
     if any(selected(row_id) for row_id in
            ("command.create", "command.import", "command.add_track", "command.add_clip",
-            "command.overwrite_insert", "command.trim", "command.split", "command.undo",
+            "command.overwrite_insert", "command.ripple_trim", "command.trim",
+            "command.split", "command.undo",
             "command.seek_summary",
             "command.seek_clip_page", "project-open", "project-save")):
         try:

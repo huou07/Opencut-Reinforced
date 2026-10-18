@@ -556,6 +556,30 @@ impl CommandEnvelope {
         edge: TimelineTrimEdge,
         timeline_time: RationalTime,
     ) -> Self {
+        Self::trim_timeline_clip_with_ripple(
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            clip_id,
+            edge,
+            timeline_time,
+            false,
+        )
+    }
+
+    /// Trims a clip's edge, optionally pulling every later clip on the track with
+    /// it. `ripple` is an explicit input, never project state; an end edge is the
+    /// only one ripple accepts, because a ripple-in has two defensible meanings.
+    #[allow(clippy::too_many_arguments)]
+    pub fn trim_timeline_clip_with_ripple(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        clip_id: ClipId,
+        edge: TimelineTrimEdge,
+        timeline_time: RationalTime,
+        ripple: bool,
+    ) -> Self {
         Self {
             command_id: TIMELINE_CLIP_TRIM_ID.to_owned(),
             schema_version: OPERATION_SCHEMA_VERSION,
@@ -566,6 +590,7 @@ impl CommandEnvelope {
                 "clip_id": clip_id,
                 "edge": edge,
                 "timeline_time": timeline_time,
+                "ripple": ripple,
             }),
         }
     }

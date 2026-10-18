@@ -344,10 +344,17 @@ class each claim actually has:
   - One thing learned while testing: an end trim *past* the current end is a
     lengthening and is legal (the existing trim allows it), so the refusal case is
     a target at or before the clip's own start, not one beyond its end.
+  - **Measured (2026-10-19).** `QUALITY.md` carries a `command.ripple_trim` row:
+    shortening the first clip of the 200-clip project and pulling the other 199 with
+    it is p50 0.295 ms / p95 0.312 ms against a 6.0 ms p95 budget, so shifting almost
+    two hundred clips costs about twice a single-clip trim. The lane prints eighteen
+    rows and the budget is PASS. Writing it also taught the boundary: 40 iterations
+    of 1/512 s stay inside the first clip's 1/4 s span, because a ripple whose edge
+    reaches the clip's own start is correctly refused.
   - **Not done, and why the gap is not closed:** no presentation or CLI surface
     sends the flag yet (trim is invoked from the timeline, so it needs a
-    presentation-local toolbar toggle rather than a dialog), there is no journey
-    step driving it, and no `QUALITY.md` row measures it.
+    presentation-local toolbar toggle rather than a dialog) and there is no journey
+    step driving it through the app.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
   ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking

@@ -217,6 +217,74 @@ fn command_latency_on_a_two_hundred_clip_project() {
     }
     measurements.push(("overwrite_insert".to_owned(), overwrite_samples));
 
+    // --- ripple trim ------------------------------------------------------
+    // Trimming the first clip's end and pulling the other 199 clips with it is the
+    // worst case this command has: the shift touches every clip after the edit. It
+    // runs here, where the tile geometry is exactly known (clip i spans i/4 to
+    // i/4+1/4), and the loop undoes its own edits afterwards so the trim, split and
+    // read rows below see the geometry they expect.
+    let mut ripple_samples = Vec::with_capacity(ITERATIONS);
+    let mut ripple_edge = match RationalTime::new(1, 4) {
+        Ok(value) => value,
+        Err(error) => {
+            unverified(&format!("invalid ripple edge: {error}"));
+            return;
+        }
+    };
+    // 40 iterations of 1/512 s stay well inside the first clip's 1/4 s span, so the
+    // loop never reaches its own start (40/512 < 1/4) and the measured edit is
+    // always a legal shortening.
+    let ripple_step = match RationalTime::new(1, 512) {
+        Ok(value) => value,
+        Err(error) => {
+            unverified(&format!("invalid ripple step: {error}"));
+            return;
+        }
+    };
+    for ripple_index in 0..ITERATIONS {
+        ripple_edge = match ripple_edge.checked_sub(ripple_step) {
+            Ok(value) => value,
+            Err(error) => {
+                unverified(&format!("ripple edge underflow: {error}"));
+                return;
+            }
+        };
+        let started = Instant::now();
+        let done = session.handle_application_request(ApplicationRequest::Command(
+            CommandEnvelope::trim_timeline_clip_with_ripple(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+                clip_ids[0],
+                TimelineTrimEdge::End,
+                ripple_edge,
+                true,
+            ),
+        ));
+        if !succeeded(&done) {
+            unverified(&format!(
+                "ripple trim failed at iteration {ripple_index} for edge {}/512 on clip {}",
+                ripple_edge.numerator(),
+                clip_ids[0],
+            ));
+            return;
+        }
+        ripple_samples.push(elapsed_ms(started));
+    }
+    for _ in 0..ITERATIONS {
+        let done =
+            session.handle_application_request(ApplicationRequest::Command(CommandEnvelope::undo(
+                session.session().project_id(),
+                session.session().project_instance_id(),
+                session.session().project_revision(),
+            )));
+        if !succeeded(&done) {
+            unverified("undo after the ripple row failed");
+            return;
+        }
+    }
+    measurements.push(("ripple_trim".to_owned(), ripple_samples));
+
     // --- trim ------------------------------------------------------------
     let mut trim_samples = Vec::with_capacity(ITERATIONS);
     for index in 0..ITERATIONS {
