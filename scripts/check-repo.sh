@@ -249,6 +249,14 @@ if ! python3 scripts/test_or_ui.py; then
   fail "the UI harness contract checks failed"
 fi
 
+# A packaged desktop bundle must carry the application entrypoint, not the
+# integration-test listener that `flutter test -d <device>` builds into the same
+# directory. The 2026-10-19 preview shipped that test build and opened to a black
+# screen; this guard is checked hermetically on fake bundles.
+if ! python3 scripts/test_check_app_bundle.py; then
+  fail "the packaged app-bundle entrypoint checks failed"
+fi
+
 # The aggregate release gate is the only check meant to block a merge, so its
 # logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
 # logic rots, the gate silently becomes a rubber stamp.
