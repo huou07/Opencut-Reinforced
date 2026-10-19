@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `failure`
+// These functions are ignored because they are not marked as `pub`: `failure`, `materialize_parsed_scene`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// Materialises the scene at `scene_path` into `output_path` as a video.
@@ -31,6 +31,29 @@ Future<MotionMaterializationView> materializeMotionScene({
   frameRateDenominator: frameRateDenominator,
   width: width,
   height: height,
+);
+
+/// Builds a scene from a code artifact and materialises it in one call.
+///
+/// This is the path the application surface uses: a user chooses a source file, not a
+/// scene, and the CLI offers the same construction as `or motion from-code`. The scene
+/// construction is `or_motion::scene_from_source`, so the app and the CLI cannot drift.
+Future<MotionMaterializationView> materializeMotionSceneFromCode({
+  required String sourcePath,
+  required String outputPath,
+  required int frameRateNumerator,
+  required int frameRateDenominator,
+  required int width,
+  required int height,
+  required String title,
+}) => RustLib.instance.api.crateApiMotionMaterializeMotionSceneFromCode(
+  sourcePath: sourcePath,
+  outputPath: outputPath,
+  frameRateNumerator: frameRateNumerator,
+  frameRateDenominator: frameRateDenominator,
+  width: width,
+  height: height,
+  title: title,
 );
 
 /// What a materialisation produced, or why it produced nothing.

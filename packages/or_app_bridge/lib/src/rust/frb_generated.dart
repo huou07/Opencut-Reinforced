@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1839153755;
+  int get rustContentHash => -260876208;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -671,6 +671,17 @@ abstract class RustLibApi extends BaseApi {
     required int frameRateDenominator,
     required int width,
     required int height,
+  });
+
+  Future<MotionMaterializationView>
+  crateApiMotionMaterializeMotionSceneFromCode({
+    required String sourcePath,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
   });
 
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path});
@@ -4642,6 +4653,68 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionMaterializationView>
+  crateApiMotionMaterializeMotionSceneFromCode({
+    required String sourcePath,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(sourcePath, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_String(title, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 80,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionMaterializeMotionSceneFromCodeConstMeta,
+        argValues: [
+          sourcePath,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+          title,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionMaterializeMotionSceneFromCodeConstMeta =>
+      const TaskConstMeta(
+        debugName: "materialize_motion_scene_from_code",
+        argNames: [
+          "sourcePath",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+          "title",
+        ],
+      );
+
+  @override
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path}) {
     return handler.executeNormal(
       NormalTask(
@@ -4651,7 +4724,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },

@@ -1012,9 +1012,15 @@ class each claim actually has:
     problem. The CLI still renders a still frame only, because it must not link FFmpeg.
     Measured in release through this client: **88 frames at 640x360 and 10 fps in
     1.226 s (71.8 fps)**, 2.6 MB — the row `docs/QUALITY.md` owed is closed with it.
-    What is still missing: **no GUI surface calls it**, and it is not yet verified by a
-    hosted run, so the capability remains `IMPLEMENTED` with local evidence rather than
-    `ACCEPTED`.
+    A second entry point, `materialize_motion_scene_from_code`, takes a **code source
+    file** rather than a scene and builds the scene with the same
+    `or_motion::scene_from_source` the CLI's `or motion from-code` uses, so the two
+    clients cannot drift. What is still missing: **no GUI surface calls either
+    function**, and neither is verified by a hosted run, so the capability remains
+    `IMPLEMENTED` with local evidence rather than `ACCEPTED`. The next increment is the
+    user-visible surface: an action that takes a source file, an output path, a frame
+    rate and a canvas, and reports the result — the app's top bar already carries the
+    export action it belongs beside.
   - **Materialisation: the frame sequence and the encoder both exist, but no client
     wires them together yet (corrected 2026-10-20).** `or_render::for_each_motion_frame`
     produces the frames in order over the half-open `[0, duration)`, at exact rational

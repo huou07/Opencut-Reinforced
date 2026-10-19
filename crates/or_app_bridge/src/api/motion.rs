@@ -70,13 +70,6 @@ pub fn materialize_motion_scene(
     height: u32,
 ) -> MotionMaterializationView {
     let output = PathBuf::from(&output_path);
-    if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
-        return failure(
-            "MOTION_INVALID_FRAME_RATE",
-            "A materialised scene needs a positive frame rate.",
-            &output,
-        );
-    }
     let source = match std::fs::read_to_string(&scene_path) {
         Ok(source) => source,
         Err(error) => {
@@ -89,9 +82,86 @@ pub fn materialize_motion_scene(
     };
     let scene = match parse_motion_scene(source.as_bytes()) {
         Ok(scene) => scene,
-        Err(error) => return failure(error.code(), error.to_string(), &output),
+        Err(error) => return failure(error.code(), error.code().to_owned(), &output),
     };
-    let validation = validate_scene(&scene);
+    materialize_parsed_scene(
+        &scene,
+        &output,
+        frame_rate_numerator,
+        frame_rate_denominator,
+        width,
+        height,
+    )
+}
+
+/// Builds a scene from a code artifact and materialises it in one call.
+///
+/// This is the path the application surface uses: a user chooses a source file, not a
+/// scene, and the CLI offers the same construction as `or motion from-code`. The scene
+/// construction is `or_motion::scene_from_source`, so the app and the CLI cannot drift.
+#[allow(clippy::too_many_arguments)]
+pub fn materialize_motion_scene_from_code(
+    source_path: String,
+    output_path: String,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    width: u32,
+    height: u32,
+    title: String,
+) -> MotionMaterializationView {
+    let output = PathBuf::from(&output_path);
+    let source = match std::fs::read(&source_path) {
+        Ok(source) => source,
+        Err(error) => {
+            return failure(
+                "MOTION_SOURCE_UNREADABLE",
+                format!("The code source could not be read: {error}"),
+                &output,
+            );
+        }
+    };
+    let options = or_motion::CodeSceneOptions {
+        title: if title.trim().is_empty() {
+            "Illustration".to_owned()
+        } else {
+            title
+        },
+        canvas: or_motion::MotionCanvas { width, height },
+        ..or_motion::CodeSceneOptions::default()
+    };
+    let scene = match or_motion::scene_from_source(&source, or_motion::CodeLanguage::Rust, &options)
+    {
+        Ok(scene) => scene,
+        // `CodeSceneError` carries its code rather than a Display message.
+        Err(error) => return failure(error.code(), error.code().to_owned(), &output),
+    };
+    materialize_parsed_scene(
+        &scene,
+        &output,
+        frame_rate_numerator,
+        frame_rate_denominator,
+        width,
+        height,
+    )
+}
+
+/// The shared materialiser: a validated scene, an output path and an explicit shape.
+fn materialize_parsed_scene(
+    scene: &or_motion::MotionScene,
+    output: &Path,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    width: u32,
+    height: u32,
+) -> MotionMaterializationView {
+    if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
+        return failure(
+            "MOTION_INVALID_FRAME_RATE",
+            "A materialised scene needs a positive frame rate.",
+            output,
+        );
+    }
+    let validation = validate_scene(scene);
     if !validation.ok {
         let first = validation
             .errors
@@ -106,7 +176,7 @@ pub fn materialize_motion_scene(
                 .map(|diagnostic| diagnostic.message.as_str())
                 .collect::<Vec<_>>()
                 .join("; "),
-            &output,
+            output,
         );
     }
     let duration = scene.duration;
@@ -118,18 +188,18 @@ pub fn materialize_motion_scene(
         return failure(
             "MOTION_EMPTY_SEQUENCE",
             "A scene with no frames at this rate has nothing to materialise.",
-            &output,
+            output,
         );
     }
     if frame_count > MAX_MOTION_OUTPUT_FRAMES {
         return failure(
             "MOTION_SEQUENCE_TOO_LONG",
             format!("A materialisation is bounded at {MAX_MOTION_OUTPUT_FRAMES} frames."),
-            &output,
+            output,
         );
     }
     let mut writer = match or_media::FfmpegSoftwareExportWriter::create_with_profile(
-        output.clone(),
+        output,
         or_media::SoftwareExportProfile::MatroskaFfv1PcmS16le,
         width,
         height,
@@ -141,7 +211,7 @@ pub fn materialize_motion_scene(
             return failure(
                 "MOTION_ENCODER_UNAVAILABLE",
                 format!("The software encoder is unavailable: {error}"),
-                &output,
+                output,
             );
         }
     };
@@ -152,7 +222,7 @@ pub fn materialize_motion_scene(
     // local and reported as itself rather than being disguised as a canvas problem.
     let mut encoder_failure: Option<String> = None;
     let encoded = or_render::for_each_motion_frame(
-        &scene,
+        scene,
         frame_rate_numerator,
         frame_rate_denominator,
         |index, frame| {
@@ -169,20 +239,20 @@ pub fn materialize_motion_scene(
         },
     );
     if let Some(message) = encoder_failure {
-        return failure("MOTION_ENCODER_FAILED", message, &output);
+        return failure("MOTION_ENCODER_FAILED", message, output);
     }
     let encoded = match encoded {
         Ok(encoded) => encoded,
-        Err(error) => return failure(error.code(), error.code().to_owned(), &output),
+        Err(error) => return failure(error.code(), error.code().to_owned(), output),
     };
     if let Err(error) = writer.finish() {
         return failure(
             "MOTION_ENCODER_FAILED",
             format!("The encoder could not finish the file: {error}"),
-            &output,
+            output,
         );
     }
-    let bytes_written = std::fs::metadata(&output)
+    let bytes_written = std::fs::metadata(output)
         .map(|meta| meta.len())
         .unwrap_or(0);
     MotionMaterializationView {
@@ -237,6 +307,49 @@ mod tests {
         ));
         std::fs::write(&path, source).unwrap();
         path
+    }
+
+    #[test]
+    fn refuses_code_it_cannot_read_or_build() {
+        let missing = std::env::temp_dir().join("or-motion-bridge-no-source.rs");
+        let output = std::env::temp_dir().join("or-motion-bridge-no-source.mkv");
+        let view = materialize_motion_scene_from_code(
+            missing.display().to_string(),
+            output.display().to_string(),
+            10,
+            1,
+            64,
+            64,
+            String::new(),
+        );
+        assert_eq!(view.code, "MOTION_SOURCE_UNREADABLE");
+        assert!(!view.succeeded);
+        assert!(!output.exists());
+    }
+
+    #[test]
+    #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+    fn materialises_a_scene_built_from_code() {
+        let source = scene_file("source.rs", "fn main() {\n    let total = 1 + 1;\n}\n");
+        let output =
+            std::env::temp_dir().join(format!("or-motion-from-code-{}.mkv", std::process::id()));
+        let _ = std::fs::remove_file(&output);
+        let view = materialize_motion_scene_from_code(
+            source.display().to_string(),
+            output.display().to_string(),
+            10,
+            1,
+            128,
+            96,
+            "From code".to_owned(),
+        );
+        assert!(view.succeeded, "{}: {}", view.code, view.message);
+        assert!(view.frame_count > 0);
+        assert_eq!(view.width, 128);
+        assert_eq!(view.height, 96);
+        assert!(!view.scene_id.is_empty());
+        assert!(view.bytes_written > 0);
+        let _ = std::fs::remove_file(&output);
     }
 
     #[test]

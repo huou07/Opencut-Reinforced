@@ -1,7 +1,10 @@
 export 'src/rust/api.dart'
     show AppInfo, Capability, HealthStatus, appInfo, capabilities, health;
 export 'src/rust/api/motion.dart'
-    show MotionMaterializationView, materializeMotionScene;
+    show
+        MotionMaterializationView,
+        materializeMotionScene,
+        materializeMotionSceneFromCode;
 export 'src/rust/api/project.dart'
     show
         ProjectActionResult,
