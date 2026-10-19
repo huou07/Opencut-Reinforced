@@ -714,6 +714,57 @@ class each claim actually has:
   implemented: clip speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
   snap-guide rendering are presentation state, and snapping itself is the
   read-only `timeline.snap` query.
+- **Phase 5 release via hosted CI: the branch is published and the hosted run is the
+  acceptance authority — and it is finding real defects (2026-10-20).**
+  - The working branch is pushed (`feat/semantics-journey-guards`), pull request #15 is
+    open, and **Platform Verification now runs for the exact commit**. The workflow
+    triggers on `pull_request`, `merge_group`, `push` to `main` and manual dispatch —
+    not on a feature-branch push — which is why the run had to come from the pull
+    request, and why the Developer Preview's *release* precondition (a successful
+    **push** run on `main`) still needs a merge the owner owns.
+  - **The first hosted run failed five jobs, and every failure was a real gap in this
+    session's local verification.** That is the value of the authority, and it is worth
+    recording defect by defect:
+    1. `or_ipc` keeps its own copy of the command catalog, and the four commands added
+       this session were missing from its expectation. The local ladder never ran
+       `or_ipc`; the hosted job runs `cargo test --workspace`.
+    2. `dart format --set-exit-if-changed` failed on seven files: the ladder ran
+       `flutter analyze` but never `dart format`.
+    3. `scripts/measure_denoise.py` invoked the freshly built helper without its library
+       path (`libavfilter.so.11` not found). The local host resolves the libraries from
+       its own prefix, so the omission was invisible here.
+    4. The same script generated its fixture with the helper's `lavfi` input, which the
+       packaged helper does not have (`--disable-everything`).
+    5. Adding `or_media` to `or_cli` made the CLI link FFmpeg. The hosted steps build
+       `or_cli` before the FFmpeg prefix is on `PKG_CONFIG_PATH`, and — worse — the
+       release CLI archives ship `or` **without** the shared libraries, so a CLI that
+       linked them could not run on a user's machine. The video path was reverted rather
+       than propped up with workflow environment changes; `ldd target/debug/or` links no
+       `libav*`.
+    6. The measurement asked the helper to report volumes with `-f null -`, and the
+       packaged helper has no `null` muxer. The levels are now computed from the PCM the
+       script itself writes and reads, which removes both the muxer dependency and the
+       log-parsing one, and leaves the helper's required surface at `-filters` and the
+       `afftdn` chain.
+  - **State at the end of this round:** `731ae61` carries all six fixes and its run is
+    in flight. Earlier runs already cleared `Rust checks`, `Flutter static and widget
+    checks` and `Granted descriptor capability boundary` for their SHAs; the OS native
+    jobs failed on defect 6, which `731ae61` fixes. One run (`ac1cc12`) was cancelled by
+    the next push, and its `release-gate` job correctly **failed** rather than passing on
+    cancelled dependencies — the gate rejecting `cancelled` is verified behaviour, not a
+    claim.
+  - **Nothing is `ACCEPTED` yet, and no claim record exists for this session's work.**
+    A claim record requires a completed hosted run for the exact implementation SHA,
+    which does not exist yet; the moment one is green the records can be written with the
+    run id, the job list and honest limitations. Publication remains owner-gated, and a
+    green pull-request run does not authorise it.
+  - **Also fixed, as developer-evidence tooling:** the local packaged lane had three more
+    path defects of the same shape — a misspelled desktop-entry id (`io.github.huu07`)
+    that the package has never contained, repository-relative `LANE_DIR`/prefix/bundle
+    paths used from the app directory, and Flutter commands that need the app directory
+    while the packaging scripts need the repository root. With those fixed the lane
+    reaches `hygiene`, `flutter`, `preflight`, `bench` and `deb` PASS and a real
+    `opencut-reinforced-linux-x64-debug.deb`.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
