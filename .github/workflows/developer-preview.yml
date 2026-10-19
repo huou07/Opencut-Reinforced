@@ -1018,8 +1018,14 @@ jobs:
           package_dir="$RUNNER_TEMP/developer-preview-android"
           mkdir -p "$package_dir"
           cp "$apk" "$package_dir/opencut-reinforced-android-debug.apk"
-          cp docs/DEVELOPER_PREVIEW_INSTALL.md "$package_dir/README-FIRST.md"
-          test -s "$package_dir/README-FIRST.md"
+          # The APK is the Android package, and it is the only file this artifact may
+          # contain: the publish job asserts that the application and CLI packages number
+          # exactly five plus three, so a loose file here becomes a ninth and fails the
+          # release. macOS, Windows and Linux carry the install guidance *inside* their
+          # archives, which the publish job verifies; an APK cannot embed a document, so
+          # the guidance travels in docs/DEVELOPER_PREVIEW_INSTALL.md and the release note.
+          test -s "$package_dir/opencut-reinforced-android-debug.apk"
+          test "$(find "$package_dir" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')" = "1"
 
       - name: Upload Android package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
