@@ -107,17 +107,6 @@ impl CliError {
         )
     }
 
-    /// A frame sequence that could not be produced.
-    fn motion_raster_sequence(error: or_render::MotionSequenceError, json: bool) -> Self {
-        Self::new(
-            4,
-            json,
-            "motion_scene",
-            error.code(),
-            error.code().to_owned(),
-        )
-    }
-
     /// A MotionScene that could not be rasterised, with the rasteriser's code.
     fn motion_raster(error: or_render::MotionRasterError, json: bool) -> Self {
         Self::new(
@@ -686,8 +675,9 @@ fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> 
         .map_err(|error| CliError::motion_raster(error, json))?;
     let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
         .map_err(|error| CliError::motion_raster(error, json))?;
-    std::fs::write(&output, &png)
-        .map_err(|error| CliError::usage(json, format!("the frame could not be written: {error}")))?;
+    std::fs::write(&output, &png).map_err(|error| {
+        CliError::usage(json, format!("the frame could not be written: {error}"))
+    })?;
     if json {
         return Ok(json_string(serde_json::json!({
             "scene_id": scene.scene_id,
