@@ -18,6 +18,7 @@ import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/shell/app_shell.dart';
+import 'package:or_app/shell/motion_materialize_dialog.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
@@ -591,6 +592,99 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'the illustration surface refuses an empty source and reports a render',
+    (tester) async {
+      // The surface is the user-visible half of code-to-illustration video. It is driven
+      // through an injected renderer so the guard needs no Rust library, and it asserts
+      // the three things a user depends on: a refusal that says what is missing, a request
+      // that carries exactly what was entered, and a result that names the file.
+      _setViewport(tester, const Size(1280, 800));
+      // The surface is mounted on its own host: this guard is about the dialog, and
+      // mounting the whole shell would make the failure ambiguous.
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
+      );
+      var rendered = 0;
+      MotionMaterializeRequest? seen;
+      // The dialog's future completes when it closes, so the test drives it first and
+      // awaits it last; awaiting here would deadlock the test against itself.
+      final dialog = showMotionMaterializeDialog(
+        context: tester.element(find.byType(Scaffold)),
+        initialDestinationPath: '/tmp/illustration.mkv',
+        render: (request) async {
+          rendered++;
+          seen = request;
+          return const MotionMaterializationOutcome(
+            succeeded: true,
+            destinationPath: '/tmp/illustration.mkv',
+            frameCount: 24,
+            width: 800,
+            height: 450,
+            frameRateNumerator: 12,
+            frameRateDenominator: 1,
+            bytesWritten: 4096,
+            errorCode: 'OK',
+            message: 'Materialised 24 frames.',
+          );
+        },
+      );
+      await tester.pumpAndSettle();
+
+      // A render with no source is refused, with a reason, and does not call the renderer.
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+      expect(rendered, 0);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('motion-materialize-status')),
+            )
+            .data,
+        contains('Choose a code file'),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-source')),
+        '/tmp/count_words.rs',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-width')),
+        '800',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-height')),
+        '450',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-frame-rate')),
+        '12',
+      );
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+
+      expect(rendered, 1);
+      expect(seen!.sourcePath, '/tmp/count_words.rs');
+      expect(seen!.frameRate, 12);
+      expect(seen!.width, 800);
+      expect(seen!.height, 450);
+      expect(seen!.destinationPath, '/tmp/illustration.mkv');
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('motion-materialize-status')),
+            )
+            .data,
+        contains('24 frames'),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-cancel')));
+      await tester.pumpAndSettle();
+      // The dialog's future completes when it closes, so it is awaited last.
+      await dialog;
+    },
+  );
 
   testWidgets('active project requests previews for supported media only', (
     tester,
@@ -5051,6 +5145,45 @@ class _FakeProjectPicker implements ProjectFilePicker {
 }
 
 class _FakeProjectGateway implements ProjectGateway {
+  /// The illustration requests the surface sent, in order.
+  final List<MotionMaterializeRequest> illustrationRequests = [];
+  MotionMaterializationOutcome? illustrationOutcome;
+
+  @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) async {
+    illustrationRequests.add(
+      MotionMaterializeRequest(
+        sourcePath: sourcePath,
+        destinationPath: destinationPath,
+        frameRate: frameRateNumerator,
+        width: width,
+        height: height,
+        title: title,
+      ),
+    );
+    return illustrationOutcome ??
+        MotionMaterializationOutcome(
+          succeeded: true,
+          destinationPath: destinationPath,
+          frameCount: 12,
+          width: width,
+          height: height,
+          frameRateNumerator: frameRateNumerator,
+          frameRateDenominator: frameRateDenominator,
+          bytesWritten: 1024,
+          errorCode: 'OK',
+          message: 'Materialised 12 frames.',
+        );
+  }
+
   final Map<String, _FakeSession> _sessionsByPath = {};
   final Map<String, ProjectReadModel> _savedByPath = {};
   _FakeSession? lastSession;

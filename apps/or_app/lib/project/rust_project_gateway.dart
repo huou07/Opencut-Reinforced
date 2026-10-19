@@ -956,6 +956,39 @@ class RustProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) async {
+    final view = await rust.materializeMotionSceneFromCode(
+      sourcePath: sourcePath,
+      outputPath: destinationPath,
+      frameRateNumerator: frameRateNumerator,
+      frameRateDenominator: frameRateDenominator,
+      width: width,
+      height: height,
+      title: title,
+    );
+    return MotionMaterializationOutcome(
+      succeeded: view.succeeded,
+      destinationPath: view.outputPath,
+      frameCount: view.frameCount.toInt(),
+      width: view.width,
+      height: view.height,
+      frameRateNumerator: view.frameRateNumerator,
+      frameRateDenominator: view.frameRateDenominator,
+      bytesWritten: view.bytesWritten.toInt(),
+      errorCode: view.code,
+      message: view.message,
+    );
+  }
+
+  @override
   Future<ProjectActionResult> moveTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current, {

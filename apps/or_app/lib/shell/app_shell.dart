@@ -26,6 +26,7 @@ import 'app_navigation.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'motion_materialize_dialog.dart';
 
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
@@ -538,9 +539,43 @@ class _AppShellState extends State<AppShell> {
           onSelected: _redoProject,
         ),
         CommandPaletteAction(label: 'Close Project', onSelected: _closeProject),
+        CommandPaletteAction(
+          label: 'Illustration Video…',
+          onSelected: () => unawaited(_openMotionMaterialize()),
+        ),
       ],
     ],
   );
+
+  /// Turns a code file into an illustration video through the shared gateway.
+  ///
+  /// The default destination is the application documents directory rather than the
+  /// project directory: the result is media, not canonical project state, and writing
+  /// beside the project would invite a client to treat it as part of the document.
+  Future<void> _openMotionMaterialize() async {
+    if (_activeSession == null) return;
+    String destination;
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      destination = '${directory.path}/illustration.mkv';
+    } catch (_) {
+      destination = '${Directory.systemTemp.path}/illustration.mkv';
+    }
+    if (!mounted) return;
+    await showMotionMaterializeDialog(
+      context: context,
+      initialDestinationPath: destination,
+      render: (request) => widget.projectGateway.materializeIllustration(
+        sourcePath: request.sourcePath,
+        destinationPath: request.destinationPath,
+        frameRateNumerator: request.frameRate,
+        frameRateDenominator: 1,
+        width: request.width,
+        height: request.height,
+        title: request.title,
+      ),
+    );
+  }
 
   void _openWorkspace() {
     if (_activeSession != null) _select(AppDestination.editorPreview);

@@ -1089,6 +1089,21 @@ abstract interface class ProjectGateway {
     required int reductionDb,
   });
 
+  /// Materialises a code artifact into an illustration video.
+  ///
+  /// This is not canonical project state: it reads a source file and writes a media
+  /// file, so it needs no session and no revision. The scene construction and the
+  /// encoder both live in Rust, behind this call, so the app cannot drift from the CLI.
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  });
+
   /// Moves a track to another position. Order is canonical: it decides which track
   /// a client reaches by index and which track is the first of its kind.
   Future<ProjectActionResult> moveTimelineTrack(
@@ -1223,4 +1238,31 @@ abstract interface class ProjectGateway {
   Future<ProjectRecoveryInspection> inspectRecovery(String path);
   Future<ProjectRecoveryActionResult> applyRecovery(String path);
   Future<ProjectRecoveryActionResult> discardRecovery(String path);
+}
+
+/// A materialised illustration video, or why there is none.
+class MotionMaterializationOutcome {
+  const MotionMaterializationOutcome({
+    required this.succeeded,
+    required this.destinationPath,
+    required this.frameCount,
+    required this.width,
+    required this.height,
+    required this.frameRateNumerator,
+    required this.frameRateDenominator,
+    required this.bytesWritten,
+    required this.errorCode,
+    required this.message,
+  });
+
+  final bool succeeded;
+  final String destinationPath;
+  final int frameCount;
+  final int width;
+  final int height;
+  final int frameRateNumerator;
+  final int frameRateDenominator;
+  final int bytesWritten;
+  final String errorCode;
+  final String message;
 }

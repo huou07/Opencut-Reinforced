@@ -2079,6 +2079,25 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) => _gateway.materializeIllustration(
+    sourcePath: sourcePath,
+    destinationPath: destinationPath,
+    frameRateNumerator: frameRateNumerator,
+    frameRateDenominator: frameRateDenominator,
+    width: width,
+    height: height,
+    title: title,
+  );
+
+  @override
   Future<ProjectActionResult> moveTimelineTrack(
     ProjectSessionHandle session,
     ProjectReadModel current, {
