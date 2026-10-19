@@ -33,6 +33,41 @@ const _timelineMarkerPageSize = 100;
 const _maxActiveMediaPreviewRequests = 8;
 const _autosaveInterval = Duration(seconds: 30);
 
+/// Registers one Android media source for import, retrying a request that lost a race.
+///
+/// Registration is additive and idempotent, so a request that lost a race is worth one
+/// retry. The plugin bumps a binding epoch on every preview and registration request,
+/// and any *newer* request invalidates an in-flight one with `STALE_PREVIEW_REQUEST`:
+/// importing several documents in a row refreshes previews between them, so the next
+/// document's registration could be invalidated by that refresh and the document was
+/// then skipped. The Android SAF journey saw exactly that -- three selected documents,
+/// two imports, and no error the user could act on. The epoch guard itself is
+/// untouched; only the client's reaction to a stale refusal changes.
+///
+/// Returns `null` on success, or the message to report.
+Future<String?> registerAndroidMediaSource(
+  String source, {
+  required Future<bool> Function(String source) register,
+  int staleRetries = 2,
+}) async {
+  var staleAttempts = 0;
+  while (true) {
+    try {
+      if (await register(source)) return null;
+      return 'Android media access could not be opened.';
+    } on PlatformException catch (error) {
+      if (error.code == 'STALE_PREVIEW_REQUEST' &&
+          staleAttempts < staleRetries) {
+        staleAttempts++;
+        continue;
+      }
+      return error.message ?? 'Android media access is unavailable.';
+    } on MissingPluginException {
+      return 'Android media access is unavailable.';
+    }
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -2683,16 +2718,12 @@ class _AppShellState extends State<AppShell> {
     for (final source in sources) {
       if (!mounted || !identical(session, _activeSession)) return;
       if (Platform.isAndroid) {
-        try {
-          if (!await OrViewerTexture.registerMediaSourceForImport(source)) {
-            failures.add('Android media access could not be opened.');
-            continue;
-          }
-        } on PlatformException catch (error) {
-          failures.add(error.message ?? 'Android media access is unavailable.');
-          continue;
-        } on MissingPluginException {
-          failures.add('Android media access is unavailable.');
+        final failure = await registerAndroidMediaSource(
+          source,
+          register: OrViewerTexture.registerMediaSourceForImport,
+        );
+        if (failure != null) {
+          failures.add(failure);
           continue;
         }
         if (!mounted || !identical(session, _activeSession)) return;

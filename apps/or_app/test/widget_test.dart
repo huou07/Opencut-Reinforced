@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/core_gateway.dart';
@@ -16,6 +17,7 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/shell/app_shell.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
@@ -512,6 +514,81 @@ void main() {
 
     expect(gateway.cleanUpAudioCalls, 1);
     expect(gateway.lastImportedPath, gateway.lastCleanUpDestination);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a stale Android import registration is retried, not skipped', (
+    tester,
+  ) async {
+    // The plugin bumps a binding epoch on every preview and registration request, so
+    // importing several documents in a row can invalidate the next one's registration
+    // with STALE_PREVIEW_REQUEST. Registration is additive and idempotent, so the
+    // shell retries it instead of dropping the document -- the Android SAF journey
+    // selected three documents and imported two before this. The retry is a named
+    // function so this can be tested without an Android host: dart:io's
+    // Platform.isAndroid reads the host, not the target platform override.
+    var attempts = 0;
+    final stale = await registerAndroidMediaSource(
+      'content://provider/document/clip-3',
+      register: (source) async {
+        attempts++;
+        if (attempts == 1) {
+          throw PlatformException(
+            code: 'STALE_PREVIEW_REQUEST',
+            message: 'A newer preview or project replaced this media request.',
+          );
+        }
+        return true;
+      },
+    );
+    expect(stale, isNull, reason: 'a stale refusal must not drop the document');
+    expect(attempts, 2, reason: 'the refusal is retried exactly once');
+
+    // A refusal the client cannot fix is reported, not retried forever.
+    var permanentAttempts = 0;
+    final permanent = await registerAndroidMediaSource(
+      'content://provider/document/clip-4',
+      register: (source) async {
+        permanentAttempts++;
+        throw PlatformException(
+          code: 'MEDIA_PERMISSION_REQUIRED',
+          message: 'Access to the selected media source is unavailable.',
+        );
+      },
+    );
+    expect(permanent, 'Access to the selected media source is unavailable.');
+    expect(permanentAttempts, 1, reason: 'a permission refusal is not retried');
+
+    // A registration that returns false is a failure, not a retry loop.
+    var falseAttempts = 0;
+    final refused = await registerAndroidMediaSource(
+      'content://provider/document/clip-5',
+      register: (source) async {
+        falseAttempts++;
+        return false;
+      },
+    );
+    expect(refused, isNotNull);
+    expect(falseAttempts, 1);
+
+    // A stale refusal that never clears stops after the retry budget.
+    var alwaysStale = 0;
+    final exhausted = await registerAndroidMediaSource(
+      'content://provider/document/clip-6',
+      register: (source) async {
+        alwaysStale++;
+        throw PlatformException(
+          code: 'STALE_PREVIEW_REQUEST',
+          message: 'stale',
+        );
+      },
+    );
+    expect(exhausted, 'stale');
+    expect(
+      alwaysStale,
+      3,
+      reason: 'two retries and then the refusal is reported',
+    );
     expect(tester.takeException(), isNull);
   });
 
