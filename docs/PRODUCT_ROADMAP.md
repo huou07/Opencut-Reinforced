@@ -1006,6 +1006,39 @@ class each claim actually has:
     candidates to check in order are the persistable grant for the second URI, the
     registry entry the import looks up, and whether any clear runs between the
     registration and the import.
+- **Android SAF `SOURCE_UNAVAILABLE`: root cause found — the preview path cleared the
+  whole descriptor registry (2026-10-19).** `clearNativeSources()` calls
+  `nativeClearMediaFds()`, which is `lock_registry().clear()` in Rust: it removes **every**
+  registered source. Three sites called it for work that owns only *some* sources, so one
+  kind of work destroyed another's descriptors:
+  - the **preview** path cleared everything whenever its source set changed, then
+    re-registered only the preview sources — so a preview refresh in the middle of a
+    multi-document import removed the descriptor of a document the import had already
+    registered and was about to read;
+  - a **failed registration** cleared everything, dropping the descriptors of sources
+    registered successfully before it;
+  - a **preview failure** cleared everything.
+  Rust then could not open the source and the import reported `SOURCE_UNAVAILABLE` — on
+  whichever document the preview happened to race, which is exactly the flakiness
+  observed: run `39210404847` at `b564479` passed the Android job and run `39214163396`
+  at `c8316ba` failed it, while `git diff b564479 origin/main` is **empty**, so the two
+  revisions are the same tree and only the timing differed.
+  - **The fix scopes each clear to what the caller owns.** Rust gained
+    `or_media_unregister_seekable_fd(uri)` for one source; the plugin tracks
+    `importRegisteredSources` and gained `clearPreviewSources()`, which removes the
+    preview sources **except** those an import still holds; a failed registration removes
+    only the source it was registering; and the whole-registry clear remains for exactly
+    the two cases that mean everything — the explicit clear method and plugin teardown.
+  - **Guard:** `scripts/test_android_registration_epoch.py` grew seven checks for this
+    invariant — the import set exists, `clearPreviewSources` exists, the per-source native
+    removal exists, the preview path clears only its own sources and never
+    `clearNativeSources`, a failed registration removes only its own source, and the
+    whole-registry clear appears exactly twice. It runs in `check-repo.sh`.
+  - **Verified so far:** the guard passes, the Rust side builds, and the case APKs rebuild
+    with a **changed** `saf.apk` checksum (`20cf2e0a…` → `bd0383be…`), which is the proof
+    that the Kotlin change compiles. A local SAF run before this fix completed 33 stages
+    with **zero** `SOURCE_UNAVAILABLE`; the deciding evidence is the hosted Android job for
+    this commit.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

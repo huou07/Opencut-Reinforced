@@ -55,6 +55,10 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     /// cancelled by what genuinely invalidates it: a clear of the registry (which removes
     /// every source) or plugin teardown.
     private val registrationEpoch = AtomicLong(0)
+
+    /// Document URIs this plugin registered so an *import* can read them. They outlive a
+    /// preview refresh, which is the whole point: a preview must not remove them.
+    private val importRegisteredSources = mutableSetOf<String>()
     private val staleDrops = AtomicLong(0)
     private val pendingFrameResults = mutableListOf<MethodChannel.Result>()
     private var frameRequestedWhilePending = false
@@ -180,11 +184,35 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private class MediaFailure(val code: String, message: String) : Exception(message)
 
+    /// Removes every registered source. Only correct when every source is going away:
+    /// clearing media sources for a project, or detaching the plugin.
     private fun clearNativeSources() {
         registeredMediaSources = null
         registeredOwner = null
+        importRegisteredSources.clear()
         if (!nativeLoaded || !nativeClearMediaFds()) {
             throw MediaFailure("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.")
+        }
+    }
+
+    /// Removes the sources this plugin registered for *preview*, and nothing else.
+    ///
+    /// The registry is one map keyed by document URI. A preview whose source set changed
+    /// used to clear the whole map, which also dropped the descriptors an import had
+    /// registered and was about to read: the import then failed with `SOURCE_UNAVAILABLE`
+    /// on whichever source the preview raced. A source that is also registered for an
+    /// import is kept, because the import still needs it.
+    private fun clearPreviewSources() {
+        val preview = registeredMediaSources.orEmpty()
+        registeredMediaSources = null
+        registeredOwner = null
+        if (!nativeLoaded) {
+            throw MediaFailure("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.")
+        }
+        for (source in preview) {
+            if (source !in importRegisteredSources) {
+                nativeUnregisterMediaFd(source)
+            }
         }
     }
 
@@ -239,13 +267,19 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         registeredSource = true
                         registrationCount++
                     }
+                    importRegisteredSources.add(source)
                     checkCurrent()
                     registeredMediaSources = (sources + source).distinct().sorted()
                 }
                 checkCurrent()
                 true
             } catch (error: Exception) {
-                if (registeredSource) clearNativeSources()
+                // Only this source's descriptor is in doubt. Clearing every source here
+                // dropped the descriptors other imports had already registered.
+                if (registeredSource) {
+                    importRegisteredSources.remove(source)
+                    if (nativeLoaded) nativeUnregisterMediaFd(source)
+                }
                 when (error) {
                     is MediaFailure -> throw error
                     is SecurityException -> throw MediaFailure("MEDIA_PERMISSION_REQUIRED", "Access to the selected media source is unavailable.")
@@ -291,7 +325,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     }
                 }
                 if (registeredMediaSources != sources || registeredOwner != owner) {
-                    clearNativeSources()
+                    clearPreviewSources()
                     for (source in sources) {
                         checkCurrent()
                         val descriptor = context.contentResolver.openFileDescriptor(Uri.parse(source), "r")
@@ -317,7 +351,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 checkCurrent()
                 true
             } catch (error: Exception) {
-                clearNativeSources()
+                clearPreviewSources()
                 when (error) {
                     is MediaFailure -> throw error
                     is SecurityException -> throw MediaFailure("MEDIA_PERMISSION_REQUIRED", "Access to an Android media source is unavailable. Select it again and retry preview.")
@@ -519,6 +553,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private external fun nativeAcquireLatest(): AndroidViewerFrame?
     private external fun nativeReleaseFrame(releaseContext: Long)
     private external fun nativeRegisterMediaFd(uri: String, fd: Int): Boolean
+    private external fun nativeUnregisterMediaFd(uri: String): Boolean
     private external fun nativeClearMediaFds(): Boolean
     private external fun nativeResourceSnapshot(): LongArray?
 
