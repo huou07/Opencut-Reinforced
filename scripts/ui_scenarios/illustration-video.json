@@ -1,0 +1,172 @@
+{
+  "name": "illustration-video",
+  "harness": "or_ui",
+  "description": "The code-to-illustration surface, driven end to end on the running app: open the command palette, choose Illustration Video, refuse an empty source with a reason, then materialise a real repository fixture through the bridge and the software encoder and assert that the dialog reports the frames it wrote. This is the surface's own guard: the widget test proves the dialog's logic with an injected renderer, and this proves the palette action, the bridge call and the encoder work together on a real build.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Illustration journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "open-command-palette"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "command-palette-query"
+      },
+      "value": "Illustration"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "command-illustration-video"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Illustration Video",
+      "budget_ms": 10000
+    },
+    {
+      "op": "shot",
+      "name": "illustration-dialog"
+    },
+    {
+      "op": "tree",
+      "name": "illustration-dialog"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-materialize-render"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Choose a code file to illustrate",
+      "budget_ms": 10000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-source"
+      },
+      "value": "$OR_UI_ROOT/scripts/ui_scenarios/illustration-source.rs"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-destination"
+      },
+      "value": "$OR_UI_ROOT/apps/or_app/build/illustration-journey.mkv"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-frame-rate"
+      },
+      "value": "10"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-width"
+      },
+      "value": "320"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-height"
+      },
+      "value": "180"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-materialize-render"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "render-attempt"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Wrote .* frames",
+      "budget_ms": 60000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-source"
+      },
+      "value": "$OR_UI_ROOT/does-not-exist.rs"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-materialize-render"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "MOTION_SOURCE_UNREADABLE",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "illustration-rendered"
+    },
+    {
+      "op": "tree",
+      "name": "illustration-rendered"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-materialize-cancel"
+      }
+    }
+  ]
+}

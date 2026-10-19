@@ -1,5 +1,7 @@
 # Application Release Plan
 
+Last reviewed: 2026-10-17.
+
 ## Current status
 
 Stable releases: **none**.
@@ -59,6 +61,8 @@ The attached CLI archives contain `or`/`or.exe` plus safe usage examples, but no
 ## Future Stable Release
 
 A stable release is a later product milestone, not a Developer Preview. Stable releases will use deliberate semantic versions and require product readiness plus a reviewed platform matrix, packaging, checksums, dependency and license inventory, human-readable notes, and applicable signing, notarization, or attestation. Installer formats and platform-specific distribution remain undecided until that work is scoped.
+
+This document defines no separate version, health or rollback gate, and none should be claimed as one. What is automated today is the Developer Preview path above: exact-source Platform Verification, a tag resolving to the verified commit, and non-empty checksummed assets. The remaining stable-release items are review requirements carried out by the owner, not gates a green check can satisfy. [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md) names the same scope.
 
 ## Intended platforms
 

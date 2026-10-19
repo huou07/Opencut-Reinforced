@@ -1,6 +1,6 @@
 # OR UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
 
 ## Purpose
 
@@ -68,7 +68,14 @@ headless or widget-level checks:
   synchronization. Saving a renamed project updates its recent display name
   without changing its last-opened time. Exact-SHA evidence: Platform
   Verification [38328757217](https://github.com/huou07/Opencut-Reinforced/actions/runs/38328757217),
-  attempt 2. Clean-machine install/upgrade/uninstall remains unverified.
+  attempt 2. Clean-machine install/upgrade/uninstall is verified separately at
+  `53de6d51c6d45c7ec7ae0a2989455972118406c1`: Platform Verification
+  [38570870756](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870756)
+  and Repository Hygiene
+  [38570870938](https://github.com/huou07/Opencut-Reinforced/actions/runs/38570870938)
+  installed, upgraded, launched and removed the Linux `.deb` and the macOS and
+  Windows ZIP packages while preserving user data. Those are debug packages, not
+  stable installers.
 - A new empty project does not inherit another project's canonical timeline.
 - Home focuses on creating, opening, and returning to projects. The visual-only
   Editor Shell Preview is reachable from Settings → Advanced and is not offered
@@ -192,22 +199,152 @@ headless or widget-level checks:
     and selection in both is carried by a fill and a border rather than by
     colour alone.
 
-### Reproduced but not yet fixed
+### Reproduced and fixed (2026-10-18, compact layout)
 
-- The compact editor overflows its column by 31 px at a 320x480 viewport.
-  This reproduces headlessly rather than only on a device.
-  `OrBreakpoints` selects the compact layout on width alone, so a short
-  viewport still receives the desktop 4:2 viewer/timeline split while the
-  viewer's transport has a fixed height. 390x844 is clean, as is every
-  width at 320x560 or taller: height, not width, is the trigger.
-  Fixing it means letting the viewer's surface and transport absorb a short
-  viewport, which changes the viewer's layout rather than removing a single
-  defect, so it is held back rather than half-applied.
+Four compact-layout defects reproduced through the running app at 320x440 with
+`scripts/or_ui.py`, all four fixed with permanent widget guards, plus a fifth
+found by the same guard once the fourth no longer masked it.
+
+- **The workspace header overflowed by 44 px.** `_ProjectWorkspaceHeader` held
+  the project name, the revision text, the state badge and the action row in one
+  fixed Row. Short of 560 px the narrow presentation now keeps the name and the
+  actions and drops the duplicated revision/badge metadata instead of clipping
+  it; Save and the shell's own dirty indicator still carry that state.
+- **The insert dialog's track dropdown overflowed by 46 px.**
+  `DropdownButtonFormField` laid out its selected item at its natural width
+  inside a 320 px dialog. Every dropdown in the editor now sets `isExpanded:
+  true` and ellipsizes its labels.
+- **A transient message covered the mobile tool dock and stole its taps.** The
+  floating message sat over the 58 px dock, so the tap that opens the compact
+  media library never arrived and the workflow stalled until the message
+  expired. `OrSnackBar.show` takes a `bottomInset`, the shell and the editor pass
+  the dock height in the compact layout, and a message is capped at two lines so a
+  long one cannot push the surface past a short viewport.
+- **The compact viewer overflowed by 17 px once a clip gave the preview a
+  range.** The trigger is `hasRange`: the viewer's scrub strip (ruler, clock
+  labels, slider) only appears once the preview has a content end, so the defect
+  was invisible until an insert succeeded. Two causes, both fixed: `AspectRatio`
+  inside the tight-height `Expanded` surface sized itself from the width and
+  overflowed the height (the surface is now fitted to both dimensions and
+  letterboxes), and the strip did not fit a 149 px panel (a short panel now keeps
+  the surface, the scrub control and the transport and drops the decorative ruler
+  and its clock labels, which the live readout and the timeline ruler carry). The
+  compact journey runs end to end and the 320x480/320x440 viewports are clean.
+
+**Measured at 320x440, and not a defect but a limit:** the compact editor gives
+the viewer about 114 px once the toolbar, timeline and dock are laid out, so the
+preview surface is one pixel tall. It is clean — no clipping, no overflow, every
+control present — and it is not *usable* as a preview either. That allocation is
+recorded here as a known limitation with its number; changing the compact flex
+allocation is a design decision, not a bug fix.
+
+Two harness defects were found by the same work and fixed: a tap delivered in the
+same frame as `ensureVisible` was hit-tested against the pre-scroll position (the
+Add Audio tap reported success and added nothing), and readiness was being
+inferred from an enabled flag that a disabled button can also present. Scenarios
+now wait for a user-visible state (the transient message clearing) before acting.
+
+### Reproduced and fixed
+
+- The compact editor overflowed its column by 31 px at a 320x480 viewport.
+  This reproduced headlessly rather than only on a device. The proximate
+  cause was the viewer's "No media loaded" placeholder, not the transport:
+  the compact 4:2 viewer/timeline split plus the fixed transport left the
+  viewer surface only 55.7 px tall, and the icon-and-text column needed more.
+  A 320x440 viewport additionally squeezed the fixed 34 px timeline view
+  controls into an 8.7 px strip. Both now absorb a short viewport: the viewer
+  placeholder keeps its icon and exposes the message through semantics when
+  the surface is shorter than 56 px or narrower than 120 px (matching the
+  existing texture-unavailable path), and the timeline view controls are
+  omitted when their region is shorter than 60 px. A headless regression
+  mounts the editor at 320x480 and 320x440; taller compact viewports such as
+  390x844 remain clean. This is source implementation with local developer
+  evidence (Flutter 3.47.7, a clean analyzer, and the widget suite — run
+  `flutter test` for the current count rather than a number written here);
+  exact-SHA hosted verification is recorded in
+  [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md).
+- The create-project journey at the emulator-sized 320x640 viewport, which the
+  Android SAF acceptance run uses, had no working overflow guard: the committed
+  test installed its own `FlutterError.onError`, and `takeException()` reads only
+  the framework's recorded error, so its assertion could not fail. The test now
+  uses the shared create-project helper and the framework error handler; it
+  mounts the empty workspace at 320x640 and passes with no overflow. This
+  corrects a vacuous guard rather than reporting a reproduced defect.
+
+### Permanent harness guards (added 2026-10-18)
+
+Widget tests answer a narrow question about a screen they mount. These guards
+answer the journey question on the running app, on this host, through the real
+command path. They are developer evidence: `ACCEPTED` still requires the
+authoritative hosted gate for the exact source.
+
+- **Editor journey** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/editor-journey.json`
+  drives Home -> Projects -> create -> a rejected import (the failure state) ->
+  import a synthetic fixture -> add a track -> insert a clip -> open and close the
+  clip dialog -> keyboard duplicate (`Ctrl+D`) -> keyboard undo (`Ctrl+Z`) ->
+  keyboard frame step (`.`) -> keyboard save (`Ctrl+S`) -> leave the editor ->
+  reopen the saved project -> open the export dialog -> cancel it. Every action
+  names a widget key, a semantics label (exact or regex), visible text, a role, or
+  a dialog-scoped control; **no step names a screen coordinate**, and the harness
+  has no option that injects canonical project state. A control reached only by
+  pointer in an earlier revision now has to have a semantic identity to be
+  driven at all.
+- **Render-exception guard** — the runner fails a step if the framework recorded
+  an exception while it ran, so a `RenderFlex overflowed` or a failed assertion
+  cannot pass as green. This is what makes the journey a layout guard and not
+  only a behaviour guard.
+- **Compact viewports** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/compact-editor-journey.json`
+  runs the same commands at 320x440 through the compact presentation (the media
+  library is a bottom sheet opened from the mobile tool dock there), and the same
+  file with `--viewport 390x844` proves the taller compact viewport has not
+  regressed. The compact journey asserts the same semantics and the same absence
+  of render exceptions.
+- **Loud failure** —
+  `python3 scripts/or_ui.py run scripts/ui_scenarios/wrong-selector.json` names a
+  control the app does not have and must report `FAIL` with status `not_found`
+  and exit 1. `scripts/test_or_ui.py` (run by `bash scripts/check-repo.sh`)
+  asserts that behaviour, the semantic-selector-only rule for every shipped
+  scenario, and that a malformed scenario is a usage error rather than a pass.
+- **Observation on demand** — `python3 scripts/or_ui.py screens` lists the screens
+  the running app exposes and dumps each one's semantics and screenshot;
+  `tree`, `shot` and `act` answer the same questions for one point in time. On
+  2026-10-18 `screens` found five destinations (Home, Projects, Templates, Asset
+  Library, Settings) at both 1280x800 and 320x440.
+- **Semantic state assertions** — a scenario can assert `expect_state` on a named
+  control (`enabled`, `disabled`, `selected`, `checked`, `focused`, `toggled`),
+  read from the semantics tree rather than from a widget field.
+- **Positional assertions** — a scenario proves where an edit *left* a clip, not
+  only that the app accepted the command: the timeline clip's semantics label
+  carries the exact span (`starts 1/4, duration 1/4, spans 1/4 to 1/2`) and, for a
+  media clip, its source window (`source 1/8`), so a screen reader announces the
+  edit precisely and `scripts/or_ui.py` can assert it. Fixing a defect or adding a
+  move without a positional assertion is incomplete: the four editing journeys
+  (`ripple-trim.json`, `slip-roll-slide.json`, `editor-journey.json`,
+  `compact-editor-journey.json`) all assert spans rather than acceptance.
+- **Measured interaction** — a scenario can wrap sub-steps in
+  `{"op": "measure"}` and the transcript records p50/p95/min/max with the
+  statement that it is wall clock on this host through the software path. A timed
+  step can set `"settle": false` so the following wait observes the visible
+  result; without that the measurement includes the harness's own settling budget
+  and measures the instrument rather than the app. The current numbers are in
+  [QUALITY.md](QUALITY.md#measured-interaction-latency-software-path), and they are
+  developer evidence, never a device or GPU claim.
 
 ## PRODUCTION REQUIRED FUTURE
 
 These items are required by the execution plan but are not production claims
 today.
+
+> **Status correction, 2026-10-17.** Part of Phase 7 has shipped since this
+> section was written. `docs/RELEASE.md` claims desktop play/pause, exact seek,
+> scrubbing and frame stepping, and a texture-backed viewer surface exists in
+> `apps/or_app/lib/screens/editor_shell_preview_screen.dart`. Read the Phase 7
+> bullets below as the remaining acceptance conditions for that work, not as
+> evidence that the feature is absent. The earlier contradiction between this
+> section and RELEASE.md was a documentation defect; the source and the hosted
+> evidence decide, and anything not covered by them stays `UNVERIFIED`.
 
 ### Phase 7 playback and preview
 

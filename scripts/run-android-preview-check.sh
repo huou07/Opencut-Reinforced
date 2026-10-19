@@ -12,7 +12,10 @@ if [[ "$case_name" == saf ]]; then
 else
   shift 4
 fi
-android_device_id=emulator-5554
+# The dedicated serial is an input, not a constant: the local Android lane
+# drives emulator-5580 while hosted CI drives emulator-5554, and a hardcoded
+# value silently drove the wrong guest from the lane.
+android_device_id="${OR_ANDROID_DEVICE_ID:-emulator-5554}"
 output_directory="${OR_ANDROID_ACCEPTANCE_OUTPUT:-$RUNNER_TEMP/android-$case_name}"
 mkdir -p "$output_directory"
 log="$output_directory/android-driver-$case_name.log"
@@ -46,7 +49,17 @@ health_pid=$!
 picker_pid=
 lifecycle_pid=
 cleanup() {
-  kill "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
+  # Kill the full descendant tree of every background job, not only the
+  # subshells that launched them: an orphaned grandchild (for example a
+  # `sleep`, an `adb` probe or a helper process) can outlive its parent and keep
+  # appending to the caller's output directory after this runner exits, racing a
+  # test harness' temporary-directory cleanup. Killing the trees, then waiting
+  # on the direct children, leaves no writer behind.
+  local background_pid
+  for background_pid in "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"}; do
+    [[ -n "$background_pid" ]] || continue
+    stop_process_tree "$background_pid"
+  done
   wait "$guest_pid" "$health_pid" ${picker_pid:+"$picker_pid"} ${lifecycle_pid:+"$lifecycle_pid"} 2>/dev/null || true
 }
 stop_process_tree() {
@@ -130,7 +143,7 @@ if [[ "$case_name" == saf ]]; then
   drive_args+=(--keep-app-running)
 fi
 (
-  flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds \
+  flutter drive --driver="$driver" --target="$target" -d "$android_device_id" --no-dds --no-pub \
     "${drive_args[@]}" "$@" 2>&1 | tee "$log"
 ) &
 drive_pid=$!

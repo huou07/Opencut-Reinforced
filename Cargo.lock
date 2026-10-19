@@ -1802,8 +1802,10 @@ dependencies = [
  "or_core",
  "or_ipc",
  "or_media",
+ "or_motion",
  "or_render",
  "or_runtime",
+ "serde_json",
  "sha2",
  "uuid",
 ]
@@ -1823,6 +1825,8 @@ version = "0.1.0"
 dependencies = [
  "or_core",
  "or_ipc",
+ "or_motion",
+ "or_render",
  "serde_json",
 ]
 
@@ -1862,12 +1866,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "or_motion"
+version = "0.1.0"
+dependencies = [
+ "or_core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "or_render"
 version = "0.1.0"
 dependencies = [
  "cosmic-text",
  "or_core",
+ "or_motion",
  "or_runtime",
+ "serde_json",
  "wgpu",
 ]
 

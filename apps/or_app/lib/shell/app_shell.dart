@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
@@ -25,12 +26,66 @@ import 'app_navigation.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'motion_materialize_dialog.dart';
 
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
 const _timelineMarkerPageSize = 100;
 const _maxActiveMediaPreviewRequests = 8;
 const _autosaveInterval = Duration(seconds: 30);
+
+/// Registers one Android media source for import, retrying a request that lost a race.
+///
+/// Registration is additive and idempotent, so a request that lost a race is worth one
+/// retry. The plugin bumps a binding epoch on every preview and registration request,
+/// and any *newer* request invalidates an in-flight one with `STALE_PREVIEW_REQUEST`:
+/// importing several documents in a row refreshes previews between them, so the next
+/// document's registration could be invalidated by that refresh and the document was
+/// then skipped. The Android SAF journey saw exactly that -- three selected documents,
+/// two imports, and no error the user could act on. The epoch guard itself is
+/// untouched; only the client's reaction to a stale refusal changes.
+///
+/// Returns `null` on success, or the message to report.
+Future<String?> registerAndroidMediaSource(
+  String source, {
+  required Future<bool> Function(String source) register,
+  int staleRetries = 2,
+}) async {
+  var staleAttempts = 0;
+  while (true) {
+    try {
+      if (await register(source)) return null;
+      return 'Android media access could not be opened.';
+    } on PlatformException catch (error) {
+      if (error.code == 'STALE_PREVIEW_REQUEST' &&
+          staleAttempts < staleRetries) {
+        staleAttempts++;
+        continue;
+      }
+      return error.message ?? 'Android media access is unavailable.';
+    } on MissingPluginException {
+      return 'Android media access is unavailable.';
+    }
+  }
+}
+
+/// Whether this process can create and remove a file in `directory`.
+///
+/// A cheap probe rather than a permission inspection: the encoder needs to create a
+/// staging directory and move a file, and only an attempt answers that.
+bool _directoryIsWritable(Directory directory) {
+  try {
+    if (!directory.existsSync()) return false;
+    final probe = File(
+      '${directory.path}/.or-write-probe-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    probe.createSync(exclusive: true);
+    probe.deleteSync();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -39,12 +94,16 @@ class AppShell extends StatefulWidget {
     required this.projectGateway,
     required this.projectFilePicker,
     required this.recentProjectStore,
+    this.audioCleanupDirectory,
   });
 
   final CoreGateway gateway;
   final ProjectGateway projectGateway;
   final ProjectFilePicker projectFilePicker;
   final RecentProjectStore recentProjectStore;
+
+  /// Where cleaned audio is written. Injectable so a test does not need a plugin.
+  final Future<Directory> Function()? audioCleanupDirectory;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -436,8 +495,10 @@ class _AppShellState extends State<AppShell> {
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
+              onCleanUpAudio: _cleanUpMediaAudio,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
+              onMoveTimelineTrack: _moveTimelineTrack,
               onLoadMoreTimelineClips: _loadMoreTimelineClips,
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
@@ -454,6 +515,9 @@ class _AppShellState extends State<AppShell> {
               onDeleteTimelineClip: _deleteTimelineClip,
               onTrimTimelineClip: _trimTimelineClip,
               onSplitTimelineClip: _splitTimelineClip,
+              onSlipTimelineClip: _slipTimelineClip,
+              onRollTimelineClip: _rollTimelineClip,
+              onSlideTimelineClip: _slideTimelineClip,
               onRippleDeleteTimelineClip: _rippleDeleteTimelineClip,
               onAddTimelineMarker: _addTimelineMarker,
               onMoveTimelineMarker: _moveTimelineMarker,
@@ -493,9 +557,51 @@ class _AppShellState extends State<AppShell> {
           onSelected: _redoProject,
         ),
         CommandPaletteAction(label: 'Close Project', onSelected: _closeProject),
+        CommandPaletteAction(
+          label: 'Illustration Video',
+          onSelected: () => unawaited(_openMotionMaterialize()),
+        ),
       ],
     ],
   );
+
+  /// Turns a code file into an illustration video through the shared gateway.
+  ///
+  /// The default destination is the application documents directory rather than the
+  /// project directory: the result is media, not canonical project state, and writing
+  /// beside the project would invite a client to treat it as part of the document.
+  Future<void> _openMotionMaterialize() async {
+    if (_activeSession == null) return;
+    // The default must be somewhere this process can actually write. The encoder
+    // stages a private sibling beside the destination and moves it into place, so an
+    // unwritable parent fails late and confusingly -- the hosted harness saw
+    // "MOTION_ENCODER_UNAVAILABLE: could not create export staging directory:
+    // Permission denied" because the documents directory it reported was not writable
+    // by the app's user. A probe here keeps the default honest and the field editable.
+    String destination = '${Directory.systemTemp.path}/illustration.mkv';
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      if (_directoryIsWritable(directory)) {
+        destination = '${directory.path}/illustration.mkv';
+      }
+    } catch (_) {
+      // The system temporary directory is the default already.
+    }
+    if (!mounted) return;
+    await showMotionMaterializeDialog(
+      context: context,
+      initialDestinationPath: destination,
+      render: (request) => widget.projectGateway.materializeIllustration(
+        sourcePath: request.sourcePath,
+        destinationPath: request.destinationPath,
+        frameRateNumerator: request.frameRate,
+        frameRateDenominator: 1,
+        width: request.width,
+        height: request.height,
+        title: request.title,
+      ),
+    );
+  }
 
   void _openWorkspace() {
     if (_activeSession != null) _select(AppDestination.editorPreview);
@@ -2205,6 +2311,22 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Future<void> _moveTimelineTrack(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    int toIndex,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineTrack(
+        session,
+        current,
+        trackId: track.trackId,
+        toIndex: toIndex,
+      ),
+    );
+  }
+
   Future<void> _insertMediaIntoTimeline(
     ProjectReadModel expected,
     ProjectMediaItem media,
@@ -2212,6 +2334,7 @@ class _AppShellState extends State<AppShell> {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   ) async {
     await _runProjectActionAtSnapshot(
       expected,
@@ -2223,6 +2346,7 @@ class _AppShellState extends State<AppShell> {
         timelineStart: timelineStart,
         sourceStart: sourceStart,
         duration: duration,
+        mode: mode,
       ),
     );
   }
@@ -2438,6 +2562,7 @@ class _AppShellState extends State<AppShell> {
     ProjectTimelineClip clip,
     ProjectTimelineTrimEdge edge,
     ProjectRationalTime timelineTime,
+    bool ripple,
   ) async {
     final session = _activeSession;
     final result = await _runProjectActionAtSnapshot(
@@ -2448,6 +2573,7 @@ class _AppShellState extends State<AppShell> {
         clipId: clip.clipId,
         edge: edge,
         timelineTime: timelineTime,
+        ripple: ripple,
       ),
     );
     if (result == null &&
@@ -2470,6 +2596,54 @@ class _AppShellState extends State<AppShell> {
         current,
         clipId: clip.clipId,
         timelineTime: timelineTime,
+      ),
+    );
+  }
+
+  Future<void> _slipTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectRationalTime delta,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.slipTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        delta: delta,
+      ),
+    );
+  }
+
+  Future<void> _rollTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectRationalTime delta,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.rollTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        delta: delta,
+      ),
+    );
+  }
+
+  Future<void> _slideTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineClip clip,
+    ProjectRationalTime delta,
+  ) async {
+    await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.slideTimelineClip(
+        session,
+        current,
+        clipId: clip.clipId,
+        delta: delta,
       ),
     );
   }
@@ -2605,16 +2779,12 @@ class _AppShellState extends State<AppShell> {
     for (final source in sources) {
       if (!mounted || !identical(session, _activeSession)) return;
       if (Platform.isAndroid) {
-        try {
-          if (!await OrViewerTexture.registerMediaSourceForImport(source)) {
-            failures.add('Android media access could not be opened.');
-            continue;
-          }
-        } on PlatformException catch (error) {
-          failures.add(error.message ?? 'Android media access is unavailable.');
-          continue;
-        } on MissingPluginException {
-          failures.add('Android media access is unavailable.');
+        final failure = await registerAndroidMediaSource(
+          source,
+          register: OrViewerTexture.registerMediaSourceForImport,
+        );
+        if (failure != null) {
+          failures.add(failure);
           continue;
         }
         if (!mounted || !identical(session, _activeSession)) return;
@@ -2647,6 +2817,86 @@ class _AppShellState extends State<AppShell> {
         '${failures.length} could not be imported. $failureSummary',
       );
     }
+  }
+
+  /// Reduces noise in one media item's audio and imports the result as a new item.
+  ///
+  /// The clean-up itself is a file operation: nothing in the project changes until
+  /// the import below, which is an ordinary revision-checked `media.add`. Leaving the
+  /// original untouched is the point — the two sit side by side and the user compares
+  /// them, or removes one.
+  Future<void> _cleanUpMediaAudio(ProjectMediaItem item) async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    final sourcePath = _mediaSourcePath(item);
+    if (sourcePath == null) {
+      _showUnavailable('This item has no readable source path to clean up.');
+      return;
+    }
+    Directory directory;
+    try {
+      final resolved =
+          await (widget.audioCleanupDirectory ??
+              getApplicationSupportDirectory)();
+      directory = Directory(
+        '${resolved.path}${Platform.pathSeparator}audio-cleanup',
+      );
+      // Synchronous on purpose: this is one mkdir, and awaiting real filesystem
+      // I/O here leaves the continuation parked in a widget test's fake async zone.
+      directory.createSync(recursive: true);
+    } catch (_) {
+      _showUnavailable('A folder for the cleaned audio is unavailable.');
+      return;
+    }
+    if (!mounted || !identical(session, _activeSession)) return;
+    final segments = sourcePath.replaceAll('\\', '/').split('/');
+    final name = segments.isEmpty ? 'audio' : segments.last;
+    final destination =
+        '${directory.path}${Platform.pathSeparator}'
+        '${DateTime.now().millisecondsSinceEpoch}-$name.cleaned.wav';
+
+    AudioCleanupOutcome outcome;
+    try {
+      outcome = await widget.projectGateway.cleanUpAudio(
+        session,
+        sourcePath: sourcePath,
+        destinationPath: destination,
+        reductionDb: 12,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable('Audio cleanup failed: ${error.message}');
+      return;
+    }
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (!outcome.succeeded) {
+      _showUnavailable(
+        'Audio cleanup failed: ${outcome.message.isEmpty ? outcome.errorCode : outcome.message}',
+      );
+      return;
+    }
+
+    final imported = await _runProjectAction((session, current) {
+      return widget.projectGateway.importMedia(
+        session,
+        current,
+        outcome.destination,
+      );
+    });
+    if (!mounted || !identical(session, _activeSession)) return;
+    if (imported == null) return;
+    _showUnavailable(
+      'Cleaned audio added to the project '
+      '(noise floor ${outcome.noiseFloorDb} dBFS, ${outcome.reductionDb} dB reduction).',
+    );
+  }
+
+  /// The filesystem path behind a media item, when the platform exposed one.
+  String? _mediaSourcePath(ProjectMediaItem item) {
+    final uri = Uri.tryParse(item.sourceUri);
+    if (uri == null) return null;
+    if (uri.scheme == 'file') return uri.toFilePath();
+    if (uri.scheme.isEmpty) return item.sourceUri;
+    return null;
   }
 
   Future<void> _removeMedia(ProjectMediaItem item) async {
@@ -2760,12 +3010,16 @@ class _AppShellState extends State<AppShell> {
         await _refreshProjectState(session);
         return;
       }
+      final items = List<ProjectMediaItem>.unmodifiable([
+        ...page.items,
+        ...next.items,
+      ]);
       setState(() {
         _mediaPage = ProjectMediaPage(
           projectId: page.projectId,
           projectInstanceId: page.projectInstanceId,
           projectRevision: page.projectRevision,
-          items: List.unmodifiable([...page.items, ...next.items]),
+          items: items,
           totalCount: next.totalCount,
           offset: 0,
           limit: page.limit,
@@ -2773,7 +3027,11 @@ class _AppShellState extends State<AppShell> {
         );
         _mediaLoadError = null;
       });
-      _queueMediaPreviews(session, next.items);
+      // `_queueMediaPreviews` treats its list as the complete loaded set and
+      // drops previews outside it, so pass the accumulated page rather than only
+      // the newly fetched items; otherwise loading page two discards every
+      // preview already generated for page one.
+      _queueMediaPreviews(session, items);
     } on ProjectGatewayException catch (error) {
       if (mounted && identical(session, _activeSession)) {
         setState(() => _mediaLoadError = error.message);
@@ -3678,7 +3936,16 @@ class _AppShellState extends State<AppShell> {
 
   void _showUnavailable(String message) {
     if (!mounted) return;
-    OrSnackBar.show(context, message);
+    // The compact editor's tool dock occupies the bottom 58 px; a message that
+    // covers it steals dock taps. Every transient message funnels through here,
+    // so one inset fixes every caller.
+    final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
+    final editor = _destination == AppDestination.editorPreview;
+    OrSnackBar.show(
+      context,
+      message,
+      bottomInset: compact && editor ? OrSpacing.topBarHeight : 0,
+    );
   }
 }
 

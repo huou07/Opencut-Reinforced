@@ -589,6 +589,36 @@ pub struct RecoveryActionResult {
     pub message: String,
 }
 
+/// The outcome of reducing noise in a media file.
+///
+/// A failure carries the caller-facing code and message; a success carries what was
+/// written and the floor the filter was given, so a client can show both and a test
+/// can assert the derivation.
+#[derive(Clone, Debug)]
+pub struct MediaCleanupResultView {
+    pub succeeded: bool,
+    pub error_code: String,
+    pub message: String,
+    pub destination: String,
+    pub noise_floor_db: i32,
+    pub reduction_db: u32,
+    pub bytes_written: u64,
+}
+
+impl MediaCleanupResultView {
+    fn failure(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            succeeded: false,
+            error_code: code.to_owned(),
+            message: message.into(),
+            destination: String::new(),
+            noise_floor_db: 0,
+            reduction_db: 0,
+            bytes_written: 0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ProjectBridgeError {
     pub code: String,
@@ -1848,7 +1878,31 @@ impl ProjectHostHandle {
         source_start_denominator: u32,
         duration_numerator: i64,
         duration_denominator: u32,
+        // `insert` (the default) or `overwrite`: an explicit command input, never
+        // canonical project state.
+        mode: Option<String>,
+        // Only read by overwrite when the new span lands strictly inside one
+        // existing clip, mirroring `timeline.clip.split`'s `new_clip_id`.
+        overwrite_split_clip_id: Option<String>,
     ) -> ProjectActionResult {
+        let edit_mode = match mode.as_deref() {
+            None => or_core::TimelineEditMode::Insert,
+            Some(value) => match or_core::TimelineEditMode::parse_wire(value) {
+                Some(edit_mode) => edit_mode,
+                None => return action_error(timeline_arguments_error()),
+            },
+        };
+        // The bridge owns id generation for this command, exactly as it does for
+        // the inserted clip itself. A client may name the fragment; when it does
+        // not, one is generated here so an overwrite that lands inside an existing
+        // clip completes instead of refusing for want of an id no user could type.
+        let split_clip_id = match overwrite_split_clip_id {
+            None => None,
+            Some(value) => match ClipId::from_str(&value) {
+                Ok(clip_id) => Some(clip_id),
+                Err(_) => return action_error(timeline_arguments_error()),
+            },
+        };
         let track_id = match TrackId::from_str(&track_id) {
             Ok(track_id) => track_id,
             Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
@@ -1880,7 +1934,7 @@ impl ProjectHostHandle {
             project_instance_id,
             expected_revision,
             |project_id, project_instance_id, revision| {
-                CommandEnvelope::insert_timeline_clip(
+                CommandEnvelope::insert_timeline_clip_with_mode(
                     project_id,
                     project_instance_id,
                     revision,
@@ -1889,6 +1943,12 @@ impl ProjectHostHandle {
                     media_id,
                     timeline_start,
                     source_range,
+                    edit_mode,
+                    if edit_mode == or_core::TimelineEditMode::Overwrite {
+                        Some(split_clip_id.unwrap_or_else(ClipId::generate))
+                    } else {
+                        None
+                    },
                 )
             },
         )
@@ -2098,6 +2158,8 @@ impl ProjectHostHandle {
         edge: TimelineTrimEdgeView,
         timeline_time_numerator: i64,
         timeline_time_denominator: u32,
+        // Opt-in end-edge ripple; absent keeps the plain trim meaning exactly.
+        ripple: Option<bool>,
     ) -> ProjectActionResult {
         let clip_id = match ClipId::from_str(&clip_id) {
             Ok(clip_id) => clip_id,
@@ -2113,7 +2175,7 @@ impl ProjectHostHandle {
             project_instance_id,
             expected_revision,
             |project_id, project_instance_id, revision| {
-                CommandEnvelope::trim_timeline_clip(
+                CommandEnvelope::trim_timeline_clip_with_ripple(
                     project_id,
                     project_instance_id,
                     revision,
@@ -2123,12 +2185,144 @@ impl ProjectHostHandle {
                         TimelineTrimEdgeView::End => TimelineTrimEdge::End,
                     },
                     timeline_time,
+                    ripple.unwrap_or(false),
                 )
             },
         )
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Moves a track to another position in the track list.
+    pub fn move_timeline_track(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        to_index: u32,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::move_timeline_track(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    to_index as usize,
+                )
+            },
+        )
+    }
+
+    /// Moves a clip's source window by the given delta without moving the clip.
+    pub fn slip_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        delta_numerator: i64,
+        delta_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::slip_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    delta,
+                )
+            },
+        )
+    }
+
+    /// Moves the boundary between two adjacent clips by the given delta.
+    pub fn roll_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        delta_numerator: i64,
+        delta_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::roll_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    delta,
+                )
+            },
+        )
+    }
+
+    /// Moves a clip in time by the given delta, letting its neighbours absorb it.
+    pub fn slide_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        clip_id: String,
+        delta_numerator: i64,
+        delta_denominator: u32,
+    ) -> ProjectActionResult {
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::slide_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    clip_id,
+                    delta,
+                )
+            },
+        )
+    }
+
     pub fn split_timeline_clip(
         &self,
         project_id: String,
@@ -2476,6 +2670,65 @@ impl ProjectHostHandle {
             revision,
             item,
         ))
+    }
+
+    /// Reduces noise in one media file and writes the result to `destination`.
+    ///
+    /// This is a file-to-file media operation, not a project mutation: no project is
+    /// opened, nothing in one changes, and the result is ordinary media the caller
+    /// can import and compare. The noise floor is derived from the material when
+    /// `noise_floor_db` is `None`, because a constant would leave the noise in one
+    /// recording and eat the audio in another.
+    pub fn clean_up_audio(
+        &self,
+        source: String,
+        destination: String,
+        noise_floor_db: Option<i32>,
+        reduction_db: u32,
+    ) -> MediaCleanupResultView {
+        if reduction_db == 0 {
+            return MediaCleanupResultView::failure(
+                "INVALID_ARGUMENTS",
+                "reduction cannot be zero",
+            );
+        }
+        let source_path = std::path::PathBuf::from(&source);
+        let destination_path = std::path::PathBuf::from(&destination);
+        let noise_floor_db = match noise_floor_db {
+            Some(value) => value,
+            None => match or_core::measure_noise_floor(&source_path) {
+                Ok(value) => value,
+                Err(error) => {
+                    return MediaCleanupResultView::failure(
+                        error.code().as_str(),
+                        format!(
+                            "could not measure the noise floor: {}",
+                            error.code().as_str()
+                        ),
+                    );
+                }
+            },
+        };
+        match or_core::clean_audio_file(
+            &source_path,
+            &destination_path,
+            noise_floor_db,
+            reduction_db,
+        ) {
+            Ok(result) => MediaCleanupResultView {
+                succeeded: true,
+                error_code: String::new(),
+                message: String::new(),
+                destination: result.destination.display().to_string(),
+                noise_floor_db: result.noise_floor_db,
+                reduction_db: result.reduction_db,
+                bytes_written: result.bytes_written,
+            },
+            Err(error) => MediaCleanupResultView::failure(
+                error.code().as_str(),
+                format!("noise reduction failed: {}", error.code().as_str()),
+            ),
+        }
     }
 
     /// Re-probes a replacement source without changing the target media identity.
@@ -3419,6 +3672,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
         ClipContent::Media {
             media_id,
             source_range,
+            playback_rate: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -3990,6 +4244,9 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
         OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
+        OperationErrorCode::TimelineOverwriteSplitRequiresClipId => {
+            "TIMELINE_OVERWRITE_SPLIT_REQUIRES_CLIP_ID"
+        }
         OperationErrorCode::TimelineLimitExceeded => "TIMELINE_LIMIT_EXCEEDED",
         OperationErrorCode::TimelineMarkerIdAlreadyExists => "TIMELINE_MARKER_ID_ALREADY_EXISTS",
         OperationErrorCode::TimelineMarkerNotFound => "TIMELINE_MARKER_NOT_FOUND",
@@ -4260,6 +4517,7 @@ mod tests {
                     timeline_start: RationalTime::new(3003, 1001).unwrap(),
                     timeline_duration: RationalTime::new(5, 2).unwrap(),
                     content: ClipContent::Media {
+                        playback_rate: or_core::RationalRate::ONE,
                         media_id,
                         source_range: TimeRange::new(
                             RationalTime::new(1, 2).unwrap(),
@@ -4489,6 +4747,44 @@ mod tests {
             )
             .expect_err("a missing cache must be reported, not ignored");
         assert_eq!(error.code, "CACHE_UNAVAILABLE");
+    }
+
+    #[test]
+    fn audio_cleanup_reports_a_missing_source_with_the_core_code() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+        let missing = directory.0.join("no-such-source-9f2.wav");
+        let destination = directory.0.join("cleaned.wav");
+
+        let result = handle.clean_up_audio(
+            missing.display().to_string(),
+            destination.display().to_string(),
+            None,
+            12,
+        );
+
+        assert!(!result.succeeded);
+        // The code is the core's, so a client switches on one vocabulary whichever
+        // layer refuses the request.
+        assert_eq!(result.error_code, "INVALID_ARGUMENTS");
+        assert!(!destination.exists());
+    }
+
+    #[test]
+    fn audio_cleanup_refuses_a_zero_reduction_before_measuring_anything() {
+        let directory = TestHostDirectory::new();
+        let handle = handle_without_artifact_service(&directory);
+
+        let result = handle.clean_up_audio(
+            directory.0.join("anything.wav").display().to_string(),
+            directory.0.join("cleaned.wav").display().to_string(),
+            Some(-30),
+            0,
+        );
+
+        assert!(!result.succeeded);
+        assert_eq!(result.error_code, "INVALID_ARGUMENTS");
+        assert!(result.message.contains("reduction"));
     }
 
     #[test]

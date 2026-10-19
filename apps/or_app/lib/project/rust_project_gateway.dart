@@ -830,6 +830,8 @@ class RustProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) async => _action(
     await _host(session).insertTimelineClip(
       projectId: current.projectId,
@@ -843,6 +845,8 @@ class RustProjectGateway implements ProjectGateway {
       sourceStartDenominator: sourceStart.denominator,
       durationNumerator: duration.numerator.toInt(),
       durationDenominator: duration.denominator,
+      mode: mode,
+      overwriteSplitClipId: overwriteSplitClipId,
     ),
   );
 
@@ -927,12 +931,87 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) async {
+    final view = await _host(session).cleanUpAudio(
+      source: sourcePath,
+      destination: destinationPath,
+      noiseFloorDb: noiseFloorDb,
+      reductionDb: reductionDb,
+    );
+    return AudioCleanupOutcome(
+      succeeded: view.succeeded,
+      destination: view.destination,
+      noiseFloorDb: view.noiseFloorDb,
+      reductionDb: view.reductionDb,
+      bytesWritten: view.bytesWritten.toInt(),
+      errorCode: view.errorCode,
+      message: view.message,
+    );
+  }
+
+  @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) async {
+    final view = await rust.materializeMotionSceneFromCode(
+      sourcePath: sourcePath,
+      outputPath: destinationPath,
+      frameRateNumerator: frameRateNumerator,
+      frameRateDenominator: frameRateDenominator,
+      width: width,
+      height: height,
+      title: title,
+    );
+    return MotionMaterializationOutcome(
+      succeeded: view.succeeded,
+      destinationPath: view.outputPath,
+      frameCount: view.frameCount.toInt(),
+      width: view.width,
+      height: view.height,
+      frameRateNumerator: view.frameRateNumerator,
+      frameRateDenominator: view.frameRateDenominator,
+      bytesWritten: view.bytesWritten.toInt(),
+      errorCode: view.code,
+      message: view.message,
+    );
+  }
+
+  @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) async => _action(
+    await _host(session).moveTimelineTrack(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      toIndex: toIndex,
+    ),
+  );
+
+  @override
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) async => _action(
     await _host(session).trimTimelineClip(
       projectId: current.projectId,
@@ -945,6 +1024,58 @@ class RustProjectGateway implements ProjectGateway {
       },
       timelineTimeNumerator: timelineTime.numerator.toInt(),
       timelineTimeDenominator: timelineTime.denominator,
+      ripple: ripple,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async => _action(
+    await _host(session).slipTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      deltaNumerator: delta.numerator.toInt(),
+      deltaDenominator: delta.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async => _action(
+    await _host(session).rollTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      deltaNumerator: delta.numerator.toInt(),
+      deltaDenominator: delta.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async => _action(
+    await _host(session).slideTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      clipId: clipId,
+      deltaNumerator: delta.numerator.toInt(),
+      deltaDenominator: delta.denominator,
     ),
   );
 

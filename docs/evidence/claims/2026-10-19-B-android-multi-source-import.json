@@ -1,0 +1,30 @@
+{
+  "requirement": "B-android-multi-source-import",
+  "claim": "Android's real DocumentsUI journey selected three media documents in one selection and imported all three; the drop caused by a stale preview registration invalidating an in-flight import is repaired.",
+  "implementation_sha": "37352fd81d743c0a5f2b2b97fb72b1582352f87b",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39191339761",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "The Android job built the case APKs and ran the SAF preview case on an API 36 x86_64 emulator; the case passed its import-count expectation (_untilMediaImports expected 3) where the previous revision imported 2, and then completed relink, export, recovery and bounded-resource checks."
+  },
+  "verified_at_utc": "2026-10-19T03:17:43Z",
+  "evidence_class": "emulator",
+  "limitations": [
+    "Android evidence is from an API 36 x86_64 SwiftShader emulator, not a physical device.",
+    "The media is a small synthetic fixture; it does not establish performance with representative media.",
+    "The repair retries a registration refused as STALE_PREVIEW_REQUEST; the plugin's binding-epoch guard itself is unchanged and still refuses work a newer request replaced.",
+    "The previous revision 44f9e39 failed this same case with two of three imports, which is the regression this run verifies as repaired."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 0 Android lane"
+}

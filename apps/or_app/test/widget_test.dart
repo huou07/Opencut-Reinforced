@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/core_gateway.dart';
@@ -16,6 +17,8 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/shell/app_shell.dart';
+import 'package:or_app/shell/motion_materialize_dialog.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
@@ -358,6 +361,331 @@ void main() {
     },
   );
 
+  testWidgets('cleaning a media item imports the result as its own item', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_audioMediaFixture('media-audio', '/tmp/music.wav')];
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final picker = _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Cleanup');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-audio')));
+    await tester.pumpAndSettle();
+    // The handler makes a directory and calls the gateway, so real asynchronous
+    // work has to be allowed to finish; pumpAndSettle alone does not wait for it.
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-media-audio')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.lastCleanUpSource, '/tmp/music.wav');
+    // The floor is not passed: the bridge measures the material's own.
+    expect(gateway.lastCleanUpNoiseFloorDb, isNull);
+    expect(gateway.lastCleanUpDestination, endsWith('music.wav.cleaned.wav'));
+    expect(gateway.lastCleanUpDestination, contains('audio-cleanup'));
+    // The result is imported through the ordinary revision-checked media command.
+    expect(gateway.importMediaCalls, 1);
+    expect(gateway.lastImportedPath, gateway.lastCleanUpDestination);
+    expect(
+      find.textContaining('Cleaned audio added to the project'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed audio cleanup imports nothing and says so', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_audioMediaFixture('media-audio', '/tmp/music.wav')]
+      ..cleanUpAudioFailure = 'the helper is missing';
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj',
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Cleanup failure');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-audio')));
+    await tester.pumpAndSettle();
+    // The handler makes a directory and calls the gateway, so real asynchronous
+    // work has to be allowed to finish; pumpAndSettle alone does not wait for it.
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-media-audio')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.importMediaCalls, 0);
+    expect(find.textContaining('the helper is missing'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an item with no audio offers no cleanup', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-silent',
+          sourceUri: Uri.file('/tmp/silent.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '10 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: null,
+        ),
+      ];
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/cleanup.orproj',
+    );
+    await _createProject(tester, 'No audio');
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-media-silent')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('media-clean-audio-media-silent')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the compact media sheet offers audio cleanup and imports it', (
+    tester,
+  ) async {
+    // Android and the compact layouts reach media through the tool dock sheet, so
+    // the action has to exist there too, not only in the desktop tool panel.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'compact-clean',
+          sourceUri: Uri.file('/tmp/compact-clean.wav').toString(),
+          formatNames: const ['wav'],
+          duration: '1 s',
+          videoDetails: null,
+          audioDetails: 'pcm',
+        ),
+      ];
+    final directory = Directory.systemTemp.createTempSync('or-audio-cleanup');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/compact-clean.orproj',
+      audioCleanupDirectory: () async => directory,
+    );
+    await _createProject(tester, 'Compact cleanup');
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('media-actions-compact-clean')));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('media-clean-audio-compact-clean')),
+      );
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(gateway.cleanUpAudioCalls, 1);
+    expect(gateway.lastImportedPath, gateway.lastCleanUpDestination);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a stale Android import registration is retried, not skipped', (
+    tester,
+  ) async {
+    // The plugin bumps a binding epoch on every preview and registration request, so
+    // importing several documents in a row can invalidate the next one's registration
+    // with STALE_PREVIEW_REQUEST. Registration is additive and idempotent, so the
+    // shell retries it instead of dropping the document -- the Android SAF journey
+    // selected three documents and imported two before this. The retry is a named
+    // function so this can be tested without an Android host: dart:io's
+    // Platform.isAndroid reads the host, not the target platform override.
+    var attempts = 0;
+    final stale = await registerAndroidMediaSource(
+      'content://provider/document/clip-3',
+      register: (source) async {
+        attempts++;
+        if (attempts == 1) {
+          throw PlatformException(
+            code: 'STALE_PREVIEW_REQUEST',
+            message: 'A newer preview or project replaced this media request.',
+          );
+        }
+        return true;
+      },
+    );
+    expect(stale, isNull, reason: 'a stale refusal must not drop the document');
+    expect(attempts, 2, reason: 'the refusal is retried exactly once');
+
+    // A refusal the client cannot fix is reported, not retried forever.
+    var permanentAttempts = 0;
+    final permanent = await registerAndroidMediaSource(
+      'content://provider/document/clip-4',
+      register: (source) async {
+        permanentAttempts++;
+        throw PlatformException(
+          code: 'MEDIA_PERMISSION_REQUIRED',
+          message: 'Access to the selected media source is unavailable.',
+        );
+      },
+    );
+    expect(permanent, 'Access to the selected media source is unavailable.');
+    expect(permanentAttempts, 1, reason: 'a permission refusal is not retried');
+
+    // A registration that returns false is a failure, not a retry loop.
+    var falseAttempts = 0;
+    final refused = await registerAndroidMediaSource(
+      'content://provider/document/clip-5',
+      register: (source) async {
+        falseAttempts++;
+        return false;
+      },
+    );
+    expect(refused, isNotNull);
+    expect(falseAttempts, 1);
+
+    // A stale refusal that never clears stops after the retry budget.
+    var alwaysStale = 0;
+    final exhausted = await registerAndroidMediaSource(
+      'content://provider/document/clip-6',
+      register: (source) async {
+        alwaysStale++;
+        throw PlatformException(
+          code: 'STALE_PREVIEW_REQUEST',
+          message: 'stale',
+        );
+      },
+    );
+    expect(exhausted, 'stale');
+    expect(
+      alwaysStale,
+      3,
+      reason: 'two retries and then the refusal is reported',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'the illustration surface refuses an empty source and reports a render',
+    (tester) async {
+      // The surface is the user-visible half of code-to-illustration video. It is driven
+      // through an injected renderer so the guard needs no Rust library, and it asserts
+      // the three things a user depends on: a refusal that says what is missing, a request
+      // that carries exactly what was entered, and a result that names the file.
+      _setViewport(tester, const Size(1280, 800));
+      // The surface is mounted on its own host: this guard is about the dialog, and
+      // mounting the whole shell would make the failure ambiguous.
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
+      );
+      var rendered = 0;
+      MotionMaterializeRequest? seen;
+      // The dialog's future completes when it closes, so the test drives it first and
+      // awaits it last; awaiting here would deadlock the test against itself.
+      final dialog = showMotionMaterializeDialog(
+        context: tester.element(find.byType(Scaffold)),
+        initialDestinationPath: '/tmp/illustration.mkv',
+        render: (request) async {
+          rendered++;
+          seen = request;
+          return const MotionMaterializationOutcome(
+            succeeded: true,
+            destinationPath: '/tmp/illustration.mkv',
+            frameCount: 24,
+            width: 800,
+            height: 450,
+            frameRateNumerator: 12,
+            frameRateDenominator: 1,
+            bytesWritten: 4096,
+            errorCode: 'OK',
+            message: 'Materialised 24 frames.',
+          );
+        },
+      );
+      await tester.pumpAndSettle();
+
+      // A render with no source is refused, with a reason, and does not call the renderer.
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+      expect(rendered, 0);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('motion-materialize-status')),
+            )
+            .data,
+        contains('Choose a code file'),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-source')),
+        '/tmp/count_words.rs',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-width')),
+        '800',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-height')),
+        '450',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('motion-materialize-frame-rate')),
+        '12',
+      );
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+
+      expect(rendered, 1);
+      expect(seen!.sourcePath, '/tmp/count_words.rs');
+      expect(seen!.frameRate, 12);
+      expect(seen!.width, 800);
+      expect(seen!.height, 450);
+      expect(seen!.destinationPath, '/tmp/illustration.mkv');
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('motion-materialize-status')),
+            )
+            .data,
+        contains('24 frames'),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-cancel')));
+      await tester.pumpAndSettle();
+      // The dialog's future completes when it closes, so it is awaited last.
+      await dialog;
+    },
+  );
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
@@ -645,6 +973,60 @@ void main() {
       scrollable: panelScroll.first,
     );
     expect(find.text('clip-54.mp4'), findsOneWidget);
+  });
+
+  testWidgets('loading a later media page keeps earlier library previews', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final png = await _tinyPngBytes();
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = List.generate(
+        55,
+        (index) => _mediaFixture('media-$index', '/tmp/clip-$index.mp4'),
+      );
+    for (var index = 0; index < 55; index++) {
+      gateway.artifactRequestResponses['media-$index:thumbnail'] =
+          ProjectMediaArtifactRequest(
+            mediaId: 'media-$index',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.ready,
+            cacheKey: 'thumbnail-$index',
+          );
+      gateway.artifactResponses['thumbnail-$index'] = ProjectMediaArtifact(
+        bytes: png,
+        mimeType: 'image/png',
+      );
+    }
+    final picker = _FakeProjectPicker()..savePath = '/tmp/large-library.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Large Library');
+
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+
+    final panelScroll = find.descendant(
+      of: find.byKey(const ValueKey('project-media-panel')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('media-load-more')),
+      160,
+      scrollable: panelScroll.first,
+    );
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListOffsets, [0, 50]);
+
+    await tester.drag(panelScroll.first, const Offset(0, 5000));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('probe backend unavailability is shown honestly', (tester) async {
@@ -1313,6 +1695,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('timeline clip exposes an executable semantic activation', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'semantic-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'semantic-track': [
+          ProjectTimelineClip(
+            clipId: 'semantic-clip',
+            mediaId: 'semantic-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+          ),
+        ],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/semantic-clip.orproj',
+    );
+    await _createProject(tester, 'Semantic clip');
+    final handle = tester.ensureSemantics();
+    final clip = find.bySemanticsLabel(RegExp('starts 0/1, duration 2/1'));
+    final node = tester.getSemantics(clip);
+    expect(node.flagsCollection.isButton, isTrue);
+    expect(
+      node.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+      isTrue,
+      reason: node.toStringDeep(),
+    );
+    for (final label in [
+      'Trim start of Media semantic',
+      'Trim end of Media semantic',
+    ]) {
+      final trim = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(
+        trim.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+        reason: trim.toStringDeep(),
+      );
+    }
+    tester.binding.performSemanticsAction(
+      ui.SemanticsActionEvent(
+        type: ui.SemanticsAction.tap,
+        nodeId: node.id,
+        viewId: tester.view.viewId,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-duplicate-semantic-clip')),
+      findsOneWidget,
+    );
+    handle.dispose();
+  });
+
   testWidgets('timeline duplicate preserves exact source range', (
     tester,
   ) async {
@@ -1881,22 +2327,25 @@ void main() {
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
-  testWidgets('ZZ probe create at 320x640', (tester) async {
+  testWidgets('compact 320x640 create-project journey does not overflow', (
+    tester,
+  ) async {
+    // The Android SAF acceptance journey creates a project at the emulator's
+    // 320x640 viewport. This test replaced a probe that installed its own
+    // FlutterError.onError; the framework then never recorded the error, so its
+    // `takeException()` assertion could not fail and the journey had no real
+    // overflow guard.
     _setViewport(tester, const Size(320, 640));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()..savePath = '/tmp/zz-ovf.orproj';
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-create.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
-    FlutterError.onError = (details) {
-      FlutterError.dumpErrorToConsole(details);
-    };
-    await tester.tap(find.byKey(const ValueKey('home-new-project')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('new-project-name')),
-      'Ov',
+    await _createProject(tester, 'Compact create');
+
+    expect(
+      find.byKey(const ValueKey('timeline-empty-import-media')),
+      findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -3208,6 +3657,242 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('short compact viewport editor does not overflow', (
+    tester,
+  ) async {
+    // 320x480 reproduced a 31px overflow of the viewer placeholder; 320x440
+    // additionally reproduced the fixed-height timeline view controls
+    // overflowing their remaining strip.
+    for (final size in const [Size(320, 480), Size(320, 440)]) {
+      // Replace the previous tree so each viewport gets a fresh app state.
+      await tester.pumpWidget(const SizedBox.shrink());
+      _setViewport(tester, size);
+      final clip = ProjectTimelineClip(
+        clipId: 'short-clip',
+        mediaId: 'missing-media',
+        timelineStart: ProjectRationalTime(BigInt.one, 2),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'short-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'short-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/short-compact.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Short viewport ${size.height.round()}');
+      expect(find.text('V1'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'editor overflowed at ${size.width}x${size.height}',
+      );
+    }
+  });
+
+  testWidgets('short compact viewer does not overflow once frames exist', (
+    tester,
+  ) async {
+    // The compact journey (scripts/or_ui.py at 320x440) inserted a clip and then
+    // overflowed by 17 px. The trigger is the viewer's scrub strip: it only
+    // appears once the preview has a content end, so a guard whose preview has no
+    // range never exercises the failing layout. Here the viewer gets 4/6 of the
+    // editor's remaining height and must still fit its header, surface and strip.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'compact-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'compact-audio': [
+          ProjectTimelineClip(
+            clipId: 'compact-clip',
+            mediaId: 'compact-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      }
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        sequenceFrameRate: const ProjectRationalRate(30, 1),
+        width: 640,
+        height: 360,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-viewer.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact viewer');
+    expect(
+      find.byKey(const ValueKey('preview-next-frame')),
+      findsOneWidget,
+      reason: 'the transport must survive a short viewer panel',
+    );
+    expect(find.byKey(const ValueKey('preview-play')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // The surface keeps whatever the strip does not need, and it must be laid out
+    // (a negative or absent box would mean the strip squeezed it away instead of
+    // absorbing the shortfall).
+    final surface = tester.getRect(
+      find.byKey(const ValueKey('editor-viewer-surface')),
+    );
+    expect(surface.height, greaterThanOrEqualTo(0));
+    expect(surface.width, 320.0);
+  });
+
+  testWidgets('compact layout adds tracks through the same command path', (
+    tester,
+  ) async {
+    // Compact parity guard: the compact timeline toolbar must dispatch the same
+    // commands as the desktop one, so a track exists for the media sheet to
+    // insert into. scripts/or_ui.py's compact journey caught the sheet reporting
+    // "Add a compatible Video or Audio track first." after this tap.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-tracks.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact tracks');
+    Future<void> tapTimelineControl(String key) async {
+      final finder = find.byKey(ValueKey(key));
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+
+    await tapTimelineControl('timeline-add-video-track');
+    await tapTimelineControl('timeline-add-audio-track');
+    expect(gateway.lastSession!.tracks.map((track) => track.kind).toList(), [
+      ProjectTimelineTrackKind.video,
+      ProjectTimelineTrackKind.audio,
+    ], reason: 'the compact timeline toolbar did not add the requested tracks');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact media sheet inserts into an existing track', (
+    tester,
+  ) async {
+    // The compact journey (scripts/or_ui.py at 320x440) reached the insert
+    // dialog through the media sheet and then reported a RenderFlex overflow, so
+    // the compact insert path is guarded here where the failure prints its
+    // location.
+    _setViewport(tester, const Size(320, 440));
+    // The media item must carry a real duration: without one the insert dialog's
+    // duration field starts empty, the confirmation stays disabled, the tap does
+    // nothing, and a guard written this way passes while proving nothing.
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'compact-audio-media',
+          sourceUri: Uri.file('/tmp/compact-insert.wav').toString(),
+          formatNames: const ['wav'],
+          duration: '1 s',
+          videoDetails: null,
+          audioDetails: 'pcm',
+          firstAudioDuration: ProjectRationalTime(BigInt.one, 1),
+        ),
+      ]
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'compact-audio',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 0,
+        ),
+      ];
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-insert.orproj'
+      ..mediaPath = '/tmp/compact-insert.wav';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact insert');
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+    final addToTimeline = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'media-add-timeline-',
+          ),
+    );
+    expect(addToTimeline, findsOneWidget);
+    await tester.tap(addToTimeline);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-confirm-insert')),
+      findsOneWidget,
+      reason: 'the compact insert did not offer its confirmation',
+    );
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      // ignore: avoid_print
+      print('OR-OVERFLOW-DETAIL ${details.toString()}');
+      previousOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previousOnError);
+    await tester.tap(find.byKey(const ValueKey('timeline-confirm-insert')));
+    await tester.pumpAndSettle();
+    expect(
+      gateway.insertTimelineClipCalls,
+      1,
+      reason:
+          'the guard must observe a real insert, not a disabled confirmation',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a message does not steal the compact dock tap', (tester) async {
+    // Reproduced 2026-10-18 with scripts/or_ui.py at 320x440: after an import the
+    // transient message covered the 58 px mobile tool dock, so the dock tap that
+    // opens the compact media library never arrived and the whole compact
+    // workflow stalled until the message expired. The guard taps the dock while a
+    // message is showing, which is the user-visible property: the dock stays
+    // reachable.
+    _setViewport(tester, const Size(320, 440));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/compact-snackbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact snackbar');
+    OrSnackBar.show(
+      tester.element(find.byKey(const ValueKey('mobile-editor-tool-dock'))),
+      'Imported 1 of 1 selected files. 2 were rejected because their codecs are '
+      'not supported by this build, which is a long message on purpose.',
+      bottomInset: OrSpacing.topBarHeight,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SnackBar), findsOneWidget);
+    final dockCenter = tester.getCenter(
+      find.byKey(const ValueKey('mobile-editor-tool-media')),
+    );
+    await tester.tapAt(dockCenter);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('mobile-tool-sheet-close')),
+      findsOneWidget,
+      reason: 'the message covered the dock, so the dock tap never reached it',
+    );
+    // A long message must not overflow the short viewport either.
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('candidate recovery offers recover discard and cancel', (
     tester,
   ) async {
@@ -4264,6 +4949,7 @@ Future<void> _mount(
   _FakeProjectGateway? gateway,
   _FakeProjectPicker? picker,
   RecentProjectStore? recentProjectStore,
+  Future<Directory> Function()? audioCleanupDirectory,
 }) async {
   await tester.pumpWidget(
     OrApp(
@@ -4271,6 +4957,7 @@ Future<void> _mount(
       projectGateway: gateway ?? _FakeProjectGateway(),
       projectFilePicker: picker ?? _FakeProjectPicker(),
       recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
+      audioCleanupDirectory: audioCleanupDirectory,
     ),
   );
   await tester.pumpAndSettle();
@@ -4458,6 +5145,45 @@ class _FakeProjectPicker implements ProjectFilePicker {
 }
 
 class _FakeProjectGateway implements ProjectGateway {
+  /// The illustration requests the surface sent, in order.
+  final List<MotionMaterializeRequest> illustrationRequests = [];
+  MotionMaterializationOutcome? illustrationOutcome;
+
+  @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) async {
+    illustrationRequests.add(
+      MotionMaterializeRequest(
+        sourcePath: sourcePath,
+        destinationPath: destinationPath,
+        frameRate: frameRateNumerator,
+        width: width,
+        height: height,
+        title: title,
+      ),
+    );
+    return illustrationOutcome ??
+        MotionMaterializationOutcome(
+          succeeded: true,
+          destinationPath: destinationPath,
+          frameCount: 12,
+          width: width,
+          height: height,
+          frameRateNumerator: frameRateNumerator,
+          frameRateDenominator: frameRateDenominator,
+          bytesWritten: 1024,
+          errorCode: 'OK',
+          message: 'Materialised 12 frames.',
+        );
+  }
+
   final Map<String, _FakeSession> _sessionsByPath = {};
   final Map<String, ProjectReadModel> _savedByPath = {};
   _FakeSession? lastSession;
@@ -4559,6 +5285,19 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastMoveTimelineStart;
   int deleteTimelineClipCalls = 0;
   int trimTimelineClipCalls = 0;
+  int moveTimelineTrackCalls = 0;
+  int cleanUpAudioCalls = 0;
+  String? lastCleanUpSource;
+  String? lastCleanUpDestination;
+  int? lastCleanUpNoiseFloorDb;
+  String? cleanUpAudioFailure;
+  String? lastMovedTrackId;
+  int? lastMovedToIndex;
+  int slipTimelineClipCalls = 0;
+  int rollTimelineClipCalls = 0;
+  int slideTimelineClipCalls = 0;
+  String? lastSlipClipId;
+  ProjectRationalTime? lastSlipDelta;
   String? lastTrimClipId;
   ProjectTimelineTrimEdge? lastTrimEdge;
   ProjectRationalTime? lastTrimTimelineTime;
@@ -4579,6 +5318,7 @@ class _FakeProjectGateway implements ProjectGateway {
   final List<int> timelineClipOffsets = [];
   final List<int> timelineMarkerOffsets = [];
   int importMediaCalls = 0;
+  String? lastImportedPath;
   int relinkMediaCalls = 0;
   int removeMediaCalls = 0;
   String? lastImportSource;
@@ -5281,6 +6021,8 @@ class _FakeProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) async {
     insertTimelineClipCalls++;
     lastInsertTrackId = trackId;
@@ -5498,12 +6240,74 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle handle, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) async {
+    cleanUpAudioCalls++;
+    lastCleanUpSource = sourcePath;
+    lastCleanUpDestination = destinationPath;
+    lastCleanUpNoiseFloorDb = noiseFloorDb;
+    if (cleanUpAudioFailure != null) {
+      return AudioCleanupOutcome(
+        succeeded: false,
+        destination: '',
+        noiseFloorDb: 0,
+        reductionDb: reductionDb,
+        bytesWritten: 0,
+        errorCode: 'CLEANUP_GENERATION_FAILED',
+        message: cleanUpAudioFailure!,
+      );
+    }
+    return AudioCleanupOutcome(
+      succeeded: true,
+      destination: destinationPath,
+      noiseFloorDb: -38,
+      reductionDb: reductionDb,
+      bytesWritten: 1024,
+      errorCode: '',
+      message: '',
+    );
+  }
+
+  @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) async {
+    moveTimelineTrackCalls++;
+    lastMovedTrackId = trackId;
+    lastMovedToIndex = toIndex;
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final index = session.tracks.indexWhere(
+      (track) => track.trackId == trackId,
+    );
+    if (index < 0) return _timelineOperationFailure('TIMELINE_TRACK_NOT_FOUND');
+    if (toIndex >= session.tracks.length) {
+      return _timelineOperationFailure('INVALID_ARGUMENTS');
+    }
+    final moved = session.tracks.removeAt(index);
+    session.tracks.insert(toIndex, moved);
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle handle,
     ProjectReadModel current, {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) async {
     trimTimelineClipCalls++;
     lastTrimClipId = clipId;
@@ -5544,6 +6348,82 @@ class _FakeProjectGateway implements ProjectGateway {
       return ProjectActionResult(succeeded: true, view: session.view);
     }
     return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    slipTimelineClipCalls++;
+    lastSlipClipId = clipId;
+    lastSlipDelta = delta;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
+  }
+
+  /// The shared shape a slip, roll and slide all have for the fake: the clip's
+  /// source window moves by the delta while its timeline span is left alone. That
+  /// is enough for a widget test to observe which command was dispatched with which
+  /// arguments; the real arithmetic is the domain tests' business.
+  Future<ProjectActionResult> _shiftClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    final session = _session(handle);
+    final failure = _timelineFailure();
+    if (failure != null) return failure;
+    if (current.revision != session.view.revision) return _revisionConflict();
+    for (final entry in session.clips.entries) {
+      final index = entry.value.indexWhere((clip) => clip.clipId == clipId);
+      if (index < 0) continue;
+      final clip = entry.value[index];
+      final sourceStart =
+          clip.sourceStart ?? ProjectRationalTime(BigInt.zero, 1);
+      final shifted = ProjectRationalTime(
+        sourceStart.numerator * BigInt.from(delta.denominator) +
+            delta.numerator * BigInt.from(sourceStart.denominator),
+        sourceStart.denominator * delta.denominator,
+      );
+      if (shifted.numerator < BigInt.zero) {
+        return _timelineOperationFailure('INVALID_ARGUMENTS');
+      }
+      entry.value[index] = ProjectTimelineClip(
+        clipId: clip.clipId,
+        mediaId: clip.mediaId,
+        timelineStart: clip.timelineStart,
+        sourceStart: shifted,
+        timelineDuration: clip.timelineDuration,
+      );
+      _timelineChanged(session);
+      return ProjectActionResult(succeeded: true, view: session.view);
+    }
+    return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+  }
+
+  @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    rollTimelineClipCalls++;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
+  }
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async {
+    slideTimelineClipCalls++;
+    return _shiftClip(handle, current, clipId: clipId, delta: delta);
   }
 
   @override
@@ -5828,6 +6708,7 @@ class _FakeProjectGateway implements ProjectGateway {
   ) async {
     importMediaCalls++;
     lastImportSource = source;
+    lastImportedPath = source;
     importMediaSources.add(source);
     if (nextImportBackendUnavailable ||
         failedImportCalls.contains(importMediaCalls)) {

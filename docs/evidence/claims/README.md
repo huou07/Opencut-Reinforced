@@ -6,7 +6,7 @@ verified, replacing the paused checkpoint ledger.
 Authority: this directory is evidence, not a work selector. It records what was
 verified and when. What to do next lives in [../../PRODUCT_ROADMAP.md](../../PRODUCT_ROADMAP.md).
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
 ## Why this exists
 
@@ -38,7 +38,14 @@ One JSON file per verified requirement, named
 | `limitations` | What this record does NOT establish |
 
 A record without `implementation_sha` and `verified_at_utc` is invalid and the
-validator rejects it.
+validator rejects it. The validator also resolves the source identity rather
+than trusting it: `implementation_sha` must be a commit that exists in this
+repository (`git cat-file -e <sha>^{commit}`) and must be an ancestor of `HEAD`
+(`git merge-base --is-ancestor <sha> HEAD`), and `verification` must name the
+hosted identity (`workflow`, a non-empty `jobs` list, and `run_id`). A
+fabricated receipt therefore fails the gate instead of passing on SHA shape
+alone. Because of that, the hygiene job checks out full history
+(`fetch-depth: 0`); a shallow clone is reported as an unavailable check.
 
 ## Rules
 
@@ -62,10 +69,13 @@ validator rejects it.
 python3 scripts/check_claims.py
 ```
 
-The validator checks schema, SHA shape, timestamp format, evidence-class
-vocabulary, and that every `requirement` appears in `PRODUCT_ROADMAP.md`. It is
-part of `scripts/check-repo.sh`, so a malformed record fails repository
-hygiene.
+The validator checks schema, SHA shape, source identity in Git, timestamp
+format, evidence-class vocabulary, the hosted verification identity, and that
+every `requirement` appears in `PRODUCT_ROADMAP.md`. It is part of
+`scripts/check-repo.sh`, so a malformed record fails repository hygiene.
+`scripts/test_check_claims.py` proves the reject behaviour cannot regress: it
+feeds the validator a fabricated SHA, a real commit outside `HEAD` history, and
+records missing their hosted identity, and requires each to fail.
 
 ## What this does not do
 

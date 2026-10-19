@@ -1,0 +1,29 @@
+{
+  "requirement": "C-audio-cleanup",
+  "claim": "Noise filtering runs through the packaged FFmpeg helper — the afftdn filter and the wav muxer the clean-up writes through — and the denoise measurement passes in the hosted Linux, macOS and Windows jobs.",
+  "implementation_sha": "37352fd81d743c0a5f2b2b97fb72b1582352f87b",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39191339761",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "The three native jobs build the helper with the pinned configure line and run scripts/measure_denoise.py against it; the Rust job runs the audio-cleanup unit tests. The helper is built --disable-everything with the afftdn filter and the wav muxer added deliberately."
+  },
+  "verified_at_utc": "2026-10-19T03:17:43Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "The measurement uses synthetic PCM (white noise plus a tone), not recorded speech; it establishes the filter chain and the container, not perceptual quality on real material.",
+    "The loudness numbers (an 11.5 dB floor drop with 11.3 dB of discrimination, and a derived -21 dBFS floor) are local developer measurements; the hosted jobs verify that the measurement passes, not those exact values on every platform.",
+    "Voice enhancement and loudness normalisation are not covered by this record."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 4 noise filtering"
+}

@@ -103,8 +103,11 @@ Desktop now also has an implementation candidate for a smaller WebM delivery
 profile using VP9 video and Opus audio. It uses the same captured project,
 timeline renderer, mixer, staging, and publication path as the lossless profile.
 Exact-SHA hosted package and independent-playback evidence is required before
-calling this delivery profile accepted. Android continues to offer its verified
-Matroska profile because its packaged FFmpeg does not include these encoders.
+calling this delivery profile accepted. Android offers both the verified
+Matroska profile and a WebM + VP9/Opus package profile: the hosted `android` job
+builds the pinned libvpx and libopus per ABI and enables `libvpx_vp9`, `libopus`
+and the WebM muxer in the Android FFmpeg configure
+(`.github/workflows/platform-verification.yml:66-71,1345-1346`).
 
 Linked clips, grouping, nested timelines, multicamera, and other complex
 relationship semantics remain advanced Phase 13 scope unless re-promoted by a
@@ -338,8 +341,9 @@ current Rust proof nor the pending desktop path establishes camera-source
 variation or physical-device performance. The import profile remains a
 candidate pending packaged acceptance and codec patent/distribution review.
 MP4 export remains out of scope; the lossless Matroska export remains available
-on desktop and Android. Android WebM delivery is a candidate pending the
-packaged codec and provider-output checks described below. Matroska also accepts H.264 video and AAC audio through
+on desktop and Android. Android WebM delivery's packaged codec and
+provider-output checks passed at exact SHA `33f7f355` (run 38172368290, recorded
+in PRODUCT_ROADMAP.md); physical-device performance remains unverified. Matroska also accepts H.264 video and AAC audio through
 the existing packaged FFmpeg decoder path. A pinned 30-second Big Buck Bunny
 source is used only by the desktop packaged journey; its original soundtrack is
 not included. Exact packaged proof for that longer import/export journey is
@@ -368,7 +372,7 @@ build-configuration review as other optional delivery profiles.
 
 **MVP FOUNDATION:** usable software video export through a background job with progress and cancellation. The mandatory correctness profile is Matroska + FFV1 video + PCM S16LE audio through linked software FFmpeg. Other delivery and hardware profiles are optional and require separate evidence.
 
-**AVAILABLE (desktop):** WebM + VP9/Opus delivery and Matroska + FFV1 + PCM S16LE lossless profiles share the same render/export path. Android WebM + VP9/Opus packaging is a candidate pending exact-SHA all-ABI build and real SAF output verification; Android Matroska + FFV1 + PCM S16LE remains available. Codec provenance and redistribution notices are recorded in `SECURITY_LICENSING.md`.
+**AVAILABLE (desktop):** WebM + VP9/Opus delivery and Matroska + FFV1 + PCM S16LE lossless profiles share the same render/export path. Android WebM + VP9/Opus packaging passed its exact-SHA all-ABI build and real SAF output check at `33f7f355` (run 38172368290, recorded in PRODUCT_ROADMAP.md), on a small emulator fixture that proves correctness rather than representative mobile performance; Android Matroska + FFV1 + PCM S16LE remains available. Codec provenance and redistribution notices are recorded in `SECURITY_LICENSING.md`.
 
 **PLANNED (optional delivery profiles):** MP4 and MOV; codecs H.264, H.265, and AV1; hardware encoding where supported, each only after legal, platform, and build-configuration review.
 

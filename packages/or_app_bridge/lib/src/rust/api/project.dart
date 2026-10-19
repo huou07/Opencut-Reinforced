@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `job_state_name`, `media_artifact_cache_root`, `media_artifact_event_receiver`, `media_artifact_event_view`, `media_item_view`, `model_download_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_error`, `transcription_job_view`, `transcription_model_view`, `transcription_proposal_view`, `transcription_service`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `failure`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `job_state_name`, `media_artifact_cache_root`, `media_artifact_event_receiver`, `media_artifact_event_view`, `media_item_view`, `model_download_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_error`, `transcription_job_view`, `transcription_model_view`, `transcription_proposal_view`, `transcription_service`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -59,6 +59,20 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
   Future<String> cancelTranscription({required String jobId});
 
   Future<void> cancelTranscriptionModelDownload({required String downloadId});
+
+  /// Reduces noise in one media file and writes the result to `destination`.
+  ///
+  /// This is a file-to-file media operation, not a project mutation: no project is
+  /// opened, nothing in one changes, and the result is ordinary media the caller
+  /// can import and compare. The noise floor is derived from the material when
+  /// `noise_floor_db` is `None`, because a constant would leave the noise in one
+  /// recording and eat the audio in another.
+  Future<MediaCleanupResultView> cleanUpAudio({
+    required String source,
+    required String destination,
+    int? noiseFloorDb,
+    required int reductionDb,
+  });
 
   Future<void> clearTranscriptionProposal({required String jobId});
 
@@ -153,6 +167,8 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required int sourceStartDenominator,
     required PlatformInt64 durationNumerator,
     required int durationDenominator,
+    String? mode,
+    String? overwriteSplitClipId,
   });
 
   Future<ProjectActionResult> insertTimelineTextClip({
@@ -204,6 +220,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String markerId,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+  });
+
+  /// Moves a track to another position in the track list.
+  Future<ProjectActionResult> moveTimelineTrack({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required int toIndex,
   });
 
   Future<void> previewAbortPrepared({required BigInt requestId});
@@ -312,6 +337,16 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String clipId,
   });
 
+  /// Moves the boundary between two adjacent clips by the given delta.
+  Future<ProjectActionResult> rollTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
   Future<ProjectActionResult> save();
 
   Future<ProjectActionResult> setTimelineSequenceFrameRate({
@@ -327,6 +362,26 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required BigInt expectedRevision,
     required String trackId,
     required ProjectTimelineTrackStateView state,
+  });
+
+  /// Moves a clip in time by the given delta, letting its neighbours absorb it.
+  Future<ProjectActionResult> slideTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
+  /// Moves a clip's source window by the given delta without moving the clip.
+  Future<ProjectActionResult> slipTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String clipId,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
   });
 
   Future<ProjectActionResult> splitTimelineClip({
@@ -376,6 +431,7 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required TimelineTrimEdgeView edge,
     required PlatformInt64 timelineTimeNumerator,
     required int timelineTimeDenominator,
+    bool? ripple,
   });
 
   Future<ProjectActionResult> undo({
@@ -534,6 +590,54 @@ class MediaArtifactRequestView {
           state == other.state &&
           errorCode == other.errorCode &&
           message == other.message;
+}
+
+/// The outcome of reducing noise in a media file.
+///
+/// A failure carries the caller-facing code and message; a success carries what was
+/// written and the floor the filter was given, so a client can show both and a test
+/// can assert the derivation.
+class MediaCleanupResultView {
+  final bool succeeded;
+  final String errorCode;
+  final String message;
+  final String destination;
+  final int noiseFloorDb;
+  final int reductionDb;
+  final BigInt bytesWritten;
+
+  const MediaCleanupResultView({
+    required this.succeeded,
+    required this.errorCode,
+    required this.message,
+    required this.destination,
+    required this.noiseFloorDb,
+    required this.reductionDb,
+    required this.bytesWritten,
+  });
+
+  @override
+  int get hashCode =>
+      succeeded.hashCode ^
+      errorCode.hashCode ^
+      message.hashCode ^
+      destination.hashCode ^
+      noiseFloorDb.hashCode ^
+      reductionDb.hashCode ^
+      bytesWritten.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaCleanupResultView &&
+          runtimeType == other.runtimeType &&
+          succeeded == other.succeeded &&
+          errorCode == other.errorCode &&
+          message == other.message &&
+          destination == other.destination &&
+          noiseFloorDb == other.noiseFloorDb &&
+          reductionDb == other.reductionDb &&
+          bytesWritten == other.bytesWritten;
 }
 
 enum PreviewFrameStepView { previous, next }

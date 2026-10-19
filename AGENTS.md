@@ -1,143 +1,145 @@
 # Opencut Reinforced — Agent Guide
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
-OR is an MIT-licensed cross-platform video editor for human editing and structured
-CLI/agent automation. Architectural directions are not implemented capabilities
-or permission to scaffold future subsystems.
+OR is an MIT-licensed cross-platform video editor for human and structured
+CLI/agent use. Architectural directions are not implemented capabilities. Read
+only the task-relevant references; this file is an operating map, and
+[docs/INDEX.md](docs/INDEX.md) is the full documentation router.
 
-## Authority and document map
+## Product focus
 
-Host security and tool permissions govern this repository. This file is the
-entrypoint; [detailed repository policy](docs/AGENT_POLICY.md) retains the permanent
-rules and acceptance restrictions. Read its relevant sections before changes to
-execution evidence, architecture, platform tooling, licensing or release.
+The owner's active priorities, in dependency order:
 
-| Task | Source of truth |
+1. **Complete basic editing** — timeline, tracks, clips, move/trim/split/ripple,
+   undo/redo, zoom/scroll, snapping, markers, clip properties, save/reopen and
+   recovery, usable by pointer, keyboard and touch.
+2. **Code-to-illustration video** — turn a code artifact into a declarative
+   MotionScene (highlighted code, callouts, captions, narration) and render it
+   deterministically. An external generative-video provider is a later, optional
+   second track.
+3. **Automatic subtitles** — local speech-to-text into reviewable caption
+   proposals, editable and exportable to SRT/WebVTT.
+4. **Noise filtering and audio cleanup** — denoise, voice enhancement and
+   loudness work in the audio layer.
+
+Desktop (macOS, Linux, Windows) must present one coherent product with the same
+concepts, terminology, layout intent and command semantics; input and layout
+adapt to platform and screen size. Android shares the same model with adapted
+presentation. Framing, gaps and open decisions are in
+[docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md); this list selects work and
+does not restate it.
+
+## Non-negotiables
+
+The permanent execution, acceptance, security and dependency rules are in
+[docs/AGENT_POLICY.md](docs/AGENT_POLICY.md). The short version:
+
+- UI, CLI and agents mutate canonical Rust project state through the shared
+  command/application path. Keep domain logic outside presentation, and never
+  create a second editable project state in Dart, CLI code or a worker.
+- Canonical motion is declarative and non-executable; rendering makes no
+  provider call. Do not scaffold unrequested architecture.
+- AI output is a reviewable proposal applied through a revision-checked command,
+  never an instruction. Credentials stay in OS secure storage and never reach the
+  CLI, agents, logs or fixtures.
+- Keep protected specifications, invariants, workflows and claims intact unless
+  the owner explicitly authorizes their control-plane change.
+- `scripts/check_or_core_deps.py` enforces the canonical-state dependency
+  boundary. A failure needs a decision, never a widened pattern list.
+- Keep credentials, models, caches and generated media out of tracked source.
+  Preserve licences and lawful small fixtures.
+
+## Work loop
+
+1. Establish branch, HEAD, worktrees and dirty changes; preserve unrelated work.
+2. Read the active roadmap and the authority that owns the capability. Reuse
+   existing components, command paths and tests before adding abstractions.
+3. Define the observable outcome and the evidence class it will need.
+4. Implement the smallest correct change and its regression guard.
+5. Verify through the ladder below, commit one coherent change, and report
+   honestly.
+
+After two speculative repairs for the same check, record observed/expected/
+evidence/attempts, a falsifiable hypothesis and a discriminating next check
+before another edit. Never discard WIP, amend shared history, force-push, merge
+protected branches, or infer publication authority from a green gate.
+
+## Build, test and release
+
+Local work is headless by default. Exactly two bounded local runtime lanes are
+owner-granted ([docs/AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md)):
+
+```sh
+bash scripts/run_local_lane.sh linux      # hygiene, Flutter suite, preflight, bench
+bash scripts/run_local_lane.sh linux --packaged   # adds the local .deb and journey
+bash scripts/run_local_lane.sh android    # local emulator lane: apk, emulator, preview, saf
+```
+
+`bash scripts/check-repo.sh` is the source gate and `bash scripts/acceptance.sh`
+adds the Rust and Flutter lanes, `gitleaks` and the local performance budget.
+`scripts/acceptance.sh` writes the machine-readable report
+`.hub/gate-report.json`; `scripts/check-repo.sh` is read-only and writes no
+report. **GitHub Actions is the only
+authority for native, packaged and cross-platform acceptance**; a local preflight
+or emulator result is developer evidence and never becomes `ACCEPTED`. Release,
+packaging and distribution follow [docs/RELEASE.md](docs/RELEASE.md) and are
+owner-gated. Mechanics are in [docs/TOOLING.md](docs/TOOLING.md) and
+[docs/TESTING.md](docs/TESTING.md); the working procedure is skill `or-dev-loop`.
+
+## UI/UX and performance acceptance
+
+A capability is not finished because it compiles or because a widget test passes.
+For every user-visible surface: the desktop platforms present one coherent
+product and Android an adapted one, sharing concepts, terminology and command
+semantics; controllable elements expose real semantics; the thresholds in
+[docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md) and
+[docs/QUALITY.md](docs/QUALITY.md) hold (4.5:1 text contrast, no type below
+11 px, 24 px desktop and 44 px compact hit areas, a keyboard alternative for
+every pointer action, and the 320x480 and 320x440 compact viewports clean); and
+the interaction is **measured, not asserted**. Semantic, behavioural, visual and
+native evidence each answer a different question and never promote one another —
+a screenshot is not a journey, and a widget test is not UX acceptance. Load skill
+`or-ui-ux` for UI work and close the interactive budget rows that
+[docs/QUALITY.md](docs/QUALITY.md) still records as unverified.
+
+## Evidence and reporting
+
+Report `IMPLEMENTED`, each verified evidence class, `ACCEPTED`, and
+`BLOCKED`/`UNVERIFIED`/`NOT RUN` separately. A skipped or unavailable check is
+never `PASS`. A completion claim is a record under
+[docs/evidence/claims/](docs/evidence/claims/README.md) that binds the exact
+implementation SHA to the hosted run and job that verified it; an implementation
+statement never establishes DONE. A Linux debug app with a fixture picker is not
+an installed-package or native OS-picker claim.
+
+## Document routing
+
+| Need | Authority |
 |---|---|
-| Active priorities and traceability | docs/PRODUCT_ROADMAP.md |
-| Current reuse/upstream/build decisions | docs/OPEN_SOURCE_CONVERGENCE.md |
-| Architecture and subsystem contracts | docs/ARCHITECTURE.md, docs/TECHNICAL_PLAN.md |
-| Product requirements | docs/PRODUCT.md |
-| UI and UX | DESIGN.md, docs/UX_ACCEPTANCE.md |
-| Development and tests | docs/DEVELOPMENT_WORKFLOW.md, docs/TESTING.md |
-| Platform tooling | docs/TOOLING.md |
-| Security/licensing and release | docs/SECURITY_LICENSING.md, docs/RELEASE.md |
-| Documentation index | docs/INDEX.md |
-| Skill routing | docs/skills.md |
-| What was verified, and what it does not prove | docs/evidence/claims/ |
+| Full documentation router, authority order, current work selection | [docs/INDEX.md](docs/INDEX.md) |
+| Permanent execution, acceptance, security, dependency rules | [docs/AGENT_POLICY.md](docs/AGENT_POLICY.md) |
+| What to do now, priorities, traceability | [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) |
+| What this host authorizes without asking | [docs/AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md) |
+| Required product capabilities and maturity labels | [docs/PRODUCT.md](docs/PRODUCT.md) |
+| Architecture, subsystem contracts, `.orproj` format, decisions | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md), [docs/PROJECT_FORMAT.md](docs/PROJECT_FORMAT.md), [ADRs](docs/adr/README.md) |
+| Feature path from definition to merged pull request | [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) |
+| Quality bar, evidence classes, gates and known gaps | [docs/QUALITY.md](docs/QUALITY.md), [docs/TESTING.md](docs/TESTING.md) |
+| Local tooling, hosted verification, approved agent tools | [docs/TOOLING.md](docs/TOOLING.md) |
+| UI conventions, acceptance and interaction performance | [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md), skill `or-ui-ux` |
+| Reuse, upstream, dependency and licence decisions | [docs/OPEN_SOURCE_CONVERGENCE.md](docs/OPEN_SOURCE_CONVERGENCE.md), [docs/SECURITY_LICENSING.md](docs/SECURITY_LICENSING.md) |
+| Release and installation | [docs/RELEASE.md](docs/RELEASE.md), [docs/DEVELOPER_PREVIEW_INSTALL.md](docs/DEVELOPER_PREVIEW_INSTALL.md) |
+| Current work selection | [docs/prompts/OR-BUILD.md](docs/prompts/OR-BUILD.md), [docs/prompts/README.md](docs/prompts/README.md) |
+| History and archived receipts | [docs/ROADMAP.md](docs/ROADMAP.md), [docs/PAUSE_MIGRATION_HANDOFF.md](docs/PAUSE_MIGRATION_HANDOFF.md), [docs/archive/execution/README.md](docs/archive/execution/README.md) |
+| Contributing and vulnerability reporting | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [README.md](README.md) |
 
-`docs/ROADMAP.md` and everything under `docs/archive/` are archival. They
-preserve requirements, checkpoints and receipts. They never select active work
-after the convergence pivot. Read them only when reconciling past evidence.
+## Skill routing
 
-This project is registered in the host control workspace (AEH) under the slug
-`or`. From the workspace root, `python3 scripts/hub.py status or` reads Git and
-recorded verification without executing project code; `hub.py verify or` runs
-`bash scripts/check-repo.sh` explicitly. AEH holds no product or task state —
-the authoritative progress source is `docs/PRODUCT_ROADMAP.md`.
+Project-local skills live in [.agents/skills/](.agents/skills/) and are catalogued
+with their triggers and exclusions in [docs/skills.md](docs/skills.md):
+`or-edit-feature`, `or-ui-ux`, `or-dev-loop`, `or-media-ai`,
+`or-claim-evidence`, `or-release`. Load one only when its trigger matches; defer to the shared
+procedures the current session exposes rather than copying one into this
+repository.
 
-## Investigate and implement
-
-1. Establish branch, HEAD and working tree. Preserve unrelated changes.
-2. Read task-relevant authorities and inspect existing implementation. When a
-   valid CodeGraph index is available, use it before broad exploration and
-   verify what it reports against source; without one, explore normally.
-3. Define observable completion and change only the requested scope. Reuse code,
-   standard/platform facilities and existing dependencies before adding structure.
-4. Preserve validated behaviour, schema, security, persistence, performance,
-   packaging, capability parity, accessibility and acceptance guards.
-5. Run meaningful authorized checks, repair from evidence and update the existing
-   relevant documentation. Prose-only changes need no invented product test.
-6. Commit one coherent internally consistent change; do not amend, rewrite shared
-   history, force-push or discard work without explicit authorization.
-
-A continuation request selects the most valuable incomplete capability in the
-active product roadmap. Labels provide traceability; they are not mandatory
-prompt/commit boundaries. Preserve real dependencies and the complete contract of
-any named requirement. Do not reactivate the historical NEXT checkpoint sequence.
-
-## Permanent architecture and UX
-
-- Rust core/media logic, FFmpeg, wgpu, Flutter, shared structured command API,
-  local-first AI and optional user-supplied cloud credentials are intended
-  directions. Implement only an authorized scope.
-- UI, CLI and agents use the shared application/command path; clients and workers
-  must not directly mutate canonical project state. Domain logic stays outside
-  presentation where practical.
-- Canonical future motion content is declarative and non-executable. Arbitrary
-  procedural HTML/JS/GPU content requires its explicit sandbox boundary.
-- Read DESIGN.md before UI changes. Preserve Focused Monochrome conventions,
-  hierarchy and terminology. Avoid marketing decoration, fake metrics and
-  unrelated redesigns. Real journey, states, keyboard and relevant viewport
-  evidence accompany UI work; a green build is insufficient.
-- The HTML prototype is product/UX reference, not production architecture.
-
-## Evidence and protected state
-
-Feature runners must not edit archived checkpoint specifications, permanent
-invariants, phase specs, architecture policy, protected workflows, or claim
-records for requirements they did not implement. Report an exact conflict rather
-than weakening a contract. Architecture/plan amendments require an explicitly
-authorized control-plane task.
-
-A runner reports IMPLEMENTED — AWAITING VERIFICATION EVIDENCE, never
-authoritative DONE. A requirement becomes evidenced when a record under
-`docs/evidence/claims/` binds the exact implementation SHA to the hosted run and
-job that verified it, names its evidence class, and states what it does not
-establish. `scripts/check_claims.py` validates those records; a model statement
-cannot establish completion.
-
-`scripts/check_or_core_deps.py` enforces the `or_core` dependency boundary in
-repository hygiene: GPU, media, audio, text-shaping, scripting and AI-runtime
-layers must not be reachable from the crate that owns canonical project state.
-Adding a dependency that trips it is a gated decision, not a formatting change —
-record an architecture decision rather than widening the pattern list.
-
-Execution-plan graph validation was lost with the paused framework and has not
-been reinstated. It guarded a frozen ledger, so there is nothing live to
-validate; the equivalent live rule is that `PRODUCT_ROADMAP.md` must not restate
-a checkpoint status, which `docs/DEVELOPMENT_WORKFLOW.md` states and
-`scripts/check_doc_freshness.sh` keeps current.
-
-## Verification and platform boundaries
-
-Use configured source checks locally. `bash scripts/check-repo.sh` is the
-repository gate: tracked-file hygiene, plus Markdown link resolution, document
-review freshness, and claim-record validity. GitHub Actions is canonical for
-native and runtime acceptance. Do not launch OR, native Flutter integration
-tests, local emulators/simulators or physical devices unless the user explicitly
-requests local runtime testing. Do not install/repair/select toolchains, accept
-licences or use sudo for platform setup without explicit local-development
-authorization.
-
-Report PASS, FAIL, NOT RUN and LOCAL ENVIRONMENT BLOCKED accurately. A skipped or
-synthetic check does not prove a feasible real packaged product journey. Test
-packaged dependencies and permissions as users receive them. Never weaken a
-failed test or silently change its evidence class.
-
-After two speculative repairs for the same failure, require actual output, a
-falsifiable hypothesis, a discriminating reproduction and a cause-based patch.
-Measure realtime/resource claims; retries and timeouts are not root causes.
-
-## Security, licensing and delivery
-
-Keep credentials out of tracked files, logs, fixtures, screenshots and CLI
-output. The future agent interface must not expose plaintext application keys.
-Use ignored local storage, OS secure storage or repository secrets as appropriate.
-Keep downloaded models, generated media, caches and build outputs untracked.
-
-Review dependency provenance, maintenance and licences; pin normal ecosystem
-versions. Restrictive distributed dependencies/models need explicit owner approval
-and licensing analysis. Model weights and FFmpeg build options have independent
-obligations. Preserve notices and lawful tiny fixtures.
-
-Public publication, releases and production deployment require explicit owner
-authority. Readiness and a clean scanner do not grant it. Author repository
-instructions and framework documents in English; converse in the owner's language.
-
-## Finish
-
-Report changes, source identity, relevant documentation, commands/results, commit
-and unverified items. Distinguish implementation, testing and product acceptance.
-No skill can override user intent, permanent invariants or host security.
+Author framework artifacts in English and converse in the owner's language.

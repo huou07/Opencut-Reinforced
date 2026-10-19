@@ -25,6 +25,8 @@ required_files=(
   docs/PRODUCT.md
   docs/PROJECT_FORMAT.md
   scripts/stage_codec_licences.sh
+  scripts/run_local_lane.sh
+  scripts/run_android_lane.sh
   docs/ARCHITECTURE.md
   docs/TECHNICAL_PLAN.md
   docs/DEVELOPMENT_WORKFLOW.md
@@ -34,6 +36,12 @@ required_files=(
   docs/RELEASE.md
   docs/TOOLING.md
   docs/UX_ACCEPTANCE.md
+  docs/QUALITY.md
+  docs/AGENT-AUTHORITY.md
+  docs/PAUSE_MIGRATION_HANDOFF.md
+  docs/evidence/PRODUCT_ROADMAP_HISTORY.md
+  docs/prompts/README.md
+  docs/prompts/OR-BUILD.md
   docs/skills.md
   docs/evidence/claims/README.md
   docs/adr/README.md
@@ -44,6 +52,7 @@ required_files=(
   docs/adr/0005-ai-provider-boundary.md
   docs/adr/0006-autonomous-agent-execution-contract.md
   docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md
+  docs/adr/0008-product-acceptance-and-execution-quality.md
 )
 
 for path in "${required_files[@]}"; do
@@ -151,12 +160,93 @@ if ! python3 scripts/check_claims.py; then
   failed=1
 fi
 
+# The claim validator now resolves each `implementation_sha` in Git, so its
+# reject-a-fabricated-receipt behaviour needs its own regression guard. It also
+# needs full history, which is why repo-hygiene.yml checks out with
+# `fetch-depth: 0` instead of the default shallow clone.
+if ! python3 scripts/test_check_claims.py; then
+  fail "the claim-evidence validator regression checks failed"
+fi
+
 # `or_core` owns canonical project state, so GPU, media, audio, text-shaping,
 # scripting and AI-runtime layers must not be reachable from it. This replaces
 # the boundary check that only ran as a side effect of the paused execution
 # plan validator.
 if ! python3 scripts/check_or_core_deps.py; then
   failed=1
+fi
+
+# The bounded Linux preflight depends on cache preparation that no compiler
+# exercises: staging project-local Cargo/pub caches, probing write access, and
+# mirroring a read-only Flutter SDK. A silent break there only shows up as a
+# confusing permission error minutes into a native run, so its hermetic unit
+# tests run with the other gates.
+if ! python3 scripts/test_linux_ui_preflight.py; then
+  fail "the bounded Linux preflight preparation checks failed"
+fi
+
+# Two hermetic Android report/runner suites existed without a runner, which made
+# them dead weight: nothing could fail if they rotted. They need no device or
+# network. `test_verify_android_saf_recovery.py` imports the verifier as
+# `scripts.verify_android_saf_recovery`, so it runs as a module from the root.
+if ! python3 -m scripts.test_verify_android_saf_recovery; then
+  fail "the Android SAF recovery report checks failed"
+fi
+
+if ! python3 scripts/test_android_preview_runner.py; then
+  fail "the Android preview runner control-flow checks failed"
+fi
+
+# The local Android lane must keep reporting BLOCKED for a host precondition and
+# DIRTY for a dirty tree, and must never claim acceptance. Those rules are what
+# stop a local guest run from being mistaken for Android acceptance, so they are
+# checked without a device.
+if ! python3 scripts/test_android_lane.py; then
+  fail "the local Android lane control-flow checks failed"
+fi
+
+# The emulator start script must bind the serial the lane reserved. When it did
+# not, the lane waited 120 s for a serial nothing listened on and left a guest
+# running; these checks pin the port, the named port conflict and the guest size
+# without a device, an emulator or /dev/kvm.
+if ! python3 scripts/test_android_emulator_start.py; then
+  fail "the Android emulator start checks failed"
+fi
+
+# The Android plugin's epoch counters must stay scoped to the state each guards: a
+# preview request cancelling an in-flight source registration dropped selected files from
+# an import, which no local test can exercise without a device.
+if ! python3 scripts/test_android_registration_epoch.py; then
+  fail "the Android registration epoch checks failed"
+fi
+
+# The shared native UI lock is per UID and outside any one project, so a sibling
+# build can hold it; a lane that then died with a bare errno cost an afternoon.
+# These checks pin the exclusion, release and named-refusal behaviour hermetically.
+if ! python3 scripts/test_ui_native_lock.py; then
+  fail "the shared native UI lock checks failed"
+fi
+
+# The performance budget is only meaningful if a breach fails and every row
+# declares where its threshold came from. Those properties are checked without a
+# compiler or a GPU; the injected-regression command that proves a real slowdown
+# trips the CLI row is documented in docs/QUALITY.md and run at phase boundaries.
+if ! python3 scripts/test_bench_quality.py; then
+  fail "the performance budget checks failed"
+fi
+
+# The UI harness is the instrument behind every interface claim. Its scenario
+# contract (semantic selectors only, validated before anything runs, the negative
+# control that must fail loudly) is checked without Xvfb or a device.
+if ! python3 scripts/test_or_ui.py; then
+  fail "the UI harness contract checks failed"
+fi
+
+# The aggregate release gate is the only check meant to block a merge, so its
+# logic must reject `skipped`/`neutral`/`cancelled` as well as `failure`. If this
+# logic rots, the gate silently becomes a rubber stamp.
+if ! python3 scripts/test_release_gate.py; then
+  fail "the aggregate release-gate logic checks failed"
 fi
 
 # Lint the repository's own shell gates. A gate that fails to parse is worse
@@ -179,4 +269,4 @@ if (( failed != 0 )); then
   exit 1
 fi
 
-printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness and claim-evidence checks).\n' "$tracked_count"
+printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-source-identity, preflight-preparation, Android-report and release-gate-logic checks).\n' "$tracked_count"

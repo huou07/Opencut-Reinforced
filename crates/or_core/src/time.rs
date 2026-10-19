@@ -153,6 +153,28 @@ impl RationalRate {
         })
     }
 
+    /// The identity rate: one unit of source per unit of timeline.
+    pub const ONE: Self = Self {
+        numerator: 1,
+        denominator: 1,
+    };
+
+    /// Scales a duration or offset by this rate: `time * rate`.
+    ///
+    /// A clip that plays at 2x consumes two units of source per unit of timeline, so the
+    /// mapping from timeline time to source time is this multiplication and not the
+    /// offset alone. It is exact rational arithmetic, never floating point, so a rate
+    /// that cannot be represented as a binary fraction still maps without drift.
+    pub fn apply(self, time: RationalTime) -> Result<RationalTime, TimeError> {
+        let numerator = i128::from(time.numerator)
+            .checked_mul(i128::from(self.numerator))
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        let denominator = u128::from(time.denominator)
+            .checked_mul(u128::from(self.denominator))
+            .ok_or(TimeError::ArithmeticOverflow)?;
+        RationalTime::from_wide(numerator, denominator)
+    }
+
     pub const fn numerator(self) -> u32 {
         self.numerator
     }
@@ -392,6 +414,40 @@ mod tests {
         assert_eq!(
             time(i64::MAX, 1).checked_add(time(1, 1)),
             Err(TimeError::ArithmeticOverflow)
+        );
+    }
+
+    #[test]
+    fn a_rate_scales_a_time_exactly() {
+        let rate = RationalRate::new(2, 1).unwrap();
+        // Two units of source per unit of timeline.
+        assert_eq!(
+            rate.apply(RationalTime::new(3, 2).unwrap()).unwrap(),
+            RationalTime::new(3, 1).unwrap()
+        );
+        // The identity rate changes nothing, which is what every migrated clip has.
+        assert_eq!(
+            RationalRate::ONE
+                .apply(RationalTime::new(7, 3).unwrap())
+                .unwrap(),
+            RationalTime::new(7, 3).unwrap()
+        );
+        // A rate that is not a binary fraction stays exact: a third of a second at 3x is
+        // exactly one second, with no floating-point residue.
+        assert_eq!(
+            RationalRate::new(3, 1)
+                .unwrap()
+                .apply(RationalTime::new(1, 3).unwrap())
+                .unwrap(),
+            RationalTime::new(1, 1).unwrap()
+        );
+        // A fractional rate halves the source a second of timeline consumes.
+        assert_eq!(
+            RationalRate::new(1, 2)
+                .unwrap()
+                .apply(RationalTime::new(1, 1).unwrap())
+                .unwrap(),
+            RationalTime::new(1, 2).unwrap()
         );
     }
 

@@ -1,10 +1,138 @@
 # Testing Strategy
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
 ## Status
 
 Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. Phase 6A adds timeline-domain validation, strict `.orproj` v3 codec and v1/v2 migration, recovery and storage compatibility, query-wire regression, and referenced-media removal guard coverage. Phase 6B adds application command/history/query coverage, headless and attached semantic CLI tests, save/reopen and undo-save storage checks, recovery snapshot/apply/reload checks, and transaction/precondition regression coverage. Phase 6C adds bridge DTO tests, Flutter widget coverage for read-only track/clip presentation and command interactions, bounded and stale page handling, and a hosted native Rust-host timeline lifecycle test through save/reopen. Phase 6D adds exact trim/split/ripple core invariants, compact history/conflict/overflow/capacity guards, CLI changed-only save and attached dirty-state parity, Flutter action/dialog acceptance, and hosted typed-bridge save/reopen coverage. Phase 6E2A adds marker ID/domain/order/bounds tests, strict v4 codec and v1/v2/v3 migration tests, clean-open/explicit-save storage tests, v1 recovery with v3 and v4 nested snapshots, semantic marker command/history/conflict/transaction/revision tests, bounded marker query and sub-1 MiB page tests, Snap V1/V2 schema/tie/read-only tests, headless/attached CLI parity, and local IPC coverage without changing Flutter marker APIs or UI. Phase 7A adds deterministic `or_runtime` coverage for exact snapshot revision/time identity, frame descriptor and lease ownership, bounded queue pressure/close/cancellation, separate render/audio/decode budget release, and software-first capability/provider selection. Phase 7B adds deterministic `or_render` contract coverage, offscreen wgpu synthetic rendering, row-padded readback normalization, resource-owned frame lifetime, and handle-only viewer presentation checks. Phase 7C0 adds a locked, hosted Linux FFmpeg 8.1.3 shared-library compile/link/load probe under an LGPL-only configuration. 7F1 adds deterministic viewer-mailbox tests and hosted macOS/Linux/Windows builds that compile a desktop packaging probe against production `or_media`, stage official FFmpeg 8.1.3 shared libraries beside that probe in the app bundle, verify loading without developer FFmpeg search paths, and preserve source/build provenance. The shared Flutter bridge remains FFmpeg-independent; Phase 9A0 separately builds and packages the approved Android shared libraries and validates the native runtime on an x86_64 emulator. It does not add FFmpeg dependencies to Android product code or to Flutter widget tests. Phase 7F builds the native Flutter pixel-buffer texture adapters but does not add a product viewer or playback controls. The 7C implementation adds bounded/stale/cancellable `or_media` queues, exact timestamp/seek checks, owned software RGBA frame tests, and a linked audio resample/range test with a tiny generated FFV1/PCM fixture. CI runs the production crate against the approved FFmpeg 8.1.3 shared prefix. Checkpoint 8F adds local export/autosave coverage; its authoritative milestone status remains gated on hosted supervisor evidence. The test layers below distinguish implemented coverage from future product tests.
+
+## Evidence selection and bounded Linux preflight
+
+Use the shared AEH evidence vocabulary for new claims while retaining historical
+phase/claim records. Source checks establish VERIFIED_SOURCE; actual Flutter
+semantics establish VERIFIED_SEMANTIC; asserted command outcomes establish
+VERIFIED_BEHAVIORAL. Target screenshots/measurements establish selected
+VERIFIED_VISUAL claims; actual app/package runs establish only their named
+VERIFIED_NATIVE scope. ACCEPTED still requires the authoritative exact-SHA
+hosted claim/owner gate. These classes do not automatically promote one another.
+
+`python3 scripts/run_linux_ui_preflight.py` runs one native Linux debug app
+under Xvfb with a generated one-second, 16,044-byte WAV and temporary project/
+application state. The production Rust gateway handles create, invalid import,
+retry/import, timeline insertion, keyboard duplicate, undo, seek and save/reopen.
+Only the file picker is substituted; OS picker and installed package acceptance
+remain separate. Export setup is opened/cancelled without a media render.
+Two rendered app-state PNGs, a clip semantics dump and source/command/resource
+metadata are written under ignored apps/or_app/build/ui-preflight.
+
+The 2026-10-15 local run used Flutter 3.47.7/Dart 3.13.5, Rust 1.98.0 and Debian's
+system media libraries against 21bfb3aa6891 plus the working diff. It passed in
+18.02s on the final warm run, with at least 7,752,691,712 bytes MemAvailable.
+This is developer evidence, not packaged acceptance or a performance benchmark.
+
+The 2026-10-17 real Debian rerun used the live Playground-enforced policy at
+revision 17 and the `codex-worker` UID. Rust 1.98.0 was readable, the worker
+created and removed a file in `.rustup/tmp`, and the Linux debug app built; its
+single editor journey passed at source `219bcf721f653576b31d5bf52645e86ab4b98f88`
+plus the working diff in 79.1s, with a minimum 6,014,963,712 bytes MemAvailable.
+The nested bridge toolchain manifest hash was unchanged after the run. The runner
+temporarily selected `x86_64-unknown-linux-gnu` so Rustup would not fetch unused
+Apple/Android/Windows targets. `flutter pub get --offline --enforce-lockfile`
+reported cached content-hash mismatches but exited successfully; the tracked
+`pubspec.lock` was unchanged. This remains debug Linux developer evidence, not
+packaged acceptance, an OS-picker check, or a performance benchmark.
+
+The 2026-10-17 sandboxed worker rerun ran with the harness file policy restricted
+to the workspace, where the shared owner Flutter/Cargo/pub caches are readable
+but not writable. `os.access` reports those ACL grants as writable, so the
+preflight now probes an actual create before deciding a cache can be used in
+place, and mirrors the Flutter SDK into an ignored
+`apps/or_app/.dart_tool/flutter-overlay` when the shared `bin/cache` cannot be
+written. The overlay keeps a real `bin` tree (about 46 MB including the tool
+snapshot) and symlinks the large read-only `artifacts`/`dart-sdk` trees, so the
+shared SDK bytes are never modified: its `engine.stamp` held
+`deb287481e3ce9468f3434937ced4240a70539ca` before and after the run. The journey
+passed at source `791a27f4839955bb6c0b2a16a4255bf12b341c8d` plus the working
+diff in 20.03s on a warm build, with a minimum 7,169,503,232 bytes
+MemAvailable. The preflight's focused tests cover cache staging, the write probe
+and the overlay (17 at this revision).
+
+The independent [Linux UI run 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316)
+passed analyzer, six focused component/semantics tests and the actual Linux
+journey at exact source `66164227f3e39aa32567890eb88850d54ff9aa37`, using the
+canonical Flutter 3.47.5 pin. Its seven-day artifact contains selected states,
+semantics and resource metadata. Local verification also passed all 97 widget
+tests and the repository guard. Existing macOS/Windows/Android/package safeguards
+remain intact; they were not rerun for this debug-only claim.
+
+Actual semantics inspection found that custom clip/trim nodes had button flags
+and labels but no activation action. Their tap action now opens the existing
+clip/exact-trim action path. The regression invokes the real semantics action;
+standard widgets were retained without blanket wrappers. Decorative waveform/
+grid pixels need no semantic nodes. Timeline mutation assertions read Rust state;
+the screenshots cannot substitute for those assertions.
+
+The screenshot set exposes rendering limitations separately: the Linux audio-only
+preflight can show Viewer texture unavailable, and inspector/media text may be
+crowded in the default 1280x720 debug window. This run does not accept preview
+video rendering, full visual polish, performance, audio playback or other OSes.
+Review platform-specific native screenshots rather than imposing pixel identity.
+
+### One local lane entry point
+
+`bash scripts/run_local_lane.sh linux` is the single supported local entry point
+for its four steps — the hygiene gate included — so an agent does not have to
+remember a sequence or its preconditions:
+
+| Step | Command it runs |
+|---|---|
+| `hygiene` | `bash scripts/check-repo.sh` |
+| `flutter` | `cd apps/or_app && flutter --no-version-check test --no-pub` |
+| `preflight` | `python3 scripts/run_linux_ui_preflight.py` |
+| `bench` | `python3 scripts/bench_quality.py --json` |
+
+It records a dirty tree rather than refusing to start, because the deliberately
+broken source check that proves the lane exits non-zero is itself a dirty tree;
+a dirty run can only ever report `DIRTY`, never `PASS`, and the bounded journey
+keeps its own hard clean-tree refusal. It runs the steps in order, stops at the
+first `FAIL` (a real failure invalidates everything after it), keeps going after
+a `BLOCKED` or `UNVERIFIED` step (a host limitation does not), and writes one
+machine-readable report to the gitignored
+`apps/or_app/build/local-lanes/linux.json`. That report carries the source SHA,
+the host facts, every step's exact command, exit code, elapsed seconds and log
+path, the SHA-256 of each artifact it produced, the steps it did not run, the
+warnings it raised, and an explicit `limits` list. Only a non-empty file
+modified during its own step is recorded as that step's artifact: the first
+version of this lane attributed the bounded preflight's `run.json` to a
+`BLOCKED` preflight step that never reached it, and recorded an empty
+`bench.json` because the budget prints its machine-readable rows only under
+`--json`. Both are the kind of artifact that looks like evidence and is not. The
+lane's own result is the worst classification it saw.
+Exit code 0 means every selected step passed on a clean tree; 1 a step failed; 2 a
+wrong invocation; 3 a step was `BLOCKED` by a host precondition (the preflight's
+own 6 GiB RAM/disk, tool, lock and clean-tree checks); 4 a step could not be
+measured (`UNVERIFIED`) or the tree was dirty, so no `PASS` is attributable.
+
+`--packaged` adds a local `deb` step (build the Linux bundle, stage the pinned
+local media runtime, package through `scripts/package_linux_deb.sh`) and a
+`journey` step (extract that `.deb` into a disposable root and run
+`scripts/run_packaged_desktop_journey.py` against the installed payload). Both go
+through `python3 scripts/run_linux_ui_preflight.py --exec`, which is the
+sanctioned way to run one command inside the prepared developer environment: the
+project-local Cargo/pub caches, the writable Flutter SDK mirror when the shared
+cache is read-only, the host-scoped Rust toolchain manifest, and — with
+`--ffmpeg-prefix` — a Cargo config that pins the local FFmpeg 8 prefix for the
+semi-hermetic native-assets hook and is removed again afterwards. The packaged
+lane needs a pinned local FFmpeg 8 prefix and codec prefix; when they are absent
+the step is `BLOCKED` and names the command that would produce them, rather than
+silently building against the system FFmpeg 7. `--packaged` never calls itself
+packaged acceptance: the report sets `"acceptance": false`, states that the local
+Flutter is not the CI pin, that the media runtime was built locally, and that the
+`.deb` was extracted rather than installed by `apt`.
+
+A lane report is developer evidence for one tree on one host. It does not
+establish hosted CI parity, an installed package, an OS picker, or a
+cross-platform claim, and it is never the input to an `ACCEPTED` claim record.
 
 ## Current Phase 3 checks
 
@@ -50,12 +178,53 @@ GitHub-hosted Actions is canonical for platform correctness, linker-dependent bu
 
 Android FFmpeg cross-link probes target API 26, matching the packaged app's `minSdk` and the Opus/libvpx target. Keeping these API levels aligned preserves Opus production hardening while ensuring the probe uses the same Android C library exports available to supported installs.
 
-Local native/runtime execution is disallowed by default: do not launch OR, an emulator/simulator, or an attached device for verification; do not run native Flutter integration tests that launch OR, manually smoke-test the GUI, or open a built/downloaded Developer Preview. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
+The owner now permits the bounded Linux developer preflight described above, and
+its single entry point is `bash scripts/run_local_lane.sh linux`; that lane also
+writes one machine-readable report of what ran, for how long, and what it could
+not establish. The same entry point selects the local Android emulator lane with
+`bash scripts/run_local_lane.sh android`, which delegates to
+`scripts/run_android_lane.sh`, whose steps are `apk`, `emulator`, `preview` and
+`saf`: it derives its `MemAvailable` floor from the selected steps (guest RAM plus
+emulator overhead plus a host margin for any guest step; a build floor for an
+apk-only run), records which derivation applied, probes the AVD, `/dev/kvm`,
+`adb`, `flutter` and `OR_ANDROID_FFMPEG_PREFIX` before booting anything, builds
+every case APK before the guest boots, drives the bridge-diagnostics,
+preview-surface and DocumentsUI SAF journeys, always stops the guest it started,
+and writes `apps/or_app/build/local-lanes/android.json` in the same shape as the
+Linux report, including the SHA-256 of each APK it drove and an explicit
+`not_run` entry when no FFmpeg link probe was staged. Its inputs are repository
+scripts: `scripts/stage_android_ffmpeg.sh` produces the pinned prefix and probe,
+and `scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install`
+link the bridge hook requires (that link is why the lane previously could not
+build an APK at all). The emulator step passes `-port` derived from the reserved serial, so
+`emulator-5580` is a guest on 5580 rather than a 120-second wait for a guest that
+came up on the default port; `scripts/test_android_emulator_start.py` pins that,
+the named port conflict, the usage error for a non-emulator serial and the guest
+sizing, hermetically. After the apk step it stops the
+Gradle/Kotlin daemons that appeared during that step and belong to the wrapper's
+Gradle version, attributing each one by UID, cwd, version and RSS first, so the
+guest never competes with the build JVMs for the same RAM; a resident or
+foreign-version daemon is reported and left alone.
+`scripts/test_android_lane.py` checks its blocked,
+dirty-tree, no-acceptance, argument-passing, guest-lifecycle, Flutter-SDK
+writability, KVM-device, artifact-isolation, derived-floor and
+daemon-attribution rules without a device (20 checks), inside `check-repo.sh`. The memory and KVM paths are explicit seams
+(`OR_LANE_MEMINFO`, `OR_LANE_KVM_DEVICE`) because a hosted runner has no
+`/dev/kvm`; the first version of these checks used the real device and the
+hosted `Repository hygiene` job failed on it before the seam existed. Other local native/runtime execution remains disallowed by default: do not launch an emulator/simulator or an attached device for verification; do not launch additional native Flutter suites, manually smoke-test the GUI, or open a built/downloaded Developer Preview without task authorization. Local Rust/CLI and other headless tests remain allowed, as do Flutter formatting, analysis, and widget tests that do not launch a native application. If Actions cannot provide genuinely required runtime evidence, explain why and ask the user before local launch.
 
 - `PASS`: the check ran and succeeded.
 - `FAIL`: the check ran and found a defect that must be addressed.
 - `LOCAL ENVIRONMENT BLOCKED`: local execution was prevented by unavailable or intentionally unconfigured platform tooling. This is neither pass nor fail.
 - `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`: local native/runtime verification was intentionally skipped under the default execution policy. This is distinct from an environment limitation and is not a pass.
+
+The agent-facing UI harness (`scripts/or_ui.py`, documented in
+[TOOLING.md](TOOLING.md#the-agent-facing-ui-harness)) is a third explicit local
+exception: it launches the real app on Linux under Xvfb through the bounded
+preflight's environment, or drives an already-booted Android guest. Its scenario
+contract and its negative control are checked hermetically by
+`scripts/test_or_ui.py` inside `check-repo.sh`; its journeys are developer
+evidence and never `ACCEPTED`.
 
 For example, a blocked local macOS native check plus a passing GitHub macOS native job is verified. A blocked local check with its remote job not run is not verified. Never weaken or omit a test because a local platform tool is unavailable.
 
@@ -193,6 +362,7 @@ The Rust workspace job runs the cache tests on Linux; Phase 5E also runs `cache:
 - `MediaArtifactService` tests cover locked profile-key separation, valid cached PNG generation for both profiles, terminal event ordering, ready cache hits without a second job, same-key in-flight deduplication, unsupported streams without spawning `ffmpeg`, queue and record backpressure, cache-budget failure, timeout/cancellation, bounded output, malformed PNG rejection, and child cleanup.
 - Bridge tests cover desktop cache-root policy. The hosted macOS offline-media bridge test checks thumbnail and waveform requests return `notApplicable`, artifact work does not change the project revision, and malformed cache keys are rejected.
 - Flutter widget tests check supported video/audio requests, unsupported media, cached previews, success events loading PNGs, neutral failure placeholders, media removal clearing the preview row, and unchanged project revision.
+- A large-library regression loads 55 media items, loads the second bounded page and scrolls back to the top, and requires the thumbnail already rendered for the first page to survive the later page. `_queueMediaPreviews` treats its argument as the complete loaded set and prunes everything outside it, so the load-more path must pass the accumulated page rather than only the newly fetched items.
 - The ignored `crates/or_core/tests/media_artifacts_integration.rs` test runs only on hosted Linux CI. It generates a tiny video/audio Matroska fixture with the CI-installed system `ffmpeg`, verifies real thumbnail and waveform PNG dimensions, confirms cache hits do not create another job, and changes sampled source bytes while preserving size and modification time to verify cache-key invalidation. It also checks that artifact generation leaves project revision unchanged. Do not install FFmpeg locally or run this real-media integration test locally.
 - Hosted macOS CI runs the native Flutter project lifecycle and offline-media bridge tests. Local native/runtime verification remains `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
@@ -488,6 +658,15 @@ dropped frames, audio underruns, queue depth, memory, cache hit/miss, and export
 throughput. This remains local performance diagnosis, not telemetry or network
 reporting.
 
+`LOCAL_PERFORMANCE_BUDGET = ENFORCED (coarse regression guard)`:
+`scripts/bench_quality.py` measures two best-of-N rows on the named Debian
+OptiPlex-class host (CLI cold start `or version --json` <= 200 ms; the ignored
+`software_export` WebM fixture <= 1500 ms), and `scripts/acceptance.sh` runs it
+so a breach fails the admission gate. Baselines, margin, the exact machine class
+and what the budget does not establish are in
+[QUALITY.md](QUALITY.md#performance-one-bounded-budget-and-its-limits). It sets
+no FPS, GPU, physical-device or hosted-runner threshold.
+
 Before claiming a hardware optimization, use controlled, repeatable media fixtures and benchmark scenarios. Representative workload classes may include:
 
 - 1080p H.264 playback and 1080p high-frame-rate playback
@@ -507,20 +686,27 @@ Use tiny, self-created or legally safe media fixtures. Keep fixture provenance a
 
 A check that did not run must never be reported as passing. Report its exact status and reason. Keep a failing or unavailable check visible rather than silently omitting it. Prototype simulation tests are not production application tests.
 
-## Execution-plan infrastructure
+The codec-fixture lanes and the eight tests marked `#[ignore]` in
+`crates/or_core/tests/media_probe_integration.rs`,
+`crates/or_core/tests/media_artifacts_integration.rs` and
+`crates/or_media/tests/software_export.rs` need FFmpeg 8 binaries on `PATH`: the
+proxy filter graph uses the `scale` filter's `reset_sar` option, which FFmpeg 7
+rejects, and the export writer needs a codec-enabled profile. Hosted CI builds
+the pinned FFmpeg 8.1.3 profile; a local gate widens to those lanes only when an
+FFmpeg 8 build (for example `~/.local/ffmpeg8` with `libvpx-vp9` and `libopus`)
+is installed, and otherwise names them as `UNVERIFIED` instead of omitting them.
 
-The standard-library-only execution infrastructure has focused tests for valid
-plan/state validation, duplicate IDs, missing dependencies, cycles, multiple
-`NEXT` states, unfinished prerequisites, unknown state IDs, grandfathered
-pre-boundary completion, required evidence after the 7A boundary,
-dirty-worktree refusal, non-zero runner exit, protected runner-state mutation,
-exact-SHA workflow and required-job matching, wrong branch/event/conclusion,
-rate/token behavior, timeout behavior without real sleeps, preview release
-contracts, exact resume guards, metadata-only platform filtering, and
-exactly-one-checkpoint transitions. The repository hygiene check runs both the
-execution-plan and architecture-policy checkers and requires the evidence
-policy, evidence directory documentation, and evidence module. These checks
-use fake API data and do not mutate the real plan or state.
+## Execution-plan infrastructure (archived)
+
+> **Archival (2026-10-14).** The execution-plan and architecture-policy
+> validators described in earlier revisions of this section belonged to the
+> paused checkpoint framework. They now live under `scripts/archive/` and the
+> repository hygiene check no longer invokes them. The live
+> `scripts/check-repo.sh` gate runs the document-link, document-freshness,
+> claim-evidence and claim-validator regression checks, the `or_core`
+> dependency-boundary check (`scripts/check_or_core_deps.py`), the bounded
+> preflight-preparation checks and the Android report/runner checks. The
+> archived validators are historical material, not current gates.
 
 The maintenance guard also locks the current post-7F0 transition
 `7F0 -> 7F1 -> 7F` and the later `8F -> 9A0 -> 9A` Android gate, verifies the

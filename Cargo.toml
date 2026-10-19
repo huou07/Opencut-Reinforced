@@ -9,6 +9,7 @@ members = [
     "crates/or_media",
     "crates/or_audio",
     "crates/or_ai",
+    "crates/or_motion",
     "crates/or_whisper_provider",
 ]
 resolver = "3"

@@ -207,6 +207,16 @@ impl ProjectDocument {
         self.revision = revision;
     }
 
+    pub(crate) fn move_timeline_track_for_command(
+        &mut self,
+        from_index: usize,
+        to_index: usize,
+        revision: ProjectRevision,
+    ) {
+        self.timeline.move_track_for_command(from_index, to_index);
+        self.revision = revision;
+    }
+
     pub(crate) fn replace_timeline_track_clips_for_command(
         &mut self,
         track_index: usize,

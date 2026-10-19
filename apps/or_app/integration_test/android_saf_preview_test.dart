@@ -624,1188 +624,1161 @@ class _ObservedSafProjectPicker extends AndroidSafProjectPicker {
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(rust.RustLib.init);
-  testWidgets(
-    'Android SAF preview works through DocumentsUI and real editor controls',
-    (tester) async {
-      final directory = Directory.systemTemp.createTempSync('or-saf-preview-');
-      addTearDown(() => directory.deleteSync(recursive: true));
-      final source = _source('late65');
-      final path = await _project(directory, 'SAF preview acceptance', source);
-      final projectJson = await File(path).readAsString();
-      final provider = await _control('seedProject', projectJson: projectJson);
-      expect(provider['providerUid'], isNot(provider['appUid']));
-      expect(provider['mediaBytes'], 9045);
-      expect(
-        provider['projectBytes'],
-        utf8.encode(projectJson).length,
-        reason:
-            'The provider must serve the exact document OR saved, not a '
-            'truncated or substituted fixture project.',
-      );
-      expect(_providerFds(), 0);
-      final gateway = _ObservedGateway();
-      final projectPicker = _ObservedSafProjectPicker();
-      await tester.pumpWidget(
-        OrApp(
-          gateway: const RustCoreGateway(),
-          projectGateway: gateway,
-          projectFilePicker: projectPicker,
-        ),
-      );
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('home-open-project'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      // Prepare Flutter's screenshot surface before the editor registers its
-      // Android SurfaceProducer texture. The prior hosted run stalled while
-      // rebinding the activity render surface with the preview texture active.
-      debugPrint('ANDROID_SAF_SURFACE_CONVERSION_START');
-      await binding.convertFlutterSurfaceToImage();
-      debugPrint('ANDROID_SAF_SURFACE_CONVERSION_COMPLETE');
-      debugPrint('ANDROID_SAF_DOCUMENTS_UI_READY');
-      await tester.tap(find.byKey(const ValueKey('home-open-project')));
-      // A hosted UIAutomator helper selects the separate provider's document in
-      // the real Android DocumentsUI. No fixture method returns a picker result.
-      await _until(
-        tester,
-        () =>
-            gateway.session != null &&
-            find.byType(Texture).evaluate().isNotEmpty,
-      );
-      debugPrint('ANDROID_SAF_PROJECT_OPENED');
-      expect(gateway.openedPath, contains('/files/or-projects/'));
-      debugPrint(
-        'ANDROID_SAF_PROJECT_PATHS '
-        'selected=${projectPicker.selectedProjectPath} '
-        'opened=${gateway.openedPath}',
-      );
-      expect(projectPicker.selectedProjectPath, gateway.openedPath);
-      final storedRecents = await PersistentRecentProjectStore().load();
-      expect(storedRecents, hasLength(1));
-      expect(storedRecents.single.path, gateway.openedPath);
-      expect(storedRecents.single.name, 'SAF preview acceptance');
-      final projectDocumentUri = projectPicker.projectDocumentUriFor(
+  testWidgets('Android SAF preview works through DocumentsUI and real editor controls', (
+    tester,
+  ) async {
+    // Record the first layout error in full. The journey's final assertion only
+    // surfaces "A RenderFlex overflowed by 6.0 pixels on the bottom" with no owner,
+    // and a hosted failure that does not name the widget costs a whole run to
+    // investigate: this keeps the widget, the file and the line in the message.
+    String? firstLayoutError;
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      firstLayoutError ??= details.toString();
+      // ignore: avoid_print
+      print('OR-SAF-LAYOUT-DETAIL $details');
+      previousOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previousOnError);
+    final directory = Directory.systemTemp.createTempSync('or-saf-preview-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final source = _source('late65');
+    final path = await _project(directory, 'SAF preview acceptance', source);
+    final projectJson = await File(path).readAsString();
+    final provider = await _control('seedProject', projectJson: projectJson);
+    expect(provider['providerUid'], isNot(provider['appUid']));
+    expect(provider['mediaBytes'], 9045);
+    expect(
+      provider['projectBytes'],
+      utf8.encode(projectJson).length,
+      reason:
+          'The provider must serve the exact document OR saved, not a '
+          'truncated or substituted fixture project.',
+    );
+    expect(_providerFds(), 0);
+    final gateway = _ObservedGateway();
+    final projectPicker = _ObservedSafProjectPicker();
+    await tester.pumpWidget(
+      OrApp(
+        gateway: const RustCoreGateway(),
+        projectGateway: gateway,
+        projectFilePicker: projectPicker,
+      ),
+    );
+    await _until(
+      tester,
+      () =>
+          find.byKey(const ValueKey('home-open-project')).evaluate().isNotEmpty,
+    );
+    // Prepare Flutter's screenshot surface before the editor registers its
+    // Android SurfaceProducer texture. The prior hosted run stalled while
+    // rebinding the activity render surface with the preview texture active.
+    debugPrint('ANDROID_SAF_SURFACE_CONVERSION_START');
+    await binding.convertFlutterSurfaceToImage();
+    debugPrint('ANDROID_SAF_SURFACE_CONVERSION_COMPLETE');
+    debugPrint('ANDROID_SAF_DOCUMENTS_UI_READY');
+    await tester.tap(find.byKey(const ValueKey('home-open-project')));
+    // A hosted UIAutomator helper selects the separate provider's document in
+    // the real Android DocumentsUI. No fixture method returns a picker result.
+    await _until(
+      tester,
+      () =>
+          gateway.session != null && find.byType(Texture).evaluate().isNotEmpty,
+    );
+    debugPrint('ANDROID_SAF_PROJECT_OPENED');
+    expect(gateway.openedPath, contains('/files/or-projects/'));
+    debugPrint(
+      'ANDROID_SAF_PROJECT_PATHS '
+      'selected=${projectPicker.selectedProjectPath} '
+      'opened=${gateway.openedPath}',
+    );
+    expect(projectPicker.selectedProjectPath, gateway.openedPath);
+    final storedRecents = await PersistentRecentProjectStore().load();
+    expect(storedRecents, hasLength(1));
+    expect(storedRecents.single.path, gateway.openedPath);
+    expect(storedRecents.single.name, 'SAF preview acceptance');
+    final projectDocumentUri = projectPicker.projectDocumentUriFor(
+      gateway.openedPath!,
+    );
+    expect(projectDocumentUri, isNotNull);
+    expect(storedRecents.single.documentUri, projectDocumentUri);
+    // A fresh picker has no in-memory URI map. Restoring the persisted recent
+    // must revalidate Android's retained grant and rebind the managed copy.
+    final restoredPicker = AndroidSafProjectPicker();
+    expect(
+      await restoredPicker.restoreRecentProject(
         gateway.openedPath!,
-      );
-      expect(projectDocumentUri, isNotNull);
-      expect(storedRecents.single.documentUri, projectDocumentUri);
-      // A fresh picker has no in-memory URI map. Restoring the persisted recent
-      // must revalidate Android's retained grant and rebind the managed copy.
-      final restoredPicker = AndroidSafProjectPicker();
-      expect(
-        await restoredPicker.restoreRecentProject(
-          gateway.openedPath!,
-          documentUri: storedRecents.single.documentUri,
-        ),
-        gateway.openedPath,
-      );
-      expect(
-        (await restoredPicker.synchronizeProjectPath(gateway.openedPath!))
-            ?.verified,
-        isTrue,
-      );
-      debugPrint('ANDROID_SAF_RECENT_PROJECT_RESTORED');
-      debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
-      final session = gateway.session!;
-      final revision = (await _stage(
-        'project-summary',
-        () => gateway.summary(session),
-      )).revision;
-      debugPrint('ANDROID_SAF_PROJECT_SUMMARY_READ');
-      expect(
-        (await _stage(
-          'project-media-page',
-          () => gateway.listMediaPage(session, offset: 64, limit: 1),
-        )).items.single.sourceUri,
-        source,
-      );
-      debugPrint('ANDROID_SAF_PROJECT_MEDIA_PAGE_READ');
+        documentUri: storedRecents.single.documentUri,
+      ),
+      gateway.openedPath,
+    );
+    expect(
+      (await restoredPicker.synchronizeProjectPath(gateway.openedPath!))
+          ?.verified,
+      isTrue,
+    );
+    debugPrint('ANDROID_SAF_RECENT_PROJECT_RESTORED');
+    debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_START');
+    final session = gateway.session!;
+    final revision = (await _stage(
+      'project-summary',
+      () => gateway.summary(session),
+    )).revision;
+    debugPrint('ANDROID_SAF_PROJECT_SUMMARY_READ');
+    expect(
+      (await _stage(
+        'project-media-page',
+        () => gateway.listMediaPage(session, offset: 64, limit: 1),
+      )).items.single.sourceUri,
+      source,
+    );
+    debugPrint('ANDROID_SAF_PROJECT_MEDIA_PAGE_READ');
 
-      // The first explicit user transport action is Play, followed by real seek.
-      debugPrint('ANDROID_SAF_PLAY_TAP_START');
+    // The first explicit user transport action is Play, followed by real seek.
+    debugPrint('ANDROID_SAF_PLAY_TAP_START');
+    await tester.tap(find.byKey(const ValueKey('preview-play')));
+    debugPrint('ANDROID_SAF_PLAY_TAP_COMPLETE');
+    await _until(tester, () => gateway.playCalls == 1);
+    debugPrint('ANDROID_SAF_PLAY_COMMAND_COMPLETE');
+    expect(gateway.playResult!.frameSequence, greaterThan(BigInt.zero));
+    expect(gateway.playResult!.errorCode, isNull);
+    if (tester
+            .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
+            .tooltip ==
+        'Pause') {
       await tester.tap(find.byKey(const ValueKey('preview-play')));
-      debugPrint('ANDROID_SAF_PLAY_TAP_COMPLETE');
-      await _until(tester, () => gateway.playCalls == 1);
-      debugPrint('ANDROID_SAF_PLAY_COMMAND_COMPLETE');
-      expect(gateway.playResult!.frameSequence, greaterThan(BigInt.zero));
-      expect(gateway.playResult!.errorCode, isNull);
-      if (tester
-              .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
-              .tooltip ==
-          'Pause') {
-        await tester.tap(find.byKey(const ValueKey('preview-play')));
-      }
-      await _until(tester, () => gateway.lastPreview?.playing == false);
-      debugPrint('ANDROID_SAF_PLAYBACK_PAUSED');
-      await _seekUi(tester, gateway, .25);
-      debugPrint('ANDROID_SAF_FIRST_SEEK_COMPLETE');
+    }
+    await _until(tester, () => gateway.lastPreview?.playing == false);
+    debugPrint('ANDROID_SAF_PLAYBACK_PAUSED');
+    await _seekUi(tester, gateway, .25);
+    debugPrint('ANDROID_SAF_FIRST_SEEK_COMPLETE');
+    expect(gateway.seekError, isNull);
+    expect(gateway.lastPreview!.width, 16);
+    expect(gateway.lastPreview!.height, 16);
+    expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
+    expect(await _frameAvailable('after-first-seek'), isTrue);
+    debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_START');
+    expect(_providerFds(), 1);
+    debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_COMPLETE');
+    final registeredBefore = (await _resources())['registrationCount'];
+    final opensBefore = (await _control('status'))['providerOpens'];
+    for (final position in [.3, .35, .45]) {
+      await _seekUi(tester, gateway, position);
       expect(gateway.seekError, isNull);
-      expect(gateway.lastPreview!.width, 16);
-      expect(gateway.lastPreview!.height, 16);
-      expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
-      expect(await _frameAvailable('after-first-seek'), isTrue);
-      debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_START');
-      expect(_providerFds(), 1);
-      debugPrint('ANDROID_SAF_PROVIDER_FD_SNAPSHOT_COMPLETE');
-      final registeredBefore = (await _resources())['registrationCount'];
-      final opensBefore = (await _control('status'))['providerOpens'];
-      for (final position in [.3, .35, .45]) {
-        await _seekUi(tester, gateway, position);
-        expect(gateway.seekError, isNull);
-        expect(await _frameAvailable('after-repeat-seek'), isTrue);
-      }
-      final registeredAfter = (await _resources())['registrationCount'];
-      final opensAfter = (await _control('status'))['providerOpens'];
-      expect(registeredAfter, registeredBefore);
-      expect(
-        opensAfter,
-        opensBefore,
-        reason: 'Unchanged active-source seeks must reuse the duplicated capability.',
-      );
+      expect(await _frameAvailable('after-repeat-seek'), isTrue);
+    }
+    final registeredAfter = (await _resources())['registrationCount'];
+    final opensAfter = (await _control('status'))['providerOpens'];
+    expect(registeredAfter, registeredBefore);
+    expect(
+      opensAfter,
+      opensBefore,
+      reason:
+          'Unchanged active-source seeks must reuse the duplicated capability.',
+    );
 
-      // Give the short fixture enough playback headroom for the native Play
-      // request and state poll before exercising Android background/resume.
-      await _seekUi(tester, gateway, .05);
-      expect(gateway.seekError, isNull);
-      expect(await _frameAvailable('before-background-play'), isTrue);
-      final beforeBackground = await _resources();
-      final playCallsBeforeBackground = gateway.playCalls;
-      await tester.tap(find.byKey(const ValueKey('preview-play')));
-      await _until(
+    // Give the short fixture enough playback headroom for the native Play
+    // request and state poll before exercising Android background/resume.
+    await _seekUi(tester, gateway, .05);
+    expect(gateway.seekError, isNull);
+    expect(await _frameAvailable('before-background-play'), isTrue);
+    final beforeBackground = await _resources();
+    final playCallsBeforeBackground = gateway.playCalls;
+    await tester.tap(find.byKey(const ValueKey('preview-play')));
+    await _until(
+      tester,
+      () => gateway.playCalls == playCallsBeforeBackground + 1,
+    );
+    final playResult = gateway.playResult!;
+    final polledPreview = gateway.lastPreview!;
+    String time(ProjectRationalTime? value) =>
+        value == null ? 'none' : '${value.numerator}/${value.denominator}';
+    debugPrint(
+      'ANDROID_SAF_BACKGROUND_PLAY_STATE '
+      'resultPlaying=${playResult.playing} '
+      'resultPosition=${time(playResult.position)} '
+      'resultEnd=${time(playResult.contentEnd)} '
+      'resultFrame=${playResult.frameSequence} '
+      'polledPlaying=${polledPreview.playing} '
+      'polledPosition=${time(polledPreview.position)} '
+      'polledEnd=${time(polledPreview.contentEnd)} '
+      'polledFrame=${polledPreview.frameSequence} '
+      'playMicros=${gateway.playMicros}',
+    );
+    expect(
+      polledPreview.playing,
+      isTrue,
+      reason: 'Preview was not actively playing before Android backgrounding.',
+    );
+    debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_START');
+    expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
+    debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE');
+    await _stage(
+      'wait-for-background-pause',
+      () => _until(tester, () => gateway.lastPreview?.playing == false),
+    );
+    debugPrint('ANDROID_SAF_BACKGROUND_PAUSE_OBSERVED');
+    await _stage(
+      'wait-for-activity-resume',
+      () => _until(
         tester,
-        () => gateway.playCalls == playCallsBeforeBackground + 1,
-      );
-      final playResult = gateway.playResult!;
-      final polledPreview = gateway.lastPreview!;
-      String time(ProjectRationalTime? value) =>
-          value == null ? 'none' : '${value.numerator}/${value.denominator}';
-      debugPrint(
-        'ANDROID_SAF_BACKGROUND_PLAY_STATE '
-        'resultPlaying=${playResult.playing} '
-        'resultPosition=${time(playResult.position)} '
-        'resultEnd=${time(playResult.contentEnd)} '
-        'resultFrame=${playResult.frameSequence} '
-        'polledPlaying=${polledPreview.playing} '
-        'polledPosition=${time(polledPreview.position)} '
-        'polledEnd=${time(polledPreview.contentEnd)} '
-        'polledFrame=${polledPreview.frameSequence} '
-        'playMicros=${gateway.playMicros}',
-      );
-      expect(
-        polledPreview.playing,
-        isTrue,
-        reason:
-            'Preview was not actively playing before Android backgrounding.',
-      );
-      debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_START');
-      expect((await _control('backgroundAndResume'))['backgrounded'], isTrue);
-      debugPrint('ANDROID_SAF_BACKGROUND_CONTROL_COMPLETE');
-      await _stage(
-        'wait-for-background-pause',
-        () => _until(tester, () => gateway.lastPreview?.playing == false),
-      );
-      debugPrint('ANDROID_SAF_BACKGROUND_PAUSE_OBSERVED');
-      await _stage(
-        'wait-for-activity-resume',
-        () => _until(
-          tester,
-          () => tester.binding.lifecycleState == AppLifecycleState.resumed,
-        ),
-      );
-      debugPrint('ANDROID_SAF_ACTIVITY_RESUME_OBSERVED');
-      expect(_providerFds(), 1);
-      expect((await gateway.summary(session)).revision, revision);
-      expect(await _frameAvailable('after-background-resume'), isTrue);
-      await _settleTextureSurface(tester, stage: 'background-resumed-surface');
-      final afterBackground = await _resources();
-      debugPrint(
-        'ANDROID_SAF_PREVIEW_RESOURCE_SNAPSHOT ${jsonEncode(afterBackground)}',
-      );
-      final surfaceCleanupDelta =
-          afterBackground['surfaceCleanups']! -
-          beforeBackground['surfaceCleanups']!;
-      final surfaceRestorationDelta =
-          afterBackground['surfaceRestorations']! -
-          beforeBackground['surfaceRestorations']!;
-      expect(surfaceCleanupDelta, greaterThanOrEqualTo(0));
-      expect(surfaceRestorationDelta, greaterThanOrEqualTo(0));
-      expect(
-        surfaceCleanupDelta == 0 || surfaceRestorationDelta > 0,
-        isTrue,
-        reason: 'A destroyed Android surface must be restored before reuse.',
-      );
-      final backgroundPixels = await _redTexture(
-        tester,
-        binding,
-        'saf-background-resumed-texture',
-      );
+        () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+      ),
+    );
+    debugPrint('ANDROID_SAF_ACTIVITY_RESUME_OBSERVED');
+    expect(_providerFds(), 1);
+    expect((await gateway.summary(session)).revision, revision);
+    expect(await _frameAvailable('after-background-resume'), isTrue);
+    await _settleTextureSurface(tester, stage: 'background-resumed-surface');
+    final afterBackground = await _resources();
+    debugPrint(
+      'ANDROID_SAF_PREVIEW_RESOURCE_SNAPSHOT ${jsonEncode(afterBackground)}',
+    );
+    final surfaceCleanupDelta =
+        afterBackground['surfaceCleanups']! -
+        beforeBackground['surfaceCleanups']!;
+    final surfaceRestorationDelta =
+        afterBackground['surfaceRestorations']! -
+        beforeBackground['surfaceRestorations']!;
+    expect(surfaceCleanupDelta, greaterThanOrEqualTo(0));
+    expect(surfaceRestorationDelta, greaterThanOrEqualTo(0));
+    expect(
+      surfaceCleanupDelta == 0 || surfaceRestorationDelta > 0,
+      isTrue,
+      reason: 'A destroyed Android surface must be restored before reuse.',
+    );
+    final backgroundPixels = await _redTexture(
+      tester,
+      binding,
+      'saf-background-resumed-texture',
+    );
 
-      final pixels = await _redTexture(tester, binding, 'saf-editor-texture');
-      debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_COMPLETE');
+    final pixels = await _redTexture(tester, binding, 'saf-editor-texture');
+    debugPrint('ANDROID_SAF_INITIAL_TEXTURE_CAPTURE_COMPLETE');
 
-      await _control('revoke', uri: source);
-      expect(
-        _providerFds(),
-        1,
-      ); // Revocation does not revoke an already-open FD.
-      await _seekUi(tester, gateway, .4);
-      expect(gateway.seekError!.code, 'MEDIA_PERMISSION_REQUIRED');
-      expect(find.byKey(const ValueKey('preview-error')), findsOneWidget);
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('preview-error'))).data,
-        contains('Select it again'),
-      );
-      expect((await _resources())['duplicatedMediaFds'], 0);
-      expect(_providerFds(), 0);
-      await _control('grant', uri: source);
-      await _seekUi(tester, gateway, .5);
-      expect(gateway.seekError, isNull);
-      expect(find.byKey(const ValueKey('preview-error')), findsNothing);
-      expect(await _frameAvailable('after-permission-regrant'), isTrue);
-      final recoveredPixels = await _redTexture(
-        tester,
-        binding,
-        'saf-editor-permission-recovered',
-      );
-      expect((await gateway.summary(session)).revision, revision);
+    await _control('revoke', uri: source);
+    expect(_providerFds(), 1); // Revocation does not revoke an already-open FD.
+    await _seekUi(tester, gateway, .4);
+    expect(gateway.seekError!.code, 'MEDIA_PERMISSION_REQUIRED');
+    expect(find.byKey(const ValueKey('preview-error')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('preview-error'))).data,
+      contains('Select it again'),
+    );
+    expect((await _resources())['duplicatedMediaFds'], 0);
+    expect(_providerFds(), 0);
+    await _control('grant', uri: source);
+    await _seekUi(tester, gateway, .5);
+    expect(gateway.seekError, isNull);
+    expect(find.byKey(const ValueKey('preview-error')), findsNothing);
+    expect(await _frameAvailable('after-permission-regrant'), isTrue);
+    final recoveredPixels = await _redTexture(
+      tester,
+      binding,
+      'saf-editor-permission-recovered',
+    );
+    expect((await gateway.summary(session)).revision, revision);
 
-      final exportButton = find.byKey(const ValueKey('export-project'));
-      await tester.ensureVisible(exportButton);
-      final exportTimer = Stopwatch()..start();
-      await tester.tap(exportButton);
-      await tester.pump();
-      await _until(
-        tester,
-        () => find.text('Export video').evaluate().isNotEmpty,
-      );
-      expect(find.text('Export video'), findsOneWidget);
-      expect(find.text('WebM video'), findsOneWidget);
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () {
-        final status = _exportStatus(tester);
-        return status != null &&
-            status != 'Export queued' &&
-            status != 'Exporting' &&
-            !RegExp(r'^Export \d+/\d+$').hasMatch(status) &&
-            status != 'Saving export to the selected location…';
-      });
-      final exportStatus = _exportStatus(tester);
-      expect(
-        exportStatus,
-        'Export complete',
-        reason: 'Android export ended with status: $exportStatus',
-      );
-      exportTimer.stop();
-      final exported = await _control('exportStatus');
-      expect(exported['exportBytes'], greaterThan(4));
-      expect(exported['validWebm'], isTrue);
-      expect(exported['webmVideoMime'], 'video/x-vnd.on2.vp9');
-      expect(exported['webmAudioMime'], 'audio/opus');
-      expect(exported['webmVideoSampleBytes'], greaterThan(0));
-      expect(exported['webmAudioSampleBytes'], greaterThan(0));
-      expect(exported['webmVideoDecodeComplete'], isTrue);
-      expect(exported['webmVideoDecodedBuffers'], greaterThan(0));
-      expect(exported['webmVideoDecodedBytes'], greaterThan(0));
-      expect(exported['webmAudioDecodeComplete'], isTrue);
-      expect(exported['webmAudioDecodedBuffers'], greaterThan(0));
-      expect(exported['webmAudioDecodedBytes'], greaterThan(0));
-      expect((await gateway.summary(session)).revision, revision);
+    final exportButton = find.byKey(const ValueKey('export-project'));
+    await tester.ensureVisible(exportButton);
+    final exportTimer = Stopwatch()..start();
+    await tester.tap(exportButton);
+    await tester.pump();
+    await _until(tester, () => find.text('Export video').evaluate().isNotEmpty);
+    expect(find.text('Export video'), findsOneWidget);
+    expect(find.text('WebM video'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    debugPrint('ANDROID_SAF_EXPORT_DOCUMENTS_UI_READY');
+    await _until(tester, () {
+      final status = _exportStatus(tester);
+      return status != null &&
+          status != 'Export queued' &&
+          status != 'Exporting' &&
+          !RegExp(r'^Export \d+/\d+$').hasMatch(status) &&
+          status != 'Saving export to the selected location…';
+    });
+    final exportStatus = _exportStatus(tester);
+    expect(
+      exportStatus,
+      'Export complete',
+      reason: 'Android export ended with status: $exportStatus',
+    );
+    exportTimer.stop();
+    final exported = await _control('exportStatus');
+    expect(exported['exportBytes'], greaterThan(4));
+    expect(exported['validWebm'], isTrue);
+    expect(exported['webmVideoMime'], 'video/x-vnd.on2.vp9');
+    expect(exported['webmAudioMime'], 'audio/opus');
+    expect(exported['webmVideoSampleBytes'], greaterThan(0));
+    expect(exported['webmAudioSampleBytes'], greaterThan(0));
+    expect(exported['webmVideoDecodeComplete'], isTrue);
+    expect(exported['webmVideoDecodedBuffers'], greaterThan(0));
+    expect(exported['webmVideoDecodedBytes'], greaterThan(0));
+    expect(exported['webmAudioDecodeComplete'], isTrue);
+    expect(exported['webmAudioDecodedBuffers'], greaterThan(0));
+    expect(exported['webmAudioDecodedBytes'], greaterThan(0));
+    expect((await gateway.summary(session)).revision, revision);
 
-      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('mobile-tool-sheet-close'))
-            .hitTestable()
-            .evaluate()
-            .isNotEmpty,
-      );
-      final mediaImport = find.byKey(const ValueKey('media-import'));
-      await _until(
-        tester,
-        () => mediaImport.hitTestable().evaluate().isNotEmpty,
-      );
-      await tester.tap(mediaImport);
-      debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
-      gateway.traceImportRefresh = true;
-      await _untilMediaImports(tester, gateway, 3);
-      gateway.traceImportRefresh = false;
-      final importResults = gateway.importResults;
-      final importResultSummary = jsonEncode(
-        importResults
-            .map(
-              (result) => {
-                'succeeded': result.succeeded,
-                'errorCode': result.errorCode,
-                'message': result.message,
-              },
-            )
-            .toList(growable: false),
-      );
-      debugPrint('ANDROID_SAF_MEDIA_IMPORT_RESULTS $importResultSummary');
-      expect(importResults, hasLength(3), reason: importResultSummary);
-      expect(
-        importResults.every((result) => result.succeeded),
-        isTrue,
-        reason: importResultSummary,
-      );
-      final imported = await gateway.listMediaPage(
-        session,
-        offset: 65,
-        limit: 3,
-      );
-      expect(imported.items.map((item) => item.sourceUri), [
-        _source('media'),
-        _source('media-second'),
-        _source('media-audio'),
-      ]);
-      expect(imported.items[0].formatNames, contains('matroska'));
-      expect(imported.items[1].formatNames, contains('mov'));
-      expect(imported.items[1].videoDetails, contains('h264'));
-      expect(imported.items[1].audioDetails, contains('aac'));
-      expect(imported.items[2].formatNames, contains('mp3'));
-      expect(imported.items[2].videoDetails, isNull);
-      expect(imported.items[2].audioDetails, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('mobile-tool-sheet-close'))
+          .hitTestable()
+          .evaluate()
+          .isNotEmpty,
+    );
+    final mediaImport = find.byKey(const ValueKey('media-import'));
+    await _until(tester, () => mediaImport.hitTestable().evaluate().isNotEmpty);
+    await tester.tap(mediaImport);
+    debugPrint('ANDROID_SAF_MEDIA_IMPORT_DOCUMENTS_UI_READY');
+    gateway.traceImportRefresh = true;
+    await _untilMediaImports(tester, gateway, 3);
+    gateway.traceImportRefresh = false;
+    final importResults = gateway.importResults;
+    final importResultSummary = jsonEncode(
+      importResults
+          .map(
+            (result) => {
+              'succeeded': result.succeeded,
+              'errorCode': result.errorCode,
+              'message': result.message,
+            },
+          )
+          .toList(growable: false),
+    );
+    debugPrint('ANDROID_SAF_MEDIA_IMPORT_RESULTS $importResultSummary');
+    expect(importResults, hasLength(3), reason: importResultSummary);
+    expect(
+      importResults.every((result) => result.succeeded),
+      isTrue,
+      reason: importResultSummary,
+    );
+    final imported = await gateway.listMediaPage(session, offset: 65, limit: 3);
+    expect(imported.items.map((item) => item.sourceUri), [
+      _source('media'),
+      _source('media-second'),
+      _source('media-audio'),
+    ]);
+    expect(imported.items[0].formatNames, contains('matroska'));
+    expect(imported.items[1].formatNames, contains('mov'));
+    expect(imported.items[1].videoDetails, contains('h264'));
+    expect(imported.items[1].audioDetails, contains('aac'));
+    expect(imported.items[2].formatNames, contains('mp3'));
+    expect(imported.items[2].videoDetails, isNull);
+    expect(imported.items[2].audioDetails, isNotNull);
 
-      final importFolderButton = find.byKey(
-        const ValueKey('media-import-folder'),
-      );
-      // Gateway completion is observed before AppShell finishes refreshing the
-      // project read model and releases its mutation busy state. Wait for the
-      // real control to become enabled so this remains a user journey rather
-      // than tapping a disabled button during that refresh.
-      await _until(tester, () {
-        if (importFolderButton.evaluate().isEmpty) return false;
-        return tester.widget<OutlinedButton>(importFolderButton).onPressed !=
-            null;
-      });
-      await tester.tap(importFolderButton);
-      debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
-      await _untilMediaImports(tester, gateway, 5);
-      final folderImported = await gateway.listMediaPage(
-        session,
-        offset: 68,
-        limit: 2,
-      );
-      expect(folderImported.items.map((item) => item.sourceUri), [
-        _folderTreeSource('folder-audio'),
-        _folderTreeSource('folder-video'),
-      ]);
-      expect(folderImported.items[0].formatNames, contains('mp3'));
-      expect(folderImported.items[1].formatNames, contains('matroska'));
-      final persistedTreeGrants =
-          (await _control('status'))['persistedMediaUris'] as List<dynamic>;
-      // Keep the persisted permission scoped to the directory the user chose.
-      expect(persistedTreeGrants, contains(_folderTreeRoot));
-      expect(
-        persistedTreeGrants,
-        isNot(contains('content://dev.opencut.saffixture.documents/tree/root')),
-      );
+    final importFolderButton = find.byKey(
+      const ValueKey('media-import-folder'),
+    );
+    // Gateway completion is observed before AppShell finishes refreshing the
+    // project read model and releases its mutation busy state. Wait for the
+    // real control to become enabled so this remains a user journey rather
+    // than tapping a disabled button during that refresh.
+    await _until(tester, () {
+      if (importFolderButton.evaluate().isEmpty) return false;
+      return tester.widget<OutlinedButton>(importFolderButton).onPressed !=
+          null;
+    });
+    await tester.tap(importFolderButton);
+    debugPrint('ANDROID_SAF_MEDIA_FOLDER_IMPORT_DOCUMENTS_UI_READY');
+    await _untilMediaImports(tester, gateway, 5);
+    final folderImported = await gateway.listMediaPage(
+      session,
+      offset: 68,
+      limit: 2,
+    );
+    expect(folderImported.items.map((item) => item.sourceUri), [
+      _folderTreeSource('folder-audio'),
+      _folderTreeSource('folder-video'),
+    ]);
+    expect(folderImported.items[0].formatNames, contains('mp3'));
+    expect(folderImported.items[1].formatNames, contains('matroska'));
+    final persistedTreeGrants =
+        (await _control('status'))['persistedMediaUris'] as List<dynamic>;
+    // Keep the persisted permission scoped to the directory the user chose.
+    expect(persistedTreeGrants, contains(_folderTreeRoot));
+    expect(
+      persistedTreeGrants,
+      isNot(contains('content://dev.opencut.saffixture.documents/tree/root')),
+    );
 
-      final importedRevision = (await gateway.summary(session)).revision;
-      expect(importedRevision, greaterThan(revision));
-      expect((await gateway.save(session)).succeeded, isTrue);
-      // Keep the granted source descriptors alive while the project revision
-      // reconnects the viewer; project close below owns their release.
-      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
-      // The mobile tool sheet is a route. Do not search for or tap timeline
-      // controls while its dismissal barrier is still intercepting input.
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('project-media-panel'))
-            .evaluate()
-            .isEmpty,
-      );
+    final importedRevision = (await gateway.summary(session)).revision;
+    expect(importedRevision, greaterThan(revision));
+    expect((await gateway.save(session)).succeeded, isTrue);
+    // Keep the granted source descriptors alive while the project revision
+    // reconnects the viewer; project close below owns their release.
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    // The mobile tool sheet is a route. Do not search for or tap timeline
+    // controls while its dismissal barrier is still intercepting input.
+    await _until(
+      tester,
+      () =>
+          find.byKey(const ValueKey('project-media-panel')).evaluate().isEmpty,
+    );
 
-      final importCaptionsButton = find.byKey(
-        const ValueKey('timeline-import-captions'),
-      );
-      await tester.ensureVisible(importCaptionsButton);
-      await _until(
-        tester,
-        () => importCaptionsButton.hitTestable().evaluate().isNotEmpty,
-      );
-      await tester.tap(importCaptionsButton.hitTestable());
-      debugPrint('ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY');
-      await _until(
-        tester,
-        () => find.text('Review SubRip captions').evaluate().isNotEmpty,
-      );
-      await tester.tap(find.text('Import captions'));
-      await _until(tester, () => gateway.reviewedCaptionImportCalls == 1);
-      expect(
-        gateway.lastReviewedCaptionImportResult?.succeeded,
-        isTrue,
-        reason: gateway.lastReviewedCaptionImportResult?.message,
-      );
-      var captionTracks = (await gateway.listTimelineTracks(session)).items
-          .where((track) => track.kind == ProjectTimelineTrackKind.caption)
-          .toList();
-      expect(captionTracks, hasLength(1));
-      var captionPage = await gateway.listTimelineClips(
-        session,
-        trackId: captionTracks.single.trackId,
-        offset: 0,
-        limit: 10,
-      );
-      expect(captionPage.items.single.text, 'Imported SAF caption');
-      final captionImportRevision = (await gateway.summary(session)).revision;
+    final importCaptionsButton = find.byKey(
+      const ValueKey('timeline-import-captions'),
+    );
+    await tester.ensureVisible(importCaptionsButton);
+    await _until(
+      tester,
+      () => importCaptionsButton.hitTestable().evaluate().isNotEmpty,
+    );
+    await tester.tap(importCaptionsButton.hitTestable());
+    debugPrint('ANDROID_SAF_CAPTION_IMPORT_DOCUMENTS_UI_READY');
+    await _until(
+      tester,
+      () => find.text('Review SubRip captions').evaluate().isNotEmpty,
+    );
+    await tester.tap(find.text('Import captions'));
+    await _until(tester, () => gateway.reviewedCaptionImportCalls == 1);
+    expect(
+      gateway.lastReviewedCaptionImportResult?.succeeded,
+      isTrue,
+      reason: gateway.lastReviewedCaptionImportResult?.message,
+    );
+    var captionTracks = (await gateway.listTimelineTracks(session)).items
+        .where((track) => track.kind == ProjectTimelineTrackKind.caption)
+        .toList();
+    expect(captionTracks, hasLength(1));
+    var captionPage = await gateway.listTimelineClips(
+      session,
+      trackId: captionTracks.single.trackId,
+      offset: 0,
+      limit: 10,
+    );
+    expect(captionPage.items.single.text, 'Imported SAF caption');
+    final captionImportRevision = (await gateway.summary(session)).revision;
 
-      final exportCaptionsButton = find.byKey(
-        const ValueKey('timeline-export-captions'),
-      );
-      await tester.ensureVisible(exportCaptionsButton);
-      await _until(tester, () {
-        if (exportCaptionsButton.evaluate().isEmpty) return false;
-        return tester.widget<TextButton>(exportCaptionsButton).onPressed !=
-            null;
-      });
-      await tester.tap(exportCaptionsButton);
+    final exportCaptionsButton = find.byKey(
+      const ValueKey('timeline-export-captions'),
+    );
+    await tester.ensureVisible(exportCaptionsButton);
+    await _until(tester, () {
+      if (exportCaptionsButton.evaluate().isEmpty) return false;
+      return tester.widget<TextButton>(exportCaptionsButton).onPressed != null;
+    });
+    await tester.tap(exportCaptionsButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    debugPrint('ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY');
+    await _until(tester, () => gateway.captionExportStartedCalls == 1);
+    await _until(tester, () => gateway.captionExportCalls == 1);
+    await _until(
+      tester,
+      () => find.text('Caption file exported.').evaluate().isNotEmpty,
+    );
+    final captionExport = await _control('status');
+    expect(captionExport['captionExportBytes'], greaterThan(0));
+    expect(captionExport['validSrtCaption'], isTrue);
+
+    captionTracks = (await gateway.listTimelineTracks(session)).items
+        .where((track) => track.kind == ProjectTimelineTrackKind.caption)
+        .toList();
+    expect(captionTracks, hasLength(1));
+    captionPage = await gateway.listTimelineClips(
+      session,
+      trackId: captionTracks.single.trackId,
+      offset: 0,
+      limit: 10,
+    );
+    expect(captionPage.items.single.text, 'Imported SAF caption');
+
+    final activeMedia = (await gateway.listMediaPage(
+      session,
+      offset: 64,
+      limit: 1,
+    )).items.single;
+    expect(activeMedia.mediaId, '00000041-2222-4222-8222-222222222222');
+    expect(activeMedia.sourceUri, source);
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('project-media-panel'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    final mediaPanel = find.byKey(const ValueKey('project-media-panel'));
+    final mediaList = find.descendant(
+      of: mediaPanel,
+      matching: find.byType(ListView),
+    );
+    await _until(tester, () => mediaList.evaluate().isNotEmpty);
+    final loadMore = find.byKey(const ValueKey('media-load-more'));
+    for (
+      var attempt = 0;
+      attempt < 20 && loadMore.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(mediaList, const Offset(0, -600));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Continue'));
-      debugPrint('ANDROID_SAF_CAPTION_EXPORT_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.captionExportStartedCalls == 1);
-      await _until(tester, () => gateway.captionExportCalls == 1);
-      await _until(
-        tester,
-        () => find.text('Caption file exported.').evaluate().isNotEmpty,
-      );
-      final captionExport = await _control('status');
-      expect(captionExport['captionExportBytes'], greaterThan(0));
-      expect(captionExport['validSrtCaption'], isTrue);
-
-      captionTracks = (await gateway.listTimelineTracks(session)).items
-          .where((track) => track.kind == ProjectTimelineTrackKind.caption)
-          .toList();
-      expect(captionTracks, hasLength(1));
-      captionPage = await gateway.listTimelineClips(
-        session,
-        trackId: captionTracks.single.trackId,
-        offset: 0,
-        limit: 10,
-      );
-      expect(captionPage.items.single.text, 'Imported SAF caption');
-
-      final activeMedia = (await gateway.listMediaPage(
-        session,
-        offset: 64,
-        limit: 1,
-      )).items.single;
-      expect(activeMedia.mediaId, '00000041-2222-4222-8222-222222222222');
-      expect(activeMedia.sourceUri, source);
-      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('project-media-panel'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      final mediaPanel = find.byKey(const ValueKey('project-media-panel'));
-      final mediaList = find.descendant(
-        of: mediaPanel,
-        matching: find.byType(ListView),
-      );
-      await _until(tester, () => mediaList.evaluate().isNotEmpty);
-      final loadMore = find.byKey(const ValueKey('media-load-more'));
-      for (
-        var attempt = 0;
-        attempt < 20 && loadMore.hitTestable().evaluate().isEmpty;
-        attempt++
-      ) {
-        await tester.drag(mediaList, const Offset(0, -600));
-        await tester.pumpAndSettle();
-      }
-      expect(loadMore.hitTestable(), findsOneWidget);
-      await tester.tap(loadMore);
-      await _until(tester, () => loadMore.evaluate().isEmpty);
-      final mediaActions = find.byKey(
-        ValueKey('media-actions-${activeMedia.mediaId}'),
-      );
-      for (
-        var attempt = 0;
-        attempt < 20 && mediaActions.hitTestable().evaluate().isEmpty;
-        attempt++
-      ) {
-        await tester.drag(mediaList, const Offset(0, -600));
-        await tester.pumpAndSettle();
-      }
-      expect(mediaActions.hitTestable(), findsOneWidget);
-      await tester.tap(mediaActions);
+    }
+    expect(loadMore.hitTestable(), findsOneWidget);
+    await tester.tap(loadMore);
+    await _until(tester, () => loadMore.evaluate().isEmpty);
+    final mediaActions = find.byKey(
+      ValueKey('media-actions-${activeMedia.mediaId}'),
+    );
+    for (
+      var attempt = 0;
+      attempt < 20 && mediaActions.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(mediaList, const Offset(0, -600));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(ValueKey('media-relink-${activeMedia.mediaId}')),
-      );
-      debugPrint('ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY');
-      await _until(tester, () => gateway.lastRelinkResult != null);
-      final relinkResult = gateway.lastRelinkResult!;
-      debugPrint(
-        'ANDROID_SAF_MEDIA_RELINK_RESULT '
-        'succeeded=${relinkResult.succeeded} '
-        'errorCode=${relinkResult.errorCode} '
-        'message=${relinkResult.message} '
-        'revision=${relinkResult.view?.revision}',
-      );
-      expect(
-        relinkResult.succeeded,
-        isTrue,
-        reason:
-            'The real SAF relink command must succeed: '
-            '${relinkResult.errorCode} ${relinkResult.message}',
-      );
-      debugPrint('ANDROID_SAF_MEDIA_RELINK_COMPLETE');
-      final relinkedMedia = (await gateway.listMediaPage(
-        session,
-        offset: 64,
-        limit: 1,
-      )).items.single;
-      expect(gateway.lastRelinkMediaId, activeMedia.mediaId);
-      expect(gateway.lastRelinkSource, _source('relink-replacement'));
-      expect(relinkedMedia.mediaId, activeMedia.mediaId);
-      expect(relinkedMedia.sourceUri, _source('relink-replacement'));
-      final videoTrack = (await gateway.listTimelineTracks(session)).items
-          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
-      final relinkedClips = await gateway.listTimelineClips(
-        session,
-        trackId: videoTrack.trackId,
-        offset: 0,
-        limit: 20,
-      );
-      expect(
-        relinkedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
-        isTrue,
-        reason: 'Relinking must retain the timeline clip identity.',
-      );
-      final mediaRelinkRevision = (await gateway.summary(session)).revision;
-      expect(mediaRelinkRevision, greaterThan(captionImportRevision));
-      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('project-media-panel'))
-            .evaluate()
-            .isEmpty,
-      );
+    }
+    expect(mediaActions.hitTestable(), findsOneWidget);
+    await tester.tap(mediaActions);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('media-relink-${activeMedia.mediaId}')),
+    );
+    debugPrint('ANDROID_SAF_MEDIA_RELINK_DOCUMENTS_UI_READY');
+    await _until(tester, () => gateway.lastRelinkResult != null);
+    final relinkResult = gateway.lastRelinkResult!;
+    debugPrint(
+      'ANDROID_SAF_MEDIA_RELINK_RESULT '
+      'succeeded=${relinkResult.succeeded} '
+      'errorCode=${relinkResult.errorCode} '
+      'message=${relinkResult.message} '
+      'revision=${relinkResult.view?.revision}',
+    );
+    expect(
+      relinkResult.succeeded,
+      isTrue,
+      reason:
+          'The real SAF relink command must succeed: '
+          '${relinkResult.errorCode} ${relinkResult.message}',
+    );
+    debugPrint('ANDROID_SAF_MEDIA_RELINK_COMPLETE');
+    final relinkedMedia = (await gateway.listMediaPage(
+      session,
+      offset: 64,
+      limit: 1,
+    )).items.single;
+    expect(gateway.lastRelinkMediaId, activeMedia.mediaId);
+    expect(gateway.lastRelinkSource, _source('relink-replacement'));
+    expect(relinkedMedia.mediaId, activeMedia.mediaId);
+    expect(relinkedMedia.sourceUri, _source('relink-replacement'));
+    final videoTrack = (await gateway.listTimelineTracks(session)).items
+        .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
+    final relinkedClips = await gateway.listTimelineClips(
+      session,
+      trackId: videoTrack.trackId,
+      offset: 0,
+      limit: 20,
+    );
+    expect(
+      relinkedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
+      isTrue,
+      reason: 'Relinking must retain the timeline clip identity.',
+    );
+    final mediaRelinkRevision = (await gateway.summary(session)).revision;
+    expect(mediaRelinkRevision, greaterThan(captionImportRevision));
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await _until(
+      tester,
+      () =>
+          find.byKey(const ValueKey('project-media-panel')).evaluate().isEmpty,
+    );
 
-      // Compact transport and editing tools must remain reachable by touch.
-      await _dragSeekUi(tester, gateway, .65);
-      expect(gateway.seekError, isNull);
-      expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
-      await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('project-media-panel'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('project-media-panel'))
-            .evaluate()
-            .isEmpty,
-      );
+    // Compact transport and editing tools must remain reachable by touch.
+    await _dragSeekUi(tester, gateway, .65);
+    expect(gateway.seekError, isNull);
+    expect(gateway.lastPreview!.position.numerator, greaterThan(BigInt.zero));
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('project-media-panel'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await _until(
+      tester,
+      () =>
+          find.byKey(const ValueKey('project-media-panel')).evaluate().isEmpty,
+    );
 
-      final clip = find.byWidgetPredicate((widget) {
-        final key = widget.key;
-        return key is ValueKey<String> &&
-            key.value.startsWith('timeline-clip-') &&
-            !key.value.startsWith('timeline-clip-tooltip-');
-      });
-      await _until(tester, () => clip.evaluate().isNotEmpty);
-      await tester.ensureVisible(clip.first);
-      await tester.tap(clip.first);
-      await _until(tester, () => find.text('Clip').evaluate().isNotEmpty);
-      await tester.tap(
-        find.descendant(
-          of: find.byType(AlertDialog).last,
-          matching: find.text('Close'),
-        ),
-      );
-      await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('mobile-editor-tool-inspector'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('mobile-editor-tool-inspector')),
-      );
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('inspector-visual-x'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('inspector-visual-x')))
-            .controller!
-            .text,
-        '0',
-      );
-      await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
-      await _until(
-        tester,
-        () =>
-            find.byKey(const ValueKey('inspector-visual-x')).evaluate().isEmpty,
-      );
+    final clip = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('timeline-clip-') &&
+          !key.value.startsWith('timeline-clip-tooltip-');
+    });
+    await _until(tester, () => clip.evaluate().isNotEmpty);
+    await tester.ensureVisible(clip.first);
+    await tester.tap(clip.first);
+    await _until(tester, () => find.text('Clip').evaluate().isNotEmpty);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog).last,
+        matching: find.text('Close'),
+      ),
+    );
+    await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('mobile-editor-tool-inspector'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-editor-tool-inspector')),
+    );
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('inspector-visual-x'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('inspector-visual-x')))
+          .controller!
+          .text,
+      '0',
+    );
+    await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
+    await _until(
+      tester,
+      () => find.byKey(const ValueKey('inspector-visual-x')).evaluate().isEmpty,
+    );
 
-      // Importing media and seeking dirties the project. Save through the
-      // editor before closing so the journey verifies provider cleanup while
-      // preserving the normal unsaved-work guard.
-      final saveButton = find.byKey(const ValueKey('workspace-save'));
-      await tester.ensureVisible(saveButton);
-      await _until(
-        tester,
-        () =>
-            saveButton.evaluate().isNotEmpty &&
-            saveButton.hitTestable().evaluate().isNotEmpty,
-      );
-      await tester.tap(saveButton);
-      await _until(tester, () => gateway.saveCalls == 1);
-      await _until(tester, () => projectPicker.syncCalls == 1);
-      expect(
-        projectPicker.syncCalls,
-        1,
-        reason: 'Saving a SAF project must invoke its document synchronizer.',
-      );
-      await _until(tester, () => projectPicker.syncCompleted);
-      debugPrint(
-        'ANDROID_SAF_PROJECT_SAVE_RESULT '
-        'succeeded=${gateway.lastSaveResult?.succeeded} '
-        'errorCode=${gateway.lastSaveResult?.errorCode} '
-        'revision=${gateway.lastSaveResult?.view?.revision} '
-        'syncCalls=${projectPicker.syncCalls} '
-        'selectedPath=${projectPicker.selectedProjectPath} '
-        'syncPath=${projectPicker.synchronizedProjectPath} '
-        'syncVerified=${projectPicker.lastSyncResult?.verified} '
-        'syncError=${projectPicker.lastSyncError}',
-      );
-      expect(
-        gateway.lastSaveResult?.succeeded,
-        isTrue,
-        reason:
-            'The project command must save successfully before SAF sync: '
-            '${gateway.lastSaveResult?.errorCode} '
-            '${gateway.lastSaveResult?.message}',
-      );
-      expect(
-        projectPicker.synchronizedProjectPath,
-        projectPicker.selectedProjectPath,
-        reason: 'Save must synchronize the exact DocumentsUI working copy.',
-      );
-      expect(
-        projectPicker.lastSyncResult?.verified,
-        isTrue,
-        reason:
-            'SAF save synchronization must verify its provider readback: '
-            '${projectPicker.lastSyncError}',
-      );
-      Map<String, dynamic>? syncedProject;
-      for (var attempt = 0; attempt < 60; attempt++) {
-        syncedProject = await _control('status');
-        if (syncedProject['projectSha256'] != provider['projectSha256']) {
-          break;
-        }
-        await tester.pump(const Duration(milliseconds: 100));
+    // Importing media and seeking dirties the project. Save through the
+    // editor before closing so the journey verifies provider cleanup while
+    // preserving the normal unsaved-work guard.
+    final saveButton = find.byKey(const ValueKey('workspace-save'));
+    await tester.ensureVisible(saveButton);
+    await _until(
+      tester,
+      () =>
+          saveButton.evaluate().isNotEmpty &&
+          saveButton.hitTestable().evaluate().isNotEmpty,
+    );
+    await tester.tap(saveButton);
+    await _until(tester, () => gateway.saveCalls == 1);
+    await _until(tester, () => projectPicker.syncCalls == 1);
+    expect(
+      projectPicker.syncCalls,
+      1,
+      reason: 'Saving a SAF project must invoke its document synchronizer.',
+    );
+    await _until(tester, () => projectPicker.syncCompleted);
+    debugPrint(
+      'ANDROID_SAF_PROJECT_SAVE_RESULT '
+      'succeeded=${gateway.lastSaveResult?.succeeded} '
+      'errorCode=${gateway.lastSaveResult?.errorCode} '
+      'revision=${gateway.lastSaveResult?.view?.revision} '
+      'syncCalls=${projectPicker.syncCalls} '
+      'selectedPath=${projectPicker.selectedProjectPath} '
+      'syncPath=${projectPicker.synchronizedProjectPath} '
+      'syncVerified=${projectPicker.lastSyncResult?.verified} '
+      'syncError=${projectPicker.lastSyncError}',
+    );
+    expect(
+      gateway.lastSaveResult?.succeeded,
+      isTrue,
+      reason:
+          'The project command must save successfully before SAF sync: '
+          '${gateway.lastSaveResult?.errorCode} '
+          '${gateway.lastSaveResult?.message}',
+    );
+    expect(
+      projectPicker.synchronizedProjectPath,
+      projectPicker.selectedProjectPath,
+      reason: 'Save must synchronize the exact DocumentsUI working copy.',
+    );
+    expect(
+      projectPicker.lastSyncResult?.verified,
+      isTrue,
+      reason:
+          'SAF save synchronization must verify its provider readback: '
+          '${projectPicker.lastSyncError}',
+    );
+    Map<String, dynamic>? syncedProject;
+    for (var attempt = 0; attempt < 60; attempt++) {
+      syncedProject = await _control('status');
+      if (syncedProject['projectSha256'] != provider['projectSha256']) {
+        break;
       }
-      expect(
-        syncedProject?['projectSha256'],
-        isNot(provider['projectSha256']),
-        reason:
-            'Save must sync the edited project to its writable SAF document.',
-      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(
+      syncedProject?['projectSha256'],
+      isNot(provider['projectSha256']),
+      reason: 'Save must sync the edited project to its writable SAF document.',
+    );
 
-      final journey = await _resources();
-      // The close control lives on the Projects workspace. Tapping nav-home
-      // landed on Home, which has no active-project card, so the close step
-      // could never complete.
-      await tester.tap(find.byKey(const ValueKey('nav-projects')));
-      await _until(
-        tester,
-        () => find
-            .byKey(const ValueKey('active-project-close'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      // The action row sits below the fold at this height; a real user scrolls
-      // to it before tapping.
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('active-project-close')),
-      );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('active-project-close')));
-      await _until(tester, () => gateway.closed);
-      expect(_providerFds(), 0);
-      expect((await _resources())['duplicatedMediaFds'], 0);
-      expect((await _resources())['inFlightLeases'], 0);
-      await tester.pumpWidget(const SizedBox());
+    final journey = await _resources();
+    // The close control lives on the Projects workspace. Tapping nav-home
+    // landed on Home, which has no active-project card, so the close step
+    // could never complete.
+    await tester.tap(find.byKey(const ValueKey('nav-projects')));
+    await _until(
+      tester,
+      () => find
+          .byKey(const ValueKey('active-project-close'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    // The action row sits below the fold at this height; a real user scrolls
+    // to it before tapping.
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('active-project-close')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('active-project-close')));
+    await _until(tester, () => gateway.closed);
+    expect(_providerFds(), 0);
+    expect((await _resources())['duplicatedMediaFds'], 0);
+    expect((await _resources())['inFlightLeases'], 0);
+    await tester.pumpWidget(const SizedBox());
 
-      // Actual provider failures exercise partial-open rollback and retryability.
-      await _control('resetMissing');
-      expect(
-        await _bindingFailure(
-          OrViewerTexture.setMediaSources([
-            _source('good'),
-            _source('missing'),
-          ]),
-        ),
-        'MEDIA_SOURCE_MISSING',
-      );
-      expect(_providerFds(), 0);
-      expect((await _resources())['duplicatedMediaFds'], 0);
-      await _control('recoverMissing');
-      expect(
-        await OrViewerTexture.setMediaSources([
-          _source('good'),
-          _source('missing'),
-        ]),
-        isTrue,
-      );
-      expect(_providerFds(), 2);
-      await OrViewerTexture.clearMediaSources();
-      expect(_providerFds(), 0);
-      await _control('resetMissing');
-      expect(await OrViewerTexture.setMediaSources([_source('good')]), isTrue);
-      expect(_providerFds(), 1);
-      expect(
-        await _bindingFailure(
-          OrViewerTexture.registerMediaSourceForImport(_source('missing')),
-        ),
-        'MEDIA_SOURCE_MISSING',
-      );
-      expect(_providerFds(), 1);
-      expect((await _resources())['duplicatedMediaFds'], 1);
-      await OrViewerTexture.clearMediaSources();
-      expect(_providerFds(), 0);
-      expect(
-        await _bindingFailure(
-          OrViewerTexture.setMediaSources([_source('pipe')]),
-        ),
-        'MEDIA_SOURCE_NOT_SEEKABLE',
-      );
-      expect(_providerFds(), 0);
-      expect((await _resources())['duplicatedMediaFds'], 0);
-      await _control('armBlocked');
-      final blocked = _bindingFailure(
-        OrViewerTexture.setMediaSources([_source('blocked')]),
-      );
-      await _control('awaitBlocked');
-      final clearing = OrViewerTexture.clearMediaSources();
-      await _control('releaseBlocked');
-      await clearing;
-      expect(await blocked, 'STALE_PREVIEW_REQUEST');
-      expect(_providerFds(), 0);
+    // Actual provider failures exercise partial-open rollback and retryability.
+    await _control('resetMissing');
+    expect(
+      await _bindingFailure(
+        OrViewerTexture.setMediaSources([_source('good'), _source('missing')]),
+      ),
+      'MEDIA_SOURCE_MISSING',
+    );
+    expect(_providerFds(), 0);
+    expect((await _resources())['duplicatedMediaFds'], 0);
+    await _control('recoverMissing');
+    expect(
+      await OrViewerTexture.setMediaSources([
+        _source('good'),
+        _source('missing'),
+      ]),
+      isTrue,
+    );
+    expect(_providerFds(), 2);
+    await OrViewerTexture.clearMediaSources();
+    expect(_providerFds(), 0);
+    await _control('resetMissing');
+    expect(await OrViewerTexture.setMediaSources([_source('good')]), isTrue);
+    expect(_providerFds(), 1);
+    expect(
+      await _bindingFailure(
+        OrViewerTexture.registerMediaSourceForImport(_source('missing')),
+      ),
+      'MEDIA_SOURCE_MISSING',
+    );
+    expect(_providerFds(), 1);
+    expect((await _resources())['duplicatedMediaFds'], 1);
+    await OrViewerTexture.clearMediaSources();
+    expect(_providerFds(), 0);
+    expect(
+      await _bindingFailure(OrViewerTexture.setMediaSources([_source('pipe')])),
+      'MEDIA_SOURCE_NOT_SEEKABLE',
+    );
+    expect(_providerFds(), 0);
+    expect((await _resources())['duplicatedMediaFds'], 0);
+    await _control('armBlocked');
+    final blocked = _bindingFailure(
+      OrViewerTexture.setMediaSources([_source('blocked')]),
+    );
+    await _control('awaitBlocked');
+    final clearing = OrViewerTexture.clearMediaSources();
+    await _control('releaseBlocked');
+    await clearing;
+    expect(await blocked, 'STALE_PREVIEW_REQUEST');
+    expect(_providerFds(), 0);
 
-      // Supplemental fresh-session Play guard and bounded surface stress.
-      const secondGateway = RustProjectGateway();
-      final selectedProjectPath = projectPicker.selectedProjectPath!;
-      expect(selectedProjectPath, gateway.openedPath);
-      final second = await secondGateway.openProject(selectedProjectPath);
-      var before = await secondGateway.summary(second);
-      final reopenedRelink = (await secondGateway.listMediaPage(
-        second,
-        offset: 64,
-        limit: 1,
-      )).items.single;
-      expect(reopenedRelink.mediaId, activeMedia.mediaId);
-      expect(reopenedRelink.sourceUri, _source('relink-replacement'));
-      final reopenedTrack = (await secondGateway.listTimelineTracks(second))
-          .items
-          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
-      final reopenedClips = await secondGateway.listTimelineClips(
-        second,
-        trackId: reopenedTrack.trackId,
-        offset: 0,
-        limit: 20,
-      );
-      expect(
-        reopenedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
-        isTrue,
-      );
+    // Supplemental fresh-session Play guard and bounded surface stress.
+    const secondGateway = RustProjectGateway();
+    final selectedProjectPath = projectPicker.selectedProjectPath!;
+    expect(selectedProjectPath, gateway.openedPath);
+    final second = await secondGateway.openProject(selectedProjectPath);
+    var before = await secondGateway.summary(second);
+    final reopenedRelink = (await secondGateway.listMediaPage(
+      second,
+      offset: 64,
+      limit: 1,
+    )).items.single;
+    expect(reopenedRelink.mediaId, activeMedia.mediaId);
+    expect(reopenedRelink.sourceUri, _source('relink-replacement'));
+    final reopenedTrack = (await secondGateway.listTimelineTracks(second)).items
+        .singleWhere((track) => track.kind == ProjectTimelineTrackKind.video);
+    final reopenedClips = await secondGateway.listTimelineClips(
+      second,
+      trackId: reopenedTrack.trackId,
+      offset: 0,
+      limit: 20,
+    );
+    expect(
+      reopenedClips.items.any((clip) => clip.mediaId == activeMedia.mediaId),
+      isTrue,
+    );
 
-      final reopenedMedia = await secondGateway.listMediaPage(
-        second,
-        offset: 65,
-        limit: 3,
-      );
-      final importedAudio = reopenedMedia.items.singleWhere(
-        (item) => item.sourceUri == _source('media-audio'),
-      );
-      expect(importedAudio.formatNames, contains('mp3'));
-      expect(importedAudio.audioDetails, isNotNull);
-      final addedAudioTrack = await secondGateway.addTimelineTrack(
-        second,
-        before,
-        ProjectTimelineTrackKind.audio,
-      );
-      expect(
-        addedAudioTrack.succeeded,
-        isTrue,
-        reason: addedAudioTrack.message,
-      );
-      before = addedAudioTrack.view!;
-      final audioTrack = (await secondGateway.listTimelineTracks(second)).items
-          .singleWhere((track) => track.kind == ProjectTimelineTrackKind.audio);
-      final insertedAudio = await secondGateway.insertTimelineClip(
-        second,
-        before,
-        trackId: audioTrack.trackId,
-        mediaId: importedAudio.mediaId,
-        timelineStart: ProjectRationalTime(BigInt.zero, 1),
-        sourceStart: ProjectRationalTime(BigInt.zero, 1),
-        duration: ProjectRationalTime(BigInt.one, 2),
-      );
-      expect(insertedAudio.succeeded, isTrue, reason: insertedAudio.message);
-      expect((await secondGateway.save(second)).succeeded, isTrue);
-      before = await secondGateway.summary(second);
+    final reopenedMedia = await secondGateway.listMediaPage(
+      second,
+      offset: 65,
+      limit: 3,
+    );
+    final importedAudio = reopenedMedia.items.singleWhere(
+      (item) => item.sourceUri == _source('media-audio'),
+    );
+    expect(importedAudio.formatNames, contains('mp3'));
+    expect(importedAudio.audioDetails, isNotNull);
+    final addedAudioTrack = await secondGateway.addTimelineTrack(
+      second,
+      before,
+      ProjectTimelineTrackKind.audio,
+    );
+    expect(addedAudioTrack.succeeded, isTrue, reason: addedAudioTrack.message);
+    before = addedAudioTrack.view!;
+    final audioTrack = (await secondGateway.listTimelineTracks(second)).items
+        .singleWhere((track) => track.kind == ProjectTimelineTrackKind.audio);
+    final insertedAudio = await secondGateway.insertTimelineClip(
+      second,
+      before,
+      trackId: audioTrack.trackId,
+      mediaId: importedAudio.mediaId,
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      duration: ProjectRationalTime(BigInt.one, 2),
+    );
+    expect(insertedAudio.succeeded, isTrue, reason: insertedAudio.message);
+    expect((await secondGateway.save(second)).succeeded, isTrue);
+    before = await secondGateway.summary(second);
 
-      final played = await secondGateway.previewPlay(
-        second,
-      ); // No preceding seek.
-      debugPrint(
-        'ANDROID_SAF_AUDIO_PREVIEW_RESULT '
-        'code=${played.errorCode} message=${played.errorMessage}',
-      );
-      expect(played.frameSequence, greaterThan(BigInt.zero));
-      expect(played.width, 16);
-      expect(
-        played.errorCode,
-        isNull,
-        reason: played.errorMessage ?? 'Audio playback did not start.',
-      );
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 250)),
-      );
-      final audioClockTick = await secondGateway.previewTick(second);
-      debugPrint(
-        'ANDROID_SAF_AUDIO_PREVIEW_TICK '
-        'code=${audioClockTick.errorCode} message=${audioClockTick.errorMessage}',
-      );
-      expect(audioClockTick.errorCode, isNull);
-      expect(
-        audioClockTick.position.numerator,
-        greaterThan(BigInt.zero),
-        reason: 'Audio output device clock should advance while the MP3 clip plays.',
-      );
-      final paused = await secondGateway.previewPause(second);
-      expect(paused.position.numerator, greaterThan(BigInt.zero));
-      expect((await secondGateway.summary(second)).revision, before.revision);
-      final firstFrame = await secondGateway.previewSeek(
-        second,
-        ProjectRationalTime(BigInt.zero, 1),
-      );
-      expect(firstFrame.errorCode, isNull);
-      expect(firstFrame.position.numerator, BigInt.zero);
-      expect(await _frameAvailable('fresh-session-zero-frame'), isTrue);
-      final textureId = (await OrViewerTexture.textureId())!;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Texture(textureId: textureId),
-              ),
+    final played = await secondGateway.previewPlay(
+      second,
+    ); // No preceding seek.
+    debugPrint(
+      'ANDROID_SAF_AUDIO_PREVIEW_RESULT '
+      'code=${played.errorCode} message=${played.errorMessage}',
+    );
+    expect(played.frameSequence, greaterThan(BigInt.zero));
+    expect(played.width, 16);
+    expect(
+      played.errorCode,
+      isNull,
+      reason: played.errorMessage ?? 'Audio playback did not start.',
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 250)),
+    );
+    final audioClockTick = await secondGateway.previewTick(second);
+    debugPrint(
+      'ANDROID_SAF_AUDIO_PREVIEW_TICK '
+      'code=${audioClockTick.errorCode} message=${audioClockTick.errorMessage}',
+    );
+    expect(audioClockTick.errorCode, isNull);
+    expect(
+      audioClockTick.position.numerator,
+      greaterThan(BigInt.zero),
+      reason:
+          'Audio output device clock should advance while the MP3 clip plays.',
+    );
+    final paused = await secondGateway.previewPause(second);
+    expect(paused.position.numerator, greaterThan(BigInt.zero));
+    expect((await secondGateway.summary(second)).revision, before.revision);
+    final firstFrame = await secondGateway.previewSeek(
+      second,
+      ProjectRationalTime(BigInt.zero, 1),
+    );
+    expect(firstFrame.errorCode, isNull);
+    expect(firstFrame.position.numerator, BigInt.zero);
+    expect(await _frameAvailable('fresh-session-zero-frame'), isTrue);
+    final textureId = (await OrViewerTexture.textureId())!;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: Texture(textureId: textureId),
             ),
           ),
         ),
-      );
-      await _settleTextureSurface(
-        tester,
-        stage: 'fresh-session-texture-surface',
-      );
-      await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
-      await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
-      for (var i = 0; i < 8; i++) {
-        expect(await _frameAvailable('preview-frame-stress'), isTrue);
-        expect((await _resources())['inFlightLeases'], 0);
-        expect(_providerFds(), 1);
-      }
-      final presentations = await Future.wait(
-        List.generate(64, (_) => _frameAvailable('parallel-stress')),
-      );
-      expect(presentations, contains(isTrue));
-      final stress = await _resources();
-      expect(stress['peakPendingFrameResults'], lessThanOrEqualTo(8));
-      expect(stress['peakQueuedOperations'], lessThanOrEqualTo(8));
-      expect(stress['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
-      expect(stress['inFlightLeases'], 0);
-      await _captionedRedTexture(
-        tester,
-        binding,
-        'saf-texture-after-frame-stress',
-      );
-      await secondGateway.close(second, discardUnsaved: false);
-      expect(_providerFds(), 0);
+      ),
+    );
+    await _settleTextureSurface(tester, stage: 'fresh-session-texture-surface');
+    await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
+    await _captionedRedTexture(tester, binding, 'saf-fresh-session-texture');
+    for (var i = 0; i < 8; i++) {
+      expect(await _frameAvailable('preview-frame-stress'), isTrue);
+      expect((await _resources())['inFlightLeases'], 0);
+      expect(_providerFds(), 1);
+    }
+    final presentations = await Future.wait(
+      List.generate(64, (_) => _frameAvailable('parallel-stress')),
+    );
+    expect(presentations, contains(isTrue));
+    final stress = await _resources();
+    expect(stress['peakPendingFrameResults'], lessThanOrEqualTo(8));
+    expect(stress['peakQueuedOperations'], lessThanOrEqualTo(8));
+    expect(stress['bitmapBytes'], lessThanOrEqualTo(1920 * 1080 * 4));
+    expect(stress['inFlightLeases'], 0);
+    await _captionedRedTexture(
+      tester,
+      binding,
+      'saf-texture-after-frame-stress',
+    );
+    await secondGateway.close(second, discardUnsaved: false);
+    expect(_providerFds(), 0);
 
-      // Real blocked provider open discriminates an edit during registration.
-      final blockedPath = await _project(
-        directory,
-        'Blocked SAF source',
-        _source('blocked'),
-      );
-      final host = await rust.openProject(path: blockedPath);
-      final prepared = await host.previewPrepare(
-        action: rust.PreviewPreparationActionView.seek,
-        position: rust.RationalTimeView(numerator: 0, denominator: 1),
-      );
-      final summary = await host.summary();
-      await _control('armBlocked');
-      final bindingOpen = OrViewerTexture.setMediaSources(
-        prepared.sources,
-        generation: prepared.requestId,
-        owner: summary.projectInstanceId,
-      );
-      await _control('awaitBlocked');
-      expect(
-        (await host.setTimelineSequenceFrameRate(
-          projectId: summary.projectId,
-          projectInstanceId: summary.projectInstanceId,
-          expectedRevision: summary.revision,
-          sequenceFrameRate: rust.RationalRateView(
-            numerator: 24,
-            denominator: 1,
-          ),
-        )).succeeded,
-        isTrue,
-      );
-      await _control('releaseBlocked');
-      expect(await bindingOpen, isTrue);
-      await expectLater(
-        host.previewCompletePrepared(requestId: prepared.requestId!),
-        throwsA(
-          isA<rust.ProjectBridgeError>().having(
-            (e) => e.code,
-            'code',
-            'STALE_PREVIEW_REQUEST',
-          ),
+    // Real blocked provider open discriminates an edit during registration.
+    final blockedPath = await _project(
+      directory,
+      'Blocked SAF source',
+      _source('blocked'),
+    );
+    final host = await rust.openProject(path: blockedPath);
+    final prepared = await host.previewPrepare(
+      action: rust.PreviewPreparationActionView.seek,
+      position: rust.RationalTimeView(numerator: 0, denominator: 1),
+    );
+    final summary = await host.summary();
+    await _control('armBlocked');
+    final bindingOpen = OrViewerTexture.setMediaSources(
+      prepared.sources,
+      generation: prepared.requestId,
+      owner: summary.projectInstanceId,
+    );
+    await _control('awaitBlocked');
+    expect(
+      (await host.setTimelineSequenceFrameRate(
+        projectId: summary.projectId,
+        projectInstanceId: summary.projectInstanceId,
+        expectedRevision: summary.revision,
+        sequenceFrameRate: rust.RationalRateView(numerator: 24, denominator: 1),
+      )).succeeded,
+      isTrue,
+    );
+    await _control('releaseBlocked');
+    expect(await bindingOpen, isTrue);
+    await expectLater(
+      host.previewCompletePrepared(requestId: prepared.requestId!),
+      throwsA(
+        isA<rust.ProjectBridgeError>().having(
+          (e) => e.code,
+          'code',
+          'STALE_PREVIEW_REQUEST',
         ),
-      );
-      expect((await host.previewState()).frameSequence, BigInt.zero);
-      final older = await host.previewPrepare(
-        action: rust.PreviewPreparationActionView.seek,
-        position: rust.RationalTimeView(numerator: 0, denominator: 1),
-      );
-      final newer = await host.previewPrepare(
-        action: rust.PreviewPreparationActionView.seek,
-        position: rust.RationalTimeView(numerator: 1, denominator: 4),
-      );
-      expect(newer.requestId, isNot(older.requestId));
-      await expectLater(
-        host.previewCompletePrepared(requestId: older.requestId!),
-        throwsA(
-          isA<rust.ProjectBridgeError>().having(
-            (e) => e.code,
-            'code',
-            'STALE_PREVIEW_REQUEST',
-          ),
+      ),
+    );
+    expect((await host.previewState()).frameSequence, BigInt.zero);
+    final older = await host.previewPrepare(
+      action: rust.PreviewPreparationActionView.seek,
+      position: rust.RationalTimeView(numerator: 0, denominator: 1),
+    );
+    final newer = await host.previewPrepare(
+      action: rust.PreviewPreparationActionView.seek,
+      position: rust.RationalTimeView(numerator: 1, denominator: 4),
+    );
+    expect(newer.requestId, isNot(older.requestId));
+    await expectLater(
+      host.previewCompletePrepared(requestId: older.requestId!),
+      throwsA(
+        isA<rust.ProjectBridgeError>().having(
+          (e) => e.code,
+          'code',
+          'STALE_PREVIEW_REQUEST',
         ),
-      );
-      expect(
-        (await host.close(
-          discardUnsaved: true,
-          discardRecoveryCheckpoint: false,
-        )).succeeded,
-        isTrue,
-      );
-      await OrViewerTexture.clearMediaSources();
-      final finalResources = await _resources();
-      expect(finalResources['duplicatedMediaFds'], 0);
-      expect(finalResources['inFlightLeases'], 0);
-      expect(finalResources['latestFrameBytes'], 0);
-      expect(_providerFds(), 0);
-      final providerStats = await _control('status');
-      expect(providerStats['providerOpens'], greaterThan(0));
-      expect(tester.takeException(), isNull);
-      final retainedMedia = await _control('status');
-      expect(
-        retainedMedia['persistedMediaUris'],
-        contains(relinkedMedia.sourceUri),
-      );
-      // Leave an unsaved, valid project change in the app-private working copy
-      // and persist it using the same recovery checkpoint API the shell uses.
-      // The host runner force-stops this process after the drive completes.
-      final recoveryGateway = RustProjectGateway();
-      final recoverySession = await recoveryGateway.openProject(
-        gateway.openedPath!,
-      );
-      final recoveryBase = await recoveryGateway.summary(recoverySession);
-      expect(
-        (await recoveryGateway.rename(
-          recoverySession,
-          recoveryBase,
-          'Process recovery acceptance',
-        )).succeeded,
-        isTrue,
-      );
-      expect(
-        (await recoveryGateway.autosaveCheckpoint(recoverySession)).succeeded,
-        isTrue,
-      );
-      final recoveryPath = gateway.openedPath!;
-      final recoveryBeforeClose = await recoveryGateway.inspectRecovery(
-        recoveryPath,
-      );
-      expect(recoveryBeforeClose.kind, ProjectRecoveryKind.candidate);
-      expect(recoveryBeforeClose.recoveryName, 'Process recovery acceptance');
-      await recoveryGateway.close(recoverySession, discardUnsaved: true);
-      final recoveryAfterClose = await recoveryGateway.inspectRecovery(
-        recoveryPath,
-      );
-      expect(
-        recoveryAfterClose.kind,
-        ProjectRecoveryKind.candidate,
-        reason: 'Closing the live session must preserve its recovery sidecar.',
-      );
-      expect(
-        recoveryAfterClose.recoveryRevision,
-        recoveryBeforeClose.recoveryRevision,
-      );
-      debugPrint('ANDROID_SAF_RECOVERY_CHECKPOINT_READY');
-      final captures =
-          (binding.reportData?['screenshots'] as List?) ?? const [];
-      expect(
-        captures.map((entry) => (entry as Map)['screenshotName']).toSet(),
-        {
-          'saf-editor-texture',
-          'saf-background-resumed-texture',
-          'saf-editor-permission-recovered',
-          'saf-fresh-session-texture',
-          'saf-texture-after-frame-stress',
+      ),
+    );
+    expect(
+      (await host.close(
+        discardUnsaved: true,
+        discardRecoveryCheckpoint: false,
+      )).succeeded,
+      isTrue,
+    );
+    await OrViewerTexture.clearMediaSources();
+    final finalResources = await _resources();
+    expect(finalResources['duplicatedMediaFds'], 0);
+    expect(finalResources['inFlightLeases'], 0);
+    expect(finalResources['latestFrameBytes'], 0);
+    expect(_providerFds(), 0);
+    final providerStats = await _control('status');
+    expect(providerStats['providerOpens'], greaterThan(0));
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: firstLayoutError == null
+          ? 'no layout error was recorded'
+          : 'the first layout error was: $firstLayoutError',
+    );
+    final retainedMedia = await _control('status');
+    expect(
+      retainedMedia['persistedMediaUris'],
+      contains(relinkedMedia.sourceUri),
+    );
+    // Leave an unsaved, valid project change in the app-private working copy
+    // and persist it using the same recovery checkpoint API the shell uses.
+    // The host runner force-stops this process after the drive completes.
+    final recoveryGateway = RustProjectGateway();
+    final recoverySession = await recoveryGateway.openProject(
+      gateway.openedPath!,
+    );
+    final recoveryBase = await recoveryGateway.summary(recoverySession);
+    expect(
+      (await recoveryGateway.rename(
+        recoverySession,
+        recoveryBase,
+        'Process recovery acceptance',
+      )).succeeded,
+      isTrue,
+    );
+    expect(
+      (await recoveryGateway.autosaveCheckpoint(recoverySession)).succeeded,
+      isTrue,
+    );
+    final recoveryPath = gateway.openedPath!;
+    final recoveryBeforeClose = await recoveryGateway.inspectRecovery(
+      recoveryPath,
+    );
+    expect(recoveryBeforeClose.kind, ProjectRecoveryKind.candidate);
+    expect(recoveryBeforeClose.recoveryName, 'Process recovery acceptance');
+    await recoveryGateway.close(recoverySession, discardUnsaved: true);
+    final recoveryAfterClose = await recoveryGateway.inspectRecovery(
+      recoveryPath,
+    );
+    expect(
+      recoveryAfterClose.kind,
+      ProjectRecoveryKind.candidate,
+      reason: 'Closing the live session must preserve its recovery sidecar.',
+    );
+    expect(
+      recoveryAfterClose.recoveryRevision,
+      recoveryBeforeClose.recoveryRevision,
+    );
+    debugPrint('ANDROID_SAF_RECOVERY_CHECKPOINT_READY');
+    final captures = (binding.reportData?['screenshots'] as List?) ?? const [];
+    expect(captures.map((entry) => (entry as Map)['screenshotName']).toSet(), {
+      'saf-editor-texture',
+      'saf-background-resumed-texture',
+      'saf-editor-permission-recovered',
+      'saf-fresh-session-texture',
+      'saf-texture-after-frame-stress',
+    }, reason: 'Every asserted capture must reach the acceptance artifact.');
+    // takeScreenshot accumulates each captured PNG in this map and the driver
+    // writes those bytes to the acceptance output. Assigning a fresh map
+    // discarded them, so the screenshots only existed while the test failed.
+    binding.reportData = {
+      ...?binding.reportData,
+      'androidSafAcceptance': {
+        'checks': {
+          for (final name in [
+            'nativeDocumentsUiAndEditorControls',
+            'safMediaImportThroughDocumentsUi',
+            'androidAudioTrackPlaybackClock',
+            'visibleTexturePixels',
+            'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
+            'externalUidPermissionEnforcement',
+            'activeLateSourceBeyond64',
+            'unchangedProjectRevision',
+            'playWithoutSeek',
+            'revokedPermissionUiRecovery',
+            'missingPartialOpenRollbackAndRecovery',
+            'nonseekableNativeRegistrationRejected',
+            'clearDuringOpenDropsStaleBinding',
+            'editAndGenerationDropPreparedFrame',
+            'surfaceLifecycleCallbacksConsistent',
+            'osMediaFdsAndNativeLeasesReleased',
+            'boundedPresentationStress',
+            'sameSourceSeeksReuseProviderCapability',
+            'mobileTouchScrubbingAndTransport',
+            'mobileMediaLibrarySheet',
+            'mobileSelectedClipInspectorSheet',
+            'androidSafExportToDocumentsUi',
+            'androidSafCaptionImportAndExportThroughDocumentsUi',
+            'androidSafMediaRelinkThroughDocumentsUi',
+            'recoveryCheckpointPersistedBeforeProcessStop',
+          ])
+            name: true,
         },
-        reason: 'Every asserted capture must reach the acceptance artifact.',
-      );
-      // takeScreenshot accumulates each captured PNG in this map and the driver
-      // writes those bytes to the acceptance output. Assigning a fresh map
-      // discarded them, so the screenshots only existed while the test failed.
-      binding.reportData = {
-        ...?binding.reportData,
-        'androidSafAcceptance': {
-          'checks': {
-            for (final name in [
-              'nativeDocumentsUiAndEditorControls',
-              'safMediaImportThroughDocumentsUi',
-              'androidAudioTrackPlaybackClock',
-              'visibleTexturePixels',
-              'foregroundBackgroundPlaybackPausesAndSurfaceRecovers',
-              'externalUidPermissionEnforcement',
-              'activeLateSourceBeyond64',
-              'unchangedProjectRevision',
-              'playWithoutSeek',
-              'revokedPermissionUiRecovery',
-              'missingPartialOpenRollbackAndRecovery',
-              'nonseekableNativeRegistrationRejected',
-              'clearDuringOpenDropsStaleBinding',
-              'editAndGenerationDropPreparedFrame',
-              'surfaceLifecycleCallbacksConsistent',
-              'osMediaFdsAndNativeLeasesReleased',
-              'boundedPresentationStress',
-              'sameSourceSeeksReuseProviderCapability',
-              'mobileTouchScrubbingAndTransport',
-              'mobileMediaLibrarySheet',
-              'mobileSelectedClipInspectorSheet',
-              'androidSafExportToDocumentsUi',
-              'androidSafCaptionImportAndExportThroughDocumentsUi',
-              'androidSafMediaRelinkThroughDocumentsUi',
-              'recoveryCheckpointPersistedBeforeProcessStop',
-            ])
-              name: true,
-          },
-          'sourceUri': source,
-          'providerUid': provider['providerUid'],
-          'appUid': provider['appUid'],
-          'projectRevision': revision.toString(),
-          'mediaImportRevision': importedRevision.toString(),
-          'captionImportRevision': captionImportRevision.toString(),
-          'captionImportCalls': gateway.reviewedCaptionImportCalls,
-          'captionExportCalls': gateway.captionExportCalls,
-          'captionExportBytes': captionExport['captionExportBytes'],
-          'captionExportValidSrt': captionExport['validSrtCaption'],
-          'mediaImportMicros': gateway.importMicros,
-          'mediaImportAudioOnlyMp3':
-              imported.items[2].formatNames.contains('mp3') &&
-              imported.items[2].videoDetails == null &&
-              imported.items[2].audioDetails != null,
-          'mediaImportH264AacMp4':
-              imported.items[1].formatNames.contains('mov') &&
-              imported.items[1].videoDetails?.contains('h264') == true &&
-              imported.items[1].audioDetails?.contains('aac') == true,
-          'audioPlaybackClockNumerator': audioClockTick.position.numerator
-              .toString(),
-          'audioPlaybackErrorCode': audioClockTick.errorCode ?? '',
-          'audioPausedPositionNumerator': paused.position.numerator.toString(),
-          'mediaImportSourceUris': imported.items
-              .map((item) => item.sourceUri)
-              .toList(growable: false),
-          'mediaRelinkCalls': gateway.relinkCalls,
-          'mediaRelinkSucceeded': relinkResult.succeeded,
-          'mediaRelinkErrorCode': relinkResult.errorCode,
-          'mediaRelinkResultRevision': relinkResult.view?.revision.toString(),
-          'mediaRelinkMediaIdBefore': activeMedia.mediaId,
-          'mediaRelinkMediaIdAfter': relinkedMedia.mediaId,
-          'mediaRelinkSourceBefore': activeMedia.sourceUri,
-          'mediaRelinkSourceAfter': relinkedMedia.sourceUri,
-          'mediaRelinkTimelineReferencePreserved': relinkedClips.items.any(
-            (clip) => clip.mediaId == activeMedia.mediaId,
-          ),
-          'mediaRelinkRevision': mediaRelinkRevision.toString(),
-          'exportBytes': exported['exportBytes'],
-          'exportValidWebm': exported['validWebm'],
-          'exportVideoMime': exported['webmVideoMime'],
-          'exportAudioMime': exported['webmAudioMime'],
-          'exportVideoSampleBytes': exported['webmVideoSampleBytes'],
-          'exportAudioSampleBytes': exported['webmAudioSampleBytes'],
-          'exportVideoDecodeComplete': exported['webmVideoDecodeComplete'],
-          'exportVideoDecodedBuffers': exported['webmVideoDecodedBuffers'],
-          'exportVideoDecodedBytes': exported['webmVideoDecodedBytes'],
-          'exportAudioDecodeComplete': exported['webmAudioDecodeComplete'],
-          'exportAudioDecodedBuffers': exported['webmAudioDecodedBuffers'],
-          'exportAudioDecodedBytes': exported['webmAudioDecodedBytes'],
-          'exportElapsedMicros': exportTimer.elapsedMicroseconds,
-          'visiblePixelRgba': pixels,
-          'backgroundResumePixelRgba': backgroundPixels,
-          'recoveredPixelRgba': recoveredPixels,
-          'surfaceLifecycleResources': {
-            'cleanupDelta': surfaceCleanupDelta,
-            'restorationDelta': surfaceRestorationDelta,
-            'cleanups': afterBackground['surfaceCleanups'],
-            'restorations': afterBackground['surfaceRestorations'],
-          },
-          'journeyResources': journey,
-          'stressResources': stress,
-          'finalResources': finalResources,
-          'providerOpens': providerStats['providerOpens'],
-          'providerProjectSha256AtSeed': provider['projectSha256'],
-          'providerProjectSha256BeforeRestart': providerStats['projectSha256'],
-          'finalOsMediaFds': _providerFds(),
-          'recoveryName': recoveryBeforeClose.recoveryName,
-          'recoveryBaseRevision': recoveryBeforeClose.baseRevision.toString(),
-          'recoveryRevision': recoveryBeforeClose.recoveryRevision.toString(),
-          'recoveryKindAfterClose': recoveryAfterClose.kind.name,
-          'uiPlayMicros': gateway.playMicros,
-          'sameSourceRegistrations': [registeredBefore, registeredAfter],
-          'sameSourceProviderOpens': [opensBefore, opensAfter],
-          'softwareFallback': 'packaged_ffmpeg_shared_render_bounded_bgra',
-          'hardware': 'UNVERIFIED',
+        'sourceUri': source,
+        'providerUid': provider['providerUid'],
+        'appUid': provider['appUid'],
+        'projectRevision': revision.toString(),
+        'mediaImportRevision': importedRevision.toString(),
+        'captionImportRevision': captionImportRevision.toString(),
+        'captionImportCalls': gateway.reviewedCaptionImportCalls,
+        'captionExportCalls': gateway.captionExportCalls,
+        'captionExportBytes': captionExport['captionExportBytes'],
+        'captionExportValidSrt': captionExport['validSrtCaption'],
+        'mediaImportMicros': gateway.importMicros,
+        'mediaImportAudioOnlyMp3':
+            imported.items[2].formatNames.contains('mp3') &&
+            imported.items[2].videoDetails == null &&
+            imported.items[2].audioDetails != null,
+        'mediaImportH264AacMp4':
+            imported.items[1].formatNames.contains('mov') &&
+            imported.items[1].videoDetails?.contains('h264') == true &&
+            imported.items[1].audioDetails?.contains('aac') == true,
+        'audioPlaybackClockNumerator': audioClockTick.position.numerator
+            .toString(),
+        'audioPlaybackErrorCode': audioClockTick.errorCode ?? '',
+        'audioPausedPositionNumerator': paused.position.numerator.toString(),
+        'mediaImportSourceUris': imported.items
+            .map((item) => item.sourceUri)
+            .toList(growable: false),
+        'mediaRelinkCalls': gateway.relinkCalls,
+        'mediaRelinkSucceeded': relinkResult.succeeded,
+        'mediaRelinkErrorCode': relinkResult.errorCode,
+        'mediaRelinkResultRevision': relinkResult.view?.revision.toString(),
+        'mediaRelinkMediaIdBefore': activeMedia.mediaId,
+        'mediaRelinkMediaIdAfter': relinkedMedia.mediaId,
+        'mediaRelinkSourceBefore': activeMedia.sourceUri,
+        'mediaRelinkSourceAfter': relinkedMedia.sourceUri,
+        'mediaRelinkTimelineReferencePreserved': relinkedClips.items.any(
+          (clip) => clip.mediaId == activeMedia.mediaId,
+        ),
+        'mediaRelinkRevision': mediaRelinkRevision.toString(),
+        'exportBytes': exported['exportBytes'],
+        'exportValidWebm': exported['validWebm'],
+        'exportVideoMime': exported['webmVideoMime'],
+        'exportAudioMime': exported['webmAudioMime'],
+        'exportVideoSampleBytes': exported['webmVideoSampleBytes'],
+        'exportAudioSampleBytes': exported['webmAudioSampleBytes'],
+        'exportVideoDecodeComplete': exported['webmVideoDecodeComplete'],
+        'exportVideoDecodedBuffers': exported['webmVideoDecodedBuffers'],
+        'exportVideoDecodedBytes': exported['webmVideoDecodedBytes'],
+        'exportAudioDecodeComplete': exported['webmAudioDecodeComplete'],
+        'exportAudioDecodedBuffers': exported['webmAudioDecodedBuffers'],
+        'exportAudioDecodedBytes': exported['webmAudioDecodedBytes'],
+        'exportElapsedMicros': exportTimer.elapsedMicroseconds,
+        'visiblePixelRgba': pixels,
+        'backgroundResumePixelRgba': backgroundPixels,
+        'recoveredPixelRgba': recoveredPixels,
+        'surfaceLifecycleResources': {
+          'cleanupDelta': surfaceCleanupDelta,
+          'restorationDelta': surfaceRestorationDelta,
+          'cleanups': afterBackground['surfaceCleanups'],
+          'restorations': afterBackground['surfaceRestorations'],
         },
-      };
-      debugPrint(
-        'ANDROID_SAF_ACCEPTANCE_COMPLETE ${jsonEncode(binding.reportData)}',
-      );
-    },
-  );
+        'journeyResources': journey,
+        'stressResources': stress,
+        'finalResources': finalResources,
+        'providerOpens': providerStats['providerOpens'],
+        'providerProjectSha256AtSeed': provider['projectSha256'],
+        'providerProjectSha256BeforeRestart': providerStats['projectSha256'],
+        'finalOsMediaFds': _providerFds(),
+        'recoveryName': recoveryBeforeClose.recoveryName,
+        'recoveryBaseRevision': recoveryBeforeClose.baseRevision.toString(),
+        'recoveryRevision': recoveryBeforeClose.recoveryRevision.toString(),
+        'recoveryKindAfterClose': recoveryAfterClose.kind.name,
+        'uiPlayMicros': gateway.playMicros,
+        'sameSourceRegistrations': [registeredBefore, registeredAfter],
+        'sameSourceProviderOpens': [opensBefore, opensAfter],
+        'softwareFallback': 'packaged_ffmpeg_shared_render_bounded_bgra',
+        'hardware': 'UNVERIFIED',
+      },
+    };
+    debugPrint(
+      'ANDROID_SAF_ACCEPTANCE_COMPLETE ${jsonEncode(binding.reportData)}',
+    );
+  });
 }

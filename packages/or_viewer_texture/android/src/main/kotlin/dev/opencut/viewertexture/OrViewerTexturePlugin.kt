@@ -42,7 +42,19 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private val workPending = AtomicBoolean(false)
     private val attached = AtomicBoolean(false)
     private val surfaceEpoch = AtomicLong(0)
-    private val bindingEpoch = AtomicLong(0)
+    /// Invalidates in-flight *preview* work. Bumped by a preview request and by a clear.
+    private val previewEpoch = AtomicLong(0)
+
+    /// Invalidates in-flight *media-source registration* work.
+    ///
+    /// Registration and preview touch different state, so they need different counters.
+    /// With one shared counter a preview request for a clip the user just imported
+    /// cancelled the registration of the next file the user had selected, and the import
+    /// silently skipped it -- the Android SAF journey selected three documents, imported
+    /// two, and later imported one of two folder children. A registration is still
+    /// cancelled by what genuinely invalidates it: a clear of the registry (which removes
+    /// every source) or plugin teardown.
+    private val registrationEpoch = AtomicLong(0)
     private val staleDrops = AtomicLong(0)
     private val pendingFrameResults = mutableListOf<MethodChannel.Result>()
     private var frameRequestedWhilePending = false
@@ -141,7 +153,8 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         attached.set(false)
-        bindingEpoch.incrementAndGet()
+        previewEpoch.incrementAndGet()
+        registrationEpoch.incrementAndGet()
         channel?.setMethodCallHandler(null)
         channel = null
         releaseProducer()
@@ -176,7 +189,8 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     private fun clearMediaSources(result: MethodChannel.Result) {
-        bindingEpoch.incrementAndGet()
+        previewEpoch.incrementAndGet()
+        registrationEpoch.incrementAndGet()
         // Reserve one queue slot for a clear behind cancelled opens.
         submit(result, reserved = true) { clearNativeSources(); true }
     }
@@ -190,11 +204,11 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
         val context = producerContext
             ?: return result.error("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.", null)
-        val epoch = bindingEpoch.incrementAndGet()
+        val epoch = registrationEpoch.incrementAndGet()
         submit(result) {
             var registeredSource = false
             fun checkCurrent() {
-                if (!nativeLoaded || !attached.get() || bindingEpoch.get() != epoch) {
+                if (!nativeLoaded || !attached.get() || registrationEpoch.get() != epoch) {
                     throw MediaFailure("STALE_PREVIEW_REQUEST", "A newer preview or project replaced this media request.")
                 }
             }
@@ -256,11 +270,11 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val owner = arguments?.get("owner") as? String
         val context = producerContext
             ?: return result.error("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.", null)
-        val epoch = bindingEpoch.incrementAndGet()
+        val epoch = previewEpoch.incrementAndGet()
         submit(result) {
             fun checkCurrent() {
                 if (!nativeLoaded) throw MediaFailure("MEDIA_SOURCE_UNAVAILABLE", "Android native media access is unavailable.")
-                if (!attached.get() || bindingEpoch.get() != epoch ||
+                if (!attached.get() || previewEpoch.get() != epoch ||
                     (generation != null && nativeResourceSnapshot()?.get(0) != generation)) {
                     throw MediaFailure("STALE_PREVIEW_REQUEST", "A newer preview or project replaced this media request.")
                 }

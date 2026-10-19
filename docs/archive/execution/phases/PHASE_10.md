@@ -21,7 +21,7 @@ Flutter widgets, or arbitrary agent code.
 MotionScene generation is optional. Validation, inspection, preview,
 rendering, and materialization of a MotionScene must not make a provider call,
 and a renderer must never invoke an LLM per frame or require a planner/critic
-loop. See [ADR 0007](../../adr/0007-declarative-motion-scenes-and-procedural-isolation.md)
+loop. See [ADR 0007](../../../adr/0007-declarative-motion-scenes-and-procedural-isolation.md)
 for the future declarative contract.
 
 Model manifests describe model identity, version/checksum, license, runtime,

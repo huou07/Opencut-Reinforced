@@ -1,0 +1,29 @@
+{
+  "requirement": "E-caption-import",
+  "claim": "Caption proposals import as reviewable captions through the revision-checked command path and reach the timeline, verified by the hosted Rust and Flutter jobs.",
+  "implementation_sha": "37352fd81d743c0a5f2b2b97fb72b1582352f87b",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39191339761",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "The Rust job runs the caption import and proposal tests in or_core and or_cli; the Flutter static and widget job runs the caption review widget tests."
+  },
+  "verified_at_utc": "2026-10-19T03:17:43Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "Android on-device transcription is BLOCKED (the model-store arm, a cross-compiled provider and hosted verification are all missing), so automatic subtitles are not verified on every target.",
+    "Transcription quality is not measured by this run; only the reviewable proposal path and its command semantics are.",
+    "SRT/WebVTT export is verified at source and widget level, not by a packaged export journey."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 2 automatic subtitles"
+}

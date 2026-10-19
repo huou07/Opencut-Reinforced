@@ -1,0 +1,21 @@
+{
+  "requirement": "B-android-multi-source-import",
+  "claim": "Android's real DocumentsUI journey imported an H.264/AAC MP4 and an audio-only MP3 in one selection, then passed captions, relink, export, process recovery and bounded-resource checks.",
+  "implementation_sha": "39afed57adf3a04faba842f78ac73a9d68a1bbed",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38199486640",
+    "jobs": ["android", "linux", "macos", "windows", "rust", "flutter", "descriptor-boundary"],
+    "detail": "All seven jobs passed. The Android job selected both files through DocumentsUI, then imported, captioned, relinked, exported WebM, recovered after process death, and stayed within the bounded-resource report. Desktop packaged journeys also passed."
+  },
+  "verified_at_utc": "2026-10-12T03:22:19Z",
+  "evidence_class": "emulator",
+  "limitations": [
+    "Android evidence is from an API 36 x86_64 SwiftShader emulator, not a physical device.",
+    "The emulator logged skipped frames and a 121 ms maximum main-draw measurement under this acceptance workload; physical-device responsiveness remains unverified.",
+    "The fixture proves multi-source selection and correctness only, not representative media performance.",
+    "The prior exact-SHA run 38196732759 exposed a real SAF multi-import regression that this run verifies as repaired."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Android multi-source import"
+}

@@ -19,19 +19,32 @@ failed=0
 
 # Documents that assert current product, architecture or process truth. Archival
 # material is deliberately excluded: history is not supposed to become fresh.
+# A document that claims a current status must be here, or its staleness is
+# invisible to every gate.
 in_scope=(
+  README.md
   AGENTS.md
+  DESIGN.md
+  docs/AGENT-AUTHORITY.md
   docs/AGENT_POLICY.md
   docs/ARCHITECTURE.md
   docs/DEVELOPMENT_WORKFLOW.md
   docs/INDEX.md
+  docs/OPEN_SOURCE_CONVERGENCE.md
   docs/PRODUCT.md
   docs/PRODUCT_ROADMAP.md
+  docs/PROJECT_FORMAT.md
+  docs/QUALITY.md
+  docs/RELEASE.md
   docs/SECURITY_LICENSING.md
   docs/TECHNICAL_PLAN.md
   docs/TESTING.md
+  docs/TOOLING.md
   docs/skills.md
   docs/UX_ACCEPTANCE.md
+  docs/evidence/claims/README.md
+  docs/prompts/README.md
+  docs/prompts/OR-BUILD.md
 )
 
 today_epoch="$(date -u +%s)"

@@ -1,6 +1,6 @@
 # Development Workflow
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-18
 
 ## Status
 
@@ -100,11 +100,13 @@ inputs/outputs, cancellation, and crash containment. It never runs in
 
 For Flutter project lifecycle changes, run the fake-gateway widget tests and include the native Rust-bridge lifecycle test in hosted CI. Verify attached CLI parity in a process-level test against the same `LiveProjectHost`; a sandboxed macOS UI integration process cannot launch an external CLI binary itself. Confirm that IPC protocol v1 remains unchanged and that the Flutter read model refreshes from Rust summaries after ordered events.
 
-The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated synthetic fixtures. They verify the real `ffprobe` and `ffmpeg` paths; do not install FFmpeg locally or run these integration tests locally. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. Keep the permanent local policy: do not launch OR or run native Flutter integration tests locally.
+The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated synthetic fixtures. They verify the real `ffprobe` and `ffmpeg` paths; do not install FFmpeg locally or run these integration tests locally. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. The local-runtime rule is the one stated under the verification ladder below: headless by default, with the two bounded local lanes as the dated owner-granted exception.
 
 ### CI-first verification ladder
 
 Local verification is headless by default. Do not launch the native OR application, platform emulator/simulator, or attached physical device locally for verification; do not run native Flutter integration tests that launch OR or open a built/downloaded Developer Preview. GitHub Actions is canonical for native/runtime evidence. If local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching it. This policy does not block local Rust/CLI/headless tests or Flutter format, analysis, and widget tests that do not launch a native application.
+
+Two bounded local runtime lanes are an explicit, dated exception recorded in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md): the Debian Linux developer preflight and the local Android emulator lane. The Linux lane has one entry point, `bash scripts/run_local_lane.sh linux` (`--packaged` adds the local `.deb` build and the packaged journey), which runs the hygiene gate, the Flutter widget suite, the bounded preflight and the performance budget, writes one machine-readable report, and exits non-zero unless every selected step passed. Both lanes are developer evidence only: they are serialised on this host, they never authorise a second writer or cross-platform packaging, and hosted `platform-verification` stays the acceptance authority. Step scope, report schema, exit codes and limits are in [TESTING.md](TESTING.md#one-local-lane-entry-point).
 
 1. Run repository hygiene, diff checks, formatting, and static/source checks locally.
 2. Run checks scoped to the affected package or subsystem, such as `cargo check -p or_core --all-targets`, plus relevant tests and linting where available.

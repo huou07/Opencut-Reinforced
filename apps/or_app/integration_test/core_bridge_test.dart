@@ -1995,6 +1995,8 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   }) => _gateway.insertTimelineClip(
     session,
     current,
@@ -2062,18 +2064,97 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.deleteTimelineClip(session, current, clipId);
 
   @override
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  }) => _gateway.cleanUpAudio(
+    session,
+    sourcePath: sourcePath,
+    destinationPath: destinationPath,
+    noiseFloorDb: noiseFloorDb,
+    reductionDb: reductionDb,
+  );
+
+  @override
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  }) => _gateway.materializeIllustration(
+    sourcePath: sourcePath,
+    destinationPath: destinationPath,
+    frameRateNumerator: frameRateNumerator,
+    frameRateDenominator: frameRateDenominator,
+    width: width,
+    height: height,
+    title: title,
+  );
+
+  @override
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  }) => _gateway.moveTimelineTrack(
+    session,
+    current,
+    trackId: trackId,
+    toIndex: toIndex,
+  );
+
+  @override
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
   }) => _gateway.trimTimelineClip(
     session,
     current,
     clipId: clipId,
     edge: edge,
     timelineTime: timelineTime,
+  );
+
+  @override
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) async =>
+      _gateway.slipTimelineClip(session, current, clipId: clipId, delta: delta);
+
+  @override
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) =>
+      _gateway.rollTimelineClip(session, current, clipId: clipId, delta: delta);
+
+  @override
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  }) => _gateway.slideTimelineClip(
+    session,
+    current,
+    clipId: clipId,
+    delta: delta,
   );
 
   @override

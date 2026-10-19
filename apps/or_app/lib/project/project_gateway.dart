@@ -848,6 +848,32 @@ class ProjectGatewayException implements Exception {
   String toString() => '$code: $message';
 }
 
+/// The outcome of reducing noise in one media file.
+class AudioCleanupOutcome {
+  const AudioCleanupOutcome({
+    required this.succeeded,
+    required this.destination,
+    required this.noiseFloorDb,
+    required this.reductionDb,
+    required this.bytesWritten,
+    required this.errorCode,
+    required this.message,
+  });
+
+  final bool succeeded;
+
+  /// Where the cleaned audio was written. Empty when the call failed.
+  final String destination;
+
+  /// The floor the filter was given. The bridge measures it from the material when
+  /// no figure is passed, so this is what a surface should report.
+  final int noiseFloorDb;
+  final int reductionDb;
+  final int bytesWritten;
+  final String errorCode;
+  final String message;
+}
+
 abstract interface class ProjectGateway {
   Future<ProjectSessionHandle> createProject(String path, String name);
   Future<ProjectSessionHandle> openProject(String path);
@@ -1003,6 +1029,11 @@ abstract interface class ProjectGateway {
     required String trackId,
     required ProjectTimelineTrackState state,
   });
+
+  /// Inserts a clip. [mode] is `insert` (default) or `overwrite`; in overwrite
+  /// the inserted span replaces its range, and [overwriteSplitClipId] supplies the
+  /// fragment id when the span lands strictly inside one existing clip. The mode
+  /// is a command input, never project state.
   Future<ProjectActionResult> insertTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -1011,6 +1042,8 @@ abstract interface class ProjectGateway {
     required ProjectRationalTime timelineStart,
     required ProjectRationalTime sourceStart,
     required ProjectRationalTime duration,
+    String? mode,
+    String? overwriteSplitClipId,
   });
   Future<ProjectActionResult> insertTimelineTextClip(
     ProjectSessionHandle session,
@@ -1040,12 +1073,78 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String clipId,
   );
+
+  /// Trims a clip edge. [ripple] pulls every later clip on the track with an end
+  /// trim; it is an explicit command input and never project state.
+  /// Reduces noise in one media file and writes the result to [destinationPath].
+  ///
+  /// This is a file-to-file media operation: no project state changes, and the
+  /// result is ordinary media the caller can import. Passing no [noiseFloorDb] lets
+  /// the bridge measure the material's own floor, which is what a surface should do.
+  Future<AudioCleanupOutcome> cleanUpAudio(
+    ProjectSessionHandle session, {
+    required String sourcePath,
+    required String destinationPath,
+    int? noiseFloorDb,
+    required int reductionDb,
+  });
+
+  /// Materialises a code artifact into an illustration video.
+  ///
+  /// This is not canonical project state: it reads a source file and writes a media
+  /// file, so it needs no session and no revision. The scene construction and the
+  /// encoder both live in Rust, behind this call, so the app cannot drift from the CLI.
+  Future<MotionMaterializationOutcome> materializeIllustration({
+    required String sourcePath,
+    required String destinationPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+    required String title,
+  });
+
+  /// Moves a track to another position. Order is canonical: it decides which track
+  /// a client reaches by index and which track is the first of its kind.
+  Future<ProjectActionResult> moveTimelineTrack(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required int toIndex,
+  });
   Future<ProjectActionResult> trimTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current, {
     required String clipId,
     required ProjectTimelineTrimEdge edge,
     required ProjectRationalTime timelineTime,
+    bool? ripple,
+  });
+
+  /// Moves a clip's source window by [delta] without moving the clip: a slip never
+  /// changes the cut or a neighbour. Positive takes later material, negative
+  /// earlier.
+  Future<ProjectActionResult> slipTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  });
+
+  /// Moves the boundary between this clip and the one after it by [delta].
+  Future<ProjectActionResult> rollTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
+  });
+
+  /// Moves a clip in time by [delta] and lets its neighbours absorb the move.
+  Future<ProjectActionResult> slideTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String clipId,
+    required ProjectRationalTime delta,
   });
   Future<ProjectActionResult> splitTimelineClip(
     ProjectSessionHandle session,
@@ -1139,4 +1238,31 @@ abstract interface class ProjectGateway {
   Future<ProjectRecoveryInspection> inspectRecovery(String path);
   Future<ProjectRecoveryActionResult> applyRecovery(String path);
   Future<ProjectRecoveryActionResult> discardRecovery(String path);
+}
+
+/// A materialised illustration video, or why there is none.
+class MotionMaterializationOutcome {
+  const MotionMaterializationOutcome({
+    required this.succeeded,
+    required this.destinationPath,
+    required this.frameCount,
+    required this.width,
+    required this.height,
+    required this.frameRateNumerator,
+    required this.frameRateDenominator,
+    required this.bytesWritten,
+    required this.errorCode,
+    required this.message,
+  });
+
+  final bool succeeded;
+  final String destinationPath;
+  final int frameCount;
+  final int width;
+  final int height;
+  final int frameRateNumerator;
+  final int frameRateDenominator;
+  final int bytesWritten;
+  final String errorCode;
+  final String message;
 }

@@ -1146,9 +1146,15 @@ mod desktop {
                 let offset = time.checked_sub(clip.timeline_start).map_err(|error| {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
                 })?;
+                // Timeline time maps to source time through the clip's rate: a clip at
+                // 2x consumes two units of source per unit of timeline.
+                let scaled = clip
+                    .playback_rate
+                    .apply(offset)
+                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
                 let source_time = clip
                     .source_start
-                    .checked_add(offset)
+                    .checked_add(scaled)
                     .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
                 match self.decode_video_frame(
@@ -1580,6 +1586,7 @@ mod desktop {
                 frame_rate: Some(RationalRate::new(24, 1).unwrap()),
                 content_end: Some(RationalTime::new(10, 1).unwrap()),
                 video_clips: vec![VideoClip {
+                    playback_rate: RationalRate::ONE,
                     source: MediaSourceRef::local_file(local_media_uri("identity.mp4")).unwrap(),
                     source_dimensions: Some((1920, 1080)),
                     timeline_start: RationalTime::ZERO,
@@ -1619,6 +1626,7 @@ mod desktop {
             program.video_clips[0].opacity = Opacity::OPAQUE;
 
             program.video_clips.push(VideoClip {
+                playback_rate: RationalRate::ONE,
                 source: MediaSourceRef::local_file(local_media_uri("second.mp4")).unwrap(),
                 source_dimensions: Some((1920, 1080)),
                 timeline_start: RationalTime::ZERO,
@@ -1717,6 +1725,7 @@ mod desktop {
         timeline_start: RationalTime,
         source_start: RationalTime,
         duration: RationalTime,
+        playback_rate: RationalRate,
         transform: Transform,
         crop: Crop,
         opacity: Opacity,
@@ -1740,6 +1749,9 @@ mod desktop {
 
     #[derive(Clone)]
     struct AudioClip {
+        #[allow(dead_code)]
+        #[allow(dead_code)]
+        playback_rate: RationalRate,
         source: MediaSourceRef,
         timeline_start: RationalTime,
         source_start: RationalTime,
@@ -1939,6 +1951,7 @@ mod desktop {
                 ClipContent::Media {
                     media_id,
                     source_range,
+                    playback_rate,
                 },
                 ClipSettings::Visual(settings),
             ) => {
@@ -1951,6 +1964,7 @@ mod desktop {
                     timeline_start: clip.timeline_start,
                     source_start: source_range.start(),
                     duration: clip.timeline_duration,
+                    playback_rate,
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
@@ -1987,6 +2001,7 @@ mod desktop {
                 ClipContent::Media {
                     media_id,
                     source_range,
+                    playback_rate,
                 },
                 ClipSettings::Audio(settings),
             ) => {
@@ -1998,6 +2013,7 @@ mod desktop {
                     timeline_start: clip.timeline_start,
                     source_start: source_range.start(),
                     duration: clip.timeline_duration,
+                    playback_rate,
                     settings,
                 });
             }

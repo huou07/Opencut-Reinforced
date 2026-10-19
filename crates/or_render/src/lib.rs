@@ -1668,5 +1668,10 @@ mod tests {
         }
     }
 }
-pub mod text;
+pub mod motion;
+mod text;
+pub use motion::{
+    MAX_MOTION_CANVAS_PIXELS, MAX_MOTION_FRAMES, MotionRasterError, MotionSequenceError,
+    RasterizedMotionFrame, encode_png, for_each_motion_frame, rasterize_motion_frame,
+};
 pub use text::{TextRasterError, TextRasterizer};

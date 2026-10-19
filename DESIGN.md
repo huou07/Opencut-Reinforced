@@ -1,6 +1,8 @@
 
 # Opencut Reinforced Design Language
 
+Last reviewed: 2026-10-17.
+
 ## Status
 
 This document is the source of truth for the Opencut Reinforced application design language.

@@ -1,0 +1,21 @@
+{
+  "requirement": "B-packaged-edit-export",
+  "claim": "On Linux, macOS and Windows, a packaged OR imported 1080p H.264/AAC media, assembled and revised a timeline, saved/reopened/relinked the project, and exported a 30-second VP9/Opus WebM that an independent probe decoded to 720 video frames and 1,501 audio frames.",
+  "implementation_sha": "33f7f355a5bb1c848551babe9c4c5c11c2a65316",
+  "verification": {
+    "workflow": "Platform Verification",
+    "run_id": "38172368290",
+    "jobs": ["linux", "macos", "windows", "android", "rust", "flutter", "descriptor-boundary"],
+    "detail": "All seven jobs passed. The Linux, macOS and Windows packaged journeys imported, edited, saved/reopened/relinked and independently decoded the export (Linux 46.883 s, macOS 54.526 s, Windows 151.311 s). Android built all three ABIs and its real DocumentsUI SAF journey wrote valid WebM with independently decoded video and audio."
+  },
+  "verified_at_utc": "2026-10-11T20:28:39Z",
+  "evidence_class": "packaged",
+  "limitations": [
+    "The desktop fixture is a tiny generated H.264/AAC clip, so this proves correctness rather than representative camera-media compatibility or performance.",
+    "The measured export times are one observation each, not a benchmark, and Windows was slower than Linux/macOS.",
+    "Android evidence is from an emulator with a half-second fixture; it does not establish physical-device responsiveness.",
+    "Codec patent and distribution review for the MP4-family candidate profile remains open."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Exact-SHA platform run"
+}

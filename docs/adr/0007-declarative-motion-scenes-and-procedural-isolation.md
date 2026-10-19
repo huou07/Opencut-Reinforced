@@ -40,6 +40,83 @@ The exact serialized field names, bounds, and codec are deferred to Phase 11E,
 after the Phase 7/8 renderer capabilities exist. No codec structs or
 `ProjectDocument` fields are introduced by this ADR.
 
+**Implemented 2026-10-20 (`crates/or_motion`) — the decisions this made.** The
+envelope above is realized as written, with these concrete choices:
+`deny_unknown_fields` on every struct, so a field this version does not implement is
+refused rather than ignored; one **flat** node struct carrying every kind's optional
+fields plus a `kind` discriminant, because serde does not support
+`deny_unknown_fields` with an internally tagged enum and a flat shape also lets the
+validator say exactly which field a kind requires; `Polyline` deliberately absent
+rather than accepted and ignored; a locked `MotionProperty` set and a locked
+`MotionEasing` set with no expression language; exact `or_core::RationalTime` for
+durations and keyframe times; typed `MotionColor` rather than a CSS string; asset
+references are identities with an optional SHA-256 and a scene-local or
+project-relative path, and a remote URL is refused because rendering never fetches.
+Bounds: 4 MiB per file, 4096 nodes, group nesting 16 deep, 4096 animations, 4096
+keyframes each, 64 KiB per text node. Diagnostics carry stable codes and JSON paths
+(`MOTION_INVALID_DURATION`, `MOTION_REMOTE_ASSET_REFUSED`, …) in the `{ok, errors}`
+shape below. Text is literal: a string that looks like a template or an expression is
+preserved byte for byte and never evaluated. Validation and inspection are pure reads
+— no project, no renderer, no provider — and the agent surface is
+`or motion validate|inspect|evaluate --file PATH [--json]`.
+
+**Evaluator, 2026-10-20.** `evaluate_scene(scene, exact_time)` returns a `MotionFrame`
+of flat, typed `MotionInstruction`s in document order, with every animated property
+already resolved: a renderer never sees a keyframe, an easing curve or a property
+name, so the render path cannot depend on scene structure. Evaluation refuses an
+invalid scene rather than partially drawing it, and refuses a time outside the
+half-open `[0, duration)` rather than clamping it, because a silent clamp would hide
+a caller's arithmetic error behind a plausible picture. Animation sampling is total
+over the scene (the first value holds before the first keyframe, the last after the
+last), the time ratio is computed through the exact rationals rather than
+floating-point seconds, and the easing set is the locked four. Evaluation reads
+nothing: no asset, font, file, network or provider — a test evaluates a scene whose
+asset path exists nowhere.
+
+**Rasteriser, 2026-10-20.** `or_render::rasterize_motion_frame` turns an evaluated
+frame into one RGBA layer that the existing compositor consumes like any decoded
+frame: a layer *producer*, not a second compositor, so blending, effects and encoding
+stay in one place. It draws rectangles, ellipses, arrows, image placeholders and text
+through the existing bundled-font rasteriser — not a second text engine. Coordinates
+are canvas pixels with the origin top left, x right and y down, matching the RGBA
+buffer; rotation is clockwise in that space; document order is paint order. An image
+node draws a visible placeholder rather than decoding an asset, because evaluation
+resolves identities and the asset pipeline is a later step: drawing nothing would look
+like a working scene with a missing picture. `or_render::encode_png` is a
+dependency-free *still preview* encoder — materialised video still goes through the
+normal media and export boundary — and its output is deterministic (stored deflate
+blocks, no timestamps or metadata).
+
+**Highlighted spans and code ingestion, 2026-10-20.** A text node may carry typed
+`spans` — byte ranges with a colour — so one line can be drawn in more than one
+colour; spans are values, never markup, and validation requires them ordered,
+non-overlapping and inside the text. They render through the same shaping and layout
+as ordinary text, with each glyph's own colour passed to the rasteriser, because a
+glyph image is a mask and its colour comes only from that base. `or_motion::code`
+builds a scene from a source file with a bounded lexical tokeniser and a locked theme
+of named colour roles: a sample is untrusted input, so the scan has hard limits and
+never executes anything, and it deliberately has no grammar, no macro expansion and no
+type information. Only Rust is tokenised; anything else is plain text.
+
+**Materialisation, 2026-10-20.** A scene materialises through the *normal* export
+boundary, and that boundary lives in the application layer rather than the CLI: the CLI
+links no FFmpeg, because the release CLI archives ship `or` without the shared
+libraries. The client is `or_app_bridge::api::motion::materialize_motion_scene`, which
+the desktop and compact shells can call through the bridge; it takes the canvas size and
+frame rate explicitly, derives the frame count from the scene's duration, and refuses an
+invalid or unbounded request before encoding. The pieces are `or_render::for_each_motion_frame` produces the frames over the half-open
+`[0, duration)` at exact rational times derived from the frame index — not by
+accumulating a floating-point step — and the existing
+`FfmpegSoftwareExportWriter` encodes them in the mandated Matroska + FFV1 + PCM S16LE
+software profile. There is no second encoder, and the frame count is
+`ceil(duration * rate)`, so a partial final frame is drawn rather than dropped. The
+sequence is bounded at 200,000 frames and the bound is checked before any frame is
+produced, so a mistyped duration is refused rather than attempted. Frames are handed
+to a visitor instead of being collected, so materialisation does not require the whole
+scene to fit in memory. The profile always carries an audio stream, so a materialised
+scene has a silent PCM track; it can be placed on an ordinary timeline like any other
+media.
+
 MotionScene source is data, not a program. It uses exact `RationalTime`, is
 random-access and seekable, is provider-independent, and does not mutate
 `ProjectDocument` during evaluation. Human, template, CLI/agent, and AI

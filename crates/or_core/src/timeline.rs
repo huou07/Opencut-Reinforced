@@ -182,6 +182,17 @@ pub enum ClipContent {
     Media {
         media_id: MediaId,
         source_range: TimeRange,
+        /// How many units of source one unit of timeline consumes.
+        ///
+        /// A file written before this field existed has no value, and the default is the
+        /// identity: the clip plays at its own rate, which is what every earlier version
+        /// meant. The raw v6/v7 clip type embeds this enum, so the default *is* the
+        /// migration and no conversion is needed to read an older project.
+        #[serde(
+            default = "default_playback_rate",
+            skip_serializing_if = "is_identity_rate"
+        )]
+        playback_rate: RationalRate,
     },
     Text {
         #[serde(deserialize_with = "crate::project_document::deserialize_text_content")]
@@ -195,11 +206,37 @@ pub enum ClipContent {
     },
 }
 
+/// The playback rate of a clip written before rates existed.
+fn default_playback_rate() -> RationalRate {
+    RationalRate::ONE
+}
+
+/// Whether a rate is the identity.
+///
+/// An identity rate is not written, so a project saved today is byte-identical to the
+/// schema-7 document an older build wrote and reads back in it. The field is only
+/// serialised once a rate that actually differs exists -- and the schema bump that
+/// declares it lands with the command that can set one, so no version is ever written
+/// with an undeclared field.
+fn is_identity_rate(rate: &RationalRate) -> bool {
+    *rate == RationalRate::ONE
+}
+
 impl ClipContent {
     pub const fn media_id(&self) -> Option<MediaId> {
         match self {
             Self::Media { media_id, .. } => Some(*media_id),
             Self::Text { .. } | Self::Caption { .. } => None,
+        }
+    }
+
+    /// How many units of source one unit of timeline consumes. Non-media content has no
+    /// rate and answers with the identity rather than an error, because a caller that
+    /// maps a time does not care what kind of clip it is.
+    pub const fn playback_rate(&self) -> RationalRate {
+        match self {
+            Self::Media { playback_rate, .. } => *playback_rate,
+            Self::Text { .. } | Self::Caption { .. } => RationalRate::ONE,
         }
     }
 
@@ -590,6 +627,7 @@ impl TimelineClip {
             ClipContent::Media {
                 media_id,
                 source_range,
+                playback_rate: RationalRate::ONE,
             },
             ClipSettings::default_for(track_kind),
         )
@@ -1078,6 +1116,15 @@ impl ProjectTimeline {
         self.tracks.remove(index)
     }
 
+    /// Moves the track at `from_index` so it sits at `to_index`.
+    ///
+    /// The list is a vector of tracks, so a move is a removal and an insertion at
+    /// the destination; the caller has already bounds-checked both indices.
+    pub(crate) fn move_track_for_command(&mut self, from_index: usize, to_index: usize) {
+        let track = self.tracks.remove(from_index);
+        self.tracks.insert(to_index, track);
+    }
+
     pub(crate) fn insert_clip_for_command(
         &mut self,
         track_index: usize,
@@ -1135,14 +1182,21 @@ fn validate_clip_content(
             ClipContent::Media {
                 media_id,
                 source_range,
+                playback_rate,
             },
             TrackKind::Video | TrackKind::Audio,
         ) => {
             let source_start = source_range.start();
             let source_duration = source_range.duration();
+            // The clip consumes `timeline_duration * rate` of source. A rate outside
+            // 1/16..16 is refused rather than accepted and then ignored: it is either a
+            // typo or an attempt to make the mapping meaningless.
+            let expected_source = playback_rate.apply(clip.timeline_duration).ok();
             if source_start.is_negative()
                 || !source_duration.is_positive()
-                || source_duration != clip.timeline_duration
+                || playback_rate.numerator() > 16 * playback_rate.denominator()
+                || playback_rate.denominator() > 16 * playback_rate.numerator()
+                || expected_source != Some(source_duration)
             {
                 return Err(TimelineValidationError);
             }

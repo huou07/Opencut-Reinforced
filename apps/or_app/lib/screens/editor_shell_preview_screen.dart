@@ -48,8 +48,10 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
+    this.onCleanUpAudio,
     this.onRemoveTimelineTrack,
     this.onSetTimelineTrackState,
+    this.onMoveTimelineTrack,
     this.onLoadMoreTimelineClips,
     this.onLoadMoreTimelineMarkers,
     this.onRefreshTimeline,
@@ -62,6 +64,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onDeleteTimelineClip,
     this.onTrimTimelineClip,
     this.onSplitTimelineClip,
+    this.onSlipTimelineClip,
+    this.onRollTimelineClip,
+    this.onSlideTimelineClip,
     this.onRippleDeleteTimelineClip,
     this.onAddTimelineMarker,
     this.onMoveTimelineMarker,
@@ -108,6 +113,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)?
   onRemoveTimelineTrack;
   final Future<void> Function(
@@ -116,6 +122,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineTrackState,
   )?
   onSetTimelineTrackState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMoveTimelineTrack;
   final ValueChanged<String>? onLoadMoreTimelineClips;
   final VoidCallback? onLoadMoreTimelineMarkers;
   final VoidCallback? onRefreshTimeline;
@@ -126,6 +134,10 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+
+    /// `insert` or `overwrite`; chosen in the insert dialog, sent with the
+    /// command, and never stored in the project.
+    String mode,
   )?
   onAddMediaToTimeline;
   final Future<void> Function(
@@ -175,6 +187,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineClip clip,
     ProjectTimelineTrimEdge edge,
     ProjectRationalTime timelineTime,
+    bool ripple,
   )?
   onTrimTimelineClip;
   final Future<void> Function(
@@ -183,6 +196,24 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineTime,
   )?
   onSplitTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlipTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onRollTimelineClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlideTimelineClip;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectTimelineClip clip,
@@ -464,6 +495,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onGenerateCaptions: widget.busy
                       ? null
                       : widget.onGenerateCaptions,
+                  onCleanUpAudio: widget.busy ? null : widget.onCleanUpAudio,
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -549,6 +581,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
+            onMoveTrack: widget.onMoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
@@ -558,6 +591,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
+            onSlipClip: widget.onSlipTimelineClip,
+            onRollClip: widget.onRollTimelineClip,
+            onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -635,6 +671,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onAddCaptionTrack: widget.onAddCaptionTrack,
             onRemoveTrack: widget.onRemoveTimelineTrack,
             onSetTrackState: widget.onSetTimelineTrackState,
+            onMoveTrack: widget.onMoveTimelineTrack,
             onLoadMore: widget.onLoadMoreTimelineClips,
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
@@ -644,6 +681,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
+            onSlipClip: widget.onSlipTimelineClip,
+            onRollClip: widget.onRollTimelineClip,
+            onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
@@ -730,6 +770,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onGenerateCaptions: widget.busy
                     ? null
                     : widget.onGenerateCaptions,
+                onCleanUpAudio: widget.busy ? null : widget.onCleanUpAudio,
                 onAddMediaToTimeline: widget.busy
                     ? null
                     : widget.onAddMediaToTimeline,
@@ -745,7 +786,12 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void _showTimelineEditError(String message) {
     if (!mounted) return;
-    OrSnackBar.show(context, message);
+    final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
+    OrSnackBar.show(
+      context,
+      message,
+      bottomInset: compact ? OrSpacing.topBarHeight : 0,
+    );
   }
 
   Future<void> _showAddTimelineMarker() async {
@@ -832,69 +878,91 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
         color: OrColors.backgroundRaised,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.folder_open_outlined,
-            size: 17,
-            color: OrColors.textSecondary,
-          ),
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: Text(
-              current?.name ?? 'Opening project…',
-              key: const ValueKey('workspace-project-name'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: OrType.metadataCompactSize,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (current != null) ...[
-            Text(
-              'Revision ${current.revision}',
-              key: const ValueKey('workspace-project-revision'),
-              style: const TextStyle(
-                fontSize: OrType.tinySize,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A 320 px compact header cannot hold the project name, the revision
+          // text, the state badge and the action row: measured 2026-10-18 with
+          // scripts/or_ui.py at 320x440, the fixed metadata overflowed it by
+          // 44 px and the clipped action row swallowed taps. The narrow
+          // presentation keeps the name and the actions and drops the duplicated
+          // metadata rather than clipping it; Save and the shell's own indicator
+          // still carry the dirty state.
+          final roomForMetadata = constraints.maxWidth >= 560;
+          return Row(
+            children: [
+              const Icon(
+                Icons.folder_open_outlined,
+                size: 17,
                 color: OrColors.textSecondary,
               ),
-            ),
-            const SizedBox(width: OrSpacing.x2),
-            OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
-          ],
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _WorkspaceAction(
-                    'Rename',
-                    Icons.edit_outlined,
-                    onRename,
-                    busy,
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: Text(
+                  current?.name ?? 'Opening project…',
+                  key: const ValueKey('workspace-project-name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: OrType.metadataCompactSize,
+                    fontWeight: FontWeight.w600,
                   ),
-                  _WorkspaceAction(
-                    'Save',
-                    Icons.save_outlined,
-                    onSave,
-                    busy || current?.dirty != true,
-                  ),
-                  _WorkspaceAction('Undo', Icons.undo_outlined, onUndo, busy),
-                  _WorkspaceAction('Redo', Icons.redo_outlined, onRedo, busy),
-                  _WorkspaceAction(
-                    'Close',
-                    Icons.close_outlined,
-                    onClose,
-                    busy,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+              if (current != null && roomForMetadata) ...[
+                Text(
+                  'Revision ${current.revision}',
+                  key: const ValueKey('workspace-project-revision'),
+                  style: const TextStyle(
+                    fontSize: OrType.tinySize,
+                    color: OrColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: OrSpacing.x2),
+                OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
+              ],
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _WorkspaceAction(
+                        'Rename',
+                        Icons.edit_outlined,
+                        onRename,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Save',
+                        Icons.save_outlined,
+                        onSave,
+                        busy || current?.dirty != true,
+                      ),
+                      _WorkspaceAction(
+                        'Undo',
+                        Icons.undo_outlined,
+                        onUndo,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Redo',
+                        Icons.redo_outlined,
+                        onRedo,
+                        busy,
+                      ),
+                      _WorkspaceAction(
+                        'Close',
+                        Icons.close_outlined,
+                        onClose,
+                        busy,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1104,6 +1172,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onRemoveMedia,
     required this.onRelinkMedia,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1125,6 +1194,7 @@ class _EditorToolPanel extends StatelessWidget {
   final ValueChanged<ProjectMediaItem>? onRemoveMedia;
   final ValueChanged<ProjectMediaItem>? onRelinkMedia;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1132,6 +1202,7 @@ class _EditorToolPanel extends StatelessWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   )?
   onAddMediaToTimeline;
   final VoidCallback? onClose;
@@ -1155,6 +1226,7 @@ class _EditorToolPanel extends StatelessWidget {
         onRemove: onRemoveMedia,
         onRelink: onRelinkMedia,
         onGenerateCaptions: onGenerateCaptions,
+        onCleanUpAudio: onCleanUpAudio,
         onAddMediaToTimeline: onAddMediaToTimeline,
         onClose: onClose,
       );
@@ -1214,6 +1286,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onRemove,
     required this.onRelink,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
     this.onClose,
   });
@@ -1233,6 +1306,7 @@ class _MediaLibraryPanel extends StatelessWidget {
   final ValueChanged<ProjectMediaItem>? onRemove;
   final ValueChanged<ProjectMediaItem>? onRelink;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
+  final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1240,6 +1314,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     ProjectRationalTime timelineStart,
     ProjectRationalTime sourceStart,
     ProjectRationalTime duration,
+    String mode,
   )?
   onAddMediaToTimeline;
   final VoidCallback? onClose;
@@ -1377,6 +1452,10 @@ class _MediaLibraryPanel extends StatelessWidget {
                                 item.audioDetails == null
                             ? null
                             : () => unawaited(onGenerateCaptions!(item)),
+                        onCleanUpAudio:
+                            onCleanUpAudio == null || item.audioDetails == null
+                            ? null
+                            : () => unawaited(onCleanUpAudio!(item)),
                       ),
                     ),
                   if (error != null) ...[
@@ -1424,6 +1503,7 @@ class _MediaLibraryItem extends StatelessWidget {
     required this.onRelink,
     required this.onRemove,
     required this.onGenerateCaptions,
+    required this.onCleanUpAudio,
   });
 
   final ProjectMediaItem item;
@@ -1432,6 +1512,7 @@ class _MediaLibraryItem extends StatelessWidget {
   final VoidCallback? onRelink;
   final VoidCallback? onRemove;
   final VoidCallback? onGenerateCaptions;
+  final VoidCallback? onCleanUpAudio;
 
   @override
   Widget build(BuildContext context) {
@@ -1542,12 +1623,14 @@ class _MediaLibraryItem extends StatelessWidget {
               onSelected:
                   onRelink == null &&
                       onRemove == null &&
-                      onGenerateCaptions == null
+                      onGenerateCaptions == null &&
+                      onCleanUpAudio == null
                   ? null
                   : (action) {
                       if (action == 'relink') onRelink?.call();
                       if (action == 'remove') onRemove?.call();
                       if (action == 'transcribe') onGenerateCaptions?.call();
+                      if (action == 'cleanup') onCleanUpAudio?.call();
                     },
               itemBuilder: (context) => [
                 if (onRelink != null)
@@ -1567,6 +1650,14 @@ class _MediaLibraryItem extends StatelessWidget {
                     key: ValueKey('media-generate-captions-${item.mediaId}'),
                     value: 'transcribe',
                     child: const Text('Generate Captions'),
+                  ),
+                // Only a file with audio can be cleaned, and the result is a new
+                // item rather than a change to this one.
+                if (onCleanUpAudio != null && item.audioDetails != null)
+                  PopupMenuItem(
+                    key: ValueKey('media-clean-audio-${item.mediaId}'),
+                    value: 'cleanup',
+                    child: const Text('Clean up Audio'),
                   ),
               ],
               child: const SizedBox(
@@ -2004,6 +2095,43 @@ class _ViewerPanelState extends State<_ViewerPanel>
     });
   }
 
+  /// Placeholder content for the viewer surface.
+  ///
+  /// A short compact viewport can squeeze the surface below the height the
+  /// icon-and-text column needs. Keep the icon and expose the message through
+  /// semantics instead of letting the column overflow.
+  Widget _viewerPlaceholder({required IconData icon, required String message}) {
+    return Center(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight < 56 || constraints.maxWidth < 120) {
+            return Semantics(
+              label: message,
+              liveRegion: true,
+              child: Icon(icon, size: 18, color: OrColors.textMuted),
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: OrColors.textMuted),
+              const SizedBox(height: OrSpacing.x2),
+              Text(
+                message,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataSize,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildViewerSurface() {
     final textureId = _textureId;
     final preview = _preview;
@@ -2015,120 +2143,94 @@ class _ViewerPanelState extends State<_ViewerPanel>
       key: const ValueKey('editor-viewer-surface'),
       alignment: Alignment.center,
       color: OrColors.background,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: widget.compact ? 520 : 660,
-          maxHeight: widget.compact ? 360 : 420,
-        ),
-        child: AspectRatio(
-          aspectRatio: aspectRatio,
-          child: Container(
-            decoration: BoxDecoration(
-              color: OrColors.backgroundRecessed,
-              border: Border.all(color: OrColors.borderStrong),
-              borderRadius: BorderRadius.circular(OrRadii.small),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (preview?.contentEnd == null)
-                  const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.movie_outlined,
-                          size: 22,
-                          color: OrColors.textMuted,
-                        ),
-                        SizedBox(height: OrSpacing.x2),
-                        Text(
-                          'No media loaded',
-                          style: TextStyle(
-                            color: OrColors.textSecondary,
-                            fontSize: OrType.metadataSize,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Fit the preview box to *both* available dimensions. `AspectRatio`
+          // inside an `Expanded` receives a tight height and sizes itself from
+          // the width, so at a narrow short viewport it overflows: measured
+          // 2026-10-18, the 320x440 compact editor overflowed the viewer by 25 px
+          // as soon as the scrub strip appeared, and the same shape overflows at
+          // any short viewport. Fitting explicitly letterboxes the preview
+          // instead, which is what a viewer should do.
+          final limitWidth = widget.compact ? 520.0 : 660.0;
+          final limitHeight = widget.compact ? 360.0 : 420.0;
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : limitWidth;
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : limitHeight;
+          var fittedWidth = math.min(availableWidth, limitWidth);
+          var fittedHeight = fittedWidth / aspectRatio;
+          if (fittedHeight > math.min(availableHeight, limitHeight)) {
+            fittedHeight = math.min(availableHeight, limitHeight);
+            fittedWidth = fittedHeight * aspectRatio;
+          }
+          return SizedBox(
+            width: fittedWidth,
+            height: fittedHeight,
+            child: Container(
+              decoration: BoxDecoration(
+                color: OrColors.backgroundRecessed,
+                border: Border.all(color: OrColors.borderStrong),
+                borderRadius: BorderRadius.circular(OrRadii.small),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (preview?.contentEnd == null)
+                    _viewerPlaceholder(
+                      icon: Icons.movie_outlined,
+                      message: 'No media loaded',
+                    )
+                  else if (textureId != null)
+                    Texture(
+                      key: ValueKey('or-viewer-texture-$textureId'),
+                      textureId: textureId,
+                      filterQuality: FilterQuality.medium,
+                    )
+                  else
+                    _viewerPlaceholder(
+                      icon: hasSession
+                          ? Icons.error_outline
+                          : Icons.movie_outlined,
+                      message: hasSession
+                          ? 'Viewer texture unavailable'
+                          : 'Open a project to preview',
+                    ),
+                  if (_busy)
+                    const Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: OrColors.backgroundRaised,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: OrColors.border),
+                          ),
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(OrRadii.small),
                           ),
                         ),
-                      ],
-                    ),
-                  )
-                else if (textureId != null)
-                  Texture(
-                    key: ValueKey('or-viewer-texture-$textureId'),
-                    textureId: textureId,
-                    filterQuality: FilterQuality.medium,
-                  )
-                else
-                  Center(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final message = hasSession
-                            ? 'Viewer texture unavailable'
-                            : 'Open a project to preview';
-                        final icon = hasSession
-                            ? Icons.error_outline
-                            : Icons.movie_outlined;
-                        if (constraints.maxHeight < 56 ||
-                            constraints.maxWidth < 120) {
-                          return Semantics(
-                            label: message,
-                            liveRegion: true,
-                            child: Icon(
-                              icon,
-                              size: 18,
-                              color: OrColors.textMuted,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: OrSpacing.x2,
+                            vertical: OrSpacing.x1,
+                          ),
+                          child: Text(
+                            'Updating preview',
+                            style: TextStyle(
+                              color: OrColors.textSecondary,
+                              fontSize: OrType.tinySize,
                             ),
-                          );
-                        }
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, size: 22, color: OrColors.textMuted),
-                            const SizedBox(height: OrSpacing.x2),
-                            Text(
-                              message,
-                              style: const TextStyle(
-                                color: OrColors.textSecondary,
-                                fontSize: OrType.metadataSize,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                if (_busy)
-                  const Center(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: OrColors.backgroundRaised,
-                        border: Border.fromBorderSide(
-                          BorderSide(color: OrColors.border),
-                        ),
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(OrRadii.small),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: OrSpacing.x2,
-                          vertical: OrSpacing.x1,
-                        ),
-                        child: Text(
-                          'Updating preview',
-                          style: TextStyle(
-                            color: OrColors.textSecondary,
-                            fontSize: OrType.tinySize,
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -2152,223 +2254,246 @@ class _ViewerPanelState extends State<_ViewerPanel>
 
     return ColoredBox(
       color: OrColors.background,
-      child: Column(
-        children: [
-          _PanelHeader(
-            title: 'Viewer',
-            height: widget.compact ? 34 : 38,
-            trailing: OrBadge(
-              preview == null || preview.width == 0
-                  ? 'Preview'
-                  : '${preview.width} × ${preview.height}',
-            ),
-          ),
-          Expanded(child: _buildViewerSurface()),
-          Container(
-            decoration: const BoxDecoration(
-              color: OrColors.backgroundRaised,
-              border: Border(top: BorderSide(color: OrColors.border)),
-            ),
-            padding: const EdgeInsets.fromLTRB(
-              OrSpacing.x3,
-              OrSpacing.x1,
-              OrSpacing.x3,
-              OrSpacing.x1,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasRange) ...[
-                  SizedBox(
-                    height: 8,
-                    child: CustomPaint(
-                      painter: _PreviewRulerPainter(),
-                      size: Size.infinite,
-                    ),
-                  ),
-                  SizedBox(
-                    height: 32,
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 2,
-                        activeTrackColor: OrColors.selection,
-                        inactiveTrackColor: OrColors.borderStrong,
-                        thumbColor: OrColors.text,
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 10,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A short panel cannot hold the header, the surface, the ruler, the
+          // ruler's clock labels, the scrub row and the transport row. Measured
+          // 2026-10-18 at 320x440: the viewer received 149 px, the surface
+          // collapsed to zero height and the column still overflowed by 25 px.
+          // A short panel keeps what the user acts with — the surface, the scrub
+          // control and the transport — and drops the ruler and its clock labels,
+          // which the live position readout and the timeline's own ruler still
+          // convey. It never clips and never squeezes away a control.
+          final shortPanel = constraints.maxHeight < 200;
+          return Column(
+            children: [
+              _PanelHeader(
+                title: 'Viewer',
+                // The short panel keeps two pixels for the surface's remainder: with
+                // the strip at its minimum the sum came to one pixel more than the
+                // panel, and a one-pixel overflow is still a clipped control.
+                height: shortPanel ? 32 : (widget.compact ? 34 : 38),
+                trailing: OrBadge(
+                  preview == null || preview.width == 0
+                      ? 'Preview'
+                      : '${preview.width} × ${preview.height}',
+                ),
+              ),
+              Expanded(child: _buildViewerSurface()),
+              Container(
+                decoration: const BoxDecoration(
+                  color: OrColors.backgroundRaised,
+                  border: Border(top: BorderSide(color: OrColors.border)),
+                ),
+                padding: const EdgeInsets.fromLTRB(
+                  OrSpacing.x3,
+                  OrSpacing.x1,
+                  OrSpacing.x3,
+                  OrSpacing.x1,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasRange) ...[
+                      if (!shortPanel)
+                        SizedBox(
+                          height: 8,
+                          child: CustomPaint(
+                            painter: _PreviewRulerPainter(),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      SizedBox(
+                        height: 32,
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 2,
+                            activeTrackColor: OrColors.selection,
+                            inactiveTrackColor: OrColors.borderStrong,
+                            thumbColor: OrColors.text,
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 10,
+                            ),
+                          ),
+                          child: Slider(
+                            key: const ValueKey('preview-scrub-ruler'),
+                            min: 0,
+                            max: rulerMaximum,
+                            value: sliderValue,
+                            onChanged: _busy || !_connected
+                                ? null
+                                : _onScrubChanged,
+                            onChangeEnd: _busy || !_connected
+                                ? null
+                                : (seconds) {
+                                    setState(() => _scrubPosition = null);
+                                    unawaited(
+                                      _run(
+                                        (gateway, session) =>
+                                            gateway.previewSeek(
+                                              session,
+                                              _timeFromSeconds(seconds),
+                                            ),
+                                      ),
+                                    );
+                                  },
+                          ),
                         ),
                       ),
-                      child: Slider(
-                        key: const ValueKey('preview-scrub-ruler'),
-                        min: 0,
-                        max: rulerMaximum,
-                        value: sliderValue,
-                        onChanged: _busy || !_connected
-                            ? null
-                            : _onScrubChanged,
-                        onChangeEnd: _busy || !_connected
-                            ? null
-                            : (seconds) {
-                                setState(() => _scrubPosition = null);
-                                unawaited(
+                      if (!shortPanel)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _clockLabel(0),
+                              style: const TextStyle(
+                                color: OrColors.textMuted,
+                                fontFamily: 'monospace',
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                            Text(
+                              _clockLabel(endSeconds),
+                              style: const TextStyle(
+                                color: OrColors.textMuted,
+                                fontFamily: 'monospace',
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                    Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('preview-previous-frame'),
+                          tooltip: 'Previous frame',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: canStep
+                              ? () => unawaited(
                                   _run(
-                                    (gateway, session) => gateway.previewSeek(
+                                    (gateway, session) => gateway.previewStep(
                                       session,
-                                      _timeFromSeconds(seconds),
+                                      ProjectPreviewFrameStep.previous,
                                     ),
                                   ),
-                                );
-                              },
-                      ),
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _clockLabel(0),
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                      Text(
-                        _clockLabel(endSeconds),
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                Row(
-                  children: [
-                    IconButton(
-                      key: const ValueKey('preview-previous-frame'),
-                      tooltip: 'Previous frame',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: canStep
-                          ? () => unawaited(
-                              _run(
-                                (gateway, session) => gateway.previewStep(
-                                  session,
-                                  ProjectPreviewFrameStep.previous,
-                                ),
-                              ),
-                            )
-                          : null,
-                      icon: const Icon(Icons.skip_previous_outlined, size: 18),
-                    ),
-                    IconButton(
-                      key: const ValueKey('preview-play'),
-                      tooltip: preview?.playing == true ? 'Pause' : 'Play',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: preview?.playing == true
-                          ? () => unawaited(
-                              _run((gateway, session) {
-                                return gateway.previewPause(session);
-                              }),
-                            )
-                          : canPlay
-                          ? () => unawaited(
-                              _run((gateway, session) {
-                                return gateway.previewPlay(session);
-                              }),
-                            )
-                          : null,
-                      icon: Icon(
-                        preview?.playing == true
-                            ? Icons.pause_outlined
-                            : Icons.play_arrow_outlined,
-                        size: 20,
-                      ),
-                    ),
-                    IconButton(
-                      key: const ValueKey('preview-next-frame'),
-                      tooltip: 'Next frame',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: canStep
-                          ? () => unawaited(
-                              _run(
-                                (gateway, session) => gateway.previewStep(
-                                  session,
-                                  ProjectPreviewFrameStep.next,
-                                ),
-                              ),
-                            )
-                          : null,
-                      icon: const Icon(Icons.skip_next_outlined, size: 18),
-                    ),
-                    Expanded(
-                      child: Text(
-                        shownPosition == null
-                            ? '0/1'
-                            : _timeFeedback(
-                                shownPosition,
-                                preview?.presentedTime,
-                              ),
-                        key: const ValueKey('preview-time-readout'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: OrColors.textSecondary,
-                          fontFamily: 'monospace',
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                    ),
-                    PopupMenuButton<_FrameRateChoice>(
-                      key: const ValueKey('preview-frame-rate'),
-                      tooltip: 'Set sequence frame rate',
-                      enabled: _connected && widget.project != null && !_busy,
-                      onSelected: (choice) =>
-                          unawaited(_setFrameRate(choice.rate)),
-                      itemBuilder: (context) => [
-                        for (final choice in _rateChoices)
-                          PopupMenuItem(
-                            value: choice,
-                            child: Text(choice.label),
+                                )
+                              : null,
+                          icon: const Icon(
+                            Icons.skip_previous_outlined,
+                            size: 18,
                           ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('preview-play'),
+                          tooltip: preview?.playing == true ? 'Pause' : 'Play',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: preview?.playing == true
+                              ? () => unawaited(
+                                  _run((gateway, session) {
+                                    return gateway.previewPause(session);
+                                  }),
+                                )
+                              : canPlay
+                              ? () => unawaited(
+                                  _run((gateway, session) {
+                                    return gateway.previewPlay(session);
+                                  }),
+                                )
+                              : null,
+                          icon: Icon(
+                            preview?.playing == true
+                                ? Icons.pause_outlined
+                                : Icons.play_arrow_outlined,
+                            size: 20,
+                          ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('preview-next-frame'),
+                          tooltip: 'Next frame',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: canStep
+                              ? () => unawaited(
+                                  _run(
+                                    (gateway, session) => gateway.previewStep(
+                                      session,
+                                      ProjectPreviewFrameStep.next,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          icon: const Icon(Icons.skip_next_outlined, size: 18),
+                        ),
+                        Expanded(
+                          child: Text(
+                            shownPosition == null
+                                ? '0/1'
+                                : _timeFeedback(
+                                    shownPosition,
+                                    preview?.presentedTime,
+                                  ),
+                            key: const ValueKey('preview-time-readout'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: OrColors.textSecondary,
+                              fontFamily: 'monospace',
+                              fontSize: OrType.tinySize,
+                            ),
+                          ),
+                        ),
+                        PopupMenuButton<_FrameRateChoice>(
+                          key: const ValueKey('preview-frame-rate'),
+                          tooltip: 'Set sequence frame rate',
+                          enabled:
+                              _connected && widget.project != null && !_busy,
+                          onSelected: (choice) =>
+                              unawaited(_setFrameRate(choice.rate)),
+                          itemBuilder: (context) => [
+                            for (final choice in _rateChoices)
+                              PopupMenuItem(
+                                value: choice,
+                                child: Text(choice.label),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(
+                              frameRate == null
+                                  ? 'Set rate'
+                                  : '${frameRate.canonical} fps',
+                              key: const ValueKey('preview-rate-label'),
+                              style: const TextStyle(
+                                color: OrColors.textSecondary,
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: OrSpacing.x1),
                         child: Text(
-                          frameRate == null
-                              ? 'Set rate'
-                              : '${frameRate.canonical} fps',
-                          key: const ValueKey('preview-rate-label'),
+                          _error!,
+                          key: const ValueKey('preview-error'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: OrColors.textSecondary,
+                            color: OrColors.danger,
                             fontSize: OrType.tinySize,
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: OrSpacing.x1),
-                    child: Text(
-                      _error!,
-                      key: const ValueKey('preview-error'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: OrColors.danger,
-                        fontSize: OrType.tinySize,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2847,9 +2972,9 @@ class _InspectorPanelState extends State<_InspectorPanel> {
 
   Widget _transitionField(String key, String label) =>
       DropdownButtonFormField<int>(
+        isExpanded: true,
         key: ValueKey('inspector-visual-$key'),
         initialValue: int.tryParse(_fields[key]!.text) ?? 0,
-        isExpanded: true,
         items: const [
           DropdownMenuItem(value: 0, child: Text('None')),
           DropdownMenuItem(value: 1, child: Text('Cross dissolve')),
@@ -3506,6 +3631,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onAddCaptionTrack,
     required this.onRemoveTrack,
     required this.onSetTrackState,
+    required this.onMoveTrack,
     required this.onLoadMore,
     required this.onLoadMoreMarkers,
     required this.onRefresh,
@@ -3515,6 +3641,9 @@ class _TimelinePanel extends StatefulWidget {
     required this.onDeleteClip,
     required this.onTrimClip,
     required this.onSplitClip,
+    required this.onSlipClip,
+    required this.onRollClip,
+    required this.onSlideClip,
     required this.onRippleDeleteClip,
     required this.onUpdateTextClip,
     required this.onAddMarker,
@@ -3554,6 +3683,8 @@ class _TimelinePanel extends StatefulWidget {
     ProjectTimelineTrackState,
   )?
   onSetTrackState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMoveTrack;
   final ValueChanged<String>? onLoadMore;
   final VoidCallback? onLoadMoreMarkers;
   final VoidCallback? onRefresh;
@@ -3585,6 +3716,7 @@ class _TimelinePanel extends StatefulWidget {
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool ripple,
   )?
   onTrimClip;
   final Future<void> Function(
@@ -3593,6 +3725,24 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onSplitClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlipClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onRollClip;
+  final Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlideClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
   final Future<void> Function(
@@ -3625,6 +3775,7 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
     ProjectRationalTime,
     ProjectRationalTime,
+    String,
   )?
   onAddMediaToTimeline;
   final void Function(
@@ -3892,7 +4043,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             canvasWidth,
           );
           final trackRows = <Widget>[];
-          for (final track in snapshot.items) {
+          for (var walk = 0; walk < snapshot.items.length; walk += 1) {
+            final track = snapshot.items[walk];
             final page = widget.clipPages[track.trackId];
             final loadedCount = page?.items.length ?? 0;
             final countLabel = loadedCount < track.clipCount
@@ -3903,10 +4055,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                 track: track,
                 label: labels[track.trackId]!,
                 countLabel: countLabel,
+                trackIndex: walk,
+                trackCount: snapshot.items.length,
                 busy: widget.busy,
                 project: widget.project,
                 onRemove: widget.onRemoveTrack,
                 onSetState: widget.onSetTrackState,
+                onMove: widget.onMoveTrack,
               ),
             );
             if (page?.nextOffset != null) {
@@ -3924,7 +4079,9 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
           return Column(
             children: [
-              _timelineViewControls(),
+              // The fixed-height view controls cannot fit a region this
+              // short; drop them rather than overflow an unusable strip.
+              if (constraints.maxHeight >= 60) _timelineViewControls(),
               Expanded(
                 child: Scrollbar(
                   child: SingleChildScrollView(
@@ -4038,6 +4195,9 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               onDelete: widget.onDeleteClip,
                                               onTrim: widget.onTrimClip,
                                               onSplit: widget.onSplitClip,
+                                              onSlip: widget.onSlipClip,
+                                              onRoll: widget.onRollClip,
+                                              onSlide: widget.onSlideClip,
                                               onRippleDelete:
                                                   widget.onRippleDeleteClip,
                                               onEditTextClip:
@@ -4493,6 +4653,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           gesture.clip,
           gesture.edge,
           resolvedTargetTime,
+          false,
         );
       }
     } on ProjectGatewayException catch (error) {
@@ -4592,6 +4753,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         timelineStart,
         ProjectRationalTime(BigInt.zero, 1),
         duration,
+        'insert',
       ),
     );
   }
@@ -4621,8 +4783,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 /// that wraps when it is squeezed, overflowing the lane. The wide layout gets
 /// enough room for a three-digit count on one line; compact keeps the legacy
 /// width so the gutter still fits a small screen.
+/// The track header must hold its name, its clip count and its four controls: the
+/// enabled, lock and solo toggles and the move menu. The desktop width grew by the
+/// move control's footprint, because squeezing the count is worse than giving the
+/// timeline 32 fewer pixels; the compact width fits the same controls at compact
+/// density and is guarded at 320x440 and 320x480.
 double _timelineTrackHeaderWidthFor(double availableWidth) =>
-    OrBreakpoints.isCompact(availableWidth) ? 272 : 336;
+    OrBreakpoints.isCompact(availableWidth) ? 272 : 368;
 const double _timelineRulerHeight = 38;
 const double _timelineLaneHeight = 58;
 
@@ -5093,15 +5260,20 @@ class _TimelineTrackHeader extends StatelessWidget {
     required this.track,
     required this.label,
     required this.countLabel,
+    required this.trackIndex,
+    required this.trackCount,
     required this.busy,
     required this.project,
     required this.onRemove,
     required this.onSetState,
+    required this.onMove,
   });
 
   final ProjectTimelineTrack track;
   final String label;
   final String countLabel;
+  final int trackIndex;
+  final int trackCount;
   final bool busy;
   final ProjectReadModel? project;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)? onRemove;
@@ -5111,6 +5283,8 @@ class _TimelineTrackHeader extends StatelessWidget {
     ProjectTimelineTrackState,
   )?
   onSetState;
+  final Future<void> Function(ProjectReadModel, ProjectTimelineTrack, int)?
+  onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -5139,7 +5313,7 @@ class _TimelineTrackHeader extends StatelessWidget {
     return Semantics(
       container: true,
       label:
-          '$kind track $label, ${track.clipCount} clips, ${enabled ? 'enabled' : 'disabled'}, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}',
+          '$kind track $label, ${track.clipCount} clips, ${enabled ? 'enabled' : 'disabled'}, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}, position ${trackIndex + 1} of $trackCount',
       child: Container(
         height: _timelineLaneHeight,
         padding: const EdgeInsets.only(left: OrSpacing.x2),
@@ -5204,6 +5378,47 @@ class _TimelineTrackHeader extends StatelessWidget {
                           ? Icons.volume_off_outlined
                           : Icons.volume_up_outlined),
                 size: 15,
+              ),
+            ),
+            // One control carrying both moves: two more icon buttons overflowed
+            // the 272 px compact header, which the compact guards caught.
+            // A tooltip on a custom child does not reach the semantics tree, so the
+            // control announces which track it moves.
+            Semantics(
+              // Its own node: the header is a semantics container, so without this
+              // the control's label merges into the track's and nothing can address
+              // the menu (a screen reader reads one long track node).
+              container: true,
+              label: 'Move track $label',
+              button: true,
+              child: PopupMenuButton<int>(
+                key: ValueKey('timeline-track-move-${track.trackId}'),
+                // The tooltip names the track, so the control is unambiguous to a
+                // screen reader and to scripts/or_ui.py without a generated id.
+                tooltip: 'Move track $label',
+                enabled:
+                    !busy &&
+                    onMove != null &&
+                    project != null &&
+                    trackCount > 1,
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: trackIndex - 1,
+                    enabled: trackIndex > 0,
+                    child: const Text('Move up'),
+                  ),
+                  PopupMenuItem(
+                    value: trackIndex + 1,
+                    enabled: trackIndex + 1 < trackCount,
+                    child: const Text('Move down'),
+                  ),
+                ],
+                onSelected: (target) =>
+                    unawaited(onMove!(project!, track, target)),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  child: Icon(Icons.swap_vert, size: 17),
+                ),
               ),
             ),
             IconButton(
@@ -5624,8 +5839,14 @@ class _TimelineTrackLane extends StatelessWidget {
         child: Semantics(
           button: true,
           selected: clip.clipId == selectedClipId,
+          onTap: () => onOpenClip(clip),
+          // The exact span, not only a human duration: a screen-reader user needs
+          // to know where an edit left the clip, and scripts/or_ui.py can then
+          // assert a position instead of only that the app accepted a command.
           label:
-              '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel',
+              '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel, '
+              'spans ${clip.timelineStart.canonical} to ${clip.timelineEnd.canonical}'
+              '${clip.sourceStart == null ? '' : ', source ${clip.sourceStart!.canonical}'}',
           hint: 'Drag to move. Activate for clip actions.',
           child: Tooltip(
             key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
@@ -5699,7 +5920,8 @@ class _TimelineTrackLane extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        hint: 'Drag to adjust the timeline edge.',
+        onTap: () => onOpenClip(clip),
+        hint: 'Drag to adjust the timeline edge. Activate for exact trim actions.',
         child: _TimelinePointerSurface(
           key: ValueKey(
             'timeline-trim-handle-${start ? 'start' : 'end'}-${clip.clipId}',
@@ -5788,6 +6010,7 @@ Future<void> _showInsertTimelineDialog({
     ProjectRationalTime,
     ProjectRationalTime,
     ProjectRationalTime,
+    String,
   )
   onInsert,
 }) async {
@@ -5851,6 +6074,9 @@ Future<void> _showInsertTimelineDialog({
 
   final canInsert = ValueNotifier(fieldsAreValid());
   void updateInsertValidity() => canInsert.value = fieldsAreValid();
+  // The mode is presentation state: it travels with the command and is never
+  // written into the project.
+  var editMode = 'insert';
 
   timelineStartController.addListener(updateInsertValidity);
   sourceStartController.addListener(updateInsertValidity);
@@ -5868,6 +6094,7 @@ Future<void> _showInsertTimelineDialog({
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     key: const ValueKey('timeline-insert-track'),
                     initialValue: selectedTrack.trackId,
                     decoration: const InputDecoration(
@@ -5879,6 +6106,8 @@ Future<void> _showInsertTimelineDialog({
                           value: track.trackId,
                           child: Text(
                             '${labels[track.trackId]} · ${track.kind.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                     ],
@@ -5896,6 +6125,24 @@ Future<void> _showInsertTimelineDialog({
                             '';
                       });
                     },
+                  ),
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('timeline-insert-mode'),
+                    isExpanded: true,
+                    initialValue: editMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Edit Mode',
+                      helperText: 'Overwrite replaces the range it lands on; insert refuses to overlap.',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'insert', child: Text('Insert')),
+                      DropdownMenuItem(
+                        value: 'overwrite',
+                        child: Text('Overwrite'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => editMode = value ?? 'insert'),
                   ),
                   _ExactRationalField(
                     fieldKey: const ValueKey('timeline-insert-start'),
@@ -5958,6 +6205,7 @@ Future<void> _showInsertTimelineDialog({
                                 submittedStart,
                                 submittedSource,
                                 submittedDuration,
+                                editMode,
                               ),
                             );
                           }
@@ -6383,8 +6631,27 @@ Future<void> _showTimelineClipActions({
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool ripple,
   )?
   onTrim,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onRoll,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlide,
   required Future<void> Function(
     ProjectReadModel,
     ProjectTimelineClip,
@@ -6428,6 +6695,16 @@ Future<void> _showTimelineClipActions({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
+      // The action set grew to ten buttons (Close, Move, Duplicate, Trim, Split,
+      // Slip, Roll, Slide, Edit Text/Caption, Ripple Delete), so on a small screen
+      // the title, the content and the wrapped action rows together exceeded the
+      // dialog's available height and it overflowed by 6.0 px on the bottom. The
+      // Android SAF journey found it: `takeException` reported
+      // "A RenderFlex overflowed by 6.0 pixels on the bottom" and the rendering
+      // library named this AlertDialog. A scrollable dialog keeps every control
+      // reachable on a short screen instead of clipping one, which is the guard's
+      // point rather than a way around it.
+      scrollable: true,
       title: const Text('Clip'),
       content: Text(switch (clip.contentKind) {
         ProjectTimelineClipContentKind.media =>
@@ -6506,6 +6783,69 @@ Future<void> _showTimelineClipActions({
                   );
                 },
           child: const Text('Trim'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-slip-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onSlip == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showSlipTimelineClipDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      onSlip: onSlip,
+                    ),
+                  );
+                },
+          child: const Text('Slip'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-roll-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onRoll == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showBoundaryMoveDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      title: 'Roll Clip',
+                      helper:
+                          'Move the boundary between this clip and the next one. '
+                          'Both clips stay where they are; their shared edge moves.',
+                      confirmKey: const ValueKey('timeline-confirm-roll'),
+                      fieldKey: const ValueKey('timeline-roll-delta'),
+                      onConfirm: onRoll,
+                    ),
+                  );
+                },
+          child: const Text('Roll'),
+        ),
+        TextButton(
+          key: ValueKey('timeline-slide-${clip.clipId}'),
+          onPressed: busy || !isMedia || track.state.locked || onSlide == null
+              ? null
+              : () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _showBoundaryMoveDialog(
+                      context: context,
+                      project: project,
+                      clip: clip,
+                      title: 'Slide Clip',
+                      helper:
+                          'Move this clip in time; the clips either side give up or '
+                          'gain the same amount, so the track stays gapless.',
+                      confirmKey: const ValueKey('timeline-confirm-slide'),
+                      fieldKey: const ValueKey('timeline-slide-delta'),
+                      onConfirm: onSlide,
+                    ),
+                  );
+                },
+          child: const Text('Slide'),
         ),
         TextButton(
           key: ValueKey('timeline-split-${clip.clipId}'),
@@ -6707,6 +7047,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextWeight>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-weight'),
                   initialValue: weight,
                   decoration: const InputDecoration(
@@ -6739,6 +7080,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextAlignment>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-alignment'),
                   initialValue: alignment,
                   decoration: const InputDecoration(
@@ -6767,6 +7109,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<int>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-text-color'),
                   initialValue: colorIndex,
                   decoration: const InputDecoration(
@@ -6867,11 +7210,16 @@ Future<void> _showTrimTimelineClipDialog({
     ProjectTimelineClip,
     ProjectTimelineTrimEdge,
     ProjectRationalTime,
+    bool,
   )?
   onTrim,
 }) async {
   if (project == null || onTrim == null) return;
   var selectedEdge = ProjectTimelineTrimEdge.start;
+  // Presentation-local: the ripple choice travels with the command and is never
+  // written into the project. It only means anything for an end edge, because a
+  // ripple-in has two defensible meanings and the command refuses it.
+  var ripple = false;
   var userEditedTimelineEdge = false;
   final timelineEdgeController = TextEditingController(
     text: clip.timelineStart.canonical,
@@ -6904,6 +7252,7 @@ Future<void> _showTrimTimelineClipDialog({
               ),
               const SizedBox(height: OrSpacing.x2),
               DropdownButtonFormField<ProjectTimelineTrimEdge>(
+                isExpanded: true,
                 key: const ValueKey('timeline-trim-edge'),
                 initialValue: selectedEdge,
                 decoration: const InputDecoration(labelText: 'Edge'),
@@ -6929,6 +7278,21 @@ Future<void> _showTrimTimelineClipDialog({
                     }
                   });
                 },
+              ),
+              CheckboxListTile(
+                key: const ValueKey('timeline-trim-ripple'),
+                value: ripple && selectedEdge == ProjectTimelineTrimEdge.end,
+                onChanged: selectedEdge == ProjectTimelineTrimEdge.end
+                    ? (value) => setDialogState(() => ripple = value ?? false)
+                    : null,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Ripple later clips'),
+                subtitle: Text(
+                  selectedEdge == ProjectTimelineTrimEdge.end
+                      ? 'Move every later clip on this track by the same amount.'
+                      : 'Only an end trim can ripple.',
+                ),
               ),
               _ExactRationalField(
                 fieldKey: const ValueKey('timeline-trim-time'),
@@ -6957,7 +7321,16 @@ Future<void> _showTrimTimelineClipDialog({
                         );
                         if (target == null || !edgeIsValid()) return;
                         Navigator.of(dialogContext).pop();
-                        unawaited(onTrim(project, clip, selectedEdge, target));
+                        unawaited(
+                          onTrim(
+                            project,
+                            clip,
+                            selectedEdge,
+                            target,
+                            ripple &&
+                                selectedEdge == ProjectTimelineTrimEdge.end,
+                          ),
+                        );
                       }
                     : null,
                 child: const Text('Trim'),
@@ -6972,6 +7345,162 @@ Future<void> _showTrimTimelineClipDialog({
     timelineEdgeController.removeListener(updateTrimValidity);
     timelineEdgeController.dispose();
     canTrim.dispose();
+  }
+}
+
+/// A signed delta in timeline units, which is all a roll and a slide ask for.
+Future<void> _showBoundaryMoveDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required String title,
+  required String helper,
+  required Key confirmKey,
+  required Key fieldKey,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onConfirm,
+}) async {
+  if (project == null || onConfirm == null) return;
+  final deltaController = TextEditingController(text: '1/4');
+  bool deltaIsValid() {
+    final delta = ProjectRationalTime.tryParse(deltaController.text);
+    return delta != null && delta.numerator != BigInt.zero;
+  }
+
+  final canConfirm = ValueNotifier(deltaIsValid());
+  void updateValidity() => canConfirm.value = deltaIsValid();
+  deltaController.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(helper),
+              _ExactRationalField(
+                fieldKey: fieldKey,
+                label: 'Delta',
+                controller: deltaController,
+                onChanged: () => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canConfirm,
+              builder: (context, valid, child) => FilledButton(
+                key: confirmKey,
+                onPressed: valid
+                    ? () {
+                        final delta = ProjectRationalTime.tryParse(
+                          deltaController.text,
+                        );
+                        if (delta == null) return;
+                        Navigator.of(dialogContext).pop();
+                        unawaited(onConfirm(project, clip, delta));
+                      }
+                    : null,
+                child: const Text('Apply'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    deltaController.removeListener(updateValidity);
+    deltaController.dispose();
+    canConfirm.dispose();
+  }
+}
+
+Future<void> _showSlipTimelineClipDialog({
+  required BuildContext context,
+  required ProjectReadModel? project,
+  required ProjectTimelineClip clip,
+  required Future<void> Function(
+    ProjectReadModel,
+    ProjectTimelineClip,
+    ProjectRationalTime,
+  )?
+  onSlip,
+}) async {
+  if (project == null || onSlip == null) return;
+  final deltaController = TextEditingController(text: '1/4');
+  bool deltaIsValid() {
+    final delta = ProjectRationalTime.tryParse(deltaController.text);
+    return delta != null && delta.numerator != BigInt.zero;
+  }
+
+  final canSlip = ValueNotifier(deltaIsValid());
+  void updateValidity() => canSlip.value = deltaIsValid();
+  deltaController.addListener(updateValidity);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Slip Clip'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Move which part of the source this clip shows. The clip stays '
+                'where it is, so no cut moves.',
+              ),
+              _ExactRationalField(
+                fieldKey: const ValueKey('timeline-slip-delta'),
+                label: 'Source delta',
+                controller: deltaController,
+                onChanged: () => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: canSlip,
+              builder: (context, valid, child) => FilledButton(
+                key: const ValueKey('timeline-confirm-slip'),
+                onPressed: valid
+                    ? () {
+                        final delta = ProjectRationalTime.tryParse(
+                          deltaController.text,
+                        );
+                        if (delta == null) return;
+                        Navigator.of(dialogContext).pop();
+                        unawaited(onSlip(project, clip, delta));
+                      }
+                    : null,
+                child: const Text('Slip'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    deltaController.removeListener(updateValidity);
+    deltaController.dispose();
+    canSlip.dispose();
   }
 }
 
@@ -7100,6 +7629,7 @@ Future<void> _showMoveTimelineClipDialog({
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   key: const ValueKey('timeline-move-track'),
                   initialValue: selectedTrackId,
                   decoration: const InputDecoration(labelText: 'Target Track'),

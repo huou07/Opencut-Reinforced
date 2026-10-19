@@ -1,5 +1,10 @@
 # Open-Source Convergence Audit
 
+Last reviewed: 2026-10-17. The decisions below are a dated evidence snapshot of
+2026-10-09; the review date records that the snapshot, its decisions and its
+license boundaries are still the repository's current position, not that
+upstream has been re-inspected.
+
 ## Decision date and scope
 
 This is the evidence snapshot that changes the active product direction. It

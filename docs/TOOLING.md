@@ -1,12 +1,86 @@
 # Development Tooling
 
+Last reviewed: 2026-10-18.
+
 This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
 
 ## Verification model
 
+The owner permits the bounded Debian Linux developer journey described in
+[TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight), using
+`scripts/run_linux_ui_preflight.py`, and — since 2026-10-18 — the local Android
+emulator lane on this host. Their entry points are
+`bash scripts/run_local_lane.sh linux` and
+`bash scripts/run_local_lane.sh android`; both are developer evidence: GitHub
+Actions remains the acceptance authority. Neither exception authorizes a long render,
+cross-platform packaging, or a second writer in this working tree.
+
 Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
 
-By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. If local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.
+The local Android lane's three helpers are repository scripts, not tribal
+knowledge: `scripts/stage_android_ffmpeg.sh` builds the pinned x86_64 Android
+FFmpeg prefix and the guest link probe (NDK 28.2.13676358, API-26 clang wrappers,
+FFmpeg 8.1.3 with a SHA-512 check, the workflow's configure profile);
+`scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install` link
+the bridge build hook requires and builds one APK per acceptance case, the SAF
+fixture, and `ui.apk` for the agent-facing UI harness; and
+`scripts/run_android_ffmpeg_probe.sh` loads the packaged FFmpeg libraries from the
+built APK on the guest. They exist because the recipe used to live only inside the
+hosted `android` job, and a lane whose input cannot be reproduced reports BLOCKED
+rather than a guess.
+
+The lane derives its memory floor from the steps it was asked to run: a guest step
+requires `OR_ANDROID_GUEST_RAM_MB` (6144) + `OR_ANDROID_EMULATOR_OVERHEAD_MB`
+(1024) + `OR_ANDROID_HOST_MARGIN_MB` (1024), an apk-only run requires
+`OR_ANDROID_BUILD_FLOOR_MB` (5120) MiB, and `OR_ANDROID_LANE_MIN_MEM_GIB` is an
+explicit override that the report names. After its apk step it stops the Gradle and
+Kotlin daemons that appeared during that step and that belong to the wrapper's own
+Gradle version; a daemon that was already resident, or one on another version, is
+attributed in `android-logs/daemons.log` and left alone.
+
+## The agent-facing UI harness
+
+`python3 scripts/or_ui.py` is the instrument behind OR's interface claims. It
+drives the real application by widget key, semantics label (exact or regex),
+visible text, role or dialog-scoped control — never by screen coordinate — and
+writes a step-by-step transcript with the action, selector, result, elapsed
+milliseconds, screenshot path and semantics-snapshot path.
+
+```sh
+python3 scripts/or_ui.py screens                       # inventory the running app's screens
+python3 scripts/or_ui.py tree --name editor           # semantics tree as JSON plus the dump
+python3 scripts/or_ui.py shot --name editor           # screenshot at the scenario viewport
+python3 scripts/or_ui.py act --label "Import Media" --role button
+python3 scripts/or_ui.py run scripts/ui_scenarios/editor-journey.json
+python3 scripts/or_ui.py --viewport 390x844 run scripts/ui_scenarios/compact-editor-journey.json
+python3 scripts/or_ui.py --target android run scripts/ui_scenarios/editor-journey.json
+```
+
+On Linux it runs through `scripts/run_linux_ui_preflight.py --exec`, so it reuses
+the same project-local caches, writable Flutter SDK mirror, host-scoped Rust
+toolchain manifest and shared native lock as the bounded preflight. On Android it
+needs an already-booted guest: it installs `ui.apk` from
+`apps/or_app/build/local-lanes/android-case-apks/`, pushes the scenario into the
+app-private files directory, drives it with `flutter drive`, and pulls the
+artifacts back with `run-as`. It exits 2 for a bad invocation or scenario, 3 for
+`BLOCKED` (no guest, no Xvfb, another lane holding the lock) with the command that
+would settle it, and 1 when a step fails.
+
+Artifacts land in `apps/or_app/build/ui-harness/<scenario>/`: `scenario.json`,
+`run.log`, `report.json`, and `artifacts/` with the transcript, screenshots,
+semantics JSON and the framework's semantics dump. Those paths are gitignored
+runtime state, not evidence records.
+
+A known host hazard: this workstation's shared `$CARGO_HOME/config.toml` pins
+`FFMPEG_DIR` and `PKG_CONFIG_PATH` with `force = true` to the Linux desktop
+prefix `apps/or_app/build/local-deb/ffmpeg-install`. `force` makes that file win
+over the environment, so any other FFmpeg linkage — the Android probe included —
+silently compiles against host libraries unless it overrides the value on the
+command line. `scripts/stage_android_ffmpeg.sh` passes scoped `--config`
+overrides for exactly this reason; the shared file itself is not modified, since
+the Linux package lane depends on it.
+
+By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. Two exceptions are explicit: the bounded Linux preflight above, and the local Android emulator lane granted in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md). Outside them, if local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.
 
 Report each check as one of:
 
@@ -21,25 +95,27 @@ When a required local check is environment-blocked and an equivalent Actions job
 
 Install only the tools needed for the part you are changing. The workspace MSRV
 is **Rust 1.89** (`rust-version` in the root `Cargo.toml`); the pinned build
-toolchain is **Rust 1.98.0**, declared in `crates/or_app_bridge/rust-toolchain.toml`.
+toolchain is **Rust 1.98.0**, declared in the root `rust-toolchain.toml` and
+`crates/or_app_bridge/rust-toolchain.toml`.
 Flutter CI uses Flutter 3.47.5 stable.
 
 These are two different numbers for two different things: 1.89 is the oldest
 compiler the crate metadata claims to support, 1.98.0 is what the bridge is
 built with. A contributor must satisfy both.
 
-Known gap: there is no workspace-root `rust-toolchain.toml`. The toolchain pin
-lives in one sub-crate, so `rustup` applies it only when the working directory
-is inside that crate. Building the rest of the workspace on an unmanaged host
-uses whatever default toolchain is active. Promoting the pin to the workspace
-root would fix this, but it changes which compiler every crate builds with, so
-it is an explicit decision with hosted verification — not a documentation fix.
+The workspace-root `rust-toolchain.toml` selects the same 1.98.0 compiler as
+the bridge and hosted builds. It requests only host tools; the bridge's nested
+configuration retains cross-compilation targets for platform builders. Use the
+rustup Cargo proxy on PATH: Debian's standalone `/usr/bin/cargo` does not apply
+rustup toolchain selection.
 
 ### Local toolchain PATH
 
-`cargo` and `rustc` are on `PATH`, but `rustup` is not, and Flutter's Rust
-native-assets hook needs `rustup` on `PATH` to build the bridge. Without it,
-`flutter test` fails with:
+On the inspected Debian host (2026-10-17), the system PATH selects Debian Rust
+1.85; Rust 1.98.0 and Flutter 3.47.7 are restored under the owner home and are
+shared with workers through H07P policy.
+Flutter's Rust native-assets hook also needs `rustup` on PATH. Without it,
+`flutter test` can fail with:
 
 ```
 RustBuilder: Failed to invoke "rustup [show, active-toolchain]"
@@ -50,18 +126,73 @@ That failure is an environment gap, not a source defect. To fix it for a local
 run, export both the toolchain home and the binary path:
 
 ```sh
-export RUSTUP_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/rustup
-export CARGO_HOME=/home/agents-worker/.agent-workbench-runtime-v6/opt/cargo
-export PATH="/home/huou07/.cargo/bin:/home/agents-worker/.agent-workbench-runtime-v6/opt/flutter/bin:$PATH"
-rustup show active-toolchain   # expect 1.98.0-x86_64-unknown-linux-gnu
+export CARGO_HOME=/home/huou07/.cargo
+export RUSTUP_HOME=/home/huou07/.rustup
+export PATH="$CARGO_HOME/bin:/home/huou07/.local/share/flutter/bin:$PATH"
+rustup show active-toolchain   # expect stable-x86_64-unknown-linux-gnu (Rust 1.98.0)
 ```
 
-Known gap: the `rustup` binary currently resolves from the owner's home
-directory. That is not a stable location for the worker to depend on — a
-permission change there would silently break local Flutter verification. The
-durable fix is for the owner to place `rustup` and the Flutter SDK under the
-shared `/opt/agent-workbench` tree alongside the other tools, which is an
-owner action and not something an agent should assume.
+Workers use the owner-home rustup proxy. Keep the toolchain read-only; Rustup
+native-assets builds need write access to its temporary directory, so configure
+that exact path through the Playground GUI for the selected worker and verify
+the enforced revision before running the preflight. Keep Rustup, Flutter
+settings and harness credential stores private.
+The Linux preflight gives Flutter temporary XDG config/cache/data directories and
+copies only readable public Cargo registry/Git and pub.dev caches into ignored
+`apps/or_app/.dart_tool/aeh-cargo` and `aeh-pub-cache` when the shared caches
+are not writable. Writability is decided by an actual create probe, not
+`os.access`: the shared owner caches carry `rw` ACLs for workers, which
+`os.access` reports as writable even where a sandboxed run denies the write.
+Flutter additionally rewrites `bin/cache/engine.stamp` beside its own script on
+every invocation, so when the shared SDK cache is not writable the preflight
+mirrors the SDK into ignored `apps/or_app/.dart_tool/flutter-overlay` and puts
+that `bin` first on `PATH`. The overlay keeps a real `bin` tree and symlinks the
+large read-only `artifacts`/`dart-sdk` trees; it never writes the shared SDK. The
+preflight excludes Cargo config and credentials, resolves dependencies
+offline with the checked-in lockfile, and runs the Linux UI test with
+`--no-pub`. The bounded runner uses one compiler worker, a shared lock, a
+300-second dependency stage and a 600-second native limit, and stops below 2 GiB
+available RAM. Do not copy another
+machine's `target`, `build`, `.dart_tool` or Flutter ephemeral directories.
+Preserve source, locks and user data.
+
+The inspected Flutter SDK is 3.47.7; CI pins 3.47.5, so local Flutter output is
+not exact-version CI evidence. Seventeen focused preflight tests pass. The Linux
+runner temporarily narrows the bridge's nested `rust-toolchain.toml` to the
+host target and restores its original bytes in `finally`; it avoids downloading
+unused cross-platform Rust targets. See the 2026-10-17 Debian run in
+[TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight).
+
+Interrupting that rewrite is what made it dangerous, so the runner is now safe
+to kill:
+
+- It refuses to start on a dirty tree (`git status --porcelain` must be empty),
+  because a toolchain rewrite is only attributable when nothing else is edited.
+- Before narrowing the manifest it writes the original bytes to ignored
+  `apps/or_app/build/ui-preflight/rust-toolchain.toml.original`, and the next run
+  restores from that backup before its clean-tree check. A `SIGKILL` never runs
+  `finally`, so startup recovery — not the handler — is what guarantees the tree
+  is repaired.
+- `python3 scripts/run_linux_ui_preflight.py --plan` reports the resolved source,
+  dirtiness, headroom, missing tools, cache and overlay decisions, budgets and
+  commands without changing anything, and exits 3 when a real run would be
+  blocked.
+- Dependency resolution no longer shares the native budget: `pub get` gets 300
+  seconds of its own, then the native journey keeps the 600-second limit. The
+  recorded `stage_timings` show each stage's cost.
+
+With the PATH above, the Debian inspection passed:
+
+- `cargo check --workspace --all-targets --locked --offline -j 2`, including
+  media, audio, render and Flutter bridge source checks against local libraries.
+- `cargo test -p or_core -p or_ipc -p or_cli --locked --offline`.
+- `flutter pub get --offline` without tracked lockfile changes, followed by
+  `flutter analyze --no-pub`.
+- `bash scripts/check-repo.sh`.
+
+This is local source evidence at baseline `21bfb3aa6891` plus the toolchain/doc
+patch, not packaged/native runtime acceptance or a hosted claim record. The
+full native app and platform packaging still use their dedicated CI gates.
 
 Rust checks run from the repository root:
 
@@ -184,6 +315,12 @@ codegraph status .
 
 Initialize an index with `codegraph init` when needed.
 
+## Playwright
+
+`playwright-cli` (Microsoft's agent-facing [playwright-cli](https://github.com/microsoft/playwright-cli), installed as `@playwright/cli`) is an agent-local browser driver, not a repository dependency. It lets an agent read the DOM and accessibility tree of a rendered page instead of guessing, which is what the HTML prototype in `prototypes/` and the UX acceptance work in `docs/UX_ACCEPTANCE.md` need. It adds no package to this workspace and no test target to CI.
+
+Like CodeGraph it is machine-local tooling, so it belongs on the developer's `PATH` rather than in `Cargo.toml`. It is used only when a task needs a rendered page; Rust and Flutter analysis stay in their own tooling, and hosted Actions remains canonical for native acceptance. It drives a Playwright-provided Chromium build by default and requires no branded Chrome and no root.
+
 ## Ponytail
 
 Ponytail helps coding agents prefer small, necessary implementations while retaining correctness and safety checks. The official upstream is [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail).
@@ -196,14 +333,14 @@ Review third-party agent tooling before installing it. Do not install additional
 
 ## Repository / GitHub safeguards
 
-- `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access. It then runs three documentation gates: `check_doc_links.py` (relative Markdown links resolve), `check_doc_freshness.sh` (documents making current claims carry a recent `Last reviewed` date), and `check_claims.py` (claim records are well formed and honest about evidence class).
+- `scripts/check-repo.sh` checks required files, tracked whitespace, local/generated paths, file sizes, MIT license text, and obvious private-key file types without network access. It then runs four gates: `check_doc_links.py` (relative Markdown links resolve), `check_doc_freshness.sh` (every current-claim document carries a recent `Last reviewed` date), `check_claims.py` (claim records are well formed, and their `implementation_sha` is a commit in this repository that is an ancestor of `HEAD`), and `test_check_claims.py` (that reject behaviour cannot regress). It also runs the hermetic preflight-preparation and Android report suites.
 - It also runs `check_or_core_deps.py`, which enforces that `or_core` stays free of GPU, media, audio, text-shaping, scripting and AI-runtime dependencies. It lints `scripts/check_doc_freshness.sh` and itself with `shellcheck -S warning` when `shellcheck` is available, and warns rather than silently skipping when it is not.
 - Execution-plan graph validation is not reinstated. It guarded a frozen ledger and has no live counterpart; the validators are preserved under `scripts/archive/` for history. See [SECURITY_LICENSING.md](SECURITY_LICENSING.md).
-- `.github/workflows/repo-hygiene.yml` runs on pull requests, pushes to `main`, and manual dispatch. The repository requires Actions references to use full commit SHAs; the workflow pins `actions/checkout` accordingly.
+- `.github/workflows/repo-hygiene.yml` runs on pull requests, pushes to `main`, and manual dispatch. The repository requires Actions references to use full commit SHAs; the workflow pins `actions/checkout` accordingly, checks out full history (`fetch-depth: 0`) so the claim-SHA and secret scans can resolve history, and runs gitleaks 8.30.1 from its pinned release after verifying the archive's SHA-256.
 - GitHub Actions is enabled. The default `GITHUB_TOKEN` permission is read-only, and workflows cannot approve pull request reviews by default.
 - Dependabot alerts and security updates are enabled. `.github/dependabot.yml` configures weekly updates for GitHub Actions only.
 - The dependency graph is enabled for this public repository.
-- Secret scanning and push protection are enabled.
+- Secret scanning and push protection are enabled on GitHub. That is a hosting-side control and is not what a local pass proves: until 2026-10-17 nothing in `scripts/check-repo.sh` or `scripts/acceptance.sh` scanned for secrets, so a green local gate said nothing about leaked credentials. `scripts/acceptance.sh` now runs `gitleaks detect` over the repository when `gitleaks` is installed and reports the lane `UNVERIFIED` with that reason when it is not; `scripts/check-repo.sh` still performs no secret scan of its own, and the pinned scan above is the CI authority.
 - GitHub Private Vulnerability Reporting is enabled; see [SECURITY.md](../SECURITY.md).
 - The active `main-safety` ruleset applies only to `main` and blocks branch deletion and non-fast-forward updates. It does not require pull requests, approvals, status checks, or signed commits.
 
@@ -217,6 +354,7 @@ Review third-party agent tooling before installing it. Do not install additional
 
 - CodeGraph
 - Ponytail
+- Playwright (`playwright-cli`, agent-local; added 2026-10-15 for rendered-page inspection of the prototype and UX work)
 
 ### Android 9B preview repair and hosted proof
 
@@ -298,5 +436,5 @@ emulator and no captured fatal/ANR cannot classify that disconnect. The final
 collector preserves failed samples, consumes complete process listings and
 captures all logcat buffers. Diagnostic collection success is not product
 acceptance. Hosted verification for the final implementation SHA remains the
-supervisor's gate; local native execution is disallowed, and optional hardware
-media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.
+supervisor's gate; local native execution outside the two owner-granted lanes is
+disallowed, and optional hardware media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.

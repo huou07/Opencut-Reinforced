@@ -1,0 +1,320 @@
+{
+  "name": "slip-roll-slide",
+  "description": "The three clip-level moves that do not change where a clip sits as a whole, driven through the real app with positional assertions. Each step names the clip by the span its own semantics label reports and then asserts the span after the move, and the slip step also asserts the source window, because a slip changes nothing else. This is the difference between proving the app accepted a command and proving it left the clips where the operation says it should.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Move journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 0 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "0/1"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-start"
+      },
+      "value": "1/2"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-insert-duration"
+      },
+      "value": "1/4"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1, 3 clips",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "seeded"
+    },
+    {
+      "op": "shot",
+      "name": "seeded"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "spans 1/4 to 1/2"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-slip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Slip Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-slip-delta"
+      },
+      "value": "1/8"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-slip"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "spans 1/4 to 1/2, source 1/8",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-slip"
+    },
+    {
+      "op": "shot",
+      "name": "after-slip"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "spans 1/4 to 1/2"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-roll-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Roll Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-roll-delta"
+      },
+      "value": "1/8"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-roll"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "spans 1/4 to 5/8",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-roll"
+    },
+    {
+      "op": "shot",
+      "name": "after-roll"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "spans 1/4 to 5/8"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-slide-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Slide Clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-slide-delta"
+      },
+      "value": "1/16"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-slide"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "spans 5/16 to 11/16",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "after-slide"
+    },
+    {
+      "op": "shot",
+      "name": "after-slide"
+    }
+  ]
+}

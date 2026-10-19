@@ -96,6 +96,64 @@ impl CliError {
         )
     }
 
+    /// A code artifact that could not become a scene.
+    fn code_scene(error: or_motion::CodeSceneError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "motion_scene",
+            error.code(),
+            error.code().to_owned(),
+        )
+    }
+
+    /// A MotionScene that could not be rasterised, with the rasteriser's code.
+    fn motion_raster(error: or_render::MotionRasterError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "motion_scene",
+            error.code(),
+            error.code().to_owned(),
+        )
+    }
+
+    /// A MotionScene evaluation refusal, with the evaluator's own stable code.
+    fn motion_evaluation(error: or_motion::MotionEvaluationError, json: bool) -> Self {
+        let message = match &error {
+            or_motion::MotionEvaluationError::InvalidScene(validation) => format!(
+                "the scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|diagnostic| diagnostic.code.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            or_motion::MotionEvaluationError::TimeOutOfRange => {
+                "the time is outside the scene's [0, duration) interval".to_owned()
+            }
+        };
+        Self::new(4, json, "motion_scene", error.code(), message)
+    }
+
+    /// A MotionScene that could not be read, with the format's own stable code.
+    fn motion(error: or_motion::MotionSceneError, json: bool) -> Self {
+        Self::new(4, json, "motion_scene", error.code(), error.to_string())
+    }
+
+    /// A noise-reduction failure, reported with the same shape as the other media
+    /// categories so a caller can switch on the code.
+    fn cleanup(error: or_core::AudioCleanupError, json: bool) -> Self {
+        Self::new(
+            4,
+            json,
+            "audio_cleanup",
+            error.code().as_str(),
+            format!("noise reduction failed: {}", error.code().as_str()),
+        )
+    }
+
     fn media(error: or_core::MediaProbeError, json: bool) -> Self {
         let diagnostic = error.diagnostic().map(str::to_owned);
         let message = match (&diagnostic, json) {
@@ -269,6 +327,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "history" => run_history(&args[1..], json)?,
         "recovery" => run_recovery(&args[1..], json)?,
         "media" => run_media(&args[1..], json)?,
+        "motion" => run_motion(&args[1..], json)?,
         "timeline" => run_timeline(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
@@ -334,11 +393,369 @@ fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
         "add" => run_media_add(&args[1..], json),
         "relink" => run_media_relink(&args[1..], json),
         "remove" => run_media_remove(&args[1..], json),
+        "clean-audio" => run_media_clean_audio(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown media action; expected probe, list, add, relink, or remove",
+            "unknown media action; expected probe, list, add, relink, remove, or clean-audio",
         )),
     }
+}
+
+/// Phase 4's noise reduction, through the packaged FFmpeg helper.
+///
+/// It reads one file and writes another: no project is opened, nothing in a project
+/// changes, and the result is an ordinary audio file a user can import and compare.
+fn run_media_clean_audio(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--source", "--out", "--noise-floor-db", "--reduction"],
+        &[],
+        json,
+    )?;
+    let source = required_path(&options, "--source", json)?;
+    let destination = required_path(&options, "--out", json)?;
+    // The floor is measured from the material unless the caller supplies one: the
+    // filter does nothing below the recording's real floor and eats the audio above
+    // it, so a constant would be wrong for most inputs in one direction or the other.
+    let measured_floor = if options.value("--noise-floor-db").is_none() {
+        Some(
+            or_core::measure_noise_floor(&source)
+                .map_err(|error| CliError::cleanup(error, json))?,
+        )
+    } else {
+        None
+    };
+    let noise_floor_db = match options.value("--noise-floor-db") {
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<i32>().ok())
+            .ok_or_else(|| CliError::usage(json, "--noise-floor-db must be a whole dBFS value"))?,
+        None => measured_floor.unwrap_or(-50),
+    };
+    let reduction_db = match options.value("--reduction") {
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<u32>().ok())
+            .ok_or_else(|| CliError::usage(json, "--reduction must be a whole number of dB"))?,
+        None => 12,
+    };
+    let result = or_core::clean_audio_file(&source, &destination, noise_floor_db, reduction_db)
+        .map_err(|error| CliError::cleanup(error, json))?;
+    if json {
+        Ok(json_string(serde_json::json!({
+            "cleanup": {
+                "source": source.display().to_string(),
+                "destination": result.destination.display().to_string(),
+                "noise_floor_db": result.noise_floor_db,
+                "reduction_db": result.reduction_db,
+                "bytes_written": result.bytes_written,
+                "noise_floor_measured": measured_floor.is_some(),
+                "chain": format!(
+                    "afftdn=nf={}:nr={}",
+                    result.noise_floor_db, result.reduction_db
+                ),
+            }
+        })))
+    } else {
+        Ok(format!(
+            "Wrote {} ({} bytes) using afftdn=nf={}:nr={}",
+            result.destination.display(),
+            result.bytes_written,
+            result.noise_floor_db,
+            result.reduction_db
+        ))
+    }
+}
+
+/// `or motion` — the declarative MotionScene surface ADR 0007 names.
+///
+/// Validation and inspection are pure reads of a scene file: no project is opened,
+/// nothing is rendered, and no provider is contacted.
+fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(
+            json,
+            "expected motion validate or motion inspect",
+        ));
+    };
+    match action {
+        "validate" => run_motion_validate(&args[1..], json),
+        "inspect" => run_motion_inspect(&args[1..], json),
+        "evaluate" => run_motion_evaluate(&args[1..], json),
+        "render" => run_motion_render(&args[1..], json),
+        "from-code" => run_motion_from_code(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown motion action; expected validate, inspect, evaluate, render or from-code",
+        )),
+    }
+}
+
+/// Evaluates a scene at one exact time and prints the resolved instructions.
+///
+/// Nothing is rendered and no project is touched: this is the step a renderer
+/// consumes, exposed so an agent can see exactly what would be drawn at a time.
+fn run_motion_evaluate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file", "--at"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let at = required_name(&options, "--at", json)?;
+    let time = parse_cli_rational(&at, "--at", json)?;
+    let frame = or_motion::evaluate_scene(&scene, time)
+        .map_err(|error| CliError::motion_evaluation(error, json))?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&frame).expect("a frame is serializable"),
+        ));
+    }
+    let mut lines = vec![format!(
+        "{} at {}/{}s: {} instructions on {}x{}",
+        scene.name,
+        time.numerator(),
+        time.denominator(),
+        frame.instructions.len(),
+        frame.canvas.width,
+        frame.canvas.height
+    )];
+    for instruction in &frame.instructions {
+        lines.push(format!(
+            "{:indent$}{} {} at ({:.1}, {:.1}) opacity {:.2}{}",
+            "",
+            instruction.node_id,
+            match instruction.kind {
+                or_motion::MotionNodeKind::Group => "group",
+                or_motion::MotionNodeKind::Text => "text",
+                or_motion::MotionNodeKind::Rectangle => "rectangle",
+                or_motion::MotionNodeKind::Ellipse => "ellipse",
+                or_motion::MotionNodeKind::Arrow => "arrow",
+                or_motion::MotionNodeKind::Image => "image",
+            },
+            instruction.position.x,
+            instruction.position.y,
+            instruction.opacity,
+            instruction
+                .text
+                .as_ref()
+                .map(|text| format!(" \"{text}\""))
+                .unwrap_or_default(),
+            indent = instruction.depth * 2
+        ));
+    }
+    Ok(lines.join("\n"))
+}
+
+/// Builds a MotionScene from a code artifact.
+///
+/// The sample is untrusted input: the tokeniser is a bounded lexical scan, nothing
+/// executes it, and the scene it produces is ordinary canonical data that validates,
+/// evaluates and renders through the same paths as a hand-authored one.
+fn run_motion_from_code(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--source",
+            "--output",
+            "--title",
+            "--font-size",
+            "--width",
+            "--height",
+        ],
+        &[],
+        json,
+    )?;
+    let source_path = required_path(&options, "--source", json)?;
+    let output = required_path(&options, "--output", json)?;
+    let bytes = std::fs::read(&source_path)
+        .map_err(|error| CliError::usage(json, format!("the source could not be read: {error}")))?;
+    let language = or_motion::CodeLanguage::from_path(&source_path.display().to_string());
+    let title = match options.value("--title") {
+        Some(value) => value.to_string_lossy().into_owned(),
+        None => source_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Code".to_owned()),
+    };
+    let mut scene_options = or_motion::CodeSceneOptions {
+        title,
+        ..or_motion::CodeSceneOptions::default()
+    };
+    if let Some(value) = options.value("--font-size") {
+        scene_options.font_size = value
+            .to_str()
+            .and_then(|text| text.parse::<f64>().ok())
+            .filter(|size| *size > 0.0)
+            .ok_or_else(|| CliError::usage(json, "--font-size must be a positive number"))?;
+    }
+    let width = parse_positive_u32(&options, "--width", json)?;
+    let height = parse_positive_u32(&options, "--height", json)?;
+    if let Some(width) = width {
+        scene_options.canvas.width = width;
+    }
+    if let Some(height) = height {
+        scene_options.canvas.height = height;
+    }
+
+    let scene = or_motion::scene_from_source(&bytes, language, &scene_options)
+        .map_err(|error| CliError::code_scene(error, json))?;
+    let validation = or_motion::validate_scene(&scene);
+    if !validation.ok {
+        // A scene this command builds failing its own validator is a defect, not a
+        // caller error, so it is reported as a generation failure with the codes.
+        return Err(CliError::new(
+            5,
+            json,
+            "motion_scene",
+            "CODE_SCENE_INVALID",
+            format!(
+                "the generated scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|error| error.code.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    let encoded = serde_json::to_vec_pretty(&scene).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be encoded: {error}"))
+    })?;
+    std::fs::write(&output, &encoded).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be written: {error}"))
+    })?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(serde_json::json!({
+            "scene_id": scene.scene_id,
+            "language": language.name(),
+            "output": output.display().to_string(),
+            "bytes_written": encoded.len(),
+            "node_count": inspection.node_count,
+            "duration_milliseconds": inspection.duration_milliseconds,
+            "validation_ok": inspection.validation.ok,
+        })));
+    }
+    Ok(format!(
+        "Wrote {} ({} nodes, {} ms) from {} as {}",
+        output.display(),
+        inspection.node_count,
+        inspection.duration_milliseconds,
+        source_path.display(),
+        language.name()
+    ))
+}
+
+fn parse_positive_u32(options: &Options, flag: &str, json: bool) -> Result<Option<u32>, CliError> {
+    match options.value(flag) {
+        None => Ok(None),
+        Some(value) => value
+            .to_str()
+            .and_then(|text| text.parse::<u32>().ok())
+            .filter(|parsed| *parsed > 0)
+            .map(Some)
+            .ok_or_else(|| CliError::usage(json, format!("{flag} must be a positive integer"))),
+    }
+}
+
+/// Renders one still frame of a scene to a PNG.
+///
+/// The CLI deliberately links no FFmpeg: the release CLI archives ship `or` without
+/// the shared libraries, so a CLI that linked them could not run on a user's machine.
+/// Materialising the whole sequence into a video therefore belongs to the application
+/// layer, which already links the encoder and ships it — `or_render`'s frame sequence
+/// and the export writer are the pieces, and the bridge is where they meet.
+fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file", "--at", "--output"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let output = required_path(&options, "--output", json)?;
+    let at = required_name(&options, "--at", json)?;
+    let time = parse_cli_rational(&at, "--at", json)?;
+    let frame = or_motion::evaluate_scene(&scene, time)
+        .map_err(|error| CliError::motion_evaluation(error, json))?;
+    let canvas = or_render::rasterize_motion_frame(&frame)
+        .map_err(|error| CliError::motion_raster(error, json))?;
+    let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
+        .map_err(|error| CliError::motion_raster(error, json))?;
+    std::fs::write(&output, &png).map_err(|error| {
+        CliError::usage(json, format!("the frame could not be written: {error}"))
+    })?;
+    if json {
+        return Ok(json_string(serde_json::json!({
+            "scene_id": scene.scene_id,
+            "kind": "still",
+            "at": {"numerator": time.numerator(), "denominator": time.denominator()},
+            "output": output.display().to_string(),
+            "width": canvas.width(),
+            "height": canvas.height(),
+            "bytes_written": png.len(),
+            "instructions": frame.instructions.len(),
+        })));
+    }
+    Ok(format!(
+        "Wrote {} ({}x{}, {} bytes) for {} at {}/{}s",
+        output.display(),
+        canvas.width(),
+        canvas.height(),
+        png.len(),
+        scene.name,
+        time.numerator(),
+        time.denominator()
+    ))
+}
+
+fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {
+    let path = required_path(options, "--file", json)?;
+    let bytes = std::fs::read(&path)
+        .map_err(|error| CliError::usage(json, format!("the scene could not be read: {error}")))?;
+    or_motion::parse_motion_scene(&bytes).map_err(|error| CliError::motion(error, json))
+}
+
+fn run_motion_validate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let validation = or_motion::validate_scene(&scene);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&validation).expect("validation is serializable"),
+        ));
+    }
+    if validation.ok {
+        Ok(format!("{} is a valid MotionScene", scene.name))
+    } else {
+        Ok(validation
+            .errors
+            .iter()
+            .map(|error| format!("{} {} {}", error.code, error.path, error.message))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+}
+
+fn run_motion_inspect(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&inspection).expect("inspection is serializable"),
+        ));
+    }
+    Ok(format!(
+        "{} ({}): {} nodes, {} assets, {} animations, {} keyframes, {} ms at {}x{}, {}",
+        inspection.name,
+        inspection.scene_id,
+        inspection.node_count,
+        inspection.asset_count,
+        inspection.animation_count,
+        inspection.keyframe_count,
+        inspection.duration_milliseconds,
+        inspection.canvas_width,
+        inspection.canvas_height,
+        if inspection.validation.ok {
+            "valid".to_owned()
+        } else {
+            format!("{} problems", inspection.validation.errors.len())
+        }
+    ))
 }
 
 fn run_media_probe(args: &[OsString], json: bool) -> Result<String, CliError> {
@@ -771,6 +1188,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "--source-start",
                     "--duration",
                     "--id",
+                    "--mode",
+                    "--overwrite-split-id",
                 ],
                 &[],
                 json,
@@ -806,22 +1225,46 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 )?,
                 None => ClipId::generate(),
             };
-            let result = timeline_mutation(
-                &path,
-                attached,
-                "timeline.clip.insert",
-                json!({
-                    "clip_id": clip_id,
-                    "track_id": track_id,
-                    "media_id": media_id,
-                    "timeline_start": rational_value(timeline_start),
-                    "source_range": {
-                        "start": rational_value(source_start),
-                        "duration": rational_value(duration),
-                    },
-                }),
-                json,
-            )?;
+            // The edit mode is an explicit input; `insert` stays the default so
+            // every existing script keeps its meaning.
+            let mode = match options.value("--mode") {
+                None => "insert",
+                Some(value) => match value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--mode must be valid UTF-8"))?
+                {
+                    "insert" => "insert",
+                    "overwrite" => "overwrite",
+                    _ => {
+                        return Err(CliError::usage(json, "--mode must be insert or overwrite"));
+                    }
+                },
+            };
+            let overwrite_split_clip_id = match options.value("--overwrite-split-id") {
+                Some(value) => Some(parse_clip_id(
+                    value.to_str().ok_or_else(|| {
+                        CliError::usage(json, "--overwrite-split-id must be valid UTF-8")
+                    })?,
+                    json,
+                )?),
+                None => None,
+            };
+            let mut arguments = json!({
+                "clip_id": clip_id,
+                "track_id": track_id,
+                "media_id": media_id,
+                "timeline_start": rational_value(timeline_start),
+                "source_range": {
+                    "start": rational_value(source_start),
+                    "duration": rational_value(duration),
+                },
+                "mode": mode,
+            });
+            if let Some(split_clip_id) = overwrite_split_clip_id {
+                arguments["overwrite_split_clip_id"] = json!(split_clip_id);
+            }
+            let result =
+                timeline_mutation(&path, attached, "timeline.clip.insert", arguments, json)?;
             Ok(render_timeline_command(
                 &result,
                 attached,
@@ -923,7 +1366,14 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         "trim-clip" => {
             let options = Options::parse(
                 action_args,
-                &["--project", "--attach", "--clip", "--edge", "--to"],
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--edge",
+                    "--to",
+                    "--ripple",
+                ],
                 &[],
                 json,
             )?;
@@ -943,6 +1393,101 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "clip_id": clip_id,
                     "edge": edge,
                     "timeline_time": rational_value(timeline_time),
+                    // Opt-in: absent means the plain trim meaning, unchanged.
+                    "ripple": options.value("--ripple").is_some(),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "move-track" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--id", "--to"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--id", json)?, json)?;
+            let to_index = required_name(&options, "--to", json)?
+                .parse::<usize>()
+                .map_err(|_| CliError::usage(json, "--to must be a non-negative index"))?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.track.move",
+                json!({
+                    "track_id": track_id,
+                    "to_index": to_index,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "slip-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--delta"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.slip",
+                json!({
+                    "clip_id": clip_id,
+                    "delta": rational_value(delta),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "roll-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--delta"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.roll",
+                json!({
+                    "clip_id": clip_id,
+                    "delta": rational_value(delta),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "slide-clip" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--delta"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.slide",
+                json!({
+                    "clip_id": clip_id,
+                    "delta": rational_value(delta),
                 }),
                 json,
             )?;
@@ -1196,6 +1741,7 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
             ClipContent::Media {
                 media_id,
                 source_range,
+                playback_rate: _,
             } => format!(
                 "{} media={} at={} source={} duration={}",
                 clip.clip_id,

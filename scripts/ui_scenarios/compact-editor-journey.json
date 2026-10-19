@@ -1,0 +1,185 @@
+{
+  "name": "compact-editor-journey",
+  "harness": "or_ui",
+  "description": "The compact-layout guard: the same command path as the desktop journey, driven at 320x440 through the compact presentation, where the media library is a bottom sheet opened from the mobile tool dock instead of a side panel and a control's name is a multi-line semantics label rather than its own Text widget. It asserts that the compact layout reaches the same commands (create, import, track, insert, keyboard duplicate and undo) with the same semantics and without a render exception or overflow. Run the same file with --viewport 390x844 to prove the taller compact viewport has not regressed.",
+  "viewport": {
+    "width": 320,
+    "height": 440
+  },
+  "fixtures": [
+    "wav",
+    "invalid"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Compact journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "compact-editor-empty"
+    },
+    {
+      "op": "tree",
+      "name": "compact-editor-empty"
+    },
+    {
+      "op": "picker",
+      "next": "invalid"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "fixture\\.wav",
+      "budget_ms": 2000
+    },
+    {
+      "op": "expect",
+      "key": "timeline-empty-import-media",
+      "role": "button"
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Imported .*selected files",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track A1",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key": "mobile-editor-tool-media",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "mobile-editor-tool-media"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "fixture\\.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "compact-media-sheet"
+    },
+    {
+      "op": "shot",
+      "name": "compact-media-sheet"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "mobile-tool-sheet-close"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tree",
+      "name": "compact-timeline"
+    },
+    {
+      "op": "shot",
+      "name": "compact-timeline"
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+d"
+    },
+    {
+      "op": "tree",
+      "name": "compact-after-duplicate"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-undo"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "compact-after-undo"
+    },
+    {
+      "op": "shot",
+      "name": "compact-after-undo"
+    }
+  ]
+}

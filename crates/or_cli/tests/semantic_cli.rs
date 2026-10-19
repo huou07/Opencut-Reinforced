@@ -45,6 +45,36 @@ impl TestDirectory {
         path
     }
 
+    /// A MotionScene file, with `extra` merged into its first node so a test can
+    /// introduce exactly one defect.
+    fn motion_scene_path(&self, name: &str, extra: Option<(&str, Value)>) -> PathBuf {
+        let mut scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Explain the parser",
+            "duration": {"numerator": 6, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "code",
+                    "kind": "text",
+                    "text": "fn main() {}",
+                    "position": {"x": 60, "y": 80},
+                    "font_size": 30,
+                },
+            ],
+            "animations": [],
+        });
+        if let Some((key, value)) = extra {
+            scene["nodes"][0][key] = value;
+        }
+        let path = self.0.join(name);
+        fs::write(&path, serde_json::to_vec_pretty(&scene).unwrap()).unwrap();
+        path
+    }
+
     fn probe_stub(&self) -> PathBuf {
         let executable = self.0.join(if cfg!(windows) {
             "probe-stub.exe"
@@ -2427,4 +2457,191 @@ fn attached_timeline_cli_uses_the_shared_host_history_dirty_state_and_explicit_s
         initial.project_instance_id
     );
     host.shutdown(false).unwrap();
+}
+
+#[test]
+fn motion_validate_and_inspect_read_a_scene_without_a_project() {
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path("explain.ormotion.json", None);
+
+    let validated = cli([
+        OsString::from("motion"),
+        OsString::from("validate"),
+        OsString::from("--file"),
+        scene.clone().into_os_string(),
+    ]);
+    assert!(validated.status.success(), "{validated:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&validated.stdout).trim(),
+        "Explain the parser is a valid MotionScene"
+    );
+
+    let inspected = cli([
+        OsString::from("motion"),
+        OsString::from("inspect"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert!(inspected.status.success(), "{inspected:?}");
+    let value: Value = serde_json::from_slice(&inspected.stdout).unwrap();
+    assert_eq!(value["node_count"], 1);
+    assert_eq!(value["duration_milliseconds"], 6000);
+    assert_eq!(value["canvas_width"], 1920);
+    assert_eq!(value["validation"]["ok"], true);
+}
+
+#[test]
+fn motion_validate_refuses_a_scene_that_carries_an_unknown_field() {
+    // The format is data, not a program: a field this version does not implement is
+    // refused rather than ignored, so a scene cannot smuggle behaviour in.
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path(
+        "scripted.ormotion.json",
+        Some(("script", Value::String("while (true) {}".to_owned()))),
+    );
+
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("validate"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["error"]["code"], "MOTION_INVALID_JSON");
+    assert_eq!(value["error"]["category"], "motion_scene");
+}
+
+#[test]
+fn motion_evaluate_resolves_animated_properties_at_an_exact_time() {
+    let directory = TestDirectory::new();
+    let scene = directory.motion_scene_path("animated.ormotion.json", None);
+    // Give the text node an opacity track of its own so the resolved value is
+    // distinguishable from its authored one.
+    let mut value: Value = serde_json::from_slice(&fs::read(&scene).unwrap()).unwrap();
+    value["animations"] = serde_json::json!([
+        {
+            "node_id": "code",
+            "property": "opacity",
+            "keyframes": [
+                {"at": {"numerator": 0, "denominator": 1}, "value": 0.0},
+                {"at": {"numerator": 1, "denominator": 1}, "value": 1.0},
+            ],
+            "easing": "ease_out",
+        },
+    ]);
+    fs::write(&scene, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("evaluate"),
+        OsString::from("--file"),
+        scene.clone().into_os_string(),
+        OsString::from("--at"),
+        OsString::from("1/2"),
+        OsString::from("--json"),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let frame: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(frame["instructions"][0]["node_id"], "code");
+    // ease_out(0.5) is 0.75, and the track runs 0 -> 1.
+    let opacity = frame["instructions"][0]["opacity"].as_f64().unwrap();
+    assert!((opacity - 0.75).abs() < 1e-9, "{opacity}");
+
+    // The half-open interval is enforced: the duration itself is out of range.
+    let out_of_range = cli([
+        OsString::from("motion"),
+        OsString::from("evaluate"),
+        OsString::from("--file"),
+        scene.into_os_string(),
+        OsString::from("--at"),
+        OsString::from("6/1"),
+        OsString::from("--json"),
+    ]);
+    assert_eq!(out_of_range.status.code(), Some(4), "{out_of_range:?}");
+    let error: Value = serde_json::from_slice(&out_of_range.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "MOTION_TIME_OUT_OF_RANGE");
+}
+
+#[test]
+fn motion_from_code_builds_a_highlighted_scene_from_a_sample() {
+    let directory = TestDirectory::new();
+    let source = directory.0.join("sample.rs");
+    fs::write(
+        &source,
+        "// a comment\nfn main() {\n    let total = 41 + 1;\n    println!(\"total\", total);\n}\n",
+    )
+    .unwrap();
+    let scene = directory.0.join("sample.ormotion.json");
+
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("from-code"),
+        OsString::from("--source"),
+        source.clone().into_os_string(),
+        OsString::from("--output"),
+        scene.clone().into_os_string(),
+        OsString::from("--title"),
+        OsString::from("main.rs"),
+        OsString::from("--json"),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(summary["language"], "rust");
+    assert_eq!(summary["validation_ok"], true);
+    // Background, title and five source lines.
+    assert_eq!(summary["node_count"], 7);
+
+    // The scene it wrote validates through the ordinary validator, and it is the same
+    // file a hand-authored scene would be.
+    let validated = cli([
+        OsString::from("motion"),
+        OsString::from("validate"),
+        OsString::from("--file"),
+        scene.clone().into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert!(validated.status.success(), "{validated:?}");
+    let validation: Value = serde_json::from_slice(&validated.stdout).unwrap();
+    assert_eq!(validation["ok"], true);
+
+    // The highlighted line carries spans in the theme's colours.
+    let written: Value = serde_json::from_slice(&fs::read(&scene).unwrap()).unwrap();
+    let nodes = written["nodes"].as_array().unwrap();
+    let line = nodes
+        .iter()
+        .find(|node| node["text"] == "    let total = 41 + 1;")
+        .expect("the sample's line is in the scene");
+    let spans = line["spans"].as_array().unwrap();
+    assert!(!spans.is_empty());
+    let text = line["text"].as_str().unwrap();
+    for span in spans {
+        let start = span["start"].as_u64().unwrap() as usize;
+        let end = span["end"].as_u64().unwrap() as usize;
+        assert!(start < end && end <= text.len());
+        assert!(text.is_char_boundary(start) && text.is_char_boundary(end));
+    }
+}
+
+#[test]
+fn motion_from_code_refuses_a_sample_larger_than_it_draws() {
+    let directory = TestDirectory::new();
+    let source = directory.0.join("huge.rs");
+    fs::write(&source, "let x = 1;\n".repeat(500)).unwrap();
+    let output = cli([
+        OsString::from("motion"),
+        OsString::from("from-code"),
+        OsString::from("--source"),
+        source.into_os_string(),
+        OsString::from("--output"),
+        directory.0.join("huge.ormotion.json").into_os_string(),
+        OsString::from("--json"),
+    ]);
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["code"], "CODE_TOO_MANY_LINES");
+    // Nothing was written: a refusal does not leave a partial scene behind.
+    assert!(!directory.0.join("huge.ormotion.json").exists());
 }
