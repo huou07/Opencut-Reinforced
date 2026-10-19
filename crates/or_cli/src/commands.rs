@@ -107,17 +107,6 @@ impl CliError {
         )
     }
 
-    /// A materialisation that failed at the encoder, with its message.
-    fn motion_materialization(message: String, json: bool) -> Self {
-        Self::new(
-            5,
-            json,
-            "motion_scene",
-            "MOTION_MATERIALIZATION_FAILED",
-            message,
-        )
-    }
-
     /// A frame sequence that could not be produced.
     fn motion_raster_sequence(error: or_render::MotionSequenceError, json: bool) -> Self {
         Self::new(
@@ -678,38 +667,17 @@ fn parse_positive_u32(options: &Options, flag: &str, json: bool) -> Result<Optio
     }
 }
 
-/// Renders a scene: one still frame to a PNG, or the whole sequence to a video.
+/// Renders one still frame of a scene to a PNG.
 ///
-/// The video path is **materialisation through the normal export boundary** — the same
-/// `FfmpegSoftwareExportWriter` the editor exports with, in its Matroska + FFV1 +
-/// PCM S16LE software profile — not a second encoder. The still path is a preview.
+/// The CLI deliberately links no FFmpeg: the release CLI archives ship `or` without
+/// the shared libraries, so a CLI that linked them could not run on a user's machine.
+/// Materialising the whole sequence into a video therefore belongs to the application
+/// layer, which already links the encoder and ships it — `or_render`'s frame sequence
+/// and the export writer are the pieces, and the bridge is where they meet.
 fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> {
-    let options = Options::parse(
-        args,
-        &["--file", "--at", "--output", "--frame-rate"],
-        &[],
-        json,
-    )?;
+    let options = Options::parse(args, &["--file", "--at", "--output"], &[], json)?;
     let scene = read_motion_scene(&options, json)?;
     let output = required_path(&options, "--output", json)?;
-    let video = output
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("mkv"));
-    if video {
-        return render_motion_video(&options, &scene, &output, json);
-    }
-    if !output
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
-    {
-        return Err(CliError::usage(
-            json,
-            "--output must be a .png still or an .mkv video",
-        ));
-    }
-
     let at = required_name(&options, "--at", json)?;
     let time = parse_cli_rational(&at, "--at", json)?;
     let frame = or_motion::evaluate_scene(&scene, time)
@@ -718,9 +686,8 @@ fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> 
         .map_err(|error| CliError::motion_raster(error, json))?;
     let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
         .map_err(|error| CliError::motion_raster(error, json))?;
-    std::fs::write(&output, &png).map_err(|error| {
-        CliError::usage(json, format!("the frame could not be written: {error}"))
-    })?;
+    std::fs::write(&output, &png)
+        .map_err(|error| CliError::usage(json, format!("the frame could not be written: {error}")))?;
     if json {
         return Ok(json_string(serde_json::json!({
             "scene_id": scene.scene_id,
@@ -742,98 +709,6 @@ fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> 
         scene.name,
         time.numerator(),
         time.denominator()
-    ))
-}
-
-/// Materialises the whole scene into a video file through the export boundary.
-fn render_motion_video(
-    options: &Options,
-    scene: &or_motion::MotionScene,
-    output: &std::path::Path,
-    json: bool,
-) -> Result<String, CliError> {
-    let (frame_rate_numerator, frame_rate_denominator) = match options.value("--frame-rate") {
-        Some(value) => {
-            let text = value.to_string_lossy();
-            let (numerator, denominator) = text
-                .split_once('/')
-                .ok_or_else(|| CliError::usage(json, "--frame-rate must be NUM/DEN"))?;
-            let numerator = numerator
-                .parse::<u32>()
-                .ok()
-                .filter(|value| *value > 0)
-                .ok_or_else(|| CliError::usage(json, "--frame-rate numerator must be positive"))?;
-            let denominator = denominator
-                .parse::<u32>()
-                .ok()
-                .filter(|value| *value > 0)
-                .ok_or_else(|| {
-                    CliError::usage(json, "--frame-rate denominator must be positive")
-                })?;
-            (numerator, denominator)
-        }
-        None => (30, 1),
-    };
-
-    let mut writer = or_media::FfmpegSoftwareExportWriter::create(
-        output,
-        scene.canvas.width,
-        scene.canvas.height,
-        frame_rate_numerator,
-        frame_rate_denominator,
-    )
-    .map_err(|error| CliError::motion_materialization(error.to_string(), json))?;
-
-    // The writer's error is carried out of the visitor, because the visitor's own
-    // error type is the render crate's: the encode failure is the interesting one.
-    let mut encode_error: Option<String> = None;
-    let frames = or_render::for_each_motion_frame(
-        scene,
-        frame_rate_numerator,
-        frame_rate_denominator,
-        |index, canvas| {
-            writer
-                .write_video_frame(canvas.pixels(), canvas.width(), canvas.height(), index)
-                .map_err(|error| {
-                    encode_error = Some(error.to_string());
-                    or_render::MotionRasterError::InvalidCanvas
-                })
-        },
-    )
-    .map_err(|error| match encode_error {
-        Some(message) => CliError::motion_materialization(message, json),
-        None => CliError::motion_raster_sequence(error, json),
-    })?;
-
-    writer
-        .finish()
-        .map_err(|error| CliError::motion_materialization(error.to_string(), json))?;
-    let bytes = std::fs::metadata(output)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
-    if json {
-        return Ok(json_string(serde_json::json!({
-            "scene_id": scene.scene_id,
-            "kind": "video",
-            "output": output.display().to_string(),
-            "width": scene.canvas.width,
-            "height": scene.canvas.height,
-            "frame_rate": {"numerator": frame_rate_numerator, "denominator": frame_rate_denominator},
-            "frames": frames,
-            "bytes_written": bytes,
-            "profile": "matroska_ffv1_pcm_s16le",
-        })));
-    }
-    Ok(format!(
-        "Wrote {} ({}x{}, {} frames at {}/{}, {} bytes) for {}",
-        output.display(),
-        scene.canvas.width,
-        scene.canvas.height,
-        frames,
-        frame_rate_numerator,
-        frame_rate_denominator,
-        bytes,
-        scene.name
     ))
 }
 

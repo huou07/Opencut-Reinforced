@@ -1823,7 +1823,6 @@ version = "0.1.0"
 dependencies = [
  "or_core",
  "or_ipc",
- "or_media",
  "or_motion",
  "or_render",
  "serde_json",

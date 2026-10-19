@@ -427,7 +427,7 @@ packaged_run_journey() {
   local installed="$install_root/opt/opencut-reinforced" required
   for required in "$installed/or_app" "$installed/ffmpeg" "$installed/ffprobe" \
                   "$installed/lib/libavutil.so.60" \
-                  "$install_root/usr/share/applications/io.github.huu07.or_app.desktop"; do
+                  "$install_root/usr/share/applications/io.github.huou07.or_app.desktop"; do
     if [[ ! -e "$required" ]]; then
       echo "the extracted package is missing $required"; exit 1
     fi

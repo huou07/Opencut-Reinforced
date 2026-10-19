@@ -875,23 +875,30 @@ class each claim actually has:
     cache — the rich-text path had to pass each glyph's own colour rather than the
     layer's. Layout, shaping and placement are unchanged, so this is the same text
     engine with more than one colour, not a second one.
-  - **Materialisation to video (2026-10-20).** A scene now becomes a real video file
-    through the **normal export boundary**: `or motion render --file PATH --output
-    PATH.mkv [--frame-rate NUM/DEN]` drives the same `FfmpegSoftwareExportWriter` the
-    editor exports with, in its mandated Matroska + FFV1 + PCM S16LE software profile —
-    not a second encoder. `or_render::for_each_motion_frame` produces the frames in
-    order over the half-open `[0, duration)`, at exact rational times computed from the
-    index rather than by accumulating a floating-point step, with a hard bound of
-    200,000 frames that is checked **before** any frame is produced. The sequence hands
-    each frame to a visitor rather than collecting them, so a long scene does not have
-    to fit in memory.
-  - **Video evidence.** Materialising a scene built from `count_words.rs` at 640x360,
-    10 fps produced exactly **84 frames for an 8.4 s scene** — the frame count rule
-    holds to the frame — and `ffprobe` reads the result as `matroska`, video `ffv1,
-    bgra, 640x360, 10 fps`, duration 2.00 s for the two-second variant. Decoding frame
-    0 back to raw pixels shows **every** theme colour present (keyword 126, string 95,
-    comment 78, number 3, function 152, foreground 433, background 217173), so the
-    highlighting survives the encode rather than only existing before it.
+  - **Materialisation: the frame sequence and the encoder both exist, but no client
+    wires them together yet (corrected 2026-10-20).** `or_render::for_each_motion_frame`
+    produces the frames in order over the half-open `[0, duration)`, at exact rational
+    times computed from the index rather than by accumulating a floating-point step,
+    with a hard bound of 200,000 frames checked **before** any frame is produced; it
+    hands each frame to a visitor rather than collecting them, so a long scene does not
+    have to fit in memory. `FfmpegSoftwareExportWriter` — the editor's own export
+    writer, Matroska + FFV1 + PCM S16LE — encodes them. What is missing is the client:
+    the first version drove both from `or_cli`, which was **wrong and is reverted**.
+    The CLI deliberately links no FFmpeg because the release CLI archives ship `or`
+    without the shared libraries, so a CLI that linked them could not run on a user's
+    machine; the hosted macOS and Windows jobs found it immediately, failing to build
+    `or_cli` before the FFmpeg prefix was on `PKG_CONFIG_PATH`. Materialisation belongs
+    in the application layer, which already links and ships the encoder, and the bridge
+    function that joins the two is the next step.
+  - **Video evidence, taken before the CLI path was reverted.** Materialising a scene
+    built from `count_words.rs` at 640x360, 10 fps produced exactly **84 frames for an
+    8.4 s scene** — the frame count rule holds to the frame — and `ffprobe` read the
+    result as `matroska`, video `ffv1, bgra, 640x360, 10 fps`. Decoding frame 0 back to
+    raw pixels showed **every** theme colour present (keyword 126, string 95, comment
+    78, number 3, function 152, foreground 433, background 217173), so the highlighting
+    survives the encode rather than only existing before it. The measurements stand;
+    the command that produced them does not, and the capability is `UNVERIFIED` end to
+    end until the bridge client exists.
   - **One property worth knowing about the artifact:** the export profile always
     carries a PCM S16LE audio stream, and a motion scene has no audio, so a
     materialised scene has a **silent audio track** of zero duration. That is the
@@ -899,10 +906,10 @@ class each claim actually has:
     on an ordinary timeline like any other media.
   - **Measured, and slow (2026-10-20).** 252 frames at 640x360 took **20.1 s** in a
     debug build — about 12.5 frames per second, or 80 ms per frame including the FFV1
-    encode — for a 9.2 MB file. That is a debug-build number on this host and no
-    release claim follows from it; the budget has rows for rasterisation and for the
-    export path separately, and a materialisation-throughput row is **owed** (settle
-    with `time or motion render --file <scene> --output /tmp/x.mkv --frame-rate 30/1`).
+    encode — for a 9.2 MB file, measured through the reverted CLI path. That is a
+    debug-build number on this host and no release claim follows from it; the budget has
+    rows for rasterisation and for the export path separately, and a
+    materialisation-throughput row is **owed** once a client exists again.
   - **Not done, and this is still most of the phase:** there is no preview inside the
     editor, no template library, and no GUI surface that materialises a scene or
     registers the result through the media commands — the CLI is the only path. Only

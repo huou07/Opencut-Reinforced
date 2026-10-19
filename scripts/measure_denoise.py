@@ -83,9 +83,18 @@ def run(command: list[str], label: str, env: dict[str, str] | None = None) -> st
 
 
 def filter_listing(ffmpeg: Path) -> str:
-    """`-filters` prints to stdout; the measurements print to stderr."""
+    """`-filters` prints to stdout; the measurements print to stderr.
+
+    Every helper invocation in this script passes `helper_environment`, including this
+    one: the hosted Linux job found the omission twice, first in the fixture generator
+    and then here, because the local host resolves the helper's libraries from its own
+    prefix and never notices.
+    """
     done = subprocess.run(
-        [str(ffmpeg), "-hide_banner", "-filters"], capture_output=True, text=True
+        [str(ffmpeg), "-hide_banner", "-filters"],
+        capture_output=True,
+        text=True,
+        env=helper_environment(ffmpeg),
     )
     if done.returncode != 0:
         raise SystemExit(f"filter discovery failed:\n{done.stderr[-800:]}")
