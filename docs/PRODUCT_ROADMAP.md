@@ -575,7 +575,21 @@ class each claim actually has:
     by construction: nothing can set a rate other than the identity, and the pinned
     `a_media_clip_cannot_yet_play_at_a_different_rate` still describes the product
     truthfully even though the model can now express one.
-  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
+  - **The rate command and the schema bump are written and stashed, not landed
+    (2026-10-19).** `timeline.clip.rate` (source span fixed, timeline duration follows
+    from the rate, `ProjectChange::TimelineClipRateChanged` distinct from a trim, catalog
+    entry and both frozen catalog expectations updated) and the schema-8 envelope, dispatch
+    arm and error variant were implemented and the workspace built clean. They are **not
+    committed**: the codec tests mix inputs from a version-7 literal with inputs the
+    encoder now writes as version 8, so several `InvalidV7Data`/`InvalidV8Data`
+    expectations need a deliberate pass rather than line edits, and three attempts at
+    line-level repair did not converge. Per this repository's own rule, the work is
+    preserved in `git stash` ("phase1.5 rate command + schema v8 (WIP; codec test
+    expectations need a careful pass)") and the tree is left green at `a43535f` rather
+    than half-broken. The next attempt should classify each codec assertion by which
+    document it decodes -- a version-7 literal keeps the version-7 error, anything the
+    encoder produced takes the version-8 one -- before changing any of them.
+  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
     `ClipContent::Media` (18 construction and match sites across five files), with
     validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
     files migrate by opening, a schema bump to 8 with the migration test, the preview
