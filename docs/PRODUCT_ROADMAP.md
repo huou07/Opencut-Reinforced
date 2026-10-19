@@ -779,6 +779,29 @@ class each claim actually has:
   and the track header gained the move control — but that is a hypothesis to test at
   that line, not a conclusion. `release-gate` cannot pass while a required job fails, so
   nothing is `ACCEPTED` and no claim record exists for any of this session's work.
+- **Phase 5, run 39182287655 (`7bed750`) final state, and the Android overflow's
+  status (2026-10-20).** `Rust checks`, `Flutter static and widget checks`, `Granted
+  descriptor capability boundary` and `Linux native build` are green; `Android APK
+  build` failed; macOS and Windows were cancelled by the next push rather than
+  failing, and `release-gate` correctly refused the run. The Android failure is the
+  `saf` case at `android_saf_preview_test.dart:1633`: a **RenderFlex overflow of 6.0
+  px on the bottom**, surfaced by the journey's final `takeException` check, with a
+  guest `MAIN_THREAD_STALL` classified beside it.
+  - **Two hypotheses were tested locally and both are refuted.** The editor with two
+    tracks reports no overflow at **411x914** (the image-default emulator viewport),
+    and the compact journey passes through `scripts/or_ui.py` at both **411x914** and
+    **320x640** — the latter being the viewport `UX_ACCEPTANCE.md` records for the
+    Android SAF acceptance run. So the overflowing surface is one the SAF journey
+    reaches and those journeys do not: the SAF import path, the relink flow, the
+    preview surface with a real clip, or the recovery prompt.
+  - **The next run carries the discriminating check.** The journey installed no error
+    interception, so the framework kept only the summary and the widget's creation
+    location never reached the log — which is why the failure has cost a run to
+    investigate. `62bf691` records the first layout error in full and puts it in the
+    assertion's `reason`, so the next Android failure names the widget, file and line
+    instead of restating six pixels.
+  - Nothing is `ACCEPTED`; no claim record exists for any of this session's work, and
+    the overflow is open rather than fixed.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
