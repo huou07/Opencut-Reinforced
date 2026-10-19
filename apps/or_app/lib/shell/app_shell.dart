@@ -69,6 +69,24 @@ Future<String?> registerAndroidMediaSource(
   }
 }
 
+/// Whether this process can create and remove a file in `directory`.
+///
+/// A cheap probe rather than a permission inspection: the encoder needs to create a
+/// staging directory and move a file, and only an attempt answers that.
+bool _directoryIsWritable(Directory directory) {
+  try {
+    if (!directory.existsSync()) return false;
+    final probe = File(
+      '${directory.path}/.or-write-probe-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    probe.createSync(exclusive: true);
+    probe.deleteSync();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -554,12 +572,20 @@ class _AppShellState extends State<AppShell> {
   /// beside the project would invite a client to treat it as part of the document.
   Future<void> _openMotionMaterialize() async {
     if (_activeSession == null) return;
-    String destination;
+    // The default must be somewhere this process can actually write. The encoder
+    // stages a private sibling beside the destination and moves it into place, so an
+    // unwritable parent fails late and confusingly -- the hosted harness saw
+    // "MOTION_ENCODER_UNAVAILABLE: could not create export staging directory:
+    // Permission denied" because the documents directory it reported was not writable
+    // by the app's user. A probe here keeps the default honest and the field editable.
+    String destination = '${Directory.systemTemp.path}/illustration.mkv';
     try {
       final directory = await getApplicationDocumentsDirectory();
-      destination = '${directory.path}/illustration.mkv';
+      if (_directoryIsWritable(directory)) {
+        destination = '${directory.path}/illustration.mkv';
+      }
     } catch (_) {
-      destination = '${Directory.systemTemp.path}/illustration.mkv';
+      // The system temporary directory is the default already.
     }
     if (!mounted) return;
     await showMotionMaterializeDialog(

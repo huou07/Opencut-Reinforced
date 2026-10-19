@@ -82,8 +82,8 @@
       }
     },
     {
-      "op": "wait",
-      "text": "Choose a code file to illustrate.",
+      "op": "wait_label",
+      "label_regex": "Choose a code file to illustrate",
       "budget_ms": 10000
     },
     {
@@ -91,25 +91,14 @@
       "selector": {
         "key": "motion-materialize-source"
       },
-      "value": "$OR_UI_ROOT/does-not-exist.rs"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "motion-materialize-render"
-      }
-    },
-    {
-      "op": "wait",
-      "text": "MOTION_SOURCE_UNREADABLE",
-      "budget_ms": 20000
+      "value": "$OR_UI_ROOT/scripts/ui_scenarios/illustration-source.rs"
     },
     {
       "op": "enter_text",
       "selector": {
-        "key": "motion-materialize-source"
+        "key": "motion-materialize-destination"
       },
-      "value": "$OR_UI_ROOT/scripts/ui_scenarios/illustration-source.rs"
+      "value": "$OR_UI_ROOT/apps/or_app/build/illustration-journey.mkv"
     },
     {
       "op": "enter_text",
@@ -139,9 +128,31 @@
       }
     },
     {
-      "op": "wait",
-      "text": "Wrote",
+      "op": "tree",
+      "name": "render-attempt"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Wrote .* frames",
       "budget_ms": 60000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-materialize-source"
+      },
+      "value": "$OR_UI_ROOT/does-not-exist.rs"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-materialize-render"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "MOTION_SOURCE_UNREADABLE",
+      "budget_ms": 20000
     },
     {
       "op": "shot",
