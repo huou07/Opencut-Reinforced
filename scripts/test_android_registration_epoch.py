@@ -121,6 +121,13 @@ def main() -> int:
         "for (source in opened)" in preview,
         "a failed preview no longer rolls back the sources it opened",
     )
+    # And it must also release the set an earlier successful request registered: a revoked
+    # grant has to leave no readable duplicate, which the descriptor-count assertion at
+    # android_saf_preview_test.dart:868 requires.
+    require(
+        "clearPreviewSources()\n                for (source in opened)" in preview,
+        "a failed preview no longer releases the earlier preview set as well as its own opens",
+    )
     require(
         "clearNativeSources()" not in preview,
         "the preview path clears every source, which drops import descriptors again",

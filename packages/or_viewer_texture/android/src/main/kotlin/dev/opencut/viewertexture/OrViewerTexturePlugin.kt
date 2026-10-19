@@ -357,9 +357,13 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 checkCurrent()
                 true
             } catch (error: Exception) {
-                // Undo this attempt and only this attempt: the sources it opened are gone,
-                // the previous preview set is already cleared, and anything an import holds
-                // is untouched.
+                // A failed preview releases everything the *preview* owns, and nothing an
+                // import owns: the set registered by an earlier successful request (a
+                // revoked grant must not leave a duplicate readable) plus whatever this
+                // attempt opened before it failed. Either half alone is wrong -- keeping
+                // the earlier set leaves a descriptor after a revocation, and clearing
+                // only this attempt's opens leaves one after a partial open.
+                clearPreviewSources()
                 for (source in opened) {
                     if (nativeLoaded) nativeUnregisterMediaFd(source)
                 }
