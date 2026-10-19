@@ -1802,8 +1802,10 @@ dependencies = [
  "or_core",
  "or_ipc",
  "or_media",
+ "or_motion",
  "or_render",
  "or_runtime",
+ "serde_json",
  "sha2",
  "uuid",
 ]

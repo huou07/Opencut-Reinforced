@@ -96,10 +96,15 @@ Motion materialisation is measured but **not yet a budget row**: 252 frames at 6
 took 20.1 s in a debug build on this host — about 12.5 frames per second, or 80 ms per
 frame including the FFV1 encode — for a 9.2 MB file (2026-10-20), measured through a CLI
 path that has since been reverted because the CLI must not link FFmpeg. No release
-claim follows from a debug number, and the row is owed once the application-layer client
-exists: it will be measured by the materialisation command that replaces the reverted
-one, at a named frame rate and canvas. The rasterisation row below covers the CPU half
-of that cost separately.
+claim follows from a debug number. The row is now closed through the application-layer
+client (`or_app_bridge::api::motion::materialize_motion_scene`), measured in a **release**
+build on this host: **88 frames at 640x360, 10 fps, in 1.226 s — 71.8 frames per second**,
+producing 2,576,823 bytes (2.6 MB) from a scene built from 25 lines of Rust source. The
+same workload measured ~12.5 frames per second through the reverted debug CLI path, so
+the two numbers are consistent and the debug figure should not be quoted as a product
+number. This is a local developer measurement of a single machine; it is not a hosted
+result and it does not establish performance on other hardware. The rasterisation row
+below covers the CPU half of the cost separately.
 
 Motion rasterisation has a budget row: `motion-rasterize-frame` evaluates and
 rasterises a forty-node 1920x1080 MotionScene frame and encodes it as a PNG — p50

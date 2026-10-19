@@ -1000,6 +1000,21 @@ class each claim actually has:
     cache — the rich-text path had to pass each glyph's own colour rather than the
     layer's. Layout, shaping and placement are unchanged, so this is the same text
     engine with more than one colour, not a second one.
+  - **Materialisation now has a client in the application layer (2026-10-19).**
+    `or_app_bridge::api::motion::materialize_motion_scene(scene_path, output_path,
+    frame_rate, width, height)` reads a scene, parses and validates it, and streams
+    `or_render::for_each_motion_frame` straight into `or_media`'s software export writer
+    (Matroska, FFV1, PCM S16LE) — the editor's own encoder, not a second path. The
+    frame count comes from the scene's duration and the requested rate, never from the
+    caller; a zero rate, an unreadable or invalid scene, an empty sequence and a
+    sequence beyond 200,000 frames are refused before a frame is encoded; and an encoder
+    failure is reported as `MOTION_ENCODER_FAILED` rather than disguised as a canvas
+    problem. The CLI still renders a still frame only, because it must not link FFmpeg.
+    Measured in release through this client: **88 frames at 640x360 and 10 fps in
+    1.226 s (71.8 fps)**, 2.6 MB — the row `docs/QUALITY.md` owed is closed with it.
+    What is still missing: **no GUI surface calls it**, and it is not yet verified by a
+    hosted run, so the capability remains `IMPLEMENTED` with local evidence rather than
+    `ACCEPTED`.
   - **Materialisation: the frame sequence and the encoder both exist, but no client
     wires them together yet (corrected 2026-10-20).** `or_render::for_each_motion_frame`
     produces the frames in order over the half-open `[0, duration)`, at exact rational

@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/motion.dart';
 import 'api/project.dart';
 
 import 'dart:async';
@@ -200,6 +201,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaCleanupResultView dco_decode_media_cleanup_result_view(dynamic raw);
+
+  @protected
+  MotionMaterializationView dco_decode_motion_materialization_view(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -618,6 +622,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaCleanupResultView sse_decode_media_cleanup_result_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionMaterializationView sse_decode_motion_materialization_view(
     SseDeserializer deserializer,
   );
 
@@ -1128,6 +1137,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_media_cleanup_result_view(
     MediaCleanupResultView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_materialization_view(
+    MotionMaterializationView self,
     SseSerializer serializer,
   );
 

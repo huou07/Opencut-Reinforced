@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/motion.dart';
 import 'api/project.dart';
 
 import 'dart:async';
@@ -68,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1451024354;
+  int get rustContentHash => -1839153755;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -661,6 +662,15 @@ abstract class RustLibApi extends BaseApi {
 
   Future<RecoveryInspectionView> crateApiProjectInspectRecovery({
     required String path,
+  });
+
+  Future<MotionMaterializationView> crateApiMotionMaterializeMotionScene({
+    required String scenePath,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
   });
 
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path});
@@ -4575,6 +4585,63 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "inspect_recovery", argNames: ["path"]);
 
   @override
+  Future<MotionMaterializationView> crateApiMotionMaterializeMotionScene({
+    required String scenePath,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(scenePath, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 79,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionMaterializeMotionSceneConstMeta,
+        argValues: [
+          scenePath,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionMaterializeMotionSceneConstMeta =>
+      const TaskConstMeta(
+        debugName: "materialize_motion_scene",
+        argNames: [
+          "scenePath",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+        ],
+      );
+
+  @override
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path}) {
     return handler.executeNormal(
       NormalTask(
@@ -4584,7 +4651,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -4988,6 +5055,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       noiseFloorDb: dco_decode_i_32(arr[4]),
       reductionDb: dco_decode_u_32(arr[5]),
       bytesWritten: dco_decode_u_64(arr[6]),
+    );
+  }
+
+  @protected
+  MotionMaterializationView dco_decode_motion_materialization_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    return MotionMaterializationView(
+      succeeded: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      outputPath: dco_decode_String(arr[3]),
+      sceneId: dco_decode_String(arr[4]),
+      sceneName: dco_decode_String(arr[5]),
+      width: dco_decode_u_32(arr[6]),
+      height: dco_decode_u_32(arr[7]),
+      frameRateNumerator: dco_decode_u_32(arr[8]),
+      frameRateDenominator: dco_decode_u_32(arr[9]),
+      frameCount: dco_decode_u_64(arr[10]),
+      durationNumerator: dco_decode_i_64(arr[11]),
+      durationDenominator: dco_decode_i_64(arr[12]),
+      bytesWritten: dco_decode_u_64(arr[13]),
     );
   }
 
@@ -6199,6 +6292,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       destination: var_destination,
       noiseFloorDb: var_noiseFloorDb,
       reductionDb: var_reductionDb,
+      bytesWritten: var_bytesWritten,
+    );
+  }
+
+  @protected
+  MotionMaterializationView sse_decode_motion_materialization_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_succeeded = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_outputPath = sse_decode_String(deserializer);
+    var var_sceneId = sse_decode_String(deserializer);
+    var var_sceneName = sse_decode_String(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_frameRateNumerator = sse_decode_u_32(deserializer);
+    var var_frameRateDenominator = sse_decode_u_32(deserializer);
+    var var_frameCount = sse_decode_u_64(deserializer);
+    var var_durationNumerator = sse_decode_i_64(deserializer);
+    var var_durationDenominator = sse_decode_i_64(deserializer);
+    var var_bytesWritten = sse_decode_u_64(deserializer);
+    return MotionMaterializationView(
+      succeeded: var_succeeded,
+      code: var_code,
+      message: var_message,
+      outputPath: var_outputPath,
+      sceneId: var_sceneId,
+      sceneName: var_sceneName,
+      width: var_width,
+      height: var_height,
+      frameRateNumerator: var_frameRateNumerator,
+      frameRateDenominator: var_frameRateDenominator,
+      frameCount: var_frameCount,
+      durationNumerator: var_durationNumerator,
+      durationDenominator: var_durationDenominator,
       bytesWritten: var_bytesWritten,
     );
   }
@@ -7636,6 +7766,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.destination, serializer);
     sse_encode_i_32(self.noiseFloorDb, serializer);
     sse_encode_u_32(self.reductionDb, serializer);
+    sse_encode_u_64(self.bytesWritten, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_materialization_view(
+    MotionMaterializationView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.succeeded, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.outputPath, serializer);
+    sse_encode_String(self.sceneId, serializer);
+    sse_encode_String(self.sceneName, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_u_32(self.frameRateNumerator, serializer);
+    sse_encode_u_32(self.frameRateDenominator, serializer);
+    sse_encode_u_64(self.frameCount, serializer);
+    sse_encode_i_64(self.durationNumerator, serializer);
+    sse_encode_i_64(self.durationDenominator, serializer);
     sse_encode_u_64(self.bytesWritten, serializer);
   }
 

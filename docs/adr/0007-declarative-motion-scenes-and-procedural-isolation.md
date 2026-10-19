@@ -101,7 +101,10 @@ type information. Only Rust is tokenised; anything else is plain text.
 **Materialisation, 2026-10-20.** A scene materialises through the *normal* export
 boundary, and that boundary lives in the application layer rather than the CLI: the CLI
 links no FFmpeg, because the release CLI archives ship `or` without the shared
-libraries. The pieces are `or_render::for_each_motion_frame` produces the frames over the half-open
+libraries. The client is `or_app_bridge::api::motion::materialize_motion_scene`, which
+the desktop and compact shells can call through the bridge; it takes the canvas size and
+frame rate explicitly, derives the frame count from the scene's duration, and refuses an
+invalid or unbounded request before encoding. The pieces are `or_render::for_each_motion_frame` produces the frames over the half-open
 `[0, duration)` at exact rational times derived from the frame index — not by
 accumulating a floating-point step — and the existing
 `FfmpegSoftwareExportWriter` encodes them in the mandated Matroska + FFV1 + PCM S16LE
