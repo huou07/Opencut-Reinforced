@@ -3608,13 +3608,17 @@ class _TimelineToolbar extends StatelessWidget {
                 key: const ValueKey('timeline-import-captions'),
                 onPressed: busy ? null : onImportCaptions,
                 icon: const Icon(Icons.file_open_outlined, size: 16),
-                label: Text(roomForFullLabels ? 'Import Captions' : 'Import'),
+                label: Text(
+                  roomForFullLabels ? 'Import Captions' : 'Import SRT',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-export-captions'),
                 onPressed: busy ? null : onExportCaptions,
                 icon: const Icon(Icons.file_download_outlined, size: 16),
-                label: Text(roomForFullLabels ? 'Export Captions' : 'Export'),
+                label: Text(
+                  roomForFullLabels ? 'Export Captions' : 'Export SRT',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-title'),

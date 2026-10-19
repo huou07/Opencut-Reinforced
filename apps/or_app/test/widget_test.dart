@@ -1892,7 +1892,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: toolbar, matching: find.text('Export')),
+        find.descendant(of: toolbar, matching: find.text('Export SRT')),
         findsOneWidget,
       );
       expect(
