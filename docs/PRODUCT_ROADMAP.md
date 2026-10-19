@@ -959,6 +959,31 @@ class each claim actually has:
   - **Still open in this gap:** only Rust and Python are tokenised; JavaScript and
     everything else are plain text, and there is still one bundled font with no
     monospace face.
+- **Android SAF import: the root cause is found and fixed, and it was a guard scoped to
+  the wrong state (2026-10-19).** The plugin invalidated in-flight work with **one** epoch
+  counter shared by three unrelated kinds of work: preview presentation, media-source
+  registration, and clearing the registry. Every request incremented it and every in-flight
+  request aborted when it changed, so **any newer request of any kind cancelled any other
+  one**. Importing several files while the preview pipeline refreshed the clips just
+  imported therefore cancelled the next file's registration, and the shell skipped that
+  file: the journey selected three documents and imported two, then one of two folder
+  children. The earlier client-side retry reduced the race but could not remove it, which
+  is why the defect moved to the second import stage instead of disappearing.
+  - **The fix scopes each guard to the state it protects.** `previewEpoch` is bumped by a
+    preview request and by a clear; `registrationEpoch` is bumped by a registration, a
+    clear and teardown. A registration is still cancelled by exactly what genuinely
+    invalidates it — a clear (which removes every source) or teardown — and a preview is
+    still cancelled by a newer preview and by the resource generation check. This is a
+    *more precise* boundary, not a weaker one: nothing that should abort now survives.
+  - **The guard is hermetic, because the behaviour is not.** `scripts/test_android_registration_epoch.py`
+    reads the plugin source and fails if the two counters are merged, if the registration
+    path consults the preview counter, if the preview path consults the registration
+    counter, or if a clear or teardown stops invalidating both. It runs in
+    `scripts/check-repo.sh`, so the source gate and every hosted job check it. The client
+    retry stays as defence for a genuine clear-during-import race.
+  - **Verification status:** the local ladder is green and the guard passes; the real
+    behaviour can only be exercised on a device or emulator, so the hosted Android job for
+    this commit is the deciding evidence and is not yet in.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

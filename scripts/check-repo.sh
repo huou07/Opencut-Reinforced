@@ -213,6 +213,13 @@ if ! python3 scripts/test_android_emulator_start.py; then
   fail "the Android emulator start checks failed"
 fi
 
+# The Android plugin's epoch counters must stay scoped to the state each guards: a
+# preview request cancelling an in-flight source registration dropped selected files from
+# an import, which no local test can exercise without a device.
+if ! python3 scripts/test_android_registration_epoch.py; then
+  fail "the Android registration epoch checks failed"
+fi
+
 # The shared native UI lock is per UID and outside any one project, so a sibling
 # build can hold it; a lane that then died with a bare errno cost an afternoon.
 # These checks pin the exclusion, release and named-refusal behaviour hermetically.
