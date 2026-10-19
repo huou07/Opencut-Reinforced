@@ -306,6 +306,11 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             ?: return result.error("MEDIA_SOURCE_UNAVAILABLE", "Android media access is unavailable.", null)
         val epoch = previewEpoch.incrementAndGet()
         submit(result) {
+            // What this attempt opens. A failure must undo exactly this list: the earlier
+            // version cleared "the preview sources", which either removed descriptors an
+            // import still needed or, once that was corrected, left this attempt's own
+            // partial open registered and the descriptor count non-zero.
+            val opened = mutableListOf<String>()
             fun checkCurrent() {
                 if (!nativeLoaded) throw MediaFailure("MEDIA_SOURCE_UNAVAILABLE", "Android native media access is unavailable.")
                 if (!attached.get() || previewEpoch.get() != epoch ||
@@ -341,6 +346,7 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                                 throw MediaFailure("MEDIA_SOURCE_REGISTRATION_FAILED", "Android media registration failed. Select the source again and retry preview.")
                             }
                             registrationCount++
+                            opened.add(source)
                         }
                         checkCurrent()
                     }
@@ -351,7 +357,12 @@ class OrViewerTexturePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 checkCurrent()
                 true
             } catch (error: Exception) {
-                clearPreviewSources()
+                // Undo this attempt and only this attempt: the sources it opened are gone,
+                // the previous preview set is already cleared, and anything an import holds
+                // is untouched.
+                for (source in opened) {
+                    if (nativeLoaded) nativeUnregisterMediaFd(source)
+                }
                 when (error) {
                     is MediaFailure -> throw error
                     is SecurityException -> throw MediaFailure("MEDIA_PERMISSION_REQUIRED", "Access to an Android media source is unavailable. Select it again and retry preview.")

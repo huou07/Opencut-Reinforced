@@ -105,6 +105,22 @@ def main() -> int:
         "clearPreviewSources()" in preview,
         "the preview path no longer clears only its own sources",
     )
+    # A failed preview must roll back exactly what that attempt opened: clearing "the
+    # preview sources" either removed an import's descriptors or left the attempt's own
+    # partial open registered, and the second of those failed the descriptor-count
+    # assertion with Expected 0 / Actual 1.
+    require(
+        "val opened = mutableListOf<String>()" in preview,
+        "the preview attempt no longer records what it opened, so it cannot roll back precisely",
+    )
+    require(
+        "opened.add(source)" in preview,
+        "the preview attempt does not record each successful open",
+    )
+    require(
+        "for (source in opened)" in preview,
+        "a failed preview no longer rolls back the sources it opened",
+    )
     require(
         "clearNativeSources()" not in preview,
         "the preview path clears every source, which drops import descriptors again",
