@@ -839,6 +839,25 @@ class each claim actually has:
     no client. Publication is owner-gated and a green pull-request run does not
     authorise it — the Developer Preview's release precondition remains a successful
     **push** run on `main`, which needs a merge the owner owns.
+- **Second fully green hosted run — 39195477799 at `fac4513`, and Phase 3 gains a
+  surface (2026-10-19).** All seven required jobs and `release-gate` passed again, this
+  time covering the materialisation client: the refusal paths run in the hosted Rust
+  job, and `2026-10-19-D-motion-materialisation.json` binds that revision to the run.
+  The record states plainly what the run does **not** cover — the encoding itself, whose
+  tests are `#[ignore]`d because the hosted Rust job builds no codec-enabled FFmpeg, and
+  which passes locally with the lane's helper as developer evidence.
+  - **Code-to-illustration video now has a user-visible surface** (`707a63a`): a command
+    palette action opens a dialog that takes a code file, an output video, a title, a
+    frame rate and a canvas, refuses an empty source or a non-positive number with a
+    reason, and reports the frame count and destination. The work goes through
+    `ProjectGateway.materializeIllustration`, so the surface is guarded by a widget test
+    with no Rust library, and the default destination is the application documents
+    directory rather than the project, because the result is media and not canonical
+    project state.
+  - **What is still open in Phase 3:** the surface has no journey step in
+    `scripts/or_ui.py` yet, no template gallery, and the rasteriser still has one bundled
+    font and Rust-only tokenisation. The surface's own hosted verification is the next
+    run after `707a63a`.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

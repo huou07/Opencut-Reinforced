@@ -1,0 +1,30 @@
+{
+  "requirement": "D-motion-materialisation",
+  "claim": "A code artifact can be materialised into a video file through the application-layer bridge client: the source becomes a declarative MotionScene and streams into the editor's own software export writer. The hosted Rust job at this revision verifies the client builds and that every refusal path returns before a frame is encoded.",
+  "implementation_sha": "fac45137ada53d8e9a1a4f411b3428dbd6ef0560",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39195477799",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "All seven required jobs and the release gate passed. The Rust job ran cargo test --workspace, which includes the bridge's refusal tests for an invalid frame rate, an unreadable source, an invalid scene and an empty sequence; clippy ran with -D warnings over the new module."
+  },
+  "verified_at_utc": "2026-10-19T05:12:00Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "The encoding itself is not verified by this run: the encoder-backed tests are #[ignore]d because the hosted Rust job does not build the codec-enabled FFmpeg profile. They pass locally with the lane's helper, which is developer evidence.",
+    "No GUI surface called the client at this revision; the surface was added in a later commit and needs its own verification.",
+    "The frame count follows the scene's duration and the requested rate; the encoded output was inspected locally (ffprobe reads Matroska/FFV1) and not by this run.",
+    "The throughput figure recorded in docs/QUALITY.md (88 frames at 640x360 and 10 fps in 1.226 s) is a local release-build measurement on one machine."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 3 code-to-illustration"
+}
