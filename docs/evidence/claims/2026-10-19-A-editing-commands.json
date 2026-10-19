@@ -1,0 +1,29 @@
+{
+  "requirement": "A-editing-commands",
+  "claim": "Overwrite insert, ripple trim, slip, roll, slide and track reorder are reachable through the shared command/application path, and the hosted Rust job plus the packaged desktop journeys on Linux, macOS and Windows verify them at this revision.",
+  "implementation_sha": "37352fd81d743c0a5f2b2b97fb72b1582352f87b",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39191339761",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "All seven required jobs and the release gate passed. The Rust job ran cargo test --workspace (or_core, or_cli, or_ipc, or_render, or_motion and the rest) and clippy with -D warnings; the three desktop jobs built a package and ran scripts/run_packaged_desktop_journey.py against the installed payload."
+  },
+  "verified_at_utc": "2026-10-19T03:17:43Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "The hosted jobs verify commands, package builds and the packaged desktop journey; they do not measure interaction latency, which is a local developer measurement recorded in docs/QUALITY.md.",
+    "The packaged desktop journey uses the product's fixture picker, not each platform's native OS picker.",
+    "Keyboard and pointer parity is verified by the Flutter widget suite and the local harness journeys, not by this run."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 1 basic editing"
+}

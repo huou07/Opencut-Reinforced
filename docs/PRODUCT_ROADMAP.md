@@ -802,6 +802,43 @@ class each claim actually has:
     instead of restating six pixels.
   - Nothing is `ACCEPTED`; no claim record exists for any of this session's work, and
     the overflow is open rather than fixed.
+- **FIRST FULLY GREEN HOSTED RUN — run 39191339761 at `37352fd` (2026-10-19).** All
+  seven required jobs passed and `release-gate` passed with them: `Rust checks`,
+  `Flutter static and widget checks`, `Granted descriptor capability boundary`,
+  `Linux native build`, `macOS native build and bridge smoke`, `Windows native build`
+  and `Android APK build`. This is the revision at which the branch stops being
+  developer evidence only.
+  - **Five claim records now bind this revision to that run**, in
+    [docs/evidence/claims/](evidence/claims/README.md):
+    `2026-10-19-A-editing-commands.json` (overwrite, ripple trim, slip/roll/slide,
+    track reorder through the shared command path, verified by the Rust job and the
+    three packaged desktop journeys), `2026-10-19-B-android-multi-source-import.json`
+    (three DocumentsUI documents selected and all three imported, `emulator` class),
+    `2026-10-19-C-audio-cleanup.json` (afftdn and the wav muxer through the packaged
+    helper, with the denoise measurement passing in all three native jobs),
+    `2026-10-19-D-motion-scene.json` (format, validator, evaluator, rasteriser and the
+    `or motion` commands) and `2026-10-19-E-caption-import.json` (caption proposals
+    applied through the revision-checked command path). Each record states what it does
+    not establish; `scripts/check_claims.py` passes on all 19 records.
+  - **How the run was reached is part of the record.** Twelve runs and eleven defects
+    separate the first push from this green run, and every defect was invisible to the
+    local ladder as it stood: `or_ipc`'s stale command catalog, `dart format` never
+    run, a helper invoked without its library path, a fixture built with an input the
+    packaged helper does not have, `or_cli` made to link FFmpeg (which the release CLI
+    archives cannot ship), `-f null` needing a muxer the helper lacks, a WAV the
+    helper could not mux (a product defect: the audio clean-up could not have written
+    its own output), an unformatted widget suite, a 6.0 px `AlertDialog` overflow in
+    the Clip dialog, and an Android import dropped because a stale preview
+    registration invalidated it. The last two were named by instrumentation added
+    after the first blind attempt, which is why they cost one run each instead of five.
+  - **What this run does not establish.** Interaction latency is a local developer
+    measurement, not this run's; the packaged desktop journeys use the product's
+    fixture picker rather than each platform's native OS picker; Android is an API 36
+    x86_64 SwiftShader emulator, not a physical device; Android on-device
+    transcription remains BLOCKED; and materialising a MotionScene to video still has
+    no client. Publication is owner-gated and a green pull-request run does not
+    authorise it — the Developer Preview's release precondition remains a successful
+    **push** run on `main`, which needs a merge the owner owns.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

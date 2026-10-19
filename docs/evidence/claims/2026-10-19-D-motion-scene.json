@@ -1,0 +1,30 @@
+{
+  "requirement": "D-motion-scene",
+  "claim": "A declarative MotionScene is parsed, validated, inspected, evaluated deterministically and rasterised, and `or motion` exposes those operations as semantic commands; the hosted Rust job verifies the format, the evaluator, the rasteriser and the CLI.",
+  "implementation_sha": "37352fd81d743c0a5f2b2b97fb72b1582352f87b",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39191339761",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "android",
+      "release-gate"
+    ],
+    "detail": "The Rust job ran cargo test --workspace, which includes the or_motion format/validator/evaluator tests, the or_render motion rasterisation and frame-sequence tests, and the or_cli motion command tests."
+  },
+  "verified_at_utc": "2026-10-19T03:17:43Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "Materialising a scene into a video file has no client at this revision: the frame sequence and the export writer both exist, but the first version drove them from the CLI, which must not link FFmpeg, so that path was reverted and the bridge client is the next step. The capability is UNVERIFIED end to end.",
+    "There is no in-editor preview of a MotionScene and no scene templates.",
+    "Rasterisation correctness is verified at the pixel-content level; the visual design of a rendered scene is not established.",
+    "The rasteriser draws from the bundled font; code tokenisation is Rust-only and there is no monospace face."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Phase 3 code-to-illustration"
+}
