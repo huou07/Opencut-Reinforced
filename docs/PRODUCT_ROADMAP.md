@@ -858,6 +858,25 @@ class each claim actually has:
     `scripts/or_ui.py` yet, no template gallery, and the rasteriser still has one bundled
     font and Rust-only tokenisation. The surface's own hosted verification is the next
     run after `707a63a`.
+- **The illustration surface gains a harness journey, which is BLOCKED on a host
+  precondition rather than finished (2026-10-19).** `scripts/ui_scenarios/illustration-video.json`
+  drives the running app: create a project, open the command palette, filter it to
+  `Illustration Video`, open the dialog, refuse an empty source, fail a missing source
+  with `MOTION_SOURCE_UNREADABLE`, then materialise a repository fixture at 320x180 and
+  assert the dialog reports the frames it wrote. The runner gained one narrow capability
+  for it: `$OR_UI_ROOT` in an `enter_text` value expands to the workspace root the
+  harness already exports, so a scenario can name a repository file on any host.
+  - **Status: not run to completion.** Steps 0-8 pass on this host — the palette action
+    is reachable and the dialog opens — and the render half is verified by the widget
+    guard with an injected renderer. The journey itself cannot finish here: the bounded
+    Linux preflight requires 6 GiB available and `/tmp` is a 7.7 GB tmpfs with **299 MB
+    free** (97% used, most of it not this session's files), so runs 4 and 5 of this
+    scenario reported `BLOCKED: require 6 GiB available RAM and disk before starting`.
+    That is a host measurement, not a product result, and the journey is `UNVERIFIED`
+    end to end until it completes on a host with room. Two attempts before it failed for
+    scenario reasons worth keeping: `wait` does not take a key selector, and the palette
+    entry sits below the fold in an unfiltered list, so the journey now filters the
+    palette the way a user would.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

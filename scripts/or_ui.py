@@ -166,6 +166,9 @@ def run_linux(payload: dict, report_dir: Path) -> int:
         os.environ,
         OR_UI_SCENARIO_FILE=str(scenario_path),
         OR_UI_ARTIFACT_DIR=str(artifacts),
+        # A scenario that types a file path names it as $OR_UI_ROOT/..., which the
+        # runner expands from this value; the path then holds on every host.
+        GITHUB_WORKSPACE=str(ROOT),
         LIBGL_ALWAYS_SOFTWARE="1",
         GDK_BACKEND="x11",
     )

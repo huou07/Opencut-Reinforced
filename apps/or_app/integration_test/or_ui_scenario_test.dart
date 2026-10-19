@@ -422,7 +422,7 @@ class _Runner {
       case 'enter_text':
         final finder = _requireFinder(step);
         await _scrollIntoView(finder);
-        await tester.enterText(finder, '${step['value'] ?? ''}');
+        await tester.enterText(finder, _expandRoot('${step['value'] ?? ''}'));
         await _settle();
         return;
       case 'key':
@@ -822,6 +822,17 @@ class _Runner {
   }
 
   // -- observation -------------------------------------------------------
+  /// Expands `$OR_UI_ROOT` to the repository root the harness reports.
+  ///
+  /// A scenario that types a file path has to name a file that exists on every host, and
+  /// the harness sets the workspace root in the environment it launches the app with. The
+  /// expansion is deliberately narrow: one token, no shell, no other variable.
+  String _expandRoot(String value) {
+    if (!value.contains(r'$OR_UI_ROOT')) return value;
+    final root = Platform.environment['GITHUB_WORKSPACE'] ?? '';
+    return value.replaceAll(r'$OR_UI_ROOT', root);
+  }
+
   Future<void> _settle() async {
     await tester.pump();
     for (var i = 0; i < 20; i++) {

@@ -540,7 +540,7 @@ class _AppShellState extends State<AppShell> {
         ),
         CommandPaletteAction(label: 'Close Project', onSelected: _closeProject),
         CommandPaletteAction(
-          label: 'Illustration Video…',
+          label: 'Illustration Video',
           onSelected: () => unawaited(_openMotionMaterialize()),
         ),
       ],
