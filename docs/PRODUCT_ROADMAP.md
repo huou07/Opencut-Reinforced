@@ -765,6 +765,20 @@ class each claim actually has:
     while the packaging scripts need the repository root. With those fixed the lane
     reaches `hygiene`, `flutter`, `preflight`, `bench` and `deb` PASS and a real
     `opencut-reinforced-linux-x64-debug.deb`.
+- **Phase 5, run 39182287655 (`7bed750`): the wav muxer fix cleared Linux; Android
+  now fails on a 6 px layout overflow (2026-10-20).** Four of seven jobs are green —
+  `Rust checks`, `Flutter static and widget checks`, `Granted descriptor capability
+  boundary` and, for the first time in five runs, **`Linux native build`**, which
+  completes its packaging, packaged desktop journey and Debian install verification.
+  macOS and Windows were still running when this was recorded. **`Android APK build`
+  failed** in the `saf` case at `apps/or_app/integration_test/android_saf_preview_test.dart:1633`:
+  `Expected: null`, `Actual: FlutterError: <A RenderFlex overflowed by 6.0 pixels on the
+  bottom.>`, with a guest `MAIN_THREAD_STALL` (`Skipped 131 frames`) classified beside
+  it. The likely cause is one of this session's UI additions growing an Android or
+  compact layout — the media actions menu gained a fourth item (`media-clean-audio-*`)
+  and the track header gained the move control — but that is a hypothesis to test at
+  that line, not a conclusion. `release-gate` cannot pass while a required job fails, so
+  nothing is `ACCEPTED` and no claim record exists for any of this session's work.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
