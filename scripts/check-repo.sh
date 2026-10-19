@@ -213,6 +213,13 @@ if ! python3 scripts/test_android_emulator_start.py; then
   fail "the Android emulator start checks failed"
 fi
 
+# A native method is declared in Kotlin, wrapped in C++ and implemented in Rust. It can
+# be declared and never implemented, which crashed the app with UnsatisfiedLinkError the
+# first time a preview source set changed.
+if ! python3 scripts/test_android_jni_bridge.py; then
+  fail "the Android JNI bridge checks failed"
+fi
+
 # The Android plugin's epoch counters must stay scoped to the state each guards: a
 # preview request cancelling an in-flight source registration dropped selected files from
 # an import, which no local test can exercise without a device.

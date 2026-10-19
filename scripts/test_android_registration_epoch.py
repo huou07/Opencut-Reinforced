@@ -86,6 +86,67 @@ def main() -> int:
         "the preview path consults the registration epoch",
     )
 
+    # A preview must not remove the descriptors an import registered. Clearing the whole
+    # registry from the preview path is what made the second of three imports fail with
+    # SOURCE_UNAVAILABLE: the descriptor was gone by the time Rust opened it.
+    require(
+        "importRegisteredSources" in source,
+        "the import-registered source set is gone; a preview clear would drop import descriptors",
+    )
+    require(
+        "private fun clearPreviewSources()" in source,
+        "clearPreviewSources is gone; the preview path has no way to clear only its own sources",
+    )
+    require(
+        "nativeUnregisterMediaFd" in source,
+        "the per-source native removal is gone; only a whole-registry clear remains",
+    )
+    require(
+        "clearPreviewSources()" in preview,
+        "the preview path no longer clears only its own sources",
+    )
+    # A failed preview must roll back exactly what that attempt opened: clearing "the
+    # preview sources" either removed an import's descriptors or left the attempt's own
+    # partial open registered, and the second of those failed the descriptor-count
+    # assertion with Expected 0 / Actual 1.
+    require(
+        "val opened = mutableListOf<String>()" in preview,
+        "the preview attempt no longer records what it opened, so it cannot roll back precisely",
+    )
+    require(
+        "opened.add(source)" in preview,
+        "the preview attempt does not record each successful open",
+    )
+    require(
+        "for (source in opened)" in preview,
+        "a failed preview no longer rolls back the sources it opened",
+    )
+    # And it must also release the set an earlier successful request registered: a revoked
+    # grant has to leave no readable duplicate, which the descriptor-count assertion at
+    # android_saf_preview_test.dart:868 requires.
+    require(
+        "clearPreviewSources()\n                for (source in opened)" in preview,
+        "a failed preview no longer releases the earlier preview set as well as its own opens",
+    )
+    require(
+        "clearNativeSources()" not in preview,
+        "the preview path clears every source, which drops import descriptors again",
+    )
+    require(
+        "nativeUnregisterMediaFd(source)" in registration,
+        "a failed registration no longer removes only the source it was registering",
+    )
+    require(
+        "clearNativeSources()" not in registration,
+        "a failed registration clears every source, which drops other imports' descriptors",
+    )
+    # The whole-registry clear stays for the two cases that really mean everything:
+    # the clear method itself and the helper's definition.
+    require(
+        source.count("clearNativeSources()") == 2,
+        "clearNativeSources must remain only its definition and the explicit clear method",
+    )
+
     # A clear removes every source, so it must invalidate both kinds of work.
     clear = body("clearMediaSources")
     require(bool(clear), "clearMediaSources was not found")

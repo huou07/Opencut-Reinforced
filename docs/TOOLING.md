@@ -356,7 +356,28 @@ Review third-party agent tooling before installing it. Do not install additional
 - Ponytail
 - Playwright (`playwright-cli`, agent-local; added 2026-10-15 for rendered-page inspection of the prototype and UX work)
 
-### Android 9B preview repair and hosted proof
+### Android emulator on this workstation
+
+The local AVD is named **`OR-android-test`** (Android 36, google_apis, x86_64). It is OR's
+own machine; `an3-api36` and `vce-api36` belong to the VCE project and must not be renamed,
+recreated or wiped from here.
+
+Start it with OR's script rather than the UI-automation plugin's boot path:
+
+```sh
+mkdir -p /tmp/or-android
+RUNNER_TEMP=/tmp/or-android OR_AVD_NAME=OR-android-test \
+  bash scripts/start-android-emulator.sh
+```
+
+Measured 2026-10-19: `android_boot OR-android-test` reported "no emulator serial appeared
+within 180000 ms" twice (once for `an3-api36`, once for the fresh OR AVD) because the
+plugin's default launch does not pass this host's GPU mode. The script starts the same AVD
+as `emulator-5554` with `gpu swiftshader_indirect` and adb reports it `device` within a
+minute. The plugin's own tools then work against that serial, which is the combination to
+use: **the script boots, the plugin drives**.
+
+## Android 9B preview repair and hosted proof
 
 The Android software path retains `content://` media identities. A preview
 request first evaluates the shared Rust program at its exact time, returns the

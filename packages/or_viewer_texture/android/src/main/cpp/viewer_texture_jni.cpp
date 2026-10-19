@@ -22,6 +22,7 @@ using OrViewerAcquireLatest = bool (*)(OrViewerPixelBuffer*);
 using OrViewerReleaseFrame = void (*)(void*);
 using OrMediaRegisterSeekableFd = bool (*)(const char*, int32_t);
 using OrMediaClearSeekableFds = void (*)();
+using OrMediaUnregisterSeekableFd = bool (*)(const char*);
 using OrViewerFrameGeneration = uint64_t (*)(const void*);
 using OrViewerCurrentGeneration = uint64_t (*)();
 using OrResourceCount = size_t (*)();
@@ -31,6 +32,7 @@ struct BridgeApi {
   OrViewerReleaseFrame release_frame = nullptr;
   OrMediaRegisterSeekableFd register_media_fd = nullptr;
   OrMediaClearSeekableFds clear_media_fds = nullptr;
+  OrMediaUnregisterSeekableFd unregister_media_fd = nullptr;
   OrViewerFrameGeneration frame_generation = nullptr;
   OrViewerCurrentGeneration current_generation = nullptr;
   OrResourceCount in_flight_frames = nullptr;
@@ -54,6 +56,8 @@ bool resolve_api(BridgeApi* api) {
       dlsym(bridge, "or_media_register_seekable_fd"));
   api->clear_media_fds = reinterpret_cast<OrMediaClearSeekableFds>(
       dlsym(bridge, "or_media_clear_seekable_fds"));
+  api->unregister_media_fd = reinterpret_cast<OrMediaUnregisterSeekableFd>(
+      dlsym(bridge, "or_media_unregister_seekable_fd"));
   api->frame_generation = reinterpret_cast<OrViewerFrameGeneration>(dlsym(bridge, "or_viewer_frame_generation"));
   api->current_generation = reinterpret_cast<OrViewerCurrentGeneration>(dlsym(bridge, "or_viewer_current_generation"));
   api->in_flight_frames = reinterpret_cast<OrResourceCount>(dlsym(bridge, "or_viewer_in_flight_frames"));
@@ -61,6 +65,7 @@ bool resolve_api(BridgeApi* api) {
   api->media_fd_count = reinterpret_cast<OrResourceCount>(dlsym(bridge, "or_media_seekable_fd_count"));
   return api->acquire_latest != nullptr && api->release_frame != nullptr &&
       api->register_media_fd != nullptr && api->clear_media_fds != nullptr &&
+      api->unregister_media_fd != nullptr &&
       api->frame_generation != nullptr && api->current_generation != nullptr &&
       api->in_flight_frames != nullptr && api->latest_frame_bytes != nullptr && api->media_fd_count != nullptr;
 }
@@ -130,6 +135,18 @@ jboolean register_media_fd(JNIEnv* env, jobject, jstring uri, jint fd) {
   return registered ? JNI_TRUE : JNI_FALSE;
 }
 
+jboolean unregister_media_fd(JNIEnv* env, jobject, jstring uri) {
+  BridgeApi api;
+  if (uri == nullptr || !resolve_api(&api) || api.unregister_media_fd == nullptr) {
+    return JNI_FALSE;
+  }
+  const char* chars = env->GetStringUTFChars(uri, nullptr);
+  if (chars == nullptr) return JNI_FALSE;
+  const bool removed = api.unregister_media_fd(chars);
+  env->ReleaseStringUTFChars(uri, chars);
+  return removed ? JNI_TRUE : JNI_FALSE;
+}
+
 jboolean clear_media_fds(JNIEnv*, jobject) {
   BridgeApi api;
   if (resolve_api(&api) && api.clear_media_fds != nullptr) {
@@ -157,6 +174,12 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_opencut_viewertexture_OrViewerTexturePlugin_nativeRegisterMediaFd(
     JNIEnv* env, jobject object, jstring uri, jint fd) {
   return register_media_fd(env, object, uri, fd);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_opencut_viewertexture_OrViewerTexturePlugin_nativeUnregisterMediaFd(
+    JNIEnv* env, jobject object, jstring uri) {
+  return unregister_media_fd(env, object, uri);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

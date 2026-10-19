@@ -66,6 +66,31 @@ pub extern "C" fn or_media_clear_seekable_fds() {
     lock_registry().clear();
 }
 
+/// Removes one registered source and closes its descriptor.
+///
+/// Clearing the whole registry is only correct when *every* source is going away. A
+/// preview whose source set changed used to call the whole-registry clear, which also
+/// dropped the descriptors an import had registered and was about to read, so the import
+/// failed with `SOURCE_UNAVAILABLE` on whichever source the preview happened to race. A
+/// caller that owns only some of the sources removes only its own.
+// Called from the Android plugin over FFI, so a host build has no caller for it. The
+// behaviour it serves -- a preview must not remove a descriptor an import holds -- is
+// guarded by scripts/test_android_registration_epoch.py, which needs no device.
+#[allow(dead_code)]
+#[cfg_attr(target_os = "android", unsafe(no_mangle))]
+pub extern "C" fn or_media_unregister_seekable_fd(uri: *const c_char) -> bool {
+    if uri.is_null() {
+        return false;
+    }
+    let Ok(uri) = unsafe { CStr::from_ptr(uri) }.to_str() else {
+        return false;
+    };
+    let Ok(uri) = AndroidSafDocumentUri::parse(uri) else {
+        return false;
+    };
+    lock_registry().remove(uri.as_str()).is_some()
+}
+
 #[cfg_attr(target_os = "android", unsafe(no_mangle))]
 pub extern "C" fn or_media_seekable_fd_count() -> usize {
     lock_registry().len()

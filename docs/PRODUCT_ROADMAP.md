@@ -984,6 +984,100 @@ class each claim actually has:
   - **Verification status:** the local ladder is green and the guard passes; the real
     behaviour can only be exercised on a device or emulator, so the hosted Android job for
     this commit is the deciding evidence and is not yet in.
+- **Android SAF: the epoch fix worked, and the next failure is a descriptor-lifetime
+  race (2026-10-19).** The merge commit `c8316ba` on `main` failed the Android job, and
+  the log says something new and better: `ANDROID_SAF_MEDIA_IMPORT_RESULTS` shows **three
+  attempts** — `succeeded:true`, `succeeded:false SOURCE_UNAVAILABLE "media source could
+  not be opened"`, `succeeded:true`. Before the epoch fix only **two** sources were
+  attempted because the third registration was cancelled; now every selected document is
+  attempted, and the failure has moved into Rust's open of the second one.
+  - **It is flaky, which is why it matters.** The same content passed the Android job in
+    run `39210404847` at `b564479` and failed in run `39214163396` at `c8316ba`. A red
+    run on `main` therefore does **not** mean the fix regressed; it means a race remains
+    between a registration that succeeded and the registry state Rust reads when it
+    opens the source.
+  - **Publication is blocked, correctly.** The Developer Preview requires a successful
+    exact-source Platform Verification **push** run, and `main`'s is red. Nothing was
+    dispatched, and no gate was touched. The release path resumes only after a push run
+    on `main` is green.
+  - **Next step, and it is the case the Android plugin exists for:** boot an AVD, install
+    the SAF case APK, drive DocumentsUI through the `android_*` tools and watch the
+    registry state across the three imports, instead of inferring it from a log. The
+    candidates to check in order are the persistable grant for the second URI, the
+    registry entry the import looks up, and whether any clear runs between the
+    registration and the import.
+- **Android SAF `SOURCE_UNAVAILABLE`: root cause found — the preview path cleared the
+  whole descriptor registry (2026-10-19).** `clearNativeSources()` calls
+  `nativeClearMediaFds()`, which is `lock_registry().clear()` in Rust: it removes **every**
+  registered source. Three sites called it for work that owns only *some* sources, so one
+  kind of work destroyed another's descriptors:
+  - the **preview** path cleared everything whenever its source set changed, then
+    re-registered only the preview sources — so a preview refresh in the middle of a
+    multi-document import removed the descriptor of a document the import had already
+    registered and was about to read;
+  - a **failed registration** cleared everything, dropping the descriptors of sources
+    registered successfully before it;
+  - a **preview failure** cleared everything.
+  Rust then could not open the source and the import reported `SOURCE_UNAVAILABLE` — on
+  whichever document the preview happened to race, which is exactly the flakiness
+  observed: run `39210404847` at `b564479` passed the Android job and run `39214163396`
+  at `c8316ba` failed it, while `git diff b564479 origin/main` is **empty**, so the two
+  revisions are the same tree and only the timing differed.
+  - **The fix scopes each clear to what the caller owns.** Rust gained
+    `or_media_unregister_seekable_fd(uri)` for one source; the plugin tracks
+    `importRegisteredSources` and gained `clearPreviewSources()`, which removes the
+    preview sources **except** those an import still holds; a failed registration removes
+    only the source it was registering; and the whole-registry clear remains for exactly
+    the two cases that mean everything — the explicit clear method and plugin teardown.
+  - **Guard:** `scripts/test_android_registration_epoch.py` grew seven checks for this
+    invariant — the import set exists, `clearPreviewSources` exists, the per-source native
+    removal exists, the preview path clears only its own sources and never
+    `clearNativeSources`, a failed registration removes only its own source, and the
+    whole-registry clear appears exactly twice. It runs in `check-repo.sh`.
+  - **Verified so far:** the guard passes, the Rust side builds, and the case APKs rebuild
+    with a **changed** `saf.apk` checksum (`20cf2e0a…` → `bd0383be…`), which is the proof
+    that the Kotlin change compiles. A local SAF run before this fix completed 33 stages
+    with **zero** `SOURCE_UNAVAILABLE`; the deciding evidence is the hosted Android job for
+    this commit.
+- **Android SAF descriptor work, rounds 3-7: three defect classes, each with its own
+  guard (2026-10-19).** The root cause is recorded above; what follows is what fixing it
+  uncovered, in the order the local lane and the hosted job found it.
+  - **The JNI layer was missing an entry (found by the local lane in 66 seconds).**
+    `nativeUnregisterMediaFd` was declared in Kotlin and implemented in Rust, but
+    `viewer_texture_jni.cpp` — which resolves the bridge's C entry points with `dlsym` and
+    exposes one `Java_...` wrapper per method — had neither, so the app died with
+    `UnsatisfiedLinkError` the first time a preview source set changed. Fixed in
+    `6bbdf97`, proven at the binary level (`nm -D` on the built
+    `libor_viewer_texture_jni.so` shows the symbol; `saf.apk`'s checksum changed), and
+    guarded by `scripts/test_android_jni_bridge.py`, which checks the whole chain: every
+    Kotlin `private external fun nativeX` has a `Java_..._nativeX` wrapper, every
+    `dlsym(bridge, "or_x")` has a `pub extern "C" fn or_x`, and every `or_media_*` export
+    is resolved. It found two dead exports — `or_viewer_advance_generation` and
+    `or_viewer_publish_rgba` are defined in Rust and referenced nowhere — recorded rather
+    than deleted, because an FFI export is a public boundary.
+  - **A failed preview must undo exactly what that attempt opened.** The hosted job failed
+    on `duplicatedMediaFds` after `setMediaSources([good, missing])` returned
+    `MEDIA_SOURCE_MISSING`: the partial open was left registered. Fixed in `3d3e371` by
+    recording what the attempt opens and rolling back that list.
+  - **A failed preview must also release the preview set an earlier request registered.**
+    Reading the test's own assertions showed `3d3e371` was still wrong before CI had to
+    report it: `android_saf_preview_test.dart:868` revokes a grant, makes a seek fail with
+    `MEDIA_PERMISSION_REQUIRED`, and requires `duplicatedMediaFds == 0`, which needs the
+    earlier set released. `b2925f0` does both halves — `clearPreviewSources()` for the
+    earlier set (keeping anything an import holds) plus the attempt's own opens — because
+    each half alone fails a different assertion: keeping the earlier set leaves a
+    descriptor after a revocation, and clearing only the attempt's opens leaves one after a
+    partial open.
+  - **Every descriptor expectation in the SAF test was then checked against the new
+    semantics**, and none of them expects an import-held descriptor to disappear before an
+    explicit clear — which is why keeping import registrations is consistent with the whole
+    test rather than a local fix that shifts the failure.
+  - **The local lane cannot produce a verdict on this host.** It reaches 33 stages with
+    zero `SOURCE_UNAVAILABLE` and zero crashes, then the lane process ends without writing
+    a result — twice — under memory contention (the guest needs 6144 MB and the host
+    margin is 1024 MB, which a host running Gradle daemons does not have). The lane is
+    still worth running for the defects it finds in a minute; the hosted Android job
+    remains the deciding evidence.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
