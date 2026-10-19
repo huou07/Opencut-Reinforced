@@ -1,0 +1,31 @@
+{
+  "requirement": "F-android-saf-descriptor-race",
+  "claim": "Android's real DocumentsUI SAF journey imports every document the user selects and keeps every source a preview does not own: a preview refresh, a failed preview or a failed registration no longer removes a descriptor an import registered and is about to read.",
+  "implementation_sha": "b2925f09c021c3d2a88c80164d7aeadab96d012e",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "39241224160",
+    "jobs": [
+      "android",
+      "rust",
+      "flutter-static",
+      "granted-descriptor-capability",
+      "linux",
+      "macos",
+      "windows",
+      "release-gate"
+    ],
+    "detail": "All seven required jobs and the release gate passed. The Android job built the case APKs, booted an API 36 x86_64 emulator and ran the SAF preview journey: three documents selected through DocumentsUI are all imported (the failure this replaces imported two), the folder children import, and the descriptor-count assertions around a partial open, a revoked grant and a failed registration all hold."
+  },
+  "verified_at_utc": "2026-10-19T11:36:33Z",
+  "evidence_class": "emulator",
+  "limitations": [
+    "Android evidence is from an API 36 x86_64 SwiftShader emulator, not a physical device.",
+    "The defect this replaces was intermittent: the same tree passed at b564479 and failed at c8316ba, so one green run is not proof of stability. A repeat run at b3f37da is recorded separately when it completes.",
+    "The guard for the invariant is a source check (scripts/test_android_registration_epoch.py and scripts/test_android_jni_bridge.py), because the behaviour needs a device.",
+    "Two FFI exports remain dead -- or_viewer_advance_generation and or_viewer_publish_rgba are defined in Rust and referenced nowhere -- recorded rather than deleted.",
+    "The local Android lane on this workstation reaches 33 journey stages with zero SOURCE_UNAVAILABLE but cannot write a verdict under memory contention, so it is not evidence."
+  ],
+  "supersedes": null,
+  "source": "docs/PRODUCT_ROADMAP.md, Android SAF descriptor race"
+}
