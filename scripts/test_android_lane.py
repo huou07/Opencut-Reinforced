@@ -312,18 +312,21 @@ class AndroidLaneCase(unittest.TestCase):
         (shared / "hosted" / "pub.dev").mkdir(parents=True)
         (shared / "hosted" / "pub.dev").chmod(0o555)
         local_cache = ROOT / "apps" / "or_app" / ".dart_tool" / "aeh-pub-cache"
-        staged = (local_cache / "hosted" / "pub.dev").is_dir()
         try:
             self.run_lane("--steps", "apk,emulator,preview", PUB_CACHE=str(shared))
             observed = self.captured_env()
             pub_caches = {value for key, value in observed.items() if key.endswith(".PUB_CACHE")}
             self.assertTrue(pub_caches, observed)
             pub_cache = sorted(pub_caches)[0]
-            if staged:
+            # The lane stages a project-local cache from the shared one when it
+            # is absent, so the decision has to be read after the run. Reading it
+            # before made this test depend on whether an earlier case in the same
+            # process had already created the directory.
+            if (local_cache / "hosted" / "pub.dev").is_dir():
                 self.assertNotEqual(pub_cache, str(shared), pub_cache)
                 self.assertIn("aeh-pub-cache", pub_cache, pub_cache)
             else:
-                # Without a staged local cache the lane must say so instead of
+                # Without any local cache the lane must say so instead of
                 # letting the case fail inside `pub get`.
                 warnings = self.payload()["warnings"]
                 self.assertTrue(any("pub cache" in entry for entry in warnings), warnings)

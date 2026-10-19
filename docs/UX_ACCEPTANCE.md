@@ -1,6 +1,6 @@
 # OR UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-20
 
 ## Purpose
 
@@ -243,6 +243,36 @@ same frame as `ensureVisible` was hit-tested against the pre-scroll position (th
 Add Audio tap reported success and added nothing), and readiness was being
 inferred from an enabled flag that a disabled button can also present. Scenarios
 now wait for a user-visible state (the transient message clearing) before acting.
+
+### Reproduced and fixed (2026-10-20, packaged desktop preview)
+
+The 2026-10-19 Developer Preview desktop packages opened to a black window.
+The cause was packaging order, not rendering: each desktop job built the app,
+ran `flutter test integration_test/core_bridge_test.dart -d <platform>`, and
+then packaged the same output directory. The test run rebuilds that directory
+with the integration-test listener as its Dart entrypoint, so the shipped
+bundle never called the application `main()` and the window never drew a frame.
+The released Linux bundle's kernel carried `flutter_test_listener`,
+`package:integration_test`, and `integration_test/core_bridge_test.dart`.
+
+- macOS, Windows and Linux stage the application bundle before the test run,
+  package the staged copy, and run the guard again on the packaged application.
+- `scripts/check_app_bundle.py` inspects every `kernel_blob.bin` in a bundle and
+  refuses the test listener and integration-test markers;
+  `scripts/test_check_app_bundle.py` pins that classification inside
+  `check-repo.sh`. The guard rejects the 2026-10-19 packages.
+- A 1280x800 audit of the running app also found and fixed four visible
+  defects: inspector text fields collapsed until the floating label overlapped
+  its value, the tool rail clipped `Templates`/`Captions`/`Transitions`, the
+  timeline toolbar hid `Export Captions` and `Add Caption` without a scroll
+  affordance, and the top bar printed `Ctrl/⌘ K` on Linux and Windows. The
+  empty inspector also asked to "unlock the selected track" when nothing was
+  selected.
+
+Local evidence: the Linux debug app under Xvfb, the `scripts/or_ui.py` editor
+journey at 1280x800 and compact journey at 320x440, and a clean `flutter
+analyze`. That is developer evidence; hosted platform verification and native
+acceptance remain separate.
 
 ### Reproduced and fixed
 

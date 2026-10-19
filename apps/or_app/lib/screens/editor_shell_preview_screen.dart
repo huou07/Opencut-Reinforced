@@ -1081,7 +1081,7 @@ class _EditorToolRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 52,
+      width: 68,
       child: ColoredBox(
         color: OrColors.backgroundRaised,
         child: SingleChildScrollView(
@@ -1102,7 +1102,7 @@ class _EditorToolRail extends StatelessWidget {
                         key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
                         onTap: () => onSelected(tool.label),
                         child: Container(
-                          width: 48,
+                          width: 64,
                           height: 48,
                           margin: const EdgeInsets.symmetric(vertical: 1),
                           decoration: BoxDecoration(
@@ -1132,7 +1132,8 @@ class _EditorToolRail extends StatelessWidget {
                               Text(
                                 _shortToolLabel(tool.label),
                                 maxLines: 1,
-                                overflow: TextOverflow.clip,
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: OrColors.textMuted,
                                   fontSize: OrType.tinySize,
@@ -2938,8 +2939,8 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         isDense: true,
         counterText: '',
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: OrSpacing.x1,
-          vertical: OrSpacing.x1,
+          horizontal: OrSpacing.x2,
+          vertical: OrSpacing.x4,
         ),
       ),
       style: const TextStyle(fontSize: OrType.tinySize),
@@ -2961,10 +2962,11 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       labelText: label,
       isDense: true,
       counterText: '',
-      helperText: 'Exact seconds, for example 1/2',
+      helperText: 'Seconds, e.g. 1/2',
+      helperMaxLines: 1,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: OrSpacing.x1,
-        vertical: OrSpacing.x1,
+        horizontal: OrSpacing.x2,
+        vertical: OrSpacing.x4,
       ),
     ),
     style: const TextStyle(fontSize: OrType.tinySize),
@@ -3032,8 +3034,8 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       isDense: true,
       counterText: '',
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: OrSpacing.x1,
-        vertical: OrSpacing.x1,
+        horizontal: OrSpacing.x2,
+        vertical: OrSpacing.x4,
       ),
     ),
     style: const TextStyle(fontSize: OrType.tinySize),
@@ -3047,10 +3049,11 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       labelText: label,
       isDense: true,
       counterText: '',
-      helperText: 'Exact seconds, for example 1/2',
+      helperText: 'Seconds, e.g. 1/2',
+      helperMaxLines: 1,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: OrSpacing.x1,
-        vertical: OrSpacing.x1,
+        horizontal: OrSpacing.x2,
+        vertical: OrSpacing.x4,
       ),
     ),
     style: const TextStyle(fontSize: OrType.tinySize),
@@ -3180,10 +3183,10 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                 title: hasSelection ? 'Clip settings' : 'No selection',
                 message: !widget.isProjectWorkspace
                     ? 'Inspector controls are unavailable in this preview.'
+                    : !hasSelection
+                    ? 'Select a video or audio clip to edit its settings.'
                     : widget.trackLocked
                     ? 'Unlock the selected track to edit clip settings.'
-                    : hasSelection
-                    ? 'Select a video or audio clip to edit its settings.'
                     : 'Select a video or audio clip to edit its settings.',
                 icon: Icons.tune_outlined,
               ),
@@ -3418,6 +3421,46 @@ const _visualTimeFieldKeys = [
 
 const _audioFieldKeys = ['gain_db', 'pan_percent', 'fade_in', 'fade_out'];
 
+/// A horizontal toolbar that makes its overflow visible.
+///
+/// The timeline actions do not fit beside the viewer at every desktop width.
+/// A bare `SingleChildScrollView` hid the rightmost actions with no affordance:
+/// measured 2026-10-20 at 1280x800, "Export Captions" and "Add Caption" were
+/// off-screen. A persistent scrollbar keeps the remaining actions discoverable
+/// and draggable with a pointer.
+class _ToolbarScroll extends StatefulWidget {
+  const _ToolbarScroll({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ToolbarScroll> createState() => _ToolbarScrollState();
+}
+
+class _ToolbarScrollState extends State<_ToolbarScroll> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scrollbar(
+    controller: _controller,
+    thumbVisibility: true,
+    thickness: 4,
+    radius: const Radius.circular(2),
+    scrollbarOrientation: ScrollbarOrientation.bottom,
+    child: SingleChildScrollView(
+      controller: _controller,
+      scrollDirection: Axis.horizontal,
+      child: widget.child,
+    ),
+  );
+}
+
 class _TimelineToolbar extends StatelessWidget {
   const _TimelineToolbar({
     required this.compact,
@@ -3455,7 +3498,14 @@ class _TimelineToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Full action names overflowed a 1280 px window: measured 2026-10-20 with
+    // scripts/or_ui.py at 1280x800, "Export Captions" was clipped and
+    // "Add Caption" was off-screen. Below a genuinely wide window the toolbar
+    // uses the shorter names the compact dock already uses, so every action is
+    // visible without horizontal scrolling.
+    final roomForFullLabels = MediaQuery.sizeOf(context).width >= 1440;
     return Container(
+      key: const ValueKey('timeline-toolbar'),
       width: double.infinity,
       height: 40,
       padding: EdgeInsets.symmetric(
@@ -3467,8 +3517,7 @@ class _TimelineToolbar extends StatelessWidget {
           horizontal: BorderSide(color: OrColors.border),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+      child: _ToolbarScroll(
         child: Row(
           children: [
             Text(
@@ -3489,19 +3538,23 @@ class _TimelineToolbar extends StatelessWidget {
                 key: const ValueKey('timeline-add-video-track'),
                 onPressed: busy ? null : onAddVideoTrack,
                 icon: const Icon(Icons.movie_outlined, size: 16),
-                label: Text(compact ? 'Add Video' : 'Add Video Track'),
+                label: Text(
+                  roomForFullLabels ? 'Add Video Track' : 'Add Video',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-audio-track'),
                 onPressed: busy ? null : onAddAudioTrack,
                 icon: const Icon(Icons.graphic_eq_outlined, size: 16),
-                label: Text(compact ? 'Add Audio' : 'Add Audio Track'),
+                label: Text(
+                  roomForFullLabels ? 'Add Audio Track' : 'Add Audio',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-marker'),
                 onPressed: busy ? null : onAddMarker,
                 icon: const Icon(Icons.bookmark_add_outlined, size: 16),
-                label: const Text('Add Marker'),
+                label: Text(roomForFullLabels ? 'Add Marker' : 'Marker'),
               ),
               IconButton(
                 key: const ValueKey('timeline-undo'),
@@ -3541,37 +3594,43 @@ class _TimelineToolbar extends StatelessWidget {
                 key: const ValueKey('timeline-add-text-track'),
                 onPressed: busy ? null : onAddTextTrack,
                 icon: const Icon(Icons.text_fields_outlined, size: 16),
-                label: Text(compact ? 'Add Text' : 'Add Text Track'),
+                label: Text(roomForFullLabels ? 'Add Text Track' : 'Add Text'),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-caption-track'),
                 onPressed: busy ? null : onAddCaptionTrack,
                 icon: const Icon(Icons.subtitles_outlined, size: 16),
-                label: Text(compact ? 'Add Captions' : 'Add Caption Track'),
+                label: Text(
+                  roomForFullLabels ? 'Add Caption Track' : 'Add Captions',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-import-captions'),
                 onPressed: busy ? null : onImportCaptions,
                 icon: const Icon(Icons.file_open_outlined, size: 16),
-                label: const Text('Import Captions'),
+                label: Text(
+                  roomForFullLabels ? 'Import Captions' : 'Import SRT',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-export-captions'),
                 onPressed: busy ? null : onExportCaptions,
                 icon: const Icon(Icons.file_download_outlined, size: 16),
-                label: const Text('Export Captions'),
+                label: Text(
+                  roomForFullLabels ? 'Export Captions' : 'Export SRT',
+                ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-title'),
                 onPressed: busy ? null : onAddTitle,
                 icon: const Icon(Icons.title, size: 16),
-                label: const Text('Add Title'),
+                label: Text(roomForFullLabels ? 'Add Title' : 'Title'),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-manual-caption'),
                 onPressed: busy ? null : onAddCaption,
                 icon: const Icon(Icons.subtitles_outlined, size: 16),
-                label: const Text('Add Caption'),
+                label: Text(roomForFullLabels ? 'Add Caption' : 'Caption'),
               ),
             ] else ...[
               _UnavailableTimelineAction(

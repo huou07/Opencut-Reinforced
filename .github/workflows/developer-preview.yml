@@ -306,6 +306,22 @@ jobs:
           EOF
           codesign --force --deep --sign - --timestamp=none "$app"
 
+      # `flutter test -d macos` rebuilds this path with the integration-test
+      # listener as its Dart entrypoint. Take the signed application aside
+      # first, package from the copy, and refuse a copy that carries the test
+      # harness: the 2026-10-19 preview shipped that test build as the app and
+      # opened to a black screen.
+      - name: Stage the signed app bundle for packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+          staged="$RUNNER_TEMP/opencut-reinforced-macos-debug-app"
+          rm -rf "$staged"
+          mkdir -p "$staged"
+          ditto "$app" "$staged/or_app.app"
+          python3 scripts/check_app_bundle.py --platform macos "$staged/or_app.app"
+
       - name: Verify packaged local transcription user journey
         timeout-minutes: 20
         working-directory: apps/or_app
@@ -316,13 +332,14 @@ jobs:
           --plain-name
           "packaged local transcription reviews and persists real captions"
 
-      - name: Re-sign macOS app after runtime acceptance
+      - name: Re-sign the staged macOS app after runtime acceptance
         shell: bash
         run: |
           set -euo pipefail
-          app="$GITHUB_WORKSPACE/apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+          app="$RUNNER_TEMP/opencut-reinforced-macos-debug-app/or_app.app"
           codesign --force --deep --sign - --timestamp=none "$app"
           codesign --verify --deep --strict "$app"
+          python3 scripts/check_app_bundle.py --platform macos "$app"
 
       - name: Package complete app bundle
         shell: bash
@@ -331,17 +348,22 @@ jobs:
           import pathlib
           import subprocess
           import os
+          import sys
 
-          products = pathlib.Path("apps/or_app/build/macos/Build/Products/Debug")
-          bundles = sorted(path for path in products.rglob("*.app") if path.is_dir())
-          if len(bundles) != 1:
-              raise SystemExit(f"Expected one .app bundle under {products}, found {len(bundles)}")
+          app = pathlib.Path(os.environ["RUNNER_TEMP"]) / "opencut-reinforced-macos-debug-app/or_app.app"
+          if not app.is_dir():
+              raise SystemExit(f"Staged macOS app bundle is missing: {app}")
 
           archive = pathlib.Path(os.environ["RUNNER_TEMP"]) / "opencut-reinforced-macos-debug.zip"
           package_dir = pathlib.Path(os.environ["RUNNER_TEMP"]) / "opencut-reinforced-macos-debug"
           package_dir.mkdir()
           app_name = "OpenCut Reinforced.app"
-          subprocess.run(["ditto", str(bundles[0]), str(package_dir / app_name)], check=True)
+          subprocess.run(["ditto", str(app), str(package_dir / app_name)], check=True)
+          subprocess.run(
+              [sys.executable, "scripts/check_app_bundle.py", "--platform", "macos",
+               str(package_dir / app_name)],
+              check=True,
+          )
           (package_dir / "README-FIRST.md").write_bytes(pathlib.Path("docs/DEVELOPER_PREVIEW_INSTALL.md").read_bytes())
           subprocess.run(
               ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(package_dir), str(archive)],
@@ -569,6 +591,22 @@ jobs:
           $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
           [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
 
+      # `flutter test -d windows` rebuilds the Debug output with the
+      # integration-test listener as its Dart entrypoint. Stage the application
+      # build first, package from the copy, and refuse a copy that carries the
+      # test harness.
+      - name: Stage the app bundle for packaging
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE "apps/or_app/build/windows/x64/runner/Debug"
+          $staged = Join-Path $env:RUNNER_TEMP "opencut-reinforced-windows-x64-debug-app"
+          if (-not (Test-Path -LiteralPath $bundle -PathType Container)) { throw "Windows Debug output directory not found: $bundle" }
+          if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
+          New-Item -ItemType Directory -Path $staged | Out-Null
+          Copy-Item -Path (Join-Path $bundle "*") -Destination $staged -Recurse
+          python scripts/check_app_bundle.py --platform windows $staged
+          if ($LASTEXITCODE -ne 0) { throw "Staged Windows bundle is not the application build" }
+
       - name: Verify packaged local transcription user journey
         timeout-minutes: 20
         working-directory: apps/or_app
@@ -582,15 +620,18 @@ jobs:
       - name: Package complete Debug output directory
         shell: pwsh
         run: |
-          $buildOutput = Join-Path $env:GITHUB_WORKSPACE "apps/or_app/build/windows/x64/runner/Debug"
+          $buildOutput = Join-Path $env:RUNNER_TEMP "opencut-reinforced-windows-x64-debug-app"
           $archive = Join-Path $env:RUNNER_TEMP "opencut-reinforced-windows-x64-debug.zip"
           $packageDir = Join-Path $env:RUNNER_TEMP "opencut-reinforced-windows-x64-debug"
-          if (-not (Test-Path -LiteralPath $buildOutput -PathType Container)) { throw "Windows Debug output directory not found: $buildOutput" }
+          if (-not (Test-Path -LiteralPath $buildOutput -PathType Container)) { throw "Staged Windows Debug output directory not found: $buildOutput" }
           if (-not (Get-ChildItem -LiteralPath $buildOutput -Filter "*.exe" -File)) { throw "Windows Debug output has no executable" }
+          if (Test-Path -LiteralPath $packageDir) { Remove-Item -LiteralPath $packageDir -Recurse -Force }
           New-Item -ItemType Directory -Path $packageDir | Out-Null
           $applicationDir = Join-Path $packageDir "OpenCut Reinforced"
           New-Item -ItemType Directory -Path $applicationDir | Out-Null
           Copy-Item -Path (Join-Path $buildOutput "*") -Destination $applicationDir -Recurse
+          python scripts/check_app_bundle.py --platform windows $applicationDir
+          if ($LASTEXITCODE -ne 0) { throw "Packaged Windows application is not the application build" }
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "docs/DEVELOPER_PREVIEW_INSTALL.md") -Destination (Join-Path $packageDir "README-FIRST.md")
           Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $archive -CompressionLevel Optimal
           if ((Get-Item -LiteralPath $archive).Length -eq 0) { throw "Windows debug archive is empty" }
@@ -834,6 +875,21 @@ jobs:
           test -s "$runtime/licenses/whisper.cpp/LICENSE"
           echo "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY=$runtime" >> "$GITHUB_ENV"
 
+      # `flutter test -d linux` rebuilds this path with the integration-test
+      # listener as its Dart entrypoint. Stage the application build first,
+      # package from the copy, and refuse a copy that carries the test harness.
+      - name: Stage the app bundle for packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="apps/or_app/build/linux/x64/debug/bundle"
+          staged="$RUNNER_TEMP/opencut-reinforced-linux-x64-debug-app"
+          test -d "$bundle"
+          rm -rf "$staged"
+          mkdir -p "$staged"
+          cp -a "$bundle/." "$staged/"
+          python3 scripts/check_app_bundle.py --platform linux "$staged"
+
       - name: Verify packaged local transcription user journey
         timeout-minutes: 20
         working-directory: apps/or_app
@@ -848,12 +904,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bundle="apps/or_app/build/linux/x64/debug/bundle"
+          bundle="$RUNNER_TEMP/opencut-reinforced-linux-x64-debug-app"
           package_dir="$RUNNER_TEMP/opencut-reinforced-linux-x64-debug"
+          rm -rf "$package_dir"
           mkdir -p "$package_dir"
           test -d "$bundle"
           test -n "$(find "$bundle" -mindepth 1 -maxdepth 1 -print -quit)"
           cp -a "$bundle" "$package_dir/opencut-reinforced"
+          python3 scripts/check_app_bundle.py --platform linux "$package_dir/opencut-reinforced"
           cp docs/DEVELOPER_PREVIEW_INSTALL.md "$package_dir/README-FIRST.md"
           tar -czf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz" -C "$package_dir" .
           test -s "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz"

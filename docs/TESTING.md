@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-20
 
 ## Status
 
@@ -225,6 +225,13 @@ preflight's environment, or drives an already-booted Android guest. Its scenario
 contract and its negative control are checked hermetically by
 `scripts/test_or_ui.py` inside `check-repo.sh`; its journeys are developer
 evidence and never `ACCEPTED`.
+
+The packaged desktop bundles carry a Dart kernel, and a bundle built by
+`flutter test -d <platform>` carries the integration-test listener instead of
+the application entrypoint. `scripts/check_app_bundle.py` rejects that bundle,
+and `scripts/test_check_app_bundle.py` checks the classification hermetically
+inside `check-repo.sh`. The Developer Preview workflow runs the guard on the
+staged and packaged macOS, Windows and Linux applications.
 
 For example, a blocked local macOS native check plus a passing GitHub macOS native job is verified. A blocked local check with its remote job not run is not verified. Never weaken or omit a test because a local platform tool is unavailable.
 
