@@ -1039,6 +1039,45 @@ class each claim actually has:
     that the Kotlin change compiles. A local SAF run before this fix completed 33 stages
     with **zero** `SOURCE_UNAVAILABLE`; the deciding evidence is the hosted Android job for
     this commit.
+- **Android SAF descriptor work, rounds 3-7: three defect classes, each with its own
+  guard (2026-10-19).** The root cause is recorded above; what follows is what fixing it
+  uncovered, in the order the local lane and the hosted job found it.
+  - **The JNI layer was missing an entry (found by the local lane in 66 seconds).**
+    `nativeUnregisterMediaFd` was declared in Kotlin and implemented in Rust, but
+    `viewer_texture_jni.cpp` — which resolves the bridge's C entry points with `dlsym` and
+    exposes one `Java_...` wrapper per method — had neither, so the app died with
+    `UnsatisfiedLinkError` the first time a preview source set changed. Fixed in
+    `6bbdf97`, proven at the binary level (`nm -D` on the built
+    `libor_viewer_texture_jni.so` shows the symbol; `saf.apk`'s checksum changed), and
+    guarded by `scripts/test_android_jni_bridge.py`, which checks the whole chain: every
+    Kotlin `private external fun nativeX` has a `Java_..._nativeX` wrapper, every
+    `dlsym(bridge, "or_x")` has a `pub extern "C" fn or_x`, and every `or_media_*` export
+    is resolved. It found two dead exports — `or_viewer_advance_generation` and
+    `or_viewer_publish_rgba` are defined in Rust and referenced nowhere — recorded rather
+    than deleted, because an FFI export is a public boundary.
+  - **A failed preview must undo exactly what that attempt opened.** The hosted job failed
+    on `duplicatedMediaFds` after `setMediaSources([good, missing])` returned
+    `MEDIA_SOURCE_MISSING`: the partial open was left registered. Fixed in `3d3e371` by
+    recording what the attempt opens and rolling back that list.
+  - **A failed preview must also release the preview set an earlier request registered.**
+    Reading the test's own assertions showed `3d3e371` was still wrong before CI had to
+    report it: `android_saf_preview_test.dart:868` revokes a grant, makes a seek fail with
+    `MEDIA_PERMISSION_REQUIRED`, and requires `duplicatedMediaFds == 0`, which needs the
+    earlier set released. `b2925f0` does both halves — `clearPreviewSources()` for the
+    earlier set (keeping anything an import holds) plus the attempt's own opens — because
+    each half alone fails a different assertion: keeping the earlier set leaves a
+    descriptor after a revocation, and clearing only the attempt's opens leaves one after a
+    partial open.
+  - **Every descriptor expectation in the SAF test was then checked against the new
+    semantics**, and none of them expects an import-held descriptor to disappear before an
+    explicit clear — which is why keeping import registrations is consistent with the whole
+    test rather than a local fix that shifts the failure.
+  - **The local lane cannot produce a verdict on this host.** It reaches 33 stages with
+    zero `SOURCE_UNAVAILABLE` and zero crashes, then the lane process ends without writing
+    a result — twice — under memory contention (the guest needs 6144 MB and the host
+    margin is 1024 MB, which a host running Gradle daemons does not have). The lane is
+    still worth running for the defects it finds in a minute; the hosted Android job
+    remains the deciding evidence.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
