@@ -547,7 +547,18 @@ class each claim actually has:
     version is rejected. So a v8 with a `playback_rate` and a migration is an
     ordinary product change, not a control-plane one, and no owner decision is needed
     to start it.
-  - **Sized, so the owner can choose the shape:** the field lives on
+  - **Correction to the sizing below, verified against the codec (2026-10-19).** The
+    format half is much smaller than the estimate assumed. The raw v6/v7 timeline types
+    do **not** duplicate the clip content: `TimelineClipV6.content` is the canonical
+    `ClipContent` itself, so a new field with a serde default is read from an older file
+    without a conversion, and the migration is the default rather than a transform. What
+    is genuinely required is the schema bump, because `deny_unknown_fields` means an
+    older reader must not silently accept the new field: a v8 envelope, a dispatch arm
+    that reuses the v7 state type, an error variant, the constant and the encoder.
+    `RationalRate::ONE` and `RationalRate::apply` (exact rational scaling, tested with
+    1/3 s at 3x and at 1/2x) have landed, so the mapping the preview and export paths
+    need is one multiplication at each site.
+  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
     `ClipContent::Media` (18 construction and match sites across five files), with
     validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
     files migrate by opening, a schema bump to 8 with the migration test, the preview
