@@ -575,20 +575,30 @@ class each claim actually has:
     by construction: nothing can set a rate other than the identity, and the pinned
     `a_media_clip_cannot_yet_play_at_a_different_rate` still describes the product
     truthfully even though the model can now express one.
-  - **The rate command and the schema bump are written and stashed, not landed
-    (2026-10-19).** `timeline.clip.rate` (source span fixed, timeline duration follows
-    from the rate, `ProjectChange::TimelineClipRateChanged` distinct from a trim, catalog
-    entry and both frozen catalog expectations updated) and the schema-8 envelope, dispatch
-    arm and error variant were implemented and the workspace built clean. They are **not
-    committed**: the codec tests mix inputs from a version-7 literal with inputs the
-    encoder now writes as version 8, so several `InvalidV7Data`/`InvalidV8Data`
-    expectations need a deliberate pass rather than line edits, and three attempts at
-    line-level repair did not converge. Per this repository's own rule, the work is
-    preserved in `git stash` ("phase1.5 rate command + schema v8 (WIP; codec test
-    expectations need a careful pass)") and the tree is left green at `a43535f` rather
-    than half-broken. The next attempt should classify each codec assertion by which
-    document it decodes -- a version-7 literal keeps the version-7 error, anything the
-    encoder produced takes the version-8 one -- before changing any of them.
+  - **The rate command and the schema bump were attempted twice and are not landed
+    (2026-10-19).** Both times the work built cleanly and both times it was stopped rather
+    than half-landed, on the owner's instruction to stop gracefully.
+    - **Attempt 1 (stashed, then dropped):** `timeline.clip.rate` with a distinct
+      `ProjectChange::TimelineClipRateChanged`, catalog entry and both frozen catalog
+      expectations, plus the schema-8 envelope, dispatch arm and error variant. It was
+      preserved in `git stash` and then restored, so that work is in the second attempt's
+      history rather than separately recoverable.
+    - **Attempt 2 (discarded):** the whole change, after the codec work exposed the real
+      cause and then a careless edit damaged the test module. The cause is worth keeping:
+      **the error variant depends on which layer rejects, not on the document version.**
+      The version-8 dispatch arm delegates to `from_v7`, whose internal checks report
+      `InvalidV7Data`, so a version-8 document with a content problem reported version 7
+      until the conversion's error was mapped. With that mapping in place the or_core,
+      recovery, storage and CLI expectations all passed — 0 failures — and the change was
+      then lost to a line-range deletion that removed a test helper.
+    - **Method for the next attempt, so it is not re-derived:** map the conversion error
+      inside the version-8 arm; then classify each remaining expectation by *which
+      document it decodes* — `base = encode_project(...)` is version 8, a hand-written
+      literal is version 7 — and update the names that say `v7` to say `current` so they
+      stop drifting. The rate command also needs its guard: a 2x clip keeps its source
+      span and halves its timeline duration, undo restores both, and a text clip is
+      refused. `RationalRate::apply` and the identity default are already landed at
+      `a43535f`, so the arithmetic and the format field are not part of the next attempt.
   - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
     `ClipContent::Media` (18 construction and match sites across five files), with
     validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
