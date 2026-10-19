@@ -984,6 +984,28 @@ class each claim actually has:
   - **Verification status:** the local ladder is green and the guard passes; the real
     behaviour can only be exercised on a device or emulator, so the hosted Android job for
     this commit is the deciding evidence and is not yet in.
+- **Android SAF: the epoch fix worked, and the next failure is a descriptor-lifetime
+  race (2026-10-19).** The merge commit `c8316ba` on `main` failed the Android job, and
+  the log says something new and better: `ANDROID_SAF_MEDIA_IMPORT_RESULTS` shows **three
+  attempts** — `succeeded:true`, `succeeded:false SOURCE_UNAVAILABLE "media source could
+  not be opened"`, `succeeded:true`. Before the epoch fix only **two** sources were
+  attempted because the third registration was cancelled; now every selected document is
+  attempted, and the failure has moved into Rust's open of the second one.
+  - **It is flaky, which is why it matters.** The same content passed the Android job in
+    run `39210404847` at `b564479` and failed in run `39214163396` at `c8316ba`. A red
+    run on `main` therefore does **not** mean the fix regressed; it means a race remains
+    between a registration that succeeded and the registry state Rust reads when it
+    opens the source.
+  - **Publication is blocked, correctly.** The Developer Preview requires a successful
+    exact-source Platform Verification **push** run, and `main`'s is red. Nothing was
+    dispatched, and no gate was touched. The release path resumes only after a push run
+    on `main` is green.
+  - **Next step, and it is the case the Android plugin exists for:** boot an AVD, install
+    the SAF case APK, drive DocumentsUI through the `android_*` tools and watch the
+    registry state across the three imports, instead of inferring it from a log. The
+    candidates to check in order are the persistable grant for the second URI, the
+    registry entry the import looks up, and whether any clear runs between the
+    registration and the import.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation
