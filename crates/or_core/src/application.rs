@@ -4856,6 +4856,7 @@ impl TimelineClipInsertArguments {
             content: ClipContent::Media {
                 media_id: self.media_id,
                 source_range,
+                playback_rate: RationalRate::ONE,
             },
             settings: ClipSettings::default_for(track_kind),
         })
@@ -6200,12 +6201,15 @@ fn validate_clip_state(
             ClipContent::Media {
                 media_id,
                 source_range,
+                playback_rate,
             },
             TrackKind::Video | TrackKind::Audio,
         ) => {
             if source_range.start().is_negative()
                 || !source_range.duration().is_positive()
-                || source_range.duration() != clip.timeline_duration
+                || playback_rate.numerator() > 16 * playback_rate.denominator()
+                || playback_rate.denominator() > 16 * playback_rate.numerator()
+                || playback_rate.apply(clip.timeline_duration).ok() != Some(source_range.duration())
             {
                 return Err(OperationError::new(OperationErrorCode::InvalidArguments));
             }
@@ -6287,6 +6291,7 @@ fn trim_content_start(
         ClipContent::Media {
             media_id,
             source_range,
+            playback_rate,
         } => {
             let source_start = source_range
                 .start()
@@ -6297,6 +6302,7 @@ fn trim_content_start(
             Ok(ClipContent::Media {
                 media_id: *media_id,
                 source_range,
+                playback_rate: *playback_rate,
             })
         }
         _ => Ok(content.clone()),
@@ -6311,12 +6317,14 @@ fn trim_content_end(
         ClipContent::Media {
             media_id,
             source_range,
+            playback_rate,
         } => {
             let source_range = TimeRange::new(source_range.start(), duration)
                 .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
             Ok(ClipContent::Media {
                 media_id: *media_id,
                 source_range,
+                playback_rate: *playback_rate,
             })
         }
         _ => Ok(content.clone()),
@@ -6332,6 +6340,7 @@ fn split_content(
         ClipContent::Media {
             media_id,
             source_range,
+            playback_rate,
         } => {
             let right_start = source_range
                 .start()
@@ -6342,11 +6351,13 @@ fn split_content(
                     media_id: *media_id,
                     source_range: TimeRange::new(source_range.start(), left_duration)
                         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+                    playback_rate: *playback_rate,
                 },
                 ClipContent::Media {
                     media_id: *media_id,
                     source_range: TimeRange::new(right_start, right_duration)
                         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
+                    playback_rate: *playback_rate,
                 },
             ))
         }
@@ -10174,6 +10185,7 @@ mod tests {
                 RationalTime::new(2, 1).unwrap(),
             )
             .unwrap(),
+            playback_rate: RationalRate::ONE,
         };
         let duration = RationalTime::new(2, 1).unwrap();
         session

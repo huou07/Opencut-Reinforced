@@ -3672,6 +3672,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
         ClipContent::Media {
             media_id,
             source_range,
+            playback_rate: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -4516,6 +4517,7 @@ mod tests {
                     timeline_start: RationalTime::new(3003, 1001).unwrap(),
                     timeline_duration: RationalTime::new(5, 2).unwrap(),
                     content: ClipContent::Media {
+                        playback_rate: or_core::RationalRate::ONE,
                         media_id,
                         source_range: TimeRange::new(
                             RationalTime::new(1, 2).unwrap(),

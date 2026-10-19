@@ -1741,6 +1741,7 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
             ClipContent::Media {
                 media_id,
                 source_range,
+                playback_rate: _,
             } => format!(
                 "{} media={} at={} source={} duration={}",
                 clip.clip_id,

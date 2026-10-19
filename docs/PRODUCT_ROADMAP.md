@@ -558,7 +558,24 @@ class each claim actually has:
     `RationalRate::ONE` and `RationalRate::apply` (exact rational scaling, tested with
     1/3 s at 3x and at 1/2x) have landed, so the mapping the preview and export paths
     need is one multiplication at each site.
-  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
+  - **The model now carries the rate, and the mapping honours it (2026-10-19).**
+    `ClipContent::Media` gained `playback_rate: RationalRate` with the identity as its
+    serde default, and both the preview's video mapping and its audio mapping scale the
+    timeline offset by it (`RationalRate::apply`), so a rate the model holds is a rate a
+    viewer would see. Validation now requires `source_duration == timeline_duration *
+    rate` with the rate bounded to 1/16..16 in **both** the domain validator and the
+    command-level check, so a clip whose source span disagrees with its rate is refused
+    at either entry point.
+  - **The written format is deliberately unchanged.** An identity rate is not
+    serialised (`skip_serializing_if`), so a project saved today is byte-identical to the
+    schema-7 document an older build wrote and reads back in it, and no version is
+    written with an undeclared field. The schema bump to 8 lands with the command that
+    can actually set a rate, which is the next step, together with the CLI, the bridge
+    view, both presentations and a journey. Until that command exists the field is inert
+    by construction: nothing can set a rate other than the identity, and the pinned
+    `a_media_clip_cannot_yet_play_at_a_different_rate` still describes the product
+    truthfully even though the model can now express one.
+  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
     `ClipContent::Media` (18 construction and match sites across five files), with
     validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
     files migrate by opening, a schema bump to 8 with the migration test, the preview
