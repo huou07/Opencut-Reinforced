@@ -129,8 +129,10 @@ pub fn materialize_motion_scene_from_code(
         canvas: or_motion::MotionCanvas { width, height },
         ..or_motion::CodeSceneOptions::default()
     };
-    let scene = match or_motion::scene_from_source(&source, or_motion::CodeLanguage::Rust, &options)
-    {
+    // The language follows the file, as it does in the CLI, so a Python artifact is
+    // tokenised as Python rather than as plain text.
+    let language = or_motion::CodeLanguage::from_path(&source_path);
+    let scene = match or_motion::scene_from_source(&source, language, &options) {
         Ok(scene) => scene,
         // `CodeSceneError` carries its code rather than a Display message.
         Err(error) => return failure(error.code(), error.code().to_owned(), &output),

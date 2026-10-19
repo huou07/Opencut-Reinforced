@@ -884,6 +884,29 @@ class each claim actually has:
     *label*, so its waits use `label_regex` rather than exact text; and one attempt was
     `BLOCKED` on the preflight's 6 GiB available-memory precondition, which is a host
     measurement and not a product result.
+- **Phase 3: the tokeniser serves more than Rust (2026-10-19).** `or_motion` gained
+  `CodeLanguage::Python`, chosen from the file name (`.py`, `.pyi`) by the same
+  `from_path` rule the CLI and the bridge both use, and the line tokeniser was
+  **parameterised rather than copied**: one scanner now takes a small syntax descriptor
+  (line-comment marker, whether block comments exist, which quote bytes open a string,
+  whether `'` is a plain literal, and the keyword set), so Rust and Python cannot drift
+  apart. Python's `#` comments, single and double quoted strings, `def`/`class` names and
+  35 keywords highlight; `//` is not a Python comment and a Rust keyword is not a Python
+  keyword, both pinned by tests. A triple quote is a string to the end of the line, which
+  is what a line-based tokeniser can honestly promise and is documented as such.
+  - **Measured end to end:** `or motion from-code --source illustration.py --output
+    scene.json` reports `language python`, and `or motion render --file scene.json --at
+    2/1 --output still.png` writes a valid 1920x1080 PNG (8,296,178 bytes, signature
+    checked). The bridge's `materialize_motion_scene_from_code` now derives the language
+    from the path too, so the app and the CLI agree.
+  - **A real defect was caught by an existing test, not by me.** The first version of the
+    descriptor compared the comment marker with `line[index..].starts_with(...)`, which
+    panics when `index` lands inside a multi-byte character; the hostile-input test
+    (`a_hostile_sample_cannot_make_the_tokeniser_loop_or_the_scene_unbounded`) failed
+    with "start byte index 5 is not a char boundary". The comparison is now byte-wise.
+  - **Still open in this gap:** only Rust and Python are tokenised; JavaScript and
+    everything else are plain text, and there is still one bundled font with no
+    monospace face.
 - **Automatic subtitles — desktop implemented and measured, Android BLOCKED on
   native packaging (2026-10-20):**
   whisper.cpp `tiny.en` is pinned by hash and downloaded only on confirmation

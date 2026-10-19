@@ -31,6 +31,7 @@ pub const MAX_CODE_LINE_BYTES: usize = 4096;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CodeLanguage {
     Rust,
+    Python,
     PlainText,
 }
 
@@ -40,6 +41,8 @@ impl CodeLanguage {
         let lowered = path.to_ascii_lowercase();
         if lowered.ends_with(".rs") {
             Self::Rust
+        } else if lowered.ends_with(".py") || lowered.ends_with(".pyi") {
+            Self::Python
         } else {
             Self::PlainText
         }
@@ -48,6 +51,7 @@ impl CodeLanguage {
     pub fn name(self) -> &'static str {
         match self {
             Self::Rust => "rust",
+            Self::Python => "python",
             Self::PlainText => "plain_text",
         }
     }
@@ -197,6 +201,16 @@ pub struct CodeToken {
     pub kind: CodeTokenKind,
 }
 
+/// Python's keywords, as the tokeniser needs them: a word that is a keyword is
+/// highlighted wherever it appears, which is what a reader expects from a keyword list
+/// rather than from a parser.
+const PYTHON_KEYWORDS: [&str; 35] = [
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
+    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+    "with", "yield",
+];
+
 const RUST_KEYWORDS: [&str; 51] = [
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
     "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
@@ -212,6 +226,52 @@ const RUST_KEYWORDS: [&str; 51] = [
 /// lines is highlighted only on the line where it opens and where it closes, and the
 /// lines between are plain. That is a stated limitation of a lexical highlighter, not
 /// an oversight, and it keeps the scan free of cross-line state.
+/// The parts of a language a line tokeniser needs.
+///
+/// One scanner serves every language; a second copy per language would drift from the
+/// first, and the token kinds are the same across them.
+struct LanguageSyntax {
+    /// The marker that starts a comment running to the end of the line.
+    line_comment: &'static str,
+    /// Whether `/* ... */` is a comment.
+    block_comment: bool,
+    /// The quote bytes that start a string literal with backslash escapes.
+    string_quotes: &'static [u8],
+    /// Whether `'` starts a short plain literal instead of a string (Rust lifetimes
+    /// and character literals; Python uses it for strings).
+    single_quote_is_plain: bool,
+    keywords: &'static [&'static str],
+}
+
+fn syntax_for(language: CodeLanguage) -> LanguageSyntax {
+    match language {
+        CodeLanguage::Rust => LanguageSyntax {
+            line_comment: "//",
+            block_comment: true,
+            string_quotes: b"\"",
+            single_quote_is_plain: true,
+            keywords: &RUST_KEYWORDS,
+        },
+        CodeLanguage::Python => LanguageSyntax {
+            line_comment: "#",
+            block_comment: false,
+            // Python's single quotes are strings; its triple quotes open a string that
+            // this line-based tokeniser carries to the end of the line, because it has
+            // no state between lines and inventing one would change the span contract.
+            string_quotes: b"\"'",
+            single_quote_is_plain: false,
+            keywords: &PYTHON_KEYWORDS,
+        },
+        CodeLanguage::PlainText => LanguageSyntax {
+            line_comment: "",
+            block_comment: false,
+            string_quotes: b"",
+            single_quote_is_plain: false,
+            keywords: &[],
+        },
+    }
+}
+
 pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
     if language == CodeLanguage::PlainText {
         return vec![CodeToken {
@@ -220,13 +280,20 @@ pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
             kind: CodeTokenKind::Plain,
         }];
     }
+    let syntax = syntax_for(language);
     let bytes = line.as_bytes();
     let mut tokens = Vec::new();
     let mut index = 0;
     while index < bytes.len() {
         let byte = bytes[index];
         // A comment runs to the end of the line.
-        if byte == b'/' && bytes.get(index + 1) == Some(&b'/') {
+        // Compared as bytes, never as a string slice: `index` walks byte by byte, so it
+        // can sit inside a multi-byte character, and slicing there panics. The hostile
+        // input test caught exactly that.
+        if !syntax.line_comment.is_empty()
+            && bytes.len() >= index + syntax.line_comment.len()
+            && &bytes[index..index + syntax.line_comment.len()] == syntax.line_comment.as_bytes()
+        {
             tokens.push(CodeToken {
                 start: index,
                 end: bytes.len(),
@@ -235,7 +302,7 @@ pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
             break;
         }
         // A block comment inside one line.
-        if byte == b'/' && bytes.get(index + 1) == Some(&b'*') {
+        if syntax.block_comment && byte == b'/' && bytes.get(index + 1) == Some(&b'*') {
             let end = line[index + 2..]
                 .find("*/")
                 .map(|offset| index + 2 + offset + 2)
@@ -249,12 +316,12 @@ pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
             continue;
         }
         // A string literal, with a backslash escape.
-        if byte == b'"' {
+        if syntax.string_quotes.contains(&byte) {
             let mut cursor = index + 1;
             while cursor < bytes.len() {
                 match bytes[cursor] {
                     b'\\' => cursor += 2,
-                    b'"' => {
+                    quote if quote == byte => {
                         cursor += 1;
                         break;
                     }
@@ -271,7 +338,7 @@ pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
             continue;
         }
         // A character literal or a lifetime: both are short and plain.
-        if byte == b'\'' {
+        if syntax.single_quote_is_plain && byte == b'\'' {
             let end = (index + 2).min(bytes.len());
             tokens.push(CodeToken {
                 start: index,
@@ -306,7 +373,7 @@ pub fn tokenize_line(line: &str, language: CodeLanguage) -> Vec<CodeToken> {
                 cursor += 1;
             }
             let word = &line[index..cursor];
-            let kind = if RUST_KEYWORDS.contains(&word) {
+            let kind = if syntax.keywords.contains(&word) {
                 CodeTokenKind::Keyword
             } else if bytes.get(cursor) == Some(&b'(') {
                 CodeTokenKind::Function
@@ -652,6 +719,84 @@ mod tests {
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].kind, CodeTokenKind::Plain);
         assert_eq!(tokens[0].end, "fn main() { // not rust here }".len());
+    }
+
+    #[test]
+    fn python_source_tokenises_its_own_syntax() {
+        assert_eq!(CodeLanguage::from_path("tool.py"), CodeLanguage::Python);
+        assert_eq!(CodeLanguage::from_path("tool.pyi"), CodeLanguage::Python);
+        assert_eq!(CodeLanguage::from_path("tool.js"), CodeLanguage::PlainText);
+
+        // A `#` comment runs to the end of the line, and `//` is not a comment.
+        let comment = tokenize_line("total = 1  # running total", CodeLanguage::Python);
+        let last = comment.last().unwrap();
+        assert_eq!(last.kind, CodeTokenKind::Comment);
+        assert_eq!(
+            &"total = 1  # running total"[last.start..last.end],
+            "# running total"
+        );
+        let not_comment = tokenize_line("total = 1 // 2", CodeLanguage::Python);
+        assert!(
+            not_comment
+                .iter()
+                .all(|token| token.kind != CodeTokenKind::Comment)
+        );
+
+        // Single and double quotes are both strings, with escapes.
+        let single = tokenize_line("name = 'or\\'s'", CodeLanguage::Python);
+        assert!(
+            single
+                .iter()
+                .any(|token| token.kind == CodeTokenKind::String)
+        );
+        let double = tokenize_line("name = \"or\"", CodeLanguage::Python);
+        assert!(
+            double
+                .iter()
+                .any(|token| token.kind == CodeTokenKind::String)
+        );
+
+        // Keywords and a defined name, which is what a reader looks for first.
+        let defined = tokenize_line("def render(scene):", CodeLanguage::Python);
+        assert!(defined.iter().any(|token| {
+            token.kind == CodeTokenKind::Keyword
+                && &"def render(scene):"[token.start..token.end] == "def"
+        }));
+        assert!(defined.iter().any(|token| {
+            token.kind == CodeTokenKind::Function
+                && &"def render(scene):"[token.start..token.end] == "render"
+        }));
+        // A Rust keyword is not a Python keyword.
+        let rust_only = tokenize_line("let impl = 1", CodeLanguage::Python);
+        assert!(
+            rust_only
+                .iter()
+                .all(|token| token.kind != CodeTokenKind::Keyword)
+        );
+
+        // A triple quote is a string to the end of the line; the tokeniser has no state
+        // between lines and does not pretend to.
+        let docstring = tokenize_line("\"\"\"A module docstring.\"\"\"", CodeLanguage::Python);
+        assert_eq!(docstring[0].kind, CodeTokenKind::String);
+    }
+
+    #[test]
+    fn python_source_builds_a_scene_with_its_own_highlighting() {
+        let source = b"def total(values):\n    return sum(values)  # add them\n";
+        let scene = scene_from_source(source, CodeLanguage::Python, &CodeSceneOptions::default())
+            .expect("python source builds a scene");
+        // The scene carries the source as text with one span per token, so the
+        // assertion reads the text the scene carries rather than a token list.
+        let text = scene
+            .nodes
+            .iter()
+            .filter_map(|node| node.text.clone())
+            .collect::<String>();
+        assert!(
+            text.contains("def"),
+            "the source text is in the scene: {text}"
+        );
+        assert!(text.contains("# add them"), "the comment is in the scene");
     }
 
     #[test]
