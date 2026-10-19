@@ -6695,6 +6695,16 @@ Future<void> _showTimelineClipActions({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
+      // The action set grew to ten buttons (Close, Move, Duplicate, Trim, Split,
+      // Slip, Roll, Slide, Edit Text/Caption, Ripple Delete), so on a small screen
+      // the title, the content and the wrapped action rows together exceeded the
+      // dialog's available height and it overflowed by 6.0 px on the bottom. The
+      // Android SAF journey found it: `takeException` reported
+      // "A RenderFlex overflowed by 6.0 pixels on the bottom" and the rendering
+      // library named this AlertDialog. A scrollable dialog keeps every control
+      // reachable on a short screen instead of clipping one, which is the guard's
+      // point rather than a way around it.
+      scrollable: true,
       title: const Text('Clip'),
       content: Text(switch (clip.contentKind) {
         ProjectTimelineClipContentKind.media =>
