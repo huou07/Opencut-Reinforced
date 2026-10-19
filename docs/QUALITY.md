@@ -113,6 +113,14 @@ transcription proposal applies through — at p50 5.9 / p95 6.0 ms against a 60 
 budget (2026-10-20). The row undoes each import outside the timed region so every
 iteration starts from the same project.
 
+The denoise measurement no longer asks the helper to report volumes at all: the fixture
+and the cleaned file are PCM, so the script reads the samples and computes an exact
+windowed RMS itself. That was forced by the hosted runs — the packaged helper is built
+`--disable-everything` and has neither the `null` muxer nor the `lavfi` input — and it
+leaves the helper's required surface at exactly the two things the product uses: the
+`afftdn` filter and `volumedetect`'s siblings are not needed, only the filter. A probe
+with a wrapper that refuses every command except `-filters` and the denoise chain passes.
+
 Noise filtering has a budget row: `command.audio_cleanup` measures the product's own
 path — derive the floor from the material, then run the filter — over a three-second
 fixture, so it includes two helper process starts. Measured 2026-10-20 on this host:

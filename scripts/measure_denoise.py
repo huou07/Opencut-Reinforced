@@ -101,20 +101,57 @@ def filter_listing(ffmpeg: Path) -> str:
     return done.stdout
 
 
+def read_pcm(path: Path) -> tuple[int, list[int]]:
+    """Reads a mono 16-bit PCM WAV written by us or by the helper.
+
+    The measurement decodes PCM itself rather than asking the helper to report a
+    volume: the packaged helper is built --disable-everything, so it has neither the
+    `null` muxer nor the `lavfi` input, and widening the shipped surface so a test can
+    read its own output would be the wrong trade. The fixture and the cleaned file are
+    both PCM, so an exact windowed RMS is available here without any helper support.
+    """
+    data = path.read_bytes()
+    if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise SystemExit(f"{path} is not a RIFF/WAVE file")
+    offset = 12
+    rate = 0
+    samples: list[int] = []
+    while offset + 8 <= len(data):
+        chunk_id = data[offset : offset + 4]
+        size = struct.unpack_from("<I", data, offset + 4)[0]
+        body = data[offset + 8 : offset + 8 + size]
+        if chunk_id == b"fmt ":
+            _format, channels, rate, _byte_rate, _align, bits = struct.unpack_from(
+                "<HHIIHH", body, 0
+            )
+            if channels != 1 or bits != 16:
+                raise SystemExit(f"{path} must be mono 16-bit PCM")
+        elif chunk_id == b"data":
+            samples = list(struct.unpack(f"<{len(body) // 2}h", body[: len(body) // 2 * 2]))
+        offset += 8 + size + (size & 1)
+    if not samples or rate == 0:
+        raise SystemExit(f"{path} has no audio samples")
+    return rate, samples
+
+
+def window_rms_db(path: Path, window: tuple[float, float]) -> float:
+    """The RMS level in dBFS over a time window, computed from the samples."""
+    rate, samples = read_pcm(path)
+    start = max(0, int(window[0] * rate))
+    end = min(len(samples), int((window[0] + window[1]) * rate))
+    windowed = samples[start:end]
+    if not windowed:
+        raise SystemExit(f"{path} has no samples in {window}")
+    mean_square = sum((sample / 32_768.0) ** 2 for sample in windowed) / len(windowed)
+    if mean_square <= 0.0:
+        return -120.0
+    return 20.0 * math.log10(math.sqrt(mean_square))
+
+
 def mean_volume_db(ffmpeg: Path, path: Path, window: tuple[float, float]) -> float:
-    start, duration = window
-    stderr = run(
-        [
-            str(ffmpeg), "-hide_banner", "-nostats", "-ss", str(start), "-t", str(duration),
-            "-i", str(path), "-map", "0:a", "-af", "volumedetect", "-f", "null", "-",
-        ],
-        "volumedetect",
-        helper_environment(ffmpeg),
-    )
-    match = re.search(r"mean_volume: (-?[0-9.]+) dB", stderr)
-    if match is None:
-        raise SystemExit(f"volumedetect reported no mean volume:\n{stderr[-600:]}")
-    return float(match.group(1))
+    """Kept as the measurement's name for one window's level."""
+    del ffmpeg  # The helper is not needed to read PCM we can read ourselves.
+    return window_rms_db(path, window)
 
 
 def build_fixture(work: Path) -> Path:
