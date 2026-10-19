@@ -62,6 +62,7 @@ env:
     --enable-filter=aresample
     --enable-filter=showwavespic
     --enable-filter=afftdn
+    --enable-muxer=wav
   # Reused desktop/Android delivery profile; each target enables it only after
   # staging the exact libvpx/libopus source pins and notices.
   FFMPEG_EXPORT_CONFIGURE_ARGS: >-

@@ -164,8 +164,13 @@ programs, the `pipe` protocol for piped artifact output, the `png` and `mpeg4` e
 the zlib compression library the PNG encoder requires. `afftdn` is FFmpeg's own
 FFT noise-reduction audio filter: it is a native component of libavfilter under the
 same LGPL-2.1-or-later posture, it links no additional external library, and it is
-enabled for Phase 4's audio clean-up. Its behaviour is verified by measurement
-(`scripts/measure_denoise.py`) rather than by a capability listing. Windows helpers statically link
+enabled for Phase 4's audio clean-up. The `wav` muxer is enabled for the same feature,
+because the clean-up writes PCM S16LE into a `.wav` destination: the first version of
+that path shipped without it and could not have written its output with the packaged
+helper at all. Both are native FFmpeg components under the unchanged
+LGPL-2.1-or-later posture with no additional external library. The capability is
+verified by measurement (`scripts/measure_denoise.py`) rather than by a capability
+listing. Windows helpers statically link
 pinned zlib 1.3.2 source (SHA-256
 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) and ship its
 license notice; macOS and Linux use system zlib with no extra bundled file. No GPL, version3, nonfree,

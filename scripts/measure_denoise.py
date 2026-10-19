@@ -306,9 +306,12 @@ def main() -> int:
         noise_floor = round(mean_volume_db(ffmpeg, fixture, NOISE_WINDOW)) + 2
         chain = f"afftdn=nf={noise_floor}:nr=12"
         denoised = work / "denoised.wav"
+        # The same output shape the product uses: pcm_s16le into a .wav destination.
+        # A container that merely happens to be enabled would hide a missing muxer,
+        # which is exactly how the shipped helper failed to write its own output.
         run([
             str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-i", str(fixture),
-            "-af", chain, "-ac", "1", str(denoised),
+            "-af", chain, "-vn", "-c:a", "pcm_s16le", "-ac", "1", str(denoised),
         ], "denoise", helper_environment(ffmpeg))
         print("via            : the packaged ffmpeg helper directly")
         measured = measure_windows(ffmpeg, fixture, denoised)
