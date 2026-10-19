@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -32,6 +33,12 @@ class AppTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // One shortcut, named the way the current platform spells it. Showing the
+    // macOS Command glyph on Linux or Windows told those users to press a key
+    // their keyboard does not have.
+    final commandShortcut = defaultTargetPlatform == TargetPlatform.macOS
+        ? '⌘ K'
+        : 'Ctrl+K';
     return Container(
       key: const ValueKey('app-top-bar'),
       height: OrSpacing.topBarHeight,
@@ -186,13 +193,13 @@ class AppTopBar extends StatelessWidget {
                   key: const ValueKey('open-command-palette'),
                   onPressed: onOpenCommandPalette,
                   icon: const Icon(Icons.search_outlined, size: 17),
-                  label: const Row(
+                  label: Row(
                     children: [
-                      Text('Search commands'),
-                      SizedBox(width: OrSpacing.x2),
+                      const Text('Search commands'),
+                      const SizedBox(width: OrSpacing.x2),
                       Text(
-                        'Ctrl/⌘ K',
-                        style: TextStyle(
+                        commandShortcut,
+                        style: const TextStyle(
                           color: OrColors.textMuted,
                           fontSize: OrType.tinySize,
                         ),
@@ -211,7 +218,7 @@ class AppTopBar extends StatelessWidget {
                 )
               else
                 Tooltip(
-                  message: 'Search commands (Ctrl/⌘ K)',
+                  message: 'Search commands ($commandShortcut)',
                   child: IconButton(
                     key: const ValueKey('open-command-palette'),
                     onPressed: onOpenCommandPalette,

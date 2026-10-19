@@ -23,6 +23,14 @@ extension AppDestinationPresentation on AppDestination {
     AppDestination.editorPreview => 'Editor Shell Preview',
   };
 
+  /// The compact bottom bar gives each destination 64 px at 320 wide;
+  /// "Asset Library" ellipsized to "Asset Li..." there. The desktop sidebar
+  /// keeps the full name.
+  String get shortLabel => switch (this) {
+    AppDestination.assets => 'Assets',
+    _ => label,
+  };
+
   IconData get icon => switch (this) {
     AppDestination.home => Icons.home_outlined,
     AppDestination.projects => Icons.folder_outlined,
@@ -287,7 +295,7 @@ class _CompactDestination extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 1),
                 child: Text(
-                  destination.label,
+                  destination.shortLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

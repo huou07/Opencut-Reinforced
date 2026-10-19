@@ -59,6 +59,9 @@ void main() {
     _setViewport(tester, const Size(390, 844));
     await _mount(tester);
     expect(find.byKey(const ValueKey('compact-navigation')), findsOneWidget);
+    // 320 px cannot hold "Asset Library"; the compact bar names it "Assets".
+    expect(find.text('Assets'), findsOneWidget);
+    expect(find.text('Asset Library'), findsNothing);
 
     final destinations = [
       (AppDestination.projects, 'No active project'),
@@ -1875,13 +1878,47 @@ void main() {
           )
           .first;
       expect(find.text('TRANSFORM'), findsOneWidget);
+      // The field collapsed to 23 px once and the floating label sat on top of
+      // the value. A full-height input keeps the label on the notch.
+      expect(
+        tester.getSize(find.byKey(const ValueKey('inspector-visual-x'))).height,
+        greaterThanOrEqualTo(40),
+      );
+      // At 1280 px the full toolbar names overflowed the window. The short
+      // names keep every action on screen; the full name is not rendered.
+      final toolbar = find.byKey(const ValueKey('timeline-toolbar'));
+      expect(
+        find.descendant(of: toolbar, matching: find.text('Add Video')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: toolbar, matching: find.text('Export')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: toolbar, matching: find.text('Export Captions')),
+        findsNothing,
+      );
+      expect(find.text('Ctrl+K'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-x')),
         '250',
       );
+      // Full-height fields push the effects section below the fold; a lazy
+      // ListView does not build a field that was never scrolled into view.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('inspector-visual-brightness')),
+        200,
+        scrollable: inspectorScrollable,
+      );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-brightness')),
         '250',
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('inspector-visual-contrast')),
+        200,
+        scrollable: inspectorScrollable,
       );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-contrast')),
