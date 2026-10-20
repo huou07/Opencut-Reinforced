@@ -16,6 +16,11 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+try:
+    from .media_checks import check_metadata
+except ImportError:
+    from media_checks import check_metadata
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_FILE = "integration_test/packaged_product_journey_test.dart"
@@ -395,6 +400,9 @@ def main() -> int:
         env={key: value for key, value in env.items() if not key.startswith("DYLD_") and key != "LD_LIBRARY_PATH"},
     )
     probe_result = json.loads(probe.stdout)
+    check_metadata(probe_result, {"width": 1920, "height": 1080,
+        "video_codec": "vp9", "audio_codec": "opus", "container": "webm",
+        "duration": 30, "duration_tolerance": 0.5})
     streams = probe_result["streams"]
     video = next((stream for stream in streams if stream["codec_type"] == "video"), None)
     audio = next((stream for stream in streams if stream["codec_type"] == "audio"), None)
@@ -438,7 +446,7 @@ def main() -> int:
         env=helper_env,
         timeout=180,
     )
-    if full_decode.returncode != 0:
+    if full_decode.returncode != 0 or full_decode.stderr.strip():
         raise SystemExit(
             "The packaged ffprobe could not fully decode the exported video and audio: "
             f"{full_decode.stderr}"
@@ -459,6 +467,10 @@ def main() -> int:
             f"{decoded_frame_counts}"
         )
     report = {
+        "result": "PASS",
+        "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "build_mode": "debug integration entrypoint with packaged helper runtime",
+        "independent_player": "UNVERIFIED — probe/decode is not a player launch",
         "platform": device,
         "host_ffmpeg_path_lookup": "blocked",
         "host_ffprobe_path_lookup": "blocked",

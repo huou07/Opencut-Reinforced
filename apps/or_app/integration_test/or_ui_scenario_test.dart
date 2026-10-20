@@ -21,15 +21,18 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
+import 'package:or_app/project/project_gateway.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
@@ -201,6 +204,7 @@ class _StepResult {
   String? screenshot;
   String? semantics;
   Map<String, Object?>? measurement;
+  Map<String, Object?>? observation;
 
   Map<String, Object?> toJson() => {
     'index': index,
@@ -212,6 +216,7 @@ class _StepResult {
     if (screenshot != null) 'screenshot': screenshot,
     if (semantics != null) 'semantics': semantics,
     if (measurement != null) 'measurement': measurement,
+    if (observation != null) 'observation': observation,
   };
 }
 
@@ -224,17 +229,32 @@ class _Runner {
 
   final GlobalKey boundary = GlobalKey();
   final List<_StepResult> results = [];
+  final _ObservedGateway gateway = _ObservedGateway();
   late final _FixturePicker picker;
   List<String> screenInventory = const [];
   bool ok = true;
   String? firstFailure;
   SemanticsHandle? _semantics;
   final List<String> frameworkErrors = [];
+  final List<Map<String, int>> frameTimings = [];
+
+  void _recordTimings(List<FrameTiming> timings) {
+    for (final timing in timings) {
+      if (frameTimings.length >= 1200) break;
+      frameTimings.add({
+        'build_us': timing.buildDuration.inMicroseconds,
+        'raster_us': timing.rasterDuration.inMicroseconds,
+        'total_us': timing.totalSpan.inMicroseconds,
+      });
+    }
+  }
+
   void Function(FlutterErrorDetails)? _previousOnError;
 
   String get platform => Platform.operatingSystem;
 
   Future<void> run() async {
+    SchedulerBinding.instance.addTimingsCallback(_recordTimings);
     final viewport = spec.viewport ?? (width: 1280, height: 800);
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = Size(viewport.width, viewport.height);
@@ -243,13 +263,14 @@ class _Runner {
     picker = _FixturePicker(
       Directory(artifacts.replacements.path),
       spec.pickList,
+      spec.raw['fixture_path'] as String?,
     );
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
         child: OrApp(
           gateway: const RustCoreGateway(),
-          projectGateway: const RustProjectGateway(),
+          projectGateway: gateway,
           projectFilePicker: picker,
           recentProjectStore: InMemoryRecentProjectStore(),
         ),
@@ -281,6 +302,7 @@ class _Runner {
   }
 
   Future<void> dispose() async {
+    SchedulerBinding.instance.removeTimingsCallback(_recordTimings);
     if (_previousOnError != null) {
       FlutterError.onError = _previousOnError;
       _previousOnError = null;
@@ -292,7 +314,19 @@ class _Runner {
       'viewport': spec.viewport == null
           ? null
           : {'width': spec.viewport!.width, 'height': spec.viewport!.height},
-      'result': ok ? 'PASS' : 'FAIL',
+      'result': ok && results.length == spec.steps.length ? 'PASS' : 'FAIL',
+      'fixture_path': picker.media,
+      'framework_errors': frameworkErrors,
+      'build_mode': kDebugMode
+          ? 'debug'
+          : (kProfileMode ? 'profile' : 'release'),
+      'performance': {
+        'current_rss_bytes': ProcessInfo.currentRss,
+        'max_rss_bytes': ProcessInfo.maxRss,
+        'flutter_frame_timings': frameTimings,
+        'limits': 'Flutter build/raster durations; not decode, presentation pacing or A/V sync',
+      },
+
       'steps': results.map((result) => result.toJson()).toList(),
     };
     final name = '${spec.name}.json';
@@ -491,6 +525,64 @@ class _Runner {
         picker.next = '${step['next']}';
         result.detail = 'next pick: ${picker.next}';
         return;
+      case 'canonical':
+        final snapshot = await tester.runAsync(gateway.snapshot);
+        if (snapshot == null) {
+          throw _StepFailure(
+            'no_session',
+            'no canonical Rust session observed',
+          );
+        }
+        result.observation = snapshot;
+        artifacts.writeJson('canonical-${result.index}.json', snapshot);
+        final expected = step['equals'] as Map<String, Object?>?;
+        if (expected == null || expected.isEmpty) {
+          throw _StepFailure('bad_scenario', 'canonical needs nonempty equals');
+        }
+        for (final entry in expected.entries) {
+          if (!snapshot.containsKey(entry.key) ||
+              jsonEncode(snapshot[entry.key]) != jsonEncode(entry.value)) {
+            throw _StepFailure(
+              'canonical_mismatch',
+              '${entry.key}: expected ${entry.value}, observed ${snapshot[entry.key]}',
+            );
+          }
+        }
+        final forbidden = step['not_equals'] as Map<String, Object?>? ?? {};
+        for (final entry in forbidden.entries) {
+          if (jsonEncode(snapshot[entry.key]) == jsonEncode(entry.value)) {
+            throw _StepFailure(
+              'canonical_unchanged',
+              '${entry.key} still equals ${entry.value}; interaction had no intended effect',
+            );
+          }
+        }
+        result.observation = {...snapshot, 'assertions_passed': true};
+        return;
+      case 'preview_probe':
+        result.observation = await _previewProbe(step);
+        return;
+      case 'drag':
+        await _act(step, (finder) async {
+          await _scrollIntoView(finder);
+          if (finder.hitTestable().evaluate().isEmpty) {
+            throw _StepFailure(
+              'inaccessible',
+              'drag target is not hit-testable',
+            );
+          }
+          final size = tester.getSize(finder);
+          await tester.timedDrag(
+            finder,
+            Offset(
+              size.width * ((step['fraction_x'] as num?)?.toDouble() ?? 0),
+              size.height * ((step['fraction_y'] as num?)?.toDouble() ?? 0),
+            ),
+            Duration(milliseconds: _milliseconds(step['duration_ms'] ?? 400)),
+          );
+        });
+        await _settle();
+        return;
       case 'scroll':
         final finder = _requireFinder(step);
         await tester.drag(
@@ -505,6 +597,93 @@ class _Runner {
       default:
         throw _StepFailure('bad_scenario', 'unknown op "$op"');
     }
+  }
+
+  Future<Map<String, Object?>> _previewProbe(Map<String, Object?> step) async {
+    final session = gateway.session;
+    if (session == null) {
+      throw _StepFailure('no_session', 'preview has no project');
+    }
+    final samples = <Map<String, Object?>>[];
+    final pixels = <List<int>>[];
+    // Observe only the viewer; changing transport labels must not fake playback.
+    final viewer = _requireFinder({
+      'selector': {'key': 'editor-viewer-surface'},
+    });
+    for (var index = 0; index < 3; index++) {
+      await _pumpFor(_milliseconds(step['interval_ms'] ?? 300));
+      final state = await tester.runAsync(() => gateway.previewState(session));
+      if (state == null ||
+          state.errorCode != null ||
+          state.width <= 0 ||
+          state.height <= 0) {
+        throw _StepFailure(
+          'preview_failed',
+          'no decoded video: ${state?.errorCode} ${state?.errorMessage}',
+        );
+      }
+      final render =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await render.toImage(pixelRatio: 1);
+      final rect = tester
+          .getRect(viewer)
+          .shift(-tester.getTopLeft(find.byKey(boundary)));
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawImageRect(
+        image,
+        rect,
+        Rect.fromLTWH(0, 0, rect.width, rect.height),
+        Paint(),
+      );
+      final picture = recorder.endRecording();
+      final cropped = await picture.toImage(
+        rect.width.ceil(),
+        rect.height.ceil(),
+      );
+      final bytes = await cropped.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      final png = await cropped.toByteData(format: ui.ImageByteFormat.png);
+      if (bytes == null || png == null) {
+        throw _StepFailure(
+          'preview_pixels_unavailable',
+          'viewer capture unavailable',
+        );
+      }
+      pixels.add(bytes.buffer.asUint8List().toList());
+      artifacts.writeBytes(
+        'preview-${results.length - 1}-$index.png',
+        png.buffer.asUint8List(),
+      );
+      samples.add({
+        'frame_sequence': '${state.frameSequence}',
+        'presented_time': state.presentedTime?.canonical,
+        'playing': state.playing,
+        'width': state.width,
+        'height': state.height,
+      });
+      image.dispose();
+      cropped.dispose();
+      picture.dispose();
+    }
+    final sequences = samples.map((sample) => sample['frame_sequence']).toSet();
+    final times = samples.map((sample) => sample['presented_time']).toSet();
+    final changed = !listEquals(pixels.first, pixels.last);
+    final observation = {
+      'samples': samples,
+      'viewer_pixels_changed': changed,
+      'method': 'Rust decoded state plus cropped Flutter viewer pixels; no transport text',
+    };
+    artifacts.writeJson('preview-${results.length - 1}.json', observation);
+    if (sequences.length < 2 || times.length < 2 || !changed) {
+      throw _StepFailure(
+        'preview_frozen_or_uncaptured',
+        'decoded sequence/time and viewer pixels must change; '
+            'sequences=$sequences times=$times pixels_changed=$changed. '
+            'Native texture readback limitations require independent target capture, never PASS.',
+      );
+    }
+    return observation;
   }
 
   Future<void> _act(
@@ -1071,8 +1250,60 @@ class _StepFailure implements Exception {
 /// The only host integration the runner replaces: the OS file picker. It serves
 /// synthetic fixtures from the artifact directory, so an import journey is a
 /// real import of a real file through the real Rust command path.
+/// Observes the production session; no command/state injection or fake gateway.
+class _ObservedGateway extends RustProjectGateway {
+  ProjectSessionHandle? session;
+
+  @override
+  Future<ProjectReadModel> summary(ProjectSessionHandle session) {
+    this.session = session;
+    return super.summary(session);
+  }
+
+  Future<Map<String, Object?>> snapshot() async {
+    final current = session;
+    if (current == null) throw StateError('No project session');
+    final before = await super.summary(current);
+    final tracks = await listTimelineTracks(current);
+    final media = await listMediaPage(current, offset: 0, limit: 50);
+    final clips = <ProjectTimelineClip>[];
+    for (final track in tracks.items) {
+      final page = await listTimelineClips(
+        current,
+        trackId: track.trackId,
+        offset: 0,
+        limit: 100,
+      );
+      if (page.nextOffset != null) {
+        throw StateError(
+          'Diagnostic snapshot bound: at most 100 clips per track',
+        );
+      }
+      clips.addAll(page.items);
+    }
+    final after = await super.summary(current);
+    if (before.revision != after.revision ||
+        tracks.projectRevision != before.revision) {
+      throw StateError('Canonical state changed while observing');
+    }
+    return {
+      'project_id': before.projectId,
+      'revision': '${before.revision}',
+      'dirty': before.dirty,
+      'media_count': media.totalCount,
+      'track_count': tracks.items.length,
+      'clip_count': clips.length,
+      'starts': clips.map((clip) => clip.timelineStart.canonical).toList(),
+      'durations': clips
+          .map((clip) => clip.timelineDuration.canonical)
+          .toList(),
+      'media_ids': clips.map((clip) => clip.mediaId).toList(),
+    };
+  }
+}
+
 class _FixturePicker extends FileSelectorProjectPicker {
-  _FixturePicker(this.directory, List<String> fixtures) {
+  _FixturePicker(this.directory, List<String> fixtures, String? fixturePath) {
     // A `noisy` fixture carries signal: the silent one cannot exercise anything
     // that measures or filters audio, because digital silence has no noise floor.
     media = fixtures.contains('noisy')
@@ -1083,6 +1314,15 @@ class _FixturePicker extends FileSelectorProjectPicker {
       File(badMedia).writeAsStringSync('synthetic invalid media');
     } else {
       badMedia = media;
+    }
+    if (fixturePath != null) {
+      final source = File(fixturePath);
+      if (!source.existsSync()) {
+        throw StateError('Missing fixture: $fixturePath');
+      }
+      media = source
+          .copySync('${directory.path}/${source.uri.pathSegments.last}')
+          .path;
     }
     project = '${directory.path}/scenario.orproj';
   }
@@ -1175,4 +1415,10 @@ class _FixturePicker extends FileSelectorProjectPicker {
 
   @override
   Future<List<String>> openMediaSources() async => [_resolved];
+
+  @override
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async => '${directory.path}/export.webm';
 }

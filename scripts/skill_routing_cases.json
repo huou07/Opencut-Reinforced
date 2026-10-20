@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "limits": "Reviewed routing expectations and static contracts. Not live model routing or DSH discovery evidence.",
+  "cases": [
+    {
+      "id": "ui-trim",
+      "request": "Implement the requested accessible trim interaction in the Flutter timeline.",
+      "primary": "or-ui-ux",
+      "exclude": [
+        "or-edit-feature",
+        "or-media-ai",
+        "or-release"
+      ],
+      "why": "Visible interaction, existing shared Rust command."
+    },
+    {
+      "id": "rust-trim",
+      "request": "Change Rust trim validation and its undo contract without changing the GUI.",
+      "primary": "or-edit-feature",
+      "exclude": [
+        "or-ui-ux",
+        "or-release"
+      ],
+      "why": "Canonical command semantics."
+    },
+    {
+      "id": "media-compatibility",
+      "request": "Verify that this supported WebM imports and exports real video and audio.",
+      "primary": "or-media-ai",
+      "exclude": [
+        "or-edit-feature",
+        "or-release"
+      ],
+      "why": "Decoded media/preset contract; AI context not required."
+    },
+    {
+      "id": "performance",
+      "request": "Diagnose the failing seek-latency check in profile mode.",
+      "primary": "verify-debug",
+      "exclude": [
+        "or-ui-ux",
+        "or-edit-feature"
+      ],
+      "why": "Failing measured runtime check; select the existing profile command, no design or feature work."
+    },
+    {
+      "id": "release-verification",
+      "request": "Run the authorized release verification for this exact SHA, without publishing.",
+      "primary": "or-release",
+      "exclude": [
+        "or-dev-loop",
+        "or-edit-feature"
+      ],
+      "why": "Hosted/package/release safeguards, no publication grant."
+    },
+    {
+      "id": "prose",
+      "request": "Correct one typo in the testing instructions.",
+      "primary": null,
+      "exclude": [
+        "or-ui-ux",
+        "or-dev-loop",
+        "or-release",
+        "or-edit-feature"
+      ],
+      "why": "No runtime gate or project procedure required."
+    },
+    {
+      "id": "plan-only",
+      "request": "Plan a timeline improvement, do not implement it.",
+      "primary": "task-planning",
+      "exclude": [
+        "or-ui-ux",
+        "or-edit-feature",
+        "or-dev-loop"
+      ],
+      "why": "Artifact only; no edits, gates, commits or new agents."
+    },
+    {
+      "id": "rust-build-failure",
+      "request": "Fix the named Rust build failure.",
+      "primary": "verify-debug",
+      "exclude": [
+        "or-edit-feature",
+        "or-dev-loop"
+      ],
+      "why": "Diagnose failure before feature or lane workflow."
+    },
+    {
+      "id": "status",
+      "request": "Report current OR readiness from existing evidence.",
+      "primary": "project-steward",
+      "exclude": [
+        "or-dev-loop",
+        "or-edit-feature",
+        "or-release"
+      ],
+      "why": "Read-only status; release procedure not triggered merely by readiness wording."
+    },
+    {
+      "id": "local-native",
+      "request": "Run this existing diagnostic scenario on the bounded Linux lane.",
+      "primary": "or-dev-loop",
+      "exclude": [
+        "or-edit-feature",
+        "or-ui-ux",
+        "or-release"
+      ],
+      "why": "Known runtime command; no product implementation or UX redesign."
+    }
+  ]
+}

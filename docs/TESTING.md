@@ -2,7 +2,139 @@
 
 Last reviewed: 2026-10-20
 
-## Status
+## Select checks by the claim
+
+Authority: executable verification procedures and ordinary-user evaluation.
+QUALITY owns the acceptance bar; TOOLING owns commands. The coverage/history
+sections below preserve prior implementation contracts and dated receipts;
+they are not evidence for today's HEAD.
+
+| Change/claim | Smallest useful layer | Additional evidence when claimed |
+|---|---|---|
+| Prose/skill routing | Diff, links, freshness, skill contracts | Reviewed routing examples; live model selection is a separate trial |
+| Rust editing semantics | Affected validation/command/history/storage tests | CLI parity and real Flutter action plus canonical state for a GUI claim |
+| Interaction/layout | Affected widgets/semantics and or_ui scenario | Actual pointer/touch/keyboard, visual/focus review, shipped platform when relevant |
+| Import/preview/export | Real fixtures and affected media integration | Actual picker/SAF, changing presented frames, supported audio, independent preset/decode/player |
+| Package/release | Existing native/platform workflows and release-gate | Shipped entrypoint/dependencies/permissions and exact-source claims; separate owner approval |
+| Performance | Named-host profile workload and repeated samples | Physical GPU/device, pacing and sync observations for those claims |
+| Beginner usability | Independent human task observation below | Automation supplements it; the coding agent cannot approve its own usability |
+
+Source gate: `bash scripts/check-repo.sh`. Full configured local admission:
+`bash scripts/acceptance.sh`. Select affected Rust/Flutter tests first.
+Do not run unrelated expensive platform jobs for a typo. A required unavailable
+lane is BLOCKED, unobserved behavior UNVERIFIED, an actual defect FAIL. Keep all
+attempts/results; a skip never passes. Hosted platform-verification and the
+existing claim schema retain acceptance authority.
+
+## Journey regression procedures
+
+The existing or_ui runner launches the actual Linux/Android debug application,
+drives semantic controls and reads the production Rust session. Its picker
+substitution is explicit. It cannot establish native OS-picker, installed
+package, physical-device performance or human usability claims.
+
+```sh
+python3 scripts/test_or_ui.py
+python3 scripts/test_journey_evidence.py
+python3 scripts/test_skill_contracts.py
+python3 scripts/media_fixtures.py --out apps/or_app/build/journey-fixtures
+python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/direct-trim-diagnostic run scripts/ui_scenarios/direct-trim-diagnostic.json
+python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/split-at-playhead-diagnostic run scripts/ui_scenarios/split-at-playhead-diagnostic.json
+python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/preview-playback-diagnostic run scripts/ui_scenarios/preview-playback-diagnostic.json
+python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/export-playable-diagnostic run scripts/ui_scenarios/export-playable-diagnostic.json
+```
+
+These four journeys are diagnostics, not declarations that defects were fixed.
+Direct trim requires an accessible hit-tested gesture, a changed canonical
+duration and undo. Split must yield two clips at the playhead without supplying
+a timestamp; filling a compulsory time field would defeat this diagnostic.
+Video import must yield usable canonical media/clips; playback must advance
+decoded frame sequence and presented time while viewer-only pixels change.
+A clock/thumbnail/surface-open result cannot satisfy it. Native texture capture
+limitations fail the observation and require independent target capture; they
+do not alone prove the product is frozen.
+
+Export requires an actual file from the app and independently checks the chosen
+container/codecs, dimensions, duration bounds, decoded frames and audio content.
+The independent player option requires ffplay/Xvfb where used. A host without an
+audio sink may explicitly use `SDL_AUDIODRIVER=dummy` for decoding/player launch;
+the report records it and leaves audible playback UNVERIFIED. Do not silently
+substitute that for a real audio/sync claim.
+
+`scripts/test_journey_evidence.py` rejects missing controls, omitted/reordered/
+failed steps, framework errors, canonical mismatch, frozen/blank preview
+observations and invalid/overlong media. These are injected instrument controls,
+not evidence of product defects. `scripts/check_journey_diagnostic.py` additionally
+runs the real split scenario and checks that either its precise manual-time
+failure is retained, or a complete canonical two-clip success is observed.
+It prints separate INFRASTRUCTURE_CHECK and PRODUCT_JOURNEY verdicts.
+Unexpected failures and host blocks fail the infrastructure check. This runs
+alongside the original editor preflight in the existing Linux UI workflow.
+
+Native import claims continue using the packaged desktop journey and Android
+DocumentsUI/SAF tests. Operate the actual picker/provider, then verify media
+identity, usable content, missing/revoked/corrupt input handling, persistence and
+save/reopen. Synthetic picker scenarios do not replace these lanes. Use existing
+desktop hosted runners and Android emulator/SAF automation. Add Patrol or another
+native framework only for a demonstrated permission/platform-UI gap.
+
+## Reusable media
+
+`scripts/media_fixtures.py` generates original two-second smoke patterns: video
+with tone (Matroska FFV1/PCM and WebM VP9/Opus), silent video at another resolution/
+frame rate, raw AVI video, audio-only PCM WAV, unsupported text and corrupt data.
+No downloads, models or third-party footage. The recipe is MIT repository code;
+the generated patterns contain no third-party creative material. Encoder and
+decoder distribution licensing remains a separate product obligation.
+
+The ignored output manifest records generator version, exact commands, size and
+SHA-256. Regeneration on the same FFmpeg build must produce identical file
+hashes; changed encoder versions need a new manifest, never silently reused
+checksums. The existing pinned tiny H.264/AAC fixture and 30-second 1080p packaged
+journey remain useful; do not relabel a two-second 160x90 smoke clip as a
+representative performance workload. Confirm supported codecs per shipped build;
+a valid container is not proof that OR supports it.
+
+Independent validation can also be run without the app:
+
+```sh
+python3 scripts/media_checks.py apps/or_app/build/journey-fixtures/video-audio.webm --expected scripts/media_presets/smoke-webm.json --report apps/or_app/build/journey-fixtures/validation.json --player
+```
+
+That validates the named input file, not an OR export journey. The existing
+packaged desktop verifier retains its representative source/preset/full-frame
+checks and now rejects overlong output and decode errors printed with exit 0.
+Its probe/decode result alone still does not establish independent player launch.
+
+## Independent ordinary-user acceptance
+
+Recruit a person unfamiliar with OR who did not implement the change. Record
+consent for any recording; use only the distributable fixtures and disposable
+project data. Name the exact source/package hash, platform, build mode, hardware,
+screen/input, fixture checksums and test date. Give goals, not a click script:
+
+1. Open OR and explain the workspace in their own words; find how to begin.
+2. Import footage with the normal platform picker (Android document provider).
+   Include a video/audio source and a second silent or audio-only source.
+3. Make a short edit using mouse/touch: position footage, move a clip, trim its
+   edges, split at the playhead and undo a deliberate mistake. Do not teach time
+   arithmetic or lead them to precision dialogs.
+4. Preview the changed portion, seek and resume; observe changing content and
+   audio where supported. Note stalls, wrong content, silence and error feedback.
+5. Save, close and reopen; confirm the same edit and media references.
+6. Export using a discoverable preset/destination, then open the result in an
+   independent player and compare its content/audio to the edit.
+
+For each task record completed/failed/abandoned, elapsed time, attempts,
+confusing labels/controls, failed actions, observed responsiveness and every
+assistance/intervention. Separate unaided from assisted completion; a facilitator
+fixing the timeline is not user success. Capture verbatim comments without
+credentials/personal files. The observer reports facts, the owner reviews the
+remaining usability defects and release implications. No automated PASS or
+agent narrative substitutes for this independent evaluation. No human session
+is claimed until its observations exist.
+
+## Coverage history and existing lanes
 
 Phase 3 has executable tests for the bootstrap core, CLI, and native bridge. Phase 4UI-1 adds structural widget regression coverage for the Flutter visual foundation. Phase 4F adds file-session, local IPC, and semantic CLI contracts. Phase 4UI-2 adds fake-gateway widget coverage, a native Flutter lifecycle test, and a real attached-CLI process test against the same shared live host. Phase 5A adds media identity, metadata, bounded external-probe, and CLI contract coverage plus a real generated-media `ffprobe` test on hosted Linux CI. Phase 5B adds project-format migration/recovery, media-command/history/query, headless/attached CLI parity, Flutter media-panel, and native offline-media bridge coverage. Phase 5C adds bounded Job Manager and disposable cache foundation coverage. Phase 5D adds production source-fingerprint and artifact-service unit coverage, Flutter preview widgets, native bridge checks, and a hosted real-`ffmpeg` thumbnail/waveform integration test. Phase 5E adds persistent cache-index, reconciliation, LRU eviction, concurrency, project-independence, and artifact-regeneration coverage on hosted Linux, macOS, and Windows. Phase 6A adds timeline-domain validation, strict `.orproj` v3 codec and v1/v2 migration, recovery and storage compatibility, query-wire regression, and referenced-media removal guard coverage. Phase 6B adds application command/history/query coverage, headless and attached semantic CLI tests, save/reopen and undo-save storage checks, recovery snapshot/apply/reload checks, and transaction/precondition regression coverage. Phase 6C adds bridge DTO tests, Flutter widget coverage for read-only track/clip presentation and command interactions, bounded and stale page handling, and a hosted native Rust-host timeline lifecycle test through save/reopen. Phase 6D adds exact trim/split/ripple core invariants, compact history/conflict/overflow/capacity guards, CLI changed-only save and attached dirty-state parity, Flutter action/dialog acceptance, and hosted typed-bridge save/reopen coverage. Phase 6E2A adds marker ID/domain/order/bounds tests, strict v4 codec and v1/v2/v3 migration tests, clean-open/explicit-save storage tests, v1 recovery with v3 and v4 nested snapshots, semantic marker command/history/conflict/transaction/revision tests, bounded marker query and sub-1 MiB page tests, Snap V1/V2 schema/tie/read-only tests, headless/attached CLI parity, and local IPC coverage without changing Flutter marker APIs or UI. Phase 7A adds deterministic `or_runtime` coverage for exact snapshot revision/time identity, frame descriptor and lease ownership, bounded queue pressure/close/cancellation, separate render/audio/decode budget release, and software-first capability/provider selection. Phase 7B adds deterministic `or_render` contract coverage, offscreen wgpu synthetic rendering, row-padded readback normalization, resource-owned frame lifetime, and handle-only viewer presentation checks. Phase 7C0 adds a locked, hosted Linux FFmpeg 8.1.3 shared-library compile/link/load probe under an LGPL-only configuration. 7F1 adds deterministic viewer-mailbox tests and hosted macOS/Linux/Windows builds that compile a desktop packaging probe against production `or_media`, stage official FFmpeg 8.1.3 shared libraries beside that probe in the app bundle, verify loading without developer FFmpeg search paths, and preserve source/build provenance. The shared Flutter bridge remains FFmpeg-independent; Phase 9A0 separately builds and packages the approved Android shared libraries and validates the native runtime on an x86_64 emulator. It does not add FFmpeg dependencies to Android product code or to Flutter widget tests. Phase 7F builds the native Flutter pixel-buffer texture adapters but does not add a product viewer or playback controls. The 7C implementation adds bounded/stale/cancellable `or_media` queues, exact timestamp/seek checks, owned software RGBA frame tests, and a linked audio resample/range test with a tiny generated FFV1/PCM fixture. CI runs the production crate against the approved FFmpeg 8.1.3 shared prefix. Checkpoint 8F adds local export/autosave coverage; its authoritative milestone status remains gated on hosted supervisor evidence. The test layers below distinguish implemented coverage from future product tests.
 

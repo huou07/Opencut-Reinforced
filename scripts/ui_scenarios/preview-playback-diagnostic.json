@@ -1,0 +1,109 @@
+{
+  "name": "preview-playback-diagnostic",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "description": "Video must be usable after import: Play must advance decoded Rust frames and presented time while cropped viewer pixels change. Missing texture, blank/frozen video or capture limitations fail this observation and require diagnosis; a clock or thumbnail is insufficient.",
+  "fixture_path": "$OR_UI_ROOT/apps/or_app/build/journey-fixtures/video-audio.webm",
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Video acceptance diagnostic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "video-audio.webm",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-video-track"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-video-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "media_count": 1,
+        "clip_count": 1
+      }
+    },
+    {
+      "op": "tree",
+      "name": "video-imported"
+    },
+    {
+      "op": "shot",
+      "name": "video-imported"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-play"
+      }
+    },
+    {
+      "op": "preview_probe",
+      "interval_ms": 250
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-play"
+      }
+    }
+  ]
+}

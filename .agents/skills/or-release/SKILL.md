@@ -1,76 +1,28 @@
 ---
 name: or-release
-description: Release or distribute OR through GitHub Actions — the Developer Preview pipeline, its publication preconditions, and the stable-release requirements the owner owns. Use when packaging, tagging, publishing, checking release readiness, or changing a release workflow. Do NOT use for local packaged builds and lanes (or-dev-loop), for claim-record bookkeeping (or-claim-evidence), or for ordinary feature work (or-edit-feature).
+description: Verify OR release readiness or change the hosted packaging/release workflow under explicit scope. Publish/tag only when separately authorized. Exclude local packaged diagnostic lanes (or-dev-loop), ordinary completion claims, UI/backend implementation and source-only checks.
 ---
 
-# OR release
+# OR release verification
 
-You move a verified commit to a distributed artifact, or you report exactly how
-far it is from one. Publication is owner-gated: a green check never authorises it
-by itself.
+[RELEASE.md](../../../docs/RELEASE.md) is the release authority; read applicable
+requirements and [SECURITY_LICENSING.md](../../../docs/SECURITY_LICENSING.md).
+[DEVELOPER_PREVIEW_INSTALL.md](../../../docs/DEVELOPER_PREVIEW_INSTALL.md) owns
+installation/signing reality.
 
-## Preconditions
+1. Establish exact source and required platform-verification push run/jobs.
+   Another SHA is STALE; skipped/neutral/cancelled required jobs block approval.
+2. Check the actual shipped entrypoint, packaged dependencies and permissions,
+   supported platform journeys, independent output decoding/player, provenance,
+   asset checksums and licence notices. A debug/widget run is insufficient.
+3. Preserve the aggregate release-gate and main-only publication safeguards.
+   Non-main validation-only artifacts are not releases or release authorization.
+4. Report signing/notarization limits accurately. Stable-release criteria remain
+   owner-owned; do not invent a version/health/rollback gate.
+5. Run only the verification requested. Readiness/report-only requests authorize
+   no edits, builds, dispatches or publication; explicit verification authorizes
+   its checks. Publishing, tagging, merging and deploying need separate authority.
 
-- Read [RELEASE.md](../../../docs/RELEASE.md) — it is the authority — plus
-  [DEVELOPER_PREVIEW_INSTALL.md](../../../docs/DEVELOPER_PREVIEW_INSTALL.md),
-  [AGENT-AUTHORITY.md](../../../docs/AGENT-AUTHORITY.md) and the release requirements in
-  [SECURITY_LICENSING.md](../../../docs/SECURITY_LICENSING.md).
-- Establish the exact commit and whether Platform Verification has passed for
-  **that** commit. A green run at another SHA is `STALE` and is not a
-  precondition.
-
-## Developer Preview
-
-- Trigger: the `developer-preview` workflow, nightly on `main` or by manual
-  dispatch. Main is the only publication path.
-- Precondition: a successful exact-source Platform Verification **push** run for
-  the commit being published.
-- Tag: `dev-<12-character-commit-sha>`, resolving to that commit. Duplicate
-  releases for the same commit are skipped.
-- Validation-only mode: a manual dispatch on a non-main branch builds the app
-  packages for dogfooding, has no release/tag write permission, and produces
-  seven-day Actions artifacts, not public releases.
-- Assets: count packages, not jobs — the Linux job emits both a tarball and a
-  Debian/Ubuntu amd64 `.deb`, so a complete run yields five app packages plus
-  three desktop CLI packages, two build/provenance files, and the FFmpeg, Opus
-  and libvpx source archives. Each required asset must be non-empty and
-  checksummed except the checksum file itself.
-- Provenance: codec source identities, configuration, toolchains and licence
-  posture travel with the build. Do not commit build outputs.
-- Signing reality: macOS is ad-hoc debug-signed and not notarized; Android uses
-  the standard debug signing key; no package has production signing. Say so in
-  any release note you touch.
-
-## The five workflows
-
-| Workflow | Role |
-|---|---|
-| `repo-hygiene.yml` | Repository hygiene gate on pull requests and pushes |
-| `ui-preflight.yml` | Hosted Linux UI preflight for the editor journey |
-| `platform-verification.yml` | The acceptance authority: Rust, Flutter static checks, macOS, Linux, Windows, Android, the granted-descriptor check, and the aggregate `release-gate` |
-| `developer-preview.yml` | Builds and publishes the Developer Preview packages and CLI archives |
-| `release-gate` job | The only check meant to block a merge; it must reject `skipped`, `neutral` and `cancelled`, not just `failure` |
-
-## Stable release
-
-Stable releases are a later, owner-owned milestone. They require product
-readiness, a reviewed platform matrix, packaging, checksums, a dependency and
-licence inventory, human-readable notes, and applicable signing, notarization or
-attestation. [RELEASE.md](../../../docs/RELEASE.md) deliberately defines no separate
-version, health or rollback gate, and none may be claimed as one. Installer
-formats and platform-specific distribution remain undecided until scoped.
-
-## Forbidden
-
-- Force-pushing `main`, rewriting tags, or discarding unrelated work.
-- Publishing from a local pass, from an emulator result, or from a run at a
-  different commit.
-- Weakening or disabling a required workflow to obtain a green result.
-- Bundling model weights by default, or distributing a dependency whose licence
-  does not permit it.
-
-## Report
-
-Commit, exact-SHA Platform Verification run, workflow and dispatch used, tag,
-asset list with sizes and checksums, signing reality, and every precondition that
-is still unmet.
+Stop with the readiness verdict and concrete missing requirements, or at the
+authorized publication boundary. Report source, run/jobs, package identity,
+executed journeys, assets/provenance, failures and UNVERIFIED targets.

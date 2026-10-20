@@ -1,0 +1,127 @@
+{
+  "name": "export-playable-diagnostic",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "description": "Complete a real app export, then independently validate preset metadata, decode moving video/non-silent audio and open with ffplay. The synthetic picker is disclosed: this cannot establish OS-picker or shipped-package acceptance.",
+  "fixture_path": "$OR_UI_ROOT/apps/or_app/build/journey-fixtures/video-audio.webm",
+  "export_expect": {
+    "width": 160,
+    "height": 90,
+    "duration": 2,
+    "container": "webm",
+    "video_codec": "vp9",
+    "audio_codec": "opus",
+    "moving_video": true,
+    "audible_audio": true
+  },
+  "independent_player": true,
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Video acceptance diagnostic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "video-audio.webm",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-video-track"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-video-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "media_count": 1,
+        "clip_count": 1
+      }
+    },
+    {
+      "op": "tree",
+      "name": "video-imported"
+    },
+    {
+      "op": "shot",
+      "name": "video-imported"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "export-project"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Continue"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Export complete",
+      "budget_ms": 60000
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "clip_count": 1
+      }
+    }
+  ]
+}

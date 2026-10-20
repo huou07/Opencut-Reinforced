@@ -39,12 +39,23 @@ command that would settle it.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import platform
+import re
+from datetime import datetime, timezone
 import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Also supports importlib-based contract tests without changing global sys.path.
+import importlib.util
+_media_spec = importlib.util.spec_from_file_location(
+    'or_media_checks', Path(__file__).with_name('media_checks.py'))
+media_checks = importlib.util.module_from_spec(_media_spec)
+_media_spec.loader.exec_module(media_checks)
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "apps/or_app"
@@ -72,6 +83,48 @@ class Blocked(Exception):
 
 class ScenarioError(Exception):
     """The invocation or the scenario file is wrong."""
+
+
+def source_identity() -> dict:
+    def git(*args: str) -> str:
+        return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+    return {
+        "task_sources": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                         for name in ("scripts/media_checks.py", "scripts/media_fixtures.py",
+                                      "scripts/test_journey_evidence.py")
+                         if (ROOT / name).is_file() and not (ROOT / name).is_symlink()},
+        "sha": git("rev-parse", "HEAD"),
+        "dirty": bool(git("status", "--porcelain")),
+        "diff_sha256": hashlib.sha256(subprocess.check_output(
+            ["git", "diff", "HEAD", "--binary"], cwd=ROOT)).hexdigest(),
+    }
+
+
+def artifact_hashes(report_dir: Path) -> list[dict]:
+    result = []
+    for path in sorted(report_dir.rglob("*")):
+        if path.is_file() and not path.is_symlink() and path.name != "report.json":
+            digest = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            result.append({"path": str(path.relative_to(report_dir)),
+                           "bytes": path.stat().st_size, "sha256": digest.hexdigest()})
+    return result
+
+
+def write_report(report_dir: Path, report: dict) -> None:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report.update({
+        "schema": 2, "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "source": source_identity(),
+        "host": {"os": platform.platform(), "machine": platform.machine()},
+        "build": {"mode": report.get("build_mode", "UNVERIFIED"), "entrypoint": SCENARIO_RUNNER,
+                  "backend": "software", "acceptance": False},
+        "artifact_manifest": artifact_hashes(report_dir) if report.get("result") in ("PASS", "FAIL") else [],
+    })
+    (report_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n",
+                                           encoding="utf-8")
 
 
 # -- scenario construction -------------------------------------------------
@@ -104,9 +157,36 @@ def load_scenario(path: Path) -> dict:
         payload["name"] = path.stem
     if not isinstance(payload.get("steps"), list) or not payload["steps"]:
         raise ScenarioError(f"{path} has no steps")
-    for index, step in enumerate(payload["steps"]):
-        if not isinstance(step, dict) or not step.get("op"):
-            raise ScenarioError(f"{path}: step {index} has no op")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", str(payload["name"])):
+        raise ScenarioError("scenario name must be a safe artifact basename")
+    operations = {"pump", "wait", "wait_absent", "wait_label", "wait_label_absent",
+                  "shot", "tree", "screens", "tap", "long_press", "enter_text", "key",
+                  "expect", "expect_text", "expect_absent", "expect_state",
+                  "wait_state", "picker", "scroll", "measure", "drag", "canonical",
+                  "preview_probe"}
+    def validate_steps(steps):
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict) or not step.get("op"):
+                raise ScenarioError(f"{path}: step {index} has no op")
+            if step["op"] not in operations:
+                raise ScenarioError(f"{path}: unknown op {step['op']}")
+            if step["op"] == "canonical" and not step.get("equals"):
+                raise ScenarioError("canonical needs nonempty equals assertions")
+            if step["op"] == "measure":
+                if not step.get("steps") or not 1 <= step.get("repeat", 10) <= 100:
+                    raise ScenarioError("measure needs steps and repeat in 1..100")
+                validate_steps(step["steps"])
+            if step["op"] == "drag":
+                if not step.get("selector"):
+                    raise ScenarioError("drag requires an observed semantic selector")
+                for field in ("fraction_x", "fraction_y"):
+                    value = step.get(field, 0)
+                    if not isinstance(value, (int, float)) or not -10 <= value <= 10:
+                        raise ScenarioError("drag fractions must be bounded in -10..10")
+    validate_steps(payload["steps"])
+    if payload.get("fixture_path"):
+        payload["fixture_path"] = str(Path(payload["fixture_path"].replace(
+            "$OR_UI_ROOT", str(ROOT))).resolve())
     return payload
 
 
@@ -176,10 +256,14 @@ def run_linux(payload: dict, report_dir: Path) -> int:
     # project-local Cargo/pub caches, mirrors a writable Flutter SDK, scopes the
     # bridge's Rust toolchain manifest to this host and restores it byte for
     # byte, and holds the one shared native lock.
+    runner = (f"flutter --no-version-check drive --profile --no-pub -d linux "
+              f"--driver={DRIVER} --target={SCENARIO_RUNNER}"
+              if payload.get("build_mode") == "profile" else
+              f"flutter --no-version-check test --no-pub -d linux {SCENARIO_RUNNER}")
     inner = (
         "flutter --no-version-check pub get --offline --enforce-lockfile && "
         "xvfb-run -a -s '-screen 0 1440x900x24' "
-        f"flutter --no-version-check test --no-pub -d linux {SCENARIO_RUNNER}"
+        f"{runner}"
     )
     command = [sys.executable, str(ROOT / "scripts/run_linux_ui_preflight.py"),
                "--exec", "--", "bash", "-c", inner]
@@ -208,7 +292,7 @@ def run_linux(payload: dict, report_dir: Path) -> int:
             "log": str(report_dir / "run.log"),
             "steps": read_transcript(artifacts, payload["name"]).get("steps", []),
         }
-        (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
+        write_report(report_dir, payload_out)
         print(f"RESULT: OR_UI=FAIL ({payload['name']})")
         print(payload_out["reason"])
         return 1
@@ -220,7 +304,8 @@ def read_transcript(artifacts: Path, name: str) -> dict:
     if not path.is_file():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
     except json.JSONDecodeError:
         return {}
 
@@ -273,7 +358,7 @@ def run_android(payload: dict, report_dir: Path) -> int:
                        + " | ".join(reason)),
             "log": str(report_dir / "run.log"),
         }
-        (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
+        write_report(report_dir, payload_out)
         print(f"RESULT: OR_UI=FAIL ({payload['name']})")
         print(payload_out["reason"])
         return 1
@@ -311,16 +396,71 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
             "read the run log; the app may have failed before the first step",
         )
     steps = transcript.get("steps", [])
+    expected = payload.get("steps", [])
+    # A runner's success flag cannot override omitted, reordered or failed steps.
+    complete = isinstance(steps, list) and len(steps) == len(expected)
+    if complete:
+        complete = all(isinstance(step, dict) and step.get("index") == index
+                       and step.get("op") == expected[index].get("op")
+                       and step.get("status") == "ok"
+                       for index, step in enumerate(steps))
+    passed = complete and transcript.get("result") == "PASS" and not transcript.get("framework_errors")
+    if complete:
+        for actual, requested in zip(steps, expected):
+            observation = actual.get("observation", {})
+            if requested["op"] == "canonical":
+                passed = passed and observation.get("assertions_passed") is True and all(
+                    observation.get(key) == value for key, value in requested["equals"].items())
+                passed = passed and all(observation.get(key) != value
+                    for key, value in requested.get("not_equals", {}).items())
+            if requested["op"] == "preview_probe":
+                samples = observation.get("samples", [])
+                passed = passed and observation.get("viewer_pixels_changed") is True and (
+                    len(samples) >= 3 and
+                    len({s.get("frame_sequence") for s in samples}) > 1 and
+                    len({s.get("presented_time") for s in samples if s.get("presented_time")}) > 1 and
+                    all(s.get("width", 0) > 0 and s.get("height", 0) > 0 for s in samples))
+    observed = steps if isinstance(steps, list) else []
+    semantic = any(s.get("status") == "ok" and s.get("semantics")
+                   and (artifacts / s["semantics"]).is_file() for s in observed)
+    visual = any(s.get("status") == "ok" and s.get("screenshot")
+                 and (artifacts / s["screenshot"]).is_file() for s in observed)
+    canonical = any(s.get("status") == "ok" and s.get("op") == "canonical"
+                    and s.get("observation", {}).get("assertions_passed") is True
+                    for s in observed)
+    export_check = None
+    if passed and payload.get("export_expect"):
+        if target != "linux":
+            raise Blocked("export artifact recovery is not implemented for this target",
+                          "use the existing platform-specific packaged/SAF export lane")
+        try:
+            export_check = media_checks.verify_export(
+                artifacts / "replacements/export.webm", payload["export_expect"],
+                player=payload.get("independent_player", False))
+        except media_checks.MediaBlocked as error:
+            raise Blocked(str(error), "supply the named independent tool") from error
+        except (media_checks.MediaFailure, ValueError, KeyError) as error:
+            export_check = {"result": "FAIL", "reason": str(error)}
+            passed = False
     report = {
         "harness": "or_ui",
         "target": target,
         "scenario": payload["name"],
-        "result": transcript.get("result"),
+        "result": "PASS" if passed else "FAIL",
+        "complete": complete,
+        "export_check": export_check,
+        "runner_result": transcript.get("result"),
         "viewport": transcript.get("viewport"),
+        "build_mode": transcript.get("build_mode", "UNVERIFIED"),
+        "performance": transcript.get("performance", {}),
         "evidence_class": {
-            "semantics": "VERIFIED_SEMANTIC",
-            "behaviour": "VERIFIED_BEHAVIORAL",
-            "visual": "VERIFIED_VISUAL",
+            "semantics": "VERIFIED_SEMANTIC" if semantic else "UNVERIFIED",
+            "behaviour": "VERIFIED_BEHAVIORAL" if passed and canonical else "UNVERIFIED",
+            "visual": "VERIFIED_VISUAL" if visual else "UNVERIFIED",
+            "preview": "VERIFIED_BEHAVIORAL" if passed and any(
+                s.get("op") == "preview_probe" and s.get("status") == "ok"
+                and s.get("observation", {}).get("viewer_pixels_changed") is True
+                for s in observed) else "UNVERIFIED",
             "native": "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
                       "is not an installed package or a physical device",
         },
@@ -337,7 +477,7 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
         "screens": load_json(artifacts / "screen-inventory.json"),
         "not_run": payload.get("not_run", []),
     }
-    (report_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    write_report(report_dir, report)
 
     print(f"== or_ui {target}: {payload['name']} ==")
     for step in steps:
@@ -379,6 +519,8 @@ def command_parser() -> argparse.ArgumentParser:
                         help="where the transcript, artifacts and report go")
     parser.add_argument("--viewport", default=f"{DEFAULT_VIEWPORT[0]}x{DEFAULT_VIEWPORT[1]}",
                         help="WIDTHxHEIGHT for the scenario's logical viewport")
+    parser.add_argument("--build-mode", choices=("debug", "profile"), default="debug",
+                        help="Linux profile uses Flutter drive; software-path timings remain developer evidence")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("screens", help="list the screens the running app exposes")
@@ -391,7 +533,7 @@ def command_parser() -> argparse.ArgumentParser:
 
     act = sub.add_parser("act", help="perform one action by semantics, key, role or text")
     act.add_argument("--op", default="tap",
-                     choices=("tap", "long_press", "enter_text", "key",
+                     choices=("tap", "long_press", "enter_text", "key", "drag",
                               "expect", "expect_absent", "expect_state"))
     act.add_argument("--key")
     act.add_argument("--label")
@@ -401,6 +543,8 @@ def command_parser() -> argparse.ArgumentParser:
     act.add_argument("--value", help="text for enter_text")
     act.add_argument("--chord", help="keyboard chord such as ctrl+d")
     act.add_argument("--state", help="semantic state for expect_state")
+    act.add_argument("--fraction-x", type=float, default=0)
+    act.add_argument("--fraction-y", type=float, default=0)
 
     run = sub.add_parser("run", help="run a scenario file")
     run.add_argument("scenario", help="path to a scenario JSON file")
@@ -427,6 +571,8 @@ def build_command_scenario(args: argparse.Namespace) -> dict:
                 raise ScenarioError(
                     "act needs --key, --label, --label-regex, --text or --role")
             step["selector"] = selector
+        if args.op == "drag":
+            step.update(fraction_x=args.fraction_x, fraction_y=args.fraction_y)
         if args.value is not None:
             step["value"] = args.value
         if args.chord is not None:
@@ -465,20 +611,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"or_ui: {error}", file=sys.stderr)
         return 2
 
+    payload["build_mode"] = args.build_mode
     try:
+        if args.target == "android" and args.build_mode != "debug":
+            raise Blocked("the staged Android harness APK is debug only",
+                          "use the documented physical-device profile lane")
         if args.target == "linux":
             return run_linux(payload, report_dir)
         return run_android(payload, report_dir)
+    except subprocess.TimeoutExpired as error:
+        write_report(report_dir, {"harness": "or_ui", "target": args.target,
+            "scenario": payload.get("name"), "result": "FAIL",
+            "reason": f"runner exceeded its bounded execution: {error.timeout}s"})
+        print("RESULT: OR_UI=FAIL (runner timeout)")
+        return 1
     except Blocked as blocked:
         report_dir.mkdir(parents=True, exist_ok=True)
-        (report_dir / "report.json").write_text(json.dumps({
+        write_report(report_dir, {
             "harness": "or_ui",
             "target": args.target,
             "scenario": payload.get("name"),
             "result": "BLOCKED",
             "reason": blocked.reason,
             "settle": blocked.settle,
-        }, indent=2) + "\n", encoding="utf-8")
+        })
         print(f"BLOCKED: {blocked.reason}")
         print(f"  settle with: {blocked.settle}")
         print("RESULT: OR_UI=BLOCKED")

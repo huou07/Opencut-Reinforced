@@ -1,86 +1,56 @@
-# Skill routing
+# OR skill routing
 
-Purpose: select one procedure without importing a second project framework.
+Authority: navigation and instruction-contract expectations. Execution authority
+stays with the request, AGENT_POLICY and host/session permissions.
+Last reviewed: 2026-10-20.
 
-Authority: navigation. [AGENTS.md](../AGENTS.md), [AGENT_POLICY.md](AGENT_POLICY.md)
-and [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md) govern execution.
+Project-local procedures live in [.agents/skills/](../.agents/skills/).
+They add OR-specific traps and references; the development loop is maintained
+once in DEVELOPMENT_WORKFLOW. Read task-relevant sections only. A readable file
+is not proof of discovery in a particular session.
 
-Last reviewed: 2026-10-18.
-
-## Project-local skills
-
-These are OR-specific procedures that no shared skill covers. Their canonical
-bodies live in [.agents/skills/](../.agents/skills/) as one `SKILL.md` per
-directory. They are loaded only by an agent session whose working project is this
-repository; a file on disk does not by itself prove that a session discovered it.
-
-| Skill | Trigger | Neighbour / exclusion |
+| Primary request | Project procedure | Exclusions |
 |---|---|---|
-| `or-edit-feature` | Add or extend timeline, clip, media, marker, text, caption, undo or project-lifecycle behavior; a command or query and its GUI/CLI surface | Generic planning (task-planning); a failing gate (verify-debug); AI/provider or codec work (`or-media-ai`) |
-| `or-ui-ux` | Design, change or judge a user-visible surface — layout, navigation, interaction, typography, colour, feedback, accessibility, desktop-versus-compact parity — and measure the interaction performance that makes it acceptable | Backend- or domain-only work (`or-edit-feature`); a failing build or gate (verify-debug); the generic evidence-class method, which stays in the shared ui-ux-review skill |
-| `or-dev-loop` | Local build, test, benchmark or preflight on this host; a lane reported `BLOCKED`; deciding whether a local result is admissible | Release publication (`or-release`); claim records (`or-claim-evidence`) |
-| `or-media-ai` | AI providers, model assets, transcription/captions, noise reduction or audio cleanup, code-to-illustration MotionScene | Plain editing with no AI component (`or-edit-feature`); credential, dependency or licence review (security-review) |
-| `or-claim-evidence` | Recording or auditing a completion claim; binding an exact SHA to a hosted run and job; deciding an evidence class | Running local lanes (`or-dev-loop`); publishing (`or-release`) |
-| `or-release` | Packaging, tagging, publishing, release readiness, or changing a release workflow | Local packaged builds (`or-dev-loop`); claim bookkeeping (`or-claim-evidence`) |
+| Implement canonical Rust editing, history, lifecycle or CLI parity | or-edit-feature | UI-only changes, failing checks, codecs/providers, planning |
+| Implement/review a visible OR interaction or accessibility journey | or-ui-ux | Backend-only work, generic performance diagnosis, build failure, prose maintenance |
+| Operate an existing bounded native Linux/Android lane or resolve its prerequisites | or-dev-loop | Ordinary unit checks with a known command, product design, claims, publication |
+| Verify/implement import/export compatibility, media/DSP, providers or MotionScene | or-media-ai | Plain timeline editing, UI-only work, host lane mechanics |
+| Record/audit an exact-source hosted completion claim | or-claim-evidence | Routine test reports, implementation, execution, general readiness |
+| Explicit release verification or scoped packaging/release workflow changes | or-release | Local package diagnostics, general status, source-only checks; no implied publication |
 
-## Shared procedures this repository defers to
+Select one primary procedure. Add another only for a distinct task boundary;
+do not recursively load all referenced skills. Shared procedures supplied by the
+current session own generic diagnosis (verify-debug), investigation
+(code-investigate), security review (security-review), instruction maintenance
+(skill-maintainer), planning (task-planning), status (project-steward), prompt
+artifacts (prompt-assist) and sustained work (sustained-repair). Generic UI review
+methods may inform OR review, but loading or-ui-ux does not automatically require
+loading another skill. A typo needs no project skill or product gate.
 
-Use the skills the current session exposes; the names below are the intent, not a
-guarantee that a given harness has installed them.
+Scope remains discriminating: review/analysis/plan produces its artifact and
+stops. Implement only a requested change; a skill is not authority to repair a
+defect noticed during review. Stop at the scoped observations or verified change;
+report source, actual outcome, evidence and unrun targets. No routine checklist
+requires repeated planning, full-platform verification or unrelated changes.
 
-| Request | Shared procedure |
-|---|---|
-| Locate core/UI command flow and callers | code-investigate |
-| Diagnose a failing authorized source or hosted check | verify-debug |
-| Sustain an authorized outcome across many turns, handoffs or quota pressure | sustained-repair |
-| Review auth, dependencies, CI or publication risk | security-review |
-| Turn an outcome into a bounded, sequenced plan | task-planning |
-| Write or improve a handoff prompt artifact | prompt-assist |
-| Report roadmap progress, next outcome or readiness | project-steward |
-| Maintain instruction or skill contracts | skill-maintainer |
-| Review a user-visible interface for usability and accessibility | ui-ux-review |
-
-For UI work, [DESIGN.md](../DESIGN.md) and [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md)
-remain authoritative; a generic skill never authorizes a new design system or a
-new local native runtime. The shared `ui-ux-review` supplies the generic
-evidence-class method, journey checklist and review-versus-fix rule;
-`or-ui-ux` binds that method to OR's design language, thresholds, shell slots,
-evidence classes and local lanes. Load `or-ui-ux` for OR work and keep its
-content here rather than duplicating it into the shared procedure.
-
-## Policy
-
-- Do not copy a shared skill into this repository. A project procedure that
-  duplicates a shared skill is retired here and archived as project history,
-  never maintained as a parallel activatable copy. The single skill this
-  happened to, `dont-giveup-soon`, was promoted to the shared library as
-  `sustained-repair` on 2026-10-14; its original text is preserved as archival
-  data in
-  [evidence/dont-giveup-soon-archived-skill.md](evidence/dont-giveup-soon-archived-skill.md).
-- A project skill must be OR-specific: it must name real OR paths, commands and
-  invariants, and it must state its exclusions, or it does not earn a slot here.
-- Skill packages are instruction artifacts, not current-status documents, so they
-  are not on the `scripts/check_doc_freshness.sh` list; a skill that restates a
-  status claim is wrong by construction.
-- Disk-only plugin packages and earlier session catalogs grant no current tools.
-
-## Control workspace
-
-This repository is registered in the host control workspace (AEH) under the slug
-`or`. From the AEH workspace root:
+[Routing cases](../scripts/skill_routing_cases.json) cover UI, Rust editing,
+media compatibility, measured performance failure, release verification and
+neighboring no-skill/read-only cases. Run:
 
 ```sh
-python3 scripts/hub.py status or    # read-only: Git and recorded verification
-python3 scripts/hub.py verify or    # explicit: runs scripts/check-repo.sh
-python3 scripts/hub.py where or     # absolute path
+python3 scripts/test_skill_contracts.py
 ```
 
-`status` never executes project code. AEH holds no product or task state for OR;
-the authoritative progress source is [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md), and
-a verified claim is a record under [evidence/claims/](evidence/claims/README.md).
-The gate ladder itself is in [QUALITY.md](QUALITY.md): `check-repo.sh` is the
-source gate, `acceptance.sh` adds the Rust and Flutter lanes and the local
-performance budget, and GitHub Actions is the only authority for native, packaged
-and cross-platform acceptance.
+This validates reference existence, narrow descriptions, stopping/output
+contracts, size bounds and the reviewed expectation corpus. It does not execute
+a model classifier or prove live discovery. A live trial must record the actual
+session's catalog, selected skills, response and scope obedience; do not spawn
+agents merely to label a structural check as behavioral evidence.
 
-Keep framework artifacts in English; conversation follows the owner's language.
+Never copy AEH's shared procedures here or expose OR skills host-wide.
+The retired dont-giveup-soon procedure remains historical data in
+[evidence/dont-giveup-soon-archived-skill.md](evidence/dont-giveup-soon-archived-skill.md).
+
+OR remains registered as `or` in AEH. Resolve it through `hub.py where or`;
+read-only status never executes project code. AEH indexes evidence; product
+state, architecture, priorities and acceptance stay in this repository.
