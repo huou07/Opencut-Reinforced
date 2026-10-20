@@ -4248,6 +4248,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               tracks: snapshot.items,
                                               track: track,
                                               clip: clip,
+                                              playhead: widget
+                                                  .previewState
+                                                  .value
+                                                  ?.position,
                                               onMove: widget.onMoveClip,
                                               onDuplicate:
                                                   widget.onDuplicateClip,
@@ -5897,8 +5901,8 @@ class _TimelineTrackLane extends StatelessWidget {
         opacity: trackEnabled ? 1 : 0.45,
         child: Semantics(
           button: true,
-          selected: clip.clipId == selectedClipId,
           onTap: () => onOpenClip(clip),
+          selected: clip.clipId == selectedClipId,
           // The exact span, not only a human duration: a screen-reader user needs
           // to know where an edit left the clip, and scripts/or_ui.py can then
           // assert a position instead of only that the app accepted a command.
@@ -6670,6 +6674,7 @@ Future<void> _showTimelineClipActions({
   required List<ProjectTimelineTrack> tracks,
   required ProjectTimelineTrack track,
   required ProjectTimelineClip clip,
+  required ProjectRationalTime? playhead,
   required Future<void> Function(
     ProjectReadModel,
     ProjectTimelineClip,
@@ -6744,6 +6749,12 @@ Future<void> _showTimelineClipActions({
       isMedia && project != null && !track.state.locked && onTrim != null;
   final canSplit =
       isMedia && project != null && !track.state.locked && onSplit != null;
+  final splitAtPlayhead = playhead;
+  final canSplitAtPlayhead =
+      canSplit &&
+      splitAtPlayhead != null &&
+      _compareProjectRational(splitAtPlayhead, clip.timelineStart) > 0 &&
+      _compareProjectRational(splitAtPlayhead, clip.timelineEnd) < 0;
   final canEditText =
       !isMedia &&
       project != null &&
@@ -6923,6 +6934,30 @@ Future<void> _showTimelineClipActions({
                 },
           child: const Text('Split'),
         ),
+        if (isMedia)
+          Tooltip(
+            message: canSplitAtPlayhead
+                ? 'Split at ${splitAtPlayhead!.canonical}'
+                : 'Move the playhead inside this clip to split at it',
+            child: TextButton(
+              key: ValueKey('timeline-split-at-playhead-${clip.clipId}'),
+              onPressed: busy || !canSplitAtPlayhead
+                  ? null
+                  : () {
+                      final activeProject = project;
+                      final split = onSplit;
+                      final position = splitAtPlayhead;
+                      if (activeProject == null ||
+                          split == null ||
+                          position == null) {
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop();
+                      unawaited(split(activeProject, clip, position));
+                    },
+              child: const Text('Split at Playhead'),
+            ),
+          ),
         TextButton(
           key: ValueKey('timeline-delete-${clip.clipId}'),
           onPressed:
