@@ -377,5 +377,41 @@ class ToolchainScopeTests(unittest.TestCase):
             self.assertEqual(manifest.read_text(), original)
 
 
+class PreparedExecutionTests(unittest.TestCase):
+    def test_exec_reuses_supervision_and_limits_compiler_workers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "crates/or_app_bridge/rust-toolchain.toml"
+            manifest.parent.mkdir(parents=True)
+            original = '[toolchain]\nchannel="1.98.0"\ntargets = [\n    "x86_64-unknown-linux-gnu",\n]\n'
+            manifest.write_text(original)
+            backup = root / "backup.toml"
+            with patch.object(preflight, "ROOT", root), \
+                    patch.object(preflight, "manifest_backup_path", return_value=backup), \
+                    patch.object(preflight, "available_memory", return_value=8 * preflight.GIB), \
+                    patch.object(preflight.shutil, "disk_usage", return_value=type("Disk", (), {"free": 8 * preflight.GIB})()), \
+                    patch.object(preflight.shutil, "which", return_value="/tool"), \
+                    patch.object(preflight, "writable_cargo_cache"), \
+                    patch.object(preflight, "writable_pub_cache"), \
+                    patch.object(preflight, "writable_flutter_root"), \
+                    patch.object(preflight, "native_lock", contextlib.nullcontext), \
+                    patch.object(preflight, "linux_rust_target", return_value="x86_64-unknown-linux-gnu"), \
+                    patch.object(preflight, "supervise", return_value=(124, "TIMEOUT: bounded", 1.0, 8 * preflight.GIB)) as supervised:
+                self.assertEqual(preflight.exec_in_environment(["--", "owned-command"]), 124)
+            environment = supervised.call_args.args[2]
+            self.assertEqual(environment["CARGO_BUILD_JOBS"], "1")
+            self.assertEqual(environment["CMAKE_BUILD_PARALLEL_LEVEL"], "1")
+            self.assertEqual(manifest.read_text(), original)
+            self.assertFalse(backup.exists())
+
+    def test_supervisor_reaps_owned_timed_out_process(self):
+        import sys
+        with patch.object(preflight, "available_memory", return_value=8 * preflight.GIB):
+            code, reason, _, _ = preflight.supervise(
+                [sys.executable, "-c", "import time; time.sleep(30)"], 0, dict(os.environ))
+        self.assertEqual(code, 124)
+        self.assertIn("TIMEOUT", reason)
+
+
 if __name__ == "__main__":
     unittest.main()

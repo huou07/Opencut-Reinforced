@@ -231,6 +231,7 @@ class _Runner {
   final List<_StepResult> results = [];
   final _ObservedGateway gateway = _ObservedGateway();
   late final _FixturePicker picker;
+  bool pickerReady = false;
   List<String> screenInventory = const [];
   bool ok = true;
   String? firstFailure;
@@ -255,6 +256,9 @@ class _Runner {
 
   Future<void> run() async {
     SchedulerBinding.instance.addTimingsCallback(_recordTimings);
+    // Profile builds reject the debug-only magical -1 IME client ID. Register
+    // Flutter's supported test input so it observes the actual attached client.
+    if (kProfileMode) tester.testTextInput.register();
     final viewport = spec.viewport ?? (width: 1280, height: 800);
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = Size(viewport.width, viewport.height);
@@ -265,6 +269,7 @@ class _Runner {
       spec.pickList,
       spec.raw['fixture_path'] as String?,
     );
+    pickerReady = true;
     await tester.pumpWidget(
       RepaintBoundary(
         key: boundary,
@@ -303,6 +308,7 @@ class _Runner {
 
   Future<void> dispose() async {
     SchedulerBinding.instance.removeTimingsCallback(_recordTimings);
+    if (kProfileMode) tester.testTextInput.unregister();
     if (_previousOnError != null) {
       FlutterError.onError = _previousOnError;
       _previousOnError = null;
@@ -315,7 +321,7 @@ class _Runner {
           ? null
           : {'width': spec.viewport!.width, 'height': spec.viewport!.height},
       'result': ok && results.length == spec.steps.length ? 'PASS' : 'FAIL',
-      'fixture_path': picker.media,
+      'fixture_path': pickerReady ? picker.media : null,
       'framework_errors': frameworkErrors,
       'build_mode': kDebugMode
           ? 'debug'
@@ -381,6 +387,15 @@ class _Runner {
         result.detail = text.length > 400 ? '${text.substring(0, 400)}…' : text;
         ok = false;
         firstFailure ??= 'step ${result.index} ($op) raised: ${result.detail}';
+      }
+      if (result.status != 'ok') {
+        try {
+          result.semantics = await _tree('failure-${result.index}');
+          result.screenshot = await _shot('failure-${result.index}');
+        } catch (captureError) {
+          result.detail =
+              '${result.detail}; failure capture unavailable: $captureError';
+        }
       }
     }
   }
@@ -456,8 +471,22 @@ class _Runner {
       case 'enter_text':
         final finder = _requireFinder(step);
         await _scrollIntoView(finder);
-        await tester.enterText(finder, _expandRoot('${step['value'] ?? ''}'));
+        final value = _expandRoot('${step['value'] ?? ''}');
+        await tester.enterText(finder, value);
         await _settle();
+        final editable = tester.widget<EditableText>(
+          find.descendant(
+            of: finder,
+            matching: find.byType(EditableText),
+            matchRoot: true,
+          ),
+        );
+        if (editable.controller.text != value) {
+          throw _StepFailure(
+            'text_not_entered',
+            'the visible field did not retain the requested text',
+          );
+        }
         return;
       case 'key':
         await _pressChord('${step['chord']}');
@@ -732,12 +761,64 @@ class _Runner {
     }
     final key = _logicalKey(parts.last);
     for (final modifier in modifiers) {
-      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyDownEvent(
+        modifier,
+        physicalKey: _physicalKey(modifier),
+      );
     }
-    await tester.sendKeyEvent(key);
+    await tester.sendKeyEvent(key, physicalKey: _physicalKey(key));
     for (final modifier in modifiers.reversed) {
-      await tester.sendKeyUpEvent(modifier);
+      await tester.sendKeyUpEvent(
+        modifier,
+        physicalKey: _physicalKey(modifier),
+      );
     }
+  }
+
+  // Flutter's implicit physical-key lookup uses debugName, stripped in profile.
+  // Supply the same explicit US-layout keys through WidgetTester's public API.
+  PhysicalKeyboardKey _physicalKey(LogicalKeyboardKey key) {
+    final keys = {
+      LogicalKeyboardKey.controlLeft: PhysicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.shiftLeft: PhysicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.altLeft: PhysicalKeyboardKey.altLeft,
+      LogicalKeyboardKey.metaLeft: PhysicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.escape: PhysicalKeyboardKey.escape,
+      LogicalKeyboardKey.enter: PhysicalKeyboardKey.enter,
+      LogicalKeyboardKey.tab: PhysicalKeyboardKey.tab,
+      LogicalKeyboardKey.space: PhysicalKeyboardKey.space,
+      LogicalKeyboardKey.delete: PhysicalKeyboardKey.delete,
+      LogicalKeyboardKey.backspace: PhysicalKeyboardKey.backspace,
+      LogicalKeyboardKey.arrowLeft: PhysicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight: PhysicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowUp: PhysicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown: PhysicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.home: PhysicalKeyboardKey.home,
+      LogicalKeyboardKey.end: PhysicalKeyboardKey.end,
+      LogicalKeyboardKey.period: PhysicalKeyboardKey.period,
+      LogicalKeyboardKey.comma: PhysicalKeyboardKey.comma,
+      LogicalKeyboardKey.equal: PhysicalKeyboardKey.equal,
+      LogicalKeyboardKey.minus: PhysicalKeyboardKey.minus,
+      LogicalKeyboardKey.f5: PhysicalKeyboardKey.f5,
+      LogicalKeyboardKey.numpadAdd: PhysicalKeyboardKey.numpadAdd,
+    };
+    if (keys.containsKey(key)) return keys[key]!;
+    final letter = key.keyId - LogicalKeyboardKey.keyA.keyId;
+    if (letter >= 0 && letter < 26) {
+      return PhysicalKeyboardKey(PhysicalKeyboardKey.keyA.usbHidUsage + letter);
+    }
+    final digit = key.keyId - LogicalKeyboardKey.digit0.keyId;
+    if (digit >= 0 && digit < 10) {
+      return digit == 0
+          ? PhysicalKeyboardKey.digit0
+          : PhysicalKeyboardKey(
+              PhysicalKeyboardKey.digit1.usbHidUsage + digit - 1,
+            );
+    }
+    throw _StepFailure(
+      'bad_scenario',
+      'no physical key mapping for ${key.keyId}',
+    );
   }
 
   LogicalKeyboardKey _logicalKey(String name) {
@@ -1306,15 +1387,9 @@ class _FixturePicker extends FileSelectorProjectPicker {
   _FixturePicker(this.directory, List<String> fixtures, String? fixturePath) {
     // A `noisy` fixture carries signal: the silent one cannot exercise anything
     // that measures or filters audio, because digital silence has no noise floor.
-    media = fixtures.contains('noisy')
+    final generatedMedia = fixtures.contains('noisy')
         ? _noisyWav('fixture.wav')
         : _wav('fixture.wav');
-    if (fixtures.contains('invalid')) {
-      badMedia = '${directory.path}/invalid.wav';
-      File(badMedia).writeAsStringSync('synthetic invalid media');
-    } else {
-      badMedia = media;
-    }
     if (fixturePath != null) {
       final source = File(fixturePath);
       if (!source.existsSync()) {
@@ -1323,6 +1398,14 @@ class _FixturePicker extends FileSelectorProjectPicker {
       media = source
           .copySync('${directory.path}/${source.uri.pathSegments.last}')
           .path;
+    } else {
+      media = generatedMedia;
+    }
+    if (fixtures.contains('invalid')) {
+      badMedia = '${directory.path}/invalid.wav';
+      File(badMedia).writeAsStringSync('synthetic invalid media');
+    } else {
+      badMedia = media;
     }
     project = '${directory.path}/scenario.orproj';
   }

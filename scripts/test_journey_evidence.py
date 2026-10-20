@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,7 +30,7 @@ class EvidenceTests(unittest.TestCase):
             artifacts = path / "artifacts"
             artifacts.mkdir()
             (artifacts / "control.json").write_text(json.dumps(
-                {"scenario": "control", "result": result, "steps": actual} | extra))
+                {"scenario": "control", "platform": "linux", "result": result, "steps": actual} | extra))
             with contextlib.redirect_stdout(io.StringIO()):
                 code = ui.finish(path, artifacts,
                                  {"name": "control", "steps": requested}, "linux")
@@ -51,9 +52,15 @@ class EvidenceTests(unittest.TestCase):
     def test_screenshot_alone_is_not_canonical_behavior(self):
         code, report = self.finish([{"op": "shot"}],
                                   [{"index": 0, "op": "shot", "status": "ok"}])
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 1)  # A claimed screenshot without its file is incomplete.
         self.assertEqual(report["evidence_class"]["behaviour"], "UNVERIFIED")
         self.assertEqual(report["evidence_class"]["visual"], "UNVERIFIED")
+
+    def test_wrong_scenario_or_platform_and_malformed_steps_fail(self):
+        for extra in ({"scenario": "another"}, {"platform": "android"}):
+            self.assertEqual(self.finish([{"op": "pump"}],
+                [{"index": 0, "op": "pump", "status": "ok"}], **extra)[0], 1)
+        self.assertEqual(self.finish([{"op": "pump"}], [None])[0], 1)
 
     def test_canonical_mismatch_cannot_be_promoted(self):
         self.assertEqual(self.finish(
@@ -91,8 +98,16 @@ class EvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT / ".hub") as directory:
             path = Path(directory) / "fake.webm"
             path.write_bytes(b"success notification, not media")
-            with self.assertRaises(media.MediaFailure):
-                media.verify_export(path, self.expected())
+            with patch.dict('os.environ', {'PATH': ''}):
+                with self.assertRaises(media.MediaFailure):
+                    media.verify_export(path, self.expected())
+
+    def test_missing_media_tool_is_blocked_not_passed(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / ".hub") as directory:
+            path = Path(directory) / "truncated.webm"
+            path.write_bytes(b"\x1a\x45\xdf\xa3truncated")
+            with self.assertRaises(media.MediaBlocked):
+                media.verify_export(path, self.expected(), ffprobe="missing-or-ffprobe-control")
 
     def test_preset_mismatch_and_long_output_fail(self):
         probe = {"format": {"duration": "2", "format_name": "matroska,webm"},

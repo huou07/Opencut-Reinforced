@@ -44,7 +44,15 @@ python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/preview-playb
 python3 scripts/or_ui.py --report-dir apps/or_app/build/ui-harness/export-playable-diagnostic run scripts/ui_scenarios/export-playable-diagnostic.json
 ```
 
-These four journeys are diagnostics, not declarations that defects were fixed.
+These journeys are diagnostics, not declarations that defects were fixed.
+The first-play preview diagnostic preserves the initial disabled/setup failure.
+Run preview-configured-playback-diagnostic.json to select the existing 24 fps
+setting and wait for enabled Play before attributing a failure to playback.
+The configured export diagnostic uses that sequence-rate setup, inserts separate
+V1/A1 streams and explicitly aligns A1 at 0/1 because today's insertion defaults
+to the global content end. This is media correctness setup, not beginner UX
+acceptance. Retain failed initial attempts separately. Failed steps now automatically retain
+semantics and a screenshot when capture is available.
 Direct trim requires an accessible hit-tested gesture, a changed canonical
 duration and undo. Split must yield two clips at the playhead without supplying
 a timestamp; filling a compulsory time field would defeat this diagnostic.

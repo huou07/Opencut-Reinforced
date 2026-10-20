@@ -140,7 +140,10 @@ This variable is provided by the
 [Dart analyzer resource provider](https://github.com/dart-lang/sdk/blob/main/pkg/analyzer/lib/file_system/physical_file_system.dart).
 Keep public package caches project-local and lockfiles unchanged; never copy
 credentials or retry a denied protected file. The existing preflight stages
-public Cargo/pub packages and scopes the toolchain. A host block is recorded,
+public Cargo/pub packages and scopes the toolchain. Its --exec mode now reuses
+the same process-group supervisor as the default journey: one compiler worker,
+a 600-second command budget, a 2 GiB runtime memory floor, owned-descendant
+cleanup and exact manifest restoration. Cancellation unwinds those contexts. A host block is recorded,
 never worked around by lowering headroom or changing shared services.
 
 ## Local development baseline

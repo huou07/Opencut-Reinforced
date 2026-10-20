@@ -1,0 +1,1248 @@
+{
+  "nodes": [
+    {
+      "id": 0,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 1,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 2
+    },
+    {
+      "id": 2,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 3,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 4,
+      "role": "structure",
+      "label": "Opencut Reinforced\nVideo acceptance diagnostic\nDeveloper Preview\nVideo acceptance diagnostic\nRevision 3\nUnsaved changes\nMedia\n1 item\nViewer\n160 × 90\nViewer texture unavailable\n00:00.000\n00:02.008\n00:00.000 · 0/1 · 0/1\nInspector\nNo selection\nSelect a video or audio clip to edit its settings.\nTimeline\nProject timeline",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 16
+    },
+    {
+      "id": 45,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 40.0,
+        "height": 40.0
+      },
+      "children": 0
+    },
+    {
+      "id": 5,
+      "role": "tappable",
+      "label": "OR",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 30.0,
+        "height": 30.0
+      },
+      "children": 0
+    },
+    {
+      "id": 46,
+      "role": "button",
+      "label": "Export",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 88.28125,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 6,
+      "role": "button",
+      "label": "Search commands\nCtrl+K",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 204.18994140625,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 47,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 518.409912109375,
+        "height": 32.0
+      },
+      "children": 5
+    },
+    {
+      "id": 48,
+      "role": "button",
+      "label": "Rename",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 112.68754032679966,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 49,
+      "role": "button",
+      "label": "Save",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 87.79027775355748,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 50,
+      "role": "button",
+      "label": "Undo",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 90.15600040980748,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 51,
+      "role": "button",
+      "label": "Redo",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 88.64721134730748,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 52,
+      "role": "button",
+      "label": "Close",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 91.93324497767857,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 53,
+      "role": "scrollable",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "scrollToOffset",
+        "scrollUp"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 389.40000000000003
+      },
+      "children": 11
+    },
+    {
+      "id": 54,
+      "role": "button",
+      "label": "Media library\nMedia",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 55,
+      "role": "button",
+      "label": "Templates, unavailable in this Developer Preview\nTemplates",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 56,
+      "role": "button",
+      "label": "Text, unavailable in this Developer Preview\nText",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 57,
+      "role": "button",
+      "label": "Captions, unavailable in this Developer Preview\nCaptions",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 58,
+      "role": "button",
+      "label": "Stickers / Shapes, unavailable in this Developer Preview\nShapes",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 59,
+      "role": "button",
+      "label": "Audio, unavailable in this Developer Preview\nAudio",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 60,
+      "role": "button",
+      "label": "Effects, unavailable in this Developer Preview\nEffects",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 61,
+      "role": "button",
+      "label": "Transitions, unavailable in this Developer Preview\nTransitions",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 11.400000000000034
+      },
+      "children": 0
+    },
+    {
+      "id": 62,
+      "role": "button",
+      "label": "Filters / Color, unavailable in this Developer Preview\nColor",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 63,
+      "role": "button",
+      "label": "AI, unavailable in this Developer Preview\nAI",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 64,
+      "role": "button",
+      "label": "More, unavailable in this Developer Preview\nMore",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 68.0,
+        "height": 54.0
+      },
+      "children": 0
+    },
+    {
+      "id": 65,
+      "role": "button",
+      "label": "Import Media",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 148.9619140625,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 66,
+      "role": "button",
+      "label": "Import Folder",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 150.1787109375,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 95,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 224.0,
+        "height": 250.40000000000003
+      },
+      "children": 1
+    },
+    {
+      "id": 98,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 224.0,
+        "height": 250.40000000000003
+      },
+      "children": 1
+    },
+    {
+      "id": 96,
+      "role": "tappable",
+      "label": "video-audio.webm\nmatroska, webm · 251/125 s · 160×90 vp9 · Audio · 48000 Hz 1 ch mono opus",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 208.0,
+        "height": 87.0
+      },
+      "children": 2
+    },
+    {
+      "id": 99,
+      "role": "image",
+      "label": "Thumbnail preview for video-audio.webm",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 52.0,
+        "height": 36.0
+      },
+      "children": 0
+    },
+    {
+      "id": 97,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 34.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 131,
+      "role": "slider",
+      "label": "",
+      "value": "0%",
+      "hint": "",
+      "actions": [
+        "decrease",
+        "focus",
+        "increase"
+      ],
+      "rect": {
+        "left": -14.0,
+        "top": -8.0,
+        "width": 48.0,
+        "height": 48.0
+      },
+      "children": 0
+    },
+    {
+      "id": 67,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 34.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 68,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 36.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 69,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 34.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 94,
+      "role": "tappable",
+      "label": "Set rate",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 57.9033203125,
+        "height": 16.0
+      },
+      "children": 0
+    },
+    {
+      "id": 70,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "scrollRight",
+        "scrollToOffset"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1256.0,
+        "height": 38.0
+      },
+      "children": 13
+    },
+    {
+      "id": 71,
+      "role": "structure",
+      "label": "Timeline",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 20.9767039162773,
+        "top": 0.0,
+        "width": 32.0467335837227,
+        "height": 17.0
+      },
+      "children": 0
+    },
+    {
+      "id": 72,
+      "role": "button",
+      "label": "Add Video",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 127.30639103480748,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 73,
+      "role": "button",
+      "label": "Add Audio",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 127.91430119105748,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 74,
+      "role": "button",
+      "label": "Marker",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 103.01957157679966,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 75,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 33.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 76,
+      "role": "structure",
+      "label": "Snap to clip boundaries",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 64.8788640158517,
+        "height": 30.0
+      },
+      "children": 1
+    },
+    {
+      "id": 77,
+      "role": "button",
+      "label": "Snap",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 64.8788640158517,
+        "height": 30.0
+      },
+      "children": 0
+    },
+    {
+      "id": 78,
+      "role": "button",
+      "label": "Add Text",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 115.51693943568638,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 79,
+      "role": "button",
+      "label": "Add Captions",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 151.31488255092074,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 80,
+      "role": "button",
+      "label": "Import SRT",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 134.13734654017856,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 81,
+      "role": "button",
+      "label": "Export SRT",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 133.45619419642856,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 82,
+      "role": "button",
+      "label": "Title",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 83.21742466517857,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 83,
+      "role": "button",
+      "label": "Caption",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 109.19135120936802,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 84,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 33.0,
+        "height": 32.0
+      },
+      "children": 1
+    },
+    {
+      "id": 85,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 33.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 132,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 220.60000000000002
+      },
+      "children": 2
+    },
+    {
+      "id": 133,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 170.0,
+        "height": 33.0
+      },
+      "children": 4
+    },
+    {
+      "id": 134,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 32.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 135,
+      "role": "structure",
+      "label": "100%",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 42.0,
+        "height": 16.0
+      },
+      "children": 0
+    },
+    {
+      "id": 136,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 32.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 137,
+      "role": "button",
+      "label": "Fit",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 56.0,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 138,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 186.60000000000002
+      },
+      "children": 2
+    },
+    {
+      "id": 139,
+      "role": "structure",
+      "label": "Video track V1, 1 clips, enabled, unlocked, not solo, position 1 of 1\nV1\n1",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 368.0,
+        "height": 58.0
+      },
+      "children": 5
+    },
+    {
+      "id": 140,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 40.0,
+        "height": 40.0
+      },
+      "children": 0
+    },
+    {
+      "id": 141,
+      "role": "button",
+      "label": "Move track V1",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 29.0,
+        "height": 33.0
+      },
+      "children": 0
+    },
+    {
+      "id": 142,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 40.0,
+        "height": 40.0
+      },
+      "children": 0
+    },
+    {
+      "id": 143,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 40.0,
+        "height": 40.0
+      },
+      "children": 0
+    },
+    {
+      "id": 144,
+      "role": "button",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 40.0,
+        "height": 40.0
+      },
+      "children": 0
+    },
+    {
+      "id": 145,
+      "role": "scrollable",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "scrollLeft",
+        "scrollToOffset"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 912.0,
+        "height": 96.0
+      },
+      "children": 1
+    },
+    {
+      "id": 146,
+      "role": "button",
+      "label": "video-audio.webm, starts 0/1, duration 251/125, spans 0/1 to 251/125, source 0/1\nvideo-audio.webm",
+      "value": "",
+      "hint": "Drag to move. Activate for clip actions.",
+      "actions": [
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 128.512,
+        "height": 48.0
+      },
+      "children": 2
+    },
+    {
+      "id": 147,
+      "role": "button",
+      "label": "Trim start of video-audio.webm",
+      "value": "",
+      "hint": "Drag to adjust the timeline edge. Activate for exact trim actions.",
+      "actions": [
+        "tap"
+      ],
+      "rect": {
+        "left": 11.0,
+        "top": 0.0,
+        "width": 13.0,
+        "height": 50.0
+      },
+      "children": 0
+    },
+    {
+      "id": 148,
+      "role": "button",
+      "label": "Trim end of video-audio.webm",
+      "value": "",
+      "hint": "Drag to adjust the timeline edge. Activate for exact trim actions.",
+      "actions": [
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 24.0,
+        "height": 50.0
+      },
+      "children": 0
+    },
+    {
+      "id": 149,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 0
+    }
+  ]
+}

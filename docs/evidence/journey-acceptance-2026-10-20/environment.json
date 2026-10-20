@@ -1,0 +1,377 @@
+{
+  "os": "Linux-7.2.6+deb13-amd64-x86_64-with-glibc2.41",
+  "cpu": {
+    "lscpu": [
+      {
+        "field": "Architecture:",
+        "data": "x86_64"
+      },
+      {
+        "field": "CPU op-mode(s):",
+        "data": "32-bit, 64-bit"
+      },
+      {
+        "field": "Address sizes:",
+        "data": "46 bits physical, 48 bits virtual"
+      },
+      {
+        "field": "Byte Order:",
+        "data": "Little Endian"
+      },
+      {
+        "field": "CPU(s):",
+        "data": "20"
+      },
+      {
+        "field": "On-line CPU(s) list:",
+        "data": "0-19"
+      },
+      {
+        "field": "Vendor ID:",
+        "data": "GenuineIntel"
+      },
+      {
+        "field": "Model name:",
+        "data": "13th Gen Intel(R) Core(TM) i5-13500T"
+      },
+      {
+        "field": "CPU family:",
+        "data": "6"
+      },
+      {
+        "field": "Model:",
+        "data": "191"
+      },
+      {
+        "field": "Thread(s) per core:",
+        "data": "2"
+      },
+      {
+        "field": "Core(s) per socket:",
+        "data": "14"
+      },
+      {
+        "field": "Socket(s):",
+        "data": "1"
+      },
+      {
+        "field": "Stepping:",
+        "data": "2"
+      },
+      {
+        "field": "CPU(s) scaling MHz:",
+        "data": "21%"
+      },
+      {
+        "field": "CPU max MHz:",
+        "data": "4600.0000"
+      },
+      {
+        "field": "CPU min MHz:",
+        "data": "800.0000"
+      },
+      {
+        "field": "BogoMIPS:",
+        "data": "3225.60"
+      },
+      {
+        "field": "Flags:",
+        "data": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities"
+      },
+      {
+        "field": "Virtualization:",
+        "data": "VT-x"
+      },
+      {
+        "field": "L1d cache:",
+        "data": "544 KiB (14 instances)"
+      },
+      {
+        "field": "L1i cache:",
+        "data": "704 KiB (14 instances)"
+      },
+      {
+        "field": "L2 cache:",
+        "data": "11.5 MiB (8 instances)"
+      },
+      {
+        "field": "L3 cache:",
+        "data": "24 MiB (1 instance)"
+      },
+      {
+        "field": "NUMA node(s):",
+        "data": "1"
+      },
+      {
+        "field": "NUMA node0 CPU(s):",
+        "data": "0-19"
+      },
+      {
+        "field": "Vulnerability Gather data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Ghostwrite:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Indirect target selection:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Itlb multihit:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability L1tf:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Meltdown:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mmio stale data:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Old microcode:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Reg file data sampling:",
+        "data": "Mitigation; Clear Register File"
+      },
+      {
+        "field": "Vulnerability Retbleed:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Spec rstack overflow:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Spec store bypass:",
+        "data": "Mitigation; Speculative Store Bypass disabled via prctl"
+      },
+      {
+        "field": "Vulnerability Spectre v1:",
+        "data": "Mitigation; usercopy/swapgs barriers and __user pointer sanitization"
+      },
+      {
+        "field": "Vulnerability Spectre v2:",
+        "data": "Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S"
+      },
+      {
+        "field": "Vulnerability Srbds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Tsa:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Tsx async abort:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Vmscape:",
+        "data": "Mitigation; IBPB before exit to userspace"
+      }
+    ]
+  },
+  "render_backend": "Xvfb; LIBGL_ALWAYS_SOFTWARE=1; software path; physical GPU not measured",
+  "audio_backend": "dummy for export player; no audible sink acceptance",
+  "flutter": "{\n  \"frameworkVersion\": \"3.47.7\",\n  \"channel\": \"stable\",\n  \"repositoryUrl\": \"https://github.com/flutter/flutter.git\",\n  \"frameworkRevision\": \"abaf9c523780a608bd46686fd5e53740a07077f8\",\n  \"frameworkCommitDate\": \"2026-10-08 09:51:21 -0700\",\n  \"engineRevision\": \"deb287481e3ce9468f3434937ced4240a70539ca\",\n  \"engineCommitDate\": \"2026-10-07 17:09:12.000Z\",\n  \"engineContentHash\": \"d8a2d6c768c334d53e16277f837970ffa1e2de81\",\n  \"engineBuildDate\": \"2026-10-07 10:51:44.552\",\n  \"dartSdkVersion\": \"3.13.5\",\n  \"devToolsVersion\": \"2.60.0\",\n  \"flutterVersion\": \"3.47.7\",\n  \"flutterRoot\": \"$HOME/.local/share/flutter\"\n}\n",
+  "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "ffmpeg_cli": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "fixture_manifest": {
+    "schema": 1,
+    "kind": "smoke",
+    "generator": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "provenance": "Original lavfi test patterns/tones and literal corrupt data; MIT repository recipe; no external footage, fonts or models.",
+    "determinism": "Byte checksums apply to this recorded FFmpeg build. Compare only identical generator/version/recipe.",
+    "files": [
+      {
+        "name": "video-audio.mkv",
+        "command": [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=160x90:rate=12:duration=2",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=440:sample_rate=48000:duration=2",
+          "-c:v",
+          "ffv1",
+          "-c:a",
+          "pcm_s16le",
+          "-map_metadata",
+          "-1",
+          "-fflags",
+          "+bitexact",
+          "-flags:v",
+          "+bitexact",
+          "-flags:a",
+          "+bitexact",
+          "-threads",
+          "1",
+          "apps/or_app/build/journey-fixtures/video-audio.mkv"
+        ],
+        "bytes": 274077,
+        "sha256": "16c0799db32329485d5b10332850acfe53bead117c60f46ff4903fc876cfcf21"
+      },
+      {
+        "name": "silent-video.mkv",
+        "command": [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=320x180:rate=24:duration=2",
+          "-an",
+          "-c:v",
+          "ffv1",
+          "-map_metadata",
+          "-1",
+          "-fflags",
+          "+bitexact",
+          "-flags:v",
+          "+bitexact",
+          "-flags:a",
+          "+bitexact",
+          "-threads",
+          "1",
+          "apps/or_app/build/journey-fixtures/silent-video.mkv"
+        ],
+        "bytes": 307001,
+        "sha256": "c2b3ea8f71234a717fa36dc9b87f069dc424eab4e4f81a8728d508d68b6cc29b"
+      },
+      {
+        "name": "video-audio.webm",
+        "command": [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=160x90:rate=12:duration=2",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=440:sample_rate=48000:duration=2",
+          "-c:v",
+          "libvpx-vp9",
+          "-c:a",
+          "libopus",
+          "-b:v",
+          "100k",
+          "-map_metadata",
+          "-1",
+          "-fflags",
+          "+bitexact",
+          "-flags:v",
+          "+bitexact",
+          "-flags:a",
+          "+bitexact",
+          "-threads",
+          "1",
+          "apps/or_app/build/journey-fixtures/video-audio.webm"
+        ],
+        "bytes": 39017,
+        "sha256": "1920ea7bb6c59ff862c4b0e1e25a342d89ea06fc53fac7069c170eb9fd40aff3"
+      },
+      {
+        "name": "silent-video.avi",
+        "command": [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=64x48:rate=15:duration=2",
+          "-an",
+          "-c:v",
+          "rawvideo",
+          "-pix_fmt",
+          "yuv420p",
+          "-map_metadata",
+          "-1",
+          "-fflags",
+          "+bitexact",
+          "-flags:v",
+          "+bitexact",
+          "-flags:a",
+          "+bitexact",
+          "-threads",
+          "1",
+          "apps/or_app/build/journey-fixtures/silent-video.avi"
+        ],
+        "bytes": 144688,
+        "sha256": "086f3fffd40012f5acfd51285b4cc25957d23c0017ef15a096e092103016f5b1"
+      },
+      {
+        "name": "audio-only.wav",
+        "command": [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=660:sample_rate=44100:duration=2",
+          "-c:a",
+          "pcm_s16le",
+          "-map_metadata",
+          "-1",
+          "-fflags",
+          "+bitexact",
+          "-flags:v",
+          "+bitexact",
+          "-flags:a",
+          "+bitexact",
+          "-threads",
+          "1",
+          "apps/or_app/build/journey-fixtures/audio-only.wav"
+        ],
+        "bytes": 176444,
+        "sha256": "749ed810ed5bf32b30912026095a02b2657b4e3e19b2142254b5c9b24750cffc"
+      },
+      {
+        "name": "unsupported.txt",
+        "command": "literal bytes in media_fixtures.py",
+        "bytes": 38,
+        "sha256": "e4b46e06248af35c2b4e7c1b871af9c02c1609870e513923d27bbd56dbfaccfc"
+      },
+      {
+        "name": "corrupt.mkv",
+        "command": "literal bytes in media_fixtures.py",
+        "bytes": 37,
+        "sha256": "a820c3a47f744b5eeaf73e4a3ff4c6a661294317a680562b0cae73c52ed47e3c"
+      }
+    ]
+  },
+  "limits": "Contended shared Debian host. Tiny synthetic smoke; no release/physical-device performance claim."
+}

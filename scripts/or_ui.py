@@ -91,7 +91,9 @@ def source_identity() -> dict:
     return {
         "task_sources": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                          for name in ("scripts/media_checks.py", "scripts/media_fixtures.py",
-                                      "scripts/test_journey_evidence.py")
+                                      "scripts/test_journey_evidence.py", "scripts/or_ui.py",
+                                      "scripts/run_linux_ui_preflight.py",
+                                      "apps/or_app/integration_test/or_ui_scenario_test.dart")
                          if (ROOT / name).is_file() and not (ROOT / name).is_symlink()},
         "sha": git("rev-parse", "HEAD"),
         "dirty": bool(git("status", "--porcelain")),
@@ -113,6 +115,28 @@ def artifact_hashes(report_dir: Path) -> list[dict]:
     return result
 
 
+def build_identity(report: dict) -> list[dict]:
+    mode = report.get("build_mode")
+    target = report.get("target")
+    if target == "linux" and mode in ("debug", "profile"):
+        bundle = APP / f"build/linux/x64/{mode}/bundle"
+        candidates = [bundle / "or_app", bundle / "data/flutter_assets/kernel_blob.bin"]
+    elif target == "android":
+        candidates = [LANE_DIR / "android-case-apks/ui.apk"]
+    else:
+        candidates = []
+    result = []
+    for path in candidates:
+        if path.is_file() and not path.is_symlink():
+            digest = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            result.append({"path": str(path.relative_to(ROOT)), "sha256": digest.hexdigest(),
+                           "bytes": path.stat().st_size})
+    return result
+
+
 def write_report(report_dir: Path, report: dict) -> None:
     report_dir.mkdir(parents=True, exist_ok=True)
     report.update({
@@ -120,7 +144,8 @@ def write_report(report_dir: Path, report: dict) -> None:
         "source": source_identity(),
         "host": {"os": platform.platform(), "machine": platform.machine()},
         "build": {"mode": report.get("build_mode", "UNVERIFIED"), "entrypoint": SCENARIO_RUNNER,
-                  "backend": "software", "acceptance": False},
+                  "backend": "software", "acceptance": False,
+                  "artifacts": build_identity(report)},
         "artifact_manifest": artifact_hashes(report_dir) if report.get("result") in ("PASS", "FAIL") else [],
     })
     (report_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n",
@@ -284,6 +309,8 @@ def run_linux(payload: dict, report_dir: Path) -> int:
             "free the named precondition (see the run log) and rerun this harness",
         )
     if completed.returncode != 0:
+        if read_transcript(artifacts, payload["name"]):
+            return finish(report_dir, artifacts, payload, "linux", runner_exit=completed.returncode)
         reason = (completed.stdout + completed.stderr).strip().splitlines()[-8:]
         payload_out = {
             "harness": "or_ui", "target": "linux", "result": "FAIL",
@@ -349,6 +376,8 @@ def run_android(payload: dict, report_dir: Path) -> int:
 
     pulled = pull_guest_artifacts(artifacts)
     if completed.returncode != 0 or not pulled:
+        if read_transcript(artifacts, payload["name"]):
+            return finish(report_dir, artifacts, payload, "android", runner_exit=completed.returncode or 1)
         reason = (completed.stdout + completed.stderr).strip().splitlines()[-8:]
         payload_out = {
             "harness": "or_ui", "target": "android", "result": "FAIL",
@@ -387,7 +416,8 @@ def pull_guest_artifacts(destination: Path) -> list[str]:
     return recovered
 
 
-def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int:
+def finish(report_dir: Path, artifacts: Path, payload: dict, target: str,
+           *, runner_exit: int = 0) -> int:
     transcript = read_transcript(artifacts, payload["name"])
     if not transcript:
         raise Blocked(
@@ -404,7 +434,10 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
                        and step.get("op") == expected[index].get("op")
                        and step.get("status") == "ok"
                        for index, step in enumerate(steps))
-    passed = complete and transcript.get("result") == "PASS" and not transcript.get("framework_errors")
+    passed = (runner_exit == 0 and complete and transcript.get("result") == "PASS"
+              and transcript.get("scenario") == payload["name"]
+              and transcript.get("platform") == target
+              and not transcript.get("framework_errors"))
     if complete:
         for actual, requested in zip(steps, expected):
             observation = actual.get("observation", {})
@@ -420,11 +453,31 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
                     len({s.get("frame_sequence") for s in samples}) > 1 and
                     len({s.get("presented_time") for s in samples if s.get("presented_time")}) > 1 and
                     all(s.get("width", 0) > 0 and s.get("height", 0) > 0 for s in samples))
-    observed = steps if isinstance(steps, list) else []
-    semantic = any(s.get("status") == "ok" and s.get("semantics")
-                   and (artifacts / s["semantics"]).is_file() for s in observed)
-    visual = any(s.get("status") == "ok" and s.get("screenshot")
-                 and (artifacts / s["screenshot"]).is_file() for s in observed)
+    observed = [s for s in steps if isinstance(s, dict)] if isinstance(steps, list) else []
+    def evidence_file(name):
+        if not isinstance(name, str) or Path(name).is_absolute():
+            return None
+        path = (artifacts / name).resolve()
+        if not path.is_relative_to(artifacts.resolve()) or not path.is_file():
+            return None
+        return path
+    def screenshot_exists(step):
+        path = evidence_file(step.get("screenshot"))
+        if path is None:
+            return False
+        with path.open("rb") as source:
+            return source.read(8) == b"\x89PNG\r\n\x1a\n"
+    def semantics_exists(step):
+        path = evidence_file(step.get("semantics"))
+        value = load_json(path) if path else None
+        return isinstance(value, dict) and bool(value.get("nodes") or value.get("screens"))
+    for step in observed:
+        if step.get("op") == "shot" and not screenshot_exists(step):
+            passed = False
+        if step.get("op") == "tree" and not semantics_exists(step):
+            passed = False
+    semantic = any(s.get("status") == "ok" and semantics_exists(s) for s in observed)
+    visual = any(s.get("status") == "ok" and screenshot_exists(s) for s in observed)
     canonical = any(s.get("status") == "ok" and s.get("op") == "canonical"
                     and s.get("observation", {}).get("assertions_passed") is True
                     for s in observed)
@@ -450,6 +503,10 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
         "complete": complete,
         "export_check": export_check,
         "runner_result": transcript.get("result"),
+        "runner_exit": runner_exit,
+        "reason": next((s.get("detail") for s in observed if s.get("status") != "ok"),
+                       None if passed else (export_check or {}).get("reason",
+                            "incomplete or inconsistent evidence")),
         "viewport": transcript.get("viewport"),
         "build_mode": transcript.get("build_mode", "UNVERIFIED"),
         "performance": transcript.get("performance", {}),
@@ -475,12 +532,14 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
         "artifacts": str(artifacts),
         "steps": steps,
         "screens": load_json(artifacts / "screen-inventory.json"),
-        "not_run": payload.get("not_run", []),
+        "not_run": payload.get("not_run", []) + [
+            {"index": i, "op": expected[i]["op"], "reason": "earlier failure stopped the scenario"}
+            for i in range(len(observed), len(expected))],
     }
     write_report(report_dir, report)
 
     print(f"== or_ui {target}: {payload['name']} ==")
-    for step in steps:
+    for step in observed:
         selector = step.get("selector")
         selector_text = json.dumps(selector, separators=(",", ":")) if selector else ""
         print(f"  {step['index']:>2} {step['op']:<12} {step['status']:<9} "

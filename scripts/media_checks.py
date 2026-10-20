@@ -74,6 +74,10 @@ def verify_export(path: Path, expected: dict, *, ffprobe: str = "ffprobe",
         raise MediaFailure(f"missing/empty export: {path}")
     if path.stat().st_size > 256 * 1024 * 1024:
         raise MediaBlocked("smoke verifier supports outputs up to 256 MiB")
+    if expected.get("container") in ("webm", "matroska"):
+        with path.open("rb") as source:
+            if source.read(4) != b"\x1a\x45\xdf\xa3":
+                raise MediaFailure("export has no Matroska/WebM container signature")
     probe = json.loads(run([ffprobe, "-v", "error", "-show_format",
                             "-show_streams", "-of", "json", str(path)]))
     report = check_metadata(probe, expected)

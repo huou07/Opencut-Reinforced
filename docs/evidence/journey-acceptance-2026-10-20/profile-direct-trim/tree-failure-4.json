@@ -1,0 +1,225 @@
+{
+  "nodes": [
+    {
+      "id": 0,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 1,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 2
+    },
+    {
+      "id": 34,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 0
+    },
+    {
+      "id": 35,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 36,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 37,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 38,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 1280.0,
+        "height": 800.0
+      },
+      "children": 1
+    },
+    {
+      "id": 39,
+      "role": "structure",
+      "label": "Alert",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 280.0,
+        "height": 212.0
+      },
+      "children": 4
+    },
+    {
+      "id": 40,
+      "role": "structure",
+      "label": "New Project",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 232.0,
+        "height": 22.0
+      },
+      "children": 0
+    },
+    {
+      "id": 41,
+      "role": "structure",
+      "label": "",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 232.0,
+        "height": 70.0
+      },
+      "children": 1
+    },
+    {
+      "id": 42,
+      "role": "textfield",
+      "label": "Project name",
+      "value": "",
+      "hint": "Enter a project name.",
+      "actions": [
+        "didGainAccessibilityFocus",
+        "didLoseAccessibilityFocus",
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 232.0,
+        "height": 70.0
+      },
+      "children": 1
+    },
+    {
+      "id": 45,
+      "role": "structure",
+      "label": "Enter a project name.",
+      "value": "",
+      "hint": "",
+      "actions": [],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 149.77499389648438,
+        "height": 18.0
+      },
+      "children": 0
+    },
+    {
+      "id": 43,
+      "role": "button",
+      "label": "Cancel",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 74.84399959019252,
+        "height": 32.0
+      },
+      "children": 0
+    },
+    {
+      "id": 44,
+      "role": "button",
+      "label": "Continue",
+      "value": "",
+      "hint": "",
+      "actions": [
+        "focus",
+        "tap"
+      ],
+      "rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "width": 102.779296875,
+        "height": 32.0
+      },
+      "children": 0
+    }
+  ]
+}

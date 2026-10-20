@@ -1,0 +1,20 @@
+{
+  "project_id": "00c8725e-4e30-49c6-9c34-e87a98d0960b",
+  "revision": "5",
+  "dirty": true,
+  "media_count": 1,
+  "track_count": 2,
+  "clip_count": 2,
+  "starts": [
+    "0/1",
+    "251/125"
+  ],
+  "durations": [
+    "251/125",
+    "251/125"
+  ],
+  "media_ids": [
+    "ad780c54-8103-4bf3-9be9-aac73310385d",
+    "ad780c54-8103-4bf3-9be9-aac73310385d"
+  ]
+}

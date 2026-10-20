@@ -1,0 +1,125 @@
+{
+  "base": "8abb41365ca0b2a89852fd60a6df64ab94a76195",
+  "candidate": "aae462cfba27a6611580c73ebe97cdd41339e016",
+  "method": "UTF-8 splitlines and whitespace-delimited words; not tokenizer counts or model cost",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "before_lines": 145,
+      "after_lines": 62,
+      "before_words": 1027,
+      "after_words": 440
+    },
+    {
+      "path": "docs/AGENT_POLICY.md",
+      "before_lines": 436,
+      "after_lines": 133,
+      "before_words": 2361,
+      "after_words": 1005
+    },
+    {
+      "path": "docs/DEVELOPMENT_WORKFLOW.md",
+      "before_lines": 149,
+      "after_lines": 169,
+      "before_words": 2309,
+      "after_words": 2143
+    },
+    {
+      "path": "docs/INDEX.md",
+      "before_lines": 150,
+      "after_lines": 152,
+      "before_words": 1110,
+      "after_words": 1121
+    },
+    {
+      "path": "docs/QUALITY.md",
+      "before_lines": 318,
+      "after_lines": 390,
+      "before_words": 3434,
+      "after_words": 4092
+    },
+    {
+      "path": "docs/TESTING.md",
+      "before_lines": 1258,
+      "after_lines": 1390,
+      "before_words": 15689,
+      "after_words": 16766
+    },
+    {
+      "path": "docs/TOOLING.md",
+      "before_lines": 461,
+      "after_lines": 513,
+      "before_words": 4454,
+      "after_words": 4803
+    },
+    {
+      "path": "docs/UX_ACCEPTANCE.md",
+      "before_lines": 500,
+      "after_lines": 528,
+      "before_words": 4418,
+      "after_words": 4621
+    },
+    {
+      "path": "docs/skills.md",
+      "before_lines": 86,
+      "after_lines": 56,
+      "before_words": 758,
+      "after_words": 454
+    },
+    {
+      "path": "docs/AGENT-AUTHORITY.md",
+      "before_lines": 173,
+      "after_lines": 178,
+      "before_words": 2246,
+      "after_words": 2283
+    },
+    {
+      "path": ".agents/skills/or-claim-evidence/SKILL.md",
+      "before_lines": 66,
+      "after_lines": 26,
+      "before_words": 513,
+      "after_words": 209
+    },
+    {
+      "path": ".agents/skills/or-dev-loop/SKILL.md",
+      "before_lines": 91,
+      "after_lines": 32,
+      "before_words": 727,
+      "after_words": 260
+    },
+    {
+      "path": ".agents/skills/or-edit-feature/SKILL.md",
+      "before_lines": 78,
+      "after_lines": 30,
+      "before_words": 652,
+      "after_words": 230
+    },
+    {
+      "path": ".agents/skills/or-media-ai/SKILL.md",
+      "before_lines": 89,
+      "after_lines": 31,
+      "before_words": 696,
+      "after_words": 243
+    },
+    {
+      "path": ".agents/skills/or-release/SKILL.md",
+      "before_lines": 76,
+      "after_lines": 28,
+      "before_words": 560,
+      "after_words": 188
+    },
+    {
+      "path": ".agents/skills/or-ui-ux/SKILL.md",
+      "before_lines": 130,
+      "after_lines": 31,
+      "before_words": 1175,
+      "after_words": 257
+    }
+  ],
+  "totals": {
+    "before_lines": 4206,
+    "after_lines": 3749,
+    "before_words": 42129,
+    "after_words": 39115
+  }
+}
