@@ -218,7 +218,6 @@ impl FfmpegExportWriter {
                 options.set("b", "0");
                 options.set("row-mt", "1");
             } else {
-                options.set("realtime", "true");
                 let bitrate = (u64::from(width) * u64::from(height) * 3).clamp(500_000, 12_000_000);
                 options.set("b", &bitrate.to_string());
             }
