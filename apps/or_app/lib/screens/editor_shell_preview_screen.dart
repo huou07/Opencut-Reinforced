@@ -21,6 +21,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.project,
     this.projectGateway,
     this.projectSession,
+    this.previewSeekPosition,
+    this.onPreviewSeekConsumed,
     this.notice,
     this.busy = false,
     this.mediaPage,
@@ -86,6 +88,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final ProjectReadModel? project;
   final ProjectGateway? projectGateway;
   final ProjectSessionHandle? projectSession;
+  final ProjectRationalTime? previewSeekPosition;
+  final VoidCallback? onPreviewSeekConsumed;
   final String? notice;
   final bool busy;
   final ProjectMediaPage? mediaPage;
@@ -506,6 +510,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   gateway: widget.projectGateway,
                   session: widget.projectSession,
                   project: widget.project,
+                  previewSeekPosition: widget.previewSeekPosition,
+                  onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
                   onStateChanged: _onPreviewStateChanged,
                 ),
               ),
@@ -622,6 +628,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             gateway: widget.projectGateway,
             session: widget.projectSession,
             project: widget.project,
+            previewSeekPosition: widget.previewSeekPosition,
+            onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
             onStateChanged: _onPreviewStateChanged,
           ),
         ),
@@ -1763,6 +1771,8 @@ class _ViewerPanel extends StatefulWidget {
     required this.gateway,
     required this.session,
     required this.project,
+    required this.previewSeekPosition,
+    required this.onPreviewSeekConsumed,
     required this.onStateChanged,
   });
 
@@ -1770,6 +1780,8 @@ class _ViewerPanel extends StatefulWidget {
   final ProjectGateway? gateway;
   final ProjectSessionHandle? session;
   final ProjectReadModel? project;
+  final ProjectRationalTime? previewSeekPosition;
+  final VoidCallback? onPreviewSeekConsumed;
   final ValueChanged<ProjectPreviewState> onStateChanged;
 
   @override
@@ -1842,11 +1854,15 @@ class _ViewerPanelState extends State<_ViewerPanel>
     super.didUpdateWidget(oldWidget);
     final oldProject = oldWidget.project;
     final project = widget.project;
+    final previewInputChanged =
+        oldWidget.previewSeekPosition != widget.previewSeekPosition &&
+        widget.previewSeekPosition != null;
     if (oldWidget.gateway != widget.gateway ||
         oldWidget.session != widget.session ||
         oldProject?.projectId != project?.projectId ||
         oldProject?.projectInstanceId != project?.projectInstanceId ||
-        oldProject?.revision != project?.revision) {
+        oldProject?.revision != project?.revision ||
+        previewInputChanged) {
       unawaited(_initialize());
     }
   }
@@ -1884,8 +1900,13 @@ class _ViewerPanelState extends State<_ViewerPanel>
       final state = await gateway.previewState(session);
       if (!_isCurrent(epoch)) return;
       _acceptState(state, epoch);
-      final rendered = await gateway.previewSeek(session, state.position);
+      final requestedPosition = widget.previewSeekPosition;
+      final rendered = await gateway.previewSeek(
+        session,
+        requestedPosition ?? state.position,
+      );
       _acceptState(rendered, epoch);
+      if (requestedPosition != null) widget.onPreviewSeekConsumed?.call();
       if (_isCurrent(epoch)) setState(() => _busy = false);
       final textureId = await textureIdFuture;
       if (!_isCurrent(epoch)) return;

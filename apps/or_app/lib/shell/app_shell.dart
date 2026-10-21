@@ -69,24 +69,6 @@ Future<String?> registerAndroidMediaSource(
   }
 }
 
-/// Whether this process can create and remove a file in `directory`.
-///
-/// A cheap probe rather than a permission inspection: the encoder needs to create a
-/// staging directory and move a file, and only an attempt answers that.
-bool _directoryIsWritable(Directory directory) {
-  try {
-    if (!directory.existsSync()) return false;
-    final probe = File(
-      '${directory.path}/.or-write-probe-${DateTime.now().microsecondsSinceEpoch}',
-    );
-    probe.createSync(exclusive: true);
-    probe.deleteSync();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -150,6 +132,8 @@ class _AppShellState extends State<AppShell> {
   ProjectTimelineTracks? _timelineTracks;
   final Map<String, ProjectTimelineClipPage> _timelineClipPages = {};
   ProjectTimelineMarkerPage? _timelineMarkerPage;
+  ProjectRationalTime? _pendingMotionPreviewPosition;
+  String? _pendingMotionPreviewProjectInstanceId;
   final Set<String> _timelineLoadingMoreTracks = {};
   bool _timelineLoadingMoreMarkers = false;
   bool _timelineLoading = false;
@@ -458,6 +442,12 @@ class _AppShellState extends State<AppShell> {
               project: _activeProject,
               projectGateway: widget.projectGateway,
               projectSession: _activeSession,
+              previewSeekPosition:
+                  _activeProject?.projectInstanceId ==
+                      _pendingMotionPreviewProjectInstanceId
+                  ? _pendingMotionPreviewPosition
+                  : null,
+              onPreviewSeekConsumed: _consumeMotionPreviewPosition,
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,
@@ -565,32 +555,13 @@ class _AppShellState extends State<AppShell> {
     ],
   );
 
-  /// Turns a code file into an illustration video through the shared gateway.
-  ///
-  /// The default destination is the application documents directory rather than the
-  /// project directory: the result is media, not canonical project state, and writing
-  /// beside the project would invite a client to treat it as part of the document.
+  /// Turns a code file into a persistent, ordinary media item in the active project.
   Future<void> _openMotionMaterialize() async {
     if (_activeSession == null) return;
-    // The default must be somewhere this process can actually write. The encoder
-    // stages a private sibling beside the destination and moves it into place, so an
-    // unwritable parent fails late and confusingly -- the hosted harness saw
-    // "MOTION_ENCODER_UNAVAILABLE: could not create export staging directory:
-    // Permission denied" because the documents directory it reported was not writable
-    // by the app's user. A probe here keeps the default honest and the field editable.
-    String destination = '${Directory.systemTemp.path}/illustration.mkv';
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      if (_directoryIsWritable(directory)) {
-        destination = '${directory.path}/illustration.mkv';
-      }
-    } catch (_) {
-      // The system temporary directory is the default already.
-    }
-    if (!mounted) return;
     await showMotionMaterializeDialog(
       context: context,
-      initialDestinationPath: destination,
+      chooseSource: _pickMotionSource,
+      chooseDestination: _pickMotionDestination,
       render: (request) => widget.projectGateway.materializeIllustration(
         sourcePath: request.sourcePath,
         destinationPath: request.destinationPath,
@@ -600,7 +571,255 @@ class _AppShellState extends State<AppShell> {
         height: request.height,
         title: request.title,
       ),
+      addToTimeline: _addMaterializedIllustrationToTimeline,
     );
+  }
+
+  Future<String?> _pickMotionSource() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      if (sources.isEmpty) return null;
+      if (sources.length != 1) {
+        _showUnavailable('Select one code file to illustrate.');
+        return null;
+      }
+      return sources.single;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('A code file could not be selected.');
+      return null;
+    }
+  }
+
+  Future<String?> _pickMotionDestination(String suggestedName) async {
+    if (!widget.projectFilePicker.supportsExport) {
+      _showUnavailable('Choose an output location is unavailable here.');
+      return null;
+    }
+    try {
+      return await widget.projectFilePicker.saveExportPath(
+        suggestedName: suggestedName,
+        profile: ExportProfile.matroskaFfv1PcmS16le,
+      );
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('An output location could not be selected.');
+      return null;
+    }
+  }
+
+  Future<bool> _addMaterializedIllustrationToTimeline(String path) async {
+    final session = _activeSession;
+    var project = _activeProject;
+    if (session == null || project == null || _busy) return false;
+
+    try {
+      var media = await _findMaterializedMedia(session, project, path);
+      if (media == null) {
+        final imported = await _runProjectActionAtSnapshot(
+          project,
+          (session, current) =>
+              widget.projectGateway.importMedia(session, current, path),
+        );
+        if (imported == null || !identical(session, _activeSession)) {
+          return false;
+        }
+        project = imported;
+        media = await _findMaterializedMedia(session, project, path);
+      }
+      if (media == null) {
+        _showUnavailable(
+          'The rendered video could not be found in the media library.',
+        );
+        return false;
+      }
+
+      var tracks = await widget.projectGateway.listTimelineTracks(session);
+      if (!_matchesTimelineProject(tracks, project)) {
+        await _refreshProjectState(session);
+        _showUnavailable(
+          'The timeline changed. Try adding the rendered video again.',
+        );
+        return false;
+      }
+      var videoTrack = _firstUnlockedVideoTrack(tracks.items);
+      if (videoTrack == null) {
+        final updated = await _runProjectActionAtSnapshot(
+          project,
+          (session, current) => widget.projectGateway.addTimelineTrack(
+            session,
+            current,
+            ProjectTimelineTrackKind.video,
+          ),
+        );
+        if (updated == null || !identical(session, _activeSession)) {
+          return false;
+        }
+        project = updated;
+        tracks = await widget.projectGateway.listTimelineTracks(session);
+        if (!_matchesTimelineProject(tracks, project)) {
+          await _refreshProjectState(session);
+          _showUnavailable('The new video track could not be loaded.');
+          return false;
+        }
+        videoTrack = _firstUnlockedVideoTrack(tracks.items);
+      }
+      if (videoTrack == null) {
+        _showUnavailable('An unlocked video track could not be created.');
+        return false;
+      }
+
+      final timelineStart = await _projectContentEnd(session, project, tracks);
+      final duration =
+          media.firstVideoDuration ??
+          media.containerDuration ??
+          ProjectRationalTime.tryParse(media.duration ?? '');
+      if (duration == null || !duration.isPositive) {
+        _showUnavailable('The rendered video has no readable duration.');
+        return false;
+      }
+
+      final inserted = await _runProjectActionAtSnapshot(
+        project,
+        (session, current) => widget.projectGateway.insertTimelineClip(
+          session,
+          current,
+          trackId: videoTrack!.trackId,
+          mediaId: media!.mediaId,
+          timelineStart: timelineStart,
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          duration: duration,
+        ),
+      );
+      if (inserted == null || !identical(session, _activeSession)) {
+        return false;
+      }
+      _pendingMotionPreviewPosition = timelineStart;
+      _pendingMotionPreviewProjectInstanceId = inserted.projectInstanceId;
+      _select(AppDestination.editorPreview);
+      setState(() => _projectNotice = 'Illustration added to the timeline.');
+      return true;
+    } on ProjectGatewayException catch (error) {
+      if (error.code == 'PROJECT_CHANGED' &&
+          identical(session, _activeSession)) {
+        await _refreshProjectState(session);
+      }
+      _showUnavailable(error.message);
+      return false;
+    } catch (_) {
+      _showUnavailable(
+        'The rendered video could not be added to the timeline.',
+      );
+      return false;
+    }
+  }
+
+  Future<ProjectMediaItem?> _findMaterializedMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel project,
+    String path,
+  ) async {
+    final first = await widget.projectGateway.listMediaPage(
+      session,
+      offset: 0,
+      limit: _mediaPageSize,
+    );
+    if (!_matchesProject(first, project)) {
+      throw const ProjectGatewayException(
+        'PROJECT_CHANGED',
+        'The media library changed while the rendered video was being added.',
+      );
+    }
+    if (first.totalCount == 0) return null;
+
+    final expectedPath = File(path).absolute.path;
+    var offset = ((first.totalCount - 1) ~/ first.limit) * first.limit;
+    while (true) {
+      final page = offset == 0
+          ? first
+          : await widget.projectGateway.listMediaPage(
+              session,
+              offset: offset,
+              limit: _mediaPageSize,
+            );
+      if (!_matchesProject(page, project)) {
+        throw const ProjectGatewayException(
+          'PROJECT_CHANGED',
+          'The media library changed while the rendered video was being added.',
+        );
+      }
+      for (final item in page.items.reversed) {
+        if (_mediaSourcePath(item) == expectedPath) return item;
+      }
+      if (offset == 0) return null;
+      offset = (offset - _mediaPageSize).clamp(0, offset).toInt();
+    }
+  }
+
+  ProjectTimelineTrack? _firstUnlockedVideoTrack(
+    List<ProjectTimelineTrack> tracks,
+  ) {
+    for (final track in tracks) {
+      if (track.kind == ProjectTimelineTrackKind.video && !track.state.locked) {
+        return track;
+      }
+    }
+    return null;
+  }
+
+  Future<ProjectRationalTime> _projectContentEnd(
+    ProjectSessionHandle session,
+    ProjectReadModel project,
+    ProjectTimelineTracks tracks,
+  ) async {
+    if (!_matchesTimelineProject(tracks, project)) {
+      throw const ProjectGatewayException(
+        'PROJECT_CHANGED',
+        'The timeline changed while its content end was being read.',
+      );
+    }
+    var end = ProjectRationalTime(BigInt.zero, 1);
+    for (final track in tracks.items) {
+      if (track.clipCount == 0) continue;
+      // Canonical tracks are time-ordered and reject overlap, so their last
+      // clip gives the exact end without paging through the whole project.
+      final offset = (track.clipCount - _timelineClipPageSize)
+          .clamp(0, track.clipCount)
+          .toInt();
+      final page = await widget.projectGateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: offset,
+        limit: _timelineClipPageSize,
+      );
+      if (!_matchesTimelineClipPage(
+        page,
+        project,
+        trackId: track.trackId,
+        offset: offset,
+        clipCount: track.clipCount,
+      )) {
+        throw const ProjectGatewayException(
+          'PROJECT_CHANGED',
+          'The timeline changed while its content end was being read.',
+        );
+      }
+      final trackEnd = page.items.last.timelineEnd;
+      if (trackEnd.compareTo(end) > 0) end = trackEnd;
+    }
+    return end;
+  }
+
+  void _consumeMotionPreviewPosition() {
+    if (_pendingMotionPreviewPosition == null || !mounted) return;
+    setState(() {
+      _pendingMotionPreviewPosition = null;
+      _pendingMotionPreviewProjectInstanceId = null;
+    });
   }
 
   void _openWorkspace() {

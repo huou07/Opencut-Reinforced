@@ -597,7 +597,7 @@ void main() {
   });
 
   testWidgets(
-    'the illustration surface refuses an empty source and reports a render',
+    'the illustration surface picks files, renders, then adds to the timeline',
     (tester) async {
       // The surface is the user-visible half of code-to-illustration video. It is driven
       // through an injected renderer so the guard needs no Rust library, and it asserts
@@ -610,12 +610,18 @@ void main() {
         const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
       var rendered = 0;
+      String? addedPath;
       MotionMaterializeRequest? seen;
       // The dialog's future completes when it closes, so the test drives it first and
       // awaits it last; awaiting here would deadlock the test against itself.
       final dialog = showMotionMaterializeDialog(
         context: tester.element(find.byType(Scaffold)),
-        initialDestinationPath: '/tmp/illustration.mkv',
+        chooseSource: () async => '/tmp/count_words.rs',
+        chooseDestination: (suggestedName) async {
+          expect(suggestedName, startsWith('Illustration-'));
+          expect(suggestedName, endsWith('.mkv'));
+          return '/tmp/illustration.mkv';
+        },
         render: (request) async {
           rendered++;
           seen = request;
@@ -632,26 +638,28 @@ void main() {
             message: 'Materialised 24 frames.',
           );
         },
+        addToTimeline: (path) async {
+          addedPath = path;
+          return true;
+        },
       );
       await tester.pumpAndSettle();
 
-      // A render with no source is refused, with a reason, and does not call the renderer.
-      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
-      await tester.pumpAndSettle();
-      expect(rendered, 0);
+      // Rendering is unavailable until both files have been selected.
       expect(
         tester
-            .widget<Text>(
-              find.byKey(const ValueKey('motion-materialize-status')),
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('motion-materialize-render')),
             )
-            .data,
-        contains('Choose a code file'),
+            .onPressed,
+        isNull,
       );
+      expect(rendered, 0);
 
-      await tester.enterText(
-        find.byKey(const ValueKey('motion-materialize-source')),
-        '/tmp/count_words.rs',
-      );
+      await tester.tap(find.text('Choose file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose location'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('motion-materialize-width')),
         '800',
@@ -681,9 +689,12 @@ void main() {
             .data,
         contains('24 frames'),
       );
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.byKey(const ValueKey('motion-materialize-cancel')));
+      await tester.tap(
+        find.byKey(const ValueKey('motion-materialize-add-to-timeline')),
+      );
       await tester.pumpAndSettle();
+      expect(addedPath, '/tmp/illustration.mkv');
+      expect(tester.takeException(), isNull);
       // The dialog's future completes when it closes, so it is awaited last.
       await dialog;
     },
