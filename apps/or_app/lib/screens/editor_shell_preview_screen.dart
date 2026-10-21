@@ -1535,6 +1535,128 @@ class _MediaLibraryItem extends StatelessWidget {
         child: const Icon(Icons.drag_indicator, size: 18),
       ),
     );
+    Widget dragAction() => Draggable<ProjectMediaItem>(
+      key: ValueKey('media-drag-${item.mediaId}'),
+      data: item,
+      affinity: Axis.horizontal,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        color: OrColors.surface,
+        borderRadius: BorderRadius.circular(OrRadii.small),
+        child: SizedBox(
+          width: 220,
+          child: Padding(
+            padding: const EdgeInsets.all(OrSpacing.x2),
+            child: Text(
+              'Add ${_mediaDisplayName(item.sourceUri)} to Timeline',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: OrColors.text,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.45, child: dragHandle()),
+      child: dragHandle(),
+    );
+    List<Widget> actionWidgets() => [
+      if (supportsTimelineDrag) dragAction(),
+      if (item.videoDetails != null || item.audioDetails != null)
+        IconButton(
+          key: ValueKey('media-add-timeline-${item.mediaId}'),
+          tooltip: 'Add to Timeline',
+          onPressed: onAddToTimeline,
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.playlist_add_outlined, size: 18),
+          color: OrColors.textMuted,
+        ),
+      PopupMenuButton<String>(
+        key: ValueKey('media-actions-${item.mediaId}'),
+        tooltip: 'Media actions',
+        onSelected:
+            onRelink == null &&
+                onRemove == null &&
+                onGenerateCaptions == null &&
+                onCleanUpAudio == null
+            ? null
+            : (action) {
+                if (action == 'relink') onRelink?.call();
+                if (action == 'remove') onRemove?.call();
+                if (action == 'transcribe') onGenerateCaptions?.call();
+                if (action == 'cleanup') onCleanUpAudio?.call();
+              },
+        itemBuilder: (context) => [
+          if (onRelink != null)
+            PopupMenuItem(
+              key: ValueKey('media-relink-${item.mediaId}'),
+              value: 'relink',
+              child: const Text('Relink Source'),
+            ),
+          if (onRemove != null)
+            PopupMenuItem(
+              key: ValueKey('media-remove-${item.mediaId}'),
+              value: 'remove',
+              child: const Text('Remove from Project'),
+            ),
+          if (onGenerateCaptions != null)
+            PopupMenuItem(
+              key: ValueKey('media-generate-captions-${item.mediaId}'),
+              value: 'transcribe',
+              child: const Text('Generate Captions'),
+            ),
+          // Only a file with audio can be cleaned, and the result is a new
+          // item rather than a change to this one.
+          if (onCleanUpAudio != null && item.audioDetails != null)
+            PopupMenuItem(
+              key: ValueKey('media-clean-audio-${item.mediaId}'),
+              value: 'cleanup',
+              child: const Text('Clean up Audio'),
+            ),
+        ],
+        child: const SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(Icons.more_vert, size: 17, color: OrColors.textMuted),
+        ),
+      ),
+    ];
+    Widget actions() =>
+        Row(mainAxisSize: MainAxisSize.min, children: actionWidgets());
+    Widget metadata() => Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              key: ValueKey('media-name-${item.mediaId}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: OrColors.text,
+                fontSize: OrType.tinySize,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (details.isNotEmpty)
+              Text(
+                details.join(' · '),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OrColors.textMuted,
+                  fontSize: OrType.tinySize,
+                  height: 1.35,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
     final card = Tooltip(
       message: 'Media ID: ${item.mediaId}\n${item.sourceUri}',
       child: Container(
@@ -1545,133 +1667,25 @@ class _MediaLibraryItem extends StatelessWidget {
           border: Border.all(color: OrColors.border),
           borderRadius: BorderRadius.circular(OrRadii.small),
         ),
-        child: Row(
-          children: [
-            _MediaItemPreview(item: item, preview: preview),
-            const SizedBox(width: OrSpacing.x2),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      key: ValueKey('media-name-${item.mediaId}'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: OrColors.text,
-                        fontSize: OrType.tinySize,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (details.isNotEmpty)
-                      Text(
-                        details.join(' · '),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontSize: OrType.tinySize,
-                          height: 1.35,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            if (supportsTimelineDrag)
-              Draggable<ProjectMediaItem>(
-                key: ValueKey('media-drag-${item.mediaId}'),
-                data: item,
-                affinity: Axis.horizontal,
-                dragAnchorStrategy: pointerDragAnchorStrategy,
-                feedback: Material(
-                  color: OrColors.surface,
-                  borderRadius: BorderRadius.circular(OrRadii.small),
-                  child: SizedBox(
-                    width: 220,
-                    child: Padding(
-                      padding: const EdgeInsets.all(OrSpacing.x2),
-                      child: Text(
-                        'Add ${_mediaDisplayName(item.sourceUri)} to Timeline',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: OrColors.text,
-                          fontSize: OrType.tinySize,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                childWhenDragging: Opacity(opacity: 0.45, child: dragHandle()),
-                child: dragHandle(),
-              ),
-            if (item.videoDetails != null || item.audioDetails != null)
-              IconButton(
-                key: ValueKey('media-add-timeline-${item.mediaId}'),
-                tooltip: 'Add to Timeline',
-                onPressed: onAddToTimeline,
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.playlist_add_outlined, size: 18),
-                color: OrColors.textMuted,
-              ),
-            PopupMenuButton<String>(
-              key: ValueKey('media-actions-${item.mediaId}'),
-              tooltip: 'Media actions',
-              onSelected:
-                  onRelink == null &&
-                      onRemove == null &&
-                      onGenerateCaptions == null &&
-                      onCleanUpAudio == null
-                  ? null
-                  : (action) {
-                      if (action == 'relink') onRelink?.call();
-                      if (action == 'remove') onRemove?.call();
-                      if (action == 'transcribe') onGenerateCaptions?.call();
-                      if (action == 'cleanup') onCleanUpAudio?.call();
-                    },
-              itemBuilder: (context) => [
-                if (onRelink != null)
-                  PopupMenuItem(
-                    key: ValueKey('media-relink-${item.mediaId}'),
-                    value: 'relink',
-                    child: const Text('Relink Source'),
-                  ),
-                if (onRemove != null)
-                  PopupMenuItem(
-                    key: ValueKey('media-remove-${item.mediaId}'),
-                    value: 'remove',
-                    child: const Text('Remove from Project'),
-                  ),
-                if (onGenerateCaptions != null)
-                  PopupMenuItem(
-                    key: ValueKey('media-generate-captions-${item.mediaId}'),
-                    value: 'transcribe',
-                    child: const Text('Generate Captions'),
-                  ),
-                // Only a file with audio can be cleaned, and the result is a new
-                // item rather than a change to this one.
-                if (onCleanUpAudio != null && item.audioDetails != null)
-                  PopupMenuItem(
-                    key: ValueKey('media-clean-audio-${item.mediaId}'),
-                    value: 'cleanup',
-                    child: const Text('Clean up Audio'),
-                  ),
-              ],
-              child: const SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(
-                  Icons.more_vert,
-                  size: 17,
-                  color: OrColors.textMuted,
-                ),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth < 270;
+            final leading = [
+              _MediaItemPreview(item: item, preview: preview),
+              const SizedBox(width: OrSpacing.x2),
+              metadata(),
+            ];
+            if (narrow) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(children: leading),
+                  Align(alignment: Alignment.centerRight, child: actions()),
+                ],
+              );
+            }
+            return Row(children: [...leading, ...actionWidgets()]);
+          },
         ),
       ),
     );

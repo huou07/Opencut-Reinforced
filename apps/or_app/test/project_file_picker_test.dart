@@ -8,10 +8,13 @@ import 'package:or_app/project/project_file_picker.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test.or_app/saf_storage');
+  const macFileAccessChannel = MethodChannel('or_macos_file_access');
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(macFileAccessChannel, null);
   });
 
   test('mobile offers WebM by default while retaining lossless Matroska', () {
@@ -22,6 +25,32 @@ void main() {
       contains(ExportProfile.matroskaFfv1PcmS16le),
     );
   });
+
+  test('macOS export selection uses the scoped folder picker', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(macFileAccessChannel, (call) async {
+          calls.add(call);
+          return switch (call.method) {
+            'restoreBookmarks' => 1,
+            'saveExport' => '/private/tmp/demo.webm',
+            _ => null,
+          };
+        });
+    const picker = FileSelectorProjectPicker();
+
+    final path = await picker.saveExportPath(
+      suggestedName: 'demo.webm',
+      profile: ExportProfile.webmVp9Opus,
+    );
+
+    expect(path, '/private/tmp/demo.webm');
+    expect(calls.map((call) => call.method), [
+      'restoreBookmarks',
+      'saveExport',
+    ]);
+    expect(calls.last.arguments, {'suggestedName': 'demo.webm'});
+  }, skip: !Platform.isMacOS);
 
   test('Android media picker returns multiple validated SAF URIs', () async {
     var pickerCalled = false;

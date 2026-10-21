@@ -99,6 +99,8 @@ class ProjectSafStorageException implements Exception {
 class FileSelectorProjectPicker implements ProjectFilePicker {
   const FileSelectorProjectPicker();
 
+  static const _macFileAccessChannel = MethodChannel('or_macos_file_access');
+
   static const _projectType = XTypeGroup(
     label: 'Opencut Reinforced project',
     extensions: ['orproj'],
@@ -121,6 +123,10 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   @override
   Future<String?> openProjectPath() async {
     if (!isSupported) return null;
+    if (Platform.isMacOS) {
+      await _restoreMacFileAccess();
+      return _invokeMacFileAccess<String>('openProject');
+    }
     final file = await openFile(acceptedTypeGroups: [_projectType]);
     return file?.path;
   }
@@ -129,7 +135,10 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   Future<String> restoreRecentProject(
     String path, {
     String? documentUri,
-  }) async => path;
+  }) async {
+    await _restoreMacFileAccess();
+    return path;
+  }
 
   @override
   String? projectDocumentUriFor(String path) => null;
@@ -137,6 +146,7 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   @override
   Future<List<String>> openMediaSources() async {
     if (!isSupported) return const [];
+    if (Platform.isMacOS) return _invokeMacFileAccessList('openMedia');
     final files = await openFiles();
     return files.map((file) => file.path).toList(growable: false);
   }
@@ -144,7 +154,9 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   @override
   Future<List<String>> openMediaFolderSources() async {
     if (!isSupported) return const [];
-    final path = await getDirectoryPath(confirmButtonText: 'Import Folder');
+    final path = Platform.isMacOS
+        ? await _invokeMacFileAccess<String>('openMediaFolder')
+        : await getDirectoryPath(confirmButtonText: 'Import Folder');
     if (path == null) return const [];
     return enumerateMediaFolderSources(Directory(path));
   }
@@ -152,11 +164,50 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
   @override
   Future<String?> saveProjectPath({required String suggestedName}) async {
     if (!isSupported) return null;
+    if (Platform.isMacOS) {
+      return _invokeMacFileAccess<String>('saveProject', {
+        'suggestedName': suggestedName,
+      });
+    }
     final location = await getSaveLocation(
       acceptedTypeGroups: [_projectType],
       suggestedName: suggestedName,
     );
     return location?.path;
+  }
+
+  Future<T?> _invokeMacFileAccess<T>(String method, [Object? arguments]) async {
+    try {
+      return await _macFileAccessChannel.invokeMethod<T>(method, arguments);
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Persistent macOS file access is unavailable.',
+      );
+    } on PlatformException catch (error) {
+      throw ProjectSafStorageException(
+        error.message ?? 'macOS file access could not be remembered.',
+      );
+    }
+  }
+
+  Future<List<String>> _invokeMacFileAccessList(String method) async {
+    try {
+      return await _macFileAccessChannel.invokeListMethod<String>(method) ??
+          const [];
+    } on MissingPluginException {
+      throw const ProjectSafStorageException(
+        'Persistent macOS file access is unavailable.',
+      );
+    } on PlatformException catch (error) {
+      throw ProjectSafStorageException(
+        error.message ?? 'macOS file access could not be remembered.',
+      );
+    }
+  }
+
+  Future<void> _restoreMacFileAccess() async {
+    if (!Platform.isMacOS) return;
+    await _invokeMacFileAccess<int>('restoreBookmarks');
   }
 
   @override
@@ -165,6 +216,12 @@ class FileSelectorProjectPicker implements ProjectFilePicker {
     required ExportProfile profile,
   }) async {
     if (!isSupported) return null;
+    if (Platform.isMacOS) {
+      await _restoreMacFileAccess();
+      return _invokeMacFileAccess<String>('saveExport', {
+        'suggestedName': suggestedName,
+      });
+    }
     final location = await getSaveLocation(
       acceptedTypeGroups: [
         XTypeGroup(label: profile.label, extensions: [profile.extension]),
