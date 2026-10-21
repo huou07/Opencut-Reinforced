@@ -6937,7 +6937,7 @@ Future<void> _showTimelineClipActions({
         if (isMedia)
           Tooltip(
             message: canSplitAtPlayhead
-                ? 'Split at ${splitAtPlayhead!.canonical}'
+                ? 'Split at ${splitAtPlayhead.canonical}'
                 : 'Move the playhead inside this clip to split at it',
             child: TextButton(
               key: ValueKey('timeline-split-at-playhead-${clip.clipId}'),
@@ -6947,11 +6947,6 @@ Future<void> _showTimelineClipActions({
                       final activeProject = project;
                       final split = onSplit;
                       final position = splitAtPlayhead;
-                      if (activeProject == null ||
-                          split == null ||
-                          position == null) {
-                        return;
-                      }
                       Navigator.of(dialogContext).pop();
                       unawaited(split(activeProject, clip, position));
                     },
