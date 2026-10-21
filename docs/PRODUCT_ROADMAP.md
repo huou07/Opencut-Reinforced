@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-21
+Last reviewed: 2026-10-22
 
 ## Authority and status
 
@@ -502,12 +502,16 @@ class each claim actually has:
     recovery, and storage suites (five real-media tests ignored).
     `flutter analyze --no-pub` passed and
     `flutter test --no-pub test/widget_test.dart` passed all 111 tests.
-  - `or_app_bridge` compiled, but its test process could not start because this
-    host lacks linked `libavutil.60.dylib` and provides FFmpeg 9's
-    `libavutil.61.1.101.dylib`; bridge runtime tests are `NOT RUN`. The real
-    macOS editing and MotionScene journeys and independent export validation
-    also remain `NOT RUN`. This is developer evidence, not `ACCEPTED`; the Mac
-    mission still requires those app journeys and export checks.
+  - `cargo test -p or_app_bridge --locked` passed 29 tests; three
+    codec- or measurement-dependent tests were ignored. The test process used
+    the matching cached FFmpeg 8.1.3 dylibs through `DYLD_LIBRARY_PATH`; no ABI
+    versions were substituted. `flutter build macos --debug` also passed at
+    the implementation SHA recorded in [TESTING.md](TESTING.md).
+  - The running app predated that build and was left untouched, so the new build
+    was not launched. The real macOS editing and MotionScene journeys and
+    independent export validation remain `NOT RUN` while the CUA surface is
+    locked. This is developer evidence, not `ACCEPTED`; the Mac mission still
+    requires those app journeys and export checks.
   - The dated notes below preserve earlier design analysis and stopped attempts;
     they do not describe the current implementation status.
   - **Baseline before the rate model (2026-10-20):** `validate_clip_content`

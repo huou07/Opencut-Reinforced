@@ -22,12 +22,17 @@ See [TOOLING.md](TOOLING.md) and skill
 - `flutter analyze --no-pub` passed, and
   `flutter test --no-pub test/widget_test.dart` passed all 111 tests, including
   the audio Inspector playback-rate command regression.
-- `or_app_bridge` compiled, but its test process could not start because the
-  linked app requires `libavutil.60.dylib` while this host provides
-  `libavutil.61.1.101.dylib`. Bridge runtime tests are `NOT RUN`; the two ABI
-  versions were not substituted for one another.
-- The real macOS editing and MotionScene journeys and independent export
-  validation remain `NOT RUN`. These local tests do not establish `ACCEPTED`.
+- `env DYLD_LIBRARY_PATH='/Users/meomeo/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-mp4/ffmpeg-install/lib'
+  cargo test -p or_app_bridge --locked` passed 29 tests; three codec- or
+  measurement-dependent tests were ignored. The runtime path used the matching
+  project cache; no FFmpeg ABI versions were substituted.
+- `flutter build macos --debug` passed at source SHA
+  `5a957c30d58f3592fcfba0be5dced5dedd21c0a2`. It produced
+  `apps/or_app/build/macos/Build/Products/Debug/or_app.app`. The app process
+  already running on the host predated this build and was left untouched, so
+  this build was not launched. The current CUA surface is locked; real macOS
+  editing and MotionScene journeys and independent export validation remain
+  `NOT RUN`. These local checks do not establish `ACCEPTED`.
 
 ## Historical coverage inventory
 
