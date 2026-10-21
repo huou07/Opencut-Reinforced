@@ -429,7 +429,7 @@ void main() {
     expect(relinkedMedia.mediaId, media.mediaId);
     expect(
       Uri.parse(relinkedMedia.sourceUri).toFilePath(),
-      replacementAudioPath,
+      await File(replacementAudioPath).resolveSymbolicLinks(),
     );
 
     final addedTrack = await gateway.addTimelineTrack(
