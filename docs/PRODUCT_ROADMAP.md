@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-21
 
 ## Authority and status
 
@@ -20,83 +20,45 @@ can be narrowed only when the source requirements or measured user value
 justify it; record the exact rationale and evidence here. Do not label a
 capability done from plans, source inspection, or model claims alone.
 
-## Current product focus (owner restatement, 2026-10-18)
+## Current product focus (owner restatement, 2026-10-21)
 
-The owner restated the product direction on 2026-10-18. These four capability
-groups are the active focus, in dependency order. Dogfood validation of the
-first-project journey continues in parallel rather than as the single trumping
-focus.
+The owner selected one near-term delivery mission for the local macOS app.
+Work in this order:
 
-1. **Complete basic editing** — the editing journey must be complete, fast and
-   understandable, with the same concepts, terminology and command semantics on
-   macOS, Linux and Windows, and an adapted but equivalent Android presentation.
-2. **Code-to-illustration video** — turn a code artifact into a declarative
-   MotionScene and render it deterministically. Track A is primary; Track B, an
-   external generative-video provider, is a later optional addition.
-3. **Automatic subtitles** — implemented for desktop debug packages; Android
-   support, word timings and translation remain open.
-4. **Noise filtering and audio cleanup** — belongs in the audio layer.
+1. **Finish ordinary editing.** Complete and dogfood the connected journey for
+   project creation, common media import, multi-track editing, visible pointer
+   trim/move/split/reorder, image/audio, speed/volume, snapping, undo/redo,
+   composition preview, save/reopen and valid playable export.
+2. **Finish deterministic MotionScene.** Turn source code into a short
+   declarative illustration, preview and render it through the existing
+   architecture, insert it into the ordinary timeline and export the combined
+   edit.
 
-Build and test run fast locally on the Debian workstation for Linux desktop and
-the Android emulator; every release still passes hosted CI before publication.
-
-Recent focused work: Candidate `3bf2e6e8980c093072b217ba33c6c91a67e1aa82`
-removes the visual-only editor shell from Home and makes Add to Timeline
-default to the current content end, so consecutive clips can be assembled
-without manually calculating a start time. Exact-SHA Platform Verification
-[38366017857](https://github.com/huou07/Opencut-Reinforced/actions/runs/38366017857)
-passed all seven jobs. Validation-only Developer Preview
-[38369979125](https://github.com/huou07/Opencut-Reinforced/actions/runs/38369979125)
-built Android, Linux, macOS, and Windows packages and passed packaged desktop
-transcription/caption acceptance. That is four build jobs; the Linux job emits
-both a tarball and a `.deb`, so a complete run produces five app packages (see
-RELEASE.md). The five temporary artifacts expire October
-20, 2026; the run summary includes the dogfood journey and feedback route.
-These are debug packages, not stable installers or a public release.
-Clean-machine installation/upgrade and physical-device responsiveness remain
-unverified; Android transcription is unsupported. Detailed historical
-evidence remains in the [history archive](evidence/PRODUCT_ROADMAP_HISTORY.md).
-
-Developer Preview [dev-656cd656199c](https://github.com/huou07/Opencut-Reinforced/releases/tag/dev-656cd656199c)
-targets exact product SHA `656cd656199ca6a236921c83ba9bdb5705f61d57`;
-Platform Verification [38192698936](https://github.com/huou07/Opencut-Reinforced/actions/runs/38192698936)
-passed all seven jobs, and Developer Preview
-[38194980068](https://github.com/huou07/Opencut-Reinforced/actions/runs/38194980068)
-published and downloaded all 13 assets to re-verify `SHA256SUMS.txt`. The
-release is an unsigned or ad-hoc-signed debug preview, not a stable release;
-Android verification covers emulator correctness and resource bounds only,
-not physical-device performance. The earlier transcription WAV handoff, pinned
-Whisper proof, and proposal contract are recorded in the
-[transcription integration note](evidence/local-transcription-poc.md).
-
-The 2026-10-15 quality pass adds a bounded Linux debug journey and executable
-semantics actions for custom timeline clips/trim handles. Local Rust-backed
-create/import/recovery/edit/undo/seek/save-reopen and selected screenshots ran;
-[testing evidence](TESTING.md#evidence-selection-and-bounded-linux-preflight)
-records scope and rendering limitations. Exact source `66164227f3e39aa32567890eb88850d54ff9aa37`
-passed [hosted Linux UI preflight 38679257316](https://github.com/huou07/Opencut-Reinforced/actions/runs/38679257316).
-This accepts the scoped Linux debug journey; it does not advance packaged,
-preview rendering, media playback or cross-platform acceptance claims.
-
+macOS on the owner's MacBook Air is the only required runtime target for this
+mission. Cross-platform development remains a future objective. Transcription,
+cloud or generative AI, community features, advanced effects and unrelated
+platform work are deferred. Complete supporting work only when it unblocks one
+of these two journeys. This scope supersedes earlier active-focus notes below;
+their dated run records remain historical evidence and must be rechecked locally.
 ## Product acceptance target
 
-A non-developer can install a supported package, understand the workspace,
-create or open a project, import local media through the platform's real
-permission model, assemble and revise a useful edit, preview with responsive
-audio/video behavior, use available assisted features as reviewable proposals,
-save/reopen/recover safely, and export a valid result using shipped
-dependencies. The same project/editing concepts, terms, layout intent, and
-command semantics hold across macOS, Windows, Linux, and Android; input and
-layout adapt to platform and screen size. iOS remains an intentional future
-parity target, not an acceptance claim until supported tooling and packages
-exist.
+For the current mission, a beginner can use the built macOS application to
+complete the ordinary editing journey and the MotionScene journey described
+above. Acceptance requires real pointer/keyboard interaction through the app,
+the resulting Rust-owned project state, save/reopen behavior, actual preview,
+and independently validated playable exports. A widget test, hidden command,
+screenshot or successful build alone does not establish a completed journey.
 
-Acceptance covers packaged user journeys, usability, performance, and
-resources on real hosted platform paths. Green unit tests alone are
-insufficient. Track crashes, corruption, import/playback/export failures,
-accessibility and task-completion issues as product defects.
+The rest of this roadmap preserves longer-term product and platform traceability.
+It does not expand the current Mac mission or establish that an older reported
+capability still works in this checkout.
 
-## Work streams
+## Longer-term product inventory (not the active work queue)
+
+These rows preserve requirements and dependencies for future work. The current
+mission selects only the ordinary editing and MotionScene paths described above;
+transcription/AI and cross-platform rows remain deferred unless the owner
+reselects them.
 
 The order below preserves actual dependencies while allowing independent work
 to proceed together. Exact evidence is attached to requirement IDs and
@@ -115,11 +77,11 @@ roadmap supplies the human mapping.
 | **H. Cross-platform release quality** | Consistent design/terminology and material feature parity on macOS, Windows, Linux, Android; accessibility; signed/notarized production distribution; install/upgrade/uninstall; performance and reliability. Legacy: 7H–9E and release requirements. | Platform-specific file pickers, permissions, packaging, window integration and hardware APIs may differ. Editing semantics and recovery must not. Maintain an explicit platform matrix and report unverified cells honestly. iOS is future until supported. |
 | **I. Code-to-illustration video** | Turn a code artifact into an illustrated explainer: code ingestion and region selection, tokenisation and syntax highlighting, a versioned declarative `.ormotion.json` MotionScene, deterministic materialisation to persistent media, callouts and arrows, captions and narration, and reusable templates. Track B — an external generative-video provider — is a later, costed, licence-reviewed extension. | Depends on the [ADR 0007](adr/0007-declarative-motion-scenes-and-procedural-isolation.md) contract, the `or_render` text and layer path, export, and captions. Reuse the deterministic bundled-font rasteriser and the existing Text/Caption clip content; do not add a second text engine. Materialisation registers output through normal media/timeline commands, and validation, preview, render and materialisation make zero provider calls. Code and its highlight theme are untrusted input, so bound the parser and never execute the sample. |
 
-The current Android app floor is API 26 (Android 8.0), matching CPAL's AAudio
-backend. This intentionally excludes older Android releases; the Android
-package and native linker both target API 26.
+For future Android support, the app floor is API 26 (Android 8.0), matching
+CPAL's AAudio backend. This excludes older Android releases; the Android
+package and native linker target API 26.
 
-## Dependency graph
+## Long-term dependency graph
 
 ```text
 safe project open/recovery ──┐
@@ -137,7 +99,13 @@ experiment, not a prerequisite for all product work. Do not let it block
 project usability, Android import, or finishing the existing preview/export
 journey unless results establish a real engine migration dependency.
 
-## Current product status and highest-value gaps
+## Historical evidence and recorded gaps — recheck locally
+
+The dated run descriptions below record what was observed on earlier machines
+and source revisions. They are not current status on this Mac and must not be
+used as proof that a failure still exists or that a reported success is usable.
+Reproduce the relevant journey and inspect the current checkout before relying
+on any item.
 
 ## OR-BUILD Phase 0 status (work in progress, 2026-10-18)
 

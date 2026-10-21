@@ -1,44 +1,36 @@
 # Development Tooling
 
-Last reviewed: 2026-10-18.
+Last reviewed: 2026-10-21.
 
-This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
+## Current local Mac mission
 
-## Verification model
+The owner authorizes building and launching the real macOS application, exercising
+its UI, and running focused local checks on this MacBook Air. Use skill
+or-dev-loop and the current permissions in AGENT-AUTHORITY.md. Recheck installed
+tool versions, free disk/memory and FFmpeg capabilities before a build or
+measurement. Use an isolated project/profile for repeatable or destructive runs.
 
-The owner permits the bounded Debian Linux developer journey described in
-[TESTING.md](TESTING.md#evidence-selection-and-bounded-linux-preflight), using
-`scripts/run_linux_ui_preflight.py`, and — since 2026-10-18 — the local Android
-emulator lane on this host. Their entry points are
-`bash scripts/run_local_lane.sh linux` and
-`bash scripts/run_local_lane.sh android`; both are developer evidence: GitHub
-Actions remains the acceptance authority. Neither exception authorizes a long render,
-cross-platform packaging, or a second writer in this working tree.
+Real UI claims require the actual app and observable project/output state.
+Use the available macOS automation or Computer Use surface when a CLI harness
+cannot exercise the interaction. Flutter documents the desktop commands in
+[desktop integration](https://docs.flutter.dev/platform-integration/desktop) and
+[macOS building](https://docs.flutter.dev/platform-integration/macos/building). A synthetic test or screenshot alone does not
+prove a complete journey. Local results describe only the tested source, build,
+host and workflow.
 
-Local machines are for editing and headless source verification. GitHub Actions is the canonical verification environment for platform, linker, native builds, and runtime checks. A local platform toolchain is not required for ordinary core or domain development when Actions provides the equivalent check.
+The source gate is bash scripts/check-repo.sh. It selects an installed
+Python 3.11+ interpreter when the system Python is older; its Linux UI-preflight
+and Android shell-runner tests run only on Linux. Other platform-specific
+procedures below remain available for future work.
 
-The local Android lane's three helpers are repository scripts, not tribal
-knowledge: `scripts/stage_android_ffmpeg.sh` builds the pinned x86_64 Android
-FFmpeg prefix and the guest link probe (NDK 28.2.13676358, API-26 clang wrappers,
-FFmpeg 8.1.3 with a SHA-512 check, the workflow's configure profile);
-`scripts/build_android_case_apks.sh` creates the `android/.ffmpeg-install` link
-the bridge build hook requires and builds one APK per acceptance case, the SAF
-fixture, and `ui.apk` for the agent-facing UI harness; and
-`scripts/run_android_ffmpeg_probe.sh` loads the packaged FFmpeg libraries from the
-built APK on the guest. They exist because the recipe used to live only inside the
-hosted `android` job, and a lane whose input cannot be reproduced reports BLOCKED
-rather than a guess.
-
-The lane derives its memory floor from the steps it was asked to run: a guest step
-requires `OR_ANDROID_GUEST_RAM_MB` (6144) + `OR_ANDROID_EMULATOR_OVERHEAD_MB`
-(1024) + `OR_ANDROID_HOST_MARGIN_MB` (1024), an apk-only run requires
-`OR_ANDROID_BUILD_FLOOR_MB` (5120) MiB, and `OR_ANDROID_LANE_MIN_MEM_GIB` is an
-explicit override that the report names. After its apk step it stops the Gradle and
-Kotlin daemons that appeared during that step and that belong to the wrapper's own
-Gradle version; a daemon that was already resident, or one on another version, is
-attributed in `android-logs/daemons.log` and left alone.
+Do not push, open pull requests, trigger remote CI, publish or deploy during this
+mission. The Linux, Android, Windows and hosted procedures below are retained
+for future work; they are not the default local workflow and do not authorize
+their execution in this mission.
 
 ## The agent-facing UI harness
+
+The commands below are a Linux/Android reference for future platform work.
 
 `python3 scripts/or_ui.py` is the instrument behind OR's interface claims. It
 drives the real application by widget key, semantics label (exact or regex),
@@ -80,18 +72,16 @@ command line. `scripts/stage_android_ffmpeg.sh` passes scoped `--config`
 overrides for exactly this reason; the shared file itself is not modified, since
 the Linux package lane depends on it.
 
-By default, agents must not launch the native OR application, a platform emulator or simulator, or an attached physical device locally for verification. Do not run native Flutter integration tests that launch OR, manually smoke-test the local GUI, or open a built/downloaded Developer Preview. This restriction is separate from the toolchain-installation rule. Local repository checks, formatting, static analysis, and headless Rust/CLI/unit/integration tests remain allowed; Flutter format, analysis, and widget tests are allowed when they do not launch a native application. Two exceptions are explicit: the bounded Linux preflight above, and the local Android emulator lane granted in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md). Outside them, if local runtime interaction is genuinely required and Actions cannot provide the evidence, explain why and ask the user before launching anything.
+The harness above exercises Linux and Android targets. It is retained
+for future platform work; it is not the required Mac journey. For the current
+mission, local native macOS app execution is authorized. Exercise the visible
+controls and resulting project state in the actual app.
 
-Report each check as one of:
+Classify local checks as PASS, FAIL, LOCAL ENVIRONMENT BLOCKED, UNVERIFIED or
+NOT RUN. A missing tool is not a source failure. Do not use remote CI as a
+substitute in this mission, because remote execution is explicitly out of scope.
 
-- `PASS` — it ran and succeeded.
-- `FAIL` — it ran and exposed a source, test, or configuration defect.
-- `LOCAL ENVIRONMENT BLOCKED` — it could not run because a missing or intentionally unconfigured local platform tool prevented it. This status is neither pass nor fail.
-- `NOT RUN` — it was intentionally skipped; for a native/runtime check skipped by policy, use `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
-
-When a required local check is environment-blocked and an equivalent Actions job exists, continue and inspect that remote job. The task may complete for that check only after the remote job passes. A blocked local check with no remote result is still unverified. A local native/runtime check intentionally skipped by policy is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`, not `LOCAL ENVIRONMENT BLOCKED`.
-
-## Local development baseline
+## Linux development baseline — dated reference
 
 Install only the tools needed for the part you are changing. The workspace MSRV
 is **Rust 1.89** (`rust-version` in the root `Cargo.toml`); the pinned build
@@ -109,7 +99,7 @@ configuration retains cross-compilation targets for platform builders. Use the
 rustup Cargo proxy on PATH: Debian's standalone `/usr/bin/cargo` does not apply
 rustup toolchain selection.
 
-### Local toolchain PATH
+### Historical Debian toolchain PATH
 
 On the inspected Debian host (2026-10-17), the system PATH selects Debian Rust
 1.85; Rust 1.98.0 and Flutter 3.47.7 are restored under the owner home and are
@@ -217,7 +207,7 @@ flutter test
 
 Flutter's Rust native-assets hook builds the bridge for the host target during Flutter builds and tests. Flutter checks that need unavailable host tooling may be environment-blocked locally; use the matching Actions job. Do not change Xcode selection, set `DEVELOPER_DIR`, accept licenses, install/repair platform components, or use `sudo` for platform setup as a normal agent workaround. Those are optional manual choices only for a developer who explicitly wants local platform builds and chooses to configure that machine.
 
-## Hosted platform verification
+## Hosted platform verification — future reference
 
 GitHub Actions is the canonical place for native platform builds. Contributors do not need to own a Mac, Windows PC, or Linux machine, and do not need to install every platform SDK.
 
@@ -356,7 +346,7 @@ Review third-party agent tooling before installing it. Do not install additional
 - Ponytail
 - Playwright (`playwright-cli`, agent-local; added 2026-10-15 for rendered-page inspection of the prototype and UX work)
 
-### Android emulator on this workstation
+### Android emulator on the previous Linux workstation
 
 The local AVD is named **`OR-android-test`** (Android 36, google_apis, x86_64). It is OR's
 own machine; `an3-api36` and `vce-api36` belong to the VCE project and must not be renamed,

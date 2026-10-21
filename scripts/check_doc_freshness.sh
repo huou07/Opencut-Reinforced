@@ -47,6 +47,22 @@ in_scope=(
   docs/prompts/OR-BUILD.md
 )
 
+date_to_epoch() {
+  local reviewed="$1"
+  local epoch
+
+  # macOS/BSD date uses -j -f; GNU date uses -d.
+  if epoch="$(date -u -j -f "%Y-%m-%d" "$reviewed" +%s 2>/dev/null)"; then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  if epoch="$(date -u -d "$reviewed" +%s 2>/dev/null)"; then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  return 1
+}
+
 today_epoch="$(date -u +%s)"
 
 for path in "${in_scope[@]}"; do
@@ -63,7 +79,7 @@ for path in "${in_scope[@]}"; do
     failed=1
     continue
   fi
-  reviewed_epoch="$(date -u -d "$reviewed" +%s 2>/dev/null)" || reviewed_epoch=""
+  reviewed_epoch="$(date_to_epoch "$reviewed" 2>/dev/null)" || reviewed_epoch=""
   if [[ -z "$reviewed_epoch" ]]; then
     printf 'FAIL: %s has an unparseable review date: %s\n' "$path" "$reviewed" >&2
     failed=1

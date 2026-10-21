@@ -1,13 +1,21 @@
 # OR quality bar
 
-Authority: this is OR's definition of "good" for the product. It does not replace
-[AGENTS.md](../AGENTS.md), `docs/AGENT_POLICY.md`, `docs/UX_ACCEPTANCE.md` or the
-project's gates; where they disagree, the source and the exact-SHA hosted runs
-decide.
+Authority: this document preserves OR's quality targets and dated measurements.
+For the current mission, the required runtime target is the local macOS app on
+the owner's Apple M5 MacBook Air. A historical Linux or hosted result does not
+establish current Mac behavior or performance.
 
-Last reviewed: 2026-10-18.
+Last reviewed: 2026-10-21.
 
-## Supported targets
+## Current Mac mission
+
+Recheck the real application, toolchain and workload on this host before making
+a quality claim. The measurements below were collected on earlier source builds
+or a different machine; do not use them as an M5 baseline. Add a current Mac
+measurement only after recording the exact build, fixture, codec/backend,
+viewport and workload.
+
+## Previously recorded platform evidence
 
 | Target | Claimed support | Evidence class | Last exact-source run |
 |---|---|---|---|
@@ -37,7 +45,7 @@ and hosted `platform-verification` remains the packaging authority.
 | Maintainability | index complete, links resolve, every current-claim doc dated, claims exact-SHA and resolvable in Git | doc and claim gates | verify | verified |
 | Cost | resource use of the bounded preflight | preflight headroom checks and per-stage budgets | acceptance (manual) | partially verified |
 
-## Performance: one bounded budget, and its limits
+## Historical performance budget and its limits
 
 OR enforces one local performance budget, measured only on the named host class
 below. It exists so a catastrophic regression fails locally instead of waiting
