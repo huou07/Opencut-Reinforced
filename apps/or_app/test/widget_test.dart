@@ -700,6 +700,73 @@ void main() {
     },
   );
 
+  testWidgets(
+    'adding an illustration imports it and appends at the project content end',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final audio = _audioMediaFixture('existing-audio', '/tmp/music.wav');
+      final contentEnd = ProjectRationalTime(BigInt.from(7), 1);
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [audio]
+        ..initialTimelineTracks = [
+          const ProjectTimelineTrack(
+            trackId: 'audio-1',
+            kind: ProjectTimelineTrackKind.audio,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'audio-1': [
+            ProjectTimelineClip(
+              clipId: 'audio-clip',
+              mediaId: audio.mediaId,
+              timelineStart: ProjectRationalTime(BigInt.from(3), 1),
+              sourceStart: ProjectRationalTime(BigInt.zero, 1),
+              timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+            ),
+          ],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/motion-insert.orproj'
+        ..mediaPaths = ['/tmp/count_words.rs']
+        ..exportPath = '/tmp/illustration.mkv';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Motion insertion');
+
+      final previewSeeksBefore = gateway.previewSeekCalls;
+      await tester.tap(find.byKey(const ValueKey('open-command-palette')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('command-palette-query')),
+        'Illustration Video',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('command-illustration-video')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose location'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('motion-materialize-add-to-timeline')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.illustrationRequests, hasLength(1));
+      expect(gateway.importMediaSources, ['/tmp/illustration.mkv']);
+      expect(gateway.addTimelineTrackCalls, 1);
+      expect(gateway.lastInsertTrackId, 'track-1');
+      expect(gateway.lastInsertTimelineStart?.canonical, contentEnd.canonical);
+      expect(gateway.lastSession!.clips['track-1'], hasLength(1));
+      expect(gateway.previewSeekCalls, previewSeeksBefore + 1);
+      expect(gateway.lastPreviewSeek?.canonical, contentEnd.canonical);
+    },
+  );
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
@@ -1034,7 +1101,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.mediaListOffsets, [0, 50]);
 
-    await tester.drag(panelScroll.first, const Offset(0, 5000));
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      panelScroll.first,
+      const Offset(0, 160),
+    );
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('media-preview-image-media-0')),
@@ -2294,33 +2365,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('export offers WebM as the ordinary desktop default', (
+  testWidgets('export offers the platform default output profile', (
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final destination = '/tmp/export-project.${defaultProfile.extension}';
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
-      ..exportPath = '/tmp/export-project.webm';
+      ..exportPath = destination;
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Export project');
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
     await tester.pump();
     expect(find.text('Export video'), findsOneWidget);
-    expect(find.text('WebM video'), findsOneWidget);
-    expect(
-      find.text(
-        'Smaller file for sharing, with lossy VP9 video and Opus audio.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text(defaultProfile.label), findsOneWidget);
+    expect(find.text(defaultProfile.description), findsOneWidget);
     await tester.tap(find.text('Continue'));
     await tester.pump();
     await tester.pump();
 
-    expect(picker.lastExportProfile, ExportProfile.webmVp9Opus);
-    expect(gateway.lastExportDestination, '/tmp/export-project.webm');
+    expect(picker.lastExportProfile, defaultProfile);
+    expect(gateway.lastExportDestination, destination);
     expect(tester.takeException(), isNull);
   });
 
@@ -6877,7 +6945,17 @@ class _FakeProjectGateway implements ProjectGateway {
       );
     }
     final item = _mediaFixture('media-imported-$importMediaCalls', source);
-    session.media.add(item);
+    session.media.add(
+      ProjectMediaItem(
+        mediaId: item.mediaId,
+        sourceUri: item.sourceUri,
+        formatNames: item.formatNames,
+        duration: item.duration,
+        videoDetails: item.videoDetails,
+        audioDetails: item.audioDetails,
+        firstVideoDuration: ProjectRationalTime(BigInt.from(10), 1),
+      ),
+    );
     session.view = _copyView(
       session.view,
       revision: session.view.revision + BigInt.one,
