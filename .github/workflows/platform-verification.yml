@@ -899,6 +899,7 @@ jobs:
           msystem: CLANG64
           path-type: inherit
           update: true
+          cache: false
           install: make pkgconf
           pacboy: clang:p nasm:p
 
