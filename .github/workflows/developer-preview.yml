@@ -381,7 +381,7 @@ jobs:
           PY
 
       - name: Upload macOS package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-macos
           path: ${{ runner.temp }}/opencut-reinforced-macos-debug.zip
@@ -644,7 +644,7 @@ jobs:
           } finally { $zip.Dispose() }
 
       - name: Upload Windows package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-windows
           path: ${{ runner.temp }}/opencut-reinforced-windows-x64-debug.zip
@@ -921,7 +921,7 @@ jobs:
           grep -Fxq "./opencut-reinforced/or_app" <<< "$package_entries"
 
       - name: Upload Linux package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-linux
           path: |
@@ -1060,7 +1060,7 @@ jobs:
 
       - name: Preserve failed Android preview APK for diagnosis
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-android-failed-${{ github.run_id }}
           path: apps/or_app/build/app/outputs/flutter-apk/app-debug.apk
@@ -1086,7 +1086,7 @@ jobs:
           test "$(find "$package_dir" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')" = "1"
 
       - name: Upload Android package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-android
           path: ${{ runner.temp }}/developer-preview-android/*
@@ -1144,7 +1144,7 @@ jobs:
           test -s "$RUNNER_TEMP/opencut-reinforced-cli-macos.zip"
 
       - name: Upload macOS CLI package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-cli-macos
           path: ${{ runner.temp }}/opencut-reinforced-cli-macos.zip
@@ -1196,7 +1196,7 @@ jobs:
           if ((Get-Item -LiteralPath $archive).Length -eq 0) { throw "Windows CLI package is empty" }
 
       - name: Upload Windows CLI package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-cli-windows-x64
           path: ${{ runner.temp }}/opencut-reinforced-cli-windows-x64.zip
@@ -1248,7 +1248,7 @@ jobs:
           test -s "$RUNNER_TEMP/opencut-reinforced-cli-linux-x64.tar.gz"
 
       - name: Upload Linux CLI package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: developer-preview-cli-linux-x64
           path: ${{ runner.temp }}/opencut-reinforced-cli-linux-x64.tar.gz
